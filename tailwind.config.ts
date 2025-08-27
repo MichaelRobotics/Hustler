@@ -1,3 +1,9 @@
-import { frostedThemePlugin } from "@whop/react/tailwind";
+import type { Config } from 'tailwindcss'
 
-export default { plugins: [frostedThemePlugin()] };
+export default {
+  content: [
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+} satisfies Config
