@@ -41,3 +41,4 @@ const CollapsibleText: React.FC<CollapsibleTextProps> = ({ text, maxLength = 20 
 
 export default CollapsibleText;
 
+

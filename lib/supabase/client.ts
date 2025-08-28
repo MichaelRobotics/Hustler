@@ -47,3 +47,4 @@ export const db = drizzle(client);
 // Export the postgres client for direct queries if needed
 export { client as postgresClient };
 
+

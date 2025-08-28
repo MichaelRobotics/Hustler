@@ -38,6 +38,9 @@ interface ResourceManagerProps {
   onUpdate: (funnel: Funnel) => void;
   funnels: Funnel[];
   setFunnels: React.Dispatch<React.SetStateAction<Funnel[]>>;
+  handleAddNewResource: (resourceData: NewResource) => void;
+  addResourceFromLibrary: (resource: Resource) => void;
+  removeResourceFromFunnel: (resourceId: string) => void;
 }
 
 /**
@@ -57,7 +60,10 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({
     currentFunnel, 
     onUpdate,
     funnels,
-    setFunnels
+    setFunnels,
+    handleAddNewResource,
+    addResourceFromLibrary,
+    removeResourceFromFunnel
 }) => {
     const [addResourceView, setAddResourceView] = React.useState<'library' | 'new'>('library');
     const [newResource, setNewResource] = React.useState<NewResource>({ 
@@ -71,29 +77,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({
     const [resourceToDelete, setResourceToDelete] = React.useState<string | null>(null);
 
     // --- Event Handlers for Resource Management ---
-
-    const handleAddNewResource = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newResource.name || !newResource.link) return;
-
-        const newResourceWithId: Resource = { ...newResource, id: Date.now().toString() };
-        const updatedAllResources = [...allResources, newResourceWithId];
-        setAllResources(updatedAllResources);
-        localStorage.setItem('allResources', JSON.stringify(updatedAllResources));
-
-        // Also add the new resource directly to the current funnel
-        const updatedFunnelResources = [...(currentFunnel.resources || []), newResourceWithId];
-        onUpdate({ ...currentFunnel, resources: updatedFunnelResources });
-
-        setNewResource({ type: 'AFFILIATE', name: '', link: '', code: '', category: 'FREE_VALUE' });
-        setIsAddingResource(false);
-    };
-
-    const addResourceFromLibrary = (resource: Resource) => {
-        const updatedFunnelResources = [...(currentFunnel.resources || []), resource];
-        onUpdate({ ...currentFunnel, resources: updatedFunnelResources });
-        setIsAddingResource(false);
-    };
+    // Functions are now received as props from parent component
 
     const handleUpdateResource = (e: React.FormEvent) => {
         e.preventDefault();
@@ -233,7 +217,11 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({
                     {addResourceView === 'new' && (
                         <div className="p-4">
                             <h4 className="text-md font-semibold text-white mb-3 text-center">Create New Resource</h4>
-                            <form onSubmit={handleAddNewResource} className="space-y-3">
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                handleAddNewResource(newResource);
+                                setNewResource({ type: 'AFFILIATE', name: '', link: '', code: '', category: 'FREE_VALUE' });
+                            }} className="space-y-3">
                                 <input type="text" placeholder="Product/Link Name" value={newResource.name} onChange={e => setNewResource({...newResource, name: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"/>
                                 <input type="text" placeholder="https://example.com" value={newResource.link} onChange={e => setNewResource({...newResource, link: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"/>
                                 <input type="text" placeholder="Promo Code (optional)" value={newResource.code} onChange={e => setNewResource({...newResource, code: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"/>
@@ -283,4 +271,5 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({
 };
 
 export default ResourceManager;
+
 

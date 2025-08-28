@@ -119,11 +119,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         setNeedsRemount(true);
     }, [currentFunnel, onUpdate, setGenerations]);
 
-    const handleAddNewResource = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newResource.name || !newResource.link) return;
+    const handleAddNewResource = (resourceData: NewResource) => {
+        if (!resourceData.name || !resourceData.link) return;
 
-        const newResourceWithId = { ...newResource, id: Date.now().toString() };
+        const newResourceWithId = { ...resourceData, id: Date.now().toString() };
 
         const updatedAllResources = [...allResources, newResourceWithId];
         setAllResources(updatedAllResources);
@@ -134,7 +133,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         setCurrentFunnel(updatedFunnel);
         onUpdate(updatedFunnel);
 
-        setNewResource({ type: 'AFFILIATE', name: '', link: '', code: '', category: 'FREE_VALUE' });
         setIsAddingResource(false);
     };
 
@@ -734,6 +732,9 @@ Here is a detailed example of the correct, required JSON structure:
                     onUpdate={onUpdate}
                     funnels={funnels}
                     setFunnels={setFunnels}
+                    handleAddNewResource={handleAddNewResource}
+                    addResourceFromLibrary={addResourceFromLibrary}
+                    removeResourceFromFunnel={removeResourceFromFunnel}
                 />
                 <GenerationPacks
                     isBuyGenerationsModalOpen={isBuyGenerationsModalOpen}

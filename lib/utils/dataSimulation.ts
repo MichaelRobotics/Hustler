@@ -112,3 +112,4 @@ export const generateSalesData = (): MockSale[] => {
     return sales;
 };
 
+

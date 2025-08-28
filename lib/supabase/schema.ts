@@ -136,3 +136,4 @@ export type NewUserGeneration = typeof user_generations.$inferInsert;
 export type TrackingEvent = typeof tracking_events.$inferSelect;
 export type NewTrackingEvent = typeof tracking_events.$inferInsert;
 
+
