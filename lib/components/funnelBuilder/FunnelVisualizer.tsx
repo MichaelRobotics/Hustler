@@ -189,19 +189,9 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                 blockRefs.current[id] && blockRefs.current[id]?.offsetHeight > 0
             );
             
-            console.log('Layout measurement check:', {
-                layoutPhase,
-                blocksCount: Object.keys(funnelFlow.blocks).length,
-                renderedBlocks: Object.keys(funnelFlow.blocks).filter(id => 
-                    blockRefs.current[id] && blockRefs.current[id]?.offsetHeight > 0
-                ).length,
-                allBlocksRendered
-            });
-            
             if (allBlocksRendered) {
                 // Small delay to ensure DOM is fully updated
                 const timer = setTimeout(() => {
-                    console.log('Transitioning to final layout phase');
                     setLayoutPhase('final');
                 }, 50);
                 
@@ -267,10 +257,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                 heights[id] = element?.offsetHeight || ESTIMATED_BLOCK_HEIGHT;
             });
             
-            console.log('Final layout calculation:', {
-                measuredHeights: heights,
-                averageHeight: Object.values(heights).reduce((a, b) => a + b, 0) / Object.values(heights).length
-            });
+
 
             const finalPositions: Record<string, Position> = {};
             const finalStageLayouts: StageLayout[] = [];
@@ -329,14 +316,124 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
         <div className="w-full h-full">
             {/* Development indicator */}
             {process.env.NODE_ENV === 'development' && (
-                <div className="absolute top-2 right-2 z-50 bg-gray-800 text-white px-2 py-1 rounded text-xs">
-                    Layout: {layoutPhase}
-                </div>
+                <>
+                    <div className="absolute top-2 right-2 z-50 bg-gray-800 text-white px-2 py-1 rounded text-xs hidden md:block">
+                        Layout: {layoutPhase}
+                    </div>
+                    <div className="md:hidden bg-gray-800 text-white px-2 py-1 rounded text-xs text-center mb-2">
+                        Layout: {layoutPhase}
+                    </div>
+                </>
             )}
             
             {/* Mobile View */}
             <div className="md:hidden p-4">
-                {/* Mobile path selector */}
+                <div className="space-y-6">
+                    {/* Mobile Path Selector */}
+                    {offerBlocks.length > 0 && (
+                        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                            <h3 className="text-sm font-semibold text-violet-400 mb-3">Select Path to View:</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {offerBlocks.map(block => (
+                                    <button
+                                        key={block.id}
+                                        onClick={() => setSelectedOfferBlockId(block.id)}
+                                        className={`px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                                            selectedOfferBlockId === block.id
+                                                ? 'bg-violet-600 text-white'
+                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        }`}
+                                    >
+                                        {block.id.replace('offer_', '').replace('_final', '')}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Mobile Funnel Flow */}
+                    <div className="space-y-4">
+                        {funnelFlow.stages.map((stage, stageIndex) => (
+                            <div key={stage.id} className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                                {/* Stage Header */}
+                                <div className="bg-gray-900/50 px-4 py-3 border-b border-gray-700">
+                                    <h3 className="text-lg font-bold text-violet-400 uppercase tracking-wider">{stage.name}</h3>
+                                    <p className="text-sm text-gray-400 mt-1">{stage.explanation}</p>
+                                </div>
+                                
+                                {/* Stage Blocks */}
+                                <div className="p-4 space-y-4">
+                                    {stage.blockIds.map(blockId => {
+                                        const block = funnelFlow.blocks[blockId];
+                                        const isInSelectedPath = selectedPath.blocks.has(blockId);
+                                        
+                                        return (
+                                            <div
+                                                key={blockId}
+                                                ref={el => { blockRefs.current[blockId] = el; }}
+                                                onClick={() => handleBlockClick(blockId)}
+                                                className={`bg-gray-700/50 border rounded-lg shadow-lg transition-all duration-300 ${
+                                                    isInSelectedPath 
+                                                        ? 'border-yellow-400 shadow-yellow-400/20' 
+                                                        : 'border-gray-600 hover:border-gray-500'
+                                                } ${editingBlockId === blockId ? 'ring-2 ring-violet-500' : ''}`}
+                                            >
+                                                {editingBlockId === blockId ? (
+                                                    <BlockEditor 
+                                                        block={block} 
+                                                        onSave={onBlockUpdate} 
+                                                        onCancel={() => setEditingBlockId(null)} 
+                                                    />
+                                                ) : (
+                                                    <>
+                                                        {/* Block Header */}
+                                                        <div className="border-b border-gray-600 p-3 bg-gray-800/50 rounded-t-lg flex justify-between items-center">
+                                                            <p className="text-xs font-bold text-violet-400">{block.id}</p>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setEditingBlockId(blockId);
+                                                                }} 
+                                                                className="p-1 text-gray-400 hover:text-white rounded-md hover:bg-gray-700"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {/* Block Message */}
+                                                        <div className="p-3">
+                                                            <p className="text-sm text-gray-200 whitespace-pre-wrap">{block.message}</p>
+                                                        </div>
+                                                        
+                                                        {/* Block Options */}
+                                                        {block.options && block.options.length > 0 && (
+                                                            <div className="p-3 border-t border-gray-600 space-y-2">
+                                                                {block.options.map((opt, i) => (
+                                                                    <div 
+                                                                        key={`${blockId}-opt-${i}`} 
+                                                                        className={`text-gray-300 text-xs rounded p-3 transition-colors duration-300 ${
+                                                                            selectedPath.options.has(`${blockId}_${opt.nextBlockId}`) 
+                                                                                ? 'bg-yellow-500/20 ring-1 ring-yellow-500' 
+                                                                                : 'bg-gray-600/50'
+                                                                        }`}
+                                                                    >
+                                                                        <p className="whitespace-normal">{opt.text}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Desktop View */}
