@@ -353,19 +353,33 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
                 {/* Sidebar */}
                 <FunnelBuilderSidebar
-                    isOpen={isSidebarOpen}
-                    onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+                    isSidebarOpen={isSidebarOpen}
+                    setIsSidebarOpen={setIsSidebarOpen}
                     currentFunnel={currentFunnel}
-                    allResources={allResources}
                     onAddResource={() => setIsAddingResource(true)}
-                    onRemoveResource={removeResourceFromFunnel}
-                    onEditResource={setEditingResource}
-                    onDeleteResource={setResourceToDelete}
-                    onGenerateFunnel={handleGenerateFunnel}
-                    isLoading={isLoading}
-                    generations={generations}
-                    onBuyGenerations={() => setIsBuyGenerationsModalOpen(true)}
+                    removeResourceFromFunnel={removeResourceFromFunnel}
                 />
+                
+                {/* Generation Controls */}
+                <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                    <div className="bg-gray-800/90 px-3 py-1 rounded-lg text-sm">
+                        <span className="text-gray-300">Generations: </span>
+                        <span className="text-violet-400 font-semibold">{generations}</span>
+                    </div>
+                    <button
+                        onClick={handleGenerateFunnel}
+                        disabled={isLoading || (currentFunnel.resources || []).length === 0}
+                        className="px-4 py-2 rounded-lg bg-violet-600 text-white font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        {isLoading ? 'Generating...' : 'Generate'}
+                    </button>
+                    <button
+                        onClick={() => setIsBuyGenerationsModalOpen(true)}
+                        className="px-3 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
+                    >
+                        Buy
+                    </button>
+                </div>
 
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col overflow-hidden">
@@ -373,13 +387,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     <FunnelBuilderHeader
                         funnelName={currentFunnel.name}
                         onBack={onBack}
-                        onPreview={handlePreviewClick}
-                        onEdit={handleEditorClick}
-                        onDeploy={handleDeploy}
-                        isPreviewing={isPreviewing}
-                        isDeploying={isDeploying}
-                        deploymentLog={deploymentLog}
-                        deployControlsRef={deployControlsRef}
+                        generations={generations}
+                        onBuyGenerations={() => setIsBuyGenerationsModalOpen(true)}
                     />
 
                     {/* Main Canvas */}
@@ -399,34 +408,25 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             </div>
 
             {/* Modals */}
-            {isAddingResource && (
-                <ResourceManager
-                    isOpen={isAddingResource}
-                    onClose={() => setIsAddingResource(false)}
-                    allResources={allResources}
-                    currentFunnelResources={currentFunnel.resources || []}
-                    addResourceView={addResourceView}
-                    setAddResourceView={setAddResourceView}
-                    handleAddNewResource={handleAddNewResource}
-                    addResourceFromLibrary={addResourceFromLibrary}
-                    removeResourceFromFunnel={removeResourceFromFunnel}
-                    editingResource={editingResource}
-                    setEditingResource={setEditingResource}
-                    onUpdateResource={handleUpdateResource}
-                    resourceToDelete={resourceToDelete}
-                    setResourceToDelete={setResourceToDelete}
-                    onConfirmDelete={handleConfirmDelete}
-                />
-            )}
+            <ResourceManager
+                isAddingResource={isAddingResource}
+                setIsAddingResource={setIsAddingResource}
+                allResources={allResources}
+                setAllResources={setAllResources}
+                currentFunnel={currentFunnel}
+                onUpdate={onUpdate}
+                funnels={funnels}
+                setFunnels={setFunnels}
+                handleAddNewResource={handleAddNewResource}
+                addResourceFromLibrary={addResourceFromLibrary}
+                removeResourceFromFunnel={removeResourceFromFunnel}
+            />
 
-            {isBuyGenerationsModalOpen && (
-                <GenerationPacks
-                    isOpen={isBuyGenerationsModalOpen}
-                    onClose={() => setIsBuyGenerationsModalOpen(false)}
-                    generations={generations}
-                    setGenerations={setGenerations}
-                />
-            )}
+            <GenerationPacks
+                isBuyGenerationsModalOpen={isBuyGenerationsModalOpen}
+                setIsBuyGenerationsModalOpen={setIsBuyGenerationsModalOpen}
+                setGenerations={setGenerations}
+            />
         </React.Fragment>
     );
 };

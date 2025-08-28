@@ -1,13 +1,5 @@
 import React from 'react';
-
-// Type definitions
-interface Funnel {
-  id: string;
-  name: string;
-  isDeployed?: boolean;
-  delay?: number;
-  resources?: any[];
-}
+import { Funnel } from '../../types/funnel';
 
 interface EditingFunnelName {
   id: string | null;
