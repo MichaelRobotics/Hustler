@@ -281,7 +281,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                 finalStageLayouts.push({ ...stage, y: currentY, height: maxBlockHeightInStage });
                 currentY += maxBlockHeightInStage + STAGE_Y_GAP;
             });
-
+            
             setItemCanvasWidth(maxStageWidth + ITEM_WIDTH);
             setTotalCanvasHeight(currentY);
             setPositions(finalPositions);
@@ -443,16 +443,93 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
             </div>
 
             {/* Desktop View */}
-            <div className="hidden md:flex items-start justify-center p-4 md:p-8">
-                <div className="relative" style={{ width: `${itemCanvasWidth + EXPLANATION_AREA_WIDTH}px`, height: `${totalCanvasHeight}px` }}>
+            <div className="hidden md:flex items-start justify-center p-4 md:p-8 h-full overflow-auto relative">
+                {/* Drag indicator */}
+                <div className="absolute top-2 right-2 z-10 bg-gray-800/80 text-gray-400 px-2 py-1 rounded text-xs flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Drag to pan
+                </div>
+                <div 
+                    className="relative transition-all duration-200"
+                    style={{ 
+                        width: `${itemCanvasWidth + EXPLANATION_AREA_WIDTH}px`, 
+                        height: `${totalCanvasHeight}px`,
+                        minWidth: 'fit-content',
+                        minHeight: 'fit-content',
+                        cursor: 'grab'
+                    }}
+                    onMouseDown={(e) => {
+                        if (e.button === 0 && e.currentTarget) { // Left mouse button only
+                            const target = e.currentTarget;
+                            const parent = target.parentElement;
+                            
+                            if (!parent) return;
+                            
+                            target.style.cursor = 'grabbing';
+                            const startX = e.clientX;
+                            const startScrollLeft = parent.scrollLeft || 0;
+                            
+                            const handleMouseMove = (moveEvent: MouseEvent) => {
+                                try {
+                                    const deltaX = moveEvent.clientX - startX;
+                                    if (parent && parent.scrollLeft !== undefined) {
+                                        parent.scrollLeft = startScrollLeft - deltaX;
+                                    }
+                                } catch (error) {
+                                    console.warn('Error during mouse move:', error);
+                                }
+                            };
+                            
+                            const handleMouseUp = () => {
+                                if (target) {
+                                    target.style.cursor = 'grab';
+                                }
+                                document.removeEventListener('mousemove', handleMouseMove);
+                                document.removeEventListener('mouseup', handleMouseUp);
+                            };
+                            
+                            document.addEventListener('mousemove', handleMouseMove);
+                            document.addEventListener('mouseup', handleMouseUp);
+                        }
+                    }}
+                    onMouseLeave={(e) => {
+                        if (e.currentTarget) {
+                            e.currentTarget.style.cursor = 'grab';
+                        }
+                    }}
+                >
                     {/* Stage Explanations */}
                     {stageLayouts.map((layout, index) => (
                         <React.Fragment key={layout.id}>
-                            <div className="absolute text-left p-4" style={{ left: 0, top: `${layout.y}px`, width: `200px`, height: `${layout.height}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                                         <div 
+                                 className="absolute text-left p-4" 
+                                 style={{ 
+                                     left: 0, 
+                                     top: `${layout.y}px`, 
+                                     width: `${EXPLANATION_AREA_WIDTH}px`, 
+                                     height: `${layout.height}px`, 
+                                     display: 'flex', 
+                                     flexDirection: 'column', 
+                                     justifyContent: 'center' 
+                                 }}
+                             >
                                 <h3 className="text-lg font-bold text-violet-400 uppercase tracking-wider">{layout.name}</h3>
                                 <p className="text-sm text-gray-400 mt-1">{layout.explanation}</p>
                             </div>
-                            {index < stageLayouts.length - 1 && <div className="absolute border-t-2 border-dashed border-gray-700" style={{ left: 0, top: `${layout.y + layout.height + 60}px`, width: '100%' }}></div>}
+                                                         {index < stageLayouts.length - 1 && (
+                                 <div 
+                                     className="absolute border-t-2 border-dashed border-gray-700 opacity-60" 
+                                     style={{ 
+                                         left: `${EXPLANATION_AREA_WIDTH}px`, 
+                                         top: `${layout.y + layout.height + 60}px`, 
+                                         width: `${itemCanvasWidth}px`,
+                                         marginLeft: '20px',
+                                         marginRight: '20px'
+                                     }}
+                                 />
+                             )}
                         </React.Fragment>
                     ))}
                     {/* Funnel Blocks and Lines */}
