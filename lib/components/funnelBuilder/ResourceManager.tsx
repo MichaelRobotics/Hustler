@@ -1,11 +1,32 @@
 'use client';
 
 import React from 'react';
-import { Funnel, Resource, NewResource } from '../../types/funnel';
+import CollapsibleText from '../common/CollapsibleText';
 
-interface EditingFunnelName {
-  id: string | null;
+interface Resource {
+  id: string;
+  type: string;
   name: string;
+  link: string;
+  code: string;
+  category: string;
+}
+
+interface Funnel {
+  id: string;
+  name: string;
+  flow?: any;
+  isDeployed?: boolean;
+  delay?: number;
+  resources?: Resource[];
+}
+
+interface NewResource {
+  type: string;
+  name: string;
+  link: string;
+  code: string;
+  category: string;
 }
 
 interface ResourceManagerProps {
@@ -222,8 +243,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({
                                 <div key={res.id} className="bg-gray-800/50 p-2 rounded-md text-sm flex justify-between items-center gap-2">
                                     <div>
                                         <div className="font-bold text-white">
-                                            {/* CollapsibleText component was removed, so we'll just show the name */}
-                                            {res.name}
+                                            <CollapsibleText text={res.name} maxLength={25} />
                                         </div>
                                         <p className="text-xs text-gray-400">{res.type} / {res.category === 'PAID_PRODUCT' ? 'Paid' : 'Free'}</p>
                                     </div>

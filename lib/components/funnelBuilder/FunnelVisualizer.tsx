@@ -2,7 +2,30 @@
 
 import React from 'react';
 import BlockEditor from './BlockEditor';
-import { FunnelFlow, FunnelStage, FunnelBlock, FunnelBlockOption } from '../../types/funnel';
+
+interface FunnelBlockOption {
+  text: string;
+  nextBlockId: string | null;
+}
+
+interface FunnelBlock {
+  id: string;
+  message: string;
+  options: FunnelBlockOption[];
+}
+
+interface FunnelStage {
+  id: string;
+  name: string;
+  explanation: string;
+  blockIds: string[];
+}
+
+interface FunnelFlow {
+  startBlockId: string;
+  stages: FunnelStage[];
+  blocks: Record<string, FunnelBlock>;
+}
 
 interface Position {
   x: number;
@@ -52,7 +75,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
     const [stageLayouts, setStageLayouts] = React.useState<StageLayout[]>([]);
     const [itemCanvasWidth, setItemCanvasWidth] = React.useState(0);
     const [totalCanvasHeight, setTotalCanvasHeight] = React.useState(0);
-    const [layoutVersion, setLayoutVersion] = React.useState(0);
+    const [layoutPhase, setLayoutPhase] = React.useState<'measure' | 'final'>('measure');
     
     // State for user interaction
     const [selectedOfferBlockId, setSelectedOfferBlockId] = React.useState<string | null>(null);
@@ -154,78 +177,147 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
 
     // Reset layout when the funnel flow changes.
     React.useEffect(() => {
-        setLayoutVersion(0);
         blockRefs.current = {};
+        setLayoutPhase('measure');
     }, [funnelFlow]);
+
+    // Trigger final layout calculation after blocks are rendered and measured
+    React.useEffect(() => {
+        if (layoutPhase === 'measure' && funnelFlow?.blocks) {
+            // Check if all blocks have been rendered and can be measured
+            const allBlocksRendered = Object.keys(funnelFlow.blocks).every(id => 
+                blockRefs.current[id] && blockRefs.current[id]?.offsetHeight > 0
+            );
+            
+            console.log('Layout measurement check:', {
+                layoutPhase,
+                blocksCount: Object.keys(funnelFlow.blocks).length,
+                renderedBlocks: Object.keys(funnelFlow.blocks).filter(id => 
+                    blockRefs.current[id] && blockRefs.current[id]?.offsetHeight > 0
+                ).length,
+                allBlocksRendered
+            });
+            
+            if (allBlocksRendered) {
+                // Small delay to ensure DOM is fully updated
+                const timer = setTimeout(() => {
+                    console.log('Transitioning to final layout phase');
+                    setLayoutPhase('final');
+                }, 50);
+                
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [layoutPhase, funnelFlow, positions]);
 
     // Layout effect to calculate positions and draw the funnel.
     React.useLayoutEffect(() => {
-        if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks || Object.keys(funnelFlow.blocks).length === 0) return;
-
-        // Step 1: Render invisible placeholders to measure dimensions.
-        if (layoutVersion === 0) {
-            const placeholderPositions: Record<string, Position> = {};
-            Object.keys(funnelFlow.blocks).forEach(id => {
-                placeholderPositions[id] = { x: 0, y: 0, opacity: 0 };
-            });
-            setPositions(placeholderPositions);
-            setLayoutVersion(1);
+        if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks || Object.keys(funnelFlow.blocks).length === 0) {
             return;
         }
 
-        // Step 2: Once refs are available, calculate the final positions.
-        if (layoutVersion === 1) {
-            const allRefsAvailable = funnelFlow.stages.every(stage => stage.blockIds.every(id => blockRefs.current[id]));
-            if (!allRefsAvailable) return;
+        const ITEM_WIDTH = 280;
+        const STAGE_Y_GAP = 120;
+        const ESTIMATED_BLOCK_HEIGHT = 200; // Initial estimate for measurement phase
+        let maxStageWidth = 0;
 
-            const heights: Record<string, number> = {};
-            Object.keys(funnelFlow.blocks).forEach(id => {
-                heights[id] = blockRefs.current[id]?.offsetHeight || 0;
-            });
+        // Calculate stage widths first
+        funnelFlow.stages.forEach((stage) => {
+            const itemsInStage = stage.blockIds;
+            const stageWidth = (itemsInStage.length - 1) * ITEM_WIDTH;
+            maxStageWidth = Math.max(maxStageWidth, stageWidth);
+        });
 
-            const newPositions: Record<string, Position> = {};
-            const newStageLayouts: StageLayout[] = [];
-            const ITEM_WIDTH = 280;
-            const STAGE_Y_GAP = 120;
+        if (layoutPhase === 'measure') {
+            // Phase 1: Set initial positions for measurement
+            const measurePositions: Record<string, Position> = {};
             let currentY = 0;
-            let maxStageWidth = 0;
 
             funnelFlow.stages.forEach((stage) => {
                 const itemsInStage = stage.blockIds;
                 const stageWidth = (itemsInStage.length - 1) * ITEM_WIDTH;
-                maxStageWidth = Math.max(maxStageWidth, stageWidth);
-                let maxBlockHeightInStage = Math.max(0, ...itemsInStage.map(id => heights[id] || 0));
+                
                 itemsInStage.forEach((blockId, itemIndex) => {
                     const xPos = (itemIndex * ITEM_WIDTH) - (stageWidth / 2);
-                    newPositions[blockId] = { x: xPos, y: currentY, opacity: 1 };
+                    measurePositions[blockId] = { x: xPos, y: currentY, opacity: 1 };
                 });
-                newStageLayouts.push({ ...stage, y: currentY, height: maxBlockHeightInStage });
-                currentY += maxBlockHeightInStage + STAGE_Y_GAP;
+                
+                currentY += ESTIMATED_BLOCK_HEIGHT + STAGE_Y_GAP;
             });
-            
+
             setItemCanvasWidth(maxStageWidth + ITEM_WIDTH);
             setTotalCanvasHeight(currentY);
-            setPositions(newPositions);
-            setStageLayouts(newStageLayouts);
+            setPositions(measurePositions);
+            
+            // Set temporary stage layouts for measurement
+            const tempStageLayouts: StageLayout[] = [];
+            let tempY = 0;
+            funnelFlow.stages.forEach((stage) => {
+                tempStageLayouts.push({ ...stage, y: tempY, height: ESTIMATED_BLOCK_HEIGHT });
+                tempY += ESTIMATED_BLOCK_HEIGHT + STAGE_Y_GAP;
+            });
+            setStageLayouts(tempStageLayouts);
+            setLines([]);
+            
+        } else if (layoutPhase === 'final') {
+            // Phase 2: Calculate final positions based on actual heights
+            const heights: Record<string, number> = {};
+            Object.keys(funnelFlow.blocks).forEach(id => {
+                const element = blockRefs.current[id];
+                heights[id] = element?.offsetHeight || ESTIMATED_BLOCK_HEIGHT;
+            });
+            
+            console.log('Final layout calculation:', {
+                measuredHeights: heights,
+                averageHeight: Object.values(heights).reduce((a, b) => a + b, 0) / Object.values(heights).length
+            });
 
-            const newLines: Line[] = [];
+            const finalPositions: Record<string, Position> = {};
+            const finalStageLayouts: StageLayout[] = [];
+            let currentY = 0;
+
+            funnelFlow.stages.forEach((stage) => {
+                const itemsInStage = stage.blockIds;
+                const stageWidth = (itemsInStage.length - 1) * ITEM_WIDTH;
+                
+                // Calculate the maximum height of blocks in this stage
+                const maxBlockHeightInStage = Math.max(
+                    ESTIMATED_BLOCK_HEIGHT, // Minimum height
+                    ...itemsInStage.map(id => heights[id] || ESTIMATED_BLOCK_HEIGHT)
+                );
+                
+                itemsInStage.forEach((blockId, itemIndex) => {
+                    const xPos = (itemIndex * ITEM_WIDTH) - (stageWidth / 2);
+                    finalPositions[blockId] = { x: xPos, y: currentY, opacity: 1 };
+                });
+                
+                finalStageLayouts.push({ ...stage, y: currentY, height: maxBlockHeightInStage });
+                currentY += maxBlockHeightInStage + STAGE_Y_GAP;
+            });
+
+            setItemCanvasWidth(maxStageWidth + ITEM_WIDTH);
+            setTotalCanvasHeight(currentY);
+            setPositions(finalPositions);
+            setStageLayouts(finalStageLayouts);
+
+            // Calculate lines with actual heights
+            const finalLines: Line[] = [];
             Object.values(funnelFlow.blocks).forEach(block => {
                 block.options?.forEach((opt, index) => {
-                    if (opt.nextBlockId && newPositions[block.id] && newPositions[opt.nextBlockId]) {
-                        newLines.push({
+                    if (opt.nextBlockId && finalPositions[block.id] && finalPositions[opt.nextBlockId]) {
+                        finalLines.push({
                             id: `${block.id}-${opt.nextBlockId}-${index}`,
-                            x1: newPositions[block.id].x,
-                            y1: newPositions[block.id].y + (heights[block.id] || 0),
-                            x2: newPositions[opt.nextBlockId].x,
-                            y2: newPositions[opt.nextBlockId].y,
+                            x1: finalPositions[block.id].x,
+                            y1: finalPositions[block.id].y + (heights[block.id] || ESTIMATED_BLOCK_HEIGHT),
+                            x2: finalPositions[opt.nextBlockId].x,
+                            y2: finalPositions[opt.nextBlockId].y,
                         });
                     }
                 });
             });
-            setLines(newLines);
-            setLayoutVersion(2);
+            setLines(finalLines);
         }
-    }, [funnelFlow, layoutVersion, editingBlockId]);
+    }, [funnelFlow, layoutPhase, editingBlockId]);
 
     if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks) {
         return <div className="flex items-center justify-center h-full text-gray-400 p-8 text-center">Add resources and click 'Generate' to build and visualize your new funnel.</div>;
@@ -235,6 +327,13 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
 
     return (
         <div className="w-full h-full">
+            {/* Development indicator */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="absolute top-2 right-2 z-50 bg-gray-800 text-white px-2 py-1 rounded text-xs">
+                    Layout: {layoutPhase}
+                </div>
+            )}
+            
             {/* Mobile View */}
             <div className="md:hidden p-4">
                 {/* Mobile path selector */}

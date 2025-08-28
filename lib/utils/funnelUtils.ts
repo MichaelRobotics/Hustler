@@ -4,7 +4,48 @@
  * Keeping these functions separate helps to maintain a clean and organized codebase.
  */
 
-import { FunnelFlow, FunnelStage, FunnelBlock, FunnelBlockOption, Resource, Funnel } from '../types/funnel';
+interface FunnelBlockOption {
+  text: string;
+  nextBlockId: string | null;
+}
+
+interface FunnelBlock {
+  id: string;
+  message: string;
+  options: FunnelBlockOption[];
+}
+
+interface FunnelStage {
+  id: string;
+  name: string;
+  explanation: string;
+  blockIds: string[];
+}
+
+interface FunnelFlow {
+  startBlockId: string;
+  stages: FunnelStage[];
+  blocks: Record<string, FunnelBlock>;
+}
+
+interface Resource {
+  id: string;
+  type: string;
+  name: string;
+  link: string;
+  code: string;
+  category: string;
+}
+
+interface Funnel {
+  id: string;
+  name: string;
+  allocation: number;
+  resources: Resource[];
+  flow: FunnelFlow | null;
+  isDeployed: boolean;
+  delay: number;
+}
 
 /**
  * Creates a basic funnel object with default values. This is used when a new funnel

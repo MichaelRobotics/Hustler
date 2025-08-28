@@ -2,14 +2,22 @@
 
 import React from 'react';
 import { generateMockData, generateSalesData } from '@/lib/utils/dataSimulation';
-import { createDefaultFunnel } from '../../utils/funnelUtils';
+import { createDefaultFunnel } from '@/lib/utils/funnelUtils';
 import AIFunnelBuilderPage from '../funnelBuilder/AIFunnelBuilderPage';
 import FunnelsDashboard from './FunnelsDashboard';
 import SalesPerformance from './SalesPerformance';
 import FunnelAnalytics from './FunnelAnalytics';
-import { Funnel, Resource } from '../../types/funnel';
 
 // Type definitions
+interface Funnel {
+  id: string;
+  name: string;
+  flow?: any;
+  isDeployed?: boolean;
+  delay?: number;
+  resources?: any[];
+}
+
 interface User {
   id: string;
   funnelId: string;
@@ -22,6 +30,15 @@ interface SalesData {
   name: string;
   price: number;
   type: string;
+}
+
+interface Resource {
+  id: string;
+  type: string;
+  name: string;
+  link: string;
+  code: string;
+  category: string;
 }
 
 interface Stats {
