@@ -325,7 +325,7 @@ const AdminPanel = () => {
                                          <div>
                                              <label htmlFor="delay" className="block text-sm font-medium text-gray-300 mb-2">Welcome Message Delay (seconds)</label>
                                              <input
-                                                 type="number"
+                                                 type="text"
                                                  id="delay"
                                                  value={funnelSettingsToEdit.delay || 0}
                                                  onChange={(e) => setFunnelSettingsToEdit({...funnelSettingsToEdit, delay: parseInt(e.target.value) || 0})}
