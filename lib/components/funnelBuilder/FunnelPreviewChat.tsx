@@ -47,12 +47,26 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow }) => 
     const chatEndRef = React.useRef<HTMLDivElement>(null);
     const chatContainerRef = React.useRef<HTMLDivElement>(null);
 
+    // Helper function to construct complete message with numbered options
+    const constructCompleteMessage = (block: any): string => {
+        if (!block || !block.options || block.options.length === 0) {
+            return block.message;
+        }
+        
+        const numberedOptions = block.options.map((opt: any, index: number) => 
+            `${index + 1}. ${opt.text}`
+        ).join('\n');
+        
+        return `${block.message}\n\n${numberedOptions}`;
+    };
+
     // Function to start or restart the conversation.
     const startConversation = React.useCallback(() => {
         if (funnelFlow && funnelFlow.startBlockId) {
             const startBlock = funnelFlow.blocks[funnelFlow.startBlockId];
             if (startBlock) {
-                setHistory([{ type: 'bot', text: startBlock.message }]);
+                const completeMessage = constructCompleteMessage(startBlock);
+                setHistory([{ type: 'bot', text: completeMessage }]);
                 setCurrentBlockId(funnelFlow.startBlockId);
             }
         }
@@ -91,7 +105,8 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow }) => 
 
         // If the next block exists, add the user's and the bot's messages to the history.
         if (nextBlock) {
-            const botMessage: ChatMessage = { type: 'bot', text: nextBlock.message };
+            const completeMessage = constructCompleteMessage(nextBlock);
+            const botMessage: ChatMessage = { type: 'bot', text: completeMessage };
             setHistory(prev => [...prev, userMessage, botMessage]);
             setCurrentBlockId(option.nextBlockId);
         } else {

@@ -343,14 +343,24 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                                              Editor
                                          </button>
                                      ) : (
-                                         <button onClick={handlePreviewClick} disabled={!currentFunnel.flow} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                         <button 
+                                             onClick={handlePreviewClick} 
+                                             disabled={!currentFunnel.flow || !!apiError} 
+                                             className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                             title={apiError ? "Cannot preview due to generation error" : !currentFunnel.flow ? "Generate funnel first" : ""}
+                                         >
                                              Preview
                                          </button>
                                      )}
                                     <button onClick={handleGenerateFunnel} disabled={isLoading || (currentFunnel.resources || []).length === 0} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-violet-600 text-white font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                                         {isLoading ? 'Generating...' : 'Generate'}
                                     </button>
-                                    <button onClick={handleDeploy} disabled={!currentFunnel.flow || isLoading} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <button 
+                                        onClick={handleDeploy} 
+                                        disabled={!currentFunnel.flow || isLoading || !!apiError} 
+                                        className="w-full sm:w-auto px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={apiError ? "Cannot deploy due to generation error" : !currentFunnel.flow ? "Generate funnel first" : isLoading ? "Generation in progress" : ""}
+                                    >
                                         Deploy
                                     </button>
                                 </div>

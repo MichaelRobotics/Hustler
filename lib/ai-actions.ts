@@ -138,7 +138,7 @@ Here is a detailed example of the correct, required JSON structure:
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome! What's your focus?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Dropshipping\\n2. SMMA",
+      "message": "Welcome! What's your focus?\\n\\nAnswer by pasting one of those numbers",
       "options": [
         {
           "text": "Dropshipping",
@@ -152,7 +152,7 @@ Here is a detailed example of the correct, required JSON structure:
     },
     "niche_ds": {
       "id": "niche_ds",
-      "message": "Great! Are you a beginner or advanced?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Beginner",
+      "message": "Great! Are you a beginner or advanced?\\n\\nAnswer by pasting one of those numbers",
       "options": [
         {
           "text": "Beginner",
@@ -162,7 +162,7 @@ Here is a detailed example of the correct, required JSON structure:
     },
     "niche_smma": {
       "id": "niche_smma",
-      "message": "Excellent. Need help finding clients?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Yes",
+      "message": "Excellent. Need help finding clients?\\n\\nAnswer by pasting one of those numbers",
       "options": [
         {
           "text": "Yes",
@@ -240,19 +240,13 @@ The 'message' string must be structured exactly like this:
 - **Line 1**: A short, impactful headline.
 - **Line 2**: An empty line for spacing.
 - **Line 3**: The instruction: "Answer by pasting one of those numbers".
-- **Line 4**: An empty line for spacing.
-- **Following Lines**: A vertically stacked, numbered list of the available choices. Each choice must be concise and to the point.
 
 *Example Message with Choices:*
 "What's your main goal?
 
-Answer by pasting one of those numbers
+Answer by pasting one of those numbers"
 
-1. Get more traffic
-2. Improve conversions
-3. Just exploring for now"
-
-**IMPORTANT**: The text for each choice in the 'message' body MUST exactly match the 'text' property of the corresponding object in the 'options' array.
+**IMPORTANT**: Do NOT include the numbered options in the message text. The options are already defined in the 'options' array and will be displayed separately by the UI.
 
 **2. FOR ITEMS WITH AN OFFER (items in the 'OFFER' stage):**
 The 'message' string must be a compelling sales message. Use emojis to make it engaging. It must follow this structure:
@@ -340,7 +334,7 @@ Here is a detailed example of the correct, required JSON structure:
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome! What's your focus?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Dropshipping\\n2. SMMA\\n3. Just exploring",
+      "message": "Welcome! What's your focus?\\n\\nAnswer by pasting one of those numbers",
       "options": [
         {
           "text": "Dropshipping",
@@ -358,7 +352,7 @@ Here is a detailed example of the correct, required JSON structure:
     },
     "niche_ds": {
       "id": "niche_ds",
-      "message": "Great! Are you a beginner or advanced?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Beginner",
+      "message": "Great! Are you a beginner or advanced?\\n\\nAnswer by pasting one of those numbers",
       "options": [
         {
           "text": "Beginner",
@@ -368,7 +362,7 @@ Here is a detailed example of the correct, required JSON structure:
     },
     "niche_smma": {
       "id": "niche_smma",
-      "message": "Excellent. Need help finding clients?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Yes",
+      "message": "Excellent. Need help finding clients?\\n\\nAnswer by pasting one of those numbers",
       "options": [
         {
           "text": "Yes",

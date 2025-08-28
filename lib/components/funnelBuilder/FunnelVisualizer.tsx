@@ -2,6 +2,7 @@
 
 import React from 'react';
 import BlockEditor from './BlockEditor';
+import CollapsibleText from '../common/CollapsibleText';
 
 interface FunnelBlockOption {
   text: string;
@@ -339,7 +340,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                                     
                                     return (
                                         <option key={block.id} value={block.id}>
-                                            {resourceName}
+                                            {resourceName.length > 40 ? `${resourceName.substring(0, 40)}...` : resourceName}
                                         </option>
                                     );
                                 })}
@@ -383,13 +384,17 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                                                             <>
                                                                 {/* Block Header */}
                                                                 <div className="border-b border-gray-700 p-2 bg-gray-900/50 rounded-t-lg flex justify-between items-center">
-                                                                    <p className="text-xs font-bold text-violet-400 text-left">{block.id}</p>
+                                                                    <div className="flex-1 min-w-0 mr-2">
+                                                                        <span className="text-xs font-bold text-violet-400">
+                                                                            <CollapsibleText text={block.id} maxLength={20} />
+                                                                        </span>
+                                                                    </div>
                                                                     <button 
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             setEditingBlockId(blockId);
                                                                         }} 
-                                                                        className="p-1 text-gray-400 hover:text-white rounded-md hover:bg-gray-700"
+                                                                        className="p-1 text-gray-400 hover:text-white rounded-md hover:bg-gray-700 flex-shrink-0"
                                                                     >
                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z" />
@@ -556,7 +561,18 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                                     <BlockEditor block={block} onSave={onBlockUpdate} onCancel={() => setEditingBlockId(null)} />
                                 ) : (
                                     <>
-                                        <div className="border-b border-gray-700 p-2 bg-gray-900/50 rounded-t-lg flex justify-between items-center"><p className="text-xs font-bold text-violet-400 text-left">{block.id}</p><button onClick={() => setEditingBlockId(block.id)} className="p-1 text-gray-400 hover:text-white rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z" /></svg></button></div>
+                                                                                                <div className="border-b border-gray-700 p-2 bg-gray-900/50 rounded-t-lg flex justify-between items-center">
+                                                            <div className="flex-1 min-w-0 mr-2">
+                                                                <span className="text-xs font-bold text-violet-400">
+                                                                    <CollapsibleText text={block.id} maxLength={20} />
+                                                                </span>
+                                                            </div>
+                                                            <button onClick={() => setEditingBlockId(block.id)} className="p-1 text-gray-400 hover:text-white rounded-md hover:bg-gray-700 flex-shrink-0">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                         <div className="p-3"><p className="text-sm text-gray-200 text-left whitespace-pre-wrap">{block.message}</p></div>
                                         {block.options && block.options.length > 0 && <div className="p-3 border-t border-gray-700 space-y-2">{block.options.map((opt, i) => (<div key={`${block.id}-opt-${i}`} className={`text-gray-300 text-xs rounded p-3 text-left transition-colors duration-300 ${highlightedPath.options.has(`${block.id}_${opt.nextBlockId}`) ? 'bg-yellow-500/20 ring-1 ring-yellow-500' : 'bg-gray-700/50 hover:bg-gray-700'}`}><p className="whitespace-normal">{opt.text}</p></div>))}</div>}
                                     </>
