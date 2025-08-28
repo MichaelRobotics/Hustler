@@ -8,34 +8,8 @@ import FunnelPreviewChat from './FunnelPreviewChat';
 import ResourceManager from './ResourceManager';
 import GenerationPacks from '../common/GenerationPacks';
 import { createErrorFunnelFlow } from '../../utils/funnelUtils';
+import { FunnelFlow, Resource, NewResource, Funnel } from '../../types/funnel';
 // AI actions are now handled via API route
-
-// Type definitions
-interface Funnel {
-  id: string;
-  name: string;
-  flow?: any;
-  isDeployed?: boolean;
-  delay?: number;
-  resources?: Resource[];
-}
-
-interface Resource {
-  id: string;
-  type: string;
-  name: string;
-  link: string;
-  code: string;
-  category: string;
-}
-
-interface NewResource {
-  type: string;
-  name: string;
-  link: string;
-  code: string;
-  category: string;
-}
 
 interface AIFunnelBuilderPageProps {
   funnel: Funnel;
@@ -80,6 +54,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
     });
     const [isLoading, setIsLoading] = React.useState(false);
     const [apiError, setApiError] = React.useState<string | null>(null);
+    const [errorDetails, setErrorDetails] = React.useState<string | null>(null);
+    const [errorAction, setErrorAction] = React.useState<string | null>(null);
     const [isPreviewing, setIsPreviewing] = React.useState(false);
     const [isAddingResource, setIsAddingResource] = React.useState(false);
     const [editingResource, setEditingResource] = React.useState<Resource | null>(null);
@@ -98,20 +74,13 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
     // FIX: This effect handles the programmatic "Preview" -> "Edit" switch.
     React.useEffect(() => {
         if (needsRemount) {
-            // 1. Switch to Preview mode (unmounts the visualizer)
-            setIsPreviewing(true);
-
-            // 2. In the next render cycle, switch back to Editor mode (remounts a fresh visualizer)
-            const timer = setTimeout(() => {
-                setIsPreviewing(false);
-                setNeedsRemount(false); // Reset the trigger
-            }, 50); // A small delay ensures React processes the state changes sequentially.
-
-            return () => clearTimeout(timer);
+            setNeedsRemount(false);
+            // Force a re-render of the visualizer
+            setCurrentFunnel(prev => ({ ...prev }));
         }
     }, [needsRemount]);
 
-    const handleGeneratedFunnelUpdate = React.useCallback((newFlow: any) => {
+    const handleGeneratedFunnelUpdate = React.useCallback((newFlow: FunnelFlow) => {
         const updatedFunnel = { ...currentFunnel, flow: newFlow };
         setCurrentFunnel(updatedFunnel);
         onUpdate(updatedFunnel);
@@ -192,7 +161,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
     };
 
     const handleBlockUpdate = (updatedBlock: any) => {
-        if (!updatedBlock) return;
+        if (!updatedBlock || !currentFunnel.flow) return;
         const newFlow = { ...currentFunnel.flow };
         newFlow.blocks[updatedBlock.id] = updatedBlock;
 
@@ -212,6 +181,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
         setIsLoading(true);
         setApiError(null);
+        setErrorDetails(null);
+        setErrorAction(null);
         setCurrentFunnel(prev => ({...prev, flow: null}));
 
         try {
@@ -238,7 +209,28 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             }
         } catch (error) {
             console.error("Funnel generation failed:", error);
-            setApiError(`Error: ${(error as Error).message}`);
+            
+            // Try to extract detailed error information
+            let errorMessage = 'An unexpected error occurred';
+            let details = null;
+            let action = null;
+            
+            if (error instanceof Error) {
+                errorMessage = error.message;
+                
+                // Try to parse error response for additional details
+                try {
+                    const errorResponse = JSON.parse(error.message);
+                    if (errorResponse.details) details = errorResponse.details;
+                    if (errorResponse.action) action = errorResponse.action;
+                } catch {
+                    // If parsing fails, use the original message
+                }
+            }
+            
+            setApiError(errorMessage);
+            setErrorDetails(details);
+            setErrorAction(action);
             handleGeneratedFunnelUpdate(createErrorFunnelFlow());
         } finally {
             setIsLoading(false);
@@ -304,118 +296,137 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     height: 8px;
                 }
                 ::-webkit-scrollbar-track {
-                    background: transparent;
+                    background: #1f2937;
+                    border-radius: 4px;
                 }
                 ::-webkit-scrollbar-thumb {
-                    background-color: #4b5563; /* gray-600 */
+                    background: #4b5563;
                     border-radius: 4px;
                 }
                 ::-webkit-scrollbar-thumb:hover {
-                    background-color: #6b7280; /* gray-500 */
+                    background: #6b7280;
+                }
+                /* Custom CSS Variables for Dynamic Styling */
+                :root {
+                    --dot-bg: #1f2937;
+                    --dot-color: #4b5563;
+                    --dot-size: 2px;
+                    --dot-space: 20px;
                 }
             `}</style>
-            <div className="bg-gray-900 min-h-screen md:h-screen md:overflow-hidden font-sans text-gray-300 flex flex-col p-2">
-                <FunnelBuilderHeader 
-                    onBack={onBack}
-                    funnelName={currentFunnel.name}
+
+            {/* Error Display */}
+            {apiError && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/90 border border-red-600 rounded-lg p-4 max-w-md shadow-lg">
+                    <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-medium text-red-200">Generation Failed</h3>
+                            <p className="text-sm text-red-300 mt-1">{apiError}</p>
+                            {errorDetails && (
+                                <p className="text-xs text-red-400 mt-2">{errorDetails}</p>
+                            )}
+                            {errorAction && (
+                                <p className="text-xs text-red-300 mt-1 font-medium">{errorAction}</p>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => {
+                                setApiError(null);
+                                setErrorDetails(null);
+                                setErrorAction(null);
+                            }}
+                            className="flex-shrink-0 text-red-400 hover:text-red-300"
+                        >
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
+                {/* Sidebar */}
+                <FunnelBuilderSidebar
+                    isOpen={isSidebarOpen}
+                    onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+                    currentFunnel={currentFunnel}
+                    allResources={allResources}
+                    onAddResource={() => setIsAddingResource(true)}
+                    onRemoveResource={removeResourceFromFunnel}
+                    onEditResource={setEditingResource}
+                    onDeleteResource={setResourceToDelete}
+                    onGenerateFunnel={handleGenerateFunnel}
+                    isLoading={isLoading}
                     generations={generations}
                     onBuyGenerations={() => setIsBuyGenerationsModalOpen(true)}
                 />
-                <div className="flex-grow flex flex-col md:flex-row md:overflow-hidden gap-2 mt-2">
-                    <FunnelBuilderSidebar
-                        isSidebarOpen={isSidebarOpen}
-                        setIsSidebarOpen={setIsSidebarOpen}
-                        currentFunnel={currentFunnel}
-                        onAddResource={() => setIsAddingResource(true)}
-                        removeResourceFromFunnel={removeResourceFromFunnel}
+
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Header */}
+                    <FunnelBuilderHeader
+                        funnelName={currentFunnel.name}
+                        onBack={onBack}
+                        onPreview={handlePreviewClick}
+                        onEdit={handleEditorClick}
+                        onDeploy={handleDeploy}
+                        isPreviewing={isPreviewing}
+                        isDeploying={isDeploying}
+                        deploymentLog={deploymentLog}
+                        deployControlsRef={deployControlsRef}
                     />
 
-                    <div className="w-full flex flex-col relative bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl md:flex-grow md:overflow-hidden">
-                        <div className="p-4 border-b border-gray-700 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 flex-shrink-0">
-                            <h2 className="text-lg font-semibold text-white text-center sm:text-left">2. Generate & Visualize Funnel</h2>
-                            <div className="flex flex-col sm:flex-row items-center gap-2">
-                                <div className="sm:hidden w-full text-center mb-2">
-                                    <p className="text-sm font-semibold bg-gray-700/50 rounded-full px-3 py-1">Generations Remaining: <span className="text-violet-400">{generations}</span></p>
-                                </div>
-                                <div className="flex items-center gap-2" ref={deployControlsRef}>
-                                     {isPreviewing ? (
-                                         <button onClick={handleEditorClick} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-600 text-white font-semibold hover:bg-gray-700 transition-colors">
-                                             Editor
-                                         </button>
-                                     ) : (
-                                         <button onClick={handlePreviewClick} disabled={!currentFunnel.flow} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                             Preview
-                                         </button>
-                                     )}
-                                    <button onClick={handleGenerateFunnel} disabled={isLoading || (currentFunnel.resources || []).length === 0} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-violet-600 text-white font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                        {isLoading ? 'Generating...' : 'Generate'}
-                                    </button>
-                                    <button onClick={handleDeploy} disabled={!currentFunnel.flow || isLoading} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                        Deploy
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="relative md:flex-grow md:overflow-auto" style={{'--dot-bg': '#1f2937', '--dot-color': '#4b5563', backgroundImage: 'radial-gradient(var(--dot-color) 1px, var(--dot-bg) 1px)', backgroundSize: '20px 20px'} as React.CSSProperties}>
-                            {apiError && (
-                                <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-20 p-4">
-                                    <div className="bg-red-900/50 border border-red-700 p-6 rounded-lg max-w-md text-center shadow-2xl">
-                                        <h3 className="text-xl font-bold text-red-300 mb-3">Generation Failed</h3>
-                                        <p className="text-red-200 mb-4">{apiError}</p>
-                                        <button onClick={() => setApiError(null)} className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors">
-                                            Close
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                            {isLoading ? (
-                                <div className="flex items-center justify-center h-full text-gray-400"><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Building your funnel...</div>
-                            ) : isPreviewing ? (
-                                <FunnelPreviewChat funnelFlow={currentFunnel.flow} />
-                            ) : (
-                                <FunnelVisualizer
-                                    funnelFlow={currentFunnel.flow}
-                                    editingBlockId={editingBlockId}
-                                    setEditingBlockId={setEditingBlockId}
-                                    onBlockUpdate={handleBlockUpdate}
-                                />
-                            )}
-                        </div>
+                    {/* Main Canvas */}
+                    <div className="flex-1 overflow-hidden">
+                        {isPreviewing ? (
+                            <FunnelPreviewChat funnelFlow={currentFunnel.flow} />
+                        ) : (
+                            <FunnelVisualizer
+                                funnelFlow={currentFunnel.flow}
+                                editingBlockId={editingBlockId}
+                                setEditingBlockId={setEditingBlockId}
+                                onBlockUpdate={handleBlockUpdate}
+                            />
+                        )}
                     </div>
                 </div>
-                {isDeploying && (
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                        <div className="bg-gray-900 border border-violet-500/50 rounded-lg shadow-2xl w-full max-w-md">
-                            <div className="p-4 border-b border-gray-700">
-                                <h3 className="text-lg font-bold text-violet-400">Deploying Funnel...</h3>
-                            </div>
-                            <div className="p-4 h-64 overflow-y-auto font-mono text-sm text-gray-300">
-                                {deploymentLog.map((line, index) => (
-                                    <p key={index} className="whitespace-pre-wrap">{`> ${line}`}</p>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
+            </div>
+
+            {/* Modals */}
+            {isAddingResource && (
                 <ResourceManager
-                    isAddingResource={isAddingResource}
-                    setIsAddingResource={setIsAddingResource}
+                    isOpen={isAddingResource}
+                    onClose={() => setIsAddingResource(false)}
                     allResources={allResources}
-                    setAllResources={setAllResources}
-                    currentFunnel={currentFunnel}
-                    onUpdate={onUpdate}
-                    funnels={funnels}
-                    setFunnels={setFunnels}
+                    currentFunnelResources={currentFunnel.resources || []}
+                    addResourceView={addResourceView}
+                    setAddResourceView={setAddResourceView}
                     handleAddNewResource={handleAddNewResource}
                     addResourceFromLibrary={addResourceFromLibrary}
                     removeResourceFromFunnel={removeResourceFromFunnel}
+                    editingResource={editingResource}
+                    setEditingResource={setEditingResource}
+                    onUpdateResource={handleUpdateResource}
+                    resourceToDelete={resourceToDelete}
+                    setResourceToDelete={setResourceToDelete}
+                    onConfirmDelete={handleConfirmDelete}
                 />
+            )}
+
+            {isBuyGenerationsModalOpen && (
                 <GenerationPacks
-                    isBuyGenerationsModalOpen={isBuyGenerationsModalOpen}
-                    setIsBuyGenerationsModalOpen={setIsBuyGenerationsModalOpen}
+                    isOpen={isBuyGenerationsModalOpen}
+                    onClose={() => setIsBuyGenerationsModalOpen(false)}
+                    generations={generations}
                     setGenerations={setGenerations}
                 />
-            </div>
+            )}
         </React.Fragment>
     );
 };

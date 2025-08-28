@@ -2,30 +2,7 @@
 
 import React from 'react';
 import BlockEditor from './BlockEditor';
-
-interface FunnelBlockOption {
-  text: string;
-  nextBlockId: string | null;
-}
-
-interface FunnelBlock {
-  id: string;
-  message: string;
-  options: FunnelBlockOption[];
-}
-
-interface FunnelStage {
-  id: string;
-  name: string;
-  explanation: string;
-  blockIds: string[];
-}
-
-interface FunnelFlow {
-  startBlockId: string;
-  stages: FunnelStage[];
-  blocks: Record<string, FunnelBlock>;
-}
+import { FunnelFlow, FunnelStage, FunnelBlock, FunnelBlockOption } from '../../types/funnel';
 
 interface Position {
   x: number;

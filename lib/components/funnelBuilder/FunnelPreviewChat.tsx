@@ -1,23 +1,7 @@
 'use client';
 
 import React from 'react';
-
-interface FunnelBlockOption {
-  text: string;
-  nextBlockId: string | null;
-}
-
-interface FunnelBlock {
-  id: string;
-  message: string;
-  options: FunnelBlockOption[];
-}
-
-interface FunnelFlow {
-  startBlockId: string;
-  stages: any[];
-  blocks: Record<string, FunnelBlock>;
-}
+import { FunnelFlow, FunnelBlock, FunnelBlockOption } from '../../types/funnel';
 
 interface ChatMessage {
   type: 'user' | 'bot';

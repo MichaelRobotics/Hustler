@@ -6,21 +6,8 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-
-interface Resource {
-  id: string;
-  type: string;
-  name: string;
-  link: string;
-  code: string;
-  category: string;
-}
-
-interface FunnelFlow {
-  startBlockId: string;
-  stages: any[];
-  blocks: Record<string, any>;
-}
+import { FunnelFlow, Resource } from './types/funnel';
+import { validateAndRepairFunnelFlow } from './utils/funnelValidation';
 
 // Custom error types for better error handling
 export class AIError extends Error {
@@ -85,7 +72,7 @@ const handleSDKError = (error: any): AIError => {
  * @param maxTries - Maximum number of repair attempts (default: 3)
  * @returns Promise with the repaired JSON object
  */
-export const repairFunnelJson = async (badJson: string, maxTries = 3): Promise<any> => {
+export const repairFunnelJson = async (badJson: string, maxTries = 3): Promise<FunnelFlow> => {
     let lastError: Error | null = null;
     
     // Validate environment before making API calls
@@ -138,7 +125,7 @@ Here is a detailed example of the correct, required JSON structure:
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome! What's your focus?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Dropshipping\\n2. SMMA",
+      "message": "Welcome! What's your focus?\\n\\nAnswer by pasting one of those numbers\\n\\n1. Dropshipping\\n2. SMMA\\n3. Just exploring",
       "options": [
         {
           "text": "Dropshipping",
@@ -147,6 +134,10 @@ Here is a detailed example of the correct, required JSON structure:
         {
           "text": "SMMA",
           "nextBlockId": "niche_smma"
+        },
+        {
+          "text": "Just exploring",
+          "nextBlockId": null
         }
       ]
     },
@@ -172,45 +163,72 @@ Here is a detailed example of the correct, required JSON structure:
     },
     "offer_ds_final": {
       "id": "offer_ds_final",
-      "message": " Congrats! Here is your offer for Dropshipping...\\n https://example.com/ds-beg",
+      "message": " Congrats! Here is your offer for Dropshipping...\\n [https://example.com/ds-beg](https://example.com/ds-beg)",
       "options": []
     },
     "offer_smma_final": {
       "id": "offer_smma_final",
-      "message": " Congrats! Here is your offer for SMMA...\\n https://example.com/smma-tool",
+      "message": " Congrats! Here is your offer for SMMA...\\n [https://example.com/smma-tool](https://example.com/smma-tool)",
       "options": []
     }
   }
 }
 \`\`\`
+
+IMPORTANT: Ensure all required fields are present:
+- Every stage must have: id, name, explanation, blockIds
+- Every block must have: id, message, options
+- Every option must have: text, nextBlockId (can be null)
+- All blockIds must reference existing blocks
+- All nextBlockId must reference existing blocks or be null
 `;
 
-            // Use the official SDK to generate content
             const response = await genAI.models.generateContent({
                 model: 'gemini-2.5-flash-preview-05-20',
                 contents: repairPrompt,
             });
 
-            let repairedText = response.text;
-            if (repairedText) {
-                if (repairedText.startsWith("```json")) {
-                    repairedText = repairedText.substring(7, repairedText.length - 3).trim();
-                }
-                // Attempt to parse the repaired JSON to see if it's valid
-                const repairedJson = JSON.parse(repairedText);
-                return repairedJson; // Success!
+            const textToProcess = response.text || '';
+
+            if (!textToProcess || textToProcess.trim() === '') {
+                throw new Error("API responded with empty content during repair.");
             }
+
+            if (textToProcess.startsWith("```json")) {
+                const jsonContent = textToProcess.substring(7, textToProcess.length - 3).trim();
+                const repairedJson = JSON.parse(jsonContent);
+                
+                // Validate the repaired JSON
+                const validatedFlow = validateAndRepairFunnelFlow(repairedJson);
+                if (validatedFlow) {
+                    return validatedFlow;
+                }
+            } else {
+                const repairedJson = JSON.parse(textToProcess);
+                
+                // Validate the repaired JSON
+                const validatedFlow = validateAndRepairFunnelFlow(repairedJson);
+                if (validatedFlow) {
+                    return validatedFlow;
+                }
+            }
+
         } catch (error) {
-            lastError = handleSDKError(error);
-            console.error(`Repair attempt ${i + 1} failed:`, lastError.message);
+            lastError = error as Error;
+            console.error(`Repair attempt ${i + 1} failed:`, error);
+            
+            if (i === maxTries - 1) {
+                throw new AIError(`Failed to repair JSON after ${maxTries} attempts. The AI returned an invalid response that could not be fixed.`, 'CONTENT');
+            }
         }
     }
-    throw lastError; // All repair attempts failed
+    
+    throw new AIError("All repair attempts failed. Please try generating again.", 'CONTENT');
 };
 
 /**
  * Generates a funnel flow using AI based on provided resources
- * @param resources - Array of resources to include in the funnel
+ * @param resources - Array of resources to create funnel for
  * @returns Promise with the generated funnel flow
  */
 export const generateFunnelFlow = async (resources: Resource[]): Promise<FunnelFlow> => {
@@ -304,6 +322,13 @@ Don't miss out on these valuable resources. Act fast – this promo code is for 
 ### JSON OUTPUT STRUCTURE
 
 Generate a clean, raw JSON object. Do not wrap it in markdown. The JSON must have three top-level keys: 'startBlockId', 'stages', and 'blocks'.
+
+CRITICAL: Every field must be present and valid:
+- Every stage MUST have: id, name, explanation, blockIds
+- Every block MUST have: id, message, options
+- Every option MUST have: text, nextBlockId (can be null)
+- All blockIds MUST reference existing blocks
+- All nextBlockId MUST reference existing blocks or be null
 
 Here is a detailed example of the correct, required JSON structure:
 \`\`\`json
@@ -416,7 +441,14 @@ Here is a detailed example of the correct, required JSON structure:
         }
 
         const generatedJson = JSON.parse(textToProcess);
-        return generatedJson;
+        
+        // Validate the generated JSON
+        const validatedFlow = validateAndRepairFunnelFlow(generatedJson);
+        if (validatedFlow) {
+            return validatedFlow;
+        } else {
+            throw new Error("Generated JSON failed validation. Attempting repair...");
+        }
 
     } catch (error) {
         const aiError = handleSDKError(error);
