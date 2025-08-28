@@ -8,7 +8,7 @@ import FunnelPreviewChat from './FunnelPreviewChat';
 import ResourceManager from './ResourceManager';
 import GenerationPacks from '../common/GenerationPacks';
 import { createErrorFunnelFlow } from '../../utils/funnelUtils';
-import { generateFunnelFlow } from '../../ai-actions';
+import { generateFunnelFlow, AIError, ValidationError } from '../../ai-actions';
 
 // Type definitions
 interface Funnel {
@@ -219,7 +219,31 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             handleGeneratedFunnelUpdate(generatedFlow);
         } catch (error) {
             console.error("Funnel generation failed:", error);
-            setApiError((error as Error).message);
+            
+            // Handle specific error types
+            if (error instanceof ValidationError) {
+                setApiError(`Configuration Error: ${error.message}`);
+            } else if (error instanceof AIError) {
+                switch (error.type) {
+                    case 'AUTHENTICATION':
+                        setApiError(`Authentication Error: ${error.message}`);
+                        break;
+                    case 'RATE_LIMIT':
+                        setApiError(`Rate Limit Error: ${error.message}`);
+                        break;
+                    case 'NETWORK':
+                        setApiError(`Network Error: ${error.message}`);
+                        break;
+                    case 'CONTENT':
+                        setApiError(`Content Generation Error: ${error.message}`);
+                        break;
+                    default:
+                        setApiError(`AI Error: ${error.message}`);
+                }
+            } else {
+                setApiError(`Unexpected Error: ${(error as Error).message}`);
+            }
+            
             handleGeneratedFunnelUpdate(createErrorFunnelFlow());
         } finally {
             setIsLoading(false);

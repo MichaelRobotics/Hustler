@@ -22,6 +22,63 @@ interface FunnelFlow {
   blocks: Record<string, any>;
 }
 
+// Custom error types for better error handling
+export class AIError extends Error {
+  constructor(message: string, public type: 'AUTHENTICATION' | 'NETWORK' | 'CONTENT' | 'RATE_LIMIT' | 'UNKNOWN') {
+    super(message);
+    this.name = 'AIError';
+  }
+}
+
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+/**
+ * Validates the API key and environment setup
+ * @throws {ValidationError} If API key is missing or invalid
+ */
+const validateEnvironment = (): void => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    throw new ValidationError('GEMINI_API_KEY is not configured. Please check your environment variables.');
+  }
+  if (apiKey === 'your_gemini_api_key_here' || apiKey.includes('test-key')) {
+    throw new ValidationError('Please configure a valid GEMINI_API_KEY in your environment variables.');
+  }
+};
+
+/**
+ * Handles specific Google Gen AI SDK errors
+ * @param error - The error from the SDK
+ * @returns {AIError} A categorized error
+ */
+const handleSDKError = (error: any): AIError => {
+  const errorMessage = error.message || error.toString();
+  
+  // Check for specific error types
+  if (errorMessage.includes('API key') || errorMessage.includes('authentication')) {
+    return new AIError('Authentication failed. Please check your API key.', 'AUTHENTICATION');
+  }
+  
+  if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+    return new AIError('Rate limit exceeded. Please try again later.', 'RATE_LIMIT');
+  }
+  
+  if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+    return new AIError('Network error. Please check your connection and try again.', 'NETWORK');
+  }
+  
+  if (errorMessage.includes('content') || errorMessage.includes('response')) {
+    return new AIError('Content generation failed. Please try again.', 'CONTENT');
+  }
+  
+  return new AIError(`Unexpected error: ${errorMessage}`, 'UNKNOWN');
+};
+
 /**
  * Repairs malformed JSON using AI
  * @param badJson - The malformed JSON string to repair
@@ -30,6 +87,9 @@ interface FunnelFlow {
  */
 export const repairFunnelJson = async (badJson: string, maxTries = 3): Promise<any> => {
     let lastError: Error | null = null;
+    
+    // Validate environment before making API calls
+    validateEnvironment();
     
     // Initialize the Google Gen AI SDK
     const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -141,8 +201,8 @@ Here is a detailed example of the correct, required JSON structure:
                 return repairedJson; // Success!
             }
         } catch (error) {
-            lastError = error as Error;
-            console.error(`Repair attempt ${i + 1} failed:`, error);
+            lastError = handleSDKError(error);
+            console.error(`Repair attempt ${i + 1} failed:`, lastError.message);
         }
     }
     throw lastError; // All repair attempts failed
@@ -333,6 +393,9 @@ Here is a detailed example of the correct, required JSON structure:
 
     let textToProcess: string = '';
     try {
+        // Validate environment before making API calls
+        validateEnvironment();
+        
         // Initialize the Google Gen AI SDK
         const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         
@@ -356,7 +419,8 @@ Here is a detailed example of the correct, required JSON structure:
         return generatedJson;
 
     } catch (error) {
-        console.error("Funnel generation failed on first attempt. Reason:", (error as Error).message);
+        const aiError = handleSDKError(error);
+        console.error("Funnel generation failed on first attempt. Reason:", aiError.message);
 
         if (textToProcess) {
             console.log("Attempting to repair the following text:", textToProcess);
@@ -365,10 +429,10 @@ Here is a detailed example of the correct, required JSON structure:
                 return repairedJson;
             } catch (repairError) {
                 console.error("Failed to repair JSON after multiple attempts:", repairError);
-                throw new Error("The AI returned an invalid response that could not be repaired. Please try generating again.");
+                throw new AIError("The AI returned an invalid response that could not be repaired. Please try generating again.", 'CONTENT');
             }
         } else {
-            throw new Error(`A network error occurred: ${(error as Error).message}. Please check your connection and try again.`);
+            throw aiError; // Re-throw the categorized error
         }
     }
 };
