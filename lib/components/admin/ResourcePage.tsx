@@ -124,17 +124,12 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
             <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
             
             {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex justify-between items-center gap-2 sm:gap-3">
               {/* Left Side: Theme Toggle */}
               <div className="flex-shrink-0">
                 <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
                   <ThemeToggle />
                 </div>
-              </div>
-              
-              {/* Center: Empty space for balance */}
-              <div className="flex-shrink-0">
-                <div className="w-15 h-10"></div>
               </div>
               
               {/* Right Side: Product Library Button */}
