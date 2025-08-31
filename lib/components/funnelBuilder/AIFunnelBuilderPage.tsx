@@ -384,8 +384,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
           {/* Main Content Area with Whop Design System */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 mt-8">
-            <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black/20">
-              <div className="md:hidden p-0 space-y-0 border-b border-border/30 dark:border-border/20 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 flex-shrink-0">
+            <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
+              <div className="p-0 border-b border-border/30 dark:border-border/20 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 flex-shrink-0">
                 {/* Enhanced Status Indicators with Whop Design */}
                 <div className="flex items-center gap-3">
                   
@@ -410,7 +410,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 {/* API Error Modal */}
                             {apiError && (
                   <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-20 p-4">
-                    <Card className="bg-red-900/50 border border-red-700 p-6 rounded-lg max-w-md text-center shadow-2xl">
+                    <Card className="bg-red-900/50 border border-red-700 p-0 rounded-lg max-w-md text-center shadow-2xl">
                       <Heading size="4" weight="bold" color="red" className="dark:text-red-300 mb-3">
                         Generation Failed
                       </Heading>
@@ -430,7 +430,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                             )}
 
                 {/* Enhanced Content Area with Whop Design */}
-                <div className="flex-0 p-0">
+                <div className="flex-1 p-0">
                             {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                       <div className="relative">
@@ -447,7 +447,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                       </div>
                     </div>
                             ) : isPreviewing ? (
-                    <div className="h-full p-0">
+                    <div className="h-full">
                                 <FunnelPreviewChat funnelFlow={currentFunnel.flow} selectedOffer={selectedOfferName} />
                     </div>
                             ) : (
@@ -464,7 +464,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                       {process.env.NODE_ENV === 'development' && (
                         <DraggableDebugPanel
                           initialPosition={{ x: 16, y: 16 }}
-                          className="bg-surface/95 dark:bg-surface/90 text-foreground p-6 rounded-2xl text-sm max-w-md border border-border/50 dark:border-border/30 shadow-2xl backdrop-blur-sm cursor-move"
+                          className="bg-surface/95 dark:bg-surface/90 text-foreground p-0 rounded-2xl text-sm max-w-md border border-border/50 dark:border-border/30 shadow-2xl backdrop-blur-sm cursor-move"
                         >
                           <div className="flex items-center gap-2 mb-4">
                             <div className="w-2 h-2 bg-violet-500 rounded-full"></div>
@@ -520,13 +520,13 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
           {/* Deployment Modal */}
                 {isDeploying && (
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <Card className="bg-surface/95 dark:bg-surface/90 border border-violet-500/50 rounded-lg shadow-2xl w-full max-w-md">
-                <div className="p-4 border-b border-border/30 dark:border-border/20">
+              <Card className="bg-surface/95 dark:bg-surface/90 border border-violet-500/50 rounded-lg shadow-2xl w-full max-w-md p-0">
+                <div className="p-0 border-b border-border/30 dark:border-border/20">
                   <Heading size="4" weight="bold" color="violet" className="dark:text-violet-300">
                     Deploying Funnel...
                   </Heading>
                             </div>
-                <div className="p-4 h-64 overflow-y-auto font-mono text-sm text-foreground">
+                <div className="p-0 h-64 overflow-y-auto font-mono text-sm text-foreground">
                                 {deploymentLog.map((line, index) => (
                     <Text key={index} size="2" className="whitespace-pre-wrap">
                       {`> ${line}`}
