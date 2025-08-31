@@ -192,9 +192,6 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
             {options.length > 0 && (
                 <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
                     <div className="space-y-3">
-                        <Text size="2" weight="medium" className="text-muted-foreground text-center">
-                            Choose your response:
-                        </Text>
                         <div className="flex flex-col items-end space-y-2">
                             {options.map((opt, i) => (
                                 <button

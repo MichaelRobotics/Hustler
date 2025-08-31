@@ -112,9 +112,10 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
       
       <div className="relative p-4 sm:p-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-10">
-            <div className="flex items-center gap-4">
+          {/* Enhanced Header with Whop Design Patterns - Always Visible */}
+          <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
+            {/* Top Section: Back Button + Title */}
+            <div className="flex items-center gap-4 mb-6">
               <Button
                 size="2"
                 variant="ghost"
@@ -127,32 +128,46 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
               </Button>
               
               <div>
-                <Heading size="6" weight="bold" className="text-foreground">
+                <Heading size="6" weight="bold" className="text-black dark:text-white">
                   Analytics
                 </Heading>
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-3 items-center">
-              {/* Theme Toggle */}
-              <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-                <ThemeToggle />
+            {/* Subtle Separator Line */}
+            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
+            
+            {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
+            <div className="flex justify-between items-center gap-4">
+              {/* Left Side: Theme Toggle */}
+              <div className="flex-shrink-0">
+                <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+                  <ThemeToggle />
+                </div>
               </div>
               
-              <Button
-                size="3"
-                color="violet"
-                onClick={() => onGoToBuilder(funnel)}
-                className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-              >
-                <Edit3 size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
-                <span className="ml-2">Edit</span>
-              </Button>
+              {/* Center: Empty space for balance */}
+              <div className="flex-shrink-0">
+                <div className="w-32 h-10"></div>
+              </div>
+              
+              {/* Right Side: Edit Button */}
+              <div className="flex-shrink-0">
+                <Button
+                  size="3"
+                  color="violet"
+                  onClick={() => onGoToBuilder(funnel)}
+                  className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                >
+                  <Edit3 size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
+                  <span className="ml-2">Edit</span>
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* Live Performance Indicator */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-700/30 mb-6 w-fit">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-700/30 mb-6 w-fit mt-12">
               <Activity className="h-4 w-4 text-green-600 dark:text-green-400" strokeWidth={2.5} />
               <Text size="2" weight="semi-bold" color="green" className="dark:text-green-300">
                   Live Performance

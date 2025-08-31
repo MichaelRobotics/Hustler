@@ -513,20 +513,50 @@ export default function AdminPanel() {
           <div className="flex-1 overflow-auto w-full lg:w-auto">
             <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
               <div className="max-w-7xl mx-auto">
-                {/* Header with Back Button */}
-                <div className="flex items-center gap-4 mb-8">
-                  <Button
-                    variant="ghost"
-                    color="gray"
-                    onClick={handleBackToDashboard}
-                    className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors"
-                  >
-                    <ArrowLeft size={20} strokeWidth={2.5} />
-                  </Button>
-                  <div>
-                    <Heading size="4" weight="bold" className="text-foreground">
-                      Preview: {selectedFunnel.name}
-                    </Heading>
+                {/* Enhanced Header with Whop Design Patterns - Always Visible */}
+                <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg mb-8">
+                  {/* Top Section: Back Button + Title */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <Button
+                      variant="ghost"
+                      color="gray"
+                      onClick={handleBackToDashboard}
+                      className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors"
+                    >
+                      <ArrowLeft size={20} strokeWidth={2.5} />
+                    </Button>
+                    <div>
+                      <Heading size="6" weight="bold" className="text-black dark:text-white">
+                        Preview: {selectedFunnel.name}
+                      </Heading>
+                    </div>
+                  </div>
+                  
+                  {/* Subtle Separator Line */}
+                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
+                  
+                  {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
+                  <div className="flex justify-between items-center gap-4">
+                    {/* Left Side: Placeholder for future actions */}
+                    <div className="flex-shrink-0">
+                      <div className="w-32 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                        <Text size="2" color="gray" className="text-center">Preview</Text>
+                      </div>
+                    </div>
+                    
+                    {/* Center: Theme Toggle */}
+                    <div className="flex-shrink-0">
+                      <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+                        <ThemeToggle />
+                      </div>
+                    </div>
+                    
+                    {/* Right Side: Placeholder for future actions */}
+                    <div className="flex-shrink-0">
+                      <div className="w-32 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                        <Text size="2" color="gray" className="text-center">Actions</Text>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -578,25 +608,51 @@ export default function AdminPanel() {
             
 
             <div className="max-w-7xl mx-auto">
-              {/* Header Section - Enhanced with dark mode highlights */}
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-6 mb-8 sm:mb-10">
-                <div className="flex-1">
-                  <div className="mb-2">
-                    <Heading size="6" weight="bold" className="text-foreground">
+              {/* Enhanced Header with Whop Design Patterns - Always Visible */}
+              <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
+                {/* Top Section: Title */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <Heading size="6" weight="bold" className="text-black dark:text-white">
                       My Funnels
                     </Heading>
                   </div>
                 </div>
                 
-                {/* Theme Toggle - Enhanced with dark mode styling */}
-                <div className="flex justify-end sm:justify-start">
-                  <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-                    <ThemeToggle />
+                {/* Subtle Separator Line */}
+                <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
+                
+                {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
+                <div className="flex justify-between items-center gap-4">
+                  {/* Left Side: Theme Toggle */}
+                  <div className="flex-shrink-0">
+                    <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+                      <ThemeToggle />
+                    </div>
+                  </div>
+                  
+                  {/* Center: Empty space for balance */}
+                  <div className="flex-shrink-0">
+                    <div className="w-32 h-10"></div>
+                  </div>
+                  
+                  {/* Right Side: Add New Funnel Button */}
+                  <div className="flex-shrink-0">
+                    <Button
+                      size="3"
+                      color="violet"
+                      onClick={() => setIsAddDialogOpen(true)}
+                      className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                    >
+                      <Plus size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
+                      <span className="ml-2">Add New Funnel</span>
+                    </Button>
                   </div>
                 </div>
               </div>
 
               {/* Funnels Dashboard - Direct rendering without nesting */}
+              <div className="mt-8">
                 <FunnelsDashboard
                     funnels={funnels}
                     handleEditFunnel={handleEditFunnel}
@@ -607,83 +663,71 @@ export default function AdminPanel() {
                     setEditingFunnelName={setEditingFunnelName}
                     handleSaveFunnelName={handleSaveFunnelName}
                 onFunnelClick={onFunnelClick}
-              />
+                />
+              </div>
 
-              {/* Responsive Add New Funnel Button - Enhanced with dark mode animations */}
-              <div className="fixed z-40 bottom-20 right-4 lg:bottom-6 lg:right-6">
-                <Dialog.Root open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                  <Dialog.Trigger asChild>
-                    <Button
-                      size="3"
-                      color="violet"
-                      className="shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 dark:shadow-lg"
-                      aria-label="Add new funnel"
-                    >
-                      <Plus size={20} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-300" />
-                      <span className="ml-2 font-semibold">Add New Funnel</span>
-                    </Button>
-                  </Dialog.Trigger>
-                  
-                  <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-50" />
-                    <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60 z-50">
-                      <div className="flex justify-between items-center mb-6">
-                        <Dialog.Title asChild>
-                          <Heading size="4" weight="bold" className="text-foreground">
-                            Create New Funnel
-                          </Heading>
-                        </Dialog.Title>
-                        <Dialog.Close asChild>
-                          <Button 
-                            size="1" 
-                            variant="ghost" 
-                            color="gray"
-                            className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
-                          >
-                            <X size={16} strokeWidth={2.5} />
-                          </Button>
-                        </Dialog.Close>
-                      </div>
-                      
-                      <div className="space-y-5">
-                        <div>
-                          <Text as="label" size="2" weight="medium" className="block mb-3 text-foreground">
-                            Funnel Name
-                          </Text>
+              {/* Add New Funnel Dialog */}
+              <Dialog.Root open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <Dialog.Portal>
+                  <Dialog.Overlay className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-50" />
+                  <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60 z-50">
+                    <div className="flex justify-between items-center mb-6">
+                      <Dialog.Title asChild>
+                        <Heading size="4" weight="bold" className="text-foreground">
+                          Create New Funnel
+                        </Heading>
+                      </Dialog.Title>
+                      <Dialog.Close asChild>
+                        <Button 
+                          size="1" 
+                          variant="ghost" 
+                          color="gray"
+                          className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
+                        >
+                          <X size={16} strokeWidth={2.5} />
+                        </Button>
+                      </Dialog.Close>
+                    </div>
+                    
+                    <div className="space-y-5">
+                      <div>
+                        <Text as="label" size="2" weight="medium" className="block mb-3 text-foreground">
+                          Funnel Name
+                        </Text>
                                 <input
                                     type="text"
                                     value={newFunnelName}
                                     onChange={(e) => setNewFunnelName(e.target.value)}
-                            placeholder="Enter funnel name..."
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
-                          />
-                        </div>
-                        
-                        <div className="flex gap-3 pt-6">
-                          <Button 
-                            color="violet" 
-                            onClick={handleAddFunnel}
+                          placeholder="Enter funnel name..."
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
+                        />
+                      </div>
+                      
+                      <div className="flex gap-3 pt-6">
+                        <Button 
+                          color="violet" 
+                          onClick={handleAddFunnel}
                                         disabled={!newFunnelName.trim()}
-                            className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                          >
-                            <Plus size={18} strokeWidth={2.5} className="mr-2" />
-                            Create Funnel
+                          className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        >
+                          <Plus size={18} strokeWidth={2.5} className="mr-2" />
+                          Create Funnel
+                        </Button>
+                        <Dialog.Close asChild>
+                          <Button 
+                            variant="soft" 
+                            color="gray" 
+                            className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 hover:scale-105 transition-all duration-300 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
+                                    >
+                                        Cancel
                           </Button>
-                          <Dialog.Close asChild>
-                            <Button 
-                              variant="soft" 
-                              color="gray" 
-                              className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 hover:scale-105 transition-all duration-300 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
-                            >
-                              Cancel
-                            </Button>
-                          </Dialog.Close>
+                        </Dialog.Close>
                         </div>
                     </div>
-                    </Dialog.Content>
-                  </Dialog.Portal>
-                </Dialog.Root>
-                                         </div>
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
+
                                      </div>
                                  </div>
                              </div>

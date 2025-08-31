@@ -2,6 +2,7 @@ import React from 'react';
 import CollapsibleText from '../common/CollapsibleText';
 import { Heading, Text } from 'frosted-ui';
 import { DollarSign, TrendingUp, Package, ExternalLink } from 'lucide-react';
+import { ThemeToggle } from '../common/ThemeToggle';
 
 // Type definitions
 interface ProductSale {

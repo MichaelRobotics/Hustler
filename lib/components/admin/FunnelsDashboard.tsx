@@ -4,6 +4,7 @@ import React from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Edit, Settings, Copy, Trash2, Check, X, Circle } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
+import { ThemeToggle } from '../common/ThemeToggle';
 
 interface Funnel {
   id: string;
@@ -56,16 +57,7 @@ export default function FunnelsDashboard({
     };
 
     return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Heading size="5" weight="semi-bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
-          Your Funnels
-        </Heading>
-        <Text size="2" color="gray" className="opacity-80">
-          {funnels.length} {funnels.length === 1 ? 'funnel' : 'funnels'}
-        </Text>
-                            </div>
+      <div className="space-y-6">
 
       {/* Funnels Grid - Enhanced with smooth gradients for both themes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -94,7 +86,7 @@ export default function FunnelsDashboard({
                                   </span>
                               )}
                           </div>
-                      </div>
+                            </div>
                         </div>
 
                   {/* Card Body - Enhanced with smooth gradients for both themes */}

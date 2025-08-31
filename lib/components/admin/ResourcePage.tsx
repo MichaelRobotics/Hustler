@@ -98,9 +98,10 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
       
       <div className="relative p-4 sm:p-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-            <div className="flex items-center gap-4">
+          {/* Enhanced Header with Whop Design Patterns - Always Visible */}
+          <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
+            {/* Top Section: Back Button + Title */}
+            <div className="flex items-center gap-4 mb-6">
               <Button
                 size="2"
                 variant="ghost"
@@ -113,33 +114,47 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
               </Button>
               
               <div>
-                <Heading size="6" weight="bold" className="text-foreground">
+                <Heading size="6" weight="bold" className="text-black dark:text-white">
                   Funnel Products
                 </Heading>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              {/* Theme Toggle */}
-              <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-                <ThemeToggle />
+            {/* Subtle Separator Line */}
+            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
+            
+            {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
+            <div className="flex justify-between items-center gap-4">
+              {/* Left Side: Theme Toggle */}
+              <div className="flex-shrink-0">
+                <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+                  <ThemeToggle />
+                </div>
               </div>
               
-              <Button
-                size="3"
-                color="violet"
-                onClick={onOpenResourceLibrary}
-                className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-              >
-                <Library size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
-                <span className="ml-2">Product Library</span>
-              </Button>
+              {/* Center: Empty space for balance */}
+              <div className="flex-shrink-0">
+                <div className="w-32 h-10"></div>
+              </div>
+              
+              {/* Right Side: Product Library Button */}
+              <div className="flex-shrink-0">
+                <Button
+                  size="3"
+                  color="violet"
+                  onClick={onOpenResourceLibrary}
+                  className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                >
+                  <Library size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
+                  <span className="ml-2">Product Library</span>
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* Generate Section - Only visible when products exist but no funnel is generated */}
           {!funnel.flow && currentResources.length > 0 && (
-            <div className="mb-12">
+            <div className="mt-12 mb-12">
               <div className="text-center py-12 px-8 bg-gradient-to-br from-violet-50/30 via-purple-50/20 to-indigo-50/15 dark:from-gray-800/40 dark:via-gray-700/30 dark:to-gray-600/20 rounded-2xl border border-violet-200/30 dark:border-gray-600/30 shadow-xl backdrop-blur-sm relative overflow-hidden">
                 {/* Subtle animated background elements */}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.12)_0%,transparent_50%)]" />
@@ -158,7 +173,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                         onClick={onGlobalGeneration}
                         className="group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-500 ease-out cursor-pointer"
                       >
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 via-green-500 to-emerald-500 dark:from-green-300 dark:via-green-400 dark:to-emerald-400 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-green-400/50 transition-all duration-300 relative">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 dark:from-green-300 dark:via-green-400 dark:to-emerald-400 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-green-500/50 transition-all duration-300 relative">
                           <Zap className="w-6 h-6 text-green-500 group-hover:text-green-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300" strokeWidth={2.5} />
                         </div>
                       </button>
@@ -184,17 +199,10 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 
           {/* Current Resources Section */}
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-                  Current Resources
-                </Heading>
-              </div>
-              <div className="flex items-center gap-2">
-                <Text size="2" color="gray" className="text-muted-foreground">
-                  {currentResources.length} resources
-                </Text>
-              </div>
+            <div className="mb-6">
+              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
+                Current Resources
+              </Heading>
             </div>
 
             {/* Resources Grid */}

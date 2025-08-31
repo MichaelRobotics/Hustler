@@ -280,6 +280,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         setShowOfferSelection(true);
     };
 
+    // Handle successful generation - automatically switch to preview mode
+    const handleGenerationSuccess = () => {
+        // Switch to preview mode to show the generated funnel
+        setIsPreviewing(true);
+        // Trigger remount to ensure proper rendering
+        setNeedsRemount(true);
+    };
+
     // Get offer blocks for selection - Load from funnel resources (same as Funnel Products view)
     const offerBlocks = React.useMemo(() => {
         if (!currentFunnel.resources) return [];
@@ -332,7 +340,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
               </Button>
               
               <div>
-                <Heading size="6" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                <Heading size="6" weight="bold" className="text-black dark:text-white">
                   Funnel Builder
                 </Heading>
               </div>
@@ -341,10 +349,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             {/* Subtle Separator Line */}
             <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
             
-            {/* Bottom Section: Action Buttons */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
+            <div className="flex justify-between items-center gap-4">
               {/* Left Side: Offers Button */}
-              <div className="flex justify-start">
+              <div className="flex-shrink-0">
                 <Button
                   size="3"
                   variant="ghost"
@@ -354,27 +362,28 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 >
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                                </svg>
+                  </svg>
                   <span className="font-semibold text-sm sm:text-base">Offers</span>
                 </Button>
               </div>
               
-              {/* Right Side: Theme Toggle + Go Live Button */}
-              <div className="flex flex-col sm:flex-row gap-3 items-center">
-                {/* Theme Toggle with Enhanced Styling */}
+              {/* Center: Theme Toggle */}
+              <div className="flex-shrink-0">
                 <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
                   <ThemeToggle />
-                            </div>
-                            
-                {/* Enhanced Go Live Button with Whop Design */}
+                </div>
+              </div>
+              
+              {/* Right Side: Go Live Button */}
+              <div className="flex-shrink-0">
                 <Button
                   size="3"
                   color="green"
-                                    onClick={handleDeploy} 
-                                    disabled={!currentFunnel.flow || isLoading || !!apiError} 
+                  onClick={handleDeploy} 
+                  disabled={!currentFunnel.flow || isLoading || !!apiError} 
                   className="px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
-                                    title={apiError ? "Cannot go live due to generation error" : !currentFunnel.flow ? "Generate funnel first" : isLoading ? "Generation in progress" : ""}
-                                >
+                  title={apiError ? "Cannot go live due to generation error" : !currentFunnel.flow ? "Generate funnel first" : isLoading ? "Generation in progress" : ""}
+                >
                   <Play size={18} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300 sm:w-5 sm:h-5" />
                   <span className="ml-2 font-semibold text-sm sm:text-base">Go Live</span>
                 </Button>
@@ -385,23 +394,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
           {/* Main Content Area with Whop Design System */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 mt-8">
             <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
-              <div className="p-0 border-b border-border/30 dark:border-border/20 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 flex-shrink-0">
-                {/* Enhanced Status Indicators with Whop Design */}
-                <div className="flex items-center gap-3">
-                  
-                  {currentFunnel.isDeployed && (
-                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-purple-900/20 border border-green-200/50 dark:border-green-700/30 shadow-sm">
-                      <div className="p-1.5 rounded-lg bg-green-100 dark:bg-green-800/50">
-                        <Target className="h-4 w-4 text-green-600 dark:text-green-400" strokeWidth={2.5} />
-                      </div>
-                      <Text size="2" weight="semi-bold" color="green" className="dark:text-green-300">
-                        Live
-                      </Text>
-                    </div>
-                  )}
-                            </div>
-                        </div>
-
               <div className="relative md:flex-grow md:overflow-auto p-0">
 
 
@@ -594,7 +586,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         onPreview={() => setIsPreviewing(true)}
         onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Funnel Products page
         onEdit={() => setIsPreviewing(false)} // Go back to Funnel Builder from Preview
-        onGeneration={onGlobalGeneration}
+        onGeneration={handleGenerationSuccess}
         isGenerated={!!currentFunnel.flow}
         isGenerating={isGenerating}
         showOnPage={isPreviewing ? "preview" : "aibuilder"}
