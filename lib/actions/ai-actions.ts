@@ -214,6 +214,12 @@ Here is a detailed example of the correct, required JSON structure:
  * @returns Promise with the generated funnel flow
  */
 export const generateFunnelFlow = async (resources: Resource[]): Promise<FunnelFlow> => {
+    // Debug: Log the resources being passed to Gemini
+    console.log('=== RESOURCES PASSED TO GEMINI ===');
+    console.log('Number of resources:', resources.length);
+    console.log('Resources:', JSON.stringify(resources, null, 2));
+    console.log('=== END RESOURCES ===');
+
     const resourceList = resources.map(r => {
         let categoryLabel = r.category === 'PAID_PRODUCT' ? 'Paid Product' : 'Free Value';
         let details = `${r.name} (Category: ${categoryLabel}, Type: ${r.type})`;
@@ -400,6 +406,12 @@ Here is a detailed example of the correct, required JSON structure:
         });
 
         textToProcess = response.text || '';
+
+        // Debug: Log the raw response from Gemini
+        console.log('=== GEMINI RAW RESPONSE ===');
+        console.log('Response text length:', textToProcess?.length || 0);
+        console.log('Response text preview:', textToProcess?.substring(0, 500) + '...');
+        console.log('=== END GEMINI RESPONSE ===');
 
         if (!textToProcess || textToProcess.trim() === '') {
             throw new Error("API responded with empty content.");

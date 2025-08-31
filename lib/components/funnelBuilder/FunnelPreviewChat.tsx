@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Text, Button } from 'frosted-ui';
 
 interface FunnelBlockOption {
   text: string;
@@ -26,6 +27,7 @@ interface ChatMessage {
 
 interface FunnelPreviewChatProps {
   funnelFlow: FunnelFlow | null;
+  selectedOffer?: string | null;
 }
 
 /**
@@ -38,7 +40,7 @@ interface FunnelPreviewChatProps {
  * @param {FunnelFlow | null} props.funnelFlow - The generated funnel flow object containing stages and blocks.
  * @returns {JSX.Element} The rendered FunnelPreviewChat component.
  */
-const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow }) => {
+const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selectedOffer }) => {
     // State to keep track of the conversation history.
     const [history, setHistory] = React.useState<ChatMessage[]>([]);
     // State to track the current block in the conversation.
@@ -92,7 +94,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow }) => 
 
     // Handler for when a user clicks on a chat option.
     const handleOptionClick = (option: FunnelBlockOption, index: number) => {
-        const userMessage: ChatMessage = { type: 'user', text: (index + 1).toString() };
+        const userMessage: ChatMessage = { type: 'user', text: `${index + 1}. ${option.text}` };
         
         // If the selected option has no next block, the conversation ends.
         if (!option.nextBlockId) {
@@ -120,39 +122,121 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow }) => 
     const options = currentBlock?.options || [];
 
     return (
-        <div className="h-full flex flex-col p-4 bg-gray-800/50">
-            <div ref={chatContainerRef} className="flex-grow overflow-y-auto pr-2 space-y-4">
-                {history.map((msg, index) => (
-                    <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl whitespace-pre-wrap ${msg.type === 'user' ? 'bg-violet-600 text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none'}`}>
-                            {msg.text}
+        <div className="h-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+            {/* Native Whop Header */}
+            <div className="flex-shrink-0 p-4 border-b border-border/30 dark:border-border/20 bg-surface/80 dark:bg-surface/60 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+                        <Text size="3" weight="semi-bold" className="text-foreground">
+                            AI Funnel Bot
+                        </Text>
+                        <div className="px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700/50">
+                            <Text size="1" weight="medium" className="text-green-700 dark:text-green-300">
+                                Online
+                            </Text>
                         </div>
                     </div>
-                ))}
-                 <div ref={chatEndRef} />
+                    
+                    {/* Selected Offer Display */}
+                    {selectedOffer && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/30 rounded-xl">
+                            <div className="w-2 h-2 bg-violet-500 rounded-full"></div>
+                            <Text size="2" weight="medium" className="text-violet-700 dark:text-violet-300">
+                                {selectedOffer}
+                            </Text>
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-700">
-                {options.length > 0 ? (
-                    <div className="flex flex-col items-end space-y-2">
-                        {options.map((opt, i) => (
+            
+            {/* Chat Messages Area */}
+            <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-4 space-y-4">
+                {history.map((msg, index) => (
+                    <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {msg.type === 'bot' && (
+                            <div className="flex items-end gap-2">
+                                <div className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0">
+                                    <Text size="1" weight="bold" className="text-white">
+                                        AI
+                                    </Text>
+                                </div>
+                                <div className="max-w-xs lg:max-w-md px-4 py-3 bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30 rounded-2xl shadow-sm">
+                                    <Text size="2" className="text-foreground whitespace-pre-wrap">
+                                        {msg.text}
+                                    </Text>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {msg.type === 'user' && (
+                            <div className="flex items-end gap-2">
+                                <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0">
+                                    <Text size="1" weight="bold" className="text-white">
+                                        You
+                                    </Text>
+                                </div>
+                                <div className="max-w-xs lg:max-w-md px-4 py-3 bg-violet-500 text-white rounded-2xl shadow-sm">
+                                    <Text size="2" className="text-white whitespace-pre-wrap">
+                                        {msg.text}
+                                    </Text>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                <div ref={chatEndRef} />
+            </div>
+            
+            {/* Response Options */}
+            {options.length > 0 && (
+                <div className="flex-shrink-0 p-4 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
+                    <div className="space-y-3">
+                        <Text size="2" weight="medium" className="text-muted-foreground text-center">
+                            Choose your response:
+                        </Text>
+                        <div className="flex flex-col items-end space-y-2">
+                            {options.map((opt, i) => (
                                 <button
                                     key={i}
                                     onClick={() => handleOptionClick(opt, i)}
-                                    className="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl whitespace-pre-wrap bg-violet-600 text-white rounded-br-none hover:bg-violet-700 transition-colors text-left"
+                                    className="max-w-xs lg:max-w-md p-3 bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50 transition-all duration-200 text-left group"
                                 >
-                                    {i + 1}
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-700/30 flex items-center justify-center flex-shrink-0">
+                                            <Text size="1" weight="bold" className="text-violet-700 dark:text-violet-300">
+                                                {i + 1}
+                                            </Text>
+                                        </div>
+                                        <Text size="2" className="text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-300 transition-colors">
+                                            {opt.text}
+                                        </Text>
+                                    </div>
                                 </button>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                ) : (
-                    <div className="text-center">
-                        <p className="text-gray-500 mb-4">Conversation ended.</p>
-                        <button onClick={startConversation} className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors">
+                </div>
+            )}
+            
+            {/* Conversation End State */}
+            {options.length === 0 && currentBlockId && (
+                <div className="flex-shrink-0 p-4 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
+                    <div className="text-center space-y-3">
+                        <Text size="2" className="text-muted-foreground">
+                            Conversation ended.
+                        </Text>
+                        <Button
+                            size="2"
+                            color="violet"
+                            onClick={startConversation}
+                            className="px-6 py-2 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
+                        >
                             Start Over
-                        </button>
+                        </Button>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };

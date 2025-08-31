@@ -49,31 +49,65 @@ const BlockEditor: React.FC<BlockEditorProps> = ({ block, onSave, onCancel }) =>
     };
 
     return (
-        <div className="p-3">
-            <label className="text-xs text-gray-400 font-bold mb-1 block">Message</label>
-            <AutoResizeTextarea
-                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white text-sm mb-2 focus:ring-2 focus:ring-violet-500"
-                value={editedBlock.message}
-                onChange={handleMessageChange}
-            />
-            {editedBlock.options && editedBlock.options.length > 0 && (
-                 <label className="text-xs text-gray-400 font-bold mb-1 block">Options</label>
-            )}
-            <div className="space-y-2">
-                {editedBlock.options && editedBlock.options.map((opt, i) => (
-                    <div key={i} className="flex items-center">
-                        <span className="text-gray-400 mr-2">{i + 1}.</span>
-                        <AutoResizeTextarea
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white text-xs focus:ring-2 focus:ring-violet-500"
-                            value={opt.text}
-                            onChange={(e) => handleOptionChange(i, e.target.value)}
-                           />
-                    </div>
-                ))}
+        <div className="p-4 space-y-4">
+            {/* Message Section */}
+            <div>
+                <label className="text-xs text-violet-600 dark:text-violet-400 font-bold mb-2 block uppercase tracking-wider">
+                    Message
+                </label>
+                <AutoResizeTextarea
+                    className="w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl p-3 text-foreground text-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200 resize-none"
+                    value={editedBlock.message}
+                    onChange={handleMessageChange}
+                    placeholder="Enter your message..."
+                    rows={4}
+                />
             </div>
-            <div className="flex justify-end gap-2 mt-3">
-                <button onClick={onCancel} className="px-3 py-1 text-xs rounded bg-gray-600 hover:bg-gray-500 font-semibold">Cancel</button>
-                <button onClick={() => onSave(editedBlock)} className="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-500 font-semibold flex items-center gap-1">💾 Save</button>
+
+            {/* Options Section */}
+            {editedBlock.options && editedBlock.options.length > 0 && (
+                <div>
+                    <label className="text-xs text-violet-600 dark:text-violet-400 font-bold mb-2 block uppercase tracking-wider">
+                        Options
+                    </label>
+                    <div className="space-y-3">
+                        {editedBlock.options && editedBlock.options.map((opt, i) => (
+                            <div key={i} className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
+                                    <span className="text-xs font-bold text-violet-600 dark:text-violet-400">{i + 1}</span>
+                                </div>
+                                <div className="flex-1">
+                                    <AutoResizeTextarea
+                                        className="w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl p-3 text-foreground text-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200 resize-none"
+                                        value={opt.text}
+                                        onChange={(e) => handleOptionChange(i, e.target.value)}
+                                        placeholder={`Option ${i + 1} text...`}
+                                        rows={2}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 pt-2">
+                <button 
+                    onClick={onCancel} 
+                    className="px-4 py-2 text-sm rounded-xl bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 text-muted-foreground hover:text-foreground hover:bg-surface/60 dark:hover:bg-surface/40 transition-all duration-200 font-medium"
+                >
+                    Cancel
+                </button>
+                <button 
+                    onClick={() => onSave(editedBlock)} 
+                    className="px-4 py-2 text-sm rounded-xl bg-violet-500 hover:bg-violet-600 dark:bg-violet-600 dark:hover:bg-violet-700 text-white font-medium transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 flex items-center gap-2"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Changes
+                </button>
             </div>
         </div>
     );

@@ -1,145 +1,230 @@
-import React from 'react';
+'use client';
 
-// Type definitions
+import React from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { MoreHorizontal, Edit, Settings, Copy, Trash2, Check, X, Circle } from 'lucide-react';
+import { Heading, Text, Button } from 'frosted-ui';
+
 interface Funnel {
   id: string;
   name: string;
   isDeployed?: boolean;
   delay?: number;
   resources?: any[];
-}
-
-interface EditingFunnelName {
-  id: string | null;
-  name: string;
+  sends?: number;
+  flow?: any;
 }
 
 interface FunnelsDashboardProps {
   funnels: Funnel[];
-  selectedFunnelId: string;
-  setSelectedFunnelId: (id: string) => void;
   handleEditFunnel: (funnel: Funnel) => void;
   handleDeployFunnel: (funnelId: string) => void;
   setFunnelToDelete: (funnelId: string | null) => void;
   setFunnelSettingsToEdit: (funnel: Funnel | null) => void;
-  editingFunnelName: EditingFunnelName;
-  setEditingFunnelName: (editing: EditingFunnelName) => void;
+  editingFunnelName: { id: string | null; name: string };
+  setEditingFunnelName: (editing: { id: string | null; name: string }) => void;
   handleSaveFunnelName: (funnelId: string) => void;
-  isAddingFunnel: boolean;
-  setIsAddingFunnel: (isAdding: boolean) => void;
-  newFunnelName: string;
-  setNewFunnelName: (name: string) => void;
-  handleAddNewFunnel: () => void;
+  onFunnelClick: (funnel: Funnel) => void;
 }
 
-/**
- * --- Funnels Dashboard Component ---
- * This component displays the list of funnels and provides controls for managing them.
- * It handles funnel selection, editing, deployment, and deletion.
- *
- * @param {FunnelsDashboardProps} props - The props passed to the component.
- * @returns {JSX.Element} The rendered FunnelsDashboard component.
- */
-const FunnelsDashboard: React.FC<FunnelsDashboardProps> = ({ 
+export default function FunnelsDashboard({
     funnels, 
-    selectedFunnelId, 
-    setSelectedFunnelId, 
     handleEditFunnel, 
     handleDeployFunnel, 
     setFunnelToDelete, 
     setFunnelSettingsToEdit, 
     editingFunnelName, 
     setEditingFunnelName, 
-    handleSaveFunnelName, 
-    isAddingFunnel, 
-    setIsAddingFunnel, 
-    newFunnelName, 
-    setNewFunnelName, 
-    handleAddNewFunnel 
-}) => {
+    handleSaveFunnelName,
+    onFunnelClick
+}: FunnelsDashboardProps) {
+
+  const handleRenameFunnel = (funnel: Funnel) => {
+    setEditingFunnelName({ id: funnel.id, name: funnel.name });
+    };
+
+    const handleDuplicateFunnel = (funnel: Funnel) => {
+    const duplicatedFunnel = {
+      ...funnel,
+      id: Date.now().toString(),
+      name: `${funnel.name} (Copy)`,
+      isDeployed: false,
+      sends: 0
+    };
+    // Add to funnels array (this would need to be handled by parent component)
+    console.log('Duplicate funnel:', duplicatedFunnel);
+    };
+
     return (
-        <div className="bg-gray-800/50 backdrop-blur-xl border border-gray-700 p-6 rounded-2xl shadow-lg mb-8">
-            <h2 className="text-2xl font-bold text-white mb-4">My Funnels</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:max-h-full max-h-96 overflow-y-auto md:overflow-visible">
-                {funnels.map(funnel => (
-                    <div key={funnel.id} onClick={() => setSelectedFunnelId(funnel.id)} className={`p-4 rounded-lg border flex flex-col justify-between transition-colors ${selectedFunnelId === funnel.id ? 'bg-violet-600/30 border-violet-500' : 'bg-gray-900/50 border-gray-700 hover:bg-gray-700/50'}`}>
-                        <div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Heading size="5" weight="semi-bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+          Your Funnels
+        </Heading>
+        <Text size="2" color="gray" className="opacity-80">
+          {funnels.length} {funnels.length === 1 ? 'funnel' : 'funnels'}
+        </Text>
+                            </div>
+
+      {/* Funnels Grid - Enhanced with smooth gradients for both themes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {funnels.map((funnel) => (
+              <div
+                  key={funnel.id}
+                  onClick={() => onFunnelClick(funnel)}
+                  className="group relative bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl flex flex-col justify-between transition-all duration-300 cursor-pointer hover:shadow-xl hover:shadow-violet-500/10 hover:border-violet-500/80 dark:hover:border-violet-400/90 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 shadow-lg backdrop-blur-sm dark:hover:shadow-2xl dark:hover:shadow-violet-500/20 dark:shadow-black/20 overflow-hidden"
+              >
+                  {/* Card Header with Status - Enhanced with smooth gradients for both themes */}
+                  <div className="p-4 border-b-2 border-border dark:border-violet-500/30 bg-gradient-to-r from-gray-50 via-gray-100 to-violet-100 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-800/60">
+                      <div className="flex items-start justify-between gap-3">
+                          {/* Status Badge - Live (Red) or Draft (Gray) */}
+                          <div className="flex items-center gap-2">
+                              {funnel.isDeployed ? (
+                                  <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
+                                      <Circle className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse fill-current" strokeWidth={0} />
+                                      <span className="hidden sm:inline font-semibold">Live</span>
+                                      <span className="sm:hidden">●</span>
+                                  </span>
+                              ) : (
+                                  <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800/60 dark:to-gray-700/60 text-gray-700 dark:text-gray-300 border-2 border-gray-300 dark:border-gray-600 shadow-sm">
+                                      <Circle className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full mr-2 fill-current" strokeWidth={0} />
+                                      <span className="hidden sm:inline font-semibold">Draft</span>
+                                      <span className="sm:hidden">●</span>
+                                  </span>
+                              )}
+                          </div>
+                      </div>
+                        </div>
+
+                  {/* Card Body - Enhanced with smooth gradients for both themes */}
+                  <div className="p-4 bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-900/80 dark:via-gray-800/60 dark:to-indigo-900/30">
                             {editingFunnelName.id === funnel.id ? (
-                                <div className="flex items-center gap-2">
+                          <div className="space-y-3">
                                     <input
                                         type="text"
                                         value={editingFunnelName.name}
                                         onChange={(e) => setEditingFunnelName({...editingFunnelName, name: e.target.value})}
-                                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  className="w-full border-2 border-border/60 dark:border-violet-500/40 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-900 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/60 dark:focus:border-violet-400/80 transition-all duration-200 shadow-sm dark:shadow-lg dark:shadow-black/20"
                                         autoFocus
-                                        onClick={(e) => e.stopPropagation()} // Prevent card click when editing
-                                    />
-                                    <button onClick={(e) => { e.stopPropagation(); handleSaveFunnelName(funnel.id)}} className="p-1 text-green-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg></button>
-                                    <button onClick={(e) => { e.stopPropagation(); setEditingFunnelName({id: null, name: ''})}} className="p-1 text-red-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                  onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex gap-2">
+                                  <Button 
+                                      size="2"
+                                      color="green"
+                                      onClick={(e) => { e.stopPropagation(); handleSaveFunnelName(funnel.id)}} 
+                                      className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 dark:shadow-green-500/30"
+                                      aria-label="Save funnel name"
+                                  >
+                                      <Check className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Save</span>
+                                  </Button>
+                                  <Button 
+                                      size="2"
+                                      color="red"
+                                      variant="soft"
+                                      onClick={(e) => { e.stopPropagation(); setEditingFunnelName({id: null, name: ''})}} 
+                                      className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30"
+                                      aria-label="Cancel editing"
+                                  >
+                                      <X className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Cancel</span>
+                                  </Button>
+                              </div>
                                 </div>
                             ) : (
-                                <div className="flex justify-between items-start gap-4">
-                                    <div className="flex items-start gap-2 min-w-0">
-                                        <span
-                                            className="font-semibold text-white cursor-pointer"
-                                            onClick={(e) => {e.stopPropagation(); setEditingFunnelName({id: funnel.id, name: funnel.name})}}
-                                        >
+                          <div className="space-y-4">
+                              {/* Funnel Name */}
+                              <div>
+                                  <Text size="4" weight="semi-bold" className="cursor-pointer group-hover:text-violet-600 dark:group-hover:text-violet-300 transition-colors duration-200 text-foreground line-clamp-2">
                                             {funnel.name}
-                                        </span>
-                                        {funnel.isDeployed && <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full flex-shrink-0 mt-1">Deployed</span>}
+                                  </Text>
+                              </div>
+                              
+                              {/* Sends Counter - Bottom left corner with separated number and text */}
+                              <div className="flex flex-col gap-1">
+                                  <Text size="4" weight="bold" color="violet" className="dark:text-violet-300">
+                                      {funnel.sends || 0}
+                                  </Text>
+                                  <Text size="1" color="gray" className="dark:text-gray-300">
+                                      Sends
+                                  </Text>
+                              </div>
+                          </div>
+                      )}
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button onClick={(e) => { e.stopPropagation(); setFunnelSettingsToEdit(funnel);}} className="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-gray-600/50 transition-colors" title="Funnel Settings">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    
+                  {/* Settings Dots - Vertically positioned in bottom right corner */}
+                  <div className="absolute bottom-3 right-3 z-10">
+                      <DropdownMenu.Root>
+                          <DropdownMenu.Trigger asChild>
+                                        <button 
+                                  className="p-2 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground hover:bg-surface/80 sm:opacity-100 sm:group-hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 shadow-sm border-2 border-transparent hover:border-violet-500/40 dark:hover:border-violet-400/60"
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label="Funnel options"
+                              >
+                                  <MoreHorizontal className="h-4 w-4" strokeWidth={2.5} />
                                         </button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleEditFunnel(funnel);}} className="px-3 py-1 text-sm rounded-md bg-violet-600 hover:bg-violet-700 text-white font-semibold transition-colors flex-shrink-0">Edit</button>
-                                    </div>
-                                </div>
-                            )}
+                          </DropdownMenu.Trigger>
+                          
+                          <DropdownMenu.Portal>
+                              <DropdownMenu.Content
+                                  className="min-w-[180px] sm:min-w-[200px] border-2 border-border/80 dark:border-violet-500/50 bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-900/50 backdrop-blur-sm rounded-xl shadow-2xl p-1 z-50"
+                                  sideOffset={5}
+                                  align="end"
+                              >
+                                  <DropdownMenu.Item
+                                      onClick={(e) => { e.preventDefault(); handleRenameFunnel(funnel); }}
+                                      className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-violet-300/60 dark:hover:border-violet-600/60"
+                                  >
+                                      <Edit className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Rename</span>
+                                  </DropdownMenu.Item>
+                                  
+                                  <DropdownMenu.Item
+                                      onClick={(e) => { e.preventDefault(); setFunnelSettingsToEdit(funnel); }}
+                                      className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-sky-100 dark:hover:bg-sky-900/40 hover:text-sky-800 dark:hover:text-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-sky-300/60 dark:hover:border-sky-600/60"
+                                  >
+                                      <Settings className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Settings</span>
+                                  </DropdownMenu.Item>
+                                  
+                                  <DropdownMenu.Item
+                                      onClick={(e) => { e.preventDefault(); handleEditFunnel(funnel); }}
+                                      className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-violet-300/60 dark:hover:border-violet-600/60"
+                                  >
+                                      <Edit className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Edit</span>
+                                  </DropdownMenu.Item>
+                                  
+                                  <DropdownMenu.Item
+                                      onClick={(e) => { e.preventDefault(); handleDuplicateFunnel(funnel); }}
+                                      className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-800 dark:hover:text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-amber-300/60 dark:hover:border-amber-600/60"
+                                  >
+                                      <Copy className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Duplicate</span>
+                                  </DropdownMenu.Item>
+                                  
+                                  <DropdownMenu.Separator className="h-px bg-border/60 my-1 dark:bg-violet-500/30" />
+                                  
+                                  <DropdownMenu.Item
+                                      onClick={(e) => { e.preventDefault(); setFunnelToDelete(funnel.id); }}
+                                                    disabled={funnel.isDeployed}
+                                      className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 disabled:cursor-not-allowed disabled:hover:bg-transparent text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-800 dark:hover:text-red-200 disabled:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-red-300/60 dark:hover:border-red-600/60"
+                                                    title={funnel.isDeployed ? "Cannot delete a live funnel" : "Delete funnel"}
+                                                >
+                                      <Trash2 className="h-4 w-4" strokeWidth={2.5} />
+                                      <span>Delete</span>
+                                  </DropdownMenu.Item>
+                              </DropdownMenu.Content>
+                          </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                         </div>
-                         <div className="mt-4 pt-2 border-t border-gray-700/50 flex items-center justify-between">
-                            <button
-                                onClick={(e) => {e.stopPropagation(); handleDeployFunnel(funnel.id)}}
-                                disabled={funnel.isDeployed}
-                                className="text-xs font-semibold text-gray-300 hover:text-white disabled:text-gray-500 disabled:cursor-not-allowed"
-                            >
-                                {funnel.isDeployed ? 'Currently Deployed' : 'Deploy'}
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setFunnelToDelete(funnel.id); }}
-                                disabled={funnel.isDeployed}
-                                className="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-red-600/50 transition-colors disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                title={funnel.isDeployed ? "Cannot delete a deployed funnel" : "Delete funnel"}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                         </div>
                     </div>
                 ))}
-                 {funnels.length < 6 && (
-                    isAddingFunnel ? (
-                        <div className="bg-gray-900/50 p-4 rounded-lg flex flex-col gap-2 border border-gray-700 w-full">
-                            <input
-                                type="text"
-                                value={newFunnelName}
-                                onChange={(e) => setNewFunnelName(e.target.value)}
-                                placeholder="New Funnel Name"
-                                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                            />
-                            <div className="flex gap-2">
-                                <button onClick={handleAddNewFunnel} className="flex-grow px-3 py-1 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white font-semibold transition-colors">Add</button>
-                                <button onClick={() => setIsAddingFunnel(false)} className="px-3 py-1 text-sm rounded-md bg-gray-600 hover:bg-gray-700 text-white font-semibold transition-colors">Cancel</button>
-                            </div>
-                        </div>
-                    ) : (
-                        <button onClick={() => setIsAddingFunnel(true)} className="bg-gray-900/50 p-4 rounded-lg flex justify-center items-center border-2 border-dashed border-gray-600 hover:border-violet-500 hover:text-violet-400 transition-colors w-full">
-                            <span className="font-semibold text-white">+ Add New Funnel</span>
-                        </button>
-                    )
-                )}
             </div>
         </div>
     );
-};
+}
 
-export default FunnelsDashboard;

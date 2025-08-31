@@ -1,21 +1,29 @@
+
 'use client';
 
-import React from 'react';
-import { generateMockData, generateSalesData } from '@/lib/utils/dataSimulation';
-import { createDefaultFunnel } from '@/lib/utils/funnelUtils';
-import AIFunnelBuilderPage from '../funnelBuilder/AIFunnelBuilderPage';
+import React, { useState } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import * as AlertDialog from '@radix-ui/react-alert-dialog';
+import { Plus, X, Settings, Trash2, Save, Sparkles, ArrowLeft } from 'lucide-react';
+import { Heading, Text, Button } from 'frosted-ui';
 import FunnelsDashboard from './FunnelsDashboard';
-import SalesPerformance from './SalesPerformance';
-import FunnelAnalytics from './FunnelAnalytics';
+import FunnelAnalyticsPage from './FunnelAnalyticsPage';
+import ResourcePage from './ResourcePage';
+import ResourceLibrary from './ResourceLibrary';
+import AIFunnelBuilderPage from '../funnelBuilder/AIFunnelBuilderPage';
+import FunnelPreviewChat from '../funnelBuilder/FunnelPreviewChat';
+import AdminSidebar from './AdminSidebar';
+import { ThemeToggle } from '../common/ThemeToggle';
+import UnifiedNavigation from '../common/UnifiedNavigation';
 
-// Type definitions
 interface Funnel {
   id: string;
   name: string;
-  flow?: any;
   isDeployed?: boolean;
   delay?: number;
   resources?: any[];
+  sends?: number;
+  flow?: any;
 }
 
 interface User {
@@ -34,315 +42,700 @@ interface SalesData {
 
 interface Resource {
   id: string;
-  type: string;
   name: string;
   link: string;
-  code: string;
-  category: string;
+  type: 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL';
+  category?: string;
+  description?: string;
+  promoCode?: string;
 }
 
-interface Stats {
-  total: number;
-  qualifiedUsers: number;
-  converted: number;
-}
+type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview';
 
-interface SalesStats {
-  affiliate: any[];
-  myProducts: any[];
-  affiliateTotal: { sales: number; revenue: number };
-  myProductsTotal: { sales: number; revenue: number };
-}
+export default function AdminPanel() {
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview'>('dashboard');
+  const [selectedFunnel, setSelectedFunnel] = useState<Funnel | null>(null);
+  const [funnels, setFunnels] = useState<Funnel[]>([
+    { 
+      id: '1', 
+      name: 'Sales Funnel', 
+      isDeployed: true, 
+      sends: 0,
+      resources: [
+        { id: '1', type: 'AFFILIATE', name: 'Product A', link: 'https://example.com/a', promoCode: 'SAVE20', category: 'Free Value' },
+        { id: '2', type: 'MY_PRODUCTS', name: 'Product B', link: 'https://example.com/b', promoCode: 'SAVE30', category: 'Free Value' }
+      ],
+      flow: null
+    },
+    { 
+      id: '2', 
+      name: 'Lead Generation', 
+      isDeployed: false, 
+      sends: 0,
+      resources: [
+        { id: '3', type: 'CONTENT', name: 'Lead Magnet', link: 'https://example.com/lead', promoCode: '', category: 'Free Value' }
+      ],
+      flow: null
+    },
+  ]);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [newFunnelName, setNewFunnelName] = useState('');
+  const [funnelToDelete, setFunnelToDelete] = useState<Funnel | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [editingFunnelName, setEditingFunnelName] = useState<{ id: string | null; name: string }>({ id: null, name: '' });
+  const [libraryContext, setLibraryContext] = useState<'global' | 'funnel'>('global');
+  const [currentFunnelForLibrary, setCurrentFunnelForLibrary] = useState<Funnel | null>(null);
 
-/**
- * --- Main Admin Component ---
- * This is the top-level component that manages the overall application state and views.
- * It handles data initialization, state management for funnels, users, and sales,
- * and renders the appropriate view (dashboard or funnel builder).
- *
- * @returns {JSX.Element} The rendered AdminPanel component.
- */
-const AdminPanel = () => {
-    // State for managing the current view ('dashboard' or 'builder')
-    const [view, setView] = React.useState<'dashboard' | 'builder'>('dashboard');
-    
-    // State for all application data
-    const [allUsers, setAllUsers] = React.useState<User[]>([]);
-    const [stats, setStats] = React.useState<Stats>({ total: 0, qualifiedUsers: 0, converted: 0 });
-    const [salesStats, setSalesStats] = React.useState<SalesStats>({ 
-        affiliate: [], 
-        myProducts: [], 
-        affiliateTotal: { sales: 0, revenue: 0 }, 
-        myProductsTotal: { sales: 0, revenue: 0 } 
-    });
-    const [loading, setLoading] = React.useState(true);
-    const [funnels, setFunnels] = React.useState<Funnel[]>([]);
-    const [allSalesData, setAllSalesData] = React.useState<SalesData[]>([]);
-    const [allResources, setAllResources] = React.useState<Resource[]>([]);
-    const [generations, setGenerations] = React.useState(1);
-
-    // State for dashboard interactions
-    const [selectedFunnelId, setSelectedFunnelId] = React.useState<string | null>('A');
-    const [editingFunnel, setEditingFunnel] = React.useState<Funnel | null>(null);
-    const [editingFunnelName, setEditingFunnelName] = React.useState<{ id: string | null; name: string }>({ id: null, name: '' });
-    const [newFunnelName, setNewFunnelName] = React.useState("");
-    const [isAddingFunnel, setIsAddingFunnel] = React.useState(false);
-    const [funnelToDelete, setFunnelToDelete] = React.useState<string | null>(null);
-    const [funnelSettingsToEdit, setFunnelSettingsToEdit] = React.useState<Funnel | null>(null);
-
-    // This effect runs once on component mount to initialize all data from localStorage or generate mock data.
+  // Debug view changes and selectedFunnel state
     React.useEffect(() => {
-        let userData = JSON.parse(localStorage.getItem('allUsersData') || '[]');
-        if (userData.length === 0) {
-            userData = generateMockData(1000);
-            localStorage.setItem('allUsersData', JSON.stringify(userData));
-        }
-        setAllUsers(userData);
+    console.log('View changed to:', currentView);
+    console.log('Selected funnel:', selectedFunnel);
+    console.log('Selected funnel flow:', selectedFunnel?.flow);
+  }, [currentView, selectedFunnel]);
 
-        let savedFunnels = JSON.parse(localStorage.getItem('funnels') || '[]');
-        if (savedFunnels.length === 0) {
-            savedFunnels = [
-                createDefaultFunnel('A', 'Sales Funnel', 50, true),
-                createDefaultFunnel('B', 'Lead Gen Funnel', 50)
-            ];
-            localStorage.setItem('funnels', JSON.stringify(savedFunnels));
-        }
-        setFunnels(savedFunnels);
+  const handleViewChange = (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview') => {
+    if (view === 'resourceLibrary') {
+      // Check if we have a selected funnel and are in a funnel-related context
+      if (selectedFunnel && (currentView === 'resources' || currentView === 'analytics' || currentView === 'funnelBuilder')) {
+        // From funnel context
+        setLibraryContext('funnel');
+        setCurrentFunnelForLibrary(selectedFunnel);
+      } else {
+        // From sidebar or other non-funnel context
+        setCurrentFunnelForLibrary(null);
+        setLibraryContext('global');
+      }
+    }
+    setCurrentView(view);
+  };
 
-        let salesData = JSON.parse(localStorage.getItem('salesData') || '[]');
-        if (salesData.length === 0) {
-            salesData = generateSalesData();
-            localStorage.setItem('salesData', JSON.stringify(salesData));
-        }
-        setAllSalesData(salesData);
+  // Mock data for analytics
+  const [allUsers, setAllUsers] = useState<User[]>([
+    { id: '1', funnelId: '1', isQualified: true, stepCompleted: 6 },
+    { id: '2', funnelId: '1', isQualified: false, stepCompleted: 2 },
+    { id: '3', funnelId: '2', isQualified: true, stepCompleted: 4 },
+  ]);
 
-        const savedResources = JSON.parse(localStorage.getItem('allResources') || '[]');
-        if (savedResources.length === 0) {
-            const defaultResources = [
-                { id: '1', type: 'AFFILIATE', name: 'Beginner Dropshipping Course', link: 'https://example.com/ds-beg', code: 'SAVE10', category: 'PAID_PRODUCT' },
-                { id: '2', type: 'MY_PRODUCT', name: 'Advanced E-commerce Guide to $100k Months', link: 'https://example.com/my-guide', code: '', category: 'PAID_PRODUCT' },
-                { id: '3', type: 'AFFILIATE', name: 'SMMA Client Finder Tool for Agencies', link: 'https://example.com/smma-tool', code: 'SMMA20', category: 'FREE_VALUE' },
-            ];
-            setAllResources(defaultResources);
-            localStorage.setItem('allResources', JSON.stringify(defaultResources));
-        } else {
-            setAllResources(savedResources);
-        }
+  const [allSalesData, setAllSalesData] = useState<SalesData[]>([
+    { funnelId: '1', name: 'Product A', price: 50, type: 'AFFILIATE' },
+    { funnelId: '1', name: 'Product B', price: 75, type: 'MY_PRODUCTS' },
+    { funnelId: '2', name: 'Product C', price: 25, type: 'AFFILIATE' },
+  ]);
 
-        const savedGenerations = localStorage.getItem('generations');
-        if (savedGenerations === null) {
-            setGenerations(1);
-            localStorage.setItem('generations', '1');
-        } else {
-            setGenerations(JSON.parse(savedGenerations));
-        }
-    }, []);
+  const [allResources, setAllResources] = useState<Resource[]>([]);
 
-    // Effect to persist generation count to localStorage whenever it changes.
-    React.useEffect(() => {
-        localStorage.setItem('generations', JSON.stringify(generations));
-    }, [generations]);
+  const handleAddFunnel = () => {
+    if (newFunnelName.trim()) {
+      const newFunnel: Funnel = {
+        id: Date.now().toString(),
+        name: newFunnelName.trim(),
+        isDeployed: false,
+        sends: 0,
+        resources: [],
+        flow: null
+      };
+      setFunnels([...funnels, newFunnel]);
+      setNewFunnelName('');
+      setIsAddDialogOpen(false);
+      
+      // Automatically select the new funnel and navigate to its Funnel Products page
+      setSelectedFunnel(newFunnel);
+      setCurrentView('resources');
+    }
+  };
 
-    // Effect to recalculate sales statistics when the selected funnel or sales data changes.
-    React.useEffect(() => {
-        if (!allSalesData.length) return;
+  const handleDeleteFunnel = (funnelId: string | null) => {
+    if (funnelId) {
+      const funnel = funnels.find(f => f.id === funnelId);
+      if (funnel) {
+        setFunnelToDelete(funnel);
+        setIsDeleteDialogOpen(true);
+      }
+    }
+  };
 
-        const funnelSales = allSalesData.filter(s => s.funnelId === selectedFunnelId);
+  const handleConfirmDelete = () => {
+    if (funnelToDelete) {
+      setFunnels(funnels.filter(f => f.id !== funnelToDelete.id));
+      setFunnelToDelete(null);
+      setIsDeleteDialogOpen(false);
+    }
+  };
 
-        const productSummary = funnelSales.reduce((acc: any, sale) => {
-            if (!acc[sale.name]) {
-                acc[sale.name] = { name: sale.name, sales: 0, revenue: 0, type: sale.type };
-            }
-            acc[sale.name].sales += 1;
-            acc[sale.name].revenue += sale.price;
-            return acc;
-        }, {});
+  const handleEditFunnel = (funnel: Funnel) => {
+    // Navigate to funnel builder view
+    setSelectedFunnel(funnel);
+    setCurrentView('funnelBuilder');
+  };
 
-        const allProducts = Object.values(productSummary);
-        const affiliateProducts = allProducts.filter((p: any) => p.type === 'AFFILIATE');
-        const myProducts = allProducts.filter((p: any) => p.type === 'MY_PRODUCTS');
-        const affiliateTotal = affiliateProducts.reduce((acc: { sales: number; revenue: number }, p: any) => ({ sales: acc.sales + p.sales, revenue: acc.revenue + p.revenue }), { sales: 0, revenue: 0 });
-        const myProductsTotal = myProducts.reduce((acc: { sales: number; revenue: number }, p: any) => ({ sales: acc.sales + p.sales, revenue: acc.revenue + p.revenue }), { sales: 0, revenue: 0 });
+  const handleDeployFunnel = (funnelId: string) => {
+    setFunnels(funnels.map(f => 
+      f.id === funnelId ? { ...f, isDeployed: !f.isDeployed } : f
+    ));
+  };
 
-        setSalesStats({
-            affiliate: affiliateProducts.sort((a: any, b: any) => b.revenue - a.revenue),
-            myProducts: myProducts.sort((a: any, b: any) => b.revenue - a.revenue),
-            affiliateTotal,
-            myProductsTotal
-        });
-    }, [selectedFunnelId, allSalesData]);
-
-    // Effect to recalculate funnel analytics when the selected funnel or user data changes.
-    React.useEffect(() => {
-        if (allUsers.length === 0) return;
-
-        const funnelUsers = allUsers.filter(u => u.funnelId === selectedFunnelId);
-        const total = funnelUsers.length;
-        const funnelStats = {
-            total,
-            qualifiedUsers: funnelUsers.filter(u => u.isQualified).length,
-            converted: funnelUsers.filter(u => u.stepCompleted === 6).length,
-        };
-        setStats(funnelStats);
-        setLoading(false);
-    }, [selectedFunnelId, allUsers]);
-
-    // --- Event Handlers ---
-
-    const handleEditFunnel = (funnel: Funnel) => {
-        setEditingFunnel(funnel);
-        setView('builder');
-    };
-
-    const handleUpdateFunnel = React.useCallback((updatedFunnel: Funnel) => {
-        setFunnels(prevFunnels => {
-            const updatedFunnels = prevFunnels.map(f =>
-                f.id === updatedFunnel.id ? updatedFunnel : f
-            );
-            localStorage.setItem('funnels', JSON.stringify(updatedFunnels));
-            return updatedFunnels;
-        });
-        setEditingFunnel(updatedFunnel);
-    }, []);
-
-    const handleAddNewFunnel = () => {
-        if (!newFunnelName.trim() || funnels.length >= 6) return;
-        const newId = String.fromCharCode(65 + funnels.length); // Generates A, B, C...
-        const newFunnel = createDefaultFunnel(newId, newFunnelName);
-        const updatedFunnels = [...funnels, newFunnel];
-        setFunnels(updatedFunnels);
-        localStorage.setItem('funnels', JSON.stringify(updatedFunnels));
-        setNewFunnelName("");
-        setIsAddingFunnel(false);
+  const setFunnelSettingsToEdit = (funnel: Funnel | null) => {
+    // Handle funnel settings
+    console.log('Settings for funnel:', funnel);
     };
 
     const handleSaveFunnelName = (funnelId: string) => {
-        const updatedFunnels = funnels.map(f => f.id === funnelId ? {...f, name: editingFunnelName.name} : f);
-        setFunnels(updatedFunnels);
-        localStorage.setItem('funnels', JSON.stringify(updatedFunnels));
+    setFunnels(funnels.map(f => 
+      f.id === funnelId ? { ...f, name: editingFunnelName.name } : f
+    ));
         setEditingFunnelName({ id: null, name: '' });
     };
 
-    const handleSaveFunnelSettings = () => {
-        if (!funnelSettingsToEdit) return;
-        const updatedFunnels = funnels.map(f => f.id === funnelSettingsToEdit.id ? funnelSettingsToEdit : f);
-        setFunnels(updatedFunnels);
-        localStorage.setItem('funnels', JSON.stringify(updatedFunnels));
-        setFunnelSettingsToEdit(null);
-    };
-
-    const handleDeployFunnel = (funnelId: string) => {
-        const updatedFunnels = funnels.map(f => ({
-            ...f,
-            isDeployed: f.id === funnelId
-        }));
-        setFunnels(updatedFunnels);
-        localStorage.setItem('funnels', JSON.stringify(updatedFunnels));
-    };
-
-    const handleConfirmDeleteFunnel = () => {
-        if (!funnelToDelete) return;
-        const updatedFunnels = funnels.filter(f => f.id !== funnelToDelete);
-        if (selectedFunnelId === funnelToDelete) {
-            setSelectedFunnelId(updatedFunnels.length > 0 ? updatedFunnels[0].id : null);
-        }
-        setFunnels(updatedFunnels);
-        localStorage.setItem('funnels', JSON.stringify(updatedFunnels));
-        setFunnelToDelete(null);
-    };
-
-    // --- Render Logic ---
-
-    if (loading) {
-        return <div className="flex justify-center items-center h-screen bg-gray-900"><div className="text-2xl font-bold text-gray-400">Loading Analytics...</div></div>;
+  const onFunnelClick = (funnel: Funnel) => {
+    // Check if funnel is generated - if not, go to Funnel Products page
+    if (!funnel.flow) {
+      setSelectedFunnel(funnel);
+      setCurrentView('resources');
+    } else {
+      // Navigate to funnel analytics if funnel is generated
+      setSelectedFunnel(funnel);
+      setCurrentView('analytics');
     }
+  };
 
-    if (view === 'builder' && editingFunnel) {
-        return <AIFunnelBuilderPage
-            funnel={editingFunnel}
-            onUpdate={handleUpdateFunnel}
-            onBack={() => setView('dashboard')}
+  const handleManageResources = (funnel: Funnel) => {
+    setSelectedFunnel(funnel);
+    setCurrentView('resources');
+  };
+
+  const handleOpenResourceLibrary = () => {
+    setLibraryContext('funnel');
+    setCurrentFunnelForLibrary(selectedFunnel);
+    setCurrentView('resourceLibrary');
+  };
+
+  const handleAddToFunnel = (resource: Resource) => {
+    if (selectedFunnel) {
+      const updatedFunnel = {
+        ...selectedFunnel,
+        resources: [...(selectedFunnel.resources || []), resource]
+      };
+      setSelectedFunnel(updatedFunnel);
+      // Assuming updateFunnel is a function that updates the state or sends an API call
+      // For now, we'll just update the local state
+      setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+    }
+  };
+
+  const handleBackToDashboard = () => {
+    setCurrentView('dashboard');
+    setSelectedFunnel(null);
+  };
+
+  const handleFunnelGenerationComplete = (funnel: Funnel) => {
+    // Update the funnel with generated flow and navigate to builder
+    const updatedFunnel = { ...funnel, flow: funnel.flow || {} };
+    setSelectedFunnel(updatedFunnel);
+    setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+    setCurrentView('funnelBuilder');
+  };
+
+  // Global generation function that can be called from any page
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const handleGlobalGeneration = async () => {
+    if (!selectedFunnel) return;
+    
+    setIsGenerating(true);
+    
+    try {
+      // Get current funnel resources
+      const currentFunnelResources = selectedFunnel.resources || [];
+      
+      if (currentFunnelResources.length === 0) {
+        alert('No resources assigned to this funnel. Please add resources first.');
+        return;
+      }
+      
+      // Convert resources to the format expected by the AI API
+      const resourcesForAI = currentFunnelResources.map(resource => ({
+        id: resource.id,
+        type: resource.type,
+        name: resource.name,
+        link: resource.link,
+        code: resource.promoCode || '',
+        category: resource.category || 'Free Value'
+      }));
+
+      // Call the AI generation API
+      const response = await fetch('/api/generate-funnel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resources: resourcesForAI }),
+      });
+
+      let result;
+      try {
+        result = await response.json();
+        console.log('Raw API Response:', result);
+      } catch (parseError) {
+        console.error('Failed to parse API response:', parseError);
+        throw new Error('Invalid response format from API');
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to generate funnel');
+      }
+
+      // Update the funnel with the generated flow
+      console.log('API Response:', result);
+      console.log('Generated Flow:', result);
+      
+      // Check if the response has the expected structure
+      const flowData = result.data || result;
+      console.log('Flow Data to use:', flowData);
+      console.log('Flow Data type:', typeof flowData);
+      console.log('Flow Data keys:', Object.keys(flowData || {}));
+      
+      // Validate the flow data structure
+      if (!flowData || typeof flowData !== 'object') {
+        throw new Error('Invalid flow data structure received from API');
+      }
+      
+      if (!flowData.stages || !flowData.blocks || !flowData.startBlockId) {
+        console.warn('Flow data missing required properties:', flowData);
+        throw new Error('Flow data missing required properties (stages, blocks, or startBlockId)');
+      }
+      
+      const updatedFunnel = { ...selectedFunnel, flow: flowData };
+      console.log('Updated Funnel:', updatedFunnel);
+      
+      setSelectedFunnel(updatedFunnel);
+      setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+      
+      // Navigate to the funnel builder to show the generated funnel
+      setCurrentView('funnelBuilder');
+      
+    } catch (error) {
+      console.error('Generation failed:', error);
+      alert(`Failed to generate funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Render different views based on current state
+  if (currentView === 'analytics' && selectedFunnel) {
+    return (
+      <FunnelAnalyticsPage 
+        funnel={selectedFunnel}
+            allUsers={allUsers}
+            allSalesData={allSalesData}
+        onBack={handleBackToDashboard}
+        onGoToBuilder={(funnel) => handleFunnelGenerationComplete(funnel)}
+        onGlobalGeneration={handleGlobalGeneration}
+        isGenerating={isGenerating}
+      />
+    );
+  }
+
+  if (currentView === 'resources' && selectedFunnel) {
+    return (
+      <ResourcePage 
+        funnel={selectedFunnel}
+        onBack={() => {
+          setCurrentView('analytics');
+        }}
+        onGoToBuilder={(updatedFunnel?: Funnel) => handleFunnelGenerationComplete(updatedFunnel || selectedFunnel)}
+        onGoToPreview={(funnel) => {
+          setSelectedFunnel(funnel);
+          setCurrentView('preview');
+        }}
+        onUpdateFunnel={(updatedFunnel) => {
+          setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+        }}
+        allResources={allResources}
+        setAllResources={(resources) => setAllResources(resources)}
+        onOpenResourceLibrary={handleOpenResourceLibrary}
+        onGlobalGeneration={handleGlobalGeneration}
+        isGenerating={isGenerating}
+        onGoToFunnelProducts={() => {}} // Already on Funnel Products page
+      />
+    );
+  }
+
+  if (currentView === 'resourceLibrary') {
+    // If it's global context, render with sidebar. If funnel context, render without sidebar
+    if (libraryContext === 'global') {
+      return (
+        <div className="flex h-screen">
+          {/* Admin Sidebar - Desktop Only */}
+          <AdminSidebar
+            currentView={currentView}
+            onViewChange={handleViewChange}
+            className="flex-shrink-0 h-full"
+          />
+          
+          {/* Main Content Area */}
+          <div className="flex-1 overflow-auto w-full lg:w-auto">
+            <ResourceLibrary
+              funnel={undefined}
+              allResources={allResources}
+              setAllResources={(resources) => setAllResources(resources)}
+              onBack={undefined}
+              onAddToFunnel={undefined}
+              onEdit={undefined} // No edit in global library
+              onGlobalGeneration={handleGlobalGeneration}
+              isGenerating={isGenerating}
+              onGoToFunnelProducts={() => setCurrentView('resources')}
+              context={libraryContext}
+            />
+          </div>
+        </div>
+      );
+    } else {
+      // Funnel context - render without sidebar (as before)
+      return (
+        <ResourceLibrary
+          funnel={selectedFunnel || undefined}
             allResources={allResources}
-            setAllResources={setAllResources}
-            funnels={funnels}
-            setFunnels={setFunnels}
-            generations={generations}
-            setGenerations={setGenerations}
+          setAllResources={(resources) => setAllResources(resources)}
+          onBack={() => setCurrentView('resources')}
+          onAddToFunnel={handleAddToFunnel}
+          onEdit={() => setCurrentView('funnelBuilder')} // Go to FunnelBuilder
+          onGlobalGeneration={handleGlobalGeneration}
+          isGenerating={isGenerating}
+          onGoToFunnelProducts={() => setCurrentView('resources')}
+          context={libraryContext}
         />
+      );
     }
+  }
+
+  if (currentView === 'funnelBuilder' && selectedFunnel) {
+    console.log('Rendering funnelBuilder view with selectedFunnel:', selectedFunnel);
+    // Convert resources to match AIFunnelBuilderPage expected format
+    const convertedResources = allResources.map(resource => ({
+      id: resource.id,
+      type: resource.type,
+      name: resource.name,
+      link: resource.link,
+      code: resource.promoCode || '',
+      category: resource.category || ''
+    }));
 
     return (
-        <div className="bg-gray-900 min-h-screen p-4 sm:p-8 font-sans text-gray-300" style={{'--dot-bg': '#111827', '--dot-color': '#374151', backgroundImage: 'radial-gradient(var(--dot-color) 1px, transparent 1px)', backgroundSize: '20px 20px'} as React.CSSProperties}>
-            <div className="max-w-7xl mx-auto">
-                <h1 className="text-4xl font-bold text-white mb-6">Admin Dashboard</h1>
+      <AIFunnelBuilderPage
+        funnel={selectedFunnel}
+        onBack={handleBackToDashboard}
+        onUpdate={(updatedFunnel) => {
+          setSelectedFunnel(updatedFunnel);
+          setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+        }}
+        onEdit={() => {}} // Already in FunnelBuilder
+        allResources={convertedResources}
+        setAllResources={(resources) => {
+          // Convert back to our format
+          const convertedBack = (Array.isArray(resources) ? resources : []).map((resource: any) => ({
+            id: resource.id,
+            type: resource.type as 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL',
+            name: resource.name,
+            link: resource.link,
+              promoCode: resource.code,
+            category: resource.category,
+            description: ''
+          }));
+          setAllResources(convertedBack);
+        }}
+        funnels={funnels}
+        setFunnels={setFunnels}
+        onGlobalGeneration={handleGlobalGeneration}
+        isGenerating={isGenerating}
+        onGoToFunnelProducts={() => setCurrentView('resources')}
+      />
+    );
+  }
 
+  // Handle case when funnelBuilder is requested but no funnel is selected
+  if (currentView === 'funnelBuilder' && !selectedFunnel) {
+    console.log('funnelBuilder requested but no selectedFunnel, falling back to dashboard');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+        
+        <div className="flex h-screen">
+          <AdminSidebar
+            currentView={currentView}
+            onViewChange={handleViewChange}
+            className="flex-shrink-0 h-full"
+          />
+          
+          <div className="flex-1 overflow-auto w-full lg:w-auto">
+            <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+              <div className="max-w-7xl mx-auto">
+                <div className="text-center py-20">
+                  <Heading size="6" weight="bold" className="text-foreground mb-4">
+                    No Funnel Selected
+                  </Heading>
+                  <Text size="3" className="text-muted-foreground mb-6">
+                    Please select a funnel to edit or go back to the dashboard.
+                  </Text>
+                  <Button
+                    variant="ghost"
+                    color="gray"
+                    onClick={handleBackToDashboard}
+                    className="px-6 py-3"
+                  >
+                    Back to Dashboard
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'preview' && selectedFunnel) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+        {/* Enhanced Background Pattern for Dark Mode */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+        
+        <div className="flex h-screen">
+          {/* Admin Sidebar - Desktop Only */}
+          <AdminSidebar
+            currentView={currentView}
+            onViewChange={handleViewChange}
+            className="flex-shrink-0 h-full"
+          />
+          
+          {/* Main Content Area */}
+          <div className="flex-1 overflow-auto w-full lg:w-auto">
+            <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+              <div className="max-w-7xl mx-auto">
+                {/* Header with Back Button */}
+                <div className="flex items-center gap-4 mb-8">
+                  <Button
+                    variant="ghost"
+                    color="gray"
+                    onClick={handleBackToDashboard}
+                    className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors"
+                  >
+                    <ArrowLeft size={20} strokeWidth={2.5} />
+                  </Button>
+                  <div>
+                    <Heading size="4" weight="bold" className="text-foreground">
+                      Preview: {selectedFunnel.name}
+                    </Heading>
+                  </div>
+                </div>
+
+                {/* Preview Content */}
+                <div className="bg-surface/50 dark:bg-surface/30 rounded-xl border border-border/50 dark:border-border/30 p-6">
+                  <FunnelPreviewChat funnelFlow={selectedFunnel.flow} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Unified Navigation */}
+        <UnifiedNavigation
+          onPreview={() => {}} // Already in preview
+          onFunnelProducts={() => setCurrentView('resources')}
+          onEdit={() => {
+            console.log('Edit button clicked in Preview, switching to funnelBuilder');
+            console.log('Current selectedFunnel:', selectedFunnel);
+            console.log('Current funnels:', funnels);
+            setCurrentView('funnelBuilder');
+          }}
+          onGeneration={handleGlobalGeneration}
+          isGenerated={!!selectedFunnel.flow}
+          isGenerating={isGenerating}
+          showOnPage="preview"
+        />
+      </div>
+    );
+  }
+
+  // Main dashboard view
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+      {/* Enhanced Background Pattern for Dark Mode */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+      
+      <div className="flex h-screen">
+        {/* Admin Sidebar - Desktop Only */}
+                  <AdminSidebar
+            currentView={currentView}
+            onViewChange={handleViewChange}
+            className="flex-shrink-0 h-full"
+          />
+        
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-auto w-full lg:w-auto">
+          <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+            
+
+            <div className="max-w-7xl mx-auto">
+              {/* Header Section - Enhanced with dark mode highlights */}
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-6 mb-8 sm:mb-10">
+                <div className="flex-1">
+                  <div className="mb-2">
+                    <Heading size="6" weight="bold" className="text-foreground">
+                      My Funnels
+                    </Heading>
+                  </div>
+                </div>
+                
+                {/* Theme Toggle - Enhanced with dark mode styling */}
+                <div className="flex justify-end sm:justify-start">
+                  <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+                    <ThemeToggle />
+                  </div>
+                </div>
+              </div>
+
+              {/* Funnels Dashboard - Direct rendering without nesting */}
                 <FunnelsDashboard
                     funnels={funnels}
-                    selectedFunnelId={selectedFunnelId || 'A'}
-                    setSelectedFunnelId={setSelectedFunnelId}
                     handleEditFunnel={handleEditFunnel}
                     handleDeployFunnel={handleDeployFunnel}
-                    setFunnelToDelete={setFunnelToDelete}
+                setFunnelToDelete={handleDeleteFunnel}
                     setFunnelSettingsToEdit={setFunnelSettingsToEdit}
                     editingFunnelName={editingFunnelName}
                     setEditingFunnelName={setEditingFunnelName}
                     handleSaveFunnelName={handleSaveFunnelName}
-                    isAddingFunnel={isAddingFunnel}
-                    setIsAddingFunnel={setIsAddingFunnel}
-                    newFunnelName={newFunnelName}
-                    setNewFunnelName={setNewFunnelName}
-                    handleAddNewFunnel={handleAddNewFunnel}
-                />
+                onFunnelClick={onFunnelClick}
+              />
 
-                <SalesPerformance salesStats={salesStats} />
-
-                <FunnelAnalytics stats={stats} />
-
-                {funnelToDelete && (
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                        <div className="bg-gray-900 border border-red-500/50 rounded-lg shadow-2xl w-full max-w-md">
-                            <div className="p-6 text-center">
-                                <h3 className="text-lg font-bold text-red-400 mb-2">Confirm Funnel Deletion</h3>
-                                <p className="text-gray-300 mb-4">Are you sure you want to delete this funnel? This action cannot be undone.</p>
-                                <div className="flex justify-center gap-4">
-                                    <button onClick={() => setFunnelToDelete(null)} className="px-4 py-2 rounded-lg bg-gray-600 text-white font-semibold hover:bg-gray-700 transition-colors">Cancel</button>
-                                    <button onClick={handleConfirmDeleteFunnel} className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors">Delete Funnel</button>
-                                </div>
-                            </div>
+              {/* Responsive Add New Funnel Button - Enhanced with dark mode animations */}
+              <div className="fixed z-40 bottom-20 right-4 lg:bottom-6 lg:right-6">
+                <Dialog.Root open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                  <Dialog.Trigger asChild>
+                    <Button
+                      size="3"
+                      color="violet"
+                      className="shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 dark:shadow-lg"
+                      aria-label="Add new funnel"
+                    >
+                      <Plus size={20} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-300" />
+                      <span className="ml-2 font-semibold">Add New Funnel</span>
+                    </Button>
+                  </Dialog.Trigger>
+                  
+                  <Dialog.Portal>
+                    <Dialog.Overlay className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-50" />
+                    <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60 z-50">
+                      <div className="flex justify-between items-center mb-6">
+                        <Dialog.Title asChild>
+                          <Heading size="4" weight="bold" className="text-foreground">
+                            Create New Funnel
+                          </Heading>
+                        </Dialog.Title>
+                        <Dialog.Close asChild>
+                          <Button 
+                            size="1" 
+                            variant="ghost" 
+                            color="gray"
+                            className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
+                          >
+                            <X size={16} strokeWidth={2.5} />
+                          </Button>
+                        </Dialog.Close>
+                      </div>
+                      
+                      <div className="space-y-5">
+                        <div>
+                          <Text as="label" size="2" weight="medium" className="block mb-3 text-foreground">
+                            Funnel Name
+                          </Text>
+                                <input
+                                    type="text"
+                                    value={newFunnelName}
+                                    onChange={(e) => setNewFunnelName(e.target.value)}
+                            placeholder="Enter funnel name..."
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
+                          />
+                        </div>
+                        
+                        <div className="flex gap-3 pt-6">
+                          <Button 
+                            color="violet" 
+                            onClick={handleAddFunnel}
+                                        disabled={!newFunnelName.trim()}
+                            className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                          >
+                            <Plus size={18} strokeWidth={2.5} className="mr-2" />
+                            Create Funnel
+                          </Button>
+                          <Dialog.Close asChild>
+                            <Button 
+                              variant="soft" 
+                              color="gray" 
+                              className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 hover:scale-105 transition-all duration-300 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
+                            >
+                              Cancel
+                            </Button>
+                          </Dialog.Close>
                         </div>
                     </div>
-                )}
-                {funnelSettingsToEdit && (
-                             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                                 <div className="bg-gray-900 border border-violet-500/50 rounded-lg shadow-2xl w-full max-w-sm">
-                                     <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-                                         <h3 className="text-lg font-bold text-violet-400">Funnel Settings</h3>
-                                         <button onClick={() => setFunnelSettingsToEdit(null)} className="p-1 text-gray-400 hover:text-white rounded-md hover:bg-gray-700">
-                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                         </button>
-                                     </div>
-                                     <div className="p-6 space-y-4">
-                                         <div>
-                                             <label htmlFor="delay" className="block text-sm font-medium text-gray-300 mb-2">Welcome Message Delay (seconds)</label>
-                                             <input
-                                                 type="text"
-                                                 id="delay"
-                                                 value={funnelSettingsToEdit.delay || 0}
-                                                 onChange={(e) => setFunnelSettingsToEdit({...funnelSettingsToEdit, delay: parseInt(e.target.value) || 0})}
-                                                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                                             />
-                                         </div>
-                                         <div className="flex justify-end gap-2">
-                                             <button onClick={() => setFunnelSettingsToEdit(null)} className="px-4 py-2 rounded-lg bg-gray-600 text-white font-semibold hover:bg-gray-700 transition-colors">Cancel</button>
-                                             <button onClick={handleSaveFunnelSettings} className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors">Save</button>
+                    </Dialog.Content>
+                  </Dialog.Portal>
+                </Dialog.Root>
                                          </div>
                                      </div>
                                  </div>
                              </div>
-                )}
+
+      </div>
+
+      {/* Delete Confirmation Dialog - Enhanced with dark mode styling */}
+      <AlertDialog.Root open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" />
+          <AlertDialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-surface/95 to-surface/90 border border-border/50 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-surface/90 dark:to-surface/80 dark:border-border/30 dark:shadow-2xl dark:shadow-black/40">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
+                <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" strokeWidth={2.5} />
+              </div>
+              <AlertDialog.Title asChild>
+                <Heading size="4" weight="semi-bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                  Delete Funnel
+                </Heading>
+              </AlertDialog.Title>
             </div>
+            
+            <AlertDialog.Description asChild>
+              <Text color="gray" className="mb-6 text-muted-foreground">
+                Are you sure you want to delete "{funnelToDelete?.name}"? This action cannot be undone and will permanently remove the funnel and all its associated data.
+              </Text>
+            </AlertDialog.Description>
+            
+            <div className="flex gap-3">
+              <AlertDialog.Cancel asChild>
+                <Button 
+                  variant="soft" 
+                  color="gray"
+                  className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 transition-all duration-200 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
+                >
+                  Cancel
+                </Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <Button 
+                  color="red" 
+                  onClick={handleConfirmDelete}
+                  className="flex-1 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-200 dark:shadow-red-500/30 dark:hover:shadow-red-500/50"
+                >
+                  <Trash2 size={16} strokeWidth={2.5} />
+                  <span className="ml-2">Delete Funnel</span>
+                </Button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
         </div>
     );
-};
-
-export default AdminPanel;
+}

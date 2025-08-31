@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateFunnelFlow, AIError, ValidationError } from '../../../lib/ai-actions';
+import { generateFunnelFlow, AIError, ValidationError } from '../../../lib/actions/ai-actions';
 
 export async function POST(request: NextRequest) {
   try {
