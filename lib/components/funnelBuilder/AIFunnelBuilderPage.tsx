@@ -258,7 +258,11 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 }
                 setTimeout(() => {
                     setIsDeploying(false);
-                    setDeploymentLog([]);
+                    // Mark funnel as deployed
+                    const updatedFunnel = { ...currentFunnel, isDeployed: true };
+                    setCurrentFunnel(updatedFunnel);
+                    onUpdate(updatedFunnel);
+                    // Keep deployment log for success modal
                 }, 2000); // Keep success message for 2s
             }
         }, 700);
@@ -376,17 +380,28 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
               
               {/* Right Side: Go Live Button */}
               <div className="flex-shrink-0">
-                <Button
-                  size="3"
-                  color="green"
-                  onClick={handleDeploy} 
-                  disabled={!currentFunnel.flow || isLoading || !!apiError} 
-                  className="px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
-                  title={apiError ? "Cannot go live due to generation error" : !currentFunnel.flow ? "Generate funnel first" : isLoading ? "Generation in progress" : ""}
-                >
-                  <Play size={18} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300 sm:w-5 sm:h-5" />
-                  <span className="ml-2 font-semibold text-sm sm:text-base">Go Live</span>
-                </Button>
+                {currentFunnel.isDeployed ? (
+                  <Button
+                    size="3"
+                    color="red"
+                    disabled={true}
+                    className="px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 cursor-not-allowed"
+                  >
+                    <span className="font-semibold text-sm sm:text-base text-white">Live</span>
+                  </Button>
+                ) : (
+                  <Button
+                    size="3"
+                    color="green"
+                    onClick={handleDeploy} 
+                    disabled={!currentFunnel.flow || isLoading || !!apiError} 
+                    className="px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
+                    title={apiError ? "Cannot go live due to generation error" : !currentFunnel.flow ? "Generate funnel first" : isLoading ? "Generation in progress" : ""}
+                  >
+                    <Play size={18} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300 sm:w-5 sm:h-5" />
+                    <span className="ml-2 font-semibold text-sm sm:text-base">Go Live</span>
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -452,8 +467,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                                     selectedOffer={selectedOffer}
                                 />
                       
-                      {/* Draggable Debug Panel with Whop Design */}
-                      {process.env.NODE_ENV === 'development' && (
+                      {/* Debug Panel - Hidden for production */}
+                      {/* {process.env.NODE_ENV === 'development' && (
                         <DraggableDebugPanel
                           initialPosition={{ x: 16, y: 16 }}
                           className="bg-surface/95 dark:bg-surface/90 text-foreground p-0 rounded-2xl text-sm max-w-md border border-border/50 dark:border-border/30 shadow-2xl backdrop-blur-sm cursor-move"
@@ -497,7 +512,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                             </details>
                           </div>
                         </DraggableDebugPanel>
-                      )}
+                      )} */}
                     </>
                   )}
                 </div>
@@ -510,21 +525,57 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 </div>
 
           {/* Deployment Modal */}
-                {isDeploying && (
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <Card className="bg-surface/95 dark:bg-surface/90 border border-violet-500/50 rounded-lg shadow-2xl w-full max-w-md p-0">
-                <div className="p-0 border-b border-border/30 dark:border-border/20">
-                  <Heading size="4" weight="bold" color="violet" className="dark:text-violet-300">
-                    Deploying Funnel...
+          {isDeploying && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 mx-auto border-4 border-green-500 rounded-full animate-spin flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+                  </div>
+                  
+                  <Heading size="4" weight="bold" className="text-gray-900 dark:text-white">
+                    Going Live!
                   </Heading>
-                            </div>
-                <div className="p-0 h-64 overflow-y-auto font-mono text-sm text-foreground">
-                                {deploymentLog.map((line, index) => (
-                    <Text key={index} size="2" className="whitespace-pre-wrap">
-                      {`> ${line}`}
-                    </Text>
-                                ))}
-                            </div>
+                  
+                  <Text size="2" className="text-gray-600 dark:text-gray-300">
+                    Setting up your funnel for customers...
+                  </Text>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Success Modal - Show when deployment is complete */}
+          {!isDeploying && deploymentLog.length > 0 && deploymentLog[deploymentLog.length - 1]?.includes('successful') && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <Card className="bg-white dark:bg-gray-800 border border-green-200 dark:border-green-600 rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 text-green-600 dark:text-green-400">✓</div>
+                  </div>
+                  
+                  <Heading size="4" weight="bold" className="text-gray-900 dark:text-white">
+                    Your Funnel is Live! 🎉
+                  </Heading>
+                  
+                  <Text size="2" className="text-gray-600 dark:text-gray-300">
+                    Customers can now access your funnel and start converting.
+                  </Text>
+                  
+                  <div className="pt-4">
+                    <Button
+                      size="3"
+                      color="violet"
+                      onClick={() => {
+                        // Redirect to analytics
+                        window.location.href = `/admin/analytics/${currentFunnel.id}`;
+                      }}
+                      className="w-full px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
+                    >
+                      View Analytics
+                    </Button>
+                  </div>
+                </div>
               </Card>
             </div>
           )}
