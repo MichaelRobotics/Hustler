@@ -11,7 +11,7 @@ type ThemeContextType = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
+  const [appearance, setAppearance] = useState<'light' | 'dark' | null>(null);
 
   useEffect(() => {
     // Load theme from localStorage on mount
@@ -27,6 +27,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Apply dark class to HTML element for Tailwind dark mode
   useEffect(() => {
+    if (appearance === null) return; // Don't apply theme until initialized
+    
     const htmlElement = document.documentElement;
     if (appearance === 'dark') {
       htmlElement.classList.add('dark');
@@ -36,10 +38,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [appearance]);
 
   const toggleTheme = () => {
+    if (appearance === null) return; // Don't toggle until initialized
+    
     const newTheme = appearance === 'dark' ? 'light' : 'dark';
     setAppearance(newTheme);
     localStorage.setItem('theme', newTheme);
   };
+
+  // Don't render until theme is initialized to prevent flash
+  if (appearance === null) {
+    return null;
+  }
 
   return (
     <ThemeContext.Provider value={{ appearance, toggleTheme }}>
