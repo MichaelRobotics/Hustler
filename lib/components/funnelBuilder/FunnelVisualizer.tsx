@@ -507,7 +507,8 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
             {/* Enhanced Mobile View with Frosted UI Design */}
             <div className="md:hidden p-4 space-y-6">
                 {/* Draggable Debug Info for Mobile with Whop Design */}
-                <DraggableDebugPanel
+                {/* Mobile Debug Panel - Hidden for production */}
+                {/* <DraggableDebugPanel
                     initialPosition={{ x: 16, y: 16 }}
                     className="mb-6 p-4 bg-surface/95 dark:bg-surface/90 rounded-2xl text-xs border border-border/50 dark:border-border/30 shadow-lg backdrop-blur-sm cursor-move"
                     isMobile={true}
@@ -523,7 +524,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                         <div>Stages: {funnelFlow?.stages?.length || 0}</div>
                         <div>Total Blocks: {Object.keys(funnelFlow?.blocks || {}).length}</div>
                     </div>
-                </DraggableDebugPanel>
+                </DraggableDebugPanel> */}
                 
                 <div className="space-y-8">
 

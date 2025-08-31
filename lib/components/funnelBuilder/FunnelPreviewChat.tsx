@@ -122,7 +122,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
     const options = currentBlock?.options || [];
 
     return (
-        <div className="h-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="h-full flex flex-col">
             {/* Native Whop Header */}
             <div className="flex-shrink-0 p-0 border-b border-border/30 dark:border-border/20 bg-surface/80 dark:bg-surface/60 backdrop-blur-sm">
                 <div className="flex items-center justify-between">
@@ -151,7 +151,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
             </div>
             
             {/* Chat Messages Area */}
-            <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4">
+            <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4 pt-6">
                 {history.map((msg, index) => (
                     <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.type === 'bot' && (
@@ -219,10 +219,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
             {/* Conversation End State */}
             {options.length === 0 && currentBlockId && (
                 <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-                    <div className="text-center space-y-3">
-                        <Text size="2" className="text-muted-foreground">
-                            Conversation ended.
-                        </Text>
+                    <div className="flex justify-center py-4">
                         <Button
                             size="2"
                             color="violet"
