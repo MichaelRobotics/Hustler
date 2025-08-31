@@ -385,7 +385,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
           {/* Main Content Area with Whop Design System */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 mt-8">
             <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black/20">
-              <div className="p-6 border-b border-border/30 dark:border-border/20 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 flex-shrink-0">
+              <div className="md:hidden p-0 space-y-0 border-b border-border/30 dark:border-border/20 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 flex-shrink-0">
                 {/* Enhanced Status Indicators with Whop Design */}
                 <div className="flex items-center gap-3">
                   
@@ -402,7 +402,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                             </div>
                         </div>
 
-              <div className="relative md:flex-grow md:overflow-auto p-4">
+              <div className="relative md:flex-grow md:overflow-auto p-0">
 
 
 
@@ -430,7 +430,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                             )}
 
                 {/* Enhanced Content Area with Whop Design */}
-                <div className="flex-1 p-6">
+                <div className="flex-0 p-0">
                             {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                       <div className="relative">
@@ -447,7 +447,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                       </div>
                     </div>
                             ) : isPreviewing ? (
-                    <div className="h-full">
+                    <div className="h-full p-0">
                                 <FunnelPreviewChat funnelFlow={currentFunnel.flow} selectedOffer={selectedOfferName} />
                     </div>
                             ) : (
@@ -584,10 +584,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   </div>
                 );
               })}
-            </div>
-          </div>
-        </div>
-      )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
       {/* Unified Navigation */}
       <UnifiedNavigation
