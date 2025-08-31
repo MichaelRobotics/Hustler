@@ -262,8 +262,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     const updatedFunnel = { ...currentFunnel, isDeployed: true };
                     setCurrentFunnel(updatedFunnel);
                     onUpdate(updatedFunnel);
-                    // Keep deployment log for success modal
-                }, 2000); // Keep success message for 2s
+                    // Automatic redirect to analytics view on current page
+                    setTimeout(() => {
+                        // Redirect to the same page but with analytics view
+                        const currentUrl = window.location.href;
+                        const separator = currentUrl.includes('?') ? '&' : '?';
+                        window.location.href = `${currentUrl}${separator}view=analytics&funnel=${currentFunnel.id}`;
+                    }, 1000); // Redirect after 1 second
+                }, 2000); // Keep deployment message for 2s
             }
         }, 700);
     };
@@ -347,14 +353,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 <Heading size="6" weight="bold" className="text-black dark:text-white">
                   Funnel Builder
                 </Heading>
-              </div>
-            </div>
+                            </div>
+                        </div>
             
             {/* Subtle Separator Line */}
             <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
             
             {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
-            <div className="flex justify-between items-center gap-4">
+            <div className="flex justify-between items-center gap-2 sm:gap-3">
               {/* Left Side: Offers Button */}
               <div className="flex-shrink-0">
                 <Button
@@ -365,8 +371,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   className="px-4 sm:px-6 py-3 border border-violet-200 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200 group"
                 >
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                  </svg>
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                                        </svg>
                   <span className="font-semibold text-sm sm:text-base">Offers</span>
                 </Button>
               </div>
@@ -375,8 +381,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
               <div className="flex-shrink-0">
                 <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
                   <ThemeToggle />
-                </div>
-              </div>
+                                    </div>
+                                </div>
               
               {/* Right Side: Go Live Button */}
               <div className="flex-shrink-0">
@@ -384,10 +390,15 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   <Button
                     size="3"
                     color="red"
-                    disabled={true}
-                    className="px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 cursor-not-allowed"
+                    className="px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 transition-all duration-200"
                   >
-                    <span className="font-semibold text-sm sm:text-base text-white">Live</span>
+                    {/* Live Status Icon */}
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="red" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" fill="red" />
+                      <circle cx="12" cy="12" r="3" fill="white" />
+                                            </svg>
+                    {/* Live Text */}
+                    <span className="font-semibold text-sm sm:text-base text-red-600 dark:text-red-400">Live</span>
                   </Button>
                 ) : (
                   <Button
@@ -402,9 +413,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     <span className="ml-2 font-semibold text-sm sm:text-base">Go Live</span>
                   </Button>
                 )}
-              </div>
-            </div>
-          </div>
+                                        </div>
+                                    </div>
+                                </div>
 
           {/* Main Content Area with Whop Design System */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 mt-8">
@@ -524,61 +535,37 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             </Card>
                 </div>
 
-          {/* Deployment Modal */}
+                    {/* Deployment Modal - Layered like UnifiedNavigation */}
           {isDeploying && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
+              <div className="p-6">
                 <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto border-4 border-green-500 rounded-full animate-spin flex items-center justify-center">
-                    <div className="w-8 h-8 border-2 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+                  {/* Animated Loading Icon with Play Symbol */}
+                  <div className="relative w-16 h-16 mx-auto">
+                    <div className="absolute inset-0 w-16 h-16 border-4 border-green-200 dark:border-green-800 rounded-full animate-pulse"></div>
+                    <div className="absolute inset-2 w-12 h-12 border-4 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+                    <div className="absolute inset-4 w-8 h-8 bg-green-500 rounded-full animate-ping"></div>
+                    {/* Play Icon in Center */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                    </div>
                   </div>
                   
                   <Heading size="4" weight="bold" className="text-gray-900 dark:text-white">
-                    Going Live!
+                    Going Live! 🚀
                   </Heading>
                   
                   <Text size="2" className="text-gray-600 dark:text-gray-300">
                     Setting up your funnel for customers...
                   </Text>
                 </div>
-              </Card>
+              </div>
             </div>
           )}
 
-          {/* Success Modal - Show when deployment is complete */}
-          {!isDeploying && deploymentLog.length > 0 && deploymentLog[deploymentLog.length - 1]?.includes('successful') && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <Card className="bg-white dark:bg-gray-800 border border-green-200 dark:border-green-600 rounded-2xl shadow-2xl w-full max-w-md p-6">
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <div className="w-8 h-8 text-green-600 dark:text-green-400">✓</div>
-                  </div>
-                  
-                  <Heading size="4" weight="bold" className="text-gray-900 dark:text-white">
-                    Your Funnel is Live! 🎉
-                  </Heading>
-                  
-                  <Text size="2" className="text-gray-600 dark:text-gray-300">
-                    Customers can now access your funnel and start converting.
-                  </Text>
-                  
-                  <div className="pt-4">
-                    <Button
-                      size="3"
-                      color="violet"
-                      onClick={() => {
-                        // Redirect to analytics
-                        window.location.href = `/admin/analytics/${currentFunnel.id}`;
-                      }}
-                      className="w-full px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
-                    >
-                      View Analytics
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
+                    {/* Success Modal - Removed for automatic redirect flow */}
                         </div>
                     </div>
 
@@ -602,8 +589,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             >
               <X size={14} strokeWidth={2.5} />
             </Button>
-          </div>
-          
+                </div>
+
           {/* Offers List */}
           <div className="p-4 max-h-80 overflow-y-auto">
             <div className="space-y-2">
@@ -624,7 +611,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
                       {resource.name}
                     </Text>
-                  </div>
+                            </div>
                 );
               })}
                             </div>

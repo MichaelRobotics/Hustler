@@ -87,8 +87,26 @@ export default function AdminPanel() {
   const [libraryContext, setLibraryContext] = useState<'global' | 'funnel'>('global');
   const [currentFunnelForLibrary, setCurrentFunnelForLibrary] = useState<Funnel | null>(null);
 
-  // Debug view changes and selectedFunnel state
+  // Handle URL query parameters for automatic view switching
     React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    const funnelParam = urlParams.get('funnel');
+    
+    if (viewParam === 'analytics' && funnelParam) {
+      // Find the funnel by ID
+      const targetFunnel = funnels.find(f => f.id === funnelParam);
+      if (targetFunnel) {
+        setSelectedFunnel(targetFunnel);
+        setCurrentView('analytics');
+        // Clean up URL
+        window.history.replaceState({}, '', '/admin');
+      }
+    }
+  }, [funnels]);
+
+  // Debug view changes and selectedFunnel state
+  React.useEffect(() => {
     console.log('View changed to:', currentView);
     console.log('Selected funnel:', selectedFunnel);
     console.log('Selected funnel flow:', selectedFunnel?.flow);
@@ -101,7 +119,7 @@ export default function AdminPanel() {
         // From funnel context
         setLibraryContext('funnel');
         setCurrentFunnelForLibrary(selectedFunnel);
-      } else {
+        } else {
         // From sidebar or other non-funnel context
         setCurrentFunnelForLibrary(null);
         setLibraryContext('global');
@@ -536,7 +554,7 @@ export default function AdminPanel() {
                   <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
                   
                   {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
-                  <div className="flex justify-between items-center gap-4">
+                  <div className="flex justify-between items-center gap-2 sm:gap-3">
                     {/* Left Side: Placeholder for future actions */}
                     <div className="flex-shrink-0">
                       <div className="w-32 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center">
@@ -623,7 +641,7 @@ export default function AdminPanel() {
                 <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
                 
                 {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
-                <div className="flex justify-between items-center gap-4">
+                <div className="flex justify-between items-center gap-2 sm:gap-3">
                   {/* Left Side: Theme Toggle */}
                   <div className="flex-shrink-0">
                     <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">

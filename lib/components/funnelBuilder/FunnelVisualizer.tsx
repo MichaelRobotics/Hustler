@@ -659,8 +659,8 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
 
             {/* Enhanced Desktop View with Whop Design */}
             <div className="hidden md:flex items-start justify-center p-6 md:p-8 h-full overflow-auto relative">
-                {/* Draggable Canvas Info with Whop Design */}
-                <DraggableDebugPanel
+                {/* Canvas Info - Hidden for production */}
+                {/* <DraggableDebugPanel
                     initialPosition={{ x: 16, y: 16 }}
                     className="bg-surface/95 dark:bg-surface/90 text-foreground px-3 py-2 rounded-xl text-xs border border-border/50 dark:border-border/30 shadow-lg backdrop-blur-sm cursor-move"
                 >
@@ -674,7 +674,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
                         <div>Blocks: {Object.keys(positions).length}</div>
                         <div>Connections: {lines.length}</div>
                     </div>
-                </DraggableDebugPanel>
+                </DraggableDebugPanel> */}
                 
                 {/* Draggable Drag Indicator with Whop Design */}
                 <DraggableDebugPanel
