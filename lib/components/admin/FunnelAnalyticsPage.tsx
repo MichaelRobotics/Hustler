@@ -148,7 +148,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
               
               {/* Center: Empty space for balance */}
               <div className="flex-shrink-0">
-                <div className="w-21 h-10"></div>
+                <div className="w-15 h-10"></div>
               </div>
               
               {/* Right Side: Edit Button */}
