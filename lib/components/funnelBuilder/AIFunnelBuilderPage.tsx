@@ -132,11 +132,11 @@ interface Funnel {
 
 interface Resource {
   id: string;
-  type: string;
+  type: 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL';
   name: string;
   link: string;
-  code: string;
-  category: string;
+  promoCode?: string; // Keep original field name for consistency with AdminPanel
+  category?: string;
 }
 
 interface AIFunnelBuilderPageProps {
@@ -151,6 +151,7 @@ interface AIFunnelBuilderPageProps {
   onGlobalGeneration: () => Promise<void>;
   isGenerating: boolean;
   onGoToFunnelProducts: () => void;
+  forcePreviewMode?: boolean; // New: force preview mode when coming from other views
 }
 
 /**
@@ -174,14 +175,27 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   setFunnels,
   onGlobalGeneration,
   isGenerating,
-  onGoToFunnelProducts
+  onGoToFunnelProducts,
+  forcePreviewMode = false
 }) => {
     const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
   
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [apiError, setApiError] = React.useState<string | null>(null);
+    const [isPreviewing, setIsPreviewing] = React.useState(false);
+    const [showFloatingMenu, setShowFloatingMenu] = React.useState(false);
+    
   // Update currentFunnel when funnel prop changes
   React.useEffect(() => {
     setCurrentFunnel(funnel);
   }, [funnel]);
+  
+  // Force preview mode when coming from other views
+  React.useEffect(() => {
+    if (forcePreviewMode) {
+      setIsPreviewing(true);
+    }
+  }, [forcePreviewMode]);
   
   // Debug: Log the current funnel flow
   React.useEffect(() => {
@@ -190,16 +204,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
     console.log('currentFunnel:', currentFunnel);
     console.log('currentFunnel.flow:', currentFunnel.flow);
     console.log('funnel.flow:', funnel.flow);
+    console.log('forcePreviewMode:', forcePreviewMode);
+    console.log('isPreviewing:', isPreviewing);
     console.log('=== END AIFUNNEL BUILDER DEBUG ===');
-  }, [currentFunnel, funnel]);
-
-    const [isLoading, setIsLoading] = React.useState(false);
-    const [apiError, setApiError] = React.useState<string | null>(null);
-    const [isPreviewing, setIsPreviewing] = React.useState(false);
-    const [showFloatingMenu, setShowFloatingMenu] = React.useState(false);
+  }, [currentFunnel, funnel, forcePreviewMode, isPreviewing]);
     const [selectedOffer, setSelectedOffer] = React.useState<string | null>(null);
-    const [isDeploying, setIsDeploying] = React.useState(false);
-    const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
+      const [isDeploying, setIsDeploying] = React.useState(false);
+  const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
+  const [offlineConfirmation, setOfflineConfirmation] = React.useState(false);
     const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null);
     const deployControlsRef = React.useRef<HTMLDivElement>(null);
     const deployIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -291,7 +303,13 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
     const handleOfferSelect = () => {
         setShowFloatingMenu(false);
+        setOfflineConfirmation(false); // Hide offline modal when opening offer selection
         setShowOfferSelection(true);
+    };
+
+    const handleClearOfferSelection = () => {
+        setSelectedOffer(null);
+        // This will automatically clear the path highlighting in FunnelVisualizer
     };
 
     // Handle successful generation - automatically switch to preview mode
@@ -303,16 +321,32 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
     };
 
     // Get offer blocks for selection - Load from funnel resources (same as Assigned Products view)
+    // This ensures the offers modal shows exactly the same products as in "Assigned Products"
     const offerBlocks = React.useMemo(() => {
         if (!currentFunnel.resources) return [];
-        return currentFunnel.resources.map(resource => ({
+        
+        // Validate that we only use resources assigned to this specific funnel
+        const funnelResourceIds = new Set(currentFunnel.resources.map(r => r.id));
+        
+        // Map to the exact same structure as sent to Gemini
+        const mappedOffers = currentFunnel.resources.map(resource => ({
             id: resource.id,
             name: resource.name,
             type: resource.type,
-            category: resource.category,
+            category: resource.category || 'Free Value',
             link: resource.link,
-            code: resource.code
+            code: resource.promoCode || '' // Use promoCode from funnel resources
         }));
+        
+        console.log('=== OFFER BLOCKS FOR MODAL ===');
+        console.log('Funnel ID:', currentFunnel.id);
+        console.log('Funnel Name:', currentFunnel.name);
+        console.log('Resources count:', mappedOffers.length);
+        console.log('Funnel Resource IDs:', Array.from(funnelResourceIds));
+        console.log('Resources:', JSON.stringify(mappedOffers, null, 2));
+        console.log('=== END OFFER BLOCKS ===');
+        
+        return mappedOffers;
     }, [currentFunnel.resources]);
 
     // Extract offer name from selected offer
@@ -366,19 +400,42 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
             <div className="flex justify-between items-center gap-2 sm:gap-3">
               {/* Left Side: Offers Button */}
-              <div className="flex-shrink-0">
+              <div className="flex-shrink-0 flex items-center gap-2">
                 <Button
                   size="3"
                   variant="ghost"
                   color="violet"
                   onClick={handleOfferSelect}
-                  className="px-4 sm:px-6 py-3 border border-violet-200 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200 group"
+                  className={`px-4 sm:px-6 py-3 border transition-all duration-200 group ${
+                    selectedOffer 
+                      ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-400 dark:border-violet-500 text-violet-700 dark:text-violet-300' 
+                      : 'border-violet-200 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20'
+                  }`}
                 >
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                                         </svg>
-                  <span className="font-semibold text-sm sm:text-base">Offers</span>
+                  <span className="font-semibold text-sm sm:text-base">
+                    {selectedOffer ? 'Offer Selected' : 'Offers'}
+                  </span>
+                  {selectedOffer && (
+                    <div className="ml-2 w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+                  )}
                 </Button>
+                
+                {/* Clear Selection Button - Only show when offer is selected */}
+                {selectedOffer && (
+                  <Button
+                    size="2"
+                    variant="ghost"
+                    color="gray"
+                    onClick={handleClearOfferSelection}
+                    className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+                    title="Clear offer selection"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </Button>
+                )}
               </div>
               
               {/* Center: Theme Toggle */}
@@ -394,7 +451,12 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   <Button
                     size="3"
                     color="red"
-                    className="px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 transition-all duration-200"
+                    onClick={() => {
+                      setOfflineConfirmation(true);
+                      setShowOfferSelection(false); // Hide offer selection when opening offline modal
+                      setSelectedOffer(null); // Clear offer selection when opening offline modal
+                    }}
+                    className="px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 transition-all duration-200 cursor-pointer"
                   >
                     {/* Live Status Icon */}
                     <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="red" viewBox="0 0 24 24">
@@ -422,7 +484,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                                 </div>
 
           {/* Main Content Area with Whop Design System */}
-          <div className="flex-grow flex flex-col md:overflow-hidden gap-6 mt-8">
+          <div className="flex-grow flex flex-col md:overflow-hidden gap-6 !mt-8">
             <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
               <div className="relative md:flex-grow md:overflow-auto p-0">
 
@@ -470,7 +532,11 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     </div>
                             ) : isPreviewing ? (
                     <div className="h-full">
-                                <FunnelPreviewChat funnelFlow={currentFunnel.flow} selectedOffer={selectedOfferName} />
+                                <FunnelPreviewChat 
+                                  funnelFlow={currentFunnel.flow} 
+                                  selectedOffer={selectedOffer} 
+                                  onOfferClick={(offerId: string) => setSelectedOffer(offerId)}
+                                />
                     </div>
                             ) : (
                     <>
@@ -480,6 +546,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                                     setEditingBlockId={setEditingBlockId}
                                     onBlockUpdate={handleBlockUpdate}
                                     selectedOffer={selectedOffer}
+                                    // Pass the selected offer to highlight the path
+                                    onOfferSelect={(offerId) => setSelectedOffer(offerId)}
                                 />
                       
                       {/* Debug Panel - Hidden for production */}
@@ -572,6 +640,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     {/* Success Modal - Removed for automatic redirect flow */}
                         </div>
                     </div>
+                    
+                    {/* Bottom margin spacer for consistent spacing */}
+                    <div className="h-14"></div>
 
       {/* Floating Offers Selection Panel - Native Whop Style */}
       {showOfferSelection && offerBlocks.length > 0 && (
@@ -588,12 +659,17 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
               size="1"
               variant="ghost"
               color="gray"
-              onClick={() => setShowOfferSelection(false)}
+              onClick={() => {
+                setShowOfferSelection(false);
+                setOfflineConfirmation(false); // Hide offline modal when closing offer selection
+              }}
               className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
             >
               <X size={14} strokeWidth={2.5} />
             </Button>
-                </div>
+          </div>
+          
+
 
           {/* Offers List */}
           <div className="p-4 max-h-80 overflow-y-auto">
@@ -605,6 +681,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     onClick={() => {
                       setSelectedOffer(resource.id);
                       setShowOfferSelection(false);
+                      setOfflineConfirmation(false); // Hide offline modal when selecting offer
+                      // The FunnelVisualizer will automatically highlight the path to this offer
+                      // through the useEffect that watches selectedOffer changes
                     }}
                     className={`p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
                       selectedOffer === resource.id 
@@ -612,16 +691,88 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                         : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-violet-50/50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50'
                     }`}
                   >
-                    <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
-                      {resource.name}
-                    </Text>
-                            </div>
+                    <div className="flex items-center justify-between">
+                      <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
+                        {resource.name}
+                      </Text>
+                      {selectedOffer === resource.id && (
+                        <div className="flex items-center gap-1 text-violet-600 dark:text-violet-400">
+                          <div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+                          <Text size="1" className="text-xs">Path Highlighted</Text>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
                             </div>
                         </div>
                     </div>
                 )}
+
+      {/* Offline Confirmation Modal - Same level as Offer Selection Modal */}
+      {offlineConfirmation && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
+                Take Funnel Offline?
+              </Text>
+            </div>
+            <Button
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={() => {
+                setOfflineConfirmation(false);
+                setShowOfferSelection(false); // Hide offer selection when closing offline modal
+              }}
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+            >
+              <X size={14} strokeWidth={2.5} />
+            </Button>
+          </div>
+
+          {/* Content */}
+          <div className="p-4">
+            <Text size="2" className="text-gray-600 dark:text-gray-300 mb-6 text-center">
+              This will make your funnel unavailable to customers.
+            </Text>
+            
+            <div className="flex gap-3">
+              <Button
+                size="3"
+                color="red"
+                onClick={() => {
+                  // Update funnel state to offline
+                  const updatedFunnel = { ...currentFunnel, isDeployed: false };
+                  setCurrentFunnel(updatedFunnel);
+                  onUpdate(updatedFunnel);
+                  setOfflineConfirmation(false);
+                  setShowOfferSelection(false); // Hide offer selection when going offline
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+              >
+                Take Offline
+              </Button>
+              <Button
+                size="3"
+                variant="soft"
+                color="gray"
+                onClick={() => {
+                  setOfflineConfirmation(false);
+                  setShowOfferSelection(false); // Hide offer selection when closing offline modal
+                }}
+                className="px-6 py-3 hover:scale-105 transition-all duration-300"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Unified Navigation */}
       <UnifiedNavigation
@@ -631,6 +782,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         onGeneration={handleGenerationSuccess}
         isGenerated={!!currentFunnel.flow}
         isGenerating={isGenerating}
+        isDeployed={currentFunnel.isDeployed}
         showOnPage={isPreviewing ? "preview" : "aibuilder"}
       />
 

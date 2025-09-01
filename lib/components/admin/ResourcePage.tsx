@@ -73,6 +73,9 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
     resourceName: ''
   });
 
+  // Offline confirmation state
+  const [offlineConfirmation, setOfflineConfirmation] = useState(false);
+
   const handleDeleteResource = (resourceId: string, resourceName: string) => {
     setDeleteConfirmation({
       show: true,
@@ -133,7 +136,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
       {/* Enhanced Background Pattern */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
       
-      <div className="relative p-4 sm:p-8">
+      <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
         <div className="max-w-7xl mx-auto">
           {/* Enhanced Header with Whop Design Patterns - Always Visible */}
           <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
@@ -169,24 +172,44 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                 </div>
               </div>
               
-              {/* Right Side: Library Button */}
+              {/* Right Side: Library Button or Live Status */}
               <div className="flex-shrink-0">
-                <Button
-                  size="3"
-                  color="violet"
-                  onClick={onOpenResourceLibrary}
-                  className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-                >
-                  <Library size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
-                                      <span className="ml-2">Library</span>
-                </Button>
+                {funnel.isDeployed ? (
+                  /* Live Status Button - When funnel is deployed */
+                  <button
+                    data-accent-color="red"
+                    onClick={() => setOfflineConfirmation(true)}
+                    className="fui-reset fui-BaseButton fui-Button px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 transition-all duration-200 fui-r-size-3 fui-variant-surface cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="red" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" fill="red"></circle>
+                      <circle cx="12" cy="12" r="3" fill="white"></circle>
+                    </svg>
+                    <span className="font-semibold text-sm sm:text-base text-red-600 dark:text-red-400">Live</span>
+                  </button>
+                ) : (
+                  /* Library Button - When funnel is not deployed */
+                  <Button
+                    size="3"
+                    color="violet"
+                    onClick={onOpenResourceLibrary}
+                    className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group ${
+                      currentResources.length === 0 ? 'animate-pulse animate-bounce' : ''
+                    }`}
+                  >
+                    <Library size={20} strokeWidth={2.5} className={`transition-transform duration-300 ${
+                      currentResources.length === 0 ? 'animate-spin' : 'group-hover:rotate-12'
+                    }`} />
+                    <span className="ml-2">Library</span>
+                  </Button>
+                )}
               </div>
             </div>
           </div>
 
           {/* Generate Section - Only visible when products exist but no funnel is generated */}
           {!funnel.flow && currentResources.length > 0 && (
-            <div className="mt-12 mb-12">
+            <div className="mt-8 mb-8">
               <div className="text-center py-12 px-8 bg-gradient-to-br from-violet-50/30 via-purple-50/20 to-indigo-50/15 dark:from-gray-800/40 dark:via-gray-700/30 dark:to-gray-600/20 rounded-2xl border border-violet-200/30 dark:border-gray-600/30 shadow-xl backdrop-blur-sm relative overflow-hidden">
                 {/* Subtle animated background elements */}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.12)_0%,transparent_50%)]" />
@@ -230,12 +253,9 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
           )}
 
           {/* Current Resources Section */}
-          <div className="mb-8">
-            <div className="mb-6">
-                              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-                  Assigned Products
-                </Heading>
-            </div>
+          <div className="mt-8">
+            
+
 
             {/* Products Grid */}
             {currentResources.length > 0 && (
@@ -249,16 +269,19 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                           {getTypeLabel(resource.type)}
                         </span>
                       </div>
-                      <Button
-                        size="1"
-                        variant="ghost"
-                        color="red"
-                        onClick={() => handleDeleteResource(resource.id, resource.name)}
-                        className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
-                        aria-label="Remove product"
-                      >
-                        <Trash2 size={14} strokeWidth={2.5} />
-                      </Button>
+                      {/* Delete Button - Only show when funnel is not live */}
+                      {!funnel.isDeployed && (
+                        <Button
+                          size="1"
+                          variant="ghost"
+                          color="red"
+                          onClick={() => handleDeleteResource(resource.id, resource.name)}
+                          className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                          aria-label="Remove product"
+                        >
+                          <Trash2 size={14} strokeWidth={2.5} />
+                        </Button>
+                      )}
                     </div>
                     
                     <div className="space-y-2">
@@ -302,15 +325,6 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                   Add products from your library to start building your funnel.
                 </Text>
               </div>
-              
-              <Button
-                color="violet"
-                onClick={onOpenResourceLibrary}
-                className="px-8 py-4 shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 text-base font-semibold"
-              >
-                <Library size={22} strokeWidth={2.5} className="mr-2" />
-                Open Library
-              </Button>
             </div>
           )}
 
@@ -373,6 +387,60 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         </div>
       )}
 
+      {/* Offline Confirmation Modal - Same positioning as Offer Modal */}
+      {offlineConfirmation && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
+                Take Funnel Offline?
+              </Text>
+            </div>
+            <Button
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={() => setOfflineConfirmation(false)}
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+            >
+              <X size={14} strokeWidth={2.5} />
+            </Button>
+          </div>
+
+          {/* Content */}
+          <div className="p-4">
+            <Text size="2" className="text-gray-600 dark:text-gray-300 mb-6 text-center">
+              This will make your funnel unavailable to customers.
+            </Text>
+            
+            <div className="flex gap-3">
+              <Button 
+                color="red" 
+                onClick={() => {
+                  // Update funnel state to offline
+                  const updatedFunnel = { ...funnel, isDeployed: false };
+                  onUpdateFunnel(updatedFunnel);
+                  setOfflineConfirmation(false);
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+              >
+                Take Offline
+              </Button>
+              <Button 
+                variant="soft" 
+                color="gray"
+                onClick={() => setOfflineConfirmation(false)}
+                className="px-6 py-3 hover:scale-105 transition-all duration-300"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unified Navigation */}
       <UnifiedNavigation
         onPreview={() => onGoToPreview(funnel)} // Go to preview
@@ -381,6 +449,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         onGeneration={onGlobalGeneration}
         isGenerated={hasValidFlow(funnel)}
         isGenerating={isGenerating}
+        isDeployed={funnel.isDeployed}
         showOnPage="resources"
       />
 

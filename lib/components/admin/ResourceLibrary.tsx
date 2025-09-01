@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Sparkles, Target, BarChart3, Library, X, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Sparkles, Target, BarChart3, Library, X, Check, PenLine } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
 import UnifiedNavigation from '../common/UnifiedNavigation';
 import { ThemeToggle } from '../common/ThemeToggle';
@@ -48,6 +48,7 @@ interface ResourceLibraryProps {
   onBack?: () => void;
   onAddToFunnel?: (resource: Resource) => void;
   onEdit?: () => void; // Optional: for navigation to edit mode
+  onGoToPreview?: (funnel: Funnel) => void; // New: for preview navigation
   onGlobalGeneration: () => Promise<void>;
   isGenerating: boolean;
   onGoToFunnelProducts: () => void;
@@ -70,6 +71,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   onBack,
   onAddToFunnel,
   onEdit,
+  onGoToPreview,
   onGlobalGeneration,
   isGenerating,
   onGoToFunnelProducts,
@@ -191,7 +193,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
       {/* Enhanced Background Pattern */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
       
-      <div className="relative p-4 sm:p-8">
+      <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
         <div className="max-w-7xl mx-auto">
           {/* Enhanced Header with Whop Design Patterns - Always Visible */}
           <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
@@ -242,9 +244,13 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                       setNewResource({ name: '', link: '', type: 'AFFILIATE', category: '', description: '', promoCode: '' });
                       setIsAddingResource(true);
                     }}
-                    className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50"
+                    className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
+                      filteredResources.length === 0 ? 'animate-pulse animate-bounce' : ''
+                    }`}
                   >
-                    <Plus size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
+                    <Plus size={20} strokeWidth={2.5} className={`transition-transform duration-300 ${
+                      filteredResources.length === 0 ? 'animate-spin' : 'group-hover:rotate-12'
+                    }`} />
                     Add Product
                   </Button>
                 )}
@@ -253,12 +259,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
           </div>
 
           {/* Resources Counter Section */}
-          <div className="mb-8">
-            <div className="mb-6">
-                              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-                  Available Products
-                </Heading>
-            </div>
+          <div className="mt-8">
+            {/* Content goes here - heading removed as requested */}
           </div>
 
           {/* Add Product Modal - Enhanced with Frosted UI best practices */}
@@ -457,32 +459,34 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                           onClick={() => onAddToFunnel?.(resource)}
                           className="px-2 py-1 text-xs"
                         >
+                          <Plus size={12} strokeWidth={2.5} className="mr-1" />
                           Assign
                         </Button>
                       )
                     )}
-                    {context === 'global' && (
-                      <Button
-                        size="1"
-                        color="violet"
-                        onClick={() => {
-                          // In global context, we can edit existing resources
-                          setNewResource({
-                            id: resource.id, // Include the ID for editing
-                            name: resource.name,
-                            link: resource.link,
-                            type: resource.type,
-                            category: resource.category,
-                            description: resource.description,
-                            promoCode: resource.promoCode
-                          });
-                          setIsAddingResource(true);
-                        }}
-                        className="px-2 py-1 text-xs"
-                      >
-                        Edit
-                      </Button>
-                    )}
+                                          {context === 'global' && (
+                        <Button
+                          size="1"
+                          color="violet"
+                          onClick={() => {
+                            // In global context, we can edit existing resources
+                            setNewResource({
+                              id: resource.id, // Include the ID for editing
+                              name: resource.name,
+                              link: resource.link,
+                              type: resource.type,
+                              category: resource.category,
+                              description: resource.description,
+                              promoCode: resource.promoCode
+                            });
+                            setIsAddingResource(true);
+                          }}
+                          className="px-2 py-1 text-xs"
+                        >
+                          <PenLine size={12} strokeWidth={2.5} className="mr-1" />
+                          Edit
+                        </Button>
+                      )}
                     <Button
                       size="1"
                       variant="ghost"
@@ -538,32 +542,29 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                   }
                 </Text>
               </div>
-              
-              {(context === 'funnel' || context === 'global') && (
-                <Button
-                  color="violet"
-                  onClick={() => {
-                    // Clear form to ensure we're adding, not editing
-                    setNewResource({ name: '', link: '', type: 'AFFILIATE', category: '', description: '', promoCode: '' });
-                    setIsAddingResource(true);
-                  }}
-                  className="px-8 py-4 shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 text-base font-semibold"
-                >
-                  <Plus size={22} strokeWidth={2.5} className="mr-2" />
-                  Add Product
-                </Button>
-              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Unified Navigation - Only show in funnel context */}
+      {/* Unified Navigation - Only show in funnel context, with preview functionality */}
       {context === 'funnel' && (
         <UnifiedNavigation
-          onPreview={() => {}} // No preview from Resource Library
+          onPreview={() => {
+            // Handle preview navigation exactly like Assigned Products
+            if (funnel && onGoToPreview) {
+              onGoToPreview(funnel);
+            }
+          }}
           onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Assigned Products page
-          onEdit={() => {}} // TODO: Add navigation to FunnelBuilder
+          onEdit={() => {
+            // Navigate to FunnelBuilder if funnel has valid flow
+            if (funnel?.flow) {
+              // This should be handled by the parent component
+              // For now, we'll use the same pattern as other components
+              window.location.href = `/admin?view=funnelBuilder&funnel=${funnel.id}`;
+            }
+          }}
           onGeneration={onGlobalGeneration}
           isGenerated={!!funnel?.flow}
           isGenerating={isGenerating}

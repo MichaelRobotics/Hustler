@@ -28,6 +28,7 @@ interface ChatMessage {
 interface FunnelPreviewChatProps {
   funnelFlow: FunnelFlow | null;
   selectedOffer?: string | null;
+  onOfferClick?: (offerId: string) => void; // Callback when offer is clicked
 }
 
 /**
@@ -40,7 +41,7 @@ interface FunnelPreviewChatProps {
  * @param {FunnelFlow | null} props.funnelFlow - The generated funnel flow object containing stages and blocks.
  * @returns {JSX.Element} The rendered FunnelPreviewChat component.
  */
-const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selectedOffer }) => {
+const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selectedOffer, onOfferClick }) => {
     // State to keep track of the conversation history.
     const [history, setHistory] = React.useState<ChatMessage[]>([]);
     // State to track the current block in the conversation.
@@ -98,7 +99,8 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
         
         // If the selected option has no next block, the conversation ends.
         if (!option.nextBlockId) {
-            setHistory(prev => [...prev, userMessage]);
+            const endMessage: ChatMessage = { type: 'bot', text: "This path has ended. You can start over to explore other options." };
+            setHistory(prev => [...prev, userMessage, endMessage]);
             setCurrentBlockId(null);
             return;
         }
@@ -113,13 +115,77 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
             setCurrentBlockId(option.nextBlockId);
         } else {
             // If the next block ID is invalid, end the conversation.
-            setHistory(prev => [...prev, userMessage]);
+            const errorMessage: ChatMessage = { type: 'bot', text: "This path encountered an error. You can start over to try again." };
+            setHistory(prev => [...prev, userMessage, errorMessage]);
             setCurrentBlockId(null);
         }
     };
 
+    // Find which answer options in the current question would lead to the selected offer
+    const findOptionsLeadingToOffer = React.useCallback((offerId: string, currentBlockId: string | null): number[] => {
+        if (!currentBlockId || !funnelFlow) return [];
+        
+        const leadingOptionIndices: number[] = [];
+        const currentBlock = funnelFlow.blocks[currentBlockId];
+        
+        if (!currentBlock?.options) return [];
+        
+        // For each option in the current block, check if it leads to the offer
+        currentBlock.options.forEach((option, index) => {
+            if (option.nextBlockId) {
+                // Recursively check if this option leads to the offer
+                if (doesPathLeadToOffer(option.nextBlockId, offerId, new Set())) {
+                    leadingOptionIndices.push(index);
+                }
+            }
+        });
+        
+        return leadingOptionIndices;
+    }, [funnelFlow]);
+    
+    // Helper function to check if a path leads to the offer
+    const doesPathLeadToOffer = React.useCallback((blockId: string, targetOfferId: string, visited: Set<string>): boolean => {
+        if (visited.has(blockId)) return false; // Prevent infinite loops
+        visited.add(blockId);
+        
+        const block = funnelFlow?.blocks[blockId];
+        if (!block) return false;
+        
+        // Check if this block is the offer block
+        if (block.id === `offer_${targetOfferId}` || block.id === targetOfferId) {
+            return true;
+        }
+        
+        // Check if this block has options that lead to the offer
+        if (block.options) {
+            for (const option of block.options) {
+                if (option.nextBlockId && doesPathLeadToOffer(option.nextBlockId, targetOfferId, visited)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }, [funnelFlow]);
+    
+    // Get the indices of options that lead to the selected offer
+    const optionsLeadingToOffer = React.useMemo(() => {
+        if (!selectedOffer || !currentBlockId) return [];
+        return findOptionsLeadingToOffer(selectedOffer, currentBlockId);
+    }, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
+    
     const currentBlock = funnelFlow?.blocks[currentBlockId || ''];
     const options = currentBlock?.options || [];
+
+    // Effect to handle blocks with no options (dead-end paths)
+    React.useEffect(() => {
+        if (currentBlockId && currentBlock && (!currentBlock.options || currentBlock.options.length === 0)) {
+            // If we reach a block with no options, add a message and end the conversation
+            const endMessage: ChatMessage = { type: 'bot', text: "This path has ended. You can start over to explore other options." };
+            setHistory(prev => [...prev, endMessage]);
+            setCurrentBlockId(null);
+        }
+    }, [currentBlockId, currentBlock]);
 
     return (
         <div className="h-full flex flex-col">
@@ -138,19 +204,11 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
                         </div>
                     </div>
                     
-                    {/* Selected Offer Display */}
-                    {selectedOffer && (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/30 rounded-xl">
-                            <div className="w-2 h-2 bg-violet-500 rounded-full"></div>
-                            <Text size="2" weight="medium" className="text-violet-700 dark:text-violet-300">
-                                {selectedOffer}
-                            </Text>
-                        </div>
-                    )}
+
                 </div>
             </div>
             
-            {/* Chat Messages Area */}
+                        {/* Chat Messages Area */}
             <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4 pt-6">
                 {history.map((msg, index) => (
                     <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -192,32 +250,56 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
             {options.length > 0 && (
                 <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
                     <div className="space-y-3">
+
+                        
                         <div className="flex flex-col items-end space-y-2">
-                            {options.map((opt, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => handleOptionClick(opt, i)}
-                                    className="max-w-xs lg:max-w-md p-3 bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50 transition-all duration-200 text-left group"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-700/30 flex items-center justify-center flex-shrink-0">
-                                            <Text size="1" weight="bold" className="text-violet-700 dark:text-violet-300">
-                                                {i + 1}
+                            {options.map((opt, i) => {
+                                const isLeadingToOffer = optionsLeadingToOffer.includes(i);
+                                
+                                return (
+                                    <button
+                                        key={i}
+                                        onClick={() => handleOptionClick(opt, i)}
+                                        className={`max-w-xs lg:max-w-md p-3 border rounded-xl transition-all duration-200 text-left group ${
+                                            isLeadingToOffer && selectedOffer
+                                                ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-600 shadow-lg shadow-amber-500/20' // Highlighted
+                                                : 'bg-white dark:bg-gray-800 border-border/50 dark:border-border/30 hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50' // Normal
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 ${
+                                                isLeadingToOffer && selectedOffer
+                                                    ? 'bg-amber-500 border-amber-600' // Highlighted
+                                                    : 'bg-violet-100 dark:bg-violet-900/30 border-violet-200 dark:border-violet-700/30' // Normal
+                                            }`}>
+                                                <Text size="1" weight="bold" className={
+                                                    isLeadingToOffer && selectedOffer
+                                                        ? 'text-white' // Highlighted
+                                                        : 'text-violet-700 dark:text-violet-300' // Normal
+                                                }>
+                                                    {i + 1}
+                                                </Text>
+                                            </div>
+                                            <Text size="2" className={`transition-colors ${
+                                                isLeadingToOffer && selectedOffer
+                                                    ? 'text-amber-800 dark:text-amber-200 font-medium' // Highlighted
+                                                    : 'text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-300' // Normal
+                                            }`}>
+                                                {opt.text}
                                             </Text>
+                                            
+
                                         </div>
-                                        <Text size="2" className="text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-300 transition-colors">
-                                            {opt.text}
-                                        </Text>
-                                    </div>
-                                </button>
-                            ))}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
             )}
             
-            {/* Conversation End State */}
-            {options.length === 0 && currentBlockId && (
+            {/* Conversation End State - Show Start Over when no options or conversation ended */}
+            {(options.length === 0 || !currentBlockId) && (
                 <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
                     <div className="flex justify-center py-4">
                         <Button

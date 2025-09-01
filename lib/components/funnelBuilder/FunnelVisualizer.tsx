@@ -155,6 +155,7 @@ interface FunnelVisualizerProps {
   setEditingBlockId: (blockId: string | null) => void;
   onBlockUpdate: (block: FunnelBlock) => void;
   selectedOffer?: string | null;
+  onOfferSelect?: (offerId: string) => void; // New: callback when offer is selected from visualization
 }
 
 /**
@@ -172,7 +173,8 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
   editingBlockId, 
   setEditingBlockId, 
   onBlockUpdate,
-  selectedOffer
+  selectedOffer,
+  onOfferSelect
 }) => {
     // State for layout calculations
     const [positions, setPositions] = React.useState<Record<string, Position>>({});
@@ -248,6 +250,46 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
             setSelectedOfferBlockId(offerBlocks[0].id);
         }
     }, [offerBlocks, selectedOfferBlockId]);
+
+    // Effect to highlight the path to the selected offer when it's chosen from the modal
+    React.useEffect(() => {
+        if (selectedOffer && funnelFlow) {
+            console.log('=== OFFER PATH HIGHLIGHTING DEBUG ===');
+            console.log('selectedOffer:', selectedOffer);
+            console.log('funnelFlow.blocks:', Object.keys(funnelFlow.blocks));
+            
+            // Find the offer block in the flow
+            // The offer block should have an ID like "offer_[resource_id]" based on our Gemini prompt
+            let offerBlock = Object.values(funnelFlow.blocks).find(block => 
+                block.id === `offer_${selectedOffer}` || // Direct match with offer_ prefix
+                block.id === selectedOffer || // Direct match (fallback)
+                (block.options && block.options.some(opt => opt.nextBlockId === selectedOffer)) // Option pointing to offer
+            );
+            
+            // If not found with offer_ prefix, try to find any block that might be an offer
+            if (!offerBlock) {
+                offerBlock = Object.values(funnelFlow.blocks).find(block => 
+                    block.id.includes('offer') || // Contains 'offer' in ID
+                    block.id.includes(selectedOffer) // Contains the resource ID
+                );
+            }
+            
+            console.log('Found offerBlock:', offerBlock);
+            
+            if (offerBlock) {
+                // Highlight the path to this offer
+                console.log('Setting selectedBlockForHighlight to:', offerBlock.id);
+                setSelectedBlockForHighlight(offerBlock.id);
+            } else {
+                console.log('No offerBlock found for selectedOffer:', selectedOffer);
+                console.log('Available blocks:', Object.values(funnelFlow.blocks).map(b => ({ id: b.id, message: b.message?.substring(0, 50) })));
+            }
+        } else if (!selectedOffer) {
+            // Clear highlighting when no offer is selected
+            console.log('Clearing selectedBlockForHighlight - no offer selected');
+            setSelectedBlockForHighlight(null);
+        }
+    }, [selectedOffer, funnelFlow]);
 
     // Effect to update selected offer when prop changes (for web view highlighting)
     React.useEffect(() => {

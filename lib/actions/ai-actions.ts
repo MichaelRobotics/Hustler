@@ -9,10 +9,10 @@ import { GoogleGenAI } from '@google/genai';
 
 interface Resource {
   id: string;
-  type: string;
+  type: 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL';
   name: string;
   link: string;
-  code: string;
+  code: string; // promoCode converted to code for consistency
   category: string;
 }
 
@@ -222,7 +222,7 @@ export const generateFunnelFlow = async (resources: Resource[]): Promise<FunnelF
 
     const resourceList = resources.map(r => {
         let categoryLabel = r.category === 'PAID_PRODUCT' ? 'Paid Product' : 'Free Value';
-        let details = `${r.name} (Category: ${categoryLabel}, Type: ${r.type})`;
+        let details = `${r.name} (ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type})`;
         if (r.code) {
             details += ` [Promo Code: ${r.code}]`;
         }
@@ -282,6 +282,9 @@ Don't miss out on these valuable resources. Act fast – this promo code is for 
 1.  **RESOURCES**: You will be provided with a list of resources, categorized as either 'Free Value' or 'Paid Product'.
     ${resourceList}
 
+    **CRITICAL: You MUST preserve the exact resource IDs provided above. Do NOT change, modify, or generate new IDs.**
+    **Each offer block in the OFFER stage must reference the exact same ID from the resources list.**
+
 2.  **GOAL**: Create a branching chatbot flow that qualifies users and directs them to the most suitable resource from the list.
 
 3.  **HIERARCHICAL STRUCTURE**: The funnel must be structured into the SAME logical STAGES for all users, regardless of their choices. A typical structure would be: WELCOME -> NICHE -> EXPERIENCE -> PAIN_POINT -> OFFER. All paths must go through these stages in this exact order.
@@ -295,6 +298,11 @@ Don't miss out on these valuable resources. Act fast – this promo code is for 
     * The **OFFER** stage will contain multiple, unique offer blocks—one for each resource. The path a user takes through the qualification stages will determine which final offer block they see.
 
 6.  **UNIQUE ENDPOINTS**: Each path through the funnel must end at a different block in the final **OFFER** stage. Two different qualification paths cannot lead to the same offer.
+
+7.  **RESOURCE ID PRESERVATION**: 
+    - Each offer block in the OFFER stage must have an ID that matches exactly one of the resource IDs provided above
+    - The offer block ID should be in the format: "offer_[resource_id]" (e.g., "offer_123" for resource with ID "123")
+    - This ensures the funnel can correctly link back to the original resources
 
 7.  **ESCAPE HATCH (CRITICAL RULE)**: The very first block in the 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' or 'Skip for now'. This option's \`nextBlockId\` must be \`null\`.
 
@@ -332,8 +340,8 @@ Here is a detailed example of the correct, required JSON structure:
       "name": "OFFER",
       "explanation": "Present the tailored resource.",
       "blockIds": [
-        "offer_ds_final",
-        "offer_smma_final"
+        "offer_1",
+        "offer_2"
       ]
     }
   ],
@@ -362,7 +370,7 @@ Here is a detailed example of the correct, required JSON structure:
       "options": [
         {
           "text": "Beginner",
-          "nextBlockId": "offer_ds_final"
+          "nextBlockId": "offer_1"
         }
       ]
     },
@@ -372,17 +380,17 @@ Here is a detailed example of the correct, required JSON structure:
       "options": [
         {
           "text": "Yes",
-          "nextBlockId": "offer_smma_final"
+          "nextBlockId": "offer_2"
         }
       ]
     },
-    "offer_ds_final": {
-      "id": "offer_ds_final",
+    "offer_1": {
+      "id": "offer_1",
       "message": " Congrats! Here is your offer for Dropshipping...\\n [https://example.com/ds-beg](https://example.com/ds-beg)",
       "options": []
     },
-    "offer_smma_final": {
-      "id": "offer_smma_final",
+    "offer_2": {
+      "id": "offer_2",
       "message": " Congrats! Here is your offer for SMMA...\\n [https://example.com/smma-tool](https://example.com/smma-tool)",
       "options": []
     }

@@ -11,10 +11,9 @@ import FunnelAnalyticsPage from './FunnelAnalyticsPage';
 import ResourcePage from './ResourcePage';
 import ResourceLibrary from './ResourceLibrary';
 import AIFunnelBuilderPage from '../funnelBuilder/AIFunnelBuilderPage';
-import FunnelPreviewChat from '../funnelBuilder/FunnelPreviewChat';
+
 import AdminSidebar from './AdminSidebar';
 import { ThemeToggle } from '../common/ThemeToggle';
-import UnifiedNavigation from '../common/UnifiedNavigation';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 
 interface Funnel {
@@ -51,6 +50,16 @@ interface Resource {
   promoCode?: string;
 }
 
+// Unified interface for AI/API communication - consistent across all components
+interface AIResource {
+  id: string;
+  name: string;
+  link: string;
+  type: 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL';
+  category: string;
+  code: string; // promoCode converted to code for consistency
+}
+
 type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview';
 
 export default function AdminPanel() {
@@ -60,7 +69,7 @@ export default function AdminPanel() {
     { 
       id: '1', 
       name: 'Sales Funnel', 
-      isDeployed: true, 
+      isDeployed: false, 
       sends: 0,
       resources: [
         { id: '1', type: 'AFFILIATE', name: 'Product A', link: 'https://example.com/a', promoCode: 'SAVE20', category: 'Free Value' },
@@ -313,11 +322,18 @@ export default function AdminPanel() {
 
   // Global generation function that can be called from any page
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingFunnelId, setGeneratingFunnelId] = useState<string | null>(null);
+  
+  // Helper function to check if a specific funnel is being generated
+  const isFunnelGenerating = (funnelId: string) => {
+    return isGenerating && generatingFunnelId === funnelId;
+  };
   
   const handleGlobalGeneration = async () => {
     if (!selectedFunnel) return;
     
     setIsGenerating(true);
+    setGeneratingFunnelId(selectedFunnel.id);
     
     try {
       // Get current funnel resources
@@ -329,7 +345,8 @@ export default function AdminPanel() {
       }
       
       // Convert resources to the format expected by the AI API
-      const resourcesForAI = currentFunnelResources.map(resource => ({
+      // Ensure we only send resources that are assigned to this specific funnel
+      const resourcesForAI: AIResource[] = currentFunnelResources.map(resource => ({
         id: resource.id,
         type: resource.type,
         name: resource.name,
@@ -337,6 +354,13 @@ export default function AdminPanel() {
         code: resource.promoCode || '',
         category: resource.category || 'Free Value'
       }));
+
+      console.log('=== RESOURCES BEING SENT TO GEMINI ===');
+      console.log('Funnel ID:', selectedFunnel.id);
+      console.log('Funnel Name:', selectedFunnel.name);
+      console.log('Resources count:', resourcesForAI.length);
+      console.log('Resources:', JSON.stringify(resourcesForAI, null, 2));
+      console.log('=== END RESOURCES FOR GEMINI ===');
 
       // Call the AI generation API
       const response = await fetch('/api/generate-funnel', {
@@ -394,6 +418,7 @@ export default function AdminPanel() {
       alert(`Failed to generate funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsGenerating(false);
+      setGeneratingFunnelId(null);
     }
   };
 
@@ -465,17 +490,29 @@ export default function AdminPanel() {
           }
         }}
         onGoToPreview={(funnel) => {
-          setSelectedFunnel(funnel);
-          setCurrentView('preview');
+          // Handle preview navigation exactly like FunnelBuilder
+          // Ensure funnel has valid flow before allowing preview
+          if (funnel && hasValidFlow(funnel)) {
+            setSelectedFunnel(funnel);
+            setCurrentView('preview');
+          } else {
+            console.warn('Cannot preview funnel without valid flow');
+            // Show user-friendly message and stay on current page
+            alert('This funnel needs to be generated first. Please generate the funnel before previewing.');
+          }
         }}
         onUpdateFunnel={(updatedFunnel) => {
           setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+          // Also update selectedFunnel so ResourcePage re-renders with new data
+          if (selectedFunnel && selectedFunnel.id === updatedFunnel.id) {
+            setSelectedFunnel(updatedFunnel);
+          }
         }}
         allResources={allResources}
         setAllResources={(resources) => setAllResources(resources)}
         onOpenResourceLibrary={handleOpenResourceLibrary}
         onGlobalGeneration={handleGlobalGeneration}
-        isGenerating={isGenerating}
+        isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
         onGoToFunnelProducts={() => {}} // Already on Assigned Products page
       />
     );
@@ -505,7 +542,7 @@ export default function AdminPanel() {
               onAddToFunnel={undefined}
               onEdit={undefined} // No edit in global library
               onGlobalGeneration={handleGlobalGeneration}
-              isGenerating={isGenerating}
+              isGenerating={false} // Global library doesn't show generation state
               onGoToFunnelProducts={() => setCurrentView('resources')}
               context={libraryContext}
             />
@@ -530,8 +567,20 @@ export default function AdminPanel() {
               setCurrentView('resources');
             }
           }}
+          onGoToPreview={(funnel) => {
+            // Handle preview navigation exactly like Assigned Products
+            // Ensure funnel has valid flow before allowing preview
+            if (funnel && hasValidFlow(funnel)) {
+              setSelectedFunnel(funnel);
+              setCurrentView('preview');
+            } else {
+              console.warn('Cannot preview funnel without valid flow');
+              // Show user-friendly message and stay on current page
+              alert('This funnel needs to be generated first. Please generate the funnel before previewing.');
+            }
+          }}
           onGlobalGeneration={handleGlobalGeneration}
-          isGenerating={isGenerating}
+          isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
           onGoToFunnelProducts={() => setCurrentView('resources')}
           context={libraryContext}
         />
@@ -584,8 +633,8 @@ export default function AdminPanel() {
             type: resource.type as 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL',
             name: resource.name,
             link: resource.link,
-              promoCode: resource.code,
-            category: resource.category,
+            promoCode: resource.promoCode || '', // Keep original field name
+            category: resource.category || 'Free Value',
             description: ''
           }));
           setAllResources(convertedBack);
@@ -593,7 +642,7 @@ export default function AdminPanel() {
         funnels={funnels}
         setFunnels={setFunnels}
         onGlobalGeneration={handleGlobalGeneration}
-        isGenerating={isGenerating}
+        isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
         onGoToFunnelProducts={() => setCurrentView('resources')}
       />
     );
@@ -642,98 +691,50 @@ export default function AdminPanel() {
     );
   }
 
+  // Preview view is now handled by FunnelBuilder component
+  // When switching to preview from other views, we go to FunnelBuilder in preview mode
   if (currentView === 'preview' && selectedFunnel) {
+    // Redirect to FunnelBuilder in preview mode
+    // This ensures we use the same preview component and layout
     return (
-      <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
-        {/* Enhanced Background Pattern for Dark Mode */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
-        
-        <div className="flex h-screen">
-          {/* Admin Sidebar - Desktop Only */}
-          <AdminSidebar
-            currentView={currentView}
-            onViewChange={handleViewChange}
-            className="flex-shrink-0 h-full"
-            libraryContext={libraryContext}
-            currentFunnelForLibrary={currentFunnelForLibrary}
-          />
-          
-          {/* Main Content Area */}
-          <div className="flex-1 overflow-auto w-full lg:w-auto">
-            <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
-              <div className="max-w-7xl mx-auto">
-                {/* Enhanced Header with Whop Design Patterns - Always Visible */}
-                <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg mb-8">
-                  {/* Top Section: Back Button + Title */}
-                  <div className="flex items-center gap-4 mb-6">
-                    <Button
-                      variant="ghost"
-                      color="gray"
-                      onClick={handleBackToDashboard}
-                      className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors"
-                    >
-                      <ArrowLeft size={20} strokeWidth={2.5} />
-                    </Button>
-                    <div>
-                      <Heading size="6" weight="bold" className="text-black dark:text-white">
-                        Preview: {selectedFunnel.name}
-                      </Heading>
-                    </div>
-                  </div>
-                  
-                  {/* Subtle Separator Line */}
-                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
-                  
-                  {/* Bottom Section: Action Buttons - Always Horizontal Layout */}
-                  <div className="flex justify-between items-center gap-2 sm:gap-3">
-                    {/* Left Side: Placeholder for future actions */}
-                    <div className="flex-shrink-0">
-                      <div className="w-32 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                        <Text size="2" color="gray" className="text-center">Preview</Text>
-                      </div>
-                    </div>
-                    
-                    {/* Right Side: Placeholder for future actions */}
-                    <div className="flex-shrink-0">
-                      <div className="w-32 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                        <Text size="2" color="gray" className="text-center">Actions</Text>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preview Content */}
-                <div className="bg-surface/50 dark:bg-surface/30 rounded-xl border border-border/50 dark:border-border/30 p-6">
-                  <FunnelPreviewChat funnelFlow={selectedFunnel.flow} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Unified Navigation */}
-        <UnifiedNavigation
-          onPreview={() => {}} // Already in preview
-          onFunnelProducts={() => setCurrentView('resources')}
-          onEdit={() => {
-            console.log('Edit button clicked in Preview, switching to funnelBuilder');
-            console.log('Current selectedFunnel:', selectedFunnel);
-            console.log('Current funnels:', funnels);
-            
-            // Validate funnel has valid flow before going to builder
-            if (selectedFunnel && hasValidFlow(selectedFunnel)) {
-              setCurrentView('funnelBuilder');
-            } else {
-              console.warn('Cannot edit funnel without valid flow, redirecting to resources');
-              setCurrentView('resources');
-            }
-          }}
-          onGeneration={handleGlobalGeneration}
-          isGenerated={selectedFunnel ? hasValidFlow(selectedFunnel) : false}
-          isGenerating={isGenerating}
-          showOnPage="preview"
-        />
-      </div>
+      <AIFunnelBuilderPage
+        funnel={selectedFunnel}
+        onBack={handleBackToDashboard}
+        onUpdate={(updatedFunnel) => {
+          // Update funnel state
+          setSelectedFunnel(updatedFunnel);
+          setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+        }}
+        onEdit={() => {}} // Already in preview mode
+        allResources={allResources.map(resource => ({
+          id: resource.id,
+          type: resource.type,
+          name: resource.name,
+          link: resource.link,
+          promoCode: resource.promoCode || '', // Keep original field name for consistency
+          category: resource.category || 'Free Value'
+        }))}
+        setAllResources={(resources) => {
+          // Convert back to our format
+          const convertedBack = (Array.isArray(resources) ? resources : []).map((resource: any) => ({
+            id: resource.id,
+            type: resource.type as 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL',
+            name: resource.name,
+            link: resource.link,
+            promoCode: resource.promoCode || '', // Keep original field name
+            category: resource.category || 'Free Value',
+            description: ''
+          }));
+          setAllResources(convertedBack);
+        }}
+        funnels={funnels}
+        setFunnels={setFunnels}
+        onGlobalGeneration={handleGlobalGeneration}
+        isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
+        onGoToFunnelProducts={() => setCurrentView('resources')}
+        // Force preview mode when coming from other views
+        forcePreviewMode={true}
+      />
     );
   }
 
@@ -854,7 +855,7 @@ export default function AdminPanel() {
                           color="violet" 
                           onClick={handleAddFunnel}
                                         disabled={!newFunnelName.trim()}
-                          className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                          className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                         >
                           <Plus size={18} strokeWidth={2.5} className="mr-2" />
                           Create Funnel
@@ -863,7 +864,7 @@ export default function AdminPanel() {
                           <Button 
                             variant="soft" 
                             color="gray" 
-                            className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 hover:scale-105 transition-all duration-300 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
+                            className="!px-6 !py-3 hover:scale-105 transition-all duration-300"
                                     >
                                         Cancel
                           </Button>

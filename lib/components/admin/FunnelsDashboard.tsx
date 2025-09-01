@@ -5,6 +5,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Edit, Settings, Copy, Trash2, Check, X, Circle } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
 import { ThemeToggle } from '../common/ThemeToggle';
+import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 
 interface Funnel {
   id: string;
@@ -72,7 +73,7 @@ export default function FunnelsDashboard({
                       <div className="flex items-start justify-between gap-3">
                           {/* Status Badge - Live (Red) or Draft (Gray) */}
                           <div className="flex items-center gap-2">
-                              {funnel.isDeployed ? (
+                              {funnel.isDeployed && hasValidFlow(funnel) ? (
                                   <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
                                       <Circle className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse fill-current" strokeWidth={0} />
                                       <span className="hidden sm:inline font-semibold">Live</span>
@@ -202,9 +203,9 @@ export default function FunnelsDashboard({
                                   
                                   <DropdownMenu.Item
                                       onClick={(e) => { e.preventDefault(); setFunnelToDelete(funnel.id); }}
-                                                    disabled={funnel.isDeployed}
+                                                    disabled={funnel.isDeployed && hasValidFlow(funnel)}
                                       className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 disabled:cursor-not-allowed disabled:hover:bg-transparent text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-800 dark:hover:text-red-200 disabled:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-red-300/60 dark:hover:border-red-600/60"
-                                                    title={funnel.isDeployed ? "Cannot delete a live funnel" : "Delete funnel"}
+                                                    title={funnel.isDeployed && hasValidFlow(funnel) ? "Cannot delete a live funnel" : "Delete funnel"}
                                                 >
                                       <Trash2 className="h-4 w-4" strokeWidth={2.5} />
                                       <span>Delete</span>

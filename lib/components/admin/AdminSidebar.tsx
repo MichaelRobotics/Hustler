@@ -230,7 +230,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   window.open('https://whop.com/pro', '_blank');
                   setIsProModalOpen(false);
                 }}
-                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60"
+                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60"
               >
                 <Sparkles size={18} strokeWidth={2.5} className="mr-2" />
                 Upgrade Now
@@ -239,7 +239,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <Button 
                   variant="soft" 
                   color="gray" 
-                  className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 hover:scale-105 transition-all duration-300 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
+                  className="!px-6 !py-3 hover:scale-105 transition-all duration-300"
                 >
                   Maybe Later
                 </Button>

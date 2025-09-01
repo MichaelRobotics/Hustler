@@ -10,6 +10,7 @@ interface UnifiedNavigationProps {
   onEdit?: () => void; // New: Go to FunnelBuilder
   isGenerated?: boolean;
   isGenerating?: boolean;
+  isDeployed?: boolean; // New: Check if funnel is deployed/live
   className?: string;
   showOnPage?: 'resources' | 'aibuilder' | 'preview' | 'all' | 'analytics';
 }
@@ -21,6 +22,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
   onEdit,
   isGenerated = false,
   isGenerating = false,
+  isDeployed = false,
   className = '',
   showOnPage = 'all'
 }) => {
@@ -77,8 +79,8 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
           </button>
         )}
 
-        {/* Generation/Regeneration Button */}
-        {isExpanded && onGeneration && (
+        {/* Generation/Regeneration Button - Hide regenerate option when funnel is live */}
+        {isExpanded && onGeneration && !isDeployed && (
           <button
             data-accent-color="green"
             aria-label={isGenerated ? "Regenerate funnel" : "Generate funnel"}
