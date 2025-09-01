@@ -387,55 +387,54 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         </div>
       )}
 
-      {/* Offline Confirmation Modal - Same positioning as Offer Modal */}
+      {/* Offline Confirmation Modal - Styled like Create New Funnel Modal */}
       {offlineConfirmation && (
-        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-[9999]">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60">
+            <div className="flex justify-between items-center mb-6">
+              <Heading size="4" weight="bold" className="text-foreground">
                 Take Funnel Offline?
-              </Text>
-            </div>
-            <Button
-              size="1"
-              variant="ghost"
-              color="gray"
-              onClick={() => setOfflineConfirmation(false)}
-              className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-            >
-              <X size={14} strokeWidth={2.5} />
-            </Button>
-          </div>
-
-          {/* Content */}
-          <div className="p-4">
-            <Text size="2" className="text-gray-600 dark:text-gray-300 mb-6 text-center">
-              This will make your funnel unavailable to customers.
-            </Text>
-            
-            <div className="flex gap-3">
-              <Button 
-                color="red" 
-                onClick={() => {
-                  // Update funnel state to offline
-                  const updatedFunnel = { ...funnel, isDeployed: false };
-                  onUpdateFunnel(updatedFunnel);
-                  setOfflineConfirmation(false);
-                }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
-              >
-                Take Offline
-              </Button>
-              <Button 
-                variant="soft" 
+              </Heading>
+              <Button
+                size="1"
+                variant="ghost"
                 color="gray"
                 onClick={() => setOfflineConfirmation(false)}
-                className="px-6 py-3 hover:scale-105 transition-all duration-300"
+                className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
               >
-                Cancel
+                <X size={16} strokeWidth={2.5} />
               </Button>
+            </div>
+            
+            <div className="space-y-5">
+              <div>
+                <Text size="3" className="text-muted-foreground text-center">
+                  This will make your funnel unavailable to customers.
+                </Text>
+              </div>
+              
+              <div className="flex gap-3 pt-6">
+                <Button
+                  color="red"
+                  onClick={() => {
+                    // Update funnel state to offline
+                    const updatedFunnel = { ...funnel, isDeployed: false };
+                    onUpdateFunnel(updatedFunnel);
+                    setOfflineConfirmation(false);
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+                >
+                  Take Offline
+                </Button>
+                <Button
+                  variant="soft"
+                  color="gray"
+                  onClick={() => setOfflineConfirmation(false)}
+                  className="!px-6 !py-3 hover:scale-105 transition-all duration-300"
+                >
+                  Cancel
+                  </Button>
+              </div>
             </div>
           </div>
         </div>

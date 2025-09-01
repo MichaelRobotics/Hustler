@@ -416,26 +416,11 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                                         </svg>
                   <span className="font-semibold text-sm sm:text-base">
-                    {selectedOffer ? 'Offer Selected' : 'Offers'}
+                    Offers
                   </span>
-                  {selectedOffer && (
-                    <div className="ml-2 w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
-                  )}
                 </Button>
                 
-                {/* Clear Selection Button - Only show when offer is selected */}
-                {selectedOffer && (
-                  <Button
-                    size="2"
-                    variant="ghost"
-                    color="gray"
-                    onClick={handleClearOfferSelection}
-                    className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
-                    title="Clear offer selection"
-                  >
-                    <X size={14} strokeWidth={2} />
-                  </Button>
-                )}
+
               </div>
               
               {/* Center: Theme Toggle */}
@@ -695,12 +680,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                       <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
                         {resource.name}
                       </Text>
-                      {selectedOffer === resource.id && (
-                        <div className="flex items-center gap-1 text-violet-600 dark:text-violet-400">
-                          <div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
-                          <Text size="1" className="text-xs">Path Highlighted</Text>
-                        </div>
-                      )}
+
                     </div>
                   </div>
                 );
@@ -710,65 +690,62 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     </div>
                 )}
 
-      {/* Offline Confirmation Modal - Same level as Offer Selection Modal */}
+      {/* Offline Confirmation Modal - Styled like Create New Funnel Modal */}
       {offlineConfirmation && (
-        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-[9999]">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60">
+            <div className="flex justify-between items-center mb-6">
+              <Heading size="4" weight="bold" className="text-foreground">
                 Take Funnel Offline?
-              </Text>
-            </div>
-            <Button
-              size="1"
-              variant="ghost"
-              color="gray"
-              onClick={() => {
-                setOfflineConfirmation(false);
-                setShowOfferSelection(false); // Hide offer selection when closing offline modal
-              }}
-              className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-            >
-              <X size={14} strokeWidth={2.5} />
-            </Button>
-          </div>
-
-          {/* Content */}
-          <div className="p-4">
-            <Text size="2" className="text-gray-600 dark:text-gray-300 mb-6 text-center">
-              This will make your funnel unavailable to customers.
-            </Text>
-            
-            <div className="flex gap-3">
+              </Heading>
               <Button
-                size="3"
-                color="red"
-                onClick={() => {
-                  // Update funnel state to offline
-                  const updatedFunnel = { ...currentFunnel, isDeployed: false };
-                  setCurrentFunnel(updatedFunnel);
-                  onUpdate(updatedFunnel);
-                  setOfflineConfirmation(false);
-                  setShowOfferSelection(false); // Hide offer selection when going offline
-                }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
-              >
-                Take Offline
-              </Button>
-              <Button
-                size="3"
-                variant="soft"
+                size="1"
+                variant="ghost"
                 color="gray"
                 onClick={() => {
                   setOfflineConfirmation(false);
                   setShowOfferSelection(false); // Hide offer selection when closing offline modal
                 }}
-                className="px-6 py-3 hover:scale-105 transition-all duration-300"
+                className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
               >
-                Cancel
+                <X size={16} strokeWidth={2.5} />
               </Button>
+            </div>
+            
+            <div className="space-y-5">
+              <div>
+                <Text size="3" className="text-muted-foreground text-center">
+                  This will make your funnel unavailable to customers.
+                </Text>
+              </div>
+              
+              <div className="flex gap-3 pt-6">
+                <Button
+                  color="red"
+                  onClick={() => {
+                    // Update funnel state to offline
+                    const updatedFunnel = { ...currentFunnel, isDeployed: false };
+                    setCurrentFunnel(updatedFunnel);
+                    onUpdate(updatedFunnel);
+                    setOfflineConfirmation(false);
+                    setShowOfferSelection(false); // Hide offer selection when going offline
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+                >
+                  Take Offline
+                </Button>
+                <Button
+                  variant="soft"
+                  color="gray"
+                  onClick={() => {
+                    setOfflineConfirmation(false);
+                    setShowOfferSelection(false); // Hide offer selection when closing offline modal
+                  }}
+                  className="!px-6 !py-3 hover:scale-105 transition-all duration-300"
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
           </div>
         </div>
