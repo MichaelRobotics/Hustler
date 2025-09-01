@@ -8,6 +8,7 @@ import { ArrowLeft, Settings, Activity, Edit3 } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
 import { ThemeToggle } from '../common/ThemeToggle';
 import UnifiedNavigation from '../common/UnifiedNavigation';
+import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 
 // Type definitions
 interface Funnel {
@@ -73,6 +74,8 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
   onGlobalGeneration,
   isGenerating
 }) => {
+
+
   // Calculate funnel-specific stats
   const funnelUsers = allUsers.filter(u => u.funnelId === funnel.id);
   const stats: Stats = {
@@ -148,18 +151,37 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
               
 
               
-              {/* Right Side: Edit Button */}
-              <div className="flex-shrink-0">
-                <Button
-                  size="3"
-                  color="violet"
-                  onClick={() => onGoToBuilder(funnel)}
-                  className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-                >
-                  <Edit3 size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
-                  <span className="ml-2">Edit</span>
-                </Button>
-              </div>
+              {/* Right Side: Edit Button - Only show if funnel has valid flow */}
+              {hasValidFlow(funnel) && (
+                <div className="flex-shrink-0">
+                  <Button
+                    size="3"
+                    color="violet"
+                    onClick={() => {
+                    if (hasValidFlow(funnel)) {
+                      onGoToBuilder(funnel);
+                    } else {
+                      console.warn('Cannot edit funnel without valid flow');
+                    }
+                  }}
+                    className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                  >
+                    <Edit3 size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
+                    <span className="ml-2">Edit</span>
+                  </Button>
+                </div>
+              )}
+              
+              {/* Show message if funnel has no valid flow */}
+              {!hasValidFlow(funnel) && (
+                <div className="flex-shrink-0">
+                  <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 rounded-lg">
+                    <Text size="2" color="amber" className="text-amber-700 dark:text-amber-300">
+                      Generate funnel first to edit
+                    </Text>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -191,7 +213,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
         onPreview={() => {}} // No preview in analytics
         onFunnelProducts={() => {}} // Already on analytics page
         onGeneration={onGlobalGeneration}
-        isGenerated={!!funnel.flow}
+        isGenerated={hasValidFlow(funnel)}
         isGenerating={isGenerating}
         showOnPage="analytics" // Hide on analytics page
       />

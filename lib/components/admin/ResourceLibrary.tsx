@@ -85,6 +85,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     description: '',
     promoCode: ''
   });
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; resourceId: string | null; resourceName: string }>({
+    show: false,
+    resourceId: null,
+    resourceName: ''
+  });
 
   const categories = ['all', 'Education', 'Content', 'Marketing', 'Tools'];
 
@@ -123,10 +128,39 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     }
   };
 
-  const handleDeleteResource = (resourceId: string) => {
-    const updatedResources = allResources.filter(r => r.id !== resourceId);
-    setAllResources(updatedResources);
+  const handleDeleteResource = (resourceId: string, resourceName: string) => {
+    setDeleteConfirmation({
+      show: true,
+      resourceId,
+      resourceName
+    });
   };
+
+  const confirmDelete = () => {
+    if (deleteConfirmation.resourceId) {
+      const updatedResources = allResources.filter(r => r.id !== deleteConfirmation.resourceId);
+      setAllResources(updatedResources);
+      setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+  };
+
+  // Handle Escape key to close delete confirmation
+  React.useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && deleteConfirmation.show) {
+        cancelDelete();
+      }
+    };
+
+    if (deleteConfirmation.show) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [deleteConfirmation.show]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -170,7 +204,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                   color="gray"
                   onClick={onBack}
                   className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
-                  aria-label="Back to resources"
+                  aria-label="Back to assigned products"
                 >
                   <ArrowLeft size={20} strokeWidth={2.5} />
                 </Button>
@@ -178,7 +212,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
               
               <div>
                 <Heading size="6" weight="bold" className="text-black dark:text-white">
-                  Product Library
+                  Library
                 </Heading>
               </div>
             </div>
@@ -221,9 +255,9 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
           {/* Resources Counter Section */}
           <div className="mb-8">
             <div className="mb-6">
-              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-                Available Resources
-              </Heading>
+                              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
+                  Available Products
+                </Heading>
             </div>
           </div>
 
@@ -343,7 +377,62 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             </div>
           )}
 
-          {/* Resources Grid */}
+          {/* Delete Confirmation Modal */}
+          {deleteConfirmation.show && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onClick={cancelDelete}>
+              <div className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm dark:shadow-black/60 max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-6">
+                  <Heading size="4" weight="bold" className="text-red-600 dark:text-red-400">
+                    Confirm Deletion
+                  </Heading>
+                  <Button
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    onClick={cancelDelete}
+                    className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
+                  >
+                    <X size={16} strokeWidth={2.5} />
+                  </Button>
+                </div>
+                
+                <div className="mb-6">
+                  <Text size="3" className="text-foreground mb-3">
+                    Are you sure you want to delete this product?
+                  </Text>
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/30 rounded-lg p-3">
+                    <Text size="2" weight="semi-bold" className="text-red-700 dark:text-red-300">
+                      "{deleteConfirmation.resourceName}"
+                    </Text>
+                  </div>
+                  <Text size="2" color="gray" className="text-muted-foreground mt-2">
+                    This action cannot be undone. The product will be permanently removed from your library.
+                  </Text>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    color="red" 
+                    onClick={confirmDelete}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+                  >
+                    <Trash2 size={18} strokeWidth={2.5} className="mr-2" />
+                    Delete Product
+                  </Button>
+                  <Button 
+                    variant="soft" 
+                    color="gray"
+                    onClick={cancelDelete}
+                    className="px-6 py-3 hover:scale-105 transition-all duration-300"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Products Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredResources.map(resource => (
               <div key={resource.id} className="group bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-800/80 dark:via-gray-700/60 dark:to-indigo-900/30 p-4 rounded-xl border border-border/50 dark:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
@@ -359,16 +448,16 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                       isResourceInFunnel(resource.id) ? (
                         <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
                           <Check size={12} strokeWidth={2.5} />
-                          Added
+                          Assigned
                         </div>
                       ) : (
                         <Button
                           size="1"
                           color="violet"
                           onClick={() => onAddToFunnel?.(resource)}
-                          className="px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                          className="px-2 py-1 text-xs"
                         >
-                          Add
+                          Assign
                         </Button>
                       )
                     )}
@@ -389,7 +478,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                           });
                           setIsAddingResource(true);
                         }}
-                        className="px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        className="px-2 py-1 text-xs"
                       >
                         Edit
                       </Button>
@@ -398,9 +487,9 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                       size="1"
                       variant="ghost"
                       color="red"
-                      onClick={() => handleDeleteResource(resource.id)}
-                      className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                      aria-label="Delete resource"
+                      onClick={() => handleDeleteResource(resource.id, resource.name)}
+                      className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                      aria-label="Delete product"
                     >
                       <Trash2 size={14} strokeWidth={2.5} />
                     </Button>
@@ -440,11 +529,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
               
               <div className="mb-8">
                 <Heading size="5" weight="bold" className="mb-3 text-foreground">
-                  {selectedCategory === 'all' ? 'No Resources Yet' : `No ${selectedCategory} Resources`}
+                  {selectedCategory === 'all' ? 'No Products Yet' : `No ${selectedCategory} Products`}
                 </Heading>
                 <Text size="3" color="gray" className="text-muted-foreground max-w-md mx-auto leading-relaxed">
                   {selectedCategory === 'all' 
-                    ? 'Add your first resource to start building your collection.'
+                    ? 'Add your first product to start building your collection.'
                     : `No resources found in the ${selectedCategory.toLowerCase()} category.`
                   }
                 </Text>
@@ -473,7 +562,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
       {context === 'funnel' && (
         <UnifiedNavigation
           onPreview={() => {}} // No preview from Resource Library
-          onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Funnel Products page
+          onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Assigned Products page
           onEdit={() => {}} // TODO: Add navigation to FunnelBuilder
           onGeneration={onGlobalGeneration}
           isGenerated={!!funnel?.flow}

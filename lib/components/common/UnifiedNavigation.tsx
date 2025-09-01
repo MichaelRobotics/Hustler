@@ -51,14 +51,14 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
           </button>
         )}
 
-        {/* Funnel Products Button - Show on aibuilder and preview pages */}
+        {/* Assigned Products Button - Show on aibuilder and preview pages */}
         {isExpanded && onFunnelProducts && (showOnPage === 'aibuilder' || showOnPage === 'preview') && (
           <button
             data-accent-color="violet"
-            aria-label="Funnel Products"
+            aria-label="Assigned Products"
             className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-violet-500 text-white"
             onClick={onFunnelProducts}
-            title="Funnel Products"
+            title="Assigned Products"
           >
             <Library size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-200" />
           </button>

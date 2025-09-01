@@ -261,14 +261,18 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     // Mark funnel as deployed
                     const updatedFunnel = { ...currentFunnel, isDeployed: true };
                     setCurrentFunnel(updatedFunnel);
+                    
+                    // Update parent component with deployed funnel
                     onUpdate(updatedFunnel);
-                    // Automatic redirect to analytics view on current page
+                    
+                    // Add deployment success to log
+                    setDeploymentLog(prev => [...prev, '🎉 Deployment completed! Navigating to analytics...']);
+                    
+                    // Small delay to ensure state is updated before navigation
                     setTimeout(() => {
-                        // Redirect to the same page but with analytics view
-                        const currentUrl = window.location.href;
-                        const separator = currentUrl.includes('?') ? '&' : '?';
-                        window.location.href = `${currentUrl}${separator}view=analytics&funnel=${currentFunnel.id}`;
-                    }, 1000); // Redirect after 1 second
+                        // The parent component will handle navigation to analytics
+                        console.log('Deployment successful, funnel ready for analytics view');
+                    }, 500);
                 }, 2000); // Keep deployment message for 2s
             }
         }, 700);
@@ -298,7 +302,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         setNeedsRemount(true);
     };
 
-    // Get offer blocks for selection - Load from funnel resources (same as Funnel Products view)
+    // Get offer blocks for selection - Load from funnel resources (same as Assigned Products view)
     const offerBlocks = React.useMemo(() => {
         if (!currentFunnel.resources) return [];
         return currentFunnel.resources.map(resource => ({
@@ -622,7 +626,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
       {/* Unified Navigation */}
       <UnifiedNavigation
         onPreview={() => setIsPreviewing(true)}
-        onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Funnel Products page
+        onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Assigned Products page
         onEdit={() => setIsPreviewing(false)} // Go back to Funnel Builder from Preview
         onGeneration={handleGenerationSuccess}
         isGenerated={!!currentFunnel.flow}

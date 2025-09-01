@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Sparkles, Target, BarChart3, Library, Zap } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Sparkles, Target, BarChart3, Library, Zap, X } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
 import UnifiedNavigation from '../common/UnifiedNavigation';
 import { ThemeToggle } from '../common/ThemeToggle';
+import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 
 // Type definitions
 interface Resource {
@@ -65,11 +66,47 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
   // Get current funnel resources (in production, this would be scraped from user's Whop)
   const currentResources = funnel.resources || [];
 
-  const handleDeleteResource = (resourceId: string) => {
-    const updatedResources = currentResources.filter(r => r.id !== resourceId);
-    const updatedFunnel = { ...funnel, resources: updatedResources };
-    onUpdateFunnel(updatedFunnel);
+  // Delete confirmation state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; resourceId: string | null; resourceName: string }>({
+    show: false,
+    resourceId: null,
+    resourceName: ''
+  });
+
+  const handleDeleteResource = (resourceId: string, resourceName: string) => {
+    setDeleteConfirmation({
+      show: true,
+      resourceId,
+      resourceName
+    });
   };
+
+  const confirmDelete = () => {
+    if (deleteConfirmation.resourceId) {
+      const updatedResources = currentResources.filter(r => r.id !== deleteConfirmation.resourceId);
+      const updatedFunnel = { ...funnel, resources: updatedResources };
+      onUpdateFunnel(updatedFunnel);
+      setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+  };
+
+  // Handle Escape key to close delete confirmation
+  React.useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && deleteConfirmation.show) {
+        cancelDelete();
+      }
+    };
+
+    if (deleteConfirmation.show) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [deleteConfirmation.show]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -115,7 +152,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
               
               <div>
                 <Heading size="6" weight="bold" className="text-black dark:text-white">
-                  Funnel Products
+                  Assigned Products
                 </Heading>
               </div>
             </div>
@@ -132,7 +169,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                 </div>
               </div>
               
-              {/* Right Side: Product Library Button */}
+              {/* Right Side: Library Button */}
               <div className="flex-shrink-0">
                 <Button
                   size="3"
@@ -141,7 +178,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                   className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
                 >
                   <Library size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
-                  <span className="ml-2">Product Library</span>
+                                      <span className="ml-2">Library</span>
                 </Button>
               </div>
             </div>
@@ -195,12 +232,12 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
           {/* Current Resources Section */}
           <div className="mb-8">
             <div className="mb-6">
-              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-                Current Resources
-              </Heading>
+                              <Heading size="4" weight="bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
+                  Assigned Products
+                </Heading>
             </div>
 
-            {/* Resources Grid */}
+            {/* Products Grid */}
             {currentResources.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {currentResources.map(resource => (
@@ -216,9 +253,9 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                         size="1"
                         variant="ghost"
                         color="red"
-                        onClick={() => handleDeleteResource(resource.id)}
-                        className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                        aria-label="Remove resource"
+                        onClick={() => handleDeleteResource(resource.id, resource.name)}
+                        className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                        aria-label="Remove product"
                       >
                         <Trash2 size={14} strokeWidth={2.5} />
                       </Button>
@@ -259,10 +296,10 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
               
               <div className="mb-8">
                 <Heading size="5" weight="bold" className="mb-3 text-foreground">
-                  No Resources Assigned
+                  No Products Assigned
                 </Heading>
                 <Text size="3" color="gray" className="text-muted-foreground max-w-md mx-auto leading-relaxed">
-                  Add resources from your library to start building your funnel.
+                  Add products from your library to start building your funnel.
                 </Text>
               </div>
               
@@ -272,7 +309,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                 className="px-8 py-4 shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 text-base font-semibold"
               >
                 <Library size={22} strokeWidth={2.5} className="mr-2" />
-                Open Product Library
+                Open Library
               </Button>
             </div>
           )}
@@ -281,13 +318,68 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation.show && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onClick={cancelDelete}>
+          <div className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm dark:shadow-black/60 max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <Heading size="4" weight="bold" className="text-red-600 dark:text-red-400">
+                Confirm Removal
+              </Heading>
+              <Button
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={cancelDelete}
+                className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
+              >
+                <X size={16} strokeWidth={2.5} />
+              </Button>
+            </div>
+            
+            <div className="mb-6">
+              <Text size="3" className="text-foreground mb-3">
+                Are you sure you want to remove this product from the funnel?
+              </Text>
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/30 rounded-lg p-3">
+                <Text size="2" weight="semi-bold" className="text-red-700 dark:text-red-300">
+                  "{deleteConfirmation.resourceName}"
+                </Text>
+              </div>
+              <Text size="2" color="gray" className="text-muted-foreground mt-2">
+                The product will be removed from this funnel but remain in your library.
+              </Text>
+            </div>
+            
+            <div className="flex gap-3">
+              <Button 
+                color="red" 
+                onClick={confirmDelete}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+              >
+                <Trash2 size={18} strokeWidth={2.5} className="mr-2" />
+                Remove Product
+              </Button>
+              <Button 
+                variant="soft" 
+                color="gray"
+                onClick={cancelDelete}
+                className="px-6 py-3 hover:scale-105 transition-all duration-300"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unified Navigation */}
       <UnifiedNavigation
         onPreview={() => onGoToPreview(funnel)} // Go to preview
-        onFunnelProducts={onGoToFunnelProducts} // Already on Funnel Products page
+        onFunnelProducts={onGoToFunnelProducts} // Already on Assigned Products page
         onEdit={() => onGoToBuilder(funnel)} // Go to FunnelBuilder
         onGeneration={onGlobalGeneration}
-        isGenerated={!!funnel.flow}
+        isGenerated={hasValidFlow(funnel)}
         isGenerating={isGenerating}
         showOnPage="resources"
       />

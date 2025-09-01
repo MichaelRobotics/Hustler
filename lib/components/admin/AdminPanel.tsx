@@ -15,6 +15,7 @@ import FunnelPreviewChat from '../funnelBuilder/FunnelPreviewChat';
 import AdminSidebar from './AdminSidebar';
 import { ThemeToggle } from '../common/ThemeToggle';
 import UnifiedNavigation from '../common/UnifiedNavigation';
+import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 
 interface Funnel {
   id: string;
@@ -86,9 +87,15 @@ export default function AdminPanel() {
   const [editingFunnelName, setEditingFunnelName] = useState<{ id: string | null; name: string }>({ id: null, name: '' });
   const [libraryContext, setLibraryContext] = useState<'global' | 'funnel'>('global');
   const [currentFunnelForLibrary, setCurrentFunnelForLibrary] = useState<Funnel | null>(null);
+  const [deploymentSuccess, setDeploymentSuccess] = useState<boolean>(false);
 
   // Handle URL query parameters for automatic view switching
-    React.useEffect(() => {
+  React.useEffect(() => {
+    // Only process URL parameters if funnels array is populated
+    if (funnels.length === 0) {
+      return;
+    }
+    
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
     const funnelParam = urlParams.get('funnel');
@@ -97,20 +104,54 @@ export default function AdminPanel() {
       // Find the funnel by ID
       const targetFunnel = funnels.find(f => f.id === funnelParam);
       if (targetFunnel) {
+        console.log('URL parameter navigation: Found funnel, navigating to analytics');
         setSelectedFunnel(targetFunnel);
         setCurrentView('analytics');
         // Clean up URL
+        window.history.replaceState({}, '', '/admin');
+      } else {
+        console.warn('URL parameter navigation: Funnel not found, redirecting to dashboard');
+        // If funnel not found, redirect to dashboard
+        setCurrentView('dashboard');
         window.history.replaceState({}, '', '/admin');
       }
     }
   }, [funnels]);
 
   // Debug view changes and selectedFunnel state
-  React.useEffect(() => {
+    React.useEffect(() => {
     console.log('View changed to:', currentView);
     console.log('Selected funnel:', selectedFunnel);
     console.log('Selected funnel flow:', selectedFunnel?.flow);
+    console.log('Has valid flow:', selectedFunnel ? hasValidFlow(selectedFunnel) : 'N/A');
+    
+    // Additional debugging for edge cases
+    if (selectedFunnel && selectedFunnel.flow) {
+      console.log('Flow validation details:', {
+        hasFlow: !!selectedFunnel.flow,
+        flowType: typeof selectedFunnel.flow,
+        hasStages: Array.isArray(selectedFunnel.flow.stages),
+        stagesLength: Array.isArray(selectedFunnel.flow.stages) ? selectedFunnel.flow.stages.length : 'N/A',
+        hasBlocks: !!selectedFunnel.flow.blocks,
+        blocksType: typeof selectedFunnel.flow.blocks,
+        blocksCount: selectedFunnel.flow.blocks ? Object.keys(selectedFunnel.flow.blocks).length : 'N/A',
+        hasStartBlockId: !!selectedFunnel.flow.startBlockId,
+        startBlockIdType: typeof selectedFunnel.flow.startBlockId,
+        startBlockIdLength: selectedFunnel.flow.startBlockId ? selectedFunnel.flow.startBlockId.length : 'N/A'
+      });
+    }
   }, [currentView, selectedFunnel]);
+
+  // Auto-hide deployment success notification
+  React.useEffect(() => {
+    if (deploymentSuccess) {
+      const timer = setTimeout(() => {
+        setDeploymentSuccess(false);
+      }, 5000); // Hide after 5 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [deploymentSuccess]);
 
   const handleViewChange = (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview') => {
     if (view === 'resourceLibrary') {
@@ -157,7 +198,7 @@ export default function AdminPanel() {
       setNewFunnelName('');
       setIsAddDialogOpen(false);
       
-      // Automatically select the new funnel and navigate to its Funnel Products page
+      // Automatically select the new funnel and navigate to its Assigned Products page
       setSelectedFunnel(newFunnel);
       setCurrentView('resources');
     }
@@ -182,9 +223,15 @@ export default function AdminPanel() {
   };
 
   const handleEditFunnel = (funnel: Funnel) => {
-    // Navigate to funnel builder view
-    setSelectedFunnel(funnel);
-    setCurrentView('funnelBuilder');
+    // Validate funnel has valid flow before going to builder
+    if (hasValidFlow(funnel)) {
+      setSelectedFunnel(funnel);
+      setCurrentView('funnelBuilder');
+    } else {
+      console.warn('Cannot edit funnel without valid flow, redirecting to resources');
+      setSelectedFunnel(funnel);
+      setCurrentView('resources');
+    }
   };
 
   const handleDeployFunnel = (funnelId: string) => {
@@ -206,8 +253,8 @@ export default function AdminPanel() {
     };
 
   const onFunnelClick = (funnel: Funnel) => {
-    // Check if funnel is generated - if not, go to Funnel Products page
-    if (!funnel.flow) {
+          // Check if funnel is generated - if not, go to Assigned Products page
+    if (!hasValidFlow(funnel)) {
       setSelectedFunnel(funnel);
       setCurrentView('resources');
     } else {
@@ -247,11 +294,21 @@ export default function AdminPanel() {
   };
 
   const handleFunnelGenerationComplete = (funnel: Funnel) => {
-    // Update the funnel with generated flow and navigate to builder
-    const updatedFunnel = { ...funnel, flow: funnel.flow || {} };
-    setSelectedFunnel(updatedFunnel);
-    setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
-    setCurrentView('funnelBuilder');
+    // Only update if funnel actually has valid flow data
+    if (hasValidFlow(funnel)) {
+      const updatedFunnel = { ...funnel };
+      setSelectedFunnel(updatedFunnel);
+      setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+      setCurrentView('funnelBuilder');
+    } else {
+      // Handle case where funnel has no valid flow
+      console.warn('Funnel has no valid flow data, redirecting to resources');
+      setSelectedFunnel(funnel);
+      setCurrentView('resources');
+      
+      // Show user-friendly message
+      alert('This funnel needs to be generated first. Please generate the funnel before editing.');
+    }
   };
 
   // Global generation function that can be called from any page
@@ -340,18 +397,47 @@ export default function AdminPanel() {
     }
   };
 
-  // Render different views based on current state
+
+
+    // Render different views based on current state
   if (currentView === 'analytics' && selectedFunnel) {
+    // Validate that the funnel actually has valid flow before showing analytics
+    if (!hasValidFlow(selectedFunnel)) {
+      console.warn('Analytics requested for funnel without valid flow, redirecting to resources');
+      setCurrentView('resources');
+      return null; // Don't render anything while redirecting
+    }
+    
     return (
-      <FunnelAnalyticsPage 
-        funnel={selectedFunnel}
+      <>
+        {/* Deployment Success Notification */}
+        {deploymentSuccess && (
+          <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in slide-in-from-right-2 duration-300">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span className="font-medium">Funnel deployed successfully!</span>
+            </div>
+            <button 
+              onClick={() => setDeploymentSuccess(false)}
+              className="absolute top-1 right-1 text-white/80 hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        
+        <FunnelAnalyticsPage 
+          funnel={selectedFunnel}
             allUsers={allUsers}
             allSalesData={allSalesData}
-        onBack={handleBackToDashboard}
-        onGoToBuilder={(funnel) => handleFunnelGenerationComplete(funnel)}
-        onGlobalGeneration={handleGlobalGeneration}
-        isGenerating={isGenerating}
-      />
+          onBack={handleBackToDashboard}
+          onGoToBuilder={(funnel) => handleFunnelGenerationComplete(funnel)}
+          onGlobalGeneration={handleGlobalGeneration}
+          isGenerating={isGenerating}
+        />
+      </>
     );
   }
 
@@ -360,9 +446,24 @@ export default function AdminPanel() {
       <ResourcePage 
         funnel={selectedFunnel}
         onBack={() => {
-          setCurrentView('analytics');
+          // Smart back navigation: go to analytics only if funnel has valid flow
+          if (hasValidFlow(selectedFunnel)) {
+            setCurrentView('analytics');
+          } else {
+            // If funnel has no valid flow, go back to dashboard
+            setCurrentView('dashboard');
+          }
         }}
-        onGoToBuilder={(updatedFunnel?: Funnel) => handleFunnelGenerationComplete(updatedFunnel || selectedFunnel)}
+        onGoToBuilder={(updatedFunnel?: Funnel) => {
+          const targetFunnel = updatedFunnel || selectedFunnel;
+          if (targetFunnel && hasValidFlow(targetFunnel)) {
+            handleFunnelGenerationComplete(targetFunnel);
+          } else {
+            console.warn('Cannot go to builder: funnel has no valid flow');
+            // Redirect to resources to generate funnel first
+            setCurrentView('resources');
+          }
+        }}
         onGoToPreview={(funnel) => {
           setSelectedFunnel(funnel);
           setCurrentView('preview');
@@ -375,7 +476,7 @@ export default function AdminPanel() {
         onOpenResourceLibrary={handleOpenResourceLibrary}
         onGlobalGeneration={handleGlobalGeneration}
         isGenerating={isGenerating}
-        onGoToFunnelProducts={() => {}} // Already on Funnel Products page
+        onGoToFunnelProducts={() => {}} // Already on Assigned Products page
       />
     );
   }
@@ -390,6 +491,8 @@ export default function AdminPanel() {
             currentView={currentView}
             onViewChange={handleViewChange}
             className="flex-shrink-0 h-full"
+            libraryContext={libraryContext}
+            currentFunnelForLibrary={currentFunnelForLibrary}
           />
           
           {/* Main Content Area */}
@@ -418,7 +521,15 @@ export default function AdminPanel() {
           setAllResources={(resources) => setAllResources(resources)}
           onBack={() => setCurrentView('resources')}
           onAddToFunnel={handleAddToFunnel}
-          onEdit={() => setCurrentView('funnelBuilder')} // Go to FunnelBuilder
+          onEdit={() => {
+            // Validate funnel has valid flow before going to builder
+            if (selectedFunnel && hasValidFlow(selectedFunnel)) {
+              setCurrentView('funnelBuilder');
+            } else {
+              console.warn('Cannot edit funnel without valid flow, redirecting to resources');
+              setCurrentView('resources');
+            }
+          }}
           onGlobalGeneration={handleGlobalGeneration}
           isGenerating={isGenerating}
           onGoToFunnelProducts={() => setCurrentView('resources')}
@@ -445,8 +556,24 @@ export default function AdminPanel() {
         funnel={selectedFunnel}
         onBack={handleBackToDashboard}
         onUpdate={(updatedFunnel) => {
+          console.log('Funnel updated in builder:', updatedFunnel);
+          console.log('Is deployed:', updatedFunnel.isDeployed);
+          console.log('Has valid flow:', hasValidFlow(updatedFunnel));
+          
+          // Update funnel state
           setSelectedFunnel(updatedFunnel);
           setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+          
+          // Check if funnel was just deployed and navigate to analytics
+          if (updatedFunnel.isDeployed && hasValidFlow(updatedFunnel)) {
+            console.log('Funnel deployed successfully, navigating to analytics');
+            // Set deployment success flag for notification
+            setDeploymentSuccess(true);
+            // Small delay to ensure state is updated
+            setTimeout(() => {
+              setCurrentView('analytics');
+            }, 100);
+          }
         }}
         onEdit={() => {}} // Already in FunnelBuilder
         allResources={convertedResources}
@@ -484,6 +611,8 @@ export default function AdminPanel() {
             currentView={currentView}
             onViewChange={handleViewChange}
             className="flex-shrink-0 h-full"
+            libraryContext={libraryContext}
+            currentFunnelForLibrary={currentFunnelForLibrary}
           />
           
           <div className="flex-1 overflow-auto w-full lg:w-auto">
@@ -525,6 +654,8 @@ export default function AdminPanel() {
             currentView={currentView}
             onViewChange={handleViewChange}
             className="flex-shrink-0 h-full"
+            libraryContext={libraryContext}
+            currentFunnelForLibrary={currentFunnelForLibrary}
           />
           
           {/* Main Content Area */}
@@ -588,10 +719,17 @@ export default function AdminPanel() {
             console.log('Edit button clicked in Preview, switching to funnelBuilder');
             console.log('Current selectedFunnel:', selectedFunnel);
             console.log('Current funnels:', funnels);
-            setCurrentView('funnelBuilder');
+            
+            // Validate funnel has valid flow before going to builder
+            if (selectedFunnel && hasValidFlow(selectedFunnel)) {
+              setCurrentView('funnelBuilder');
+            } else {
+              console.warn('Cannot edit funnel without valid flow, redirecting to resources');
+              setCurrentView('resources');
+            }
           }}
           onGeneration={handleGlobalGeneration}
-          isGenerated={!!selectedFunnel.flow}
+          isGenerated={selectedFunnel ? hasValidFlow(selectedFunnel) : false}
           isGenerating={isGenerating}
           showOnPage="preview"
         />
@@ -611,6 +749,8 @@ export default function AdminPanel() {
             currentView={currentView}
             onViewChange={handleViewChange}
             className="flex-shrink-0 h-full"
+            libraryContext={libraryContext}
+            currentFunnelForLibrary={currentFunnelForLibrary}
           />
         
         {/* Main Content Area */}
