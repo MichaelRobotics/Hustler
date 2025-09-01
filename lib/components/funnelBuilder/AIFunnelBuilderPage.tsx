@@ -211,6 +211,12 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
     const [selectedOffer, setSelectedOffer] = React.useState<string | null>(null);
       const [isDeploying, setIsDeploying] = React.useState(false);
   const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
+  const [deploymentValidation, setDeploymentValidation] = React.useState<{
+    isValid: boolean;
+    message: string;
+    missingProducts: string[];
+    extraProducts: string[];
+  } | null>(null);
   const [offlineConfirmation, setOfflineConfirmation] = React.useState(false);
     const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null);
     const deployControlsRef = React.useRef<HTMLDivElement>(null);
@@ -245,7 +251,60 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         setEditingBlockId(null);
     };
 
+    // Validate that assigned products match generated funnel products
+    const validateDeployment = (): { isValid: boolean; message: string; missingProducts: string[]; extraProducts: string[] } => {
+        if (!currentFunnel.flow || !currentFunnel.resources) {
+            return { 
+                isValid: false, 
+                message: "Funnel must be generated and have assigned products to deploy.", 
+                missingProducts: [], 
+                extraProducts: [] 
+            };
+        }
+
+        // Extract product IDs from the generated funnel flow
+        const generatedProductIds = new Set<string>();
+        
+        // Look for offer blocks in the flow
+        Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
+            if (block.id && typeof block.id === 'string' && 
+                (block.id.includes('offer_') || (block.message && typeof block.message === 'string' && block.message.toLowerCase().includes('offer')))) {
+                // Extract product ID from offer block
+                const productId = block.id.replace('offer_', '');
+                if (productId && productId !== block.id) {
+                    generatedProductIds.add(productId);
+                }
+            }
+        });
+
+        // Get assigned product IDs
+        const assignedProductIds = new Set(currentFunnel.resources.map(r => r.id));
+
+        // Find missing and extra products
+        const missingProducts = Array.from(generatedProductIds).filter(id => !assignedProductIds.has(id));
+        const extraProducts = Array.from(assignedProductIds).filter(id => !generatedProductIds.has(id));
+
+        // Simple validation - just check if there's a mismatch
+        if (missingProducts.length > 0 || extraProducts.length > 0) {
+            return { 
+                isValid: false, 
+                message: "Product mismatch detected", 
+                missingProducts, 
+                extraProducts 
+            };
+        }
+
+        return { isValid: true, message: "", missingProducts: [], extraProducts: [] };
+    };
+
     const handleDeploy = () => {
+        // Validate deployment before proceeding
+        const validation = validateDeployment();
+        if (!validation.isValid) {
+            setDeploymentValidation(validation);
+            return;
+        }
+
         setIsDeploying(true);
         setDeploymentLog(['Deployment initiated...']);
 
@@ -498,6 +557,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                                 </div>
                             )}
 
+                
+
                 {/* Enhanced Content Area with Whop Design */}
                 <div className="flex-1 p-0">
                             {isLoading ? (
@@ -744,6 +805,49 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   className="!px-6 !py-3 hover:scale-105 transition-all duration-300"
                 >
                   Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deployment Validation Modal - Simplified User-Friendly Version */}
+      {deploymentValidation && !deploymentValidation.isValid && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-[9999]">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60">
+            <div className="flex justify-between items-center mb-6">
+              <Heading size="4" weight="bold" className="text-foreground">
+                Cannot Go Live
+              </Heading>
+              <Button
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={() => setDeploymentValidation(null)}
+                className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-all duration-200 hover:scale-105"
+              >
+                <X size={16} strokeWidth={2.5} />
+              </Button>
+            </div>
+            
+            <div className="space-y-5">
+              <div>
+                <Text size="3" className="text-muted-foreground text-center">
+                  Your funnel products don't match the generated funnel structure.
+                </Text>
+                <Text size="3" className="text-muted-foreground text-center mt-3">
+                  Please update your assigned products to match the funnel.
+                </Text>
+              </div>
+              
+              <div className="flex justify-center pt-6">
+                <Button
+                  color="violet"
+                  onClick={() => onGoToFunnelProducts()}
+                  className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60"
+                >
+                  Go to Assigned Products
                 </Button>
               </div>
             </div>

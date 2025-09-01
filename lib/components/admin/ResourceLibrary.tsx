@@ -44,6 +44,7 @@ interface Funnel {
 interface ResourceLibraryProps {
   funnel?: Funnel;
   allResources: Resource[];
+  allFunnels?: Funnel[]; // New: to check if resource is assigned to any funnel
   setAllResources: (resources: Resource[]) => void;
   onBack?: () => void;
   onAddToFunnel?: (resource: Resource) => void;
@@ -67,6 +68,7 @@ interface ResourceLibraryProps {
 const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   funnel,
   allResources,
+  allFunnels = [],
   setAllResources,
   onBack,
   onAddToFunnel,
@@ -94,6 +96,13 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   });
 
   const categories = ['all', 'Education', 'Content', 'Marketing', 'Tools'];
+
+  // Check if a resource is assigned to any funnel
+  const isResourceAssignedToAnyFunnel = (resourceId: string): boolean => {
+    return allFunnels.some(funnel => 
+      funnel.resources && funnel.resources.some(resource => resource.id === resourceId)
+    );
+  };
 
   const filteredResources = selectedCategory === 'all' 
     ? allResources 
@@ -464,7 +473,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                         </Button>
                       )
                     )}
-                                          {context === 'global' && (
+                                          {context === 'global' && !isResourceAssignedToAnyFunnel(resource.id) && (
                         <Button
                           size="1"
                           color="violet"
@@ -487,16 +496,19 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                           Edit
                         </Button>
                       )}
-                    <Button
-                      size="1"
-                      variant="ghost"
-                      color="red"
-                      onClick={() => handleDeleteResource(resource.id, resource.name)}
-                      className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
-                      aria-label="Delete product"
-                    >
-                      <Trash2 size={14} strokeWidth={2.5} />
-                    </Button>
+                    {/* Delete Button - Only show when resource is not assigned to any funnel */}
+                    {!isResourceAssignedToAnyFunnel(resource.id) && (
+                      <Button
+                        size="1"
+                        variant="ghost"
+                        color="red"
+                        onClick={() => handleDeleteResource(resource.id, resource.name)}
+                        className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                        aria-label="Delete product"
+                      >
+                        <Trash2 size={14} strokeWidth={2.5} />
+                      </Button>
+                    )}
                   </div>
                 </div>
                 
@@ -559,10 +571,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
           onFunnelProducts={onGoToFunnelProducts} // Go to specific funnel's Assigned Products page
           onEdit={() => {
             // Navigate to FunnelBuilder if funnel has valid flow
-            if (funnel?.flow) {
-              // This should be handled by the parent component
-              // For now, we'll use the same pattern as other components
-              window.location.href = `/admin?view=funnelBuilder&funnel=${funnel.id}`;
+            if (funnel && onEdit) {
+              onEdit();
             }
           }}
           onGeneration={onGlobalGeneration}

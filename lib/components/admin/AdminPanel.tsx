@@ -537,6 +537,7 @@ export default function AdminPanel() {
             <ResourceLibrary
               funnel={undefined}
               allResources={allResources}
+              allFunnels={funnels}
               setAllResources={(resources) => setAllResources(resources)}
               onBack={undefined}
               onAddToFunnel={undefined}
@@ -554,7 +555,8 @@ export default function AdminPanel() {
       return (
         <ResourceLibrary
           funnel={selectedFunnel || undefined}
-            allResources={allResources}
+          allResources={allResources}
+          allFunnels={funnels}
           setAllResources={(resources) => setAllResources(resources)}
           onBack={() => setCurrentView('resources')}
           onAddToFunnel={handleAddToFunnel}

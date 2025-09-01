@@ -79,19 +79,16 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
           </button>
         )}
 
-        {/* Generation/Regeneration Button - Hide regenerate option when funnel is live */}
-        {isExpanded && onGeneration && !isDeployed && (
+        {/* Generation/Regeneration Button - Hide when funnel is live or when generating */}
+        {isExpanded && onGeneration && !isDeployed && !isGenerating && (
           <button
             data-accent-color="green"
             aria-label={isGenerated ? "Regenerate funnel" : "Generate funnel"}
             className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-green-500/25 hover:shadow-green-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-green-500 text-white"
             onClick={onGeneration}
             title={isGenerated ? "Regenerate funnel" : "Generate funnel"}
-            disabled={isGenerating}
           >
-            {isGenerating ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-            ) : isGenerated ? (
+            {isGenerated ? (
               <RefreshCw size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-200" />
             ) : (
               <Zap size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-200" />
