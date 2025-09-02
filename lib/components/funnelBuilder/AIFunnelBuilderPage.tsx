@@ -510,6 +510,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                        const blockId = resource.id;
                        
                        if (blockId) {
+                         // Set the selected offer for highlighting in preview mode
+                         setSelectedOffer(blockId);
                          // Directly call handleBlockClick to set selectedBlockForHighlight state
                          funnelVisualizerRef.current?.handleBlockClick(blockId);
                        }

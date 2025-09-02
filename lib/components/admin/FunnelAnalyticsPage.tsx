@@ -229,15 +229,17 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
         </div>
       </div>
 
-      {/* Unified Navigation - Hidden on analytics page */}
-      <UnifiedNavigation
-        onPreview={() => {}} // No preview in analytics
-        onFunnelProducts={() => {}} // Already on analytics page
-        onGeneration={onGlobalGeneration}
-        isGenerated={hasValidFlow(funnel)}
-        isGenerating={isGenerating}
-        showOnPage="analytics" // Hide on analytics page
-      />
+      {/* Unified Navigation - Hidden on analytics page or when generating */}
+      {!isGenerating && (
+        <UnifiedNavigation
+          onPreview={() => {}} // No preview in analytics
+          onFunnelProducts={() => {}} // Already on analytics page
+          onGeneration={onGlobalGeneration}
+          isGenerated={hasValidFlow(funnel)}
+          isGenerating={isGenerating}
+          showOnPage="analytics" // Hide on analytics page
+        />
+      )}
     </div>
   );
 };

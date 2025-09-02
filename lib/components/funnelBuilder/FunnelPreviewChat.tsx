@@ -151,8 +151,12 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
         const block = funnelFlow?.blocks[blockId];
         if (!block) return false;
         
+        // Debug logging for path checking
+        console.log(`Checking block ${blockId} (${block.id}) against target offer ${targetOfferId}`);
+        
         // Check if this block is the offer block
         if (block.id === `offer_${targetOfferId}` || block.id === targetOfferId) {
+            console.log(`Found offer block! ${block.id} matches ${targetOfferId}`);
             return true;
         }
         
@@ -171,7 +175,16 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selec
     // Get the indices of options that lead to the selected offer
     const optionsLeadingToOffer = React.useMemo(() => {
         if (!selectedOffer || !currentBlockId) return [];
-        return findOptionsLeadingToOffer(selectedOffer, currentBlockId);
+        
+        // Debug logging
+        console.log('=== PREVIEW CHAT DEBUG ===');
+        console.log('selectedOffer:', selectedOffer);
+        console.log('currentBlockId:', currentBlockId);
+        console.log('funnelFlow blocks:', Object.keys(funnelFlow?.blocks || {}));
+        
+        const result = findOptionsLeadingToOffer(selectedOffer, currentBlockId);
+        console.log('optionsLeadingToOffer result:', result);
+        return result;
     }, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
     
     const currentBlock = funnelFlow?.blocks[currentBlockId || ''];

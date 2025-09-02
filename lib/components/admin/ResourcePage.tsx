@@ -461,17 +461,19 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         </div>
       )}
 
-      {/* Unified Navigation */}
-      <UnifiedNavigation
-        onPreview={() => onGoToPreview(funnel)} // Go to preview
-        onFunnelProducts={onGoToFunnelProducts} // Already on Assigned Products page
-        onEdit={() => onGoToBuilder(funnel)} // Go to FunnelBuilder
-        onGeneration={() => onGlobalGeneration(funnel.id)}
-        isGenerated={hasValidFlow(funnel)}
-        isGenerating={isGenerating(funnel.id)}
-        isDeployed={funnel.isDeployed}
-        showOnPage="resources"
-      />
+      {/* Unified Navigation - Hide when funnel is generating */}
+      {!isGenerating(funnel.id) && (
+        <UnifiedNavigation
+          onPreview={() => onGoToPreview(funnel)} // Go to preview
+          onFunnelProducts={onGoToFunnelProducts} // Already on Assigned Products page
+          onEdit={() => onGoToBuilder(funnel)} // Go to FunnelBuilder
+          onGeneration={() => onGlobalGeneration(funnel.id)}
+          isGenerated={hasValidFlow(funnel)}
+          isGenerating={isGenerating(funnel.id)}
+          isDeployed={funnel.isDeployed}
+          showOnPage="resources"
+        />
+      )}
 
     </div>
   );

@@ -592,8 +592,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
         </div>
       </div>
 
-      {/* Unified Navigation - Only show in funnel context, with preview functionality */}
-      {context === 'funnel' && (
+      {/* Unified Navigation - Only show in funnel context, with preview functionality, and hide when generating */}
+      {context === 'funnel' && !isGenerating && (
         <UnifiedNavigation
           onPreview={() => {
             // Handle preview navigation exactly like Assigned Products
