@@ -13,6 +13,8 @@ interface FunnelFlow {
 interface Funnel {
   id: string;
   name: string;
+  isDeployed?: boolean;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   flow?: FunnelFlow | null;
   [key: string]: any;
 }

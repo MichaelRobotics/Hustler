@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, Library, Zap, Plus, Edit3, RefreshCw } from 'lucide-react';
+import { Eye, Library, Zap, Plus, Edit3 } from 'lucide-react';
 
 interface UnifiedNavigationProps {
   onPreview?: () => void;
@@ -79,20 +79,16 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
           </button>
         )}
 
-        {/* Generation/Regeneration Button - Hide when funnel is live or when generating */}
-        {isExpanded && onGeneration && !isDeployed && !isGenerating && (
+        {/* Generation Button - Hide when funnel is live, generating, or already generated */}
+        {!isDeployed && !isGenerated && (
           <button
-            data-accent-color="green"
-            aria-label={isGenerated ? "Regenerate funnel" : "Generate funnel"}
-            className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-green-500/25 hover:shadow-green-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-green-500 text-white"
             onClick={onGeneration}
-            title={isGenerated ? "Regenerate funnel" : "Generate funnel"}
+            disabled={isGenerating}
+            className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-violet-500 text-white"
+            aria-label="Generate funnel"
+            title="Generate funnel"
           >
-            {isGenerated ? (
-              <RefreshCw size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-200" />
-            ) : (
-              <Zap size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-200" />
-            )}
+            <Zap size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-200" />
           </button>
         )}
 

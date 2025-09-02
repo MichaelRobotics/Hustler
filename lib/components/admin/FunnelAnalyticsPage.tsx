@@ -15,6 +15,7 @@ interface Funnel {
   id: string;
   name: string;
   isDeployed?: boolean;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   delay?: number;
   resources?: any[];
   flow?: any;
@@ -193,18 +194,38 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
               </Text>
           </div>
 
-          {/* Analytics Components - Direct rendering without nesting */}
-          <FunnelAnalytics stats={stats} />
-          
-          {/* Live Sales Indicator */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-white to-gray-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-gray-200/50 dark:border-blue-700/30 mb-6 w-fit">
-              <Activity className="h-4 w-4 text-gray-600 dark:text-blue-400" strokeWidth={2.5} />
-              <Text size="2" weight="semi-bold" color="blue" className="dark:text-blue-300">
-                  Live Sales
-              </Text>
-          </div>
-          
-          <SalesPerformance salesStats={salesStats} />
+          {/* Check if funnel was ever live - if never live, show no analytics message */}
+          {!funnel.wasEverDeployed ? (
+            <div className="mb-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 border border-gray-200 dark:border-gray-700/30 rounded-xl text-center">
+              <div className="mb-4">
+                <Activity className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" strokeWidth={1.5} />
+                <Heading size="5" weight="bold" className="text-gray-800 dark:text-gray-200 mb-2">
+                  No Analytics Available
+                </Heading>
+                <Text size="3" color="gray" className="text-gray-700 dark:text-gray-300 mb-4">
+                  This funnel has never been live, so there are no analytics to collect.
+                </Text>
+                <Text size="2" color="gray" className="text-gray-600 dark:text-gray-400">
+                  Go to the Funnel Builder and click "Go Live" to start collecting data.
+                </Text>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Analytics Components - Show if funnel was ever live */}
+              <FunnelAnalytics stats={stats} />
+              
+              {/* Live Sales Indicator */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-white to-gray-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-gray-200/50 dark:border-blue-700/30 mb-6 w-fit">
+                  <Activity className="h-4 w-4 text-gray-600 dark:text-blue-400" strokeWidth={2.5} />
+                  <Text size="2" weight="semi-bold" color="blue" className="dark:text-blue-300">
+                      Live Sales
+                  </Text>
+              </div>
+              
+              <SalesPerformance salesStats={salesStats} />
+            </>
+          )}
         </div>
       </div>
 

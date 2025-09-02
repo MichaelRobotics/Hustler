@@ -20,10 +20,14 @@ interface Funnel {
   id: string;
   name: string;
   isDeployed?: boolean;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   delay?: number;
   resources?: any[];
   sends?: number;
   flow?: any;
+  generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
+  generationError?: string;
+  lastGeneratedAt?: number;
 }
 
 interface User {
@@ -66,27 +70,31 @@ export default function AdminPanel() {
   const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview'>('dashboard');
   const [selectedFunnel, setSelectedFunnel] = useState<Funnel | null>(null);
   const [funnels, setFunnels] = useState<Funnel[]>([
-    { 
-      id: '1', 
-      name: 'Sales Funnel', 
-      isDeployed: false, 
-      sends: 0,
-      resources: [
-        { id: '1', type: 'AFFILIATE', name: 'Product A', link: 'https://example.com/a', promoCode: 'SAVE20', category: 'Free Value' },
-        { id: '2', type: 'MY_PRODUCTS', name: 'Product B', link: 'https://example.com/b', promoCode: 'SAVE30', category: 'Free Value' }
-      ],
-      flow: null
-    },
-    { 
-      id: '2', 
-      name: 'Lead Generation', 
-      isDeployed: false, 
-      sends: 0,
-      resources: [
-        { id: '3', type: 'CONTENT', name: 'Lead Magnet', link: 'https://example.com/lead', promoCode: '', category: 'Free Value' }
-      ],
-      flow: null
-    },
+         { 
+       id: '1', 
+       name: 'Sales Funnel', 
+       isDeployed: false, 
+       wasEverDeployed: false,
+       sends: 0,
+       generationStatus: 'idle' as const,
+       resources: [
+         { id: '1', type: 'AFFILIATE', name: 'Product A', link: 'https://example.com/a', promoCode: 'SAVE20', category: 'Free Value' },
+         { id: '2', type: 'MY_PRODUCTS', name: 'Product B', link: 'https://example.com/b', promoCode: 'SAVE30', category: 'Free Value' }
+       ],
+       flow: null
+     },
+     { 
+       id: '2', 
+       name: 'Lead Generation', 
+       isDeployed: false, 
+       wasEverDeployed: false,
+       sends: 0,
+       generationStatus: 'idle' as const,
+       resources: [
+         { id: '3', type: 'CONTENT', name: 'Lead Magnet', link: 'https://example.com/b', promoCode: '', category: 'Free Value' }
+       ],
+       flow: null
+     },
   ]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -199,7 +207,9 @@ export default function AdminPanel() {
         id: Date.now().toString(),
         name: newFunnelName.trim(),
         isDeployed: false,
+        wasEverDeployed: false,
         sends: 0,
+        generationStatus: 'idle' as const,
         resources: [],
         flow: null
       };
@@ -237,22 +247,44 @@ export default function AdminPanel() {
       setSelectedFunnel(funnel);
       setCurrentView('funnelBuilder');
     } else {
-      console.warn('Cannot edit funnel without valid flow, redirecting to resources');
+      console.warn('Cannot edit funnel without valid flow - staying on dashboard');
+      // Don't switch view, just show error or stay on dashboard
       setSelectedFunnel(funnel);
-      setCurrentView('resources');
     }
   };
 
   const handleDeployFunnel = (funnelId: string) => {
     setFunnels(funnels.map(f => 
-      f.id === funnelId ? { ...f, isDeployed: !f.isDeployed } : f
+      f.id === funnelId ? { 
+        ...f, 
+        isDeployed: !f.isDeployed,
+        wasEverDeployed: f.wasEverDeployed || !f.isDeployed // Set to true if deploying
+      } : f
     ));
   };
 
   const setFunnelSettingsToEdit = (funnel: Funnel | null) => {
-    // Handle funnel settings
+    // Handle funnel settings - stay on dashboard
     console.log('Settings for funnel:', funnel);
+    setSelectedFunnel(funnel);
+    // Don't switch view - stay on dashboard
+  };
+
+  const handleDuplicateFunnel = (funnel: Funnel) => {
+    const duplicatedFunnel = {
+      ...funnel,
+      id: Date.now().toString(),
+      name: `${funnel.name} (Copy)`,
+      isDeployed: false,
+      wasEverDeployed: false, // Reset for new copy
+      sends: 0,
+      generationStatus: 'idle' as const,
+      generationError: undefined,
+      lastGeneratedAt: undefined
     };
+    setFunnels([...funnels, duplicatedFunnel]);
+    console.log('Duplicate funnel created:', duplicatedFunnel);
+  };
 
     const handleSaveFunnelName = (funnelId: string) => {
     setFunnels(funnels.map(f => 
@@ -302,50 +334,126 @@ export default function AdminPanel() {
     setSelectedFunnel(null);
   };
 
-  const handleFunnelGenerationComplete = (funnel: Funnel) => {
-    // Only update if funnel actually has valid flow data
-    if (hasValidFlow(funnel)) {
-      const updatedFunnel = { ...funnel };
-      setSelectedFunnel(updatedFunnel);
-      setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
-      setCurrentView('funnelBuilder');
-    } else {
-      // Handle case where funnel has no valid flow
-      console.warn('Funnel has no valid flow data, redirecting to resources');
-      setSelectedFunnel(funnel);
-      setCurrentView('resources');
-      
-      // Show user-friendly message
-      alert('This funnel needs to be generated first. Please generate the funnel before editing.');
+
+
+  // NEW: Per-funnel generation state management
+  const updateFunnelGenerationStatus = (funnelId: string, status: Funnel['generationStatus'], error?: string) => {
+    // Use the generation-specific update function that NEVER changes selectedFunnel
+    updateFunnelForGeneration(funnelId, {
+      generationStatus: status, 
+      generationError: error,
+      lastGeneratedAt: status === 'completed' ? Date.now() : undefined
+    });
+  };
+
+  // NEW: Check if a specific funnel is generating (no global state dependency)
+  const isFunnelGenerating = (funnelId: string) => {
+    const funnel = funnels.find(f => f.id === funnelId);
+    return funnel?.generationStatus === 'generating';
+  };
+
+  // NEW: Check if any funnel is currently generating
+  const isAnyFunnelGenerating = () => {
+    return funnels.some(f => f.generationStatus === 'generating');
+  };
+
+
+
+  // NEW: Utility function to safely update funnel state
+  const updateFunnelSafely = (funnelId: string, updates: Partial<Funnel>) => {
+    setFunnels(prevFunnels => 
+      prevFunnels.map(f => 
+        f.id === funnelId ? { ...f, ...updates } : f
+      )
+    );
+    
+    // Only update selectedFunnel if it's the same funnel AND we're not in generation completion
+    // This prevents automatic context switching when other funnels are generated
+    if (selectedFunnel && selectedFunnel.id === funnelId && !updates.generationStatus) {
+      setSelectedFunnel(prev => prev ? { ...prev, ...updates } : null);
     }
   };
 
-  // Global generation function that can be called from any page
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatingFunnelId, setGeneratingFunnelId] = useState<string | null>(null);
-  
-  // Helper function to check if a specific funnel is being generated
-  const isFunnelGenerating = (funnelId: string) => {
-    return isGenerating && generatingFunnelId === funnelId;
-  };
-  
-  const handleGlobalGeneration = async () => {
-    if (!selectedFunnel) return;
+  // NEW: Special function for generation updates that NEVER changes selectedFunnel
+  const updateFunnelForGeneration = (funnelId: string, updates: Partial<Funnel>) => {
+    setFunnels(prevFunnels => 
+      prevFunnels.map(f => 
+        f.id === funnelId ? { ...f, ...updates } : f
+      )
+    );
     
-    setIsGenerating(true);
-    setGeneratingFunnelId(selectedFunnel.id);
+    // NEVER update selectedFunnel during generation - preserve user context
+    // The UI will update through the funnels array, and selectedFunnel will
+    // only be updated when the user is in the same funnel context
+  };
+
+  // NEW: Utility function to get funnel by ID safely
+  const getFunnelById = (funnelId: string): Funnel | undefined => {
+    return funnels.find(f => f.id === funnelId);
+  };
+
+  // NEW: Utility function to validate funnel state consistency
+  const validateFunnelState = (funnelId: string): boolean => {
+    const funnel = getFunnelById(funnelId);
+    if (!funnel) return false;
+    
+    // Check for state inconsistencies
+    if (funnel.generationStatus === 'generating' && !funnel.flow) {
+      // If generating but no flow, this might be a corrupted state
+      console.warn('Funnel state inconsistency detected:', funnelId);
+      return false;
+    }
+    
+    return true;
+  };
+
+  // NEW: Improved generation function with per-funnel state
+  const handleGlobalGeneration = async (funnelId: string) => {
+    // Validate funnel ID
+    if (!funnelId || funnelId.trim() === '') {
+      console.error('Invalid funnel ID provided');
+      return;
+    }
+
+    // Find the target funnel by ID (don't rely on selectedFunnel)
+    const targetFunnel = getFunnelById(funnelId);
+    if (!targetFunnel) {
+      console.error('Funnel not found:', funnelId);
+      return;
+    }
+
+    // Validate funnel state consistency
+    if (!validateFunnelState(funnelId)) {
+      console.error('Funnel state validation failed:', funnelId);
+      return;
+    }
+
+    // Check if this specific funnel is already generating
+    if (targetFunnel.generationStatus === 'generating') {
+      console.warn('Funnel is already generating:', funnelId);
+      return;
+    }
+
+    // Check if any other funnel is generating (optional: can be removed for parallel generation)
+    if (isAnyFunnelGenerating()) {
+      alert('Another funnel is currently being generated. Please wait for it to complete.');
+      return;
+    }
+
+    // Update this funnel's generation status
+    updateFunnelGenerationStatus(funnelId, 'generating');
     
     try {
       // Get current funnel resources
-      const currentFunnelResources = selectedFunnel.resources || [];
+      const currentFunnelResources = targetFunnel.resources || [];
       
       if (currentFunnelResources.length === 0) {
         alert('No resources assigned to this funnel. Please add resources first.');
+        updateFunnelGenerationStatus(funnelId, 'failed', 'No resources assigned');
         return;
       }
       
       // Convert resources to the format expected by the AI API
-      // Ensure we only send resources that are assigned to this specific funnel
       const resourcesForAI: AIResource[] = currentFunnelResources.map(resource => ({
         id: resource.id,
         type: resource.type,
@@ -356,8 +464,8 @@ export default function AdminPanel() {
       }));
 
       console.log('=== RESOURCES BEING SENT TO GEMINI ===');
-      console.log('Funnel ID:', selectedFunnel.id);
-      console.log('Funnel Name:', selectedFunnel.name);
+      console.log('Funnel ID:', funnelId);
+      console.log('Funnel Name:', targetFunnel.name);
       console.log('Resources count:', resourcesForAI.length);
       console.log('Resources:', JSON.stringify(resourcesForAI, null, 2));
       console.log('=== END RESOURCES FOR GEMINI ===');
@@ -404,22 +512,31 @@ export default function AdminPanel() {
         throw new Error('Flow data missing required properties (stages, blocks, or startBlockId)');
       }
       
-      const updatedFunnel = { ...selectedFunnel, flow: flowData };
+      // Update the specific funnel with the generated flow
+      const updatedFunnel = { ...targetFunnel, flow: flowData };
       console.log('Updated Funnel:', updatedFunnel);
       
-      setSelectedFunnel(updatedFunnel);
-      setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+      // Use the generation-specific update function that NEVER changes selectedFunnel
+      updateFunnelForGeneration(funnelId, updatedFunnel);
       
-      // Navigate to the funnel builder to show the generated funnel
-      setCurrentView('funnelBuilder');
+      // Mark generation as completed
+      updateFunnelGenerationStatus(funnelId, 'completed');
+      
+      console.log('Generation completed for funnel:', funnelId);
       
     } catch (error) {
       console.error('Generation failed:', error);
-      alert(`Failed to generate funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsGenerating(false);
-      setGeneratingFunnelId(null);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to generate funnel: ${errorMessage}`);
+      updateFunnelGenerationStatus(funnelId, 'failed', errorMessage);
     }
+  };
+
+  // Wrapper function for ResourcePage that matches expected signature
+  const handleGlobalGenerationForResourcePage = async (funnelId: string) => {
+    // Don't change selectedFunnel - preserve current context
+    // User can manually navigate to view the generated funnel when ready
+    await handleGlobalGeneration(funnelId);
   };
 
 
@@ -458,18 +575,30 @@ export default function AdminPanel() {
             allUsers={allUsers}
             allSalesData={allSalesData}
           onBack={handleBackToDashboard}
-          onGoToBuilder={(funnel) => handleFunnelGenerationComplete(funnel)}
-          onGlobalGeneration={handleGlobalGeneration}
-          isGenerating={isGenerating}
+          onGoToBuilder={(funnel) => {
+            // Direct navigation to funnel builder for editing
+            if (funnel && hasValidFlow(funnel)) {
+              setSelectedFunnel(funnel);
+              setCurrentView('funnelBuilder');
+            } else {
+              console.warn('Cannot edit funnel without valid flow');
+              alert('This funnel needs to be generated first. Please generate the funnel before editing.');
+            }
+          }}
+          onGlobalGeneration={() => handleGlobalGeneration(selectedFunnel?.id || '')}
+          isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
         />
       </>
     );
   }
 
   if (currentView === 'resources' && selectedFunnel) {
+    // Get the current funnel data from the funnels array to ensure we have the latest state
+    const currentFunnel = funnels.find(f => f.id === selectedFunnel.id) || selectedFunnel;
+    
     return (
       <ResourcePage 
-        funnel={selectedFunnel}
+        funnel={currentFunnel}
         onBack={() => {
           // Smart back navigation: go to analytics only if funnel has valid flow
           if (hasValidFlow(selectedFunnel)) {
@@ -482,7 +611,9 @@ export default function AdminPanel() {
         onGoToBuilder={(updatedFunnel?: Funnel) => {
           const targetFunnel = updatedFunnel || selectedFunnel;
           if (targetFunnel && hasValidFlow(targetFunnel)) {
-            handleFunnelGenerationComplete(targetFunnel);
+            // Direct navigation to funnel builder for editing
+            setSelectedFunnel(targetFunnel);
+            setCurrentView('funnelBuilder');
           } else {
             console.warn('Cannot go to builder: funnel has no valid flow');
             // Redirect to resources to generate funnel first
@@ -511,8 +642,9 @@ export default function AdminPanel() {
         allResources={allResources}
         setAllResources={(resources) => setAllResources(resources)}
         onOpenResourceLibrary={handleOpenResourceLibrary}
-        onGlobalGeneration={handleGlobalGeneration}
-        isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
+        onGlobalGeneration={handleGlobalGenerationForResourcePage}
+        isGenerating={isFunnelGenerating}
+        onEdit={() => {}} // Not used in ResourcePage but required by interface
         onGoToFunnelProducts={() => {}} // Already on Assigned Products page
       />
     );
@@ -542,7 +674,7 @@ export default function AdminPanel() {
               onBack={undefined}
               onAddToFunnel={undefined}
               onEdit={undefined} // No edit in global library
-              onGlobalGeneration={handleGlobalGeneration}
+              onGlobalGeneration={() => handleGlobalGeneration('')} // Global library doesn't show generation state
               isGenerating={false} // Global library doesn't show generation state
               onGoToFunnelProducts={() => setCurrentView('resources')}
               context={libraryContext}
@@ -581,8 +713,8 @@ export default function AdminPanel() {
               alert('This funnel needs to be generated first. Please generate the funnel before previewing.');
             }
           }}
-          onGlobalGeneration={handleGlobalGeneration}
-          isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
+                      onGlobalGeneration={() => handleGlobalGeneration(selectedFunnel?.id || '')}
+            isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
           onGoToFunnelProducts={() => setCurrentView('resources')}
           context={libraryContext}
         />
@@ -626,25 +758,6 @@ export default function AdminPanel() {
             }, 100);
           }
         }}
-        onEdit={() => {}} // Already in FunnelBuilder
-        allResources={convertedResources}
-        setAllResources={(resources) => {
-          // Convert back to our format
-          const convertedBack = (Array.isArray(resources) ? resources : []).map((resource: any) => ({
-            id: resource.id,
-            type: resource.type as 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL',
-            name: resource.name,
-            link: resource.link,
-            promoCode: resource.promoCode || '', // Keep original field name
-            category: resource.category || 'Free Value',
-            description: ''
-          }));
-          setAllResources(convertedBack);
-        }}
-        funnels={funnels}
-        setFunnels={setFunnels}
-        onGlobalGeneration={handleGlobalGeneration}
-        isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
         onGoToFunnelProducts={() => setCurrentView('resources')}
       />
     );
@@ -707,35 +820,8 @@ export default function AdminPanel() {
           setSelectedFunnel(updatedFunnel);
           setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
         }}
-        onEdit={() => {}} // Already in preview mode
-        allResources={allResources.map(resource => ({
-          id: resource.id,
-          type: resource.type,
-          name: resource.name,
-          link: resource.link,
-          promoCode: resource.promoCode || '', // Keep original field name for consistency
-          category: resource.category || 'Free Value'
-        }))}
-        setAllResources={(resources) => {
-          // Convert back to our format
-          const convertedBack = (Array.isArray(resources) ? resources : []).map((resource: any) => ({
-            id: resource.id,
-            type: resource.type as 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL',
-            name: resource.name,
-            link: resource.link,
-            promoCode: resource.promoCode || '', // Keep original field name
-            category: resource.category || 'Free Value',
-            description: ''
-          }));
-          setAllResources(convertedBack);
-        }}
-        funnels={funnels}
-        setFunnels={setFunnels}
-        onGlobalGeneration={handleGlobalGeneration}
-        isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
         onGoToFunnelProducts={() => setCurrentView('resources')}
-        // Force preview mode when coming from other views
-        forcePreviewMode={true}
+        autoPreview={true} // Auto-switch to preview mode for fast navigation
       />
     );
   }
@@ -812,6 +898,8 @@ export default function AdminPanel() {
                     setEditingFunnelName={setEditingFunnelName}
                     handleSaveFunnelName={handleSaveFunnelName}
                 onFunnelClick={onFunnelClick}
+                    handleDuplicateFunnel={handleDuplicateFunnel}
+                    handleManageResources={handleManageResources}
                 />
               </div>
 
@@ -883,25 +971,25 @@ export default function AdminPanel() {
 
       </div>
 
-      {/* Delete Confirmation Dialog - Enhanced with dark mode styling */}
+      {/* Delete Confirmation Dialog - Simple Whop Design */}
       <AlertDialog.Root open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialog.Portal>
-          <AlertDialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" />
-          <AlertDialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-surface/95 to-surface/90 border border-border/50 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-surface/90 dark:to-surface/80 dark:border-border/30 dark:shadow-2xl dark:shadow-black/40">
+          <AlertDialog.Overlay className="fixed inset-0 bg-black/50" />
+          <AlertDialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
-                <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" strokeWidth={2.5} />
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/20">
+                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" strokeWidth={2} />
               </div>
               <AlertDialog.Title asChild>
-                <Heading size="4" weight="semi-bold" className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                <Heading size="4" weight="semi-bold" className="text-gray-900 dark:text-white">
                   Delete Funnel
                 </Heading>
               </AlertDialog.Title>
             </div>
             
             <AlertDialog.Description asChild>
-              <Text color="gray" className="mb-6 text-muted-foreground">
-                Are you sure you want to delete "{funnelToDelete?.name}"? This action cannot be undone and will permanently remove the funnel and all its associated data.
+              <Text color="gray" className="mb-6 text-gray-600 dark:text-gray-300">
+                Are you sure you want to delete "{funnelToDelete?.name}"? This action cannot be undone.
               </Text>
             </AlertDialog.Description>
             
@@ -910,7 +998,7 @@ export default function AdminPanel() {
                 <Button 
                   variant="soft" 
                   color="gray"
-                  className="flex-1 shadow-lg shadow-gray-500/25 hover:shadow-gray-500/40 transition-all duration-200 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50"
+                  className="flex-1"
                 >
                   Cancel
                 </Button>
@@ -919,10 +1007,9 @@ export default function AdminPanel() {
                 <Button 
                   color="red" 
                   onClick={handleConfirmDelete}
-                  className="flex-1 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-200 dark:shadow-red-500/30 dark:hover:shadow-red-500/50"
+                  className="flex-1"
                 >
-                  <Trash2 size={16} strokeWidth={2.5} />
-                  <span className="ml-2">Delete Funnel</span>
+                  Delete
                 </Button>
               </AlertDialog.Action>
             </div>

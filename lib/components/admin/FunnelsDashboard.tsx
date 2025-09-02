@@ -11,10 +11,15 @@ interface Funnel {
   id: string;
   name: string;
   isDeployed?: boolean;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   delay?: number;
   resources?: any[];
   sends?: number;
   flow?: any;
+  // New: Per-funnel generation state
+  generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
+  generationError?: string;
+  lastGeneratedAt?: number;
 }
 
 interface FunnelsDashboardProps {
@@ -27,6 +32,8 @@ interface FunnelsDashboardProps {
   setEditingFunnelName: (editing: { id: string | null; name: string }) => void;
   handleSaveFunnelName: (funnelId: string) => void;
   onFunnelClick: (funnel: Funnel) => void;
+  handleDuplicateFunnel: (funnel: Funnel) => void;
+  handleManageResources: (funnel: Funnel) => void;
 }
 
 export default function FunnelsDashboard({
@@ -38,24 +45,14 @@ export default function FunnelsDashboard({
     editingFunnelName, 
     setEditingFunnelName, 
     handleSaveFunnelName,
-    onFunnelClick
+    onFunnelClick,
+    handleDuplicateFunnel,
+    handleManageResources
 }: FunnelsDashboardProps) {
 
-  const handleRenameFunnel = (funnel: Funnel) => {
-    setEditingFunnelName({ id: funnel.id, name: funnel.name });
-    };
 
-    const handleDuplicateFunnel = (funnel: Funnel) => {
-    const duplicatedFunnel = {
-      ...funnel,
-      id: Date.now().toString(),
-      name: `${funnel.name} (Copy)`,
-      isDeployed: false,
-      sends: 0
-    };
-    // Add to funnels array (this would need to be handled by parent component)
-    console.log('Duplicate funnel:', duplicatedFunnel);
-    };
+
+
 
     return (
       <div className="space-y-6">
@@ -135,25 +132,39 @@ export default function FunnelsDashboard({
                                   </Text>
                               </div>
                               
-                              {/* Sends Counter - Bottom left corner with separated number and text */}
-                              <div className="flex flex-col gap-1">
-                                  <Text size="4" weight="bold" color="violet" className="dark:text-violet-300">
-                                      {funnel.sends || 0}
-                                  </Text>
-                                  <Text size="1" color="gray" className="dark:text-gray-300">
-                                      Sends
-                                  </Text>
+                              {/* Sends Counter and Status Indicators - Combined to remove free space */}
+                              <div className="flex flex-col gap-2">
+                                  {/* Sends Counter */}
+                                  <div className="flex flex-col gap-1">
+                                      <Text size="4" weight="bold" color="violet" className="dark:text-violet-300">
+                                          {funnel.sends || 0}
+                                      </Text>
+                                      <Text size="1" color="gray" className="dark:text-gray-300">
+                                          Sends
+                                      </Text>
+                                  </div>
+
+                                  {/* Deployment Status Only */}
+                                  <div className="flex items-center gap-2">
+                                    {/* Deployment Status */}
+                                    {funnel.isDeployed && hasValidFlow(funnel) && (
+                                      <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                        Live
+                                      </div>
+                                    )}
+                                  </div>
                               </div>
                           </div>
                       )}
                                     </div>
                                     
-                  {/* Settings Dots - Vertically positioned in bottom right corner */}
-                  <div className="absolute bottom-3 right-3 z-10">
+                  {/* Settings Dots - Moved to top right corner */}
+                  <div className="absolute top-3 right-3 z-10">
                       <DropdownMenu.Root>
                           <DropdownMenu.Trigger asChild>
                                         <button 
-                                  className="p-2 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground hover:bg-surface/80 sm:opacity-100 sm:group-hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 shadow-sm border-2 border-transparent hover:border-violet-500/40 dark:hover:border-violet-400/60"
+                                  className="p-2 rounded-lg transition-all duration-200 opacity-100 text-muted-foreground hover:text-foreground hover:bg-surface/80 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 shadow-sm border-2 border-transparent hover:border-violet-500/40 dark:hover:border-violet-400/60"
                                   onClick={(e) => e.stopPropagation()}
                                   aria-label="Funnel options"
                               >
@@ -168,23 +179,25 @@ export default function FunnelsDashboard({
                                   align="end"
                               >
                                   <DropdownMenu.Item
-                                      onClick={(e) => { e.preventDefault(); handleRenameFunnel(funnel); }}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingFunnelName({id: funnel.id, name: funnel.name}); }}
                                       className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-violet-300/60 dark:hover:border-violet-600/60"
                                   >
-                                      <Edit className="h-4 w-4" strokeWidth={2.5} />
+                                      <span className="text-sm font-bold">Aa</span>
                                       <span>Rename</span>
                                   </DropdownMenu.Item>
                                   
                                   <DropdownMenu.Item
-                                      onClick={(e) => { e.preventDefault(); setFunnelSettingsToEdit(funnel); }}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleManageResources(funnel); }}
                                       className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-sky-100 dark:hover:bg-sky-900/40 hover:text-sky-800 dark:hover:text-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-sky-300/60 dark:hover:border-sky-600/60"
                                   >
-                                      <Settings className="h-4 w-4" strokeWidth={2.5} />
-                                      <span>Settings</span>
+                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                      </svg>
+                                      <span>Products</span>
                                   </DropdownMenu.Item>
                                   
                                   <DropdownMenu.Item
-                                      onClick={(e) => { e.preventDefault(); handleEditFunnel(funnel); }}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditFunnel(funnel); }}
                                       className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-violet-300/60 dark:hover:border-violet-600/60"
                                   >
                                       <Edit className="h-4 w-4" strokeWidth={2.5} />
@@ -192,7 +205,7 @@ export default function FunnelsDashboard({
                                   </DropdownMenu.Item>
                                   
                                   <DropdownMenu.Item
-                                      onClick={(e) => { e.preventDefault(); handleDuplicateFunnel(funnel); }}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDuplicateFunnel(funnel); }}
                                       className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-800 dark:hover:text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-amber-300/60 dark:hover:border-amber-600/60"
                                   >
                                       <Copy className="h-4 w-4" strokeWidth={2.5} />
@@ -202,7 +215,7 @@ export default function FunnelsDashboard({
                                   <DropdownMenu.Separator className="h-px bg-border/60 my-1 dark:bg-violet-500/30" />
                                   
                                   <DropdownMenu.Item
-                                      onClick={(e) => { e.preventDefault(); setFunnelToDelete(funnel.id); }}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFunnelToDelete(funnel.id); }}
                                                     disabled={funnel.isDeployed && hasValidFlow(funnel)}
                                       className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 disabled:cursor-not-allowed disabled:hover:bg-transparent text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-800 dark:hover:text-red-200 disabled:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-red-300/60 dark:hover:border-red-600/60"
                                                     title={funnel.isDeployed && hasValidFlow(funnel) ? "Cannot delete a live funnel" : "Delete funnel"}

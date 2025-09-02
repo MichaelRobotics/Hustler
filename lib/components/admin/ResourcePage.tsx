@@ -22,22 +22,28 @@ interface Funnel {
   id: string;
   name: string;
   isDeployed?: boolean;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   delay?: number;
   resources?: Resource[];
   flow?: any; // Added for generated funnel flow
+  // New: Per-funnel generation state
+  generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
+  generationError?: string;
+  lastGeneratedAt?: number;
 }
 
 interface ResourcePageProps {
   funnel: Funnel;
   onBack: () => void;
-  onGoToBuilder: (updatedFunnel?: Funnel) => void;
-  onGoToPreview: (funnel: Funnel) => void;
-  onUpdateFunnel: (funnel: Funnel) => void;
+  onUpdateFunnel: (updatedFunnel: Funnel) => void;
+  onEdit: () => void;
   allResources: Resource[];
   setAllResources: (resources: Resource[]) => void;
+  onGoToBuilder: (updatedFunnel?: Funnel) => void;
+  onGoToPreview: (funnel: Funnel) => void;
   onOpenResourceLibrary: () => void;
-  onGlobalGeneration: () => Promise<void>;
-  isGenerating: boolean;
+  onGlobalGeneration: (funnelId: string) => Promise<void>; // Updated to accept funnelId
+  isGenerating: (funnelId: string) => boolean; // Function to check if specific funnel is generating
   onGoToFunnelProducts: () => void;
 }
 
@@ -217,7 +223,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                 
                 <div className="relative z-10">
                   <div className="mb-6">
-                    {isGenerating ? (
+                    {isGenerating(funnel.id) ? (
                       <div className="flex justify-center mb-4">
                         <div className="w-16 h-16 border-4 border-green-500 rounded-full animate-spin shadow-lg flex items-center justify-center">
                           <Zap className="w-8 h-8 text-green-500" strokeWidth={2.5} />
@@ -225,8 +231,11 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                       </div>
                     ) : (
                       <button
-                        onClick={onGlobalGeneration}
-                        className="group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-500 ease-out cursor-pointer"
+                        onClick={() => onGlobalGeneration(funnel.id)}
+                        disabled={funnel.generationStatus === 'generating'}
+                        className={`group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-500 ease-out cursor-pointer ${
+                          funnel.generationStatus === 'generating' ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 via-green-500 to-emerald-500 dark:from-green-300 dark:via-green-400 dark:to-emerald-400 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-green-400/50 transition-all duration-300 relative">
                           <Zap className="w-6 h-6 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300" strokeWidth={2.5} />
@@ -241,8 +250,20 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                         {currentResources.length} product{currentResources.length !== 1 ? 's' : ''} selected
                       </Text>
                       <Heading size="5" weight="bold" className="text-violet-600 dark:text-violet-400">
-                        {isGenerating ? 'Generating...' : 'Generate'}
+                        {funnel.generationStatus === 'generating' ? 'Generating...' : 
+                         funnel.generationStatus === 'completed' ? 'Generated' :
+                         funnel.generationStatus === 'failed' ? 'Generation Failed' : 'Generate'}
                       </Heading>
+                      {funnel.generationStatus === 'failed' && funnel.generationError && (
+                        <Text size="2" color="red" className="text-red-600 dark:text-red-400">
+                          Error: {funnel.generationError}
+                        </Text>
+                      )}
+                      {funnel.generationStatus === 'completed' && funnel.lastGeneratedAt && (
+                        <Text size="2" color="gray" className="text-muted-foreground">
+                          Last generated: {new Date(funnel.lastGeneratedAt).toLocaleString()}
+                        </Text>
+                      )}
                     </div>
                   </div>
                   
@@ -445,9 +466,9 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         onPreview={() => onGoToPreview(funnel)} // Go to preview
         onFunnelProducts={onGoToFunnelProducts} // Already on Assigned Products page
         onEdit={() => onGoToBuilder(funnel)} // Go to FunnelBuilder
-        onGeneration={onGlobalGeneration}
+        onGeneration={() => onGlobalGeneration(funnel.id)}
         isGenerated={hasValidFlow(funnel)}
-        isGenerating={isGenerating}
+        isGenerating={isGenerating(funnel.id)}
         isDeployed={funnel.isDeployed}
         showOnPage="resources"
       />

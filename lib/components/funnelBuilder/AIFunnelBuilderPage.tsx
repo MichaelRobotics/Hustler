@@ -3,121 +3,17 @@
 import React from 'react';
 import { Heading, Text, Button, Card } from 'frosted-ui';
 
-// Draggable Debug Panel Component
-interface DraggableDebugPanelProps {
-  children: React.ReactNode;
-  initialPosition: { x: number; y: number };
-  className?: string;
-}
 
-const DraggableDebugPanel: React.FC<DraggableDebugPanelProps> = ({ 
-  children, 
-  initialPosition, 
-  className = '' 
-}) => {
-  const [position, setPosition] = React.useState(initialPosition);
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0) { // Left mouse button only
-      setIsDragging(true);
-      const rect = e.currentTarget.getBoundingClientRect();
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
-      e.preventDefault();
-    }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    const rect = e.currentTarget.getBoundingClientRect();
-    const touch = e.touches[0];
-    setDragOffset({
-      x: touch.clientX - rect.left,
-      y: touch.clientY - rect.top
-    });
-    e.preventDefault();
-  };
-
-  const handleMouseMove = React.useCallback((e: MouseEvent) => {
-    if (isDragging) {
-      setPosition({
-        x: e.clientX - dragOffset.x,
-        y: e.clientY - dragOffset.y
-      });
-    }
-  }, [isDragging, dragOffset]);
-
-  const handleTouchMove = React.useCallback((e: TouchEvent) => {
-    if (isDragging) {
-      const touch = e.touches[0];
-      setPosition({
-        x: touch.clientX - dragOffset.x,
-        y: touch.clientY - dragOffset.y
-      });
-      e.preventDefault();
-    }
-  }, [isDragging, dragOffset]);
-
-  const handleMouseUp = React.useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  const handleTouchEnd = React.useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  React.useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('touchmove', handleTouchMove);
-        document.removeEventListener('touchend', handleTouchEnd);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
-
-  return (
-    <div
-      className={`fixed z-50 select-none ${className}`}
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        cursor: isDragging ? 'grabbing' : 'move'
-      }}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
-    >
-      {children}
-    </div>
-  );
-};
 import { 
   ArrowLeft, 
-  Eye, 
-  Edit3, 
-  Plus, 
   X, 
-  Zap, 
-  Loader2, 
-  Play,
-  Save,
-  Target,
-  BarChart3
+  Play
 } from 'lucide-react';
 
 import FunnelVisualizer from './FunnelVisualizer';
 import FunnelPreviewChat from './FunnelPreviewChat';
 import { ThemeToggle } from '../common/ThemeToggle';
-import { createErrorFunnelFlow } from '../../utils/funnelUtils';
+
 import UnifiedNavigation from '../common/UnifiedNavigation';
 
 // Type definitions
@@ -126,7 +22,7 @@ interface Funnel {
   name: string;
   flow?: any;
   isDeployed?: boolean;
-  delay?: number;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   resources?: Resource[];
 }
 
@@ -143,15 +39,8 @@ interface AIFunnelBuilderPageProps {
   funnel: Funnel;
   onBack: () => void;
   onUpdate: (funnel: Funnel) => void;
-  onEdit?: () => void; // Optional: for navigation to edit mode
-  allResources: Resource[];
-  setAllResources: React.Dispatch<React.SetStateAction<Resource[]>>;
-  funnels: Funnel[];
-  setFunnels: React.Dispatch<React.SetStateAction<Funnel[]>>;
-  onGlobalGeneration: () => Promise<void>;
-  isGenerating: boolean;
   onGoToFunnelProducts: () => void;
-  forcePreviewMode?: boolean; // New: force preview mode when coming from other views
+  autoPreview?: boolean; // New: Auto-switch to preview mode
 }
 
 /**
@@ -168,46 +57,30 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   funnel, 
   onBack, 
   onUpdate, 
-  onEdit,
-  allResources, 
-  setAllResources, 
-  funnels, 
-  setFunnels,
-  onGlobalGeneration,
-  isGenerating,
   onGoToFunnelProducts,
-  forcePreviewMode = false
+  autoPreview = false
 }) => {
     const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
   
-    const [isLoading, setIsLoading] = React.useState(false);
+
     const [apiError, setApiError] = React.useState<string | null>(null);
     const [isPreviewing, setIsPreviewing] = React.useState(false);
-    const [showFloatingMenu, setShowFloatingMenu] = React.useState(false);
+
     
   // Update currentFunnel when funnel prop changes
   React.useEffect(() => {
     setCurrentFunnel(funnel);
   }, [funnel]);
-  
-  // Force preview mode when coming from other views
+
+  // Auto-switch to preview mode if requested
   React.useEffect(() => {
-    if (forcePreviewMode) {
+    if (autoPreview) {
+      // Immediate switch to preview mode for instant transition
       setIsPreviewing(true);
     }
-  }, [forcePreviewMode]);
+  }, [autoPreview]);
   
-  // Debug: Log the current funnel flow
-  React.useEffect(() => {
-    console.log('=== AIFUNNEL BUILDER DEBUG ===');
-    console.log('funnel prop:', funnel);
-    console.log('currentFunnel:', currentFunnel);
-    console.log('currentFunnel.flow:', currentFunnel.flow);
-    console.log('funnel.flow:', funnel.flow);
-    console.log('forcePreviewMode:', forcePreviewMode);
-    console.log('isPreviewing:', isPreviewing);
-    console.log('=== END AIFUNNEL BUILDER DEBUG ===');
-  }, [currentFunnel, funnel, forcePreviewMode, isPreviewing]);
+
     const [selectedOffer, setSelectedOffer] = React.useState<string | null>(null);
       const [isDeploying, setIsDeploying] = React.useState(false);
   const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
@@ -219,26 +92,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   } | null>(null);
   const [offlineConfirmation, setOfflineConfirmation] = React.useState(false);
     const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null);
-    const deployControlsRef = React.useRef<HTMLDivElement>(null);
     const deployIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const [needsRemount, setNeedsRemount] = React.useState(false);
-  const [showOfferSelection, setShowOfferSelection] = React.useState(false);
-
-    // FIX: This effect handles the programmatic "Preview" -> "Edit" switch.
-    React.useEffect(() => {
-        if (needsRemount) {
-            // 1. Switch to Preview mode (unmounts the visualizer)
-            setIsPreviewing(true);
-
-            // 2. In the next render cycle, switch back to Editor mode (remounts a fresh visualizer)
-            const timer = setTimeout(() => {
-                setIsPreviewing(false);
-                setNeedsRemount(false); // Reset the trigger
-            }, 50); // A small delay ensures React processes the state changes sequentially.
-
-            return () => clearTimeout(timer);
-        }
-    }, [needsRemount]);
+    const [showOfferSelection, setShowOfferSelection] = React.useState(false);
+    const funnelVisualizerRef = React.useRef<{ handleBlockClick: (blockId: string) => void }>(null);
 
     const handleBlockUpdate = (updatedBlock: any) => {
         if (!updatedBlock) return;
@@ -262,28 +118,45 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             };
         }
 
-        // Extract product IDs from the generated funnel flow
-        const generatedProductIds = new Set<string>();
+        // Extract product names from the generated funnel flow (what the AI actually offers)
+        const generatedProductNames = new Set<string>();
         
-        // Look for offer blocks in the flow
+        // Look for offer blocks in the flow using resourceName field
         Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
-            if (block.id && typeof block.id === 'string' && 
-                (block.id.includes('offer_') || (block.message && typeof block.message === 'string' && block.message.toLowerCase().includes('offer')))) {
-                // Extract product ID from offer block
-                const productId = block.id.replace('offer_', '');
-                if (productId && productId !== block.id) {
-                    generatedProductIds.add(productId);
-                }
+            // Check if this block has a resourceName field (offer block)
+            if (block.resourceName && typeof block.resourceName === 'string') {
+                generatedProductNames.add(block.resourceName);
+            }
+        });
+        
+
+        
+        // Check which generated products are missing from "Assigned Products"
+        const missingProducts: string[] = [];
+        const extraProducts: string[] = [];
+        
+        // Find missing products (generated but not assigned)
+        generatedProductNames.forEach(productName => {
+            const isAssigned = currentFunnel.resources?.some(resource => 
+                resource.name.toLowerCase() === productName.toLowerCase()
+            );
+            if (!isAssigned) {
+                missingProducts.push(productName);
+            }
+        });
+        
+        // Find extra products (assigned but not generated)
+        currentFunnel.resources?.forEach(resource => {
+            const isGenerated = Array.from(generatedProductNames).some(generatedName => 
+                generatedName.toLowerCase() === resource.name.toLowerCase()
+            );
+            if (!isGenerated) {
+                extraProducts.push(resource.id);
             }
         });
 
-        // Get assigned product IDs
-        const assignedProductIds = new Set(currentFunnel.resources.map(r => r.id));
 
-        // Find missing and extra products
-        const missingProducts = Array.from(generatedProductIds).filter(id => !assignedProductIds.has(id));
-        const extraProducts = Array.from(assignedProductIds).filter(id => !generatedProductIds.has(id));
-
+        
         // Simple validation - just check if there's a mismatch
         if (missingProducts.length > 0 || extraProducts.length > 0) {
             return { 
@@ -342,7 +215,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     // Small delay to ensure state is updated before navigation
                     setTimeout(() => {
                         // The parent component will handle navigation to analytics
-                        console.log('Deployment successful, funnel ready for analytics view');
+                
                     }, 500);
                 }, 2000); // Keep deployment message for 2s
             }
@@ -351,69 +224,32 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 
 
-    const handleFloatingMenuClick = () => {
-        setShowFloatingMenu(!showFloatingMenu);
-    };
 
-    const handlePreviewClick = () => {
-        setShowFloatingMenu(false);
-        setIsPreviewing(true);
-    };
 
-    const handleOfferSelect = () => {
-        setShowFloatingMenu(false);
-        setOfflineConfirmation(false); // Hide offline modal when opening offer selection
-        setShowOfferSelection(true);
-    };
 
-    const handleClearOfferSelection = () => {
-        setSelectedOffer(null);
-        // This will automatically clear the path highlighting in FunnelVisualizer
-    };
 
-    // Handle successful generation - automatically switch to preview mode
+    // Handle successful generation - don't automatically switch context
     const handleGenerationSuccess = () => {
-        // Switch to preview mode to show the generated funnel
-        setIsPreviewing(true);
-        // Trigger remount to ensure proper rendering
-        setNeedsRemount(true);
+        // Don't automatically switch context - let user stay in their current view
+        // User can manually navigate to preview when ready
     };
+    
 
-    // Get offer blocks for selection - Load from funnel resources (same as Assigned Products view)
-    // This ensures the offers modal shows exactly the same products as in "Assigned Products"
+
+    // Get offer blocks for selection - Same simple logic as Go Live validation
     const offerBlocks = React.useMemo(() => {
-        if (!currentFunnel.resources) return [];
+        if (!currentFunnel.flow) return [];
         
-        // Validate that we only use resources assigned to this specific funnel
-        const funnelResourceIds = new Set(currentFunnel.resources.map(r => r.id));
-        
-        // Map to the exact same structure as sent to Gemini
-        const mappedOffers = currentFunnel.resources.map(resource => ({
-            id: resource.id,
-            name: resource.name,
-            type: resource.type,
-            category: resource.category || 'Free Value',
-            link: resource.link,
-            code: resource.promoCode || '' // Use promoCode from funnel resources
-        }));
-        
-        console.log('=== OFFER BLOCKS FOR MODAL ===');
-        console.log('Funnel ID:', currentFunnel.id);
-        console.log('Funnel Name:', currentFunnel.name);
-        console.log('Resources count:', mappedOffers.length);
-        console.log('Funnel Resource IDs:', Array.from(funnelResourceIds));
-        console.log('Resources:', JSON.stringify(mappedOffers, null, 2));
-        console.log('=== END OFFER BLOCKS ===');
-        
-        return mappedOffers;
-    }, [currentFunnel.resources]);
+        // Simple: Just get all blocks with resourceName (same as validation modal)
+        return Object.values(currentFunnel.flow.blocks)
+            .filter((block: any) => block.resourceName && typeof block.resourceName === 'string')
+            .map((block: any) => ({
+                id: block.id,
+                name: block.resourceName
+            }));
+    }, [currentFunnel.flow]);
 
-    // Extract offer name from selected offer
-    const selectedOfferName = React.useMemo(() => {
-        if (!selectedOffer || !currentFunnel.resources) return null;
-        const resource = currentFunnel.resources.find(r => r.id === selectedOffer);
-        return resource ? resource.name : null;
-    }, [selectedOffer, currentFunnel.resources]);
+
 
     React.useEffect(() => {
         // Cleanup interval on component unmount
@@ -464,7 +300,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   size="3"
                   variant="ghost"
                   color="violet"
-                  onClick={handleOfferSelect}
+                  onClick={() => {
+                    setOfflineConfirmation(false);
+                    setShowOfferSelection(true);
+                  }}
                   className={`px-4 sm:px-6 py-3 border transition-all duration-200 group ${
                     selectedOffer 
                       ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-400 dark:border-violet-500 text-violet-700 dark:text-violet-300' 
@@ -515,9 +354,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     size="3"
                     color="green"
                     onClick={handleDeploy} 
-                    disabled={!currentFunnel.flow || isLoading || !!apiError} 
+                    disabled={!currentFunnel.flow || !!apiError} 
                     className="px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
-                    title={apiError ? "Cannot go live due to generation error" : !currentFunnel.flow ? "Generate funnel first" : isLoading ? "Generation in progress" : ""}
+                    title={apiError ? "Cannot go live due to generation error" : !currentFunnel.flow ? "Generate funnel first" : ""}
                   >
                     <Play size={18} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300 sm:w-5 sm:h-5" />
                     <span className="ml-2 font-semibold text-sm sm:text-base">Go Live</span>
@@ -561,23 +400,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
                 {/* Enhanced Content Area with Whop Design */}
                 <div className="flex-1 p-0">
-                            {isLoading ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                      <div className="relative">
-                        <div className="w-16 h-16 border-4 border-violet-200 dark:border-violet-700 rounded-full animate-pulse"></div>
-                        <Loader2 className="absolute inset-0 w-16 h-16 text-violet-500 dark:text-violet-400 animate-spin" strokeWidth={2} />
-                      </div>
-                      <div className="space-y-2">
-                        <Text size="4" weight="semi-bold" className="text-foreground">
-                          Building your funnel...
-                        </Text>
-                        <Text size="2" color="gray" className="text-muted-foreground max-w-sm">
-                          Our AI is analyzing your resources and creating an optimized conversion flow
-                        </Text>
-                      </div>
-                    </div>
-                            ) : isPreviewing ? (
-                    <div className="h-full">
+                            {isPreviewing ? (
+                    <div className="h-full animate-in fade-in duration-0">
                                 <FunnelPreviewChat 
                                   funnelFlow={currentFunnel.flow} 
                                   selectedOffer={selectedOffer} 
@@ -586,62 +410,19 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     </div>
                             ) : (
                     <>
+                                <div className="animate-in fade-in duration-0">
                                 <FunnelVisualizer
                                     funnelFlow={currentFunnel.flow}
                                     editingBlockId={editingBlockId}
                                     setEditingBlockId={setEditingBlockId}
                                     onBlockUpdate={handleBlockUpdate}
                                     selectedOffer={selectedOffer}
-                                    // Pass the selected offer to highlight the path
                                     onOfferSelect={(offerId) => setSelectedOffer(offerId)}
+                                    ref={funnelVisualizerRef}
                                 />
+                                </div>
                       
-                      {/* Debug Panel - Hidden for production */}
-                      {/* {process.env.NODE_ENV === 'development' && (
-                        <DraggableDebugPanel
-                          initialPosition={{ x: 16, y: 16 }}
-                          className="bg-surface/95 dark:bg-surface/90 text-foreground p-0 rounded-2xl text-sm max-w-md border border-border/50 dark:border-border/30 shadow-2xl backdrop-blur-sm cursor-move"
-                        >
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className="w-2 h-2 bg-violet-500 rounded-full"></div>
-                            <Text size="2" weight="semi-bold" color="violet">
-                              Debug Panel
-                            </Text>
-                          </div>
-                          <div className="space-y-2 text-xs">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Flow exists:</span>
-                              <span className={currentFunnel.flow ? 'text-green-500' : 'text-red-500'}>
-                                {currentFunnel.flow ? 'Yes' : 'No'}
-                              </span>
-                            </div>
-                            {currentFunnel.flow && (
-                              <>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Stages:</span>
-                                  <span className="text-foreground">{currentFunnel.flow.stages?.length || 0}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Blocks:</span>
-                                  <span className="text-foreground">{Object.keys(currentFunnel.flow.blocks || {}).length}</span>
-                                        </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Start:</span>
-                                  <span className="text-foreground font-mono">{currentFunnel.flow.startBlockId}</span>
-                                </div>
-                              </>
-                            )}
-                            <details className="mt-4">
-                              <summary className="cursor-pointer text-violet-500 hover:text-violet-600 transition-colors">
-                                Raw Flow Data
-                              </summary>
-                              <pre className="mt-2 text-xs overflow-auto max-h-32 bg-surface/50 dark:bg-surface/30 p-2 rounded-lg border border-border/30">
-                                {JSON.stringify(currentFunnel.flow, null, 2)}
-                              </pre>
-                            </details>
-                          </div>
-                        </DraggableDebugPanel>
-                      )} */}
+
                     </>
                   )}
                 </div>
@@ -724,24 +505,26 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 return (
                   <div
                     key={resource.id}
-                    onClick={() => {
-                      setSelectedOffer(resource.id);
-                      setShowOfferSelection(false);
-                      setOfflineConfirmation(false); // Hide offline modal when selecting offer
-                      // The FunnelVisualizer will automatically highlight the path to this offer
-                      // through the useEffect that watches selectedOffer changes
-                    }}
+                                          onClick={() => {
+                       // Since resource.id is now the block ID, we can use it directly
+                       const blockId = resource.id;
+                       
+                       if (blockId) {
+                         // Directly call handleBlockClick to set selectedBlockForHighlight state
+                         funnelVisualizerRef.current?.handleBlockClick(blockId);
+                       }
+                       
+                       setShowOfferSelection(false);
+                       setOfflineConfirmation(false); // Hide offline modal when selecting offer
+                     }}
                     className={`p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
-                      selectedOffer === resource.id 
-                        ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-600 shadow-sm' 
-                        : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-violet-50/50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50'
+                      'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-violet-50/50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
                         {resource.name}
                       </Text>
-
                     </div>
                   </div>
                 );
@@ -812,10 +595,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         </div>
       )}
 
-      {/* Deployment Validation Modal - Simplified User-Friendly Version */}
+      {/* Deployment Validation Modal - Enhanced with Product Details */}
       {deploymentValidation && !deploymentValidation.isValid && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-[9999]">
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-2xl bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60">
             <div className="flex justify-between items-center mb-6">
               <Heading size="4" weight="bold" className="text-foreground">
                 Cannot Go Live
@@ -831,21 +614,73 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
               </Button>
             </div>
             
-            <div className="space-y-5">
-              <div>
-                <Text size="3" className="text-muted-foreground text-center">
-                  Your funnel products don't match the generated funnel structure.
-                </Text>
-                <Text size="3" className="text-muted-foreground text-center mt-3">
-                  Please update your assigned products to match the funnel.
+            <div className="space-y-6">
+              <div className="text-center">
+                <Text size="3" className="text-muted-foreground">
+                  Products don't match. Fix your products or generate a new funnel.
                 </Text>
               </div>
               
-              <div className="flex justify-center pt-6">
+              {/* Missing Products Section */}
+              {deploymentValidation.missingProducts.length > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                    <Text size="3" weight="semi-bold" className="text-amber-800 dark:text-amber-200">
+                      Add these products to "Assigned Products":
+                    </Text>
+                  </div>
+                  <div className="space-y-2">
+                    {deploymentValidation.missingProducts.map((productName, index) => {
+                      return (
+                        <div key={index} className="flex items-center gap-2 bg-white dark:bg-amber-900/30 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-600">
+                          <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          <Text size="2" className="text-amber-800 dark:text-amber-200 font-medium">
+                            {productName}
+                          </Text>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* Extra Products Section */}
+              {deploymentValidation.extraProducts.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <Text size="3" weight="semi-bold" className="text-red-800 dark:text-red-200">
+                      Remove these products from "Assigned Products":
+                    </Text>
+                  </div>
+                  <div className="space-y-2">
+                    {deploymentValidation.extraProducts.map((productId) => {
+                      // Try to find the product name from funnel resources
+                      const productName = currentFunnel.resources?.find(r => r.id === productId)?.name || 
+                                        `Product ${productId}`;
+                      return (
+                        <div key={productId} className="flex items-center gap-2 bg-white dark:bg-red-900/30 rounded-lg px-3 py-2 border border-red-200 dark:border-red-600">
+                          <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <Text size="2" className="text-red-800 dark:text-red-200 font-medium">
+                            {productName}
+                          </Text>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-center pt-4">
                 <Button
                   color="violet"
                   onClick={() => onGoToFunnelProducts()}
-                  className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60"
+                  className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:bg-violet-500/60"
                 >
                   Go to Assigned Products
                 </Button>
@@ -862,7 +697,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         onEdit={() => setIsPreviewing(false)} // Go back to Funnel Builder from Preview
         onGeneration={handleGenerationSuccess}
         isGenerated={!!currentFunnel.flow}
-        isGenerating={isGenerating}
+        isGenerating={false}
         isDeployed={currentFunnel.isDeployed}
         showOnPage={isPreviewing ? "preview" : "aibuilder"}
       />

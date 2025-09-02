@@ -168,14 +168,14 @@ interface FunnelVisualizerProps {
  * @param {FunnelVisualizerProps} props - The props passed to the component.
  * @returns {JSX.Element} The rendered FunnelVisualizer component.
  */
-const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({ 
+const FunnelVisualizer = React.forwardRef<{ handleBlockClick: (blockId: string) => void }, FunnelVisualizerProps>(({ 
   funnelFlow, 
   editingBlockId, 
   setEditingBlockId, 
   onBlockUpdate,
   selectedOffer,
   onOfferSelect
-}) => {
+}, ref) => {
     // State for layout calculations
     const [positions, setPositions] = React.useState<Record<string, Position>>({});
     const [lines, setLines] = React.useState<Line[]>([]);
@@ -243,6 +243,11 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
         if (editingBlockId) return; // Don't allow highlighting when editing
         setSelectedBlockForHighlight(prev => (prev === blockId ? null : blockId));
     };
+
+    // Expose handleBlockClick function to parent component via ref
+    React.useImperativeHandle(ref, () => ({
+        handleBlockClick
+    }));
 
     // Effect to set the default selected offer for the mobile view.
     React.useEffect(() => {
@@ -900,7 +905,7 @@ const FunnelVisualizer: React.FC<FunnelVisualizerProps> = ({
             </div>
         </div>
     );
-};
+});
 
 export default FunnelVisualizer;
 

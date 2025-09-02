@@ -36,6 +36,7 @@ interface Funnel {
   id: string;
   name: string;
   isDeployed?: boolean;
+  wasEverDeployed?: boolean; // Track if funnel was ever live
   delay?: number;
   resources?: Resource[];
   flow?: any;
@@ -95,7 +96,17 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     resourceName: ''
   });
 
+
   const categories = ['all', 'Education', 'Content', 'Marketing', 'Tools'];
+
+  // Helper function to check if a name is available
+  const isNameAvailable = (name: string, currentId?: string): boolean => {
+    if (!name.trim()) return true; // Empty names are always "available"
+    return !allResources.some(resource => 
+      resource.id !== currentId && 
+      resource.name.toLowerCase() === name.toLowerCase()
+    );
+  };
 
   // Check if a resource is assigned to any funnel
   const isResourceAssignedToAnyFunnel = (resourceId: string): boolean => {
@@ -110,6 +121,17 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
   const handleAddResource = () => {
     if (newResource.name && newResource.link) {
+      // Check for duplicate names (case-insensitive)
+      const resourceName = newResource.name;
+      const isDuplicateName = allResources.some(resource => 
+        resource.id !== newResource.id && // Skip current resource when editing
+        resource.name.toLowerCase() === resourceName.toLowerCase()
+      );
+      
+      if (isDuplicateName) {
+        return; // Block submission - user will see real-time validation message
+      }
+      
       // Check if we're editing an existing resource (has an ID) or adding a new one
       if (newResource.id) {
         // Editing existing resource
@@ -248,11 +270,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                   <Button
                     size="3"
                     color="violet"
-                    onClick={() => {
-                      // Clear form to ensure we're adding, not editing
-                      setNewResource({ name: '', link: '', type: 'AFFILIATE', category: '', description: '', promoCode: '' });
-                      setIsAddingResource(true);
-                    }}
+                                                            onClick={() => {
+                        // Clear form to ensure we're adding, not editing
+                        setNewResource({ name: '', link: '', type: 'AFFILIATE', category: '', description: '', promoCode: '' });
+                        setIsAddingResource(true);
+                      }}
                     className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
                       filteredResources.length === 0 ? 'animate-pulse animate-bounce' : ''
                     }`}
@@ -299,10 +321,21 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                     <input
                       type="text"
                       value={newResource.name}
-                      onChange={(e) => setNewResource({ ...newResource, name: e.target.value })}
+                      onChange={(e) => {
+                        setNewResource({ ...newResource, name: e.target.value });
+                      }}
                       placeholder="Enter product name..."
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
+                      className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                        newResource.name && !isNameAvailable(newResource.name, newResource.id) 
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                          : 'border-gray-300'
+                      }`}
                     />
+                    {newResource.name && !isNameAvailable(newResource.name, newResource.id) && (
+                      <div className="mt-2 text-sm text-red-600 dark:text-red-400">
+                        This name is already taken. Please choose a different one.
+                      </div>
+                    )}
                   </div>
                   
                   <div>
@@ -368,11 +401,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                     <Button 
                       color="violet" 
                       onClick={handleAddResource}
-                      disabled={!newResource.name || !newResource.link}
+                      disabled={!newResource.name || !newResource.link || !isNameAvailable(newResource.name, newResource.id)}
                       className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
                       <Plus size={18} strokeWidth={2.5} className="mr-2" />
-                      {context === 'global' && newResource.name ? 'Update Product' : 'Add Product'}
+                      {newResource.id ? 'Update Product' : 'Add Product'}
                     </Button>
                     <Button 
                       variant="soft" 
