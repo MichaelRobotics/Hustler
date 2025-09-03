@@ -30,18 +30,18 @@ export default async function ExperiencePage({
 	// 'no_access' means the user does not have access to the whop
 	const { accessLevel } = result;
 
-	// Only show AdminDashboard to admins
-	if (accessLevel === 'admin') {
+	// TEMPORARILY: Give customers the same access as admins
+	if (accessLevel === 'admin' || accessLevel === 'customer') {
 		return <AdminPanel />;
 	}
 
-	// Show access denied for non-admins
+	// Show access denied only for users with no access
 	return (
 		<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
 			<div className="text-center">
 				<h1 className="text-2xl font-bold text-white mb-4">Access Denied</h1>
 				<p className="text-gray-300 mb-4">
-					Hi <strong>{user.name}</strong>, you need admin access to view this dashboard.
+					Hi <strong>{user.name}</strong>, you need access to view this dashboard.
 				</p>
 				<p className="text-sm text-gray-400">
 					Your access level: <strong>{accessLevel}</strong>

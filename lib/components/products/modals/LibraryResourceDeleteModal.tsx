@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
-import { DeleteConfirmation } from '../../types/resource';
+import { DeleteConfirmation } from '../../../types/resource';
 
 interface LibraryResourceDeleteModalProps {
   confirmation: DeleteConfirmation;

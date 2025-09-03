@@ -173,7 +173,34 @@ export function useFunnelManagement() {
     if (targetFunnel.generationStatus === 'generating') return;
 
     if (isAnyFunnelGenerating()) {
-      alert('Another funnel is currently being generated. Please wait for it to complete.');
+      // Show a short, Whop-native notification instead of alert
+      if (typeof window !== 'undefined') {
+        // Use a simple toast-like notification that's more Whop-native
+        const showNotification = (message: string) => {
+          // Create a temporary notification element
+          const notification = document.createElement('div');
+          notification.className = 'fixed top-4 right-4 z-50 px-4 py-3 bg-red-500 text-white rounded-lg border border-red-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs';
+          notification.textContent = message;
+          
+          // Add close button
+          const closeBtn = document.createElement('button');
+          closeBtn.innerHTML = '×';
+          closeBtn.className = 'ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold';
+          closeBtn.onclick = () => notification.remove();
+          notification.appendChild(closeBtn);
+          
+          document.body.appendChild(notification);
+          
+          // Auto-remove after 3 seconds
+          setTimeout(() => {
+            if (notification.parentNode) {
+              notification.remove();
+            }
+          }, 3000);
+        };
+        
+        showNotification('Another generation running');
+      }
       return;
     }
 
@@ -184,7 +211,30 @@ export function useFunnelManagement() {
       const currentFunnelResources = targetFunnel.resources || [];
     
       if (currentFunnelResources.length === 0) {
-        alert('No resources assigned to this funnel. Please add resources first.');
+        // Show a short, Whop-native notification instead of alert
+        if (typeof window !== 'undefined') {
+          const showNotification = (message: string) => {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 z-50 px-4 py-3 bg-red-500 text-white rounded-lg border border-red-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs';
+            notification.textContent = message;
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.className = 'ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold';
+            closeBtn.onclick = () => notification.remove();
+            notification.appendChild(closeBtn);
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+              if (notification.parentNode) {
+                notification.remove();
+              }
+            }, 3000);
+          };
+          
+          showNotification('Add resources first');
+        }
         updateFunnelGenerationStatus(funnelId, 'failed', 'No resources assigned');
         return;
       }
@@ -235,7 +285,30 @@ export function useFunnelManagement() {
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to generate funnel: ${errorMessage}`);
+      // Show a short, Whop-native notification instead of alert
+      if (typeof window !== 'undefined') {
+        const showNotification = (message: string) => {
+          const notification = document.createElement('div');
+          notification.className = 'fixed top-4 right-4 z-50 px-4 py-3 bg-red-500 text-white rounded-lg border border-red-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs';
+          notification.textContent = message;
+          
+          const closeBtn = document.createElement('button');
+          closeBtn.innerHTML = '×';
+          closeBtn.className = 'ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold';
+          closeBtn.onclick = () => notification.remove();
+          notification.appendChild(closeBtn);
+          
+          document.body.appendChild(notification);
+          
+          setTimeout(() => {
+            if (notification.parentNode) {
+              notification.remove();
+            }
+          }, 3000);
+        };
+        
+        showNotification('Generation failed');
+      }
       updateFunnelGenerationStatus(funnelId, 'failed', errorMessage);
     }
   };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Plus } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
-import { ResourceFormData } from '../../types/resource';
+import { ResourceFormData } from '../../../types/resource';
 
 interface LibraryResourceModalProps {
   isOpen: boolean;
@@ -128,7 +128,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
           
           <div>
             <Text as="label" size="2" weight="medium" className="block mb-3 text-foreground">
-              Price
+              Category
             </Text>
             <select
               value={resource.price || 'FREE_VALUE'}

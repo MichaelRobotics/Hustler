@@ -1,6 +1,6 @@
 // Main components
 export { default as AIFunnelBuilderPage } from './AIFunnelBuilderPage';
-export { default as FunnelBuilderHeader } from './FunnelBuilderHeader';
+export { FunnelBuilderHeader } from './FunnelBuilderHeader';
 export { default as MobileFunnelView } from './MobileFunnelView';
 export { default as FunnelConnections } from './FunnelConnections';
 export { default as FunnelBlock } from './FunnelBlock';

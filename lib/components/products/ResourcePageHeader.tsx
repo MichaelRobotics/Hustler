@@ -10,6 +10,7 @@ interface ResourcePageHeaderProps {
   onBack: () => void;
   onOpenResourceLibrary: () => void;
   onOpenOfflineConfirmation: () => void;
+  isGenerating: (funnelId: string) => boolean;
 }
 
 export const ResourcePageHeader: React.FC<ResourcePageHeaderProps> = ({
@@ -17,7 +18,8 @@ export const ResourcePageHeader: React.FC<ResourcePageHeaderProps> = ({
   currentResources,
   onBack,
   onOpenResourceLibrary,
-  onOpenOfflineConfirmation
+  onOpenOfflineConfirmation,
+  isGenerating
 }) => {
   return (
     <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
@@ -69,20 +71,22 @@ export const ResourcePageHeader: React.FC<ResourcePageHeaderProps> = ({
               <span className="font-semibold text-sm sm:text-base text-red-600 dark:text-red-400">Live</span>
             </button>
           ) : (
-            /* Library Button - When funnel is not deployed */
-            <Button
-              size="3"
-              color="violet"
-              onClick={onOpenResourceLibrary}
-              className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group ${
-                currentResources.length === 0 ? 'animate-pulse animate-bounce' : ''
-              }`}
-            >
-              <Library size={20} strokeWidth={2.5} className={`transition-transform duration-300 ${
-                currentResources.length === 0 ? 'animate-spin' : 'group-hover:rotate-12'
-              }`} />
-              <span className="ml-2">Library</span>
-            </Button>
+            /* Library Button - When funnel is not deployed and not generating */
+            !isGenerating(funnel.id) && (
+              <Button
+                size="3"
+                color="violet"
+                onClick={onOpenResourceLibrary}
+                className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group ${
+                  currentResources.length === 0 ? 'animate-pulse animate-bounce' : ''
+                }`}
+              >
+                <Library size={20} strokeWidth={2.5} className={`transition-transform duration-300 ${
+                  currentResources.length === 0 ? 'animate-spin' : 'group-hover:rotate-12'
+                }`} />
+                <span className="ml-2">Library</span>
+              </Button>
+            )
           )}
         </div>
       </div>

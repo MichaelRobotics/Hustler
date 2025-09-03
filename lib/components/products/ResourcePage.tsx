@@ -49,6 +49,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
             onBack={onBack}
             onOpenResourceLibrary={onOpenResourceLibrary}
             onOpenOfflineConfirmation={openOfflineConfirmation}
+            isGenerating={isGenerating}
           />
 
           {/* Generate Section - Only visible when products exist but no funnel is generated */}
@@ -98,8 +99,8 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
         onCancel={closeOfflineConfirmation}
       />
 
-      {/* Unified Navigation - Hide when funnel is generating */}
-      {!isGenerating(funnel.id) && (
+      {/* Unified Navigation - Hide when funnel is generating OR when no resources and no funnel generated */}
+      {!isGenerating(funnel.id) && (currentResources.length > 0 || hasValidFlow(funnel)) && (
         <UnifiedNavigation
           onPreview={() => onGoToPreview(funnel)}
           onFunnelProducts={onGoToFunnelProducts}
