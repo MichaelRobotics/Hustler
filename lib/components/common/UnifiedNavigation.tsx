@@ -80,7 +80,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
         )}
 
         {/* Generation Button - Hide when funnel is live, generating, or already generated */}
-        {!isDeployed && !isGenerated && (
+        {isExpanded && !isDeployed && !isGenerated && (
           <button
             onClick={onGeneration}
             disabled={isGenerating}

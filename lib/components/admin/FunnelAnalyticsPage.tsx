@@ -3,50 +3,13 @@
 import React from 'react';
 import SalesPerformance from './SalesPerformance';
 import FunnelAnalytics from './FunnelAnalytics';
-import CollapsibleText from '../common/CollapsibleText';
 import { ArrowLeft, Settings, Activity, Edit3 } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
 import { ThemeToggle } from '../common/ThemeToggle';
 import UnifiedNavigation from '../common/UnifiedNavigation';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
-
-// Type definitions
-interface Funnel {
-  id: string;
-  name: string;
-  isDeployed?: boolean;
-  wasEverDeployed?: boolean; // Track if funnel was ever live
-  delay?: number;
-  resources?: any[];
-  flow?: any;
-}
-
-interface User {
-  id: string;
-  funnelId: string;
-  isQualified: boolean;
-  stepCompleted: number;
-}
-
-interface SalesData {
-  funnelId: string;
-  name: string;
-  price: number;
-  type: string;
-}
-
-interface Stats {
-  total: number;
-  qualifiedUsers: number;
-  converted: number;
-}
-
-interface SalesStats {
-  affiliate: any[];
-  myProducts: any[];
-  affiliateTotal: { sales: number; revenue: number };
-  myProductsTotal: { sales: number; revenue: number };
-}
+import { useProcessedAnalyticsData } from '../../hooks/useAnalyticsData';
+import { Funnel, User, SalesData } from '../../utils/adminAnalytics';
 
 interface FunnelAnalyticsPageProps {
   funnel: Funnel;
@@ -75,39 +38,24 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
   onGlobalGeneration,
   isGenerating
 }) => {
+  // Use the custom hook to process analytics data
+  const { funnelStats, salesStats } = useProcessedAnalyticsData(
+    allUsers, 
+    allSalesData, 
+    funnel.id
+  );
 
-
-  // Calculate funnel-specific stats
-  const funnelUsers = allUsers.filter(u => u.funnelId === funnel.id);
-  const stats: Stats = {
-    total: funnelUsers.length,
-    qualifiedUsers: funnelUsers.filter(u => u.isQualified).length,
-    converted: funnelUsers.filter(u => u.stepCompleted === 6).length,
-  };
-
-  // Calculate funnel-specific sales stats
-  const funnelSales = allSalesData.filter(s => s.funnelId === funnel.id);
-  const productSummary = funnelSales.reduce((acc: any, sale) => {
-    if (!acc[sale.name]) {
-      acc[sale.name] = { name: sale.name, sales: 0, revenue: 0, type: sale.type };
-    }
-    acc[sale.name].sales += 1;
-    acc[sale.name].revenue += sale.price;
-    return acc;
-  }, {});
-
-  const allProducts = Object.values(productSummary);
-  const affiliateProducts = allProducts.filter((p: any) => p.type === 'AFFILIATE');
-  const myProducts = allProducts.filter((p: any) => p.type === 'MY_PRODUCTS');
-  const affiliateTotal = affiliateProducts.reduce((acc: { sales: number; revenue: number }, p: any) => ({ sales: acc.sales + p.sales, revenue: acc.revenue + p.revenue }), { sales: 0, revenue: 0 });
-  const myProductsTotal = myProducts.reduce((acc: { sales: number; revenue: number }, p: any) => ({ sales: acc.sales + p.sales, revenue: acc.revenue + p.revenue }), { sales: 0, revenue: 0 });
-
-  const salesStats: SalesStats = {
-    affiliate: affiliateProducts.sort((a: any, b: any) => b.revenue - a.revenue),
-    myProducts: myProducts.sort((a: any, b: any) => b.revenue - a.revenue),
-    affiliateTotal,
-    myProductsTotal
-  };
+  // Debug logging
+  console.log('FunnelAnalyticsPage Debug:', {
+    funnelId: funnel.id,
+    isDeployed: funnel.isDeployed,
+    wasEverDeployed: funnel.wasEverDeployed,
+    hasValidFlow: hasValidFlow(funnel),
+    allUsersCount: allUsers.length,
+    allSalesDataCount: allSalesData.length,
+    funnelStats,
+    salesStats
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
@@ -149,8 +97,6 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
                   <ThemeToggle />
                 </div>
               </div>
-              
-
               
               {/* Right Side: Edit Button - Only show if funnel has valid flow */}
               {hasValidFlow(funnel) && (
@@ -194,8 +140,10 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
               </Text>
           </div>
 
+
+
           {/* Check if funnel was ever live - if never live, show no analytics message */}
-          {!funnel.wasEverDeployed ? (
+          {!funnel.wasEverDeployed && (!funnelStats || !salesStats) ? (
             <div className="mb-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 border border-gray-200 dark:border-gray-700/30 rounded-xl text-center">
               <div className="mb-4">
                 <Activity className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" strokeWidth={1.5} />
@@ -212,8 +160,8 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
             </div>
           ) : (
             <>
-              {/* Analytics Components - Show if funnel was ever live */}
-              <FunnelAnalytics stats={stats} />
+              {/* Analytics Components - Show if funnel was ever live OR if we have mock data */}
+              {funnelStats && <FunnelAnalytics stats={funnelStats} />}
               
               {/* Live Sales Indicator */}
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-white to-gray-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-gray-200/50 dark:border-blue-700/30 mb-6 w-fit">
@@ -223,7 +171,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
                   </Text>
               </div>
               
-              <SalesPerformance salesStats={salesStats} />
+              {salesStats && <SalesPerformance salesStats={salesStats} />}
             </>
           )}
         </div>

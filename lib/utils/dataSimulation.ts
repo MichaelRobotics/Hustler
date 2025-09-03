@@ -26,6 +26,19 @@ interface MockSale {
   price: number;
 }
 
+interface MockFunnel {
+  id: string;
+  name: string;
+  isDeployed?: boolean;
+  wasEverDeployed?: boolean;
+  resources?: any[];
+  sends?: number;
+  flow?: any;
+  generationStatus?: 'idle' | 'generating' | 'completed' | 'failed';
+  generationError?: string;
+  lastGeneratedAt?: number;
+}
+
 /**
  * Generates a specified number of mock user records.
  * It simulates user progression through different funnels and their choices,
@@ -33,8 +46,8 @@ interface MockSale {
  * @param {number} userCount - The number of mock users to generate.
  * @returns {MockUser[]} An array of mock user objects.
  */
-export const generateMockData = (userCount: number): MockUser[] => {
-    const mockData: MockUser[] = [];
+export const generateMockData = (userCount: number): any[] => {
+    const mockData: any[] = [];
     const niches = ['DROPSHIPING', 'SMMA', 'AFFILIATE'];
     const experiences = ['BEGGINER', 'INTERMEDIATE', 'ADVANCED'];
     const painPoints = ['TRAFFIC', 'CONVERSION', 'SPEED'];
@@ -72,7 +85,7 @@ export const generateMockData = (userCount: number): MockUser[] => {
  * Generates mock sales data for both affiliate and proprietary products.
  * @returns {MockSale[]} An array of mock sales objects.
  */
-export const generateSalesData = (): MockSale[] => {
+export const generateSalesData = (): any[] => {
     const affiliateProducts = [
         { name: 'Beginner Traffic Course', price: 49 },
         { name: 'Advanced Dropshipping Strategies for High Volume Stores', price: 199 },
@@ -85,7 +98,7 @@ export const generateSalesData = (): MockSale[] => {
         { name: 'Exclusive Community Access Pass (Lifetime)', price: 29 },
     ];
     
-    const sales: MockSale[] = [];
+    const sales: any[] = [];
     
     // Generate affiliate sales
     for (let i = 0; i < 50 + Math.random() * 100; i++) {
@@ -110,6 +123,40 @@ export const generateSalesData = (): MockSale[] => {
     }
     
     return sales;
+};
+
+/**
+ * Generates mock funnel data for development and testing purposes.
+ * @returns {MockFunnel[]} An array of mock funnel objects.
+ */
+export const generateMockFunnels = (): MockFunnel[] => {
+    return [
+        { 
+            id: '1', 
+            name: 'Sales Funnel', 
+            isDeployed: false, 
+            wasEverDeployed: false,
+            sends: 0,
+            generationStatus: 'idle' as const,
+            resources: [
+                { id: '1', type: 'AFFILIATE', name: 'Product A', link: 'https://example.com/a', promoCode: 'SAVE20', price: 'FREE_VALUE' },
+                { id: '2', type: 'MY_PRODUCTS', name: 'Product B', link: 'https://example.com/b', promoCode: 'SAVE30', price: 'FREE_VALUE' }
+            ],
+            flow: null
+        },
+        { 
+            id: '2', 
+            name: 'Lead Generation', 
+            isDeployed: false, 
+            wasEverDeployed: false,
+            sends: 0,
+            generationStatus: 'idle' as const,
+            resources: [
+                { id: '3', type: 'AFFILIATE', name: 'Lead Magnet', link: 'https://example.com/b', promoCode: '', price: 'FREE_VALUE' }
+            ],
+            flow: null
+        },
+    ];
 };
 
 

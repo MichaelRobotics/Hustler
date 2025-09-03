@@ -27,10 +27,10 @@ interface FunnelsDashboardProps {
   handleEditFunnel: (funnel: Funnel) => void;
   handleDeployFunnel: (funnelId: string) => void;
   setFunnelToDelete: (funnelId: string | null) => void;
-  setFunnelSettingsToEdit: (funnel: Funnel | null) => void;
-  editingFunnelName: { id: string | null; name: string };
-  setEditingFunnelName: (editing: { id: string | null; name: string }) => void;
-  handleSaveFunnelName: (funnelId: string) => void;
+  setFunnelSettingsToEdit?: (funnel: Funnel | null) => void;
+  editingFunnelId: string | null;
+  setEditingFunnelId: (id: string | null) => void;
+  handleSaveFunnelName: (funnelId: string, newName: string) => void;
   onFunnelClick: (funnel: Funnel) => void;
   handleDuplicateFunnel: (funnel: Funnel) => void;
   handleManageResources: (funnel: Funnel) => void;
@@ -42,8 +42,8 @@ export default function FunnelsDashboard({
     handleDeployFunnel, 
     setFunnelToDelete, 
     setFunnelSettingsToEdit, 
-    editingFunnelName, 
-    setEditingFunnelName, 
+    editingFunnelId, 
+    setEditingFunnelId, 
     handleSaveFunnelName,
     onFunnelClick,
     handleDuplicateFunnel,
@@ -53,6 +53,7 @@ export default function FunnelsDashboard({
     // State to track which dropdown is open and which button is highlighted
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [highlightedButtonId, setHighlightedButtonId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState('');
 
 
     return (
@@ -90,12 +91,12 @@ export default function FunnelsDashboard({
 
                   {/* Card Body - Enhanced with smooth gradients for both themes */}
                   <div className="p-4 bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-900/80 dark:via-gray-800/60 dark:to-indigo-900/30">
-                            {editingFunnelName.id === funnel.id ? (
+                            {editingFunnelId === funnel.id ? (
                           <div className="space-y-3">
                                     <input
                                         type="text"
-                                        value={editingFunnelName.name}
-                                        onChange={(e) => setEditingFunnelName({...editingFunnelName, name: e.target.value})}
+                                        value={editingName}
+                                        onChange={(e) => setEditingName(e.target.value)}
                                   className="w-full border-2 border-border/60 dark:border-violet-500/40 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-900 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/60 dark:focus:border-violet-400/80 transition-all duration-200 shadow-sm dark:shadow-lg dark:shadow-black/20"
                                         autoFocus
                                   onClick={(e) => e.stopPropagation()}
@@ -104,7 +105,7 @@ export default function FunnelsDashboard({
                                   <Button 
                                       size="2"
                                       color="green"
-                                      onClick={(e) => { e.stopPropagation(); handleSaveFunnelName(funnel.id)}} 
+                                      onClick={(e) => { e.stopPropagation(); handleSaveFunnelName(funnel.id, editingName)}} 
                                       className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 dark:shadow-green-500/30"
                                       aria-label="Save funnel name"
                                   >
@@ -115,7 +116,7 @@ export default function FunnelsDashboard({
                                       size="2"
                                       color="red"
                                       variant="soft"
-                                      onClick={(e) => { e.stopPropagation(); setEditingFunnelName({id: null, name: ''})}} 
+                                      onClick={(e) => { e.stopPropagation(); setEditingFunnelId(null); setEditingName('')}} 
                                       className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30"
                                       aria-label="Cancel editing"
                                   >
@@ -198,7 +199,8 @@ export default function FunnelsDashboard({
                                       onClick={(e) => { 
                                           e.preventDefault(); 
                                           e.stopPropagation(); 
-                                          setEditingFunnelName({id: funnel.id, name: funnel.name}); 
+                                          setEditingFunnelId(funnel.id);
+                        setEditingName(funnel.name); 
                                           setOpenDropdownId(null);
                                           setHighlightedButtonId(null);
                                       }}

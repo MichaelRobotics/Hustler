@@ -1,35 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Text, Button } from 'frosted-ui';
-
-interface FunnelBlockOption {
-  text: string;
-  nextBlockId: string | null;
-}
-
-interface FunnelBlock {
-  id: string;
-  message: string;
-  options: FunnelBlockOption[];
-}
-
-interface FunnelFlow {
-  startBlockId: string;
-  stages: any[];
-  blocks: Record<string, FunnelBlock>;
-}
-
-interface ChatMessage {
-  type: 'user' | 'bot';
-  text: string;
-}
-
-interface FunnelPreviewChatProps {
-  funnelFlow: FunnelFlow | null;
-  selectedOffer?: string | null;
-  onOfferClick?: (offerId: string) => void; // Callback when offer is clicked
-}
+import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
+import { FunnelPreviewChatProps } from '../../types/funnel';
+import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton } from './components';
 
 /**
  * --- Funnel Preview Chat Component ---
@@ -41,293 +15,51 @@ interface FunnelPreviewChatProps {
  * @param {FunnelFlow | null} props.funnelFlow - The generated funnel flow object containing stages and blocks.
  * @returns {JSX.Element} The rendered FunnelPreviewChat component.
  */
-const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ funnelFlow, selectedOffer, onOfferClick }) => {
-    // State to keep track of the conversation history.
-    const [history, setHistory] = React.useState<ChatMessage[]>([]);
-    // State to track the current block in the conversation.
-    const [currentBlockId, setCurrentBlockId] = React.useState<string | null>(null);
-    // Refs to manage auto-scrolling of the chat window.
-    const chatEndRef = React.useRef<HTMLDivElement>(null);
-    const chatContainerRef = React.useRef<HTMLDivElement>(null);
+const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ 
+  funnelFlow, 
+  selectedOffer, 
+  onOfferClick 
+}) => {
+  const {
+    history,
+    currentBlockId,
+    chatEndRef,
+    chatContainerRef,
+    optionsLeadingToOffer,
+    startConversation,
+    handleOptionClick,
+    options
+  } = useFunnelPreviewChat(funnelFlow, selectedOffer);
 
-    // Helper function to construct complete message with numbered options
-    const constructCompleteMessage = (block: any): string => {
-        if (!block || !block.options || block.options.length === 0) {
-            return block.message;
-        }
-        
-        const numberedOptions = block.options.map((opt: any, index: number) => 
-            `${index + 1}. ${opt.text}`
-        ).join('\n');
-        
-        return `${block.message}\n\n${numberedOptions}`;
-    };
-
-    // Function to start or restart the conversation.
-    const startConversation = React.useCallback(() => {
-        if (funnelFlow && funnelFlow.startBlockId) {
-            const startBlock = funnelFlow.blocks[funnelFlow.startBlockId];
-            if (startBlock) {
-                const completeMessage = constructCompleteMessage(startBlock);
-                setHistory([{ type: 'bot', text: completeMessage }]);
-                setCurrentBlockId(funnelFlow.startBlockId);
-            }
-        }
-    }, [funnelFlow]);
-
-    // Start the conversation when the component mounts or the funnelFlow changes.
-    React.useEffect(() => {
-        startConversation();
-    }, [startConversation]);
-
-    // Effect to handle auto-scrolling as new messages are added.
-    React.useEffect(() => {
-        if (history.length === 1) {
-            // On the first message, scroll the container to the top.
-            if (chatContainerRef.current) {
-                chatContainerRef.current.scrollTop = 0;
-            }
-        } else {
-            // For all subsequent messages, scroll to the end.
-            chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [history]);
-
-    // Handler for when a user clicks on a chat option.
-    const handleOptionClick = (option: FunnelBlockOption, index: number) => {
-        const userMessage: ChatMessage = { type: 'user', text: `${index + 1}. ${option.text}` };
-        
-        // If the selected option has no next block, the conversation ends.
-        if (!option.nextBlockId) {
-            const endMessage: ChatMessage = { type: 'bot', text: "This path has ended. You can start over to explore other options." };
-            setHistory(prev => [...prev, userMessage, endMessage]);
-            setCurrentBlockId(null);
-            return;
-        }
-
-        const nextBlock = funnelFlow?.blocks[option.nextBlockId];
-
-        // If the next block exists, add the user's and the bot's messages to the history.
-        if (nextBlock) {
-            const completeMessage = constructCompleteMessage(nextBlock);
-            const botMessage: ChatMessage = { type: 'bot', text: completeMessage };
-            setHistory(prev => [...prev, userMessage, botMessage]);
-            setCurrentBlockId(option.nextBlockId);
-        } else {
-            // If the next block ID is invalid, end the conversation.
-            const errorMessage: ChatMessage = { type: 'bot', text: "This path encountered an error. You can start over to try again." };
-            setHistory(prev => [...prev, userMessage, errorMessage]);
-            setCurrentBlockId(null);
-        }
-    };
-
-    // Find which answer options in the current question would lead to the selected offer
-    const findOptionsLeadingToOffer = React.useCallback((offerId: string, currentBlockId: string | null): number[] => {
-        if (!currentBlockId || !funnelFlow) return [];
-        
-        const leadingOptionIndices: number[] = [];
-        const currentBlock = funnelFlow.blocks[currentBlockId];
-        
-        if (!currentBlock?.options) return [];
-        
-        // For each option in the current block, check if it leads to the offer
-        currentBlock.options.forEach((option, index) => {
-            if (option.nextBlockId) {
-                // Recursively check if this option leads to the offer
-                if (doesPathLeadToOffer(option.nextBlockId, offerId, new Set())) {
-                    leadingOptionIndices.push(index);
-                }
-            }
-        });
-        
-        return leadingOptionIndices;
-    }, [funnelFlow]);
-    
-    // Helper function to check if a path leads to the offer
-    const doesPathLeadToOffer = React.useCallback((blockId: string, targetOfferId: string, visited: Set<string>): boolean => {
-        if (visited.has(blockId)) return false; // Prevent infinite loops
-        visited.add(blockId);
-        
-        const block = funnelFlow?.blocks[blockId];
-        if (!block) return false;
-        
-        // Debug logging for path checking
-        console.log(`Checking block ${blockId} (${block.id}) against target offer ${targetOfferId}`);
-        
-        // Check if this block is the offer block
-        if (block.id === `offer_${targetOfferId}` || block.id === targetOfferId) {
-            console.log(`Found offer block! ${block.id} matches ${targetOfferId}`);
-            return true;
-        }
-        
-        // Check if this block has options that lead to the offer
-        if (block.options) {
-            for (const option of block.options) {
-                if (option.nextBlockId && doesPathLeadToOffer(option.nextBlockId, targetOfferId, visited)) {
-                    return true;
-                }
-            }
-        }
-        
-        return false;
-    }, [funnelFlow]);
-    
-    // Get the indices of options that lead to the selected offer
-    const optionsLeadingToOffer = React.useMemo(() => {
-        if (!selectedOffer || !currentBlockId) return [];
-        
-        // Debug logging
-        console.log('=== PREVIEW CHAT DEBUG ===');
-        console.log('selectedOffer:', selectedOffer);
-        console.log('currentBlockId:', currentBlockId);
-        console.log('funnelFlow blocks:', Object.keys(funnelFlow?.blocks || {}));
-        
-        const result = findOptionsLeadingToOffer(selectedOffer, currentBlockId);
-        console.log('optionsLeadingToOffer result:', result);
-        return result;
-    }, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
-    
-    const currentBlock = funnelFlow?.blocks[currentBlockId || ''];
-    const options = currentBlock?.options || [];
-
-    // Effect to handle blocks with no options (dead-end paths)
-    React.useEffect(() => {
-        if (currentBlockId && currentBlock && (!currentBlock.options || currentBlock.options.length === 0)) {
-            // If we reach a block with no options, add a message and end the conversation
-            const endMessage: ChatMessage = { type: 'bot', text: "This path has ended. You can start over to explore other options." };
-            setHistory(prev => [...prev, endMessage]);
-            setCurrentBlockId(null);
-        }
-    }, [currentBlockId, currentBlock]);
-
-    return (
-        <div className="h-full flex flex-col">
-            {/* Native Whop Header */}
-            <div className="flex-shrink-0 p-0 border-b border-border/30 dark:border-border/20 bg-surface/80 dark:bg-surface/60 backdrop-blur-sm">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
-                        <Text size="3" weight="semi-bold" className="text-foreground">
-                            AI Funnel Bot
-                        </Text>
-                        <div className="px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700/50">
-                            <Text size="1" weight="medium" className="text-green-700 dark:text-green-300">
-                                Online
-                            </Text>
-                        </div>
-                    </div>
-                    
-
-                </div>
-            </div>
-            
-                        {/* Chat Messages Area */}
-            <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4 pt-6">
-                {history.map((msg, index) => (
-                    <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        {msg.type === 'bot' && (
-                            <div className="flex items-end gap-2">
-                                <div className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0">
-                                    <Text size="1" weight="bold" className="text-white">
-                                        AI
-                                    </Text>
-                                </div>
-                                <div className="max-w-xs lg:max-w-md px-4 py-3 bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30 rounded-2xl shadow-sm">
-                                    <Text size="2" className="text-foreground whitespace-pre-wrap">
-                                        {msg.text}
-                                    </Text>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {msg.type === 'user' && (
-                            <div className="flex items-end gap-2">
-                                <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0">
-                                    <Text size="1" weight="bold" className="text-white">
-                                        You
-                                    </Text>
-                                </div>
-                                <div className="max-w-xs lg:max-w-md px-4 py-3 bg-violet-500 text-white rounded-2xl shadow-sm">
-                                    <Text size="2" className="text-white whitespace-pre-wrap">
-                                        {msg.text}
-                                    </Text>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-                <div ref={chatEndRef} />
-            </div>
-            
-            {/* Response Options */}
-            {options.length > 0 && (
-                <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-                    <div className="space-y-3">
-
-                        
-                        <div className="flex flex-col items-end space-y-2">
-                            {options.map((opt, i) => {
-                                const isLeadingToOffer = optionsLeadingToOffer.includes(i);
-                                
-                                return (
-                                    <button
-                                        key={i}
-                                        onClick={() => handleOptionClick(opt, i)}
-                                        className={`max-w-xs lg:max-w-md p-3 border rounded-xl transition-all duration-200 text-left group ${
-                                            isLeadingToOffer && selectedOffer
-                                                ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-600 shadow-lg shadow-amber-500/20' // Highlighted
-                                                : 'bg-white dark:bg-gray-800 border-border/50 dark:border-border/30 hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50' // Normal
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 ${
-                                                isLeadingToOffer && selectedOffer
-                                                    ? 'bg-amber-500 border-amber-600' // Highlighted
-                                                    : 'bg-violet-100 dark:bg-violet-900/30 border-violet-200 dark:border-violet-700/30' // Normal
-                                            }`}>
-                                                <Text size="1" weight="bold" className={
-                                                    isLeadingToOffer && selectedOffer
-                                                        ? 'text-white' // Highlighted
-                                                        : 'text-violet-700 dark:text-violet-300' // Normal
-                                                }>
-                                                    {i + 1}
-                                                </Text>
-                                            </div>
-                                            <Text size="2" className={`transition-colors ${
-                                                isLeadingToOffer && selectedOffer
-                                                    ? 'text-amber-800 dark:text-amber-200 font-medium' // Highlighted
-                                                    : 'text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-300' // Normal
-                                            }`}>
-                                                {opt.text}
-                                            </Text>
-                                            
-
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {/* Conversation End State - Show Start Over when no options or conversation ended */}
-            {(options.length === 0 || !currentBlockId) && (
-                <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-                    <div className="flex justify-center py-4">
-                        <Button
-                            size="2"
-                            color="violet"
-                            onClick={startConversation}
-                            className="px-6 py-2 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
-                        >
-                            Start Over
-                        </Button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+  return (
+    <div className="h-full flex flex-col">
+      {/* Chat Header */}
+      <ChatHeader />
+      
+      {/* Chat Messages Area */}
+      <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4 pt-6">
+        {history.map((msg, index) => (
+          <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <ChatMessage message={msg} />
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+      
+      {/* Response Options */}
+      <ChatOptions
+        options={options}
+        optionsLeadingToOffer={optionsLeadingToOffer}
+        selectedOffer={selectedOffer}
+        onOptionClick={handleOptionClick}
+      />
+      
+      {/* Conversation End State - Show Start Over when no options or conversation ended */}
+      {(options.length === 0 || !currentBlockId) && (
+        <ChatRestartButton onRestart={startConversation} />
+      )}
+    </div>
+  );
 };
 
 export default FunnelPreviewChat;
