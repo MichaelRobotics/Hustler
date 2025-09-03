@@ -71,6 +71,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                     resource={resource}
                     funnel={funnel}
                     onDelete={handleDeleteResource}
+                    isGenerating={isGenerating(funnel.id)}
                   />
                 ))}
               </div>

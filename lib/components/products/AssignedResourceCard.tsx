@@ -7,12 +7,14 @@ interface AssignedResourceCardProps {
   resource: Resource;
   funnel: Funnel;
   onDelete: (resourceId: string, resourceName: string) => void;
+  isGenerating?: boolean;
 }
 
 export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
   resource,
   funnel,
-  onDelete
+  onDelete,
+  isGenerating = false
 }) => {
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -47,8 +49,8 @@ export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
           </span>
         </div>
         
-        {/* Delete Button - Only show when funnel is not live */}
-        {!funnel.isDeployed && (
+        {/* Delete Button - Only show when funnel is not live and not generating */}
+        {!funnel.isDeployed && !isGenerating && (
           <Button
             size="1"
             variant="ghost"
