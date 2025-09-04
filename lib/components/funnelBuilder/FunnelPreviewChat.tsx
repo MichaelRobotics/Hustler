@@ -69,7 +69,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({
       {options.length > 0 && currentBlockId && (
         <ChatInput
           onSendMessage={handleCustomInput}
-          placeholder="Type your response or choose from options above..."
+          placeholder="Type or choose response"
         />
       )}
       

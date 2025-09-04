@@ -64,6 +64,8 @@
 		"@whop-apps/dev-proxy": "^0.0.1-canary.116",
 		"dotenv-cli": "^8.0.0",
 		"drizzle-kit": "^0.31.4",
+		"eslint": "^9",
+		"eslint-config-next": "15.5.2",
 		"tailwindcss": "^4",
 		"typescript": "^5"
 	},

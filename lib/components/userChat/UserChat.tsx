@@ -3,7 +3,8 @@
 import React from 'react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelFlow } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatInput, ChatOptions } from '../funnelBuilder/components';
+import { ChatHeader, ChatMessage, ChatInput } from '../funnelBuilder/components';
+import { Text } from 'frosted-ui';
 
 /**
  * --- User Chat Component ---
@@ -81,22 +82,53 @@ const UserChat: React.FC<UserChatProps> = ({
             <ChatMessage message={msg} />
           </div>
         ))}
+        
+        {/* Show clickable options below the last bot message - on user side */}
+        {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
+          <div className="flex justify-end">
+            <div className="flex items-end gap-2">
+              {/* Options Container */}
+              <div className="max-w-xs lg:max-w-md">
+                <div className="space-y-2">
+                  {options.map((opt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleUserOptionClick(opt, i)}
+                      className="w-full p-3 border rounded-xl transition-all duration-200 text-left group bg-violet-500 hover:bg-violet-600 border-violet-400 hover:border-violet-500"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 bg-white/20 border-white/30">
+                          <Text size="1" weight="bold" className="text-white">
+                            {i + 1}
+                          </Text>
+                        </div>
+                        <Text size="2" className="text-white group-hover:text-white transition-colors">
+                          {opt.text}
+                        </Text>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* User Avatar */}
+              <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0">
+                <Text size="1" weight="bold" className="text-white">
+                  You
+                </Text>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div ref={chatEndRef} />
       </div>
-      
-      {/* Response Options */}
-      <ChatOptions
-        options={options}
-        optionsLeadingToOffer={[]}
-        selectedOffer={null}
-        onOptionClick={handleUserOptionClick}
-      />
       
       {/* Chat Input - Only show when there are options available */}
       {options.length > 0 && currentBlockId && (
         <ChatInput
           onSendMessage={handleUserMessage}
-          placeholder="Type your response..."
+          placeholder="Type or choose response"
         />
       )}
     </div>
