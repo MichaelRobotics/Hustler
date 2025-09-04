@@ -26,12 +26,12 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   context
 }) => {
   const {
-    selectedPrice,
+    selectedCategory,
     isAddingResource,
     newResource,
     deleteConfirmation,
     filteredResources,
-    setSelectedPrice,
+    setSelectedCategory,
     setNewResource,
     handleAddResource,
     handleDeleteResource,
@@ -105,7 +105,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
           {/* Empty State */}
           {filteredResources.length === 0 && (
-            <LibraryEmptyState selectedPrice={selectedPrice} />
+            <LibraryEmptyState selectedCategory={selectedCategory} />
           )}
         </div>
       </div>

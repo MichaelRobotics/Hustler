@@ -16,7 +16,7 @@ interface Funnel {
   lastGeneratedAt?: number;
 }
 
-type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview';
+type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat';
 
 export function useViewNavigation() {
   const [currentView, setCurrentView] = useState<View>('dashboard');

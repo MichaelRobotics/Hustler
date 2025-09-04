@@ -4,6 +4,7 @@ import { FunnelFlow, FunnelBlockOption, ChatMessage } from '../types/funnel';
 export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffer?: string | null) => {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
+  const [invalidInputCount, setInvalidInputCount] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -103,6 +104,60 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     return findOptionsLeadingToOffer(selectedOffer, currentBlockId);
   }, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
 
+  // Helper function to check if input matches a valid option
+  const isValidOption = useCallback((input: string, currentBlock: any): { isValid: boolean; optionIndex?: number } => {
+    if (!currentBlock?.options) return { isValid: false };
+    
+    // Check for exact text match
+    const exactMatch = currentBlock.options.findIndex((opt: any) => 
+      opt.text.toLowerCase() === input.toLowerCase()
+    );
+    if (exactMatch !== -1) return { isValid: true, optionIndex: exactMatch };
+    
+    // Check for number match (1, 2, 3, etc.)
+    const numberMatch = parseInt(input);
+    if (!isNaN(numberMatch) && numberMatch >= 1 && numberMatch <= currentBlock.options.length) {
+      return { isValid: true, optionIndex: numberMatch - 1 };
+    }
+    
+    return { isValid: false };
+  }, []);
+
+  // Handler for custom text input
+  const handleCustomInput = useCallback((input: string) => {
+    if (!currentBlockId || !funnelFlow) return;
+    
+    const currentBlock = funnelFlow.blocks[currentBlockId];
+    if (!currentBlock) return;
+    
+    const userMessage: ChatMessage = { type: 'user', text: input };
+    
+    // Check if input is valid
+    const validation = isValidOption(input, currentBlock);
+    
+    if (validation.isValid && validation.optionIndex !== undefined) {
+      // Valid input - process as option click
+      setInvalidInputCount(0); // Reset invalid input counter
+      const option = currentBlock.options[validation.optionIndex];
+      handleOptionClick(option, validation.optionIndex);
+    } else {
+      // Invalid input - handle based on invalid input count
+      setInvalidInputCount(prev => prev + 1);
+      
+      let botResponse: string;
+      if (invalidInputCount === 0) {
+        // First invalid input - friendly reminder
+        botResponse = "I understand you'd like to respond differently, but please choose one of the options I've provided above. This helps me guide you through the conversation effectively! 😊";
+      } else {
+        // Second invalid input - escalate to creator
+        botResponse = "I see you have questions that aren't covered by my current options. I'll notify the creator about your inquiry, and they'll get back to you with a personalized response. In the meantime, please choose from the available options to continue our conversation.";
+      }
+      
+      const botMessage: ChatMessage = { type: 'bot', text: botResponse };
+      setHistory(prev => [...prev, userMessage, botMessage]);
+    }
+  }, [currentBlockId, funnelFlow, isValidOption, invalidInputCount]);
+
   // Handler for when a user clicks on a chat option
   const handleOptionClick = useCallback((option: FunnelBlockOption, index: number) => {
     const userMessage: ChatMessage = { type: 'user', text: `${index + 1}. ${option.text}` };
@@ -152,6 +207,7 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     optionsLeadingToOffer,
     startConversation,
     handleOptionClick,
+    handleCustomInput,
     currentBlock: funnelFlow?.blocks[currentBlockId || ''],
     options: funnelFlow?.blocks[currentBlockId || '']?.options || []
   };

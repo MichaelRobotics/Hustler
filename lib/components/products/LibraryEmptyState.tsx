@@ -3,25 +3,25 @@ import { Library, BookOpen, Sparkles } from 'lucide-react';
 import { Heading, Text } from 'frosted-ui';
 
 interface LibraryEmptyStateProps {
-  selectedPrice: string;
+  selectedCategory: string;
 }
 
-export const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({ selectedPrice }) => {
+export const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({ selectedCategory }) => {
   const getEmptyStateContent = () => {
-    if (selectedPrice === 'all') {
+    if (selectedCategory === 'all') {
       return {
         icon: <Library className="w-10 h-10 text-violet-500 dark:text-violet-400" strokeWidth={2.5} />,
         title: 'Your Library is Empty'
       };
-    } else if (selectedPrice === 'PAID') {
+    } else if (selectedCategory === 'PAID') {
       return {
         icon: <Sparkles className="w-10 h-10 text-orange-500 dark:text-orange-400" strokeWidth={2.5} />,
-        title: 'No Paid Resources Yet'
+        title: 'No Paid Products Yet'
       };
     } else {
       return {
         icon: <BookOpen className="w-10 h-10 text-green-500 dark:text-green-400" strokeWidth={2.5} />,
-        title: 'No Free Value Resources'
+        title: 'No Free Value Products'
       };
     }
   };

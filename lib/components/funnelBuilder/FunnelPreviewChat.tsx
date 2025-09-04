@@ -3,13 +3,23 @@
 import React from 'react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelPreviewChatProps } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton } from './components';
+import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton, ChatInput } from './components';
 
 /**
  * --- Funnel Preview Chat Component ---
  * This component simulates a user conversation with the generated chatbot flow.
- * It allows the user to click through the options and see the conversation unfold,
- * providing a way to test and validate the funnel's logic and messaging.
+ * It allows the user to:
+ * - Click through the provided options
+ * - Type custom responses to test the funnel's handling of invalid inputs
+ * - See how the AI responds to off-script user behavior
+ * - Test the escalation logic when users don't follow the expected path
+ *
+ * Features:
+ * - Option clicking for normal flow testing
+ * - Custom text input for edge case testing
+ * - Invalid input handling with friendly reminders
+ * - Escalation to creator after multiple invalid inputs
+ * - Auto-scrolling and responsive design
  *
  * @param {FunnelPreviewChatProps} props - The props passed to the component.
  * @param {FunnelFlow | null} props.funnelFlow - The generated funnel flow object containing stages and blocks.
@@ -28,6 +38,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({
     optionsLeadingToOffer,
     startConversation,
     handleOptionClick,
+    handleCustomInput,
     options
   } = useFunnelPreviewChat(funnelFlow, selectedOffer);
 
@@ -53,6 +64,14 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({
         selectedOffer={selectedOffer}
         onOptionClick={handleOptionClick}
       />
+      
+      {/* Chat Input - Only show when there are options available */}
+      {options.length > 0 && currentBlockId && (
+        <ChatInput
+          onSendMessage={handleCustomInput}
+          placeholder="Type your response or choose from options above..."
+        />
+      )}
       
       {/* Conversation End State - Show Start Over when no options or conversation ended */}
       {(options.length === 0 || !currentBlockId) && (

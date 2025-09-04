@@ -36,9 +36,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
     switch (type) {
       case 'AFFILIATE': return 'Affiliate';
       case 'MY_PRODUCTS': return 'My Product';
-      case 'CONTENT': return 'Content';
-      case 'TOOL': return 'Tool';
-      default: return 'Resource';
+      default: return 'Product';
     }
   };
 
@@ -51,11 +49,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
             {getTypeLabel(resource.type)}
           </span>
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-            resource.price === 'PAID' 
+            resource.category === 'PAID' 
               ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' 
               : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
           }`}>
-            {resource.price === 'PAID' ? 'Paid' : 'Free Value'}
+            {resource.category === 'PAID' ? 'Paid' : 'Free Value'}
           </span>
         </div>
         <div className="flex items-center gap-1">

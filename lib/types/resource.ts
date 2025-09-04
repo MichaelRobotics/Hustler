@@ -5,7 +5,7 @@ export interface Resource {
   name: string;
   link: string;
   type: 'AFFILIATE' | 'MY_PRODUCTS';
-  price: 'PAID' | 'FREE_VALUE';
+  category: 'PAID' | 'FREE_VALUE';
   description?: string;
   promoCode?: string;
 }
@@ -15,7 +15,7 @@ export interface ResourceFormData {
   name: string;
   link: string;
   type: 'AFFILIATE' | 'MY_PRODUCTS';
-  price: 'PAID' | 'FREE_VALUE';
+  category: 'PAID' | 'FREE_VALUE';
   description?: string;
   promoCode?: string;
 }

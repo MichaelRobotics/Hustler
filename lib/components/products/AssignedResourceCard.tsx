@@ -28,7 +28,7 @@ export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
     switch (type) {
       case 'AFFILIATE': return 'Affiliate';
       case 'MY_PRODUCTS': return 'My Product';
-      default: return 'Resource';
+      default: return 'Product';
     }
   };
 
@@ -41,11 +41,11 @@ export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
             {getTypeLabel(resource.type)}
           </span>
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-            resource.price === 'PAID' 
+            resource.category === 'PAID' 
               ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' 
               : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
           }`}>
-            {resource.price === 'PAID' ? 'Paid' : 'Free Value'}
+            {resource.category === 'PAID' ? 'Paid' : 'Free Value'}
           </span>
         </div>
         
@@ -76,7 +76,7 @@ export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
             <Text size="1" color="gray" className="text-muted-foreground">
               Promo:
             </Text>
-            <span className="px-2 py-1 rounded text-xs font-mono bg-green-100 dark:bg-violet-300">
+            <span className="px-2 py-1 rounded text-xs font-mono bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
               {resource.promoCode}
             </span>
           </div>

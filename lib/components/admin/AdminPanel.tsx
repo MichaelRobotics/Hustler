@@ -7,6 +7,7 @@ import FunnelAnalyticsPage from './FunnelAnalyticsPage';
 import ResourcePage from '../products/ResourcePage';
 import ResourceLibrary from '../products/ResourceLibrary';
 import AIFunnelBuilderPage from '../funnelBuilder/AIFunnelBuilderPage';
+import { LiveChatPage } from '../liveChat';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import AddFunnelModal from './modals/AddFunnelModal';
@@ -19,6 +20,7 @@ import { useResourceManagement } from '@/lib/hooks/useResourceManagement';
 import { useViewNavigation } from '@/lib/hooks/useViewNavigation';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 import { generateMockData, generateSalesData } from '@/lib/utils/dataSimulation';
+import { Resource } from '@/lib/types/resource';
 
 interface Funnel {
   id: string;
@@ -33,17 +35,8 @@ interface Funnel {
   lastGeneratedAt?: number;
 }
 
-interface Resource {
-  id: string;
-  name: string;
-  link: string;
-  type: 'AFFILIATE' | 'MY_PRODUCTS';
-  price: 'PAID' | 'FREE_VALUE';
-  description?: string;
-  promoCode?: string;
-}
 
-type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview';
+type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat';
 
 export default function AdminPanel() {
   // Use the extracted hooks
@@ -377,6 +370,24 @@ export default function AdminPanel() {
         onGoToFunnelProducts={() => setCurrentView('resources')}
         autoPreview={true} // Auto-switch to preview mode for fast navigation
       />
+    );
+  }
+
+  if (currentView === 'liveChat') {
+    return (
+      <div className="flex min-h-screen">
+        <AdminSidebar
+          currentView={currentView}
+          onViewChange={handleViewChange}
+          className="flex-shrink-0 h-full"
+        />
+        
+        <div className="flex-1 w-full lg:w-auto">
+          <LiveChatPage
+            onBack={handleBackToDashboard}
+          />
+        </div>
+      </div>
     );
   }
 

@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 
 interface AdminSidebarProps {
-  currentView: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview';
-  onViewChange: (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview') => void;
+  currentView: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat';
+  onViewChange: (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat') => void;
   className?: string;
   libraryContext?: 'global' | 'funnel';
   currentFunnelForLibrary?: { id: string; name: string } | null;
@@ -45,8 +45,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const isAnalyticsView = currentView === 'analytics';
   const isResourcesView = currentView === 'resources';
   const isFunnelBuilderView = currentView === 'funnelBuilder';
+  const isLiveChatView = currentView === 'liveChat';
 
-  const handleViewChange = (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview') => {
+  const handleViewChange = (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat') => {
     onViewChange(view);
   };
 
@@ -114,20 +115,25 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
             )}
           </div>
 
-          {/* Live Chat - Pro Version */}
+          {/* Live Chat */}
           <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
             <Button
               variant="ghost"
-              color="gray"
-              onClick={() => setIsProModalOpen(true)}
-              className="w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground group relative"
-              title="Live Chat - Monitor conversations (Pro)"
+              color={isLiveChatView ? "violet" : "gray"}
+              onClick={() => handleViewChange('liveChat')}
+              className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
+                isLiveChatView 
+                  ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
+                  : 'hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground'
+              }`}
+              title="Live Chat - Monitor conversations"
             >
               <div className="relative">
                 <MessageCircle size={20} strokeWidth={2} />
-                <Crown size={12} className="absolute -top-1 -right-1 text-amber-500" />
               </div>
-
+              {isLiveChatView && (
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
+              )}
             </Button>
           </div>
 
@@ -190,13 +196,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {/* Live Chat */}
           <Button
             variant="ghost"
-            color="gray"
-            onClick={() => setIsProModalOpen(true)}
-            className="flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 text-muted-foreground active:text-foreground active:bg-surface/80 dark:active:bg-surface/60 min-h-[60px]"
+            color={isLiveChatView ? "violet" : "gray"}
+            onClick={() => handleViewChange('liveChat')}
+            className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 min-h-[60px] ${
+              isLiveChatView 
+                ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
+                : 'text-muted-foreground active:text-foreground active:bg-surface/80 dark:active:bg-surface/60'
+            }`}
           >
             <div className="relative mb-1">
               <MessageCircle size={20} strokeWidth={2} />
-              <Crown size={10} className="absolute -top-1 -right-1 text-amber-500" />
+              {isLiveChatView && (
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
+              )}
             </div>
             <Text size="1" weight="semi-bold" className="text-xs">Chat</Text>
           </Button>

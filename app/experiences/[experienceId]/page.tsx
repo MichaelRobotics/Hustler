@@ -1,6 +1,6 @@
 import { whopSdk } from "@/lib/whop-sdk";
 import { headers } from "next/headers";
-import AdminPanel from "@/lib/components/admin/AdminPanel";
+import { ExperienceView } from "@/lib/components/experiences";
 
 export default async function ExperiencePage({
 	params,
@@ -30,9 +30,15 @@ export default async function ExperiencePage({
 	// 'no_access' means the user does not have access to the whop
 	const { accessLevel } = result;
 
-	// TEMPORARILY: Give customers the same access as admins
+	// Show the experience page with view selection for both admins and customers
 	if (accessLevel === 'admin' || accessLevel === 'customer') {
-		return <AdminPanel />;
+		return (
+			<ExperienceView
+				userName={user.name || 'User'}
+				accessLevel={accessLevel}
+				experienceId={experienceId}
+			/>
+		);
 	}
 
 	// Show access denied only for users with no access

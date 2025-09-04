@@ -7,6 +7,7 @@ export interface FunnelBlock {
   id: string;
   message: string;
   options: FunnelBlockOption[];
+  resourceName?: string;
 }
 
 export interface FunnelFlow {

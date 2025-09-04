@@ -6,13 +6,13 @@ export const useResourceLibrary = (
   allFunnels: Funnel[],
   setAllResources: (resources: Resource[]) => void
 ) => {
-  const [selectedPrice, setSelectedPrice] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isAddingResource, setIsAddingResource] = useState(false);
   const [newResource, setNewResource] = useState<Partial<ResourceFormData>>({
     name: '',
     link: '',
     type: 'AFFILIATE',
-    price: 'FREE_VALUE',
+    category: 'FREE_VALUE',
     description: '',
     promoCode: ''
   });
@@ -22,7 +22,7 @@ export const useResourceLibrary = (
     resourceName: ''
   });
 
-  const priceOptions = useMemo(() => ['all', 'PAID', 'FREE_VALUE'], []);
+  const categoryOptions = useMemo(() => ['all', 'PAID', 'FREE_VALUE'], []);
 
   // Helper function to check if a name is available
   const isNameAvailable = useCallback((name: string, currentId?: string): boolean => {
@@ -41,10 +41,10 @@ export const useResourceLibrary = (
   }, [allFunnels]);
 
   const filteredResources = useMemo(() => 
-    selectedPrice === 'all' 
+    selectedCategory === 'all' 
       ? allResources 
-      : allResources.filter(resource => resource.price === selectedPrice),
-    [selectedPrice, allResources]
+      : allResources.filter(resource => resource.category === selectedCategory),
+    [selectedCategory, allResources]
   );
 
   const handleAddResource = useCallback(() => {
@@ -72,7 +72,7 @@ export const useResourceLibrary = (
           name: newResource.name,
           link: newResource.link,
           type: newResource.type as 'AFFILIATE' | 'MY_PRODUCTS',
-          price: newResource.price as 'PAID' | 'FREE_VALUE',
+          category: newResource.category as 'PAID' | 'FREE_VALUE',
           description: newResource.description,
           promoCode: newResource.promoCode
         };
@@ -82,7 +82,7 @@ export const useResourceLibrary = (
       }
       
       // Reset form
-      setNewResource({ name: '', link: '', type: 'AFFILIATE', price: 'FREE_VALUE', description: '', promoCode: '' });
+      setNewResource({ name: '', link: '', type: 'AFFILIATE', category: 'FREE_VALUE', description: '', promoCode: '' });
       setIsAddingResource(false);
     }
   }, [newResource, allResources, setAllResources]);
@@ -108,7 +108,7 @@ export const useResourceLibrary = (
   }, []);
 
   const resetForm = useCallback(() => {
-    setNewResource({ name: '', link: '', type: 'AFFILIATE', price: 'FREE_VALUE', description: '', promoCode: '' });
+    setNewResource({ name: '', link: '', type: 'AFFILIATE', category: 'FREE_VALUE', description: '', promoCode: '' });
   }, []);
 
   const openAddModal = useCallback(() => {
@@ -122,7 +122,7 @@ export const useResourceLibrary = (
       name: resource.name,
       link: resource.link,
       type: resource.type,
-      price: resource.price,
+      category: resource.category,
       description: resource.description,
       promoCode: resource.promoCode
     });
@@ -136,15 +136,15 @@ export const useResourceLibrary = (
 
   return {
     // State
-    selectedPrice,
+    selectedCategory,
     isAddingResource,
     newResource,
     deleteConfirmation,
-    priceOptions,
+    categoryOptions,
     filteredResources,
     
     // Actions
-    setSelectedPrice,
+    setSelectedCategory,
     setNewResource,
     handleAddResource,
     handleDeleteResource,

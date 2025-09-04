@@ -1,16 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-
-interface Resource {
-  id: string;
-  name: string;
-  link: string;
-  type: 'AFFILIATE' | 'MY_PRODUCTS';
-  price: 'PAID' | 'FREE_VALUE';
-  description?: string;
-  promoCode?: string;
-}
+import { Resource } from '@/lib/types/resource';
 
 interface Funnel {
   id: string;
