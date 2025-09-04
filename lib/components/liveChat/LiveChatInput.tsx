@@ -9,6 +9,8 @@ interface LiveChatInputProps {
   onChange: (value: string) => void;
   onSend: () => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   disabled?: boolean;
   placeholder?: string;
 }
@@ -18,6 +20,8 @@ const LiveChatInput: React.FC<LiveChatInputProps> = ({
   onChange,
   onSend,
   onKeyPress,
+  onFocus,
+  onBlur,
   disabled = false,
   placeholder = "Type a message..."
 }) => {
@@ -29,6 +33,8 @@ const LiveChatInput: React.FC<LiveChatInputProps> = ({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyPress={onKeyPress}
+            onFocus={onFocus}
+            onBlur={onBlur}
             placeholder={placeholder}
             disabled={disabled}
             rows={1}

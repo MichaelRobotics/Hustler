@@ -39,6 +39,9 @@ interface Funnel {
 type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat';
 
 export default function AdminPanel() {
+  // State for tracking typing in LiveChat
+  const [isUserTyping, setIsUserTyping] = React.useState(false);
+
   // Use the extracted hooks
   const {
     funnels,
@@ -382,12 +385,13 @@ export default function AdminPanel() {
           <AdminSidebar
             currentView={currentView}
             onViewChange={handleViewChange}
-            className="flex-shrink-0 h-full"
+            className={`flex-shrink-0 h-full ${isUserTyping ? 'lg:block hidden' : 'block'}`}
           />
           
           <div className="flex-1 overflow-auto w-full lg:w-auto">
             <LiveChatPage
               onBack={handleBackToDashboard}
+              onTypingChange={setIsUserTyping}
             />
           </div>
         </div>

@@ -120,7 +120,7 @@ const simulateAutoClose = (conversations: LiveChatConversation[]): LiveChatConve
   });
 };
 
-const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
+const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<LiveChatConversation[]>(mockConversations);
   const [filters, setFilters] = useState<LiveChatFilters>({
@@ -219,21 +219,23 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+    <div className={`relative ${selectedConversation ? 'lg:p-4 lg:pb-8' : 'p-4 sm:p-6 lg:p-8'} pb-20 lg:pb-8`}>
       <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header with Whop Design Patterns - Always Visible */}
-        <LiveChatHeader
-          onBack={onBack}
-          filters={filters}
-          searchQuery={searchQuery}
-          onFiltersChange={setFilters}
-          onSearchChange={setSearchQuery}
-        />
+        {/* Enhanced Header with Whop Design Patterns - Hidden on mobile when in chat */}
+        <div className={`${selectedConversation ? 'hidden lg:block' : 'block'}`}>
+          <LiveChatHeader
+            onBack={onBack}
+            filters={filters}
+            searchQuery={searchQuery}
+            onFiltersChange={setFilters}
+            onSearchChange={setSearchQuery}
+          />
+        </div>
 
         {/* Main Content Area */}
-        <div className="flex-grow flex flex-col md:overflow-hidden gap-6 mt-8">
+        <div className={`flex-grow flex flex-col md:overflow-hidden gap-6 ${selectedConversation ? 'lg:mt-8' : 'mt-8'}`}>
           {/* Mobile: Show conversation list or chat view */}
-          <div className="lg:hidden h-[calc(100vh-300px)] min-h-[400px] overflow-hidden">
+          <div className={`lg:hidden ${selectedConversation ? 'h-[calc(100vh-80px)]' : 'h-[calc(100vh-300px)]'} min-h-[400px] overflow-hidden`}>
             {selectedConversation ? (
               <div className="h-full animate-in fade-in duration-0">
                 <LiveChatView
@@ -241,6 +243,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
                   onSendMessage={handleSendMessage}
                   onUpdateConversation={handleUpdateConversation}
                   onBack={() => setSelectedConversationId(null)}
+                  onTypingChange={onTypingChange}
                 />
               </div>
             ) : (
@@ -258,9 +261,9 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
           </div>
 
           {/* Desktop: Show both side by side */}
-          <div className="hidden lg:grid lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px]">
+          <div className="hidden lg:grid lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px] max-h-[calc(100vh-300px)]">
             {/* Conversation List */}
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 overflow-hidden">
               <ConversationList
                 conversations={conversations}
                 selectedConversationId={selectedConversationId || undefined}
@@ -272,7 +275,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
             </div>
 
             {/* Chat View */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 overflow-hidden h-full">
               {selectedConversation ? (
                 <div className="h-full animate-in fade-in duration-0">
                   <LiveChatView
@@ -280,6 +283,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
                     onSendMessage={handleSendMessage}
                     onUpdateConversation={handleUpdateConversation}
                     onBack={() => setSelectedConversationId(null)}
+                    onTypingChange={onTypingChange}
                   />
                 </div>
               ) : (

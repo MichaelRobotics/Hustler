@@ -86,6 +86,7 @@ export interface GetMessagesResponse {
 // Component Props
 export interface LiveChatPageProps {
   onBack: () => void;
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
 export interface ConversationListProps {
@@ -105,6 +106,7 @@ export interface LiveChatViewProps {
   onSendMessage: (message: string) => void;
   onUpdateConversation: (conversation: LiveChatConversation) => void;
   onBack: () => void;
+  onTypingChange?: (isTyping: boolean) => void;
   isLoading?: boolean;
 }
 
