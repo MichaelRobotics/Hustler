@@ -19,283 +19,263 @@ interface UseLiveChatOptions {
 export const useLiveChat = (options: UseLiveChatOptions = {}) => {
   const { autoRefresh = true, refreshInterval = 30000 } = options;
   
-  // State
+  // State management
   const [conversations, setConversations] = useState<LiveChatConversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<LiveChatFilters>({ 
-    status: 'open', 
-    sortBy: 'newest' 
+  const [filters, setFilters] = useState<LiveChatFilters>({
+    status: 'open',
+    sortBy: 'newest'
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Refs for cleanup
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // API Functions
-  const fetchConversations = useCallback(async (signal?: AbortSignal) => {
+  // Fetch conversations from API
+  const fetchConversations = useCallback(async (reset = false) => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
     try {
-      setIsLoading(true);
+      // Cancel previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      abortControllerRef.current = new AbortController();
       
       const params = new URLSearchParams({
         status: filters.status || 'open',
         sortBy: filters.sortBy || 'newest',
-        ...(searchQuery && { search: searchQuery })
+        ...(searchQuery && { search: searchQuery }),
+        ...(reset ? {} : { offset: conversations.length.toString() })
       });
-
+      
       const response = await fetch(`/api/live-chat/conversations?${params}`, {
-        signal,
+        signal: abortControllerRef.current.signal,
         headers: {
           'Content-Type': 'application/json',
         },
       });
-
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch conversations');
+        throw new Error(`Failed to fetch conversations: ${response.statusText}`);
       }
-
+      
       const data: GetConversationsResponse = await response.json();
-      setConversations(data.conversations);
+      
+      if (reset) {
+        setConversations(data.conversations);
+      } else {
+        setConversations(prev => [...prev, ...data.conversations]);
+      }
+      
       setHasMore(data.hasMore);
+      
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Error fetching conversations:', error);
+        setError(error.message);
+        console.error('Failed to fetch conversations:', error);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [filters, searchQuery]);
+  }, [conversations.length, filters, searchQuery, isLoading]);
 
-  const sendMessage = useCallback(async (conversationId: string, text: string) => {
+  // Send message to conversation
+  const sendMessage = useCallback(async (conversationId: string, message: CreateMessageRequest) => {
     try {
-      const request: CreateMessageRequest = {
-        conversationId,
-        text,
-        type: 'bot'
-      };
-
-      const response = await fetch('/api/live-chat/messages', {
+      const response = await fetch(`/api/live-chat/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(request),
+        body: JSON.stringify({
+          ...message,
+          conversationId
+        }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      const data = await response.json();
       
-      // Update local state with the new message and updated conversation
-      setConversations(prevConversations =>
-        prevConversations.map(conv =>
-          conv.id === conversationId
+      if (!response.ok) {
+        throw new Error(`Failed to send message: ${response.statusText}`);
+      }
+      
+      const newMessage: LiveChatMessage = await response.json();
+      
+      // Update local state optimistically
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
             ? {
                 ...conv,
-                messages: [...conv.messages, data.message],
-                lastMessage: text,
-                lastMessageAt: new Date(),
+                messages: [...conv.messages, newMessage],
+                lastMessage: newMessage.text,
+                lastMessageAt: newMessage.timestamp,
                 messageCount: conv.messageCount + 1,
                 updatedAt: new Date()
               }
             : conv
         )
       );
-
-      return data;
+      
+      return newMessage;
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Failed to send message:', error);
       throw error;
     }
   }, []);
 
-  const updateConversation = useCallback(async (conversationId: string, updates: Partial<UpdateConversationRequest>) => {
+  // Update conversation status
+  const updateConversation = useCallback(async (conversationId: string, updates: UpdateConversationRequest) => {
     try {
-      const request: UpdateConversationRequest = {
-        conversationId,
-        ...updates
-      };
-
-      const response = await fetch('/api/live-chat/conversations', {
+      const response = await fetch(`/api/live-chat/conversations/${conversationId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(request),
+        body: JSON.stringify(updates),
       });
-
+      
       if (!response.ok) {
-        throw new Error('Failed to update conversation');
+        throw new Error(`Failed to update conversation: ${response.statusText}`);
       }
-
-      const data = await response.json();
+      
+      const updatedConversation: LiveChatConversation = await response.json();
       
       // Update local state
-      setConversations(prevConversations =>
-        prevConversations.map(conv =>
-          conv.id === conversationId
-            ? { ...conv, ...data.conversation, updatedAt: new Date() }
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { ...updatedConversation, updatedAt: new Date() }
             : conv
         )
       );
-
-      return data;
+      
+      return updatedConversation;
     } catch (error) {
-      console.error('Error updating conversation:', error);
+      console.error('Failed to update conversation:', error);
       throw error;
     }
   }, []);
 
-  const fetchMessages = useCallback(async (conversationId: string, signal?: AbortSignal) => {
+  // Fetch messages for a specific conversation
+  const fetchMessages = useCallback(async (conversationId: string, reset = false) => {
     try {
-      const response = await fetch(`/api/live-chat/conversations/${conversationId}/messages`, {
-        signal,
+      const params = new URLSearchParams({
+        ...(reset ? {} : { offset: '0' })
+      });
+      
+      const response = await fetch(`/api/live-chat/conversations/${conversationId}/messages?${params}`, {
         headers: {
           'Content-Type': 'application/json',
         },
       });
-
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch messages');
+        throw new Error(`Failed to fetch messages: ${response.statusText}`);
       }
-
+      
       const data: GetMessagesResponse = await response.json();
       
       // Update conversation with messages
-      setConversations(prevConversations =>
-        prevConversations.map(conv =>
-          conv.id === conversationId
-            ? { ...conv, messages: data.messages }
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? {
+                ...conv,
+                messages: reset ? data.messages : [...conv.messages, ...data.messages],
+                updatedAt: new Date()
+              }
             : conv
         )
       );
-
-      return data;
+      
+      return data.messages;
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Error fetching messages:', error);
-      }
+      console.error('Failed to fetch messages:', error);
       throw error;
     }
   }, []);
 
-  // Event Handlers
-  const handleSelectConversation = useCallback((conversationId: string) => {
-    setSelectedConversationId(conversationId);
-    // Fetch messages for the selected conversation
-    fetchMessages(conversationId);
-  }, [fetchMessages]);
-
-  const handleSendMessage = useCallback(async (message: string) => {
-    if (!selectedConversationId) return;
-    
-    try {
-      await sendMessage(selectedConversationId, message);
-    } catch (error) {
-      // Handle error (show toast, etc.)
-      console.error('Failed to send message:', error);
-    }
-  }, [selectedConversationId, sendMessage]);
-
-  const handleUpdateConversation = useCallback(async (updatedConversation: LiveChatConversation) => {
-    try {
-      await updateConversation(updatedConversation.id, {
-        status: updatedConversation.status,
-        isArchived: updatedConversation.isArchived
-      });
-      
-      // Auto-switch filter view to match new status
-      setFilters(prevFilters => ({
-        ...prevFilters,
-        status: updatedConversation.status
-      }));
-    } catch (error) {
-      console.error('Failed to update conversation:', error);
-    }
-  }, [updateConversation]);
-
-  const handleFiltersChange = useCallback((newFilters: LiveChatFilters) => {
-    setFilters(newFilters);
-  }, []);
-
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
-
-  // Auto-refresh setup
+  // Auto-refresh conversations
   useEffect(() => {
-    if (autoRefresh) {
-      refreshIntervalRef.current = setInterval(() => {
-        fetchConversations();
-      }, refreshInterval);
-    }
-
+    if (!autoRefresh) return;
+    
+    const refresh = () => {
+      fetchConversations(true);
+    };
+    
+    // Initial fetch
+    refresh();
+    
+    // Set up interval
+    refreshIntervalRef.current = setInterval(refresh, refreshInterval);
+    
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, [autoRefresh, refreshInterval, fetchConversations]);
 
-  // Fetch conversations when filters or search change
+  // Refetch when filters or search change
   useEffect(() => {
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    fetchConversations(true);
+  }, [filters, searchQuery]);
+
+  // Get selected conversation
+  const selectedConversation = conversations.find(conv => conv.id === selectedConversationId) || null;
+
+  // Filtered conversations
+  const filteredConversations = conversations.filter(conv => {
+    if (filters.status && conv.status !== filters.status) return false;
+    if (searchQuery && !conv.user.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
+        !conv.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
     }
-    
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
-    
-    fetchConversations(abortControllerRef.current.signal);
+    return true;
+  });
 
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [fetchConversations]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
-
-  // Computed values
-  const selectedConversation = conversations.find(conv => conv.id === selectedConversationId);
+  // Sort conversations
+  const sortedConversations = [...filteredConversations].sort((a, b) => {
+    if (filters.sortBy === 'oldest') {
+      return new Date(a.lastMessageAt).getTime() - new Date(b.lastMessageAt).getTime();
+    } else {
+      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+    }
+  });
 
   return {
     // State
-    conversations,
-    selectedConversationId,
+    conversations: sortedConversations,
     selectedConversation,
+    selectedConversationId,
     filters,
     searchQuery,
     isLoading,
     hasMore,
+    error,
     
     // Actions
-    handleSelectConversation,
-    handleSendMessage,
-    handleUpdateConversation,
-    handleFiltersChange,
-    handleSearchChange,
-    
-    // Direct API access (for advanced use cases)
+    setSelectedConversationId,
+    setFilters,
+    setSearchQuery,
     sendMessage,
     updateConversation,
-    fetchConversations,
     fetchMessages,
+    fetchConversations,
+    
+    // Utilities
+    retry: () => fetchConversations(true),
+    clearError: () => setError(null)
   };
 };

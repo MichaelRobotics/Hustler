@@ -217,7 +217,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
     <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
       
-      <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+      <div className="relative p-4 sm:p-6 lg:p-8 pt-20 pb-24 lg:pt-8 lg:pb-8">
         <div className="max-w-7xl mx-auto">
           {/* Enhanced Header with Whop Design Patterns - Always Visible */}
           <LiveChatHeader
@@ -231,7 +231,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
           {/* Main Content Area */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 !mt-8">
             {/* Mobile: Show conversation list or chat view */}
-            <div className="lg:hidden min-h-[500px] max-h-[calc(100vh-200px)]">
+            <div className="lg:hidden min-h-[400px] max-h-[calc(100vh-280px)]">
               {selectedConversation ? (
                 <div className="h-full animate-in fade-in duration-0">
                   <LiveChatView
@@ -255,7 +255,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack }) => {
             </div>
 
             {/* Desktop: Show both side by side */}
-            <div className="hidden lg:grid lg:grid-cols-3 gap-6 min-h-[500px] max-h-[calc(100vh-200px)]">
+            <div className="hidden lg:grid lg:grid-cols-3 gap-6 min-h-[500px] max-h-[calc(100vh-150px)]">
               {/* Conversation List */}
               <div className="lg:col-span-1">
                 <ConversationList
