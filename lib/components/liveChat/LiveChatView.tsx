@@ -52,14 +52,15 @@ const LiveChatView: React.FC<LiveChatViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl shadow-lg backdrop-blur-sm dark:shadow-2xl dark:shadow-violet-500/20 dark:shadow-black/20 overflow-hidden min-h-[500px] h-[600px]">
+    <div className="flex flex-col bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl shadow-lg backdrop-blur-sm dark:shadow-2xl dark:shadow-violet-500/20 dark:shadow-black/20 overflow-hidden h-full">
       {/* Chat Header */}
-      <ChatHeader
-        conversation={conversation}
-        onBack={onBack}
-        onUpdateConversation={onUpdateConversation}
-      />
-
+      <div className="flex-shrink-0">
+        <ChatHeader
+          conversation={conversation}
+          onBack={onBack}
+          onUpdateConversation={onUpdateConversation}
+        />
+      </div>
 
       {/* Messages Area */}
       <div 
@@ -80,7 +81,7 @@ const LiveChatView: React.FC<LiveChatViewProps> = ({
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
+      <div className="flex-shrink-0 p-4 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
         <LiveChatInput
           value={newMessage}
           onChange={setNewMessage}

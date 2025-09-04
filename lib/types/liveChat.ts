@@ -94,6 +94,7 @@ export interface ConversationListProps {
   onSelectConversation: (conversationId: string) => void;
   filters: LiveChatFilters;
   onFiltersChange: (filters: LiveChatFilters) => void;
+  onSearchReset?: () => void;
   isLoading?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => void;

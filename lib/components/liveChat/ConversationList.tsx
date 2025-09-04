@@ -11,7 +11,8 @@ const ConversationList: React.FC<ConversationListProps> = ({
   selectedConversationId,
   onSelectConversation,
   filters,
-  onFiltersChange
+  onFiltersChange,
+  onSearchReset
 }) => {
 
   // Filter and sort conversations based on current filters
@@ -68,7 +69,10 @@ const ConversationList: React.FC<ConversationListProps> = ({
                 key={conversation.id}
                 conversation={conversation}
                 isSelected={selectedConversationId === conversation.id}
-                onClick={() => onSelectConversation(conversation.id)}
+                onClick={() => {
+                  onSelectConversation(conversation.id);
+                  onSearchReset?.();
+                }}
               />
             ))}
           </div>

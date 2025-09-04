@@ -375,17 +375,21 @@ export default function AdminPanel() {
 
   if (currentView === 'liveChat') {
     return (
-      <div className="flex min-h-screen">
-        <AdminSidebar
-          currentView={currentView}
-          onViewChange={handleViewChange}
-          className="flex-shrink-0 h-full"
-        />
+      <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
         
-        <div className="flex-1 w-full lg:w-auto">
-          <LiveChatPage
-            onBack={handleBackToDashboard}
+        <div className="flex h-screen">
+          <AdminSidebar
+            currentView={currentView}
+            onViewChange={handleViewChange}
+            className="flex-shrink-0 h-full"
           />
+          
+          <div className="flex-1 overflow-auto w-full lg:w-auto">
+            <LiveChatPage
+              onBack={handleBackToDashboard}
+            />
+          </div>
         </div>
       </div>
     );
