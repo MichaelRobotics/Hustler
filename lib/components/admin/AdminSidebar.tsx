@@ -20,6 +20,7 @@ interface AdminSidebarProps {
   className?: string;
   libraryContext?: 'global' | 'funnel';
   currentFunnelForLibrary?: { id: string; name: string } | null;
+  isUserTyping?: boolean;
 }
 
 /**
@@ -36,7 +37,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onViewChange,
   className = '',
   libraryContext = 'global',
-  currentFunnelForLibrary = null
+  currentFunnelForLibrary = null,
+  isUserTyping = false
 }) => {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   
@@ -46,6 +48,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const isResourcesView = currentView === 'resources';
   const isFunnelBuilderView = currentView === 'funnelBuilder';
   const isLiveChatView = currentView === 'liveChat';
+
 
   const handleViewChange = (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat') => {
     onViewChange(view);
@@ -142,7 +145,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl">
+      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? 'hidden' : 'block'}`}>
         <div className="flex items-center justify-around px-4 py-3">
           {/* Automations */}
           <Button

@@ -19,11 +19,21 @@ const LiveChatView: React.FC<LiveChatViewProps> = ({
   const [isUserTyping, setIsUserTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation.messages]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSendMessage = () => {
     if (newMessage.trim()) {
@@ -47,9 +57,20 @@ const LiveChatView: React.FC<LiveChatViewProps> = ({
 
   const handleInputChange = (value: string) => {
     setNewMessage(value);
-    const typing = value.trim().length > 0;
-    setIsUserTyping(typing);
-    onTypingChange?.(typing);
+    // Always set typing to true when user is interacting with input
+    setIsUserTyping(true);
+    onTypingChange?.(true);
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set timeout to stop typing after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsUserTyping(false);
+      onTypingChange?.(false);
+    }, 2000);
   };
 
   const handleInputFocus = () => {
@@ -58,6 +79,11 @@ const LiveChatView: React.FC<LiveChatViewProps> = ({
   };
 
   const handleInputBlur = () => {
+    // Clear timeout when user blurs input
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
     setIsUserTyping(false);
     onTypingChange?.(false);
   };

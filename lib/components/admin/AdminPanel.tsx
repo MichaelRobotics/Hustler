@@ -42,6 +42,7 @@ export default function AdminPanel() {
   // State for tracking typing in LiveChat
   const [isUserTyping, setIsUserTyping] = React.useState(false);
 
+
   // Use the extracted hooks
   const {
     funnels,
@@ -385,7 +386,8 @@ export default function AdminPanel() {
           <AdminSidebar
             currentView={currentView}
             onViewChange={handleViewChange}
-            className={`flex-shrink-0 h-full ${isUserTyping ? 'lg:block hidden' : 'block'}`}
+            className={`flex-shrink-0 h-full ${isUserTyping ? 'hidden' : 'block'}`}
+            isUserTyping={isUserTyping}
           />
           
           <div className="flex-1 overflow-auto w-full lg:w-auto">
@@ -411,6 +413,7 @@ export default function AdminPanel() {
           className="flex-shrink-0 h-full"
           libraryContext={libraryContext}
           currentFunnelForLibrary={selectedFunnelForLibrary}
+          isUserTyping={isUserTyping}
         />
         
         <div className="flex-1 overflow-auto w-full lg:w-auto">
