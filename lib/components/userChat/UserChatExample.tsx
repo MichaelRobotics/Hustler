@@ -13,7 +13,7 @@ import { mockFunnelFlow, mockFunnelFlows } from './mockData';
 
 const UserChatExample: React.FC = () => {
   const [viewMode, setViewMode] = useState<'page' | 'container'>('page');
-  const [selectedFunnel, setSelectedFunnel] = useState<keyof typeof mockFunnelFlows>('ecommerce');
+  const [selectedFunnel, setSelectedFunnel] = useState<keyof typeof mockFunnelFlows>('default');
   const [conversationId] = useState(`conv-${Date.now()}`);
 
   const handleMessageSent = (message: string, convId?: string) => {
@@ -93,9 +93,7 @@ const UserChatExample: React.FC = () => {
         <div className="max-w-4xl mx-auto p-4">
           <div className="mb-4">
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              Embedded Chat Example - {selectedFunnel === 'ecommerce' ? 'E-commerce' : 
-                                       selectedFunnel === 'coaching' ? 'Coaching' : 
-                                       selectedFunnel === 'saas' ? 'SaaS' : selectedFunnel} Funnel
+              Embedded Chat Example - {selectedFunnel === 'default' ? 'Default' : selectedFunnel} Funnel
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
               This shows how the chat can be embedded in other pages with custom sizing. Try different funnels above!
