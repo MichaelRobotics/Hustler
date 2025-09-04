@@ -59,15 +59,6 @@ export const UserChatHeader: React.FC<UserChatHeaderProps> = ({
       </div>
       
       <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-3"></div>
-      
-      {/* Below Separation Line - Online Indicator */}
-      <div className="flex items-center justify-start">
-        <div className="flex items-center gap-2">
-          <div className="px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700/50">
-            <Text size="1" weight="medium" className="text-green-700 dark:text-green-300">Online</Text>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
