@@ -3,8 +3,7 @@
 import React from 'react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelFlow } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatInput } from '../funnelBuilder/components';
-import { CustomerChatOptions } from './CustomerChatOptions';
+import { ChatHeader, ChatMessage, ChatInput, ChatOptions } from '../funnelBuilder/components';
 
 /**
  * --- User Chat Component ---
@@ -86,8 +85,10 @@ const UserChat: React.FC<UserChatProps> = ({
       </div>
       
       {/* Response Options */}
-      <CustomerChatOptions
+      <ChatOptions
         options={options}
+        optionsLeadingToOffer={[]}
+        selectedOffer={null}
         onOptionClick={handleUserOptionClick}
       />
       

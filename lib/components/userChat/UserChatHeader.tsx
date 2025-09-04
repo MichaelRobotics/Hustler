@@ -21,6 +21,9 @@ export const UserChatHeader: React.FC<UserChatHeaderProps> = ({
         {/* Left: Hustler Title */}
         <div className="flex items-center min-w-0 flex-1">
           <h1 className="fui-Heading text-black dark:text-white fui-r-size-6 fui-r-weight-bold">Hustler</h1>
+          <div className="ml-3">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          </div>
         </div>
         
         {/* Right: Theme Switch */}

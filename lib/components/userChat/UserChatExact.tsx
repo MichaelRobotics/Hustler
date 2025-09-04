@@ -6,6 +6,7 @@ import { Send } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { mockFunnelFlow } from './mockData';
 import { UserChatHeader } from './UserChatHeader';
+import { ChatOptions } from '../funnelBuilder/components';
 
 interface UserChatExactProps {
   onBack?: () => void;
@@ -30,13 +31,6 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
     options
   } = useFunnelPreviewChat(mockFunnelFlow);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [message]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -113,59 +107,54 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
                     <div ref={chatEndRef} />
           </div>
 
-          {/* Response Options - Exact structure */}
-          {options.length > 0 && (
-            <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-              <div className="space-y-3">
-                <div className="flex flex-col items-end space-y-2">
-                  {options.map((opt, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleUserOptionClick(opt, i)}
-                      className="max-w-xs lg:max-w-md p-3 border rounded-xl transition-all duration-200 text-left group bg-white dark:bg-gray-800 border-border/50 dark:border-border/30 hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 bg-violet-100 dark:bg-violet-900/30 border-violet-200 dark:border-violet-700/30">
-                          <Text size="1" weight="bold" className="text-violet-700 dark:text-violet-300">
-                            {i + 1}
-                          </Text>
-                        </div>
-                        <Text size="2" className="transition-colors text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-300">
-                          {opt.text}
-                        </Text>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Response Options - Same as preview view */}
+          <ChatOptions
+            options={options}
+            optionsLeadingToOffer={[]}
+            selectedOffer={null}
+            onOptionClick={handleUserOptionClick}
+          />
 
-          {/* Chat Input - Exact structure */}
+          {/* Chat Input - LiveChat style */}
           {options.length > 0 && currentBlockId && (
             <div className="flex-shrink-0 p-4 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-              <form onSubmit={handleSubmit} className="flex items-end gap-3">
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type your response or choose from options above..."
-                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:hover:border-gray-500 resize-none min-h-[48px] max-h-[120px]"
-                    rows={1}
-                    style={{ height: '48px' }}
-                  />
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+                    <textarea
+                      ref={textareaRef}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Type your response or choose from options above..."
+                      rows={1}
+                      className="w-full px-4 py-3 bg-transparent border-0 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 transition-all duration-200 resize-none min-h-[44px] max-h-32"
+                      style={{
+                        height: 'auto',
+                        minHeight: '44px',
+                      }}
+                      onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = 'auto';
+                        target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+                      }}
+                    />
+                  </div>
                 </div>
-                <Button
-                  type="submit"
-                  disabled={!message.trim()}
-                  className="p-3 rounded-xl bg-violet-500 hover:bg-violet-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Send message"
-                >
-                  <Send size={20} />
-                </Button>
-              </form>
+                
+                <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200">
+                  <Button
+                    size="3"
+                    variant="ghost"
+                    color="violet"
+                    onClick={handleSubmit}
+                    disabled={!message.trim()}
+                    className="px-4 py-3 text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send size={18} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
