@@ -30,16 +30,17 @@ export default async function ExperiencePage({
 		const { userId } = await whopSdk.verifyUserToken(headersList);
 		console.log('Verified user ID:', userId);
 		
-		// Get company ID from headers
-		const whopCompanyId = headersList.get('x-whop-company-id') || 
-		                      headersList.get('whop-company-id') ||
-		                      process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-
-		console.log('Company ID found:', whopCompanyId);
+		// Get company ID from experience data (as per WHOP docs)
+		console.log('Getting experience data for:', experienceId);
+		const experience = await whopSdk.experiences.getExperience({ experienceId });
+		const whopCompanyId = experience.company.id;
+		
+		console.log('Experience data:', experience);
+		console.log('Company ID from experience:', whopCompanyId);
 		console.log('Environment company ID:', process.env.NEXT_PUBLIC_WHOP_COMPANY_ID);
 
 		if (!whopCompanyId) {
-			console.log('No company ID found in headers');
+			console.log('No company ID found in experience data');
 		} else {
 			// Check access to the experience first (as per WHOP docs)
 			console.log('Checking access to experience:', experienceId);
@@ -98,7 +99,7 @@ export default async function ExperiencePage({
 							</div>
 							<div className="flex justify-between">
 								<span className="text-gray-400">WHOP Company ID:</span>
-								<span className="text-white font-mono">{headersList.get('x-whop-company-id') || headersList.get('whop-company-id') || 'Missing'}</span>
+								<span className="text-white font-mono">{authContext?.user?.company?.whopCompanyId || 'Missing'}</span>
 							</div>
 							<div className="flex justify-between">
 								<span className="text-gray-400">Auth Context:</span>
