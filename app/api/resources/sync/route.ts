@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { whopProductSync } from '../../../../lib/sync/whop-product-sync';
 
 /**
@@ -10,7 +10,7 @@ import { whopProductSync } from '../../../../lib/sync/whop-product-sync';
 /**
  * GET /api/resources/sync - Get sync status and available WHOP products
  */
-async function getSyncStatusHandler(context: ProtectedRouteContext) {
+async function getSyncStatusHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
     
@@ -30,9 +30,9 @@ async function getSyncStatusHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/resources/sync - Sync WHOP products to resources
  */
-async function syncWhopProductsHandler(context: ProtectedRouteContext) {
+async function syncWhopProductsHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const body = await request.json();
     
     const { forceUpdate = false, batchSize = 10, includeInactive = false } = body;
@@ -58,5 +58,5 @@ async function syncWhopProductsHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const GET = withCustomerProtection(getSyncStatusHandler);
-export const POST = withCustomerProtection(syncWhopProductsHandler);
+export const GET = withCustomerAuth(getSyncStatusHandler);
+export const POST = withCustomerAuth(syncWhopProductsHandler);

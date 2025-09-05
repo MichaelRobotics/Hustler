@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateFunnelFlow, AIError, ValidationError } from '../../../lib/actions/ai-actions';
-import { withCreditsProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
 import { updateUserCredits } from '../../../lib/context/user-context';
 
 /**
  * Generate Funnel API Route
  * Protected route that requires authentication and credits
  */
-async function generateFunnelHandler(context: ProtectedRouteContext) {
+async function generateFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { resources } = await context.request.json();
+    const { resources } = await request.json();
     
     // Generate the funnel flow using AI
     const generatedFlow = await generateFunnelFlow(resources || []);
@@ -68,4 +68,4 @@ async function generateFunnelHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handler
-export const POST = withCreditsProtection(1, generateFunnelHandler);
+export const POST = withCustomerAuth(generateFunnelHandler);

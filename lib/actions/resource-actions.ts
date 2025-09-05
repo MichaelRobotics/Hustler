@@ -1,7 +1,7 @@
 import { db } from '../supabase/db';
 import { resources, funnelResources, funnels } from '../supabase/schema';
 import { eq, and, desc, asc, count, sql, inArray } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 import { whopSdk } from '../whop-sdk';
 
 export interface CreateResourceInput {

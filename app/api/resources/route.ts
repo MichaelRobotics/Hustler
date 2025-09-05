@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
 import { getResources, createResource } from '../../../lib/actions/resource-actions';
 
 /**
@@ -10,9 +10,9 @@ import { getResources, createResource } from '../../../lib/actions/resource-acti
 /**
  * GET /api/resources - List user's resources
  */
-async function getResourcesHandler(context: ProtectedRouteContext) {
+async function getResourcesHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -38,9 +38,9 @@ async function getResourcesHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/resources - Create a new resource
  */
-async function createResourceHandler(context: ProtectedRouteContext) {
+async function createResourceHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const input = await request.json();
 
     // Validation
@@ -79,5 +79,5 @@ async function createResourceHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const GET = withCustomerProtection(getResourcesHandler);
-export const POST = withCustomerProtection(createResourceHandler);
+export const GET = withCustomerAuth(getResourcesHandler);
+export const POST = withCustomerAuth(createResourceHandler);

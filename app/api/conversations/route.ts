@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
 import { getConversations, createConversation } from '../../../lib/actions/conversation-actions';
 
 /**
@@ -10,9 +10,9 @@ import { getConversations, createConversation } from '../../../lib/actions/conve
 /**
  * GET /api/conversations - List user's conversations
  */
-async function getConversationsHandler(context: ProtectedRouteContext) {
+async function getConversationsHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -38,9 +38,9 @@ async function getConversationsHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/conversations - Create a new conversation
  */
-async function createConversationHandler(context: ProtectedRouteContext) {
+async function createConversationHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const input = await request.json();
 
     // Validation
@@ -65,5 +65,5 @@ async function createConversationHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const GET = withCustomerProtection(getConversationsHandler);
-export const POST = withCustomerProtection(createConversationHandler);
+export const GET = withCustomerAuth(getConversationsHandler);
+export const POST = withCustomerAuth(createConversationHandler);

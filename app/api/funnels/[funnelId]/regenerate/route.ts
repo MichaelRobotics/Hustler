@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCreditsProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../../lib/middleware/simple-auth';
 import { regenerateFunnelFlow } from '../../../../../lib/actions/funnel-actions';
 
 /**
@@ -10,9 +10,9 @@ import { regenerateFunnelFlow } from '../../../../../lib/actions/funnel-actions'
 /**
  * POST /api/funnels/[funnelId]/regenerate - Regenerate a funnel flow using AI
  */
-async function regenerateFunnelHandler(context: ProtectedRouteContext) {
+async function regenerateFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const funnelId = context.request.nextUrl.pathname.split('/')[3]; // Extract funnelId from path
+    const funnelId = request.nextUrl.pathname.split('/')[3]; // Extract funnelId from path
     
     if (!funnelId) {
       return createErrorResponse(
@@ -34,5 +34,5 @@ async function regenerateFunnelHandler(context: ProtectedRouteContext) {
   }
 }
 
-// Export the protected route handler with credits protection (1 credit required)
-export const POST = withCreditsProtection(1, regenerateFunnelHandler);
+// Export the protected route handler
+export const POST = withCustomerAuth(regenerateFunnelHandler);

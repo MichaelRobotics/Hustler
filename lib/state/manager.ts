@@ -17,7 +17,7 @@ import {
 } from './types';
 import { stateSyncManager } from './sync';
 import { realtimeStateManager } from './realtime';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 
 export interface StateManagerConfig {
   enableRealtime: boolean;

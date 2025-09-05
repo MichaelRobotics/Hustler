@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withConversationAuth, createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/simple-resource-auth';
+import { type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { getConversationById, updateConversation, completeConversation, abandonConversation } from '../../../../lib/actions/conversation-actions';
 
 /**
@@ -10,9 +11,9 @@ import { getConversationById, updateConversation, completeConversation, abandonC
 /**
  * GET /api/conversations/[conversationId] - Get specific conversation
  */
-async function getConversationHandler(context: ProtectedRouteContext) {
+async function getConversationHandler(request: NextRequest, context: AuthContext) {
   try {
-    const conversationId = context.request.nextUrl.pathname.split('/').pop();
+    const conversationId = request.nextUrl.pathname.split('/').pop();
     
     if (!conversationId) {
       return createErrorResponse(
@@ -37,10 +38,10 @@ async function getConversationHandler(context: ProtectedRouteContext) {
 /**
  * PUT /api/conversations/[conversationId] - Update specific conversation
  */
-async function updateConversationHandler(context: ProtectedRouteContext) {
+async function updateConversationHandler(request: NextRequest, context: AuthContext) {
   try {
-    const conversationId = context.request.nextUrl.pathname.split('/').pop();
-    const input = await context.request.json();
+    const conversationId = request.nextUrl.pathname.split('/').pop();
+    const input = await request.json();
     
     if (!conversationId) {
       return createErrorResponse(
@@ -65,9 +66,9 @@ async function updateConversationHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/conversations/[conversationId]/complete - Complete a conversation
  */
-async function completeConversationHandler(context: ProtectedRouteContext) {
+async function completeConversationHandler(request: NextRequest, context: AuthContext) {
   try {
-    const conversationId = context.request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
+    const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
     
     if (!conversationId) {
       return createErrorResponse(
@@ -92,9 +93,9 @@ async function completeConversationHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/conversations/[conversationId]/abandon - Abandon a conversation
  */
-async function abandonConversationHandler(context: ProtectedRouteContext) {
+async function abandonConversationHandler(request: NextRequest, context: AuthContext) {
   try {
-    const conversationId = context.request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
+    const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
     
     if (!conversationId) {
       return createErrorResponse(
@@ -117,6 +118,6 @@ async function abandonConversationHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers with resource protection
-export const GET = withResourceProtection('conversation', 'customer', getConversationHandler);
-export const PUT = withResourceProtection('conversation', 'customer', updateConversationHandler);
-export const POST = withResourceProtection('conversation', 'customer', completeConversationHandler);
+export const GET = withConversationAuth( getConversationHandler);
+export const PUT = withConversationAuth( updateConversationHandler);
+export const POST = withConversationAuth( completeConversationHandler);

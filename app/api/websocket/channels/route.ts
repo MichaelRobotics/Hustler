@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { whopWebSocket } from '../../../../lib/websocket/whop-websocket';
 
 /**
@@ -10,9 +10,9 @@ import { whopWebSocket } from '../../../../lib/websocket/whop-websocket';
 /**
  * POST /api/websocket/channels - Join a channel
  */
-async function joinChannelHandler(context: ProtectedRouteContext) {
+async function joinChannelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const body = await request.json();
     
     const { channel } = body;
@@ -52,9 +52,9 @@ async function joinChannelHandler(context: ProtectedRouteContext) {
 /**
  * DELETE /api/websocket/channels - Leave a channel
  */
-async function leaveChannelHandler(context: ProtectedRouteContext) {
+async function leaveChannelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const body = await request.json();
     
     const { channel } = body;
@@ -86,7 +86,7 @@ async function leaveChannelHandler(context: ProtectedRouteContext) {
 /**
  * GET /api/websocket/channels - Get joined channels
  */
-async function getChannelsHandler(context: ProtectedRouteContext) {
+async function getChannelsHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
     const status = whopWebSocket.getConnectionStatus();
@@ -143,6 +143,6 @@ function validateChannelAccess(channel: string, user: any): boolean {
 }
 
 // Export the protected route handlers
-export const POST = withCustomerProtection(joinChannelHandler);
-export const DELETE = withCustomerProtection(leaveChannelHandler);
-export const GET = withCustomerProtection(getChannelsHandler);
+export const POST = withCustomerAuth(joinChannelHandler);
+export const DELETE = withCustomerAuth(leaveChannelHandler);
+export const GET = withCustomerAuth(getChannelsHandler);

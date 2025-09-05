@@ -2,7 +2,7 @@ import { whopSdk } from '../whop-sdk';
 import { db } from '../supabase/db';
 import { companies, users } from '../supabase/schema';
 import { eq } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 
 /**
  * User Context Management

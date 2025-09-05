@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { whopWebSocket } from '../../../../lib/websocket/whop-websocket';
 import { realTimeMessaging } from '../../../../lib/websocket/messaging';
 import { realTimeUpdates } from '../../../../lib/websocket/updates';
@@ -12,9 +12,9 @@ import { realTimeUpdates } from '../../../../lib/websocket/updates';
 /**
  * POST /api/websocket/connect - Initialize WebSocket connection
  */
-async function connectWebSocketHandler(context: ProtectedRouteContext) {
+async function connectWebSocketHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const body = await request.json();
     
     const { experienceId, autoReconnect = true } = body;
@@ -57,7 +57,7 @@ async function connectWebSocketHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/websocket/disconnect - Disconnect WebSocket
  */
-async function disconnectWebSocketHandler(context: ProtectedRouteContext) {
+async function disconnectWebSocketHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
 
@@ -83,7 +83,7 @@ async function disconnectWebSocketHandler(context: ProtectedRouteContext) {
 /**
  * GET /api/websocket/status - Get WebSocket connection status
  */
-async function getWebSocketStatusHandler(context: ProtectedRouteContext) {
+async function getWebSocketStatusHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
     const status = whopWebSocket.getConnectionStatus();
@@ -103,6 +103,6 @@ async function getWebSocketStatusHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const POST = withCustomerProtection(connectWebSocketHandler);
-export const DELETE = withCustomerProtection(disconnectWebSocketHandler);
-export const GET = withCustomerProtection(getWebSocketStatusHandler);
+export const POST = withCustomerAuth(connectWebSocketHandler);
+export const DELETE = withCustomerAuth(disconnectWebSocketHandler);
+export const GET = withCustomerAuth(getWebSocketStatusHandler);

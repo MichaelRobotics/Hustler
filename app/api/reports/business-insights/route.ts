@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { reportingSystem } from '../../../../lib/reporting/reports';
 
 /**
@@ -10,9 +10,9 @@ import { reportingSystem } from '../../../../lib/reporting/reports';
 /**
  * GET /api/reports/business-insights - Generate business insights report
  */
-async function generateBusinessInsightsReportHandler(context: ProtectedRouteContext) {
+async function generateBusinessInsightsReportHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -50,4 +50,4 @@ async function generateBusinessInsightsReportHandler(context: ProtectedRouteCont
 }
 
 // Export the protected route handler
-export const GET = withCustomerProtection(generateBusinessInsightsReportHandler);
+export const GET = withCustomerAuth(generateBusinessInsightsReportHandler);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
+import { withCustomerAuth, withAdminAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
 import { getFunnels, createFunnel } from '../../../lib/actions/funnel-actions';
 
 /**
@@ -62,5 +62,5 @@ async function createFunnelHandler(request: NextRequest, context: AuthContext) {
 }
 
 // Export the protected route handlers
-export const GET = withCustomerAuth(getFunnelsHandler);
-export const POST = withCustomerAuth(createFunnelHandler);
+export const GET = withCustomerAuth(getFunnelsHandler); // Both admin and customer can view funnels
+export const POST = withAdminAuth(createFunnelHandler); // Only admin can create funnels

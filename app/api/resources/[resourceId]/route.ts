@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withResourceAuth, createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/simple-resource-auth';
+import { type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { getResourceById, updateResource, deleteResource } from '../../../../lib/actions/resource-actions';
 
 /**
@@ -10,9 +11,9 @@ import { getResourceById, updateResource, deleteResource } from '../../../../lib
 /**
  * GET /api/resources/[resourceId] - Get specific resource
  */
-async function getResourceHandler(context: ProtectedRouteContext) {
+async function getResourceHandler(request: NextRequest, context: AuthContext) {
   try {
-    const resourceId = context.request.nextUrl.pathname.split('/').pop();
+    const resourceId = request.nextUrl.pathname.split('/').pop();
     
     if (!resourceId) {
       return createErrorResponse(
@@ -37,10 +38,10 @@ async function getResourceHandler(context: ProtectedRouteContext) {
 /**
  * PUT /api/resources/[resourceId] - Update specific resource
  */
-async function updateResourceHandler(context: ProtectedRouteContext) {
+async function updateResourceHandler(request: NextRequest, context: AuthContext) {
   try {
-    const resourceId = context.request.nextUrl.pathname.split('/').pop();
-    const input = await context.request.json();
+    const resourceId = request.nextUrl.pathname.split('/').pop();
+    const input = await request.json();
     
     if (!resourceId) {
       return createErrorResponse(
@@ -65,9 +66,9 @@ async function updateResourceHandler(context: ProtectedRouteContext) {
 /**
  * DELETE /api/resources/[resourceId] - Delete specific resource
  */
-async function deleteResourceHandler(context: ProtectedRouteContext) {
+async function deleteResourceHandler(request: NextRequest, context: AuthContext) {
   try {
-    const resourceId = context.request.nextUrl.pathname.split('/').pop();
+    const resourceId = request.nextUrl.pathname.split('/').pop();
     
     if (!resourceId) {
       return createErrorResponse(
@@ -93,6 +94,6 @@ async function deleteResourceHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers with resource protection
-export const GET = withResourceProtection('resource', 'customer', getResourceHandler);
-export const PUT = withResourceProtection('resource', 'customer', updateResourceHandler);
-export const DELETE = withResourceProtection('resource', 'customer', deleteResourceHandler);
+export const GET = withResourceAuth( getResourceHandler);
+export const PUT = withResourceAuth( updateResourceHandler);
+export const DELETE = withResourceAuth( deleteResourceHandler);

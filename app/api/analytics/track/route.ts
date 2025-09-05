@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { analyticsSystem } from '../../../../lib/analytics/analytics';
 
 /**
@@ -10,9 +10,9 @@ import { analyticsSystem } from '../../../../lib/analytics/analytics';
 /**
  * POST /api/analytics/track - Track analytics events
  */
-async function trackAnalyticsHandler(context: ProtectedRouteContext) {
+async function trackAnalyticsHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const body = await request.json();
     
     const { event, funnelId, conversationId, data } = body;
@@ -77,4 +77,4 @@ async function trackAnalyticsHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handler
-export const POST = withCustomerProtection(trackAnalyticsHandler);
+export const POST = withCustomerAuth(trackAnalyticsHandler);

@@ -9,7 +9,7 @@ import { whopSdk } from '../whop-sdk';
 import { db } from '../supabase/db';
 import { resources, companies, users } from '../supabase/schema';
 import { eq, and, isNull, isNotNull } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 import { realTimeUpdates } from '../websocket/updates';
 
 export interface WhopProduct {

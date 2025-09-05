@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withFunnelAuth, createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/simple-resource-auth';
+import { type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { getFunnelById, updateFunnel, deleteFunnel } from '../../../../lib/actions/funnel-actions';
 
 /**
@@ -10,9 +11,9 @@ import { getFunnelById, updateFunnel, deleteFunnel } from '../../../../lib/actio
 /**
  * GET /api/funnels/[funnelId] - Get specific funnel
  */
-async function getFunnelHandler(context: ProtectedRouteContext) {
+async function getFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const funnelId = context.request.nextUrl.pathname.split('/').pop();
+    const funnelId = request.nextUrl.pathname.split('/').pop();
     
     if (!funnelId) {
       return createErrorResponse(
@@ -37,10 +38,10 @@ async function getFunnelHandler(context: ProtectedRouteContext) {
 /**
  * PUT /api/funnels/[funnelId] - Update specific funnel
  */
-async function updateFunnelHandler(context: ProtectedRouteContext) {
+async function updateFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const funnelId = context.request.nextUrl.pathname.split('/').pop();
-    const input = await context.request.json();
+    const funnelId = request.nextUrl.pathname.split('/').pop();
+    const input = await request.json();
     
     if (!funnelId) {
       return createErrorResponse(
@@ -65,9 +66,9 @@ async function updateFunnelHandler(context: ProtectedRouteContext) {
 /**
  * DELETE /api/funnels/[funnelId] - Delete specific funnel
  */
-async function deleteFunnelHandler(context: ProtectedRouteContext) {
+async function deleteFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const funnelId = context.request.nextUrl.pathname.split('/').pop();
+    const funnelId = request.nextUrl.pathname.split('/').pop();
     
     if (!funnelId) {
       return createErrorResponse(
@@ -93,6 +94,6 @@ async function deleteFunnelHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers with resource protection
-export const GET = withResourceProtection('funnel', 'customer', getFunnelHandler);
-export const PUT = withResourceProtection('funnel', 'customer', updateFunnelHandler);
-export const DELETE = withResourceProtection('funnel', 'customer', deleteFunnelHandler);
+export const GET = withFunnelAuth( getFunnelHandler);
+export const PUT = withFunnelAuth( updateFunnelHandler);
+export const DELETE = withFunnelAuth( deleteFunnelHandler);

@@ -14,7 +14,7 @@ import type {
   BackendState, 
   StateAction
 } from '../state/types';
-import type { AuthenticatedUser } from '../middleware/auth';
+import type { AuthenticatedUser } from '../middleware/simple-auth';
 import { 
   useStateManager, 
   UseStateManagerOptions 

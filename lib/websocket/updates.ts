@@ -6,7 +6,7 @@
  */
 
 import { whopWebSocket, WebSocketMessage } from './whop-websocket';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 
 export interface FunnelUpdate {
   type: 'generation_started' | 'generation_progress' | 'generation_completed' | 'generation_failed' | 'deployed' | 'undeployed';

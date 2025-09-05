@@ -1,7 +1,7 @@
 import { db } from '../supabase/db';
 import { funnels, funnelResources, resources, funnelAnalytics } from '../supabase/schema';
 import { eq, and, desc, asc, count, sql } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 import { generateFunnelFlow } from './ai-actions';
 import { updateUserCredits } from '../context/user-context';
 import { realTimeUpdates } from '../websocket/updates';

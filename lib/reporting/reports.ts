@@ -17,7 +17,7 @@ import {
   companies
 } from '../supabase/schema';
 import { eq, and, gte, lte, desc, asc, count, sum, avg, sql } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/auth';
+import { AuthenticatedUser } from '../middleware/simple-auth';
 import { analyticsSystem } from '../analytics/analytics';
 
 export interface ReportFilters {

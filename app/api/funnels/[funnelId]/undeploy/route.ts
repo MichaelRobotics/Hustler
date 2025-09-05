@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../../lib/middleware';
+import { withFunnelAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/simple-resource-auth';
+import { type AuthContext } from '../../../../../lib/middleware/simple-auth';
 import { undeployFunnel } from '../../../../../lib/actions/funnel-actions';
 
 /**
@@ -10,9 +11,9 @@ import { undeployFunnel } from '../../../../../lib/actions/funnel-actions';
 /**
  * POST /api/funnels/[funnelId]/undeploy - Undeploy a funnel
  */
-async function undeployFunnelHandler(context: ProtectedRouteContext) {
+async function undeployFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const funnelId = context.request.nextUrl.pathname.split('/')[3]; // Extract funnelId from path
+    const funnelId = request.nextUrl.pathname.split('/')[3]; // Extract funnelId from path
     
     if (!funnelId) {
       return createErrorResponse(
@@ -35,4 +36,4 @@ async function undeployFunnelHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handler with resource protection
-export const POST = withResourceProtection('funnel', 'customer', undeployFunnelHandler);
+export const POST = withFunnelAuth( undeployFunnelHandler);

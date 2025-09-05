@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../../lib/middleware';
+import { withConversationAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/simple-resource-auth';
+import { type AuthContext } from '../../../../../lib/middleware/simple-auth';
 import { getMessages, createMessage } from '../../../../../lib/actions/conversation-actions';
 
 /**
@@ -10,10 +11,10 @@ import { getMessages, createMessage } from '../../../../../lib/actions/conversat
 /**
  * GET /api/conversations/[conversationId]/messages - Get messages for a conversation
  */
-async function getMessagesHandler(context: ProtectedRouteContext) {
+async function getMessagesHandler(request: NextRequest, context: AuthContext) {
   try {
-    const conversationId = context.request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
-    const url = new URL(context.request.url);
+    const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
+    const url = new URL(request.url);
     
     if (!conversationId) {
       return createErrorResponse(
@@ -42,10 +43,10 @@ async function getMessagesHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/conversations/[conversationId]/messages - Create a new message
  */
-async function createMessageHandler(context: ProtectedRouteContext) {
+async function createMessageHandler(request: NextRequest, context: AuthContext) {
   try {
-    const conversationId = context.request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
-    const input = await context.request.json();
+    const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
+    const input = await request.json();
     
     if (!conversationId) {
       return createErrorResponse(
@@ -88,5 +89,5 @@ async function createMessageHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers with resource protection
-export const GET = withResourceProtection('conversation', 'customer', getMessagesHandler);
-export const POST = withResourceProtection('conversation', 'customer', createMessageHandler);
+export const GET = withConversationAuth( getMessagesHandler);
+export const POST = withConversationAuth( createMessageHandler);

@@ -76,12 +76,24 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({
     );
   }
 
-  // Show view selection panel if no view is selected
+  // Show view selection panel only for admins, customers go directly to CustomerView
   if (!selectedView) {
+    // Customers go directly to CustomerView - no choice
+    if (currentAccessLevel === 'customer') {
+      return (
+        <CustomerView
+          userName={currentUser.name}
+          experienceId={experienceId}
+          onMessageSent={handleCustomerMessage}
+        />
+      );
+    }
+    
+    // Admins see view selection panel
     return (
       <ViewSelectionPanel
         userName={currentUser.name}
-        accessLevel={currentAccessLevel}
+        accessLevel={currentAccessLevel as 'admin'}
         onViewSelected={handleViewSelected}
       />
     );

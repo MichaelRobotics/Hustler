@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withRouteProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { getUserCredits } from '../../../../lib/context/user-context';
 
 /**
@@ -10,7 +10,7 @@ import { getUserCredits } from '../../../../lib/context/user-context';
 /**
  * GET /api/user/credits - Get current user credits
  */
-async function getUserCreditsHandler(context: ProtectedRouteContext) {
+async function getUserCreditsHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
     
@@ -37,4 +37,4 @@ async function getUserCreditsHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handler
-export const GET = withRouteProtection(getUserCreditsHandler);
+export const GET = withCustomerAuth(getUserCreditsHandler);

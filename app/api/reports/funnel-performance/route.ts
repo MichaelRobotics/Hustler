@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { reportingSystem } from '../../../../lib/reporting/reports';
 
 /**
@@ -10,9 +10,9 @@ import { reportingSystem } from '../../../../lib/reporting/reports';
 /**
  * GET /api/reports/funnel-performance - Generate funnel performance report
  */
-async function generateFunnelPerformanceReportHandler(context: ProtectedRouteContext) {
+async function generateFunnelPerformanceReportHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -52,4 +52,4 @@ async function generateFunnelPerformanceReportHandler(context: ProtectedRouteCon
 }
 
 // Export the protected route handler
-export const GET = withCustomerProtection(generateFunnelPerformanceReportHandler);
+export const GET = withCustomerAuth(generateFunnelPerformanceReportHandler);

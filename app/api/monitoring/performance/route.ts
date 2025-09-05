@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAdminProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withAdminAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 import { performanceMonitoring } from '../../../../lib/monitoring/performance';
 
 /**
@@ -10,9 +10,8 @@ import { performanceMonitoring } from '../../../../lib/monitoring/performance';
 /**
  * GET /api/monitoring/performance - Get system performance metrics
  */
-async function getPerformanceMetricsHandler(context: ProtectedRouteContext) {
+async function getPerformanceMetricsHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { request } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -54,7 +53,7 @@ async function getPerformanceMetricsHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/monitoring/performance - Record system metrics
  */
-async function recordPerformanceMetricsHandler(context: ProtectedRouteContext) {
+async function recordPerformanceMetricsHandler(request: NextRequest, context: AuthContext) {
   try {
     await performanceMonitoring.recordSystemMetrics();
     
@@ -72,5 +71,5 @@ async function recordPerformanceMetricsHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const GET = withAdminProtection(getPerformanceMetricsHandler);
-export const POST = withAdminProtection(recordPerformanceMetricsHandler);
+export const GET = withAdminAuth(getPerformanceMetricsHandler);
+export const POST = withAdminAuth(recordPerformanceMetricsHandler);

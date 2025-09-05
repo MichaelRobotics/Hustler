@@ -1,44 +1,24 @@
-// Authentication Middleware
+// Simplified Authentication Middleware
 export {
   authenticateRequest,
   withAuth,
   withAdminAuth,
   withCustomerAuth,
+  createSuccessResponse,
+  createErrorResponse,
   type AuthenticatedUser,
   type AuthContext
-} from './auth';
+} from './simple-auth';
 
-// Authorization Middleware
+// Simplified Resource Authorization Middleware
 export {
-  checkExperienceAccess,
-  checkCompanyAccess,
   checkFunnelAccess,
   checkResourceAccess,
   checkConversationAccess,
-  checkCreditsAccess,
-  withResourceAccess,
-  withCreditsAccess,
-  withExperienceAccess,
-  type AuthorizationContext
-} from './authorization';
-
-// Route Protection Middleware
-export {
-  withRouteProtection,
-  withAdminProtection,
-  withCustomerProtection,
-  withCreditsProtection,
-  withExperienceProtection,
-  withResourceProtection,
-  getUserFromRequest,
-  createSuccessResponse,
-  extractWhopToken,
-  extractCompanyId,
-  extractExperienceId,
-  type ProtectedRouteContext,
-  type ErrorResponse,
-  type SuccessResponse
-} from './route-protection';
+  withFunnelAuth,
+  withResourceAuth,
+  withConversationAuth
+} from './simple-resource-auth';
 
 // User Context Management
 export {
@@ -53,7 +33,6 @@ export {
 
 // Error Handling
 export {
-  createErrorResponse,
   createCustomErrorResponse,
   handleUnexpectedError,
   handleWhopApiError,

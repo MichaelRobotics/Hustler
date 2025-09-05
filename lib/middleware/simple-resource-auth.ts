@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../supabase/db';
 import { funnels, resources, conversations } from '../supabase/schema';
 import { eq, and } from 'drizzle-orm';
-import { AuthenticatedUser, withAuth } from './simple-auth';
+import { AuthenticatedUser, withAuth, createSuccessResponse, createErrorResponse } from './simple-auth';
 
 /**
  * Simplified Resource Authorization
@@ -170,3 +170,6 @@ export function withConversationAuth(handler: (request: NextRequest, context: an
     return handler(request, context);
   });
 }
+
+// Export response functions
+export { createSuccessResponse, createErrorResponse };
