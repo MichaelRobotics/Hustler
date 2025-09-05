@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerAuth, withAdminAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
+import { withWhopAuth, type AuthContext } from '../../../lib/middleware/whop-auth';
 import { getFunnels, createFunnel } from '../../../lib/actions/funnel-actions';
+import { getUserContext } from '../../../lib/context/user-context';
 
 /**
  * Funnels API Route
@@ -20,15 +21,42 @@ async function getFunnelsHandler(request: NextRequest, context: AuthContext) {
     const limit = parseInt(url.searchParams.get('limit') || '10');
     const search = url.searchParams.get('search') || undefined;
 
-    // Get funnels using server action
-    const result = await getFunnels(user, page, limit, search);
+    // Use experience ID from URL or fallback to a default
+    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
 
-    return createSuccessResponse(result, 'Funnels retrieved successfully');
+    // Get the full user context from the simplified auth (whopCompanyId is now optional)
+    const userContext = await getUserContext(
+      user.userId,
+      '', // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+      'customer' // default access level
+    );
+
+    if (!userContext) {
+      return NextResponse.json(
+        { error: 'User context not found' },
+        { status: 401 }
+      );
+    }
+
+    // Get funnels using the full user context
+    const funnels = await getFunnels(userContext.user, {
+      page,
+      limit,
+      search
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: funnels,
+      message: 'Funnels retrieved successfully'
+    });
   } catch (error) {
     console.error('Error getting funnels:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
     );
   }
 }
@@ -42,25 +70,52 @@ async function createFunnelHandler(request: NextRequest, context: AuthContext) {
     const input = await request.json();
 
     if (!input.name) {
-      return createErrorResponse(
-        'MISSING_REQUIRED_FIELDS',
-        'Funnel name is required'
+      return NextResponse.json(
+        { error: 'Funnel name is required' },
+        { status: 400 }
       );
     }
 
-    // Create funnel using server action
-    const newFunnel = await createFunnel(user, input);
+    // Use experience ID from URL or fallback to a default
+    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
 
-    return createSuccessResponse(newFunnel, 'Funnel created successfully', 201);
+    // Get the full user context from the simplified auth (whopCompanyId is now optional)
+    const userContext = await getUserContext(
+      user.userId,
+      '', // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+      'customer' // default access level
+    );
+
+    if (!userContext) {
+      return NextResponse.json(
+        { error: 'User context not found' },
+        { status: 401 }
+      );
+    }
+
+    // Create the funnel using the full user context
+    const funnel = await createFunnel(userContext.user, {
+      name: input.name,
+      description: input.description,
+      resources: input.resources || []
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: funnel,
+      message: 'Funnel created successfully'
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating funnel:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
     );
   }
 }
 
 // Export the protected route handlers
-export const GET = withCustomerAuth(getFunnelsHandler); // Both admin and customer can view funnels
-export const POST = withAdminAuth(createFunnelHandler); // Only admin can create funnels
+export const GET = withWhopAuth(getFunnelsHandler);
+export const POST = withWhopAuth(createFunnelHandler);

@@ -16,7 +16,7 @@ import {
   ConflictResolution
 } from '../state/types';
 import { stateManager } from '../state/manager';
-import { AuthenticatedUser } from '../middleware/simple-auth';
+import { AuthenticatedUser } from '../context/user-context';
 
 export interface UseStateManagerOptions {
   enableRealtime?: boolean;

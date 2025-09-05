@@ -1,24 +1,16 @@
-// Simplified Authentication Middleware
+// Simple WHOP Authentication Middleware
 export {
-  authenticateRequest,
-  withAuth,
-  withAdminAuth,
-  withCustomerAuth,
-  createSuccessResponse,
-  createErrorResponse,
-  type AuthenticatedUser,
-  type AuthContext
-} from './simple-auth';
-
-// Simplified Resource Authorization Middleware
-export {
-  checkFunnelAccess,
-  checkResourceAccess,
-  checkConversationAccess,
+  authenticateWhopUser,
+  withWhopAuth,
+  getWhopUserId,
   withFunnelAuth,
   withResourceAuth,
-  withConversationAuth
-} from './simple-resource-auth';
+  withConversationAuth,
+  createSuccessResponse,
+  createErrorResponse,
+  type WhopUser,
+  type AuthContext
+} from './whop-auth';
 
 // User Context Management
 export {

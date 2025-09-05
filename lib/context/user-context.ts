@@ -2,7 +2,25 @@ import { whopSdk } from '../whop-sdk';
 import { db } from '../supabase/db';
 import { experiences, users } from '../supabase/schema';
 import { eq } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/simple-auth';
+
+export interface AuthenticatedUser {
+  id: string;
+  whopUserId: string;
+  experienceId: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  credits: number;
+  accessLevel: 'admin' | 'customer' | 'no_access';
+  experience: {
+    id: string;
+    whopExperienceId: string;
+    whopCompanyId: string;
+    name: string;
+    description?: string;
+    logo?: string;
+  };
+}
 
 /**
  * User Context Management
@@ -25,12 +43,12 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
  */
 export async function getUserContext(
   whopUserId: string,
-  whopCompanyId: string,
+  whopCompanyId: string = '', // Optional - not needed for experience-based isolation
   whopExperienceId: string,
   forceRefresh: boolean = false,
   accessLevel?: 'admin' | 'customer' | 'no_access'
 ): Promise<UserContext | null> {
-  const cacheKey = `${whopUserId}:${whopCompanyId}`;
+  const cacheKey = `${whopUserId}:${whopExperienceId}`; // Use experienceId for cache key instead
   
   // Check cache first (unless force refresh)
   if (!forceRefresh) {
@@ -64,7 +82,7 @@ export async function getUserContext(
  */
 async function createUserContext(
   whopUserId: string,
-  whopCompanyId: string,
+  whopCompanyId: string = '', // Optional - not needed for experience-based isolation
   whopExperienceId: string,
   accessLevel?: 'admin' | 'customer' | 'no_access'
 ): Promise<UserContext | null> {
@@ -82,7 +100,7 @@ async function createUserContext(
       console.log('Experience not found, creating new experience...');
       const [newExperience] = await db.insert(experiences).values({
         whopExperienceId: whopExperienceId,
-        whopCompanyId: whopCompanyId, // App creator's company (metadata only)
+        whopCompanyId: whopCompanyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || '', // App creator's company (metadata only)
         name: 'App Installation',
         description: 'Experience for app installation',
         logo: null
@@ -155,7 +173,7 @@ async function createUserContext(
     }
 
     // Determine access level (use provided level if available, otherwise determine from WHOP)
-    const finalAccessLevel = accessLevel || await determineAccessLevel(whopUserId, whopCompanyId);
+    const finalAccessLevel = accessLevel || await determineAccessLevel(whopUserId, whopExperienceId);
 
     if (!user) {
       console.error('User not found after creation/update');
@@ -229,9 +247,9 @@ async function syncUserData(user: any): Promise<void> {
 /**
  * Determine user access level based on WHOP permissions
  */
-async function determineAccessLevel(whopUserId: string, whopCompanyId: string): Promise<'admin' | 'customer' | 'no_access'> {
+async function determineAccessLevel(whopUserId: string, whopExperienceId: string): Promise<'admin' | 'customer' | 'no_access'> {
   try {
-    console.log('Determining access level for:', { whopUserId, whopCompanyId });
+    console.log('Determining access level for:', { whopUserId, whopExperienceId });
     
     // Handle test user for development
     if (process.env.NODE_ENV === 'development' && whopUserId === 'test-user-id') {
@@ -239,14 +257,11 @@ async function determineAccessLevel(whopUserId: string, whopCompanyId: string): 
       return 'customer';
     }
 
-    // TODO: This will be replaced with experience-based access level determination
-    // For now, we'll use a simplified approach during migration
-
-    // Check WHOP access for user to the company (app creator's company)
-    console.log('Checking WHOP access for user to company...');
-    const result = await whopSdk.access.checkIfUserHasAccessToCompany({
+    // Check WHOP access for user to the experience (experience-based access)
+    console.log('Checking WHOP access for user to experience...');
+    const result = await whopSdk.access.checkIfUserHasAccessToExperience({
       userId: whopUserId,
-      companyId: whopCompanyId
+      experienceId: whopExperienceId
     });
 
     console.log('WHOP access check result:', result);

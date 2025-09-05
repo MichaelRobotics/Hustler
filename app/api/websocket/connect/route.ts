@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/whop-auth';
 import { whopWebSocket } from '../../../../lib/websocket/whop-websocket';
 import { realTimeMessaging } from '../../../../lib/websocket/messaging';
 import { realTimeUpdates } from '../../../../lib/websocket/updates';

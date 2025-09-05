@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceAuth, createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/simple-resource-auth';
-import { type AuthContext } from '../../../../lib/middleware/simple-auth';
+import { withResourceAuth, createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/whop-auth';
+import { type AuthContext } from '../../../../lib/middleware/whop-auth';
 import { getResourceById, updateResource, deleteResource } from '../../../../lib/actions/resource-actions';
 
 /**

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withConversationAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/simple-resource-auth';
-import { type AuthContext } from '../../../../../lib/middleware/simple-auth';
+import { withConversationAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/whop-auth';
+import { type AuthContext } from '../../../../../lib/middleware/whop-auth';
 import { getMessages, createMessage } from '../../../../../lib/actions/conversation-actions';
 
 /**

@@ -17,7 +17,7 @@ import {
 } from './types';
 import { redisCache } from '../cache/redis-cache';
 import { realTimeUpdates } from '../websocket/updates';
-import { AuthenticatedUser } from '../middleware/simple-auth';
+import { AuthenticatedUser } from '../context/user-context';
 
 export interface SyncConfig {
   maxRetries: number;

@@ -19,7 +19,7 @@ import { stateSyncManager } from './sync';
 import { whopWebSocket, WebSocketMessage } from '../websocket/whop-websocket';
 import { realTimeMessaging } from '../websocket/messaging';
 import { realTimeUpdates } from '../websocket/updates';
-import { AuthenticatedUser } from '../middleware/simple-auth';
+import { AuthenticatedUser } from '../context/user-context';
 
 export interface RealtimeConfig {
   reconnectInterval: number;

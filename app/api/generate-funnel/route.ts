@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateFunnelFlow, AIError, ValidationError } from '../../../lib/actions/ai-actions';
-import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
+import { withWhopAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/whop-auth';
 import { updateUserCredits } from '../../../lib/context/user-context';
 
 /**
@@ -15,13 +15,13 @@ async function generateFunnelHandler(request: NextRequest, context: AuthContext)
     const generatedFlow = await generateFunnelFlow(resources || []);
     
     // Deduct 1 credit for the operation
-    const creditDeducted = await updateUserCredits(context.user.whopUserId, 1, 'subtract');
+    const creditDeducted = await updateUserCredits(context.user.userId, 1, 'subtract');
     
     if (!creditDeducted) {
-      console.warn('Failed to deduct credits for user:', context.user.whopUserId);
+      console.warn('Failed to deduct credits for user:', context.user.userId);
     }
     
-    console.log(`User ${context.user.whopUserId} consumed 1 credit. Remaining: ${context.user.credits - 1}`);
+    console.log(`User ${context.user.userId} consumed 1 credit`);
     
     return createSuccessResponse(generatedFlow, 'Funnel generated successfully');
   } catch (error) {
@@ -68,4 +68,4 @@ async function generateFunnelHandler(request: NextRequest, context: AuthContext)
 }
 
 // Export the protected route handler
-export const POST = withCustomerAuth(generateFunnelHandler);
+export const POST = withWhopAuth(generateFunnelHandler);

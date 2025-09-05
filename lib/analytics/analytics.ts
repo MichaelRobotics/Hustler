@@ -17,7 +17,7 @@ import {
   experiences
 } from '../supabase/schema';
 import { eq, and, gte, lte, desc, asc, count, sum, avg, sql } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/simple-auth';
+import { AuthenticatedUser } from '../context/user-context';
 import { realTimeUpdates } from '../websocket/updates';
 
 export interface FunnelPerformanceMetrics {

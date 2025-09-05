@@ -9,7 +9,7 @@ import { whopWebSocket, WebSocketMessage } from './whop-websocket';
 import { db } from '../supabase/db';
 import { conversations, messages, funnelInteractions } from '../supabase/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { AuthenticatedUser } from '../middleware/simple-auth';
+import { AuthenticatedUser } from '../context/user-context';
 
 export interface ChatMessage {
   id: string;

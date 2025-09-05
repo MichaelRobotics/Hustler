@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
-import { useAuthenticatedFetch } from './useWhopAuth';
 
 interface Funnel {
   id: string;
@@ -38,15 +37,14 @@ export function useFunnelManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Get authenticated fetch function
-  const { authenticatedFetch } = useAuthenticatedFetch();
+  // Use regular fetch since authentication is handled server-side
 
   // Fetch funnels from API
   const fetchFunnels = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await authenticatedFetch('/api/funnels');
+      const response = await fetch('/api/funnels');
       
       if (!response.ok) {
         throw new Error(`Failed to fetch funnels: ${response.statusText}`);
@@ -72,7 +70,7 @@ export function useFunnelManagement() {
     if (newFunnelName.trim()) {
       try {
         setError(null);
-        const response = await authenticatedFetch('/api/funnels', {
+        const response = await fetch('/api/funnels', {
           method: 'POST',
           body: JSON.stringify({ name: newFunnelName.trim() })
         });
@@ -328,7 +326,7 @@ export function useFunnelManagement() {
       }));
 
       // Call the AI generation API
-      const response = await authenticatedFetch('/api/generate-funnel', {
+      const response = await fetch('/api/generate-funnel', {
         method: 'POST',
         body: JSON.stringify({ resources: resourcesForAI }),
       });

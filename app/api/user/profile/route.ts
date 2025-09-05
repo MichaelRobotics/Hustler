@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
+import { withWhopAuth, type AuthContext } from '../../../../lib/middleware/whop-auth';
 
 /**
  * User Profile API Route
@@ -13,25 +13,23 @@ async function getUserProfileHandler(request: NextRequest, context: AuthContext)
   try {
     const { user } = context;
     
-    // Return user profile with company information
+    // Return simple user profile
     const profile = {
-      id: user.id,
-      whopUserId: user.whopUserId,
-      email: user.email,
-      name: user.name,
-      avatar: user.avatar,
-      credits: user.credits,
-      accessLevel: user.accessLevel,
-      experience: user.experience,
-      createdAt: new Date().toISOString() // You might want to add this to the schema
+      userId: user.userId,
+      experienceId: user.experienceId,
+      authenticated: true
     };
 
-    return createSuccessResponse(profile, 'User profile retrieved successfully');
+    return NextResponse.json({
+      success: true,
+      data: profile,
+      message: 'User profile retrieved successfully'
+    });
   } catch (error) {
     console.error('Error getting user profile:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
     );
   }
 }
@@ -42,33 +40,30 @@ async function getUserProfileHandler(request: NextRequest, context: AuthContext)
 async function updateUserProfileHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
-    const { name, avatar } = await request.json();
+    const input = await request.json();
 
-    // Note: In a real implementation, you might want to update the database
-    // For now, we'll just return the current user data
-    // The actual profile updates should be handled through WHOP's user management
-    
+    // Simple profile update response
     const updatedProfile = {
-      id: user.id,
-      whopUserId: user.whopUserId,
-      email: user.email,
-      name: name || user.name,
-      avatar: avatar || user.avatar,
-      credits: user.credits,
-      accessLevel: user.accessLevel,
-      experience: user.experience
+      userId: user.userId,
+      experienceId: user.experienceId,
+      authenticated: true,
+      updated: true
     };
 
-    return createSuccessResponse(updatedProfile, 'User profile updated successfully');
+    return NextResponse.json({
+      success: true,
+      data: updatedProfile,
+      message: 'User profile updated successfully'
+    });
   } catch (error) {
     console.error('Error updating user profile:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
     );
   }
 }
 
 // Export the protected route handlers
-export const GET = withCustomerAuth(getUserProfileHandler);
-export const PUT = withCustomerAuth(updateUserProfileHandler);
+export const GET = withWhopAuth(getUserProfileHandler);
+export const PUT = withWhopAuth(updateUserProfileHandler);

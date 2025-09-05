@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withFunnelAuth, createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/simple-resource-auth';
-import { type AuthContext } from '../../../../lib/middleware/simple-auth';
-import { getFunnelById, updateFunnel, deleteFunnel } from '../../../../lib/actions/funnel-actions';
+import { withWhopAuth, type AuthContext } from '../../../../lib/middleware/whop-auth';
 
 /**
  * Individual Funnel API Route
