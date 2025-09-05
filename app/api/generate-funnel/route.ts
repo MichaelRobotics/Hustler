@@ -1,66 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateFunnelFlow, AIError, ValidationError } from '../../../lib/actions/ai-actions';
+import { withCreditsProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../lib/middleware';
+import { updateUserCredits } from '../../../lib/context/user-context';
 
-export async function POST(request: NextRequest) {
+/**
+ * Generate Funnel API Route
+ * Protected route that requires authentication and credits
+ */
+async function generateFunnelHandler(context: ProtectedRouteContext) {
   try {
-    const { resources } = await request.json();
+    const { resources } = await context.request.json();
     
     // Generate the funnel flow using AI
     const generatedFlow = await generateFunnelFlow(resources || []);
     
-    return NextResponse.json({ success: true, data: generatedFlow });
+    // Deduct 1 credit for the operation
+    const creditDeducted = await updateUserCredits(context.user.whopUserId, 1, 'subtract');
+    
+    if (!creditDeducted) {
+      console.warn('Failed to deduct credits for user:', context.user.whopUserId);
+    }
+    
+    console.log(`User ${context.user.whopUserId} consumed 1 credit. Remaining: ${context.user.credits - 1}`);
+    
+    return createSuccessResponse(generatedFlow, 'Funnel generated successfully');
   } catch (error) {
     console.error('API Error:', error);
     
     if (error instanceof ValidationError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Configuration Error', 
-          message: error.message 
-        },
-        { status: 400 }
+      return createErrorResponse(
+        'INVALID_INPUT',
+        error.message
       );
     }
     
     if (error instanceof AIError) {
-      let statusCode = 500;
+      let errorType: keyof typeof import('../../../lib/middleware/error-handling').ERROR_TYPES = 'INTERNAL_ERROR';
       switch (error.type) {
         case 'AUTHENTICATION':
-          statusCode = 401;
+          errorType = 'INVALID_TOKEN';
           break;
         case 'RATE_LIMIT':
-          statusCode = 429;
+          errorType = 'INTERNAL_ERROR';
           break;
         case 'NETWORK':
-          statusCode = 503;
+          errorType = 'INTERNAL_ERROR';
           break;
         case 'CONTENT':
-          statusCode = 422;
+          errorType = 'INVALID_INPUT';
           break;
         default:
-          statusCode = 500;
+          errorType = 'INTERNAL_ERROR';
       }
       
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'AI Error', 
-          message: error.message,
-          type: error.type 
-        },
-        { status: statusCode }
+      return createErrorResponse(
+        errorType,
+        error.message
       );
     }
     
     // Generic error
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Unexpected Error', 
-        message: (error as Error).message 
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      (error as Error).message
     );
   }
 }
+
+// Export the protected route handler
+export const POST = withCreditsProtection(1, generateFunnelHandler);

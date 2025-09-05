@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
-import { generateMockFunnels } from '@/lib/utils/dataSimulation';
+import { useAuthenticatedFetch } from './useWhopAuth';
 
 interface Funnel {
   id: string;
@@ -28,32 +28,72 @@ interface AIResource {
 }
 
 export function useFunnelManagement() {
-  const [funnels, setFunnels] = useState<Funnel[]>(generateMockFunnels());
+  const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [selectedFunnel, setSelectedFunnel] = useState<Funnel | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [newFunnelName, setNewFunnelName] = useState('');
   const [funnelToDelete, setFunnelToDelete] = useState<Funnel | null>(null);
   const [editingFunnelId, setEditingFunnelId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleAddFunnel = () => {
-    if (newFunnelName.trim()) {
-      const newFunnel: Funnel = {
-        id: Date.now().toString(),
-        name: newFunnelName.trim(),
-        isDeployed: false,
-        wasEverDeployed: false,
-        sends: 0,
-        generationStatus: 'idle' as const,
-        resources: [],
-        flow: null
-      };
-      setFunnels([...funnels, newFunnel]);
-      setNewFunnelName('');
-      setIsAddDialogOpen(false);
+  // Fetch funnels from API
+  const fetchFunnels = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch('/api/funnels');
       
-      setSelectedFunnel(newFunnel);
-      return newFunnel; // Return for navigation
+      if (!response.ok) {
+        throw new Error(`Failed to fetch funnels: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setFunnels(data.data.funnels || []);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch funnels';
+      setError(errorMessage);
+      console.error('Error fetching funnels:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load funnels on component mount
+  useEffect(() => {
+    fetchFunnels();
+  }, []);
+
+  const handleAddFunnel = async () => {
+    if (newFunnelName.trim()) {
+      try {
+        setError(null);
+        const response = await fetch('/api/funnels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newFunnelName.trim() })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create funnel');
+        }
+
+        const data = await response.json();
+        const newFunnel = data.data;
+        
+        setFunnels([...funnels, newFunnel]);
+        setNewFunnelName('');
+        setIsAddDialogOpen(false);
+        
+        setSelectedFunnel(newFunnel);
+        return newFunnel; // Return for navigation
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to create funnel';
+        setError(errorMessage);
+        console.error('Error creating funnel:', err);
+      }
     }
   };
 
@@ -67,11 +107,27 @@ export function useFunnelManagement() {
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (funnelToDelete) {
-      setFunnels(funnels.filter(f => f.id !== funnelToDelete.id));
-      setFunnelToDelete(null);
-      setIsDeleteDialogOpen(false);
+      try {
+        setError(null);
+        const response = await fetch(`/api/funnels/${funnelToDelete.id}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete funnel');
+        }
+
+        setFunnels(funnels.filter(f => f.id !== funnelToDelete.id));
+        setFunnelToDelete(null);
+        setIsDeleteDialogOpen(false);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to delete funnel';
+        setError(errorMessage);
+        console.error('Error deleting funnel:', err);
+      }
     }
   };
 
@@ -110,11 +166,32 @@ export function useFunnelManagement() {
     setFunnels([...funnels, duplicatedFunnel]);
   };
 
-  const handleSaveFunnelName = (funnelId: string, newName: string) => {
-    setFunnels(funnels.map(f => 
-      f.id === funnelId ? { ...f, name: newName } : f
-    ));
-    setEditingFunnelId(null);
+  const handleSaveFunnelName = async (funnelId: string, newName: string) => {
+    try {
+      setError(null);
+      const response = await fetch(`/api/funnels/${funnelId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update funnel');
+      }
+
+      const data = await response.json();
+      const updatedFunnel = data.data;
+      
+      setFunnels(funnels.map(f => 
+        f.id === funnelId ? updatedFunnel : f
+      ));
+      setEditingFunnelId(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update funnel';
+      setError(errorMessage);
+      console.error('Error updating funnel:', err);
+    }
   };
 
   const onFunnelClick = (funnel: Funnel) => {
@@ -329,6 +406,8 @@ export function useFunnelManagement() {
     newFunnelName,
     funnelToDelete,
     editingFunnelId,
+    isLoading,
+    error,
     
     // Setters
     setFunnels,
@@ -355,6 +434,7 @@ export function useFunnelManagement() {
     updateFunnelForGeneration,
     handleGlobalGeneration,
     updateFunnel,
+    fetchFunnels, // Add fetch function for manual refresh
   };
 }
 

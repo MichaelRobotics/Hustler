@@ -45,8 +45,8 @@ export interface LiveChatConversation {
 }
 
 export interface LiveChatFilters {
-  status?: 'open' | 'closed';
-  sortBy?: 'newest' | 'oldest';
+  status?: 'all' | 'open' | 'closed';
+  sortBy?: 'newest' | 'oldest' | 'most_messages' | 'least_messages';
   searchQuery?: string;
 }
 
