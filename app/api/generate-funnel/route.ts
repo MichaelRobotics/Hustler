@@ -12,8 +12,18 @@ async function generateFunnelHandler(request: NextRequest, context: AuthContext)
   try {
     const { resources } = await request.json();
     
+    // Convert AIResource[] to Resource[] format
+    const convertedResources = (resources || []).map((resource: any) => ({
+      id: resource.id,
+      type: resource.type,
+      name: resource.name,
+      link: resource.link,
+      code: resource.code || '',
+      category: resource.price || 'FREE_VALUE' // Map price to category
+    }));
+    
     // Generate the funnel flow using AI
-    const generatedFlow = await generateFunnelFlow(resources || []);
+    const generatedFlow = await generateFunnelFlow(convertedResources);
     
     // Deduct 1 credit for the operation
     const creditDeducted = await updateUserCredits(context.user.userId, 1, 'subtract');
@@ -69,4 +79,4 @@ async function generateFunnelHandler(request: NextRequest, context: AuthContext)
 }
 
 // Export the protected route handler
-// export const POST = withWhopAuth(generateFunnelHandler);
+export const POST = withWhopAuth(generateFunnelHandler);
