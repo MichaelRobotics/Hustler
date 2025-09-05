@@ -15,7 +15,7 @@ interface LiveChatInputProps {
   placeholder?: string;
 }
 
-const LiveChatInput: React.FC<LiveChatInputProps> = ({
+const LiveChatInput: React.FC<LiveChatInputProps> = React.memo(({
   value,
   onChange,
   onSend,
@@ -45,8 +45,11 @@ const LiveChatInput: React.FC<LiveChatInputProps> = ({
             }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+              // Throttle height calculation for better mobile performance
+              requestAnimationFrame(() => {
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+              });
             }}
           />
         </div>
@@ -66,6 +69,8 @@ const LiveChatInput: React.FC<LiveChatInputProps> = ({
       </div>
     </div>
   );
-};
+});
+
+LiveChatInput.displayName = 'LiveChatInput';
 
 export default LiveChatInput;

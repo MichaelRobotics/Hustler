@@ -22,6 +22,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   onGoToPreview,
   onGlobalGeneration,
   isGenerating,
+  isAnyFunnelGenerating,
   onGoToFunnelProducts,
   context
 }) => {
@@ -110,8 +111,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
         </div>
       </div>
 
-      {/* Unified Navigation - Only show in funnel context, with preview functionality, and hide when generating */}
-      {context === 'funnel' && !isGenerating && (
+      {/* Unified Navigation - Only show in funnel context, with preview functionality, and hide when generating or when no resources and no funnel generated */}
+      {context === 'funnel' && !isGenerating && funnel && ((funnel.resources?.length || 0) > 0 || hasValidFlow(funnel)) && (
         <UnifiedNavigation
           onPreview={() => {
             if (funnel && onGoToPreview) {
@@ -131,6 +132,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
           }}
           isGenerated={funnel ? hasValidFlow(funnel) : false}
           isGenerating={isGenerating}
+          isAnyFunnelGenerating={isAnyFunnelGenerating}
           isDeployed={funnel?.isDeployed}
           showOnPage="resources"
         />

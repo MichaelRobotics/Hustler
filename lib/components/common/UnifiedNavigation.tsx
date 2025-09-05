@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Eye, Library, Zap, Plus, Edit3 } from 'lucide-react';
+import { useCredits } from '../../hooks/useCredits';
+import { CreditPackModal } from '../payments/CreditPackModal';
 
 interface UnifiedNavigationProps {
   onPreview?: () => void;
@@ -10,6 +12,7 @@ interface UnifiedNavigationProps {
   onEdit?: () => void; // New: Go to FunnelBuilder
   isGenerated?: boolean;
   isGenerating?: boolean;
+  isAnyFunnelGenerating?: () => boolean; // New: Check if any funnel is generating
   isDeployed?: boolean; // New: Check if funnel is deployed/live
   className?: string;
   showOnPage?: 'resources' | 'aibuilder' | 'preview' | 'all' | 'analytics';
@@ -22,14 +25,48 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
   onEdit,
   isGenerated = false,
   isGenerating = false,
+  isAnyFunnelGenerating,
   isDeployed = false,
   className = '',
   showOnPage = 'all'
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { canGenerate, consumeCredit } = useCredits();
+  const [showCreditModal, setShowCreditModal] = useState(false);
 
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
+  };
+
+  const handleGeneration = async () => {
+    // Check if user can generate (has credits)
+    if (!canGenerate) {
+      setShowCreditModal(true);
+      return;
+    }
+
+    // Check if any funnel is already generating (prefer isAnyFunnelGenerating if available)
+    const anyGenerating = isAnyFunnelGenerating ? isAnyFunnelGenerating() : isGenerating;
+    if (anyGenerating) {
+      console.log('Another funnel is already generating');
+      return;
+    }
+
+    try {
+      // Call the original generation handler first
+      await onGeneration?.();
+      
+      // Only consume credit if generation was successful
+      await consumeCredit();
+    } catch (error) {
+      console.error('Error during generation:', error);
+      // Don't consume credit if generation failed
+      // Don't show credit modal for generation failures
+    }
+  };
+
+  const handlePurchaseSuccess = () => {
+    setShowCreditModal(false);
   };
 
   // Only show on specified pages (hide on analytics)
@@ -82,7 +119,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
         {/* Generation Button - Hide when funnel is live, generating, or already generated */}
         {isExpanded && !isDeployed && !isGenerated && (
           <button
-            onClick={onGeneration}
+            onClick={handleGeneration}
             disabled={isGenerating}
             className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-violet-500 text-white"
             aria-label="Generate funnel"
@@ -107,6 +144,13 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
           />
         </button>
       </div>
+
+      {/* Credit Pack Modal */}
+      <CreditPackModal
+        isOpen={showCreditModal}
+        onClose={() => setShowCreditModal(false)}
+        onPurchaseSuccess={handlePurchaseSuccess}
+      />
     </div>
   );
 };

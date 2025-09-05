@@ -25,13 +25,14 @@
  * - Error handling structure is in place
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, Text, Heading, Button } from 'frosted-ui';
 import { ArrowLeft, MessageCircle, Search } from 'lucide-react';
 import { ThemeToggle } from '../common/ThemeToggle';
 import ConversationList from './ConversationList';
 import LiveChatView from './LiveChatView';
 import LiveChatHeader from './LiveChatHeader';
+import PerformanceProfiler from '../common/PerformanceProfiler';
 import { LiveChatPageProps, LiveChatConversation, LiveChatFilters } from '../../types/liveChat';
 
 // Mock data for development - replace with real data fetching
@@ -120,7 +121,7 @@ const simulateAutoClose = (conversations: LiveChatConversation[]): LiveChatConve
   });
 };
 
-const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) => {
+const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTypingChange }) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<LiveChatConversation[]>(mockConversations);
   const [filters, setFilters] = useState<LiveChatFilters>({
@@ -128,6 +129,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
     sortBy: 'newest',
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   
   // Backend-ready state (currently unused with mock data)
   const [isLoading, setIsLoading] = useState(false);
@@ -143,22 +145,24 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
     const interval = setInterval(() => {
       setConversations(prevConversations => {
         const updatedConversations = simulateAutoClose(prevConversations);
-        // Only update if there were changes
-        if (JSON.stringify(updatedConversations) !== JSON.stringify(prevConversations)) {
-          return updatedConversations;
-        }
-        return prevConversations;
+        // Only update if there were changes - use shallow comparison instead of JSON.stringify
+        const hasChanges = updatedConversations.some((conv, index) => 
+          conv.status !== prevConversations[index]?.status ||
+          conv.updatedAt.getTime() !== prevConversations[index]?.updatedAt.getTime()
+        );
+        
+        return hasChanges ? updatedConversations : prevConversations;
       });
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
   }, []);
 
-  const handleSelectConversation = (conversationId: string) => {
+  const handleSelectConversation = useCallback((conversationId: string) => {
     setSelectedConversationId(conversationId);
-  };
+  }, []);
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string) => {
     if (!selectedConversationId) return;
     
     // TODO: Replace with actual API call when backend is ready
@@ -188,7 +192,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
           : conv
       )
     );
-  };
+  }, [selectedConversationId]);
 
   const handleUpdateConversation = async (updatedConversation: LiveChatConversation) => {
     // TODO: Replace with actual API call when backend is ready
@@ -218,6 +222,19 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
     setSearchQuery('');
   };
 
+  // Handle search state change
+  const handleSearchStateChange = (isOpen: boolean) => {
+    setIsSearchOpen(isOpen);
+    // Notify parent component about the combined state (input focus OR search open)
+    onTypingChange?.(isOpen);
+  };
+
+  // Handle input focus/blur from chat view
+  const handleInputFocusChange = (isFocused: boolean) => {
+    // Notify parent component about the combined state (input focus OR search open)
+    onTypingChange?.(isFocused || isSearchOpen);
+  };
+
   return (
     <div className={`relative ${selectedConversation ? 'lg:p-4 lg:pb-8' : 'p-4 sm:p-6 lg:p-8'} pb-20 lg:pb-8`}>
       <div className="max-w-7xl mx-auto">
@@ -229,6 +246,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
             searchQuery={searchQuery}
             onFiltersChange={setFilters}
             onSearchChange={setSearchQuery}
+            onSearchStateChange={handleSearchStateChange}
           />
         </div>
 
@@ -243,7 +261,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
                   onSendMessage={handleSendMessage}
                   onUpdateConversation={handleUpdateConversation}
                   onBack={() => setSelectedConversationId(null)}
-                  onTypingChange={onTypingChange}
+                  onTypingChange={handleInputFocusChange}
                 />
               </div>
             ) : (
@@ -264,27 +282,33 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
           <div className="hidden lg:grid lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px] max-h-[calc(100vh-300px)]">
             {/* Conversation List */}
             <div className="lg:col-span-1 overflow-hidden">
-              <ConversationList
-                conversations={conversations}
-                selectedConversationId={selectedConversationId || undefined}
-                onSelectConversation={handleSelectConversation}
-                filters={{ ...filters, searchQuery }}
-                onFiltersChange={setFilters}
-                onSearchReset={handleSearchReset}
-              />
+              <PerformanceProfiler id="ConversationList">
+                <ConversationList
+                  conversations={conversations}
+                  selectedConversationId={selectedConversationId || undefined}
+                  onSelectConversation={handleSelectConversation}
+                  filters={{ ...filters, searchQuery }}
+                  onFiltersChange={setFilters}
+                  onSearchReset={handleSearchReset}
+                  isLoading={isLoading}
+                />
+              </PerformanceProfiler>
             </div>
 
             {/* Chat View */}
             <div className="lg:col-span-2 overflow-hidden h-full">
               {selectedConversation ? (
                 <div className="h-full animate-in fade-in duration-0">
-                  <LiveChatView
-                    conversation={selectedConversation}
-                    onSendMessage={handleSendMessage}
-                    onUpdateConversation={handleUpdateConversation}
-                    onBack={() => setSelectedConversationId(null)}
-                    onTypingChange={onTypingChange}
-                  />
+                  <PerformanceProfiler id="LiveChatView">
+                    <LiveChatView
+                      conversation={selectedConversation}
+                      onSendMessage={handleSendMessage}
+                      onUpdateConversation={handleUpdateConversation}
+                      onBack={() => setSelectedConversationId(null)}
+                      onTypingChange={handleInputFocusChange}
+                      isLoading={isLoading}
+                    />
+                  </PerformanceProfiler>
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center">
@@ -304,6 +328,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = ({ onBack, onTypingChange }) =
       </div>
     </div>
   );
-};
+});
+
+LiveChatPage.displayName = 'LiveChatPage';
 
 export default LiveChatPage;

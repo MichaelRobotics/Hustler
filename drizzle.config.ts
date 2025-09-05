@@ -10,4 +10,9 @@ export default defineConfig({
   dbCredentials: {
     url: process.env.POSTGRES_URL_NON_POOLING!,
   },
+  verbose: true,
+  strict: true,
+  migrations: {
+    prefix: "timestamp",
+  },
 });

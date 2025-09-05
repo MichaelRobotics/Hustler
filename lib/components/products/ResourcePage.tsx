@@ -21,6 +21,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
   onOpenResourceLibrary,
   onGlobalGeneration,
   isGenerating,
+  isAnyFunnelGenerating,
   onGoToFunnelProducts
 }) => {
   const {
@@ -57,6 +58,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
             funnel={funnel}
             currentResources={currentResources}
             isGenerating={isGenerating}
+            isAnyFunnelGenerating={isAnyFunnelGenerating}
             onGlobalGeneration={onGlobalGeneration}
           />
 
@@ -109,6 +111,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
           onGeneration={() => onGlobalGeneration(funnel.id)}
           isGenerated={hasValidFlow(funnel)}
           isGenerating={isGenerating(funnel.id)}
+          isAnyFunnelGenerating={isAnyFunnelGenerating}
           isDeployed={funnel.isDeployed}
           showOnPage="resources"
         />

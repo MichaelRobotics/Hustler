@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Button, Text } from 'frosted-ui';
 import { Send } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
@@ -12,7 +12,7 @@ interface UserChatExactProps {
   onMessageSent?: (message: string, conversationId?: string) => void;
 }
 
-export const UserChatExact: React.FC<UserChatExactProps> = ({ 
+export const UserChatExact: React.FC<UserChatExactProps> = React.memo(({ 
   onBack, 
   onMessageSent 
 }) => {
@@ -38,7 +38,7 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
     }
   }, [history]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim()) {
       handleCustomInput(message.trim());
@@ -47,21 +47,43 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
       }
       setMessage('');
     }
-  };
+  }, [message, handleCustomInput, onMessageSent]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
-  };
+  }, [handleSubmit]);
 
-  const handleUserOptionClick = (option: any, index: number) => {
+  const handleUserOptionClick = useCallback((option: any, index: number) => {
     handleOptionClick(option, index);
     if (onMessageSent) {
       onMessageSent(`${index + 1}. ${option.text}`);
     }
-  };
+  }, [handleOptionClick, onMessageSent]);
+
+  // Memoize options list to prevent unnecessary re-renders
+  const memoizedOptions = useMemo(() => 
+    options.map((opt, i) => (
+      <button
+        key={`option-${i}-${opt.text.length}`}
+        onClick={() => handleUserOptionClick(opt, i)}
+        className="w-full p-3 border rounded-xl transition-all duration-200 text-left group bg-violet-500 hover:bg-violet-600 border-violet-400 hover:border-violet-500"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 bg-white/20 border-white/30">
+            <Text size="1" weight="bold" className="text-white">
+              {i + 1}
+            </Text>
+          </div>
+          <Text size="2" className="text-white group-hover:text-white transition-colors">
+            {opt.text}
+          </Text>
+        </div>
+      </button>
+    )), [options, handleUserOptionClick]
+  );
 
   return (
     <div className="h-screen w-full flex flex-col">
@@ -73,36 +95,38 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
         <div className="fui-CardInner h-full flex flex-col">
           {/* Messages Area - Scrollable */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 max-h-full">
-                    {history.map((msg, index) => (
-                      <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className="flex items-end gap-2">
-                          {/* Avatar */}
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            msg.type === 'user' ? 'bg-gray-500' : 'bg-violet-500'
-                          }`}>
-                            <Text size="1" weight="bold" className="text-white">
-                              {msg.type === 'user' ? 'You' : 'AI'}
-                            </Text>
-                          </div>
-                          
-                          {/* Message Bubble */}
-                          <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl shadow-sm ${
-                            msg.type === 'user' 
-                              ? 'bg-violet-500 text-white' 
-                              : 'bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30'
-                          }`}>
-                            <Text 
-                              size="2" 
-                              className={`whitespace-pre-wrap ${
-                                msg.type === 'user' ? 'text-white' : 'text-foreground'
-                              }`}
-                            >
-                              {msg.text}
-                            </Text>
+                    {useMemo(() => 
+                      history.map((msg, index) => (
+                        <div key={`${msg.type}-${index}-${msg.text.length}`} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className="flex items-end gap-2">
+                            {/* Avatar */}
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              msg.type === 'user' ? 'bg-gray-500' : 'bg-violet-500'
+                            }`}>
+                              <Text size="1" weight="bold" className="text-white">
+                                {msg.type === 'user' ? 'You' : 'AI'}
+                              </Text>
+                            </div>
+                            
+                            {/* Message Bubble */}
+                            <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl shadow-sm ${
+                              msg.type === 'user' 
+                                ? 'bg-violet-500 text-white' 
+                                : 'bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30'
+                            }`}>
+                              <Text 
+                                size="2" 
+                                className={`whitespace-pre-wrap ${
+                                  msg.type === 'user' ? 'text-white' : 'text-foreground'
+                                }`}
+                              >
+                                {msg.text}
+                              </Text>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )), [history]
+                    )}
                     
                     {/* Show clickable options below the last bot message - on user side */}
                     {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
@@ -111,24 +135,7 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
                           {/* Options Container */}
                           <div className="max-w-xs lg:max-w-md">
                             <div className="space-y-2">
-                              {options.map((opt, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => handleUserOptionClick(opt, i)}
-                                  className="w-full p-3 border rounded-xl transition-all duration-200 text-left group bg-violet-500 hover:bg-violet-600 border-violet-400 hover:border-violet-500"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 bg-white/20 border-white/30">
-                                      <Text size="1" weight="bold" className="text-white">
-                                        {i + 1}
-                                      </Text>
-                                    </div>
-                                    <Text size="2" className="text-white group-hover:text-white transition-colors">
-                                      {opt.text}
-                                    </Text>
-                                  </div>
-                                </button>
-                              ))}
+                              {memoizedOptions}
                             </div>
                           </div>
                           
@@ -208,4 +215,6 @@ export const UserChatExact: React.FC<UserChatExactProps> = ({
       </div>
     </div>
   );
-};
+});
+
+UserChatExact.displayName = 'UserChatExact';

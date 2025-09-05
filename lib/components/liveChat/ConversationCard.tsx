@@ -5,7 +5,7 @@ import { Text } from 'frosted-ui';
 import { Circle } from 'lucide-react';
 import { ConversationCardProps } from '../../types/liveChat';
 
-const ConversationCard: React.FC<ConversationCardProps> = ({
+const ConversationCard: React.FC<ConversationCardProps> = React.memo(({
   conversation,
   isSelected,
   onClick
@@ -89,6 +89,8 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ConversationCard.displayName = 'ConversationCard';
 
 export default ConversationCard;

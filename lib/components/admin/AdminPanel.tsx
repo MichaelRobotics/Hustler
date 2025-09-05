@@ -224,6 +224,7 @@ export default function AdminPanel() {
         onOpenResourceLibrary={handleOpenResourceLibraryWithNavigation}
         onGlobalGeneration={handleGlobalGeneration}
         isGenerating={isFunnelGenerating}
+        isAnyFunnelGenerating={isAnyFunnelGenerating}
         onEdit={() => {}}
         onGoToFunnelProducts={() => {}}
       />
@@ -253,6 +254,7 @@ export default function AdminPanel() {
               onEdit={undefined}
               onGlobalGeneration={() => handleGlobalGeneration('')}
               isGenerating={false}
+              isAnyFunnelGenerating={isAnyFunnelGenerating}
               onGoToFunnelProducts={() => setCurrentView('resources')}
               context={libraryContext}
             />
@@ -285,6 +287,7 @@ export default function AdminPanel() {
           }}
           onGlobalGeneration={() => handleGlobalGeneration(selectedFunnel?.id || '')}
           isGenerating={selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false}
+          isAnyFunnelGenerating={isAnyFunnelGenerating}
           onGoToFunnelProducts={() => setCurrentView('resources')}
           context={libraryContext}
         />

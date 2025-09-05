@@ -45,6 +45,7 @@ export interface ResourceLibraryProps {
   onGoToPreview?: (funnel: Funnel) => void;
   onGlobalGeneration: () => Promise<void>;
   isGenerating: boolean;
+  isAnyFunnelGenerating?: () => boolean;
   onGoToFunnelProducts: () => void;
   context: 'global' | 'funnel';
 }
@@ -59,6 +60,7 @@ export interface ResourcePageProps {
   onOpenResourceLibrary: () => void;
   onGlobalGeneration: (funnelId: string) => Promise<void>;
   isGenerating: (funnelId: string) => boolean;
+  isAnyFunnelGenerating: () => boolean;
   onGoToFunnelProducts: () => void;
 }
 

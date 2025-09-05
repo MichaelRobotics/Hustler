@@ -220,9 +220,11 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
       }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
   }, [autoRefresh, refreshInterval, fetchConversations]);

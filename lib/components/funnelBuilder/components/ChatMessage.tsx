@@ -6,7 +6,7 @@ interface ChatMessageProps {
   message: ChatMessageType;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ message }) => {
   if (message.type === 'bot') {
     return (
       <div className="flex items-end gap-2">
@@ -38,4 +38,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
       </div>
     </div>
   );
-};
+});
+
+ChatMessage.displayName = 'ChatMessage';

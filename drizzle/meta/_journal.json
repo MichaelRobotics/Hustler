@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1757077572694,
+      "tag": "20250905130612_happy_zarda",
+      "breakpoints": true
+    }
+  ]
+}

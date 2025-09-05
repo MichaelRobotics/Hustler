@@ -5,7 +5,7 @@ interface ChatRestartButtonProps {
   onRestart: () => void;
 }
 
-export const ChatRestartButton: React.FC<ChatRestartButtonProps> = ({ onRestart }) => {
+export const ChatRestartButton: React.FC<ChatRestartButtonProps> = React.memo(({ onRestart }) => {
   return (
     <div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
       <div className="flex justify-center py-4">
@@ -20,4 +20,6 @@ export const ChatRestartButton: React.FC<ChatRestartButtonProps> = ({ onRestart 
       </div>
     </div>
   );
-};
+});
+
+ChatRestartButton.displayName = 'ChatRestartButton';

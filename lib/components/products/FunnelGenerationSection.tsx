@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Zap } from 'lucide-react';
 import { Heading, Text } from 'frosted-ui';
 import { Funnel, Resource } from '../../types/resource';
+import { useCredits } from '../../hooks/useCredits';
+import { CreditPackModal } from '../payments/CreditPackModal';
 
 interface FunnelGenerationSectionProps {
   funnel: Funnel;
   currentResources: Resource[];
   isGenerating: (funnelId: string) => boolean;
+  isAnyFunnelGenerating: () => boolean;
   onGlobalGeneration: (funnelId: string) => Promise<void>;
 }
 
@@ -14,8 +17,41 @@ export const FunnelGenerationSection: React.FC<FunnelGenerationSectionProps> = (
   funnel,
   currentResources,
   isGenerating,
+  isAnyFunnelGenerating,
   onGlobalGeneration
 }) => {
+  const { canGenerate, consumeCredit } = useCredits();
+  const [showCreditModal, setShowCreditModal] = useState(false);
+
+  const handleGeneration = async () => {
+    // Check if user can generate (has credits)
+    if (!canGenerate) {
+      setShowCreditModal(true);
+      return;
+    }
+
+    // Check if any funnel is already generating (not just this one)
+    if (isAnyFunnelGenerating()) {
+      console.log('Another funnel is already generating');
+      return;
+    }
+
+    try {
+      // Call the original generation handler first
+      await onGlobalGeneration(funnel.id);
+      
+      // Only consume credit if generation was successful
+      await consumeCredit();
+    } catch (error) {
+      console.error('Error during generation:', error);
+      // Don't consume credit if generation failed
+      // Don't show credit modal for generation failures
+    }
+  };
+
+  const handlePurchaseSuccess = () => {
+    setShowCreditModal(false);
+  };
   if (funnel.flow || currentResources.length === 0) {
     return null;
   }
@@ -37,7 +73,7 @@ export const FunnelGenerationSection: React.FC<FunnelGenerationSectionProps> = (
               </div>
             ) : (
               <button
-                onClick={() => onGlobalGeneration(funnel.id)}
+                onClick={handleGeneration}
                 disabled={funnel.generationStatus === 'generating'}
                 className={`group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-500 ease-out cursor-pointer ${
                   funnel.generationStatus === 'generating' ? 'opacity-50 cursor-not-allowed' : ''
@@ -74,6 +110,13 @@ export const FunnelGenerationSection: React.FC<FunnelGenerationSectionProps> = (
           </div>
         </div>
       </div>
+
+      {/* Credit Pack Modal */}
+      <CreditPackModal
+        isOpen={showCreditModal}
+        onClose={() => setShowCreditModal(false)}
+        onPurchaseSuccess={handlePurchaseSuccess}
+      />
     </div>
   );
 };

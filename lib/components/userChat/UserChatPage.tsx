@@ -30,7 +30,7 @@ interface UserChatPageProps {
   className?: string;
 }
 
-const UserChatPage: React.FC<UserChatPageProps> = ({ 
+const UserChatPage: React.FC<UserChatPageProps> = React.memo(({ 
   funnelFlow, 
   conversationId,
   onMessageSent,
@@ -38,11 +38,11 @@ const UserChatPage: React.FC<UserChatPageProps> = ({
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Simulate loading state for better UX
+  // Simulate loading state for better UX - reduced delay for better performance
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoaded(true);
-    }, 100);
+    }, 50); // Reduced from 100ms to 50ms
 
     return () => clearTimeout(timer);
   }, []);
@@ -67,6 +67,8 @@ const UserChatPage: React.FC<UserChatPageProps> = ({
       />
     </div>
   );
-};
+});
+
+UserChatPage.displayName = 'UserChatPage';
 
 export default UserChatPage;

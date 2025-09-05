@@ -9,7 +9,7 @@ interface ChatMessageProps {
   user: LiveChatUser;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, user }) => {
+const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ message, user }) => {
   const isUserMessage = message.type === 'user';
   const isBotMessage = message.type === 'bot';
 
@@ -38,6 +38,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, user }) => {
       </div>
     </div>
   );
-};
+});
+
+ChatMessage.displayName = 'ChatMessage';
 
 export default ChatMessage;

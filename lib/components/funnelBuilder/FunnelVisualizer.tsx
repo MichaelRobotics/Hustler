@@ -157,7 +157,7 @@ interface FunnelVisualizerProps {
  * @param {FunnelVisualizerProps} props - The props passed to the component.
  * @returns {JSX.Element} The rendered FunnelVisualizer component.
  */
-const FunnelVisualizer = React.forwardRef<{ handleBlockClick: (blockId: string) => void }, FunnelVisualizerProps>(({ 
+const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockId: string) => void }, FunnelVisualizerProps>(({ 
   funnelFlow, 
   editingBlockId, 
   setEditingBlockId, 
@@ -319,7 +319,9 @@ const FunnelVisualizer = React.forwardRef<{ handleBlockClick: (blockId: string) 
             </FunnelCanvas>
         </div>
     );
-});
+}));
+
+FunnelVisualizer.displayName = 'FunnelVisualizer';
 
 export default FunnelVisualizer;
 

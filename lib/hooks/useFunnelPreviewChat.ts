@@ -4,9 +4,10 @@ import { FunnelFlow, FunnelBlockOption, ChatMessage } from '../types/funnel';
 export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffer?: string | null) => {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
-  const [invalidInputCount, setInvalidInputCount] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const lastProcessedInputRef = useRef<string>('');
+  const lastProcessedTimeRef = useRef<number>(0);
 
   // Helper function to construct complete message with numbered options
   const constructCompleteMessage = useCallback((block: any): string => {
@@ -51,7 +52,7 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     }
   }, [history]);
 
-  // Helper function to check if a path leads to the offer
+  // Helper function to check if a path leads to the offer - memoized for performance
   const doesPathLeadToOffer = useCallback((blockId: string, targetOfferId: string, visited: Set<string>): boolean => {
     if (visited.has(blockId)) return false; // Prevent infinite loops
     visited.add(blockId);
@@ -76,6 +77,22 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     return false;
   }, [funnelFlow]);
 
+  // Memoize the path finding function to prevent expensive recalculations
+  const memoizedPathFinder = useMemo(() => {
+    const pathCache = new Map<string, boolean>();
+    
+    return (blockId: string, targetOfferId: string): boolean => {
+      const cacheKey = `${blockId}-${targetOfferId}`;
+      if (pathCache.has(cacheKey)) {
+        return pathCache.get(cacheKey)!;
+      }
+      
+      const result = doesPathLeadToOffer(blockId, targetOfferId, new Set());
+      pathCache.set(cacheKey, result);
+      return result;
+    };
+  }, [doesPathLeadToOffer]);
+
   // Find which answer options in the current question would lead to the selected offer
   const findOptionsLeadingToOffer = useCallback((offerId: string, currentBlockId: string | null): number[] => {
     if (!currentBlockId || !funnelFlow) return [];
@@ -88,15 +105,15 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     // For each option in the current block, check if it leads to the offer
     currentBlock.options.forEach((option, index) => {
       if (option.nextBlockId) {
-        // Recursively check if this option leads to the offer
-        if (doesPathLeadToOffer(option.nextBlockId, offerId, new Set())) {
+        // Use memoized path finder for better performance
+        if (memoizedPathFinder(option.nextBlockId, offerId)) {
           leadingOptionIndices.push(index);
         }
       }
     });
     
     return leadingOptionIndices;
-  }, [funnelFlow, doesPathLeadToOffer]);
+  }, [funnelFlow, memoizedPathFinder]);
 
   // Get the indices of options that lead to the selected offer
   const optionsLeadingToOffer = useMemo(() => {
@@ -104,59 +121,63 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     return findOptionsLeadingToOffer(selectedOffer, currentBlockId);
   }, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
 
+  // Memoize current block to prevent unnecessary re-computations
+  const currentBlock = useMemo(() => {
+    return funnelFlow?.blocks[currentBlockId || ''];
+  }, [funnelFlow, currentBlockId]);
+
+  // Memoize options to prevent unnecessary re-computations
+  const options = useMemo(() => {
+    return currentBlock?.options || [];
+  }, [currentBlock]);
+
   // Helper function to check if input matches a valid option
   const isValidOption = useCallback((input: string, currentBlock: any): { isValid: boolean; optionIndex?: number } => {
     if (!currentBlock?.options) return { isValid: false };
     
+    const normalizedInput = input.toLowerCase().trim();
+    
+    
     // Check for exact text match
     const exactMatch = currentBlock.options.findIndex((opt: any) => 
-      opt.text.toLowerCase() === input.toLowerCase()
+      opt.text.toLowerCase() === normalizedInput
     );
     if (exactMatch !== -1) return { isValid: true, optionIndex: exactMatch };
     
     // Check for number match (1, 2, 3, etc.)
-    const numberMatch = parseInt(input);
+    const numberMatch = parseInt(normalizedInput);
     if (!isNaN(numberMatch) && numberMatch >= 1 && numberMatch <= currentBlock.options.length) {
       return { isValid: true, optionIndex: numberMatch - 1 };
     }
     
+    // Check for fuzzy matching (partial text match)
+    const fuzzyMatch = currentBlock.options.findIndex((opt: any) => {
+      const optionText = opt.text.toLowerCase();
+      // Check if input is contained in option text or vice versa
+      return optionText.includes(normalizedInput) || normalizedInput.includes(optionText);
+    });
+    if (fuzzyMatch !== -1) return { isValid: true, optionIndex: fuzzyMatch };
+    
+    // Check for common synonyms
+    const synonymMap: Record<string, string[]> = {
+      'yes': ['y', 'yeah', 'yep', 'sure', 'ok', 'okay', 'agree', 'accept'],
+      'no': ['n', 'nope', 'nah', 'disagree', 'decline', 'reject'],
+      'maybe': ['perhaps', 'possibly', 'might', 'could be'],
+      'continue': ['next', 'proceed', 'go on', 'keep going'],
+      'back': ['previous', 'go back', 'return', 'undo']
+    };
+    
+    for (const [key, synonyms] of Object.entries(synonymMap)) {
+      if (synonyms.includes(normalizedInput)) {
+        const synonymMatch = currentBlock.options.findIndex((opt: any) => 
+          opt.text.toLowerCase().includes(key)
+        );
+        if (synonymMatch !== -1) return { isValid: true, optionIndex: synonymMatch };
+      }
+    }
+    
     return { isValid: false };
   }, []);
-
-  // Handler for custom text input
-  const handleCustomInput = useCallback((input: string) => {
-    if (!currentBlockId || !funnelFlow) return;
-    
-    const currentBlock = funnelFlow.blocks[currentBlockId];
-    if (!currentBlock) return;
-    
-    const userMessage: ChatMessage = { type: 'user', text: input };
-    
-    // Check if input is valid
-    const validation = isValidOption(input, currentBlock);
-    
-    if (validation.isValid && validation.optionIndex !== undefined) {
-      // Valid input - process as option click
-      setInvalidInputCount(0); // Reset invalid input counter
-      const option = currentBlock.options[validation.optionIndex];
-      handleOptionClick(option, validation.optionIndex);
-    } else {
-      // Invalid input - handle based on invalid input count
-      setInvalidInputCount(prev => prev + 1);
-      
-      let botResponse: string;
-      if (invalidInputCount === 0) {
-        // First invalid input - friendly reminder
-        botResponse = "I understand you'd like to respond differently, but please choose one of the options I've provided above. This helps me guide you through the conversation effectively! 😊";
-      } else {
-        // Second invalid input - escalate to creator
-        botResponse = "I see you have questions that aren't covered by my current options. I'll notify the creator about your inquiry, and they'll get back to you with a personalized response. In the meantime, please choose from the available options to continue our conversation.";
-      }
-      
-      const botMessage: ChatMessage = { type: 'bot', text: botResponse };
-      setHistory(prev => [...prev, userMessage, botMessage]);
-    }
-  }, [currentBlockId, funnelFlow, isValidOption, invalidInputCount]);
 
   // Handler for when a user clicks on a chat option
   const handleOptionClick = useCallback((option: FunnelBlockOption, index: number) => {
@@ -186,6 +207,42 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     }
   }, [funnelFlow, constructCompleteMessage]);
 
+  // Handler for custom text input
+  const handleCustomInput = useCallback((input: string) => {
+    const now = Date.now();
+    const trimmedInput = input.trim();
+    
+    // Prevent duplicate processing of the same input within 1 second
+    if (lastProcessedInputRef.current === trimmedInput && 
+        now - lastProcessedTimeRef.current < 1000) {
+      return;
+    }
+    
+    lastProcessedInputRef.current = trimmedInput;
+    lastProcessedTimeRef.current = now;
+    
+    if (!currentBlockId || !funnelFlow) return;
+    
+    const currentBlock = funnelFlow.blocks[currentBlockId];
+    if (!currentBlock) return;
+    
+    const userMessage: ChatMessage = { type: 'user', text: trimmedInput };
+    
+    // Check if input is valid
+    const validation = isValidOption(trimmedInput, currentBlock);
+    
+    if (validation.isValid && validation.optionIndex !== undefined && validation.optionIndex >= 0) {
+      // Valid option selection - process as option click
+      const option = currentBlock.options[validation.optionIndex];
+      handleOptionClick(option, validation.optionIndex);
+    } else {
+      // Invalid input - simple error message
+      const botResponse = "Please choose one of the available options above.";
+      const botMessage: ChatMessage = { type: 'bot', text: botResponse };
+      setHistory(prev => [...prev, userMessage, botMessage]);
+    }
+  }, [currentBlockId, funnelFlow, isValidOption, handleOptionClick]);
+
   // Effect to handle blocks with no options (dead-end paths)
   useEffect(() => {
     if (currentBlockId && funnelFlow) {
@@ -208,7 +265,7 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     startConversation,
     handleOptionClick,
     handleCustomInput,
-    currentBlock: funnelFlow?.blocks[currentBlockId || ''],
-    options: funnelFlow?.blocks[currentBlockId || '']?.options || []
+    currentBlock,
+    options
   };
 };

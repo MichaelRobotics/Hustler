@@ -9,7 +9,7 @@ interface ChatOptionsProps {
   onOptionClick: (option: FunnelBlockOption, index: number) => void;
 }
 
-export const ChatOptions: React.FC<ChatOptionsProps> = ({
+export const ChatOptions: React.FC<ChatOptionsProps> = React.memo(({
   options,
   optionsLeadingToOffer,
   selectedOffer,
@@ -63,4 +63,6 @@ export const ChatOptions: React.FC<ChatOptionsProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ChatOptions.displayName = 'ChatOptions';

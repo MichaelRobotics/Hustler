@@ -4,6 +4,7 @@ import React from 'react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelPreviewChatProps } from '../../types/funnel';
 import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton, ChatInput } from './components';
+import PerformanceProfiler from '../common/PerformanceProfiler';
 
 /**
  * --- Funnel Preview Chat Component ---
@@ -25,7 +26,7 @@ import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton, ChatInput } fr
  * @param {FunnelFlow | null} props.funnelFlow - The generated funnel flow object containing stages and blocks.
  * @returns {JSX.Element} The rendered FunnelPreviewChat component.
  */
-const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({ 
+const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({ 
   funnelFlow, 
   selectedOffer, 
   onOfferClick 
@@ -43,43 +44,57 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = ({
   } = useFunnelPreviewChat(funnelFlow, selectedOffer);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Chat Header */}
-      <ChatHeader />
-      
-      {/* Chat Messages Area */}
-      <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4 pt-6">
-        {history.map((msg, index) => (
-          <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <ChatMessage message={msg} />
-          </div>
-        ))}
-        <div ref={chatEndRef} />
+    <PerformanceProfiler id="FunnelPreviewChat">
+      <div className="h-full flex flex-col">
+        {/* Chat Header */}
+        <PerformanceProfiler id="FunnelPreviewChat-Header">
+          <ChatHeader />
+        </PerformanceProfiler>
+        
+        {/* Chat Messages Area */}
+        <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-0 space-y-4 pt-6">
+          <PerformanceProfiler id="FunnelPreviewChat-Messages">
+            {history.map((msg, index) => (
+              <div key={`${msg.type}-${index}-${msg.text.length}`} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <ChatMessage message={msg} />
+              </div>
+            ))}
+          </PerformanceProfiler>
+          <div ref={chatEndRef} />
+        </div>
+        
+        {/* Response Options */}
+        <PerformanceProfiler id="FunnelPreviewChat-Options">
+          <ChatOptions
+            options={options}
+            optionsLeadingToOffer={optionsLeadingToOffer}
+            selectedOffer={selectedOffer}
+            onOptionClick={handleOptionClick}
+          />
+        </PerformanceProfiler>
+        
+        {/* Chat Input - Only show when there are options available */}
+        {options.length > 0 && currentBlockId && (
+          <PerformanceProfiler id="FunnelPreviewChat-Input">
+            <ChatInput
+              onSendMessage={handleCustomInput}
+              placeholder="Type or choose response"
+            />
+          </PerformanceProfiler>
+        )}
+        
+        {/* Conversation End State - Show Start Over when no options or conversation ended */}
+        {(options.length === 0 || !currentBlockId) && (
+          <PerformanceProfiler id="FunnelPreviewChat-Restart">
+            <ChatRestartButton onRestart={startConversation} />
+          </PerformanceProfiler>
+        )}
       </div>
-      
-      {/* Response Options */}
-      <ChatOptions
-        options={options}
-        optionsLeadingToOffer={optionsLeadingToOffer}
-        selectedOffer={selectedOffer}
-        onOptionClick={handleOptionClick}
-      />
-      
-      {/* Chat Input - Only show when there are options available */}
-      {options.length > 0 && currentBlockId && (
-        <ChatInput
-          onSendMessage={handleCustomInput}
-          placeholder="Type or choose response"
-        />
-      )}
-      
-      {/* Conversation End State - Show Start Over when no options or conversation ended */}
-      {(options.length === 0 || !currentBlockId) && (
-        <ChatRestartButton onRestart={startConversation} />
-      )}
-    </div>
+    </PerformanceProfiler>
   );
-};
+});
+
+FunnelPreviewChat.displayName = 'FunnelPreviewChat';
 
 export default FunnelPreviewChat;
 

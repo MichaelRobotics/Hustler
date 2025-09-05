@@ -12,6 +12,7 @@ interface LiveChatHeaderProps {
   searchQuery: string;
   onFiltersChange: (filters: LiveChatFilters) => void;
   onSearchChange: (query: string) => void;
+  onSearchStateChange?: (isSearchOpen: boolean) => void;
 }
 
 const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
@@ -19,7 +20,8 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
   filters,
   searchQuery,
   onFiltersChange,
-  onSearchChange
+  onSearchChange,
+  onSearchStateChange
 }) => {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [mobileSearchQuery, setMobileSearchQuery] = useState('');
@@ -43,12 +45,14 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
     setIsMobileSearchOpen(false);
     setMobileSearchQuery('');
     onSearchChange('');
+    onSearchStateChange?.(false);
   };
 
   // Handle mobile search open
   const handleMobileSearchOpen = () => {
     setIsMobileSearchOpen(true);
     setMobileSearchQuery(searchQuery);
+    onSearchStateChange?.(true);
   };
   return (
     <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
