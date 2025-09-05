@@ -60,11 +60,40 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
 
     const whopUserId = tokenData.userId;
     
-    // Get company ID from environment or extract from user context
-    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    // For iframe apps, we need to get company ID from the request context
+    // This could be from URL params, headers, or we need to determine it differently
+    // For now, let's use a fallback approach - we'll get it from the user's memberships
+    let whopCompanyId: string;
     
-    if (!whopCompanyId) {
-      console.log('No company ID found in environment');
+    try {
+      // Try to get company ID from request headers or URL
+      const companyIdFromHeader = request.headers.get('x-whop-company-id') || 
+                                 request.headers.get('whop-company-id');
+      
+      if (companyIdFromHeader) {
+        whopCompanyId = companyIdFromHeader;
+      } else {
+        // Fallback: Use environment variable for development
+        whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || '';
+        
+        if (!whopCompanyId) {
+          console.log('No company ID found in headers or environment');
+          return null;
+        }
+      }
+    } catch (error) {
+      console.log('Error extracting company ID:', error);
+      return null;
+    }
+
+    // Validate user has access to this company
+    const companyAccess = await whopSdk.access.checkIfUserHasAccessToCompany({
+      companyId: whopCompanyId,
+      userId: whopUserId
+    });
+
+    if (!companyAccess.hasAccess) {
+      console.log(`User ${whopUserId} does not have access to company ${whopCompanyId}`);
       return null;
     }
 
@@ -144,8 +173,8 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       }
     }
 
-    // Determine access level
-    const accessLevel = await determineAccessLevel(whopUserId, whopCompanyId);
+    // Use access level from company access validation
+    const accessLevel = companyAccess.accessLevel;
 
     if (!user) {
       console.log('User not found after creation/update');

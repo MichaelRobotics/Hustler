@@ -150,16 +150,53 @@ export function withRouteProtection(
       }
 
           const whopUserId = tokenData.userId;
-    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+          
+          // For iframe apps, we need to get company ID from the request context
+          let whopCompanyId: string;
+          
+          try {
+            // Try to get company ID from request headers or URL
+            const companyIdFromHeader = request.headers.get('x-whop-company-id') || 
+                                       request.headers.get('whop-company-id');
+            
+            if (companyIdFromHeader) {
+              whopCompanyId = companyIdFromHeader;
+            } else {
+              // Fallback: Use environment variable for development
+              whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || '';
+              
+              if (!whopCompanyId) {
+                return createErrorResponse(
+                  'No Company Access',
+                  'Company ID not found in headers or environment',
+                  403,
+                  'NO_COMPANY_ACCESS'
+                );
+              }
+            }
+          } catch (error) {
+            return createErrorResponse(
+              'Company Error',
+              'Error extracting company ID',
+              500,
+              'COMPANY_ERROR'
+            );
+          }
+          
+          // Validate user has access to this company
+          const companyAccess = await whopSdk.access.checkIfUserHasAccessToCompany({
+            companyId: whopCompanyId,
+            userId: whopUserId
+          });
 
-      if (!whopCompanyId) {
-        return createErrorResponse(
-          'Company Required',
-          'Company ID is required for this operation',
-          400,
-          'MISSING_COMPANY'
-        );
-      }
+          if (!companyAccess.hasAccess) {
+            return createErrorResponse(
+              'Access Denied',
+              'User does not have access to this company',
+              403,
+              'COMPANY_ACCESS_DENIED'
+            );
+          }
 
       // Get user context with caching
       const userContext = await getUserContext(whopUserId, whopCompanyId);
