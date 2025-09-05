@@ -50,9 +50,6 @@ async function getFunnelAnalyticsHandler(request: NextRequest, context: AuthCont
     }
 
     const metrics = { totalViews: 0, totalConversions: 0, conversionRate: 0 }; // Dummy data for build
-      startDate,
-      endDate
-    });
 
     return createSuccessResponse(metrics, 'Funnel analytics retrieved successfully');
   } catch (error) {
