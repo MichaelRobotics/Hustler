@@ -21,8 +21,7 @@ async function connectWebSocketHandler(request: NextRequest, context: AuthContex
 
     // Initialize WebSocket connection
     await whopWebSocket.connect({
-      experienceId,
-      companyId: user.companyId,
+      experienceId: user.experienceId,
       userId: user.id,
       autoReconnect,
       reconnectInterval: 5000, // 5 seconds
@@ -41,8 +40,7 @@ async function connectWebSocketHandler(request: NextRequest, context: AuthContex
     return createSuccessResponse({
       connected: true,
       userId: user.id,
-      companyId: user.companyId,
-      experienceId: experienceId || null,
+      experienceId: user.experienceId,
       channels: Array.from(whopWebSocket.getConnectionStatus().channels)
     }, 'WebSocket connection established successfully');
   } catch (error) {
@@ -91,7 +89,7 @@ async function getWebSocketStatusHandler(request: NextRequest, context: AuthCont
     return createSuccessResponse({
       ...status,
       userId: user.id,
-      companyId: user.companyId
+      experienceId: user.experienceId
     }, 'WebSocket status retrieved successfully');
   } catch (error) {
     console.error('Error getting WebSocket status:', error);

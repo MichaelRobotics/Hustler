@@ -42,16 +42,16 @@ export interface UseWebSocketReturn {
   // Subscription methods
   subscribeToConversation: (conversationId: string, handler: (message: ChatMessage) => void) => void;
   subscribeToTyping: (conversationId: string, handler: (typing: TypingIndicator) => void) => void;
-  subscribeToPresence: (companyId: string, handler: (presence: UserPresence) => void) => void;
-  subscribeToFunnelUpdates: (companyId: string, handler: (update: FunnelUpdate) => void) => void;
-  subscribeToResourceUpdates: (companyId: string, handler: (update: ResourceUpdate) => void) => void;
+  subscribeToPresence: (experienceId: string, handler: (presence: UserPresence) => void) => void;
+  subscribeToFunnelUpdates: (experienceId: string, handler: (update: FunnelUpdate) => void) => void;
+  subscribeToResourceUpdates: (experienceId: string, handler: (update: ResourceUpdate) => void) => void;
   subscribeToNotifications: (userId: string, handler: (notification: SystemNotification) => void) => void;
   subscribeToCreditUpdates: (userId: string, handler: (update: CreditUpdate) => void) => void;
   
   // Utility methods
   getTypingUsers: (conversationId: string) => string[];
   getUserPresence: (userId: string) => UserPresence | undefined;
-  getOnlineUsers: (companyId: string) => UserPresence[];
+  getOnlineUsers: (experienceId: string) => UserPresence[];
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketReturn {
@@ -89,8 +89,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
       // Connect WebSocket
       await whopWebSocket.connect({
-        experienceId,
-        companyId: userRef.current.companyId,
+        experienceId: userRef.current.experienceId,
         userId: userRef.current.id,
         autoReconnect: true,
         reconnectInterval: 5000,
@@ -180,16 +179,16 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     realTimeMessaging.subscribeToTyping(conversationId, handler);
   }, []);
 
-  const subscribeToPresence = useCallback((companyId: string, handler: (presence: UserPresence) => void) => {
-    realTimeMessaging.subscribeToPresence(companyId, handler);
+  const subscribeToPresence = useCallback((experienceId: string, handler: (presence: UserPresence) => void) => {
+    realTimeMessaging.subscribeToPresence(experienceId, handler);
   }, []);
 
-  const subscribeToFunnelUpdates = useCallback((companyId: string, handler: (update: FunnelUpdate) => void) => {
-    realTimeUpdates.subscribeToFunnelUpdates(companyId, handler);
+  const subscribeToFunnelUpdates = useCallback((experienceId: string, handler: (update: FunnelUpdate) => void) => {
+    realTimeUpdates.subscribeToFunnelUpdates(experienceId, handler);
   }, []);
 
-  const subscribeToResourceUpdates = useCallback((companyId: string, handler: (update: ResourceUpdate) => void) => {
-    realTimeUpdates.subscribeToResourceUpdates(companyId, handler);
+  const subscribeToResourceUpdates = useCallback((experienceId: string, handler: (update: ResourceUpdate) => void) => {
+    realTimeUpdates.subscribeToResourceUpdates(experienceId, handler);
   }, []);
 
   const subscribeToNotifications = useCallback((userId: string, handler: (notification: SystemNotification) => void) => {
@@ -209,8 +208,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     return realTimeMessaging.getUserPresence(userId);
   }, []);
 
-  const getOnlineUsers = useCallback((companyId: string) => {
-    return realTimeMessaging.getOnlineUsers(companyId);
+  const getOnlineUsers = useCallback((experienceId: string) => {
+    return realTimeMessaging.getOnlineUsers(experienceId);
   }, []);
 
   // Set up connection status monitoring

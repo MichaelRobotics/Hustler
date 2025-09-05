@@ -94,7 +94,7 @@ async function getChannelsHandler(request: NextRequest, context: AuthContext) {
     return createSuccessResponse({
       channels: Array.from(status.channels),
       userId: user.id,
-      companyId: user.companyId
+      experienceId: user.experienceId
     }, 'Channels retrieved successfully');
   } catch (error) {
     console.error('Error getting channels:', error);
@@ -113,9 +113,9 @@ function validateChannelAccess(channel: string, user: any): boolean {
   const [channelType, channelId] = channel.split(':');
 
   switch (channelType) {
-    case 'company':
-      // Users can only join their own company channels
-      return channelId === user.companyId;
+    case 'experience':
+      // Users can only join their own experience channels
+      return channelId === user.experienceId;
 
     case 'user':
       // Users can only join their own user channel
@@ -129,8 +129,8 @@ function validateChannelAccess(channel: string, user: any): boolean {
     case 'funnel_updates':
     case 'resource_updates':
     case 'analytics':
-      // Company-wide channels - users can join their company's channels
-      return channelId === user.companyId;
+      // Experience-wide channels - users can join their experience's channels
+      return channelId === user.experienceId;
 
     case 'system':
       // System channel - all authenticated users can join

@@ -15,7 +15,7 @@ async function getSyncStatusHandler(request: NextRequest, context: AuthContext) 
     const { user } = context;
     
     // Get sync status
-    const syncStatus = await whopProductSync.getSyncStatus(user.company.whopCompanyId);
+    const syncStatus = await whopProductSync.getSyncStatus(user.experience.whopCompanyId);
 
     return createSuccessResponse(syncStatus, 'Sync status retrieved successfully');
   } catch (error) {

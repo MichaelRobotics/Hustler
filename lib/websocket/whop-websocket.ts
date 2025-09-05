@@ -13,7 +13,7 @@ export interface WebSocketMessage {
   data: any;
   timestamp: Date;
   userId?: string;
-  companyId?: string;
+  experienceId?: string; // New: Experience-based scoping
 }
 
 export interface WebSocketConnection {
@@ -25,8 +25,7 @@ export interface WebSocketConnection {
 }
 
 export interface WebSocketConfig {
-  experienceId?: string;
-  companyId: string;
+  experienceId: string; // New: Experience-based scoping
   userId: string;
   autoReconnect: boolean;
   reconnectInterval: number;
@@ -141,7 +140,7 @@ class WhopWebSocketManager {
         action: 'join',
         channel: channel,
         userId: this.config?.userId,
-        companyId: this.config?.companyId
+        experienceId: this.config?.experienceId
       },
       timestamp: new Date()
     };
@@ -167,7 +166,7 @@ class WhopWebSocketManager {
         action: 'leave',
         channel: channel,
         userId: this.config?.userId,
-        companyId: this.config?.companyId
+        experienceId: this.config?.experienceId
       },
       timestamp: new Date()
     };
@@ -233,9 +232,8 @@ class WhopWebSocketManager {
       
       // Build WebSocket URL with authentication
       const params = new URLSearchParams({
-        companyId: config.companyId,
+        experienceId: config.experienceId,
         userId: config.userId,
-        experienceId: config.experienceId || '',
         token: await this.getWebSocketToken()
       });
 

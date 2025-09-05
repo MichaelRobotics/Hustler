@@ -107,8 +107,7 @@ class RealtimeStateManager {
 
     try {
       await whopWebSocket.connect({
-        experienceId: undefined,
-        companyId: this.user.companyId,
+        experienceId: this.user.experienceId,
         userId: this.user.id,
         autoReconnect: true,
         reconnectInterval: this.config.reconnectInterval,
@@ -237,12 +236,12 @@ class RealtimeStateManager {
     });
 
     // Subscribe to funnel updates
-    realTimeUpdates.subscribeToFunnelUpdates(this.user!.companyId, (update) => {
+    realTimeUpdates.subscribeToFunnelUpdates(this.user!.experienceId, (update) => {
       this.handleFunnelUpdate(update);
     });
 
     // Subscribe to resource updates
-    realTimeUpdates.subscribeToResourceUpdates(this.user!.companyId, (update) => {
+    realTimeUpdates.subscribeToResourceUpdates(this.user!.experienceId, (update) => {
       this.handleResourceUpdate(update);
     });
 
@@ -264,11 +263,11 @@ class RealtimeStateManager {
     if (!this.user) return;
 
     try {
-      // Company-wide channels
-      await whopWebSocket.joinChannel(`company:${this.user.companyId}`);
-      await whopWebSocket.joinChannel(`funnel_updates:${this.user.companyId}`);
-      await whopWebSocket.joinChannel(`resource_updates:${this.user.companyId}`);
-      await whopWebSocket.joinChannel(`analytics:${this.user.companyId}`);
+      // Experience-wide channels
+      await whopWebSocket.joinChannel(`experience:${this.user.experienceId}`);
+      await whopWebSocket.joinChannel(`funnel_updates:${this.user.experienceId}`);
+      await whopWebSocket.joinChannel(`resource_updates:${this.user.experienceId}`);
+      await whopWebSocket.joinChannel(`analytics:${this.user.experienceId}`);
 
       // User-specific channels
       await whopWebSocket.joinChannel(`user:${this.user.id}`);

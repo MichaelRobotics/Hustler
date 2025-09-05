@@ -7,7 +7,7 @@
 
 import { whopSdk } from '../whop-sdk';
 import { db } from '../supabase/db';
-import { resources, companies, users } from '../supabase/schema';
+import { resources, experiences, users } from '../supabase/schema';
 import { eq, and, isNull, isNotNull } from 'drizzle-orm';
 import { AuthenticatedUser } from '../middleware/simple-auth';
 import { realTimeUpdates } from '../websocket/updates';
@@ -50,18 +50,18 @@ class WhopProductSync {
   private lastSyncTime: Map<string, Date> = new Map();
 
   /**
-   * Sync all products for a company
+   * Sync all products for an experience
    */
   async syncCompanyProducts(
     user: AuthenticatedUser,
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const companyId = user.companyId;
-    const syncKey = `company:${companyId}`;
+    const experienceId = user.experienceId;
+    const syncKey = `experience:${experienceId}`;
 
-    // Prevent concurrent syncs for the same company
+    // Prevent concurrent syncs for the same experience
     if (this.syncInProgress.get(syncKey)) {
-      throw new Error('Sync already in progress for this company');
+      throw new Error('Sync already in progress for this experience');
     }
 
     this.syncInProgress.set(syncKey, true);
@@ -70,8 +70,8 @@ class WhopProductSync {
       // Send sync started notification
       await realTimeUpdates.sendResourceSyncUpdate(
         user,
-        'company-sync',
-        'Company Products',
+        'experience-sync',
+        'Experience Products',
         'sync_started',
         0,
         'Starting product synchronization...'
@@ -154,8 +154,8 @@ class WhopProductSync {
       // Send completion notification
       await realTimeUpdates.sendResourceSyncUpdate(
         user,
-        'company-sync',
-        'Company Products',
+        'experience-sync',
+        'Experience Products',
         'sync_completed',
         100,
         `Sync completed: ${result.created} created, ${result.updated} updated, ${result.errors} errors`
@@ -166,8 +166,8 @@ class WhopProductSync {
     } catch (error) {
       await realTimeUpdates.sendResourceSyncUpdate(
         user,
-        'company-sync',
-        'Company Products',
+        'experience-sync',
+        'Experience Products',
         'sync_failed',
         0,
         `Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -192,7 +192,7 @@ class WhopProductSync {
       const existingResource = await db.query.resources.findFirst({
         where: and(
           eq(resources.whopProductId, whopProduct.id),
-          eq(resources.companyId, user.companyId)
+          eq(resources.experienceId, user.experienceId)
         )
       });
 
@@ -226,7 +226,7 @@ class WhopProductSync {
         // Create new resource
         await db.insert(resources).values({
           ...resourceData,
-          companyId: user.companyId,
+          experienceId: user.experienceId,
           userId: user.id,
           createdAt: new Date()
         });
@@ -247,9 +247,9 @@ class WhopProductSync {
     options: SyncOptions
   ): Promise<WhopProduct[]> {
     try {
-      // Use WHOP SDK to fetch company products
+      // Use WHOP SDK to fetch experience products
       const products = await (whopSdk as any).products.list({
-        companyId: user.company.whopCompanyId
+        companyId: user.experience.whopCompanyId
       });
 
       // Transform WHOP products to our format
@@ -331,23 +331,23 @@ class WhopProductSync {
     event: string
   ): Promise<void> {
     try {
-      // Find the company
-      const company = await db.query.companies.findFirst({
-        where: eq(companies.whopCompanyId, companyId)
+      // Find the experience
+      const experience = await db.query.experiences.findFirst({
+        where: eq(experiences.whopCompanyId, companyId)
       });
 
-      if (!company) {
-        console.log('Company not found for webhook:', companyId);
+      if (!experience) {
+        console.log('Experience not found for webhook:', companyId);
         return;
       }
 
-      // Find a user from this company to use for sync
+      // Find a user from this experience to use for sync
       const user = await db.query.users.findFirst({
-        where: eq(users.companyId, company.id)
+        where: eq(users.experienceId, experience.id)
       });
 
       if (!user) {
-        console.log('No users found for company:', companyId);
+        console.log('No users found for experience:', companyId);
         return;
       }
 
@@ -381,13 +381,13 @@ class WhopProductSync {
     productData: any
   ): Promise<void> {
     try {
-      // Find the company
-      const company = await db.query.companies.findFirst({
-        where: eq(companies.whopCompanyId, companyId)
+      // Find the experience
+      const experience = await db.query.experiences.findFirst({
+        where: eq(experiences.whopCompanyId, companyId)
       });
 
-      if (!company) {
-        console.log('Company not found for webhook:', companyId);
+      if (!experience) {
+        console.log('Experience not found for webhook:', companyId);
         return;
       }
 
@@ -395,7 +395,7 @@ class WhopProductSync {
       const resource = await db.query.resources.findFirst({
         where: and(
           eq(resources.whopProductId, productData.id),
-          eq(resources.companyId, company.id)
+          eq(resources.experienceId, experience.id)
         )
       });
 
@@ -409,7 +409,7 @@ class WhopProductSync {
   }
 
   /**
-   * Get sync status for a company
+   * Get sync status for an experience
    */
   async getSyncStatus(companyId: string): Promise<{
     lastSync?: Date;
@@ -417,7 +417,7 @@ class WhopProductSync {
     totalProducts: number;
     syncedProducts: number;
   }> {
-    const syncKey = `company:${companyId}`;
+    const syncKey = `experience:${companyId}`;
     
     // Count total products from WHOP
     let totalProducts = 0;
@@ -431,15 +431,15 @@ class WhopProductSync {
     }
 
     // Count synced products
-    const company = await db.query.companies.findFirst({
-      where: eq(companies.whopCompanyId, companyId)
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopCompanyId, companyId)
     });
 
     let syncedProducts = 0;
-    if (company) {
+    if (experience) {
       const synced = await db.query.resources.findMany({
         where: and(
-          eq(resources.companyId, company.id),
+          eq(resources.experienceId, experience.id),
           eq(resources.type, 'MY_PRODUCTS'),
           isNotNull(resources.whopProductId)
         )
@@ -474,7 +474,7 @@ class WhopProductSync {
     for (const product of products) {
       try {
         await db.insert(resources).values({
-          companyId: user.companyId,
+          experienceId: user.experienceId,
           userId: user.id,
           name: product.name,
           type: 'AFFILIATE',

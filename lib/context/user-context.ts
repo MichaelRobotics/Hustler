@@ -1,6 +1,6 @@
 import { whopSdk } from '../whop-sdk';
 import { db } from '../supabase/db';
-import { companies, users } from '../supabase/schema';
+import { experiences, users } from '../supabase/schema';
 import { eq } from 'drizzle-orm';
 import { AuthenticatedUser } from '../middleware/simple-auth';
 
@@ -26,6 +26,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 export async function getUserContext(
   whopUserId: string,
   whopCompanyId: string,
+  whopExperienceId: string,
   forceRefresh: boolean = false,
   accessLevel?: 'admin' | 'customer' | 'no_access'
 ): Promise<UserContext | null> {
@@ -41,7 +42,7 @@ export async function getUserContext(
 
   try {
     // Fetch fresh user data
-    const userContext = await createUserContext(whopUserId, whopCompanyId, accessLevel);
+    const userContext = await createUserContext(whopUserId, whopCompanyId, whopExperienceId, accessLevel);
     
     if (userContext) {
       // Cache the result
@@ -64,36 +65,42 @@ export async function getUserContext(
 async function createUserContext(
   whopUserId: string,
   whopCompanyId: string,
+  whopExperienceId: string,
   accessLevel?: 'admin' | 'customer' | 'no_access'
 ): Promise<UserContext | null> {
   try {
-    // Get or create company
-    console.log('Looking for company with whopCompanyId:', whopCompanyId);
-    let company = await db.query.companies.findFirst({
-      where: eq(companies.whopCompanyId, whopCompanyId)
+    console.log('Creating user context with experience-based approach');
+    console.log('Experience ID:', whopExperienceId);
+    console.log('Company ID:', whopCompanyId);
+    
+    // Get or create experience
+    let experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, whopExperienceId)
     });
 
-    if (!company) {
-      console.log('Company not found, creating new company...');
-      // Create company in our database with basic info
-      const [newCompany] = await db.insert(companies).values({
-        whopCompanyId: whopCompanyId,
-        name: 'Company', // Will be updated when we get more info
-        description: null,
+    if (!experience) {
+      console.log('Experience not found, creating new experience...');
+      const [newExperience] = await db.insert(experiences).values({
+        whopExperienceId: whopExperienceId,
+        whopCompanyId: whopCompanyId, // App creator's company (metadata only)
+        name: 'App Installation',
+        description: 'Experience for app installation',
         logo: null
       }).returning();
       
-      console.log('New company created:', newCompany);
-      company = newCompany;
+      console.log('New experience created:', newExperience);
+      experience = newExperience;
     } else {
-      console.log('Existing company found:', company);
+      console.log('Existing experience found:', experience);
     }
+    
+    // Company logic removed - using experiences for multitenancy
 
     // Get or create user
     let user = await db.query.users.findFirst({
       where: eq(users.whopUserId, whopUserId),
       with: {
-        company: true
+        experience: true
       }
     });
 
@@ -102,7 +109,7 @@ async function createUserContext(
       if (process.env.NODE_ENV === 'development' && whopUserId === 'test-user-id') {
         const [newUser] = await db.insert(users).values({
           whopUserId: whopUserId,
-          companyId: company.id,
+          experienceId: experience.id, // Link to experience
           email: 'test@example.com',
           name: 'Test User',
           avatar: null,
@@ -112,7 +119,7 @@ async function createUserContext(
         user = await db.query.users.findFirst({
           where: eq(users.id, newUser.id),
           with: {
-            company: true
+            experience: true
           }
         });
       } else {
@@ -127,18 +134,18 @@ async function createUserContext(
         // Create user in our database
         const [newUser] = await db.insert(users).values({
           whopUserId: whopUser.id,
-          companyId: company.id,
+          experienceId: experience.id, // Link to experience
           email: '', // Email is not available in public profile
           name: whopUser.name || whopUser.username || 'Unknown User',
           avatar: whopUser.profilePicture?.sourceUrl || null,
           credits: 2 // Default credits for new users
         }).returning();
         
-        // Fetch the user with company relation
+        // Fetch the user with experience relation
         user = await db.query.users.findFirst({
           where: eq(users.id, newUser.id),
           with: {
-            company: true
+            experience: true
           }
         });
       }
@@ -158,18 +165,19 @@ async function createUserContext(
     const authenticatedUser: AuthenticatedUser = {
       id: user.id,
       whopUserId: user.whopUserId,
-      companyId: user.companyId,
+      experienceId: user.experienceId!, // Experience-based scoping
       email: user.email,
       name: user.name,
       avatar: user.avatar || undefined,
       credits: user.credits,
       accessLevel: finalAccessLevel,
-      company: {
-        id: company.id,
-        whopCompanyId: company.whopCompanyId,
-        name: company.name,
-        description: company.description || undefined,
-        logo: company.logo || undefined
+      experience: {
+        id: experience.id,
+        whopExperienceId: experience.whopExperienceId,
+        whopCompanyId: experience.whopCompanyId,
+        name: experience.name,
+        description: experience.description || undefined,
+        logo: experience.logo || undefined
       }
     };
 
@@ -186,19 +194,19 @@ async function createUserContext(
   }
 }
 
-/**
- * Sync company data with WHOP API
- */
-async function syncCompanyData(company: any): Promise<void> {
-  // Company sync is not needed for now since we're using environment variable
-  // In the future, you might want to fetch company details from WHOP API
-}
+// Company sync function removed - using experiences for multitenancy
 
 /**
  * Sync user data with WHOP API
  */
 async function syncUserData(user: any): Promise<void> {
   try {
+    // Skip sync for test users in development
+    if (process.env.NODE_ENV === 'development' && user.whopUserId === 'test-user-id') {
+      console.log('Skipping user sync for test user');
+      return;
+    }
+    
     const whopUser = await whopSdk.users.getUser({ userId: user.whopUserId });
     
     if (whopUser && user && (
@@ -231,7 +239,10 @@ async function determineAccessLevel(whopUserId: string, whopCompanyId: string): 
       return 'customer';
     }
 
-    // Check if user has access to the company
+    // TODO: This will be replaced with experience-based access level determination
+    // For now, we'll use a simplified approach during migration
+
+    // Check WHOP access for user to the company (app creator's company)
     console.log('Checking WHOP access for user to company...');
     const result = await whopSdk.access.checkIfUserHasAccessToCompany({
       userId: whopUserId,

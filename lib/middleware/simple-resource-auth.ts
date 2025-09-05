@@ -20,7 +20,7 @@ export async function checkFunnelAccess(
     const funnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId)
       )
     });
 
@@ -48,7 +48,7 @@ export async function checkResourceAccess(
     const resource = await db.query.resources.findFirst({
       where: and(
         eq(resources.id, resourceId),
-        eq(resources.companyId, user.companyId)
+        eq(resources.experienceId, user.experienceId)
       )
     });
 
@@ -76,7 +76,7 @@ export async function checkConversationAccess(
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       )
     });
 

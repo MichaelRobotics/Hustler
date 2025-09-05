@@ -8,13 +8,13 @@
 import { db } from '../supabase/db';
 import { 
   funnelAnalytics, 
-  funnels, 
-  conversations, 
-  messages, 
+  funnels,
+  conversations,
+  messages,
   funnelInteractions,
   resources,
   users,
-  companies
+  experiences
 } from '../supabase/schema';
 import { eq, and, gte, lte, desc, asc, count, sum, avg, sql } from 'drizzle-orm';
 import { AuthenticatedUser } from '../middleware/simple-auth';
@@ -65,7 +65,7 @@ export interface UserInteractionAnalytics {
 }
 
 export interface CompanyAnalytics {
-  companyId: string;
+  experienceId: string;
   totalFunnels: number;
   activeFunnels: number;
   totalUsers: number;
@@ -152,13 +152,13 @@ class AnalyticsSystem {
       });
 
       if (funnel) {
-        const company = await db.query.companies.findFirst({
-          where: eq(companies.id, funnel.companyId)
+        const experience = await db.query.experiences.findFirst({
+          where: eq(experiences.id, funnel.experienceId)
         });
 
-        if (company) {
+        if (experience) {
           await realTimeUpdates.sendAnalyticsUpdate(
-            company.id,
+            experience.id,
             'funnel_analytics',
             {
               type: 'funnel_start',
@@ -194,13 +194,13 @@ class AnalyticsSystem {
       });
 
       if (funnel) {
-        const company = await db.query.companies.findFirst({
-          where: eq(companies.id, funnel.companyId)
+        const experience = await db.query.experiences.findFirst({
+          where: eq(experiences.id, funnel.experienceId)
         });
 
-        if (company) {
+        if (experience) {
           await realTimeUpdates.sendAnalyticsUpdate(
-            company.id,
+            experience.id,
             'funnel_analytics',
             {
               type: 'funnel_completion',
@@ -238,13 +238,13 @@ class AnalyticsSystem {
       });
 
       if (funnel) {
-        const company = await db.query.companies.findFirst({
-          where: eq(companies.id, funnel.companyId)
+        const experience = await db.query.experiences.findFirst({
+          where: eq(experiences.id, funnel.experienceId)
         });
 
-        if (company) {
+        if (experience) {
           await realTimeUpdates.sendAnalyticsUpdate(
-            company.id,
+            experience.id,
             'revenue_update',
             {
               type: 'conversion',
@@ -283,7 +283,7 @@ class AnalyticsSystem {
       const funnel = await db.query.funnels.findFirst({
         where: and(
           eq(funnels.id, funnelId),
-          eq(funnels.companyId, user.companyId)
+          eq(funnels.experienceId, user.experienceId)
         )
       });
 
@@ -447,7 +447,7 @@ class AnalyticsSystem {
       const targetUser = await db.query.users.findFirst({
         where: and(
           eq(users.id, userId),
-          eq(users.companyId, user.companyId)
+          eq(users.experienceId, user.experienceId)
         )
       });
 
@@ -470,7 +470,7 @@ class AnalyticsSystem {
         .from(funnelInteractions)
         .innerJoin(conversations, eq(funnelInteractions.conversationId, conversations.id))
         .where(and(
-          eq(conversations.companyId, user.companyId),
+          eq(conversations.experienceId, user.experienceId),
           ...dateFilter
         ));
 
@@ -479,7 +479,7 @@ class AnalyticsSystem {
         .select({ count: count(conversations.id) })
         .from(conversations)
         .where(and(
-          eq(conversations.companyId, user.companyId),
+          eq(conversations.experienceId, user.experienceId),
           ...dateFilter
         ));
 
@@ -494,7 +494,7 @@ class AnalyticsSystem {
         .innerJoin(conversations, eq(funnelInteractions.conversationId, conversations.id))
         .innerJoin(funnels, eq(conversations.funnelId, funnels.id))
         .where(and(
-          eq(conversations.companyId, user.companyId),
+          eq(conversations.experienceId, user.experienceId),
           ...dateFilter
         ))
         .groupBy(conversations.funnelId, funnels.name)
@@ -510,7 +510,7 @@ class AnalyticsSystem {
         })
         .from(conversations)
         .where(and(
-          eq(conversations.companyId, user.companyId),
+          eq(conversations.experienceId, user.experienceId),
           ...dateFilter
         ))
         .groupBy(sql`DATE(${conversations.updatedAt})`)
@@ -523,7 +523,7 @@ class AnalyticsSystem {
         })
         .from(conversations)
         .where(and(
-          eq(conversations.companyId, user.companyId),
+          eq(conversations.experienceId, user.experienceId),
           ...dateFilter
         ));
 
@@ -565,7 +565,7 @@ class AnalyticsSystem {
     user: AuthenticatedUser,
     filters: AnalyticsFilters = {}
   ): Promise<CompanyAnalytics> {
-    const cacheKey = `company_analytics:${user.companyId}:${JSON.stringify(filters)}`;
+    const cacheKey = `company_analytics:${user.experienceId}:${JSON.stringify(filters)}`;
     
     // Check cache first
     const cached = this.analyticsCache.get(cacheKey);
@@ -587,14 +587,14 @@ class AnalyticsSystem {
       const totalFunnels = await db
         .select({ count: count(funnels.id) })
         .from(funnels)
-        .where(eq(funnels.companyId, user.companyId));
+        .where(eq(funnels.experienceId, user.experienceId));
 
       // Get active funnels
       const activeFunnels = await db
         .select({ count: count(funnels.id) })
         .from(funnels)
         .where(and(
-          eq(funnels.companyId, user.companyId),
+          eq(funnels.experienceId, user.experienceId),
           eq(funnels.isDeployed, true)
         ));
 
@@ -602,13 +602,13 @@ class AnalyticsSystem {
       const totalUsers = await db
         .select({ count: count(users.id) })
         .from(users)
-        .where(eq(users.companyId, user.companyId));
+        .where(eq(users.experienceId, user.experienceId));
 
       // Get total conversations
       const totalConversations = await db
         .select({ count: count(conversations.id) })
         .from(conversations)
-        .where(eq(conversations.companyId, user.companyId));
+        .where(eq(conversations.experienceId, user.experienceId));
 
       // Get aggregated metrics
       const metrics = await db
@@ -620,7 +620,7 @@ class AnalyticsSystem {
         .from(funnelAnalytics)
         .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
         .where(and(
-          eq(funnels.companyId, user.companyId),
+          eq(funnels.experienceId, user.experienceId),
           ...dateFilter
         ));
 
@@ -646,7 +646,7 @@ class AnalyticsSystem {
         .from(funnelAnalytics)
         .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
         .where(and(
-          eq(funnels.companyId, user.companyId),
+          eq(funnels.experienceId, user.experienceId),
           ...dateFilter
         ))
         .groupBy(funnels.id, funnels.name)
@@ -671,7 +671,7 @@ class AnalyticsSystem {
       };
 
       const result: CompanyAnalytics = {
-        companyId: user.companyId,
+        experienceId: user.experienceId,
         totalFunnels: totalFunnels[0]?.count || 0,
         activeFunnels: activeFunnels[0]?.count || 0,
         totalUsers: totalUsers[0]?.count || 0,
@@ -736,9 +736,9 @@ class AnalyticsSystem {
         // Create new record
         await db.insert(funnelAnalytics).values({
           funnelId,
-          companyId: (await db.query.funnels.findFirst({
+          experienceId: (await db.query.funnels.findFirst({
             where: eq(funnels.id, funnelId)
-          }))?.companyId || '',
+          }))?.experienceId || '',
           date: today,
           views: updates.views || 0,
           starts: updates.starts || 0,

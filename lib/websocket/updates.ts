@@ -16,7 +16,7 @@ export interface FunnelUpdate {
   message?: string;
   timestamp: Date;
   userId: string;
-  companyId: string;
+  experienceId: string; // New: Experience-based scoping
 }
 
 export interface ResourceUpdate {
@@ -27,14 +27,14 @@ export interface ResourceUpdate {
   message?: string;
   timestamp: Date;
   userId: string;
-  companyId: string;
+  experienceId: string; // New: Experience-based scoping
 }
 
 export interface AnalyticsUpdate {
   type: 'funnel_analytics' | 'conversation_analytics' | 'revenue_update';
   data: any;
   timestamp: Date;
-  companyId: string;
+  experienceId: string; // New: Experience-based scoping
 }
 
 export interface SystemNotification {
@@ -44,7 +44,7 @@ export interface SystemNotification {
   actionUrl?: string;
   timestamp: Date;
   userId?: string;
-  companyId: string;
+  experienceId: string; // New: Experience-based scoping
 }
 
 export interface CreditUpdate {
@@ -54,7 +54,7 @@ export interface CreditUpdate {
   operation: string;
   timestamp: Date;
   userId: string;
-  companyId: string;
+  experienceId: string; // New: Experience-based scoping
 }
 
 class RealTimeUpdates {
@@ -99,7 +99,7 @@ class RealTimeUpdates {
         message,
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       await this.broadcastUpdate('funnel_updates', update, user);
@@ -125,7 +125,7 @@ class RealTimeUpdates {
         message: deployed ? 'Funnel deployed successfully' : 'Funnel undeployed',
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       await this.broadcastUpdate('funnel_updates', update, user);
@@ -154,7 +154,7 @@ class RealTimeUpdates {
         message,
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       await this.broadcastUpdate('resource_updates', update, user);
@@ -167,7 +167,7 @@ class RealTimeUpdates {
    * Send analytics update
    */
   async sendAnalyticsUpdate(
-    companyId: string,
+    experienceId: string,
     type: AnalyticsUpdate['type'],
     data: any
   ): Promise<void> {
@@ -176,15 +176,15 @@ class RealTimeUpdates {
         type,
         data,
         timestamp: new Date(),
-        companyId
+        experienceId
       };
 
       const message: WebSocketMessage = {
         type: 'update',
-        channel: `analytics:${companyId}`,
+        channel: `analytics:${experienceId}`,
         data: update,
         timestamp: new Date(),
-        companyId
+        experienceId
       };
 
       whopWebSocket.sendMessage(message);
@@ -197,7 +197,7 @@ class RealTimeUpdates {
    * Send system notification
    */
   async sendSystemNotification(
-    companyId: string,
+    experienceId: string,
     type: SystemNotification['type'],
     title: string,
     message: string,
@@ -212,17 +212,17 @@ class RealTimeUpdates {
         actionUrl,
         timestamp: new Date(),
         userId,
-        companyId
+        experienceId
       };
 
-      const channel = userId ? `user:${userId}` : `company:${companyId}`;
+      const channel = userId ? `user:${userId}` : `experience:${experienceId}`;
       const wsMessage: WebSocketMessage = {
         type: 'notification',
         channel: channel,
         data: notification,
         timestamp: new Date(),
         userId,
-        companyId
+        experienceId
       };
 
       whopWebSocket.sendMessage(wsMessage);
@@ -249,7 +249,7 @@ class RealTimeUpdates {
         operation,
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       const message: WebSocketMessage = {
@@ -258,7 +258,7 @@ class RealTimeUpdates {
         data: update,
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       whopWebSocket.sendMessage(message);
@@ -271,30 +271,30 @@ class RealTimeUpdates {
    * Subscribe to funnel updates
    */
   subscribeToFunnelUpdates(
-    companyId: string,
+    experienceId: string,
     handler: (update: FunnelUpdate) => void
   ): void {
-    this.updateHandlers.set(`funnel_updates:${companyId}`, handler);
+    this.updateHandlers.set(`funnel_updates:${experienceId}`, handler);
   }
 
   /**
    * Subscribe to resource updates
    */
   subscribeToResourceUpdates(
-    companyId: string,
+    experienceId: string,
     handler: (update: ResourceUpdate) => void
   ): void {
-    this.updateHandlers.set(`resource_updates:${companyId}`, handler);
+    this.updateHandlers.set(`resource_updates:${experienceId}`, handler);
   }
 
   /**
    * Subscribe to analytics updates
    */
   subscribeToAnalyticsUpdates(
-    companyId: string,
+    experienceId: string,
     handler: (update: AnalyticsUpdate) => void
   ): void {
-    this.updateHandlers.set(`analytics:${companyId}`, handler);
+    this.updateHandlers.set(`analytics:${experienceId}`, handler);
   }
 
   /**
@@ -325,10 +325,10 @@ class RealTimeUpdates {
       // Join user-specific channel for personal updates
       await whopWebSocket.joinChannel(`user:${user.id}`);
       
-      // Join company-wide update channels
-      await whopWebSocket.joinChannel(`funnel_updates:${user.companyId}`);
-      await whopWebSocket.joinChannel(`resource_updates:${user.companyId}`);
-      await whopWebSocket.joinChannel(`analytics:${user.companyId}`);
+      // Join experience-wide update channels
+      await whopWebSocket.joinChannel(`funnel_updates:${user.experienceId}`);
+      await whopWebSocket.joinChannel(`resource_updates:${user.experienceId}`);
+      await whopWebSocket.joinChannel(`analytics:${user.experienceId}`);
       
       console.log(`Joined update channels for user: ${user.id}`);
     } catch (error) {
@@ -345,7 +345,7 @@ class RealTimeUpdates {
     whopWebSocket.subscribe('funnel_updates', (message: WebSocketMessage) => {
       if (message.type === 'update') {
         const update = message.data as FunnelUpdate;
-        const handler = this.updateHandlers.get(`funnel_updates:${update.companyId}`);
+        const handler = this.updateHandlers.get(`funnel_updates:${update.experienceId}`);
         if (handler) {
           handler(update);
         }
@@ -356,7 +356,7 @@ class RealTimeUpdates {
     whopWebSocket.subscribe('resource_updates', (message: WebSocketMessage) => {
       if (message.type === 'update') {
         const update = message.data as ResourceUpdate;
-        const handler = this.updateHandlers.get(`resource_updates:${update.companyId}`);
+        const handler = this.updateHandlers.get(`resource_updates:${update.experienceId}`);
         if (handler) {
           handler(update);
         }
@@ -367,7 +367,7 @@ class RealTimeUpdates {
     whopWebSocket.subscribe('analytics', (message: WebSocketMessage) => {
       if (message.type === 'update') {
         const update = message.data as AnalyticsUpdate;
-        const handler = this.updateHandlers.get(`analytics:${update.companyId}`);
+        const handler = this.updateHandlers.get(`analytics:${update.experienceId}`);
         if (handler) {
           handler(update);
         }
@@ -411,11 +411,11 @@ class RealTimeUpdates {
   ): Promise<void> {
     const message: WebSocketMessage = {
       type: 'update',
-      channel: `${channelType}:${user.companyId}`,
+      channel: `${channelType}:${user.experienceId}`,
       data: update,
       timestamp: new Date(),
       userId: user.id,
-      companyId: user.companyId
+      experienceId: user.experienceId
     };
 
     whopWebSocket.sendMessage(message);

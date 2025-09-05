@@ -14,7 +14,7 @@ import {
   funnelInteractions,
   resources,
   users,
-  companies
+  experiences
 } from '../supabase/schema';
 import { eq, and, gte, lte, desc, asc, count, sum, avg, sql } from 'drizzle-orm';
 import { AuthenticatedUser } from '../middleware/simple-auth';
@@ -175,7 +175,7 @@ class ReportingSystem {
       .from(funnelAnalytics)
       .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
       .where(and(
-        eq(funnels.companyId, user.companyId),
+        eq(funnels.experienceId, user.experienceId),
         ...dateFilter
       ));
 
@@ -201,7 +201,7 @@ class ReportingSystem {
       .from(funnelAnalytics)
       .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
       .where(and(
-        eq(funnels.companyId, user.companyId),
+        eq(funnels.experienceId, user.experienceId),
         ...dateFilter
       ))
       .groupBy(funnels.id, funnels.name)
@@ -220,7 +220,7 @@ class ReportingSystem {
       .from(funnelAnalytics)
       .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
       .where(and(
-        eq(funnels.companyId, user.companyId),
+        eq(funnels.experienceId, user.experienceId),
         ...dateFilter
       ))
       .groupBy(sql`DATE(${funnelAnalytics.date})`)
@@ -308,10 +308,10 @@ class ReportingSystem {
         lastActive: sql<Date>`MAX(${conversations.updatedAt})`
       })
       .from(users)
-      .leftJoin(conversations, eq(users.id, conversations.companyId)) // This join might need adjustment
+      .leftJoin(conversations, eq(users.experienceId, conversations.experienceId)) // This join might need adjustment
       .leftJoin(funnelInteractions, eq(conversations.id, funnelInteractions.conversationId))
       .where(and(
-        eq(users.companyId, user.companyId),
+        eq(users.experienceId, user.experienceId),
         ...dateFilter
       ))
       .groupBy(users.id, users.name)
@@ -321,15 +321,15 @@ class ReportingSystem {
     const engagementTrends = await db
       .select({
         date: sql<string>`DATE(${conversations.createdAt})`,
-        activeUsers: count(sql`DISTINCT ${conversations.companyId}`), // This might need adjustment
+        activeUsers: count(sql`DISTINCT ${conversations.experienceId}`), // This might need adjustment
         newUsers: count(sql`DISTINCT ${users.id}`),
         interactions: count(funnelInteractions.id)
       })
       .from(conversations)
       .leftJoin(funnelInteractions, eq(conversations.id, funnelInteractions.conversationId))
-      .leftJoin(users, eq(conversations.companyId, users.companyId))
+      .leftJoin(users, eq(conversations.experienceId, users.experienceId))
       .where(and(
-        eq(conversations.companyId, user.companyId),
+        eq(conversations.experienceId, user.experienceId),
         ...dateFilter
       ))
       .groupBy(sql`DATE(${conversations.createdAt})`)
@@ -391,7 +391,7 @@ class ReportingSystem {
       .from(funnelAnalytics)
       .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
       .where(and(
-        eq(funnels.companyId, user.companyId),
+        eq(funnels.experienceId, user.experienceId),
         ...(filters.startDate ? [gte(funnelAnalytics.date, filters.startDate)] : []),
         ...(filters.endDate ? [lte(funnelAnalytics.date, filters.endDate)] : [])
       ));
@@ -409,7 +409,7 @@ class ReportingSystem {
       .from(resources)
       .innerJoin(funnelAnalytics, eq(resources.id, funnelAnalytics.funnelId)) // This join might need adjustment
       .where(and(
-        eq(resources.companyId, user.companyId),
+        eq(resources.experienceId, user.experienceId),
         eq(resources.type, 'MY_PRODUCTS'),
         ...(filters.startDate ? [gte(funnelAnalytics.date, filters.startDate)] : []),
         ...(filters.endDate ? [lte(funnelAnalytics.date, filters.endDate)] : [])
@@ -429,7 +429,7 @@ class ReportingSystem {
       .from(funnelAnalytics)
       .innerJoin(funnels, eq(funnelAnalytics.funnelId, funnels.id))
       .where(and(
-        eq(funnels.companyId, user.companyId),
+        eq(funnels.experienceId, user.experienceId),
         ...(filters.startDate ? [gte(funnelAnalytics.date, filters.startDate)] : []),
         ...(filters.endDate ? [lte(funnelAnalytics.date, filters.endDate)] : [])
       ))

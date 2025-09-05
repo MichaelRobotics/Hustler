@@ -52,8 +52,8 @@ export default async function ExperiencePage({
 			console.log('Experience access result:', experienceAccess);
 			
 			if (experienceAccess.hasAccess) {
-				// Get user context (this will create company/user records if needed)
-				const userContext = await getUserContext(userId, whopCompanyId, false, experienceAccess.accessLevel);
+				// Get user context (this will create experience/user records if needed)
+				const userContext = await getUserContext(userId, whopCompanyId, experienceId, false, experienceAccess.accessLevel);
 				console.log('User context result:', userContext ? 'Success' : 'Failed');
 				
 				if (userContext?.isAuthenticated) {
@@ -65,7 +65,7 @@ export default async function ExperiencePage({
 					console.log('Auth context created:', {
 						userId: authContext.user.id,
 						accessLevel: authContext.user.accessLevel,
-						companyId: authContext.user.companyId
+						                                          experienceId: authContext.user.experienceId
 					});
 				}
 			} else {
@@ -99,7 +99,7 @@ export default async function ExperiencePage({
 							</div>
 							<div className="flex justify-between">
 								<span className="text-gray-400">WHOP Company ID:</span>
-								<span className="text-white font-mono">{authContext?.user?.company?.whopCompanyId || 'Missing'}</span>
+								                                                                 <span className="text-white font-mono">{authContext?.user?.experience?.whopCompanyId || 'Missing'}</span>
 							</div>
 							<div className="flex justify-between">
 								<span className="text-gray-400">Auth Context:</span>
@@ -140,16 +140,16 @@ export default async function ExperiencePage({
 										<span className="text-white">{authContext.user.credits}</span>
 									</div>
 									<div className="flex justify-between">
-										<span className="text-gray-400">Company ID:</span>
-										<span className="text-white font-mono">{authContext.user.companyId}</span>
+										<span className="text-gray-400">Experience ID:</span>
+										<span className="text-white font-mono">{authContext.user.experienceId}</span>
 									</div>
 									<div className="flex justify-between">
 										<span className="text-gray-400">WHOP Company ID:</span>
-										<span className="text-white font-mono">{authContext.user.company.whopCompanyId}</span>
+										<span className="text-white font-mono">{authContext.user.experience.whopCompanyId}</span>
 									</div>
 									<div className="flex justify-between">
-										<span className="text-gray-400">Company Name:</span>
-										<span className="text-white">{authContext.user.company.name}</span>
+										<span className="text-gray-400">Experience Name:</span>
+										<span className="text-white">{authContext.user.experience.name}</span>
 									</div>
 									{authContext.user.avatar && (
 										<div className="flex justify-between">
@@ -216,32 +216,32 @@ export default async function ExperiencePage({
 						</div>
 					</div>
 
-					{/* Company Information */}
+					{/* Experience Information */}
 					<div className="bg-gray-800 rounded-lg p-6 text-left">
-						<h2 className="text-lg font-semibold text-white mb-4">Company Information</h2>
+						<h2 className="text-lg font-semibold text-white mb-4">Experience Information</h2>
 						<div className="space-y-2 text-sm">
 							<div className="flex justify-between">
-								<span className="text-gray-400">Company ID:</span>
-								<span className="text-white font-mono">{authContext.user.companyId}</span>
+								<span className="text-gray-400">Experience ID:</span>
+								<span className="text-white font-mono">{authContext.user.experienceId}</span>
 							</div>
 							<div className="flex justify-between">
 								<span className="text-gray-400">WHOP Company ID:</span>
-								<span className="text-white font-mono">{authContext.user.company.whopCompanyId}</span>
+								<span className="text-white font-mono">{authContext.user.experience.whopCompanyId}</span>
 							</div>
 							<div className="flex justify-between">
-								<span className="text-gray-400">Company Name:</span>
-								<span className="text-white">{authContext.user.company.name}</span>
+								<span className="text-gray-400">Experience Name:</span>
+								<span className="text-white">{authContext.user.experience.name}</span>
 							</div>
-							{authContext.user.company.description && (
+							{authContext.user.experience.description && (
 								<div className="flex justify-between">
 									<span className="text-gray-400">Description:</span>
-									<span className="text-white">{authContext.user.company.description}</span>
+									<span className="text-white">{authContext.user.experience.description}</span>
 								</div>
 							)}
-							{authContext.user.company.logo && (
+							{authContext.user.experience.logo && (
 								<div className="flex justify-between">
 									<span className="text-gray-400">Logo:</span>
-									<span className="text-white">{authContext.user.company.logo}</span>
+									<span className="text-white">{authContext.user.experience.logo}</span>
 								</div>
 							)}
 						</div>

@@ -30,12 +30,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle the webhook update
+    // Note: company_id here is the WHOP company ID, which we use to find the experience
     await whopProductSync.handleWebhookUpdate(company_id, {
       event,
       data
     });
 
-    console.log(`WHOP product webhook handled: ${event} for company ${company_id}`);
+    console.log(`WHOP product webhook handled: ${event} for WHOP company ${company_id}`);
 
     return NextResponse.json(
       { success: true, message: 'Webhook processed successfully' },

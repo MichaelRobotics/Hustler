@@ -20,6 +20,7 @@ export interface ChatMessage {
   isRead: boolean;
   metadata?: any;
   userId?: string;
+  experienceId?: string; // New: Experience-based scoping
 }
 
 export interface TypingIndicator {
@@ -58,8 +59,8 @@ class RealTimeMessaging {
    */
   async initialize(user: AuthenticatedUser): Promise<void> {
     try {
-      // Join conversation channels for the user's company
-      await this.joinCompanyChannels(user.companyId);
+      // Join conversation channels for the user's experience
+      await this.joinExperienceChannels(user.experienceId);
       
       // Set up message handlers
       this.setupMessageHandlers();
@@ -86,7 +87,7 @@ class RealTimeMessaging {
       const conversation = await db.query.conversations.findFirst({
         where: and(
           eq(conversations.id, conversationId),
-          eq(conversations.companyId, user.companyId)
+          eq(conversations.experienceId, user.experienceId) // New: Experience-based filtering
         )
       });
 
@@ -167,7 +168,7 @@ class RealTimeMessaging {
         data: typingIndicator,
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       whopWebSocket.sendMessage(message);
@@ -206,11 +207,11 @@ class RealTimeMessaging {
       // Broadcast presence update
       const message: WebSocketMessage = {
         type: 'presence',
-        channel: `company:${user.companyId}`,
+        channel: `experience:${user.experienceId}`,
         data: presence,
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       whopWebSocket.sendMessage(message);
@@ -247,7 +248,7 @@ class RealTimeMessaging {
         },
         timestamp: new Date(),
         userId: user.id,
-        companyId: user.companyId
+        experienceId: user.experienceId
       };
 
       whopWebSocket.sendMessage(message);
@@ -280,10 +281,10 @@ class RealTimeMessaging {
    * Subscribe to user presence updates
    */
   subscribeToPresence(
-    companyId: string,
+    experienceId: string,
     handler: (presence: UserPresence) => void
   ): void {
-    this.presenceHandlers.set(companyId, handler);
+    this.presenceHandlers.set(experienceId, handler);
   }
 
   /**
@@ -301,27 +302,27 @@ class RealTimeMessaging {
   }
 
   /**
-   * Get all online users for a company
+   * Get all online users for an experience
    */
-  getOnlineUsers(companyId: string): UserPresence[] {
+  getOnlineUsers(experienceId: string): UserPresence[] {
     return Array.from(this.userPresence.values())
       .filter(presence => presence.isOnline);
   }
 
   /**
-   * Join company-specific channels
+   * Join experience-specific channels
    */
-  private async joinCompanyChannels(companyId: string): Promise<void> {
+  private async joinExperienceChannels(experienceId: string): Promise<void> {
     try {
-      // Join company-wide channel for presence updates
-      await whopWebSocket.joinChannel(`company:${companyId}`);
+      // Join experience-wide channel for presence updates
+      await whopWebSocket.joinChannel(`experience:${experienceId}`);
       
       // Join system channel for general updates
       await whopWebSocket.joinChannel('system');
       
-      console.log(`Joined channels for company: ${companyId}`);
+      console.log(`Joined channels for experience: ${experienceId}`);
     } catch (error) {
-      console.error('Failed to join company channels:', error);
+      console.error('Failed to join experience channels:', error);
       throw error;
     }
   }
@@ -374,7 +375,7 @@ class RealTimeMessaging {
       data: message,
       timestamp: new Date(),
       userId: message.userId,
-      companyId: undefined // Will be set by the sender
+      experienceId: undefined // Will be set by the sender
     };
 
     whopWebSocket.sendMessage(wsMessage);

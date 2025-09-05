@@ -24,9 +24,19 @@ export function useWhopAuth(): WhopAuthState {
   useEffect(() => {
     const getAuthToken = async () => {
       try {
-        // Check if we're in development mode
-        if (process.env.NODE_ENV === 'development') {
+        // Check if we're in development mode or localhost
+        const isDevelopment = process.env.NODE_ENV === 'development' || 
+            (typeof window !== 'undefined' && window.location.hostname === 'localhost');
+        
+        console.log('useWhopAuth: Environment check', {
+          NODE_ENV: process.env.NODE_ENV,
+          hostname: typeof window !== 'undefined' ? window.location.hostname : 'undefined',
+          isDevelopment
+        });
+        
+        if (isDevelopment) {
           // In development, use test token
+          console.log('useWhopAuth: Using test token for development');
           setState({
             userToken: 'test-token',
             isLoading: false,
@@ -36,6 +46,8 @@ export function useWhopAuth(): WhopAuthState {
         }
 
         // In production, try to get token from iframe context
+        console.log('useWhopAuth: Checking iframe SDK', { iframeSdk: !!iframeSdk });
+        
         if (iframeSdk) {
           // Try to get token from iframe SDK or window context
           try {

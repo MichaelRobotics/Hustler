@@ -1,5 +1,5 @@
 import { db } from '../supabase/db';
-import { funnels, funnelResources, resources, funnelAnalytics } from '../supabase/schema';
+import { funnels, funnelResources, resources, funnelAnalytics, experiences } from '../supabase/schema';
 import { eq, and, desc, asc, count, sql } from 'drizzle-orm';
 import { AuthenticatedUser } from '../middleware/simple-auth';
 import { generateFunnelFlow } from './ai-actions';
@@ -58,7 +58,7 @@ export async function createFunnel(
   try {
     // Create the funnel
     const [newFunnel] = await db.insert(funnels).values({
-      companyId: user.companyId,
+      experienceId: user.experienceId, // Experience-based scoping
       userId: user.id,
       name: input.name,
       description: input.description || null,
@@ -71,16 +71,16 @@ export async function createFunnel(
 
     // Assign resources if provided
     if (input.resources && input.resources.length > 0) {
-      // Verify resources belong to user's company
+      // Verify resources belong to user's experience
       const userResources = await db.query.resources.findMany({
         where: and(
-          eq(resources.companyId, user.companyId),
+          eq(resources.experienceId, user.experienceId), // New: Experience-based filtering
           sql`${resources.id} = ANY(${input.resources})`
         )
       });
 
       if (userResources.length !== input.resources.length) {
-        throw new Error('Some resources do not exist or belong to different company');
+        throw new Error('Some resources do not exist or belong to different experience');
       }
 
       // Create funnel-resource relationships
@@ -92,8 +92,35 @@ export async function createFunnel(
       await db.insert(funnelResources).values(funnelResourceValues);
     }
 
-    // Fetch the complete funnel with resources
-    return await getFunnelById(user, newFunnel.id);
+    // Return the created funnel directly instead of fetching it again
+    const assignedResources = input.resources ? await db.query.resources.findMany({
+      where: and(
+        eq(resources.experienceId, user.experienceId),
+        sql`${resources.id} = ANY(${input.resources})`
+      )
+    }) : [];
+
+    return {
+      id: newFunnel.id,
+      name: newFunnel.name,
+      description: newFunnel.description || undefined,
+      flow: newFunnel.flow,
+      isDeployed: newFunnel.isDeployed,
+      wasEverDeployed: newFunnel.wasEverDeployed,
+      generationStatus: newFunnel.generationStatus,
+      sends: newFunnel.sends,
+      createdAt: newFunnel.createdAt,
+      updatedAt: newFunnel.updatedAt,
+      resources: assignedResources.map((resource: any) => ({
+        id: resource.id,
+        name: resource.name,
+        type: resource.type as 'AFFILIATE' | 'MY_PRODUCTS',
+        category: resource.category as 'PAID' | 'FREE_VALUE',
+        link: resource.link,
+        code: resource.code || undefined,
+        description: resource.description || undefined
+      }))
+    };
   } catch (error) {
     console.error('Error creating funnel:', error);
     throw new Error('Failed to create funnel');
@@ -111,7 +138,7 @@ export async function getFunnelById(
     const funnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
       ),
       with: {
         funnelResources: {
@@ -170,10 +197,10 @@ export async function getFunnels(
   try {
     const offset = (page - 1) * limit;
     
-    // Build where conditions
-    let whereConditions = eq(funnels.companyId, user.companyId);
+    // Build where conditions - use experience-based filtering
+    let whereConditions = eq(funnels.experienceId, user.experienceId);
     
-    // Add user filter for customers
+    // For customers, also filter by user ID to ensure data isolation
     if (user.accessLevel === 'customer') {
       whereConditions = and(whereConditions, eq(funnels.userId, user.id))!;
     }
@@ -256,7 +283,7 @@ export async function updateFunnel(
     const existingFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
       )
     });
 
@@ -291,13 +318,13 @@ export async function updateFunnel(
         // Verify resources belong to user's company
         const userResources = await db.query.resources.findMany({
           where: and(
-            eq(resources.companyId, user.companyId),
+            eq(resources.experienceId, user.experienceId), // New: Experience-based filtering
             sql`${resources.id} = ANY(${input.resources})`
           )
         });
 
         if (userResources.length !== input.resources.length) {
-          throw new Error('Some resources do not exist or belong to different company');
+          throw new Error('Some resources do not exist or belong to different experience');
         }
 
         // Create new funnel-resource relationships
@@ -330,7 +357,7 @@ export async function deleteFunnel(
     const existingFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
       )
     });
 
@@ -366,7 +393,7 @@ export async function deployFunnel(
     const existingFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
       )
     });
 
@@ -421,7 +448,7 @@ export async function undeployFunnel(
     const existingFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
       )
     });
 
@@ -470,7 +497,7 @@ export async function regenerateFunnelFlow(
     const existingFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
       ),
       with: {
         funnelResources: {
@@ -617,7 +644,7 @@ export async function getFunnelAnalytics(
     const existingFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId)
       )
     });
 

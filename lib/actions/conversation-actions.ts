@@ -79,7 +79,7 @@ export async function createConversation(
     const funnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.id, input.funnelId),
-        eq(funnels.companyId, user.companyId)
+        eq(funnels.experienceId, user.experienceId)
       )
     });
 
@@ -94,7 +94,7 @@ export async function createConversation(
 
     // Create the conversation
     const [newConversation] = await db.insert(conversations).values({
-      companyId: user.companyId,
+      experienceId: user.experienceId,
       funnelId: input.funnelId,
       status: 'active',
       currentBlockId: null,
@@ -137,7 +137,7 @@ export async function getConversationById(
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         messages: {
@@ -209,7 +209,7 @@ export async function getConversations(
     const offset = (page - 1) * limit;
     
     // Build where conditions
-    let whereConditions = eq(conversations.companyId, user.companyId);
+    let whereConditions = eq(conversations.experienceId, user.experienceId);
     
     // Add funnel filter
     if (funnelId) {
@@ -326,7 +326,7 @@ export async function updateConversation(
     const existingConversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true
@@ -380,7 +380,7 @@ export async function createMessage(
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, input.conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true
@@ -458,7 +458,7 @@ export async function getMessages(
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true
@@ -526,7 +526,7 @@ export async function createInteraction(
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, input.conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true
@@ -581,7 +581,7 @@ export async function getInteractions(
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true
@@ -628,7 +628,7 @@ export async function completeConversation(
     const existingConversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true
@@ -673,7 +673,7 @@ export async function abandonConversation(
     const existingConversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
-        eq(conversations.companyId, user.companyId)
+        eq(conversations.experienceId, user.experienceId)
       ),
       with: {
         funnel: true

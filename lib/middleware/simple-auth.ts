@@ -10,14 +10,15 @@ import { getUserContext } from '../context/user-context';
 export interface AuthenticatedUser {
   id: string;
   whopUserId: string;
-  companyId: string;
+  experienceId: string; // Experience-based scoping
   email: string;
   name: string;
   avatar?: string;
   credits: number;
   accessLevel: 'admin' | 'customer' | 'no_access';
-  company: {
+  experience: {
     id: string;
+    whopExperienceId: string;
     whopCompanyId: string;
     name: string;
     description?: string;
@@ -52,6 +53,28 @@ function extractCompanyId(request: NextRequest): string | null {
 }
 
 /**
+ * Extract experience ID from request headers or URL
+ */
+function extractExperienceId(request: NextRequest): string | null {
+  // Try different header variations
+  const experienceId = request.headers.get('x-whop-experience-id') ||
+                      request.headers.get('whop-experience-id') ||
+                      request.headers.get('experience-id');
+  
+  // If not in headers, try to extract from URL path
+  if (!experienceId) {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const experienceIndex = pathParts.indexOf('experiences');
+    if (experienceIndex !== -1 && pathParts[experienceIndex + 1]) {
+      return pathParts[experienceIndex + 1];
+    }
+  }
+  
+  return experienceId;
+}
+
+/**
  * Authenticate request and return user context
  */
 export async function authenticateRequest(request: NextRequest): Promise<AuthContext | null> {
@@ -83,6 +106,13 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       return null;
     }
 
+    // Get experience ID
+    const whopExperienceId = extractExperienceId(request);
+    if (!whopExperienceId) {
+      console.log('No experience ID found');
+      return null;
+    }
+
     // Validate company access
     const companyAccess = await whopSdk.access.checkIfUserHasAccessToCompany({
       companyId: whopCompanyId,
@@ -95,7 +125,7 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
     }
 
     // Get user context
-    const userContext = await getUserContext(tokenData.userId, whopCompanyId);
+    const userContext = await getUserContext(tokenData.userId, whopCompanyId, whopExperienceId);
     if (!userContext?.isAuthenticated) {
       console.log('Failed to get user context');
       return null;
@@ -124,7 +154,7 @@ async function createTestUserContext(): Promise<AuthContext> {
     throw new Error('Company ID not found in environment');
   }
 
-  const userContext = await getUserContext(whopUserId, whopCompanyId);
+  const userContext = await getUserContext(whopUserId, whopCompanyId, 'test-experience-id');
   if (!userContext?.isAuthenticated) {
     throw new Error('Failed to create test user context');
   }

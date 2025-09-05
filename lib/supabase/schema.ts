@@ -22,22 +22,27 @@ export const conversationStatusEnum = pgEnum('conversation_status', ['active', '
 export const messageTypeEnum = pgEnum('message_type', ['user', 'bot', 'system']);
 
 // ===== CORE WHOP INTEGRATION TABLES =====
-export const companies = pgTable('companies', {
+// Experiences represent app installations - the proper way to scope data in WHOP apps
+export const experiences = pgTable('experiences', {
   id: uuid('id').defaultRandom().primaryKey(),
-  whopCompanyId: text('whop_company_id').notNull().unique(),
+  whopExperienceId: text('whop_experience_id').notNull().unique(),
+  whopCompanyId: text('whop_company_id').notNull(), // App creator's company (metadata only)
   name: text('name').notNull(),
   description: text('description'),
   logo: text('logo'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
-  whopCompanyIdIdx: index('companies_whop_company_id_idx').on(table.whopCompanyId),
+  whopExperienceIdIdx: index('experiences_whop_experience_id_idx').on(table.whopExperienceId),
+  whopCompanyIdIdx: index('experiences_whop_company_id_idx').on(table.whopCompanyId),
 }));
+
+// Companies table removed - using experiences for multitenancy
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   whopUserId: text('whop_user_id').notNull().unique(),
-  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  experienceId: uuid('experience_id').notNull().references(() => experiences.id, { onDelete: 'cascade' }), // Experience-based scoping
   email: text('email').notNull(),
   name: text('name').notNull(),
   avatar: text('avatar'),
@@ -46,13 +51,13 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   whopUserIdIdx: index('users_whop_user_id_idx').on(table.whopUserId),
-  companyIdIdx: index('users_company_id_idx').on(table.companyId),
+  experienceIdIdx: index('users_experience_id_idx').on(table.experienceId),
 }));
 
 // ===== FUNNEL MANAGEMENT TABLES =====
 export const funnels = pgTable('funnels', {
   id: uuid('id').defaultRandom().primaryKey(),
-  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  experienceId: uuid('experience_id').notNull().references(() => experiences.id, { onDelete: 'cascade' }), // Experience-based scoping
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
@@ -64,7 +69,7 @@ export const funnels = pgTable('funnels', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
-  companyIdIdx: index('funnels_company_id_idx').on(table.companyId),
+  experienceIdIdx: index('funnels_experience_id_idx').on(table.experienceId),
   userIdIdx: index('funnels_user_id_idx').on(table.userId),
   isDeployedIdx: index('funnels_is_deployed_idx').on(table.isDeployed),
   generationStatusIdx: index('funnels_generation_status_idx').on(table.generationStatus),
@@ -73,7 +78,7 @@ export const funnels = pgTable('funnels', {
 // ===== RESOURCE MANAGEMENT TABLES =====
 export const resources = pgTable('resources', {
   id: uuid('id').defaultRandom().primaryKey(),
-  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  experienceId: uuid('experience_id').notNull().references(() => experiences.id, { onDelete: 'cascade' }), // Experience-based scoping
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   type: resourceTypeEnum('type').notNull(),
@@ -85,7 +90,7 @@ export const resources = pgTable('resources', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
-  companyIdIdx: index('resources_company_id_idx').on(table.companyId),
+  experienceIdIdx: index('resources_experience_id_idx').on(table.experienceId),
   userIdIdx: index('resources_user_id_idx').on(table.userId),
   typeIdx: index('resources_type_idx').on(table.type),
   whopProductIdIdx: index('resources_whop_product_id_idx').on(table.whopProductId),
@@ -105,7 +110,7 @@ export const funnelResources = pgTable('funnel_resources', {
 // ===== LIVE CHAT & CONVERSATIONS =====
 export const conversations = pgTable('conversations', {
   id: uuid('id').defaultRandom().primaryKey(),
-  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  experienceId: uuid('experience_id').notNull().references(() => experiences.id, { onDelete: 'cascade' }), // Experience-based scoping
   funnelId: uuid('funnel_id').notNull().references(() => funnels.id, { onDelete: 'cascade' }),
   status: conversationStatusEnum('status').default('active').notNull(),
   currentBlockId: text('current_block_id'),
@@ -114,7 +119,7 @@ export const conversations = pgTable('conversations', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
-  companyIdIdx: index('conversations_company_id_idx').on(table.companyId),
+  experienceIdIdx: index('conversations_experience_id_idx').on(table.experienceId),
   funnelIdIdx: index('conversations_funnel_id_idx').on(table.funnelId),
   statusIdx: index('conversations_status_idx').on(table.status),
 }));
@@ -147,7 +152,7 @@ export const funnelInteractions = pgTable('funnel_interactions', {
 // ===== ANALYTICS TABLES =====
 export const funnelAnalytics = pgTable('funnel_analytics', {
   id: uuid('id').defaultRandom().primaryKey(),
-  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  experienceId: uuid('experience_id').notNull().references(() => experiences.id, { onDelete: 'cascade' }), // Experience-based scoping
   funnelId: uuid('funnel_id').notNull().references(() => funnels.id, { onDelete: 'cascade' }),
   date: timestamp('date').notNull(),
   views: integer('views').default(0).notNull(),
@@ -157,14 +162,14 @@ export const funnelAnalytics = pgTable('funnel_analytics', {
   revenue: decimal('revenue', { precision: 10, scale: 2 }).default('0').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
-  companyIdIdx: index('funnel_analytics_company_id_idx').on(table.companyId),
+  experienceIdIdx: index('funnel_analytics_experience_id_idx').on(table.experienceId),
   funnelIdIdx: index('funnel_analytics_funnel_id_idx').on(table.funnelId),
   dateIdx: index('funnel_analytics_date_idx').on(table.date),
   uniqueFunnelDate: unique('unique_funnel_date').on(table.funnelId, table.date),
 }));
 
 // ===== RELATIONS =====
-export const companiesRelations = relations(companies, ({ many }) => ({
+export const experiencesRelations = relations(experiences, ({ many }) => ({
   users: many(users),
   funnels: many(funnels),
   resources: many(resources),
@@ -172,19 +177,21 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   funnelAnalytics: many(funnelAnalytics),
 }));
 
+// Companies relations removed - using experiences for multitenancy
+
 export const usersRelations = relations(users, ({ one, many }) => ({
-  company: one(companies, {
-    fields: [users.companyId],
-    references: [companies.id],
+  experience: one(experiences, {
+    fields: [users.experienceId],
+    references: [experiences.id],
   }),
   funnels: many(funnels),
   resources: many(resources),
 }));
 
 export const funnelsRelations = relations(funnels, ({ one, many }) => ({
-  company: one(companies, {
-    fields: [funnels.companyId],
-    references: [companies.id],
+  experience: one(experiences, {
+    fields: [funnels.experienceId],
+    references: [experiences.id],
   }),
   user: one(users, {
     fields: [funnels.userId],
@@ -196,9 +203,9 @@ export const funnelsRelations = relations(funnels, ({ one, many }) => ({
 }));
 
 export const resourcesRelations = relations(resources, ({ one, many }) => ({
-  company: one(companies, {
-    fields: [resources.companyId],
-    references: [companies.id],
+  experience: one(experiences, {
+    fields: [resources.experienceId],
+    references: [experiences.id],
   }),
   user: one(users, {
     fields: [resources.userId],
@@ -219,9 +226,9 @@ export const funnelResourcesRelations = relations(funnelResources, ({ one }) => 
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
-  company: one(companies, {
-    fields: [conversations.companyId],
-    references: [companies.id],
+  experience: one(experiences, {
+    fields: [conversations.experienceId],
+    references: [experiences.id],
   }),
   funnel: one(funnels, {
     fields: [conversations.funnelId],
@@ -246,9 +253,9 @@ export const funnelInteractionsRelations = relations(funnelInteractions, ({ one 
 }));
 
 export const funnelAnalyticsRelations = relations(funnelAnalytics, ({ one }) => ({
-  company: one(companies, {
-    fields: [funnelAnalytics.companyId],
-    references: [companies.id],
+  experience: one(experiences, {
+    fields: [funnelAnalytics.experienceId],
+    references: [experiences.id],
   }),
   funnel: one(funnels, {
     fields: [funnelAnalytics.funnelId],

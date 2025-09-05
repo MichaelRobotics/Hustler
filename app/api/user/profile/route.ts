@@ -22,7 +22,7 @@ async function getUserProfileHandler(request: NextRequest, context: AuthContext)
       avatar: user.avatar,
       credits: user.credits,
       accessLevel: user.accessLevel,
-      company: user.company,
+      experience: user.experience,
       createdAt: new Date().toISOString() // You might want to add this to the schema
     };
 
@@ -56,7 +56,7 @@ async function updateUserProfileHandler(request: NextRequest, context: AuthConte
       avatar: avatar || user.avatar,
       credits: user.credits,
       accessLevel: user.accessLevel,
-      company: user.company
+      experience: user.experience
     };
 
     return createSuccessResponse(updatedProfile, 'User profile updated successfully');
