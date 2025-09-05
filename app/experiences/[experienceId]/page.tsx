@@ -1,5 +1,5 @@
-import { whopSdk } from "@/lib/whop-sdk";
 import { headers } from "next/headers";
+import { authenticateRequest } from "@/lib/middleware/auth";
 import { ExperienceView } from "@/lib/components/experiences";
 
 export default async function ExperiencePage({
@@ -7,52 +7,58 @@ export default async function ExperiencePage({
 }: {
 	params: Promise<{ experienceId: string }>;
 }) {
-	// The headers contains the user token
-	const headersList = await headers();
-
-	// The experienceId is a path param
+	// Get experienceId from path params
 	const { experienceId } = await params;
 
-	// The user token is in the headers
-	const { userId } = await whopSdk.verifyUserToken(headersList);
+	// Create a mock request object for authentication
+	const headersList = await headers();
+	const mockRequest = {
+		headers: headersList,
+		url: `/experiences/${experienceId}`,
+		nextUrl: new URL(`/experiences/${experienceId}`, 'http://localhost:3000')
+	} as any;
 
-	const result = await whopSdk.access.checkIfUserHasAccessToExperience({
-		userId,
-		experienceId,
-	});
+	// Use the unified authentication middleware
+	const authContext = await authenticateRequest(mockRequest);
 
-	const user = await whopSdk.users.getUser({ userId });
-	const experience = await whopSdk.experiences.getExperience({ experienceId });
-
-	// Either: 'admin' | 'customer' | 'no_access';
-	// 'admin' means the user is an admin of the whop, such as an owner or moderator
-	// 'customer' means the user is a common member in this whop
-	// 'no_access' means the user does not have access to the whop
-	const { accessLevel } = result;
-
-	// Show the experience page with view selection for both admins and customers
-	if (accessLevel === 'admin' || accessLevel === 'customer') {
+	if (!authContext?.isAuthenticated) {
 		return (
-			<ExperienceView
-				userName={user.name || 'User'}
-				accessLevel={accessLevel}
-				experienceId={experienceId}
-			/>
+			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
+				<div className="text-center">
+					<h1 className="text-2xl font-bold text-white mb-4">Authentication Required</h1>
+					<p className="text-gray-300 mb-4">
+						Please log in to access this experience.
+					</p>
+				</div>
+			</div>
 		);
 	}
 
-	// Show access denied only for users with no access
-	return (
-		<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
-			<div className="text-center">
-				<h1 className="text-2xl font-bold text-white mb-4">Access Denied</h1>
-				<p className="text-gray-300 mb-4">
-					Hi <strong>{user.name}</strong>, you need access to view this dashboard.
-				</p>
-				<p className="text-sm text-gray-400">
-					Your access level: <strong>{accessLevel}</strong>
-				</p>
+	if (!authContext.hasAccess) {
+		return (
+			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
+				<div className="text-center">
+					<h1 className="text-2xl font-bold text-white mb-4">Access Denied</h1>
+					<p className="text-gray-300 mb-4">
+						Hi <strong>{authContext.user.name}</strong>, you need access to view this dashboard.
+					</p>
+					<p className="text-sm text-gray-400">
+						Your access level: <strong>{authContext.user.accessLevel}</strong>
+					</p>
+				</div>
 			</div>
-		</div>
+		);
+	}
+
+	// Show the experience page with view selection for both admins and customers
+	// Filter out no_access users (they should have been caught by hasAccess check)
+	const accessLevel = authContext.user.accessLevel === 'no_access' ? 'customer' : authContext.user.accessLevel;
+	
+	return (
+		<ExperienceView
+			userName={authContext.user.name}
+			accessLevel={accessLevel as 'admin' | 'customer'}
+			experienceId={experienceId}
+		/>
 	);
 }

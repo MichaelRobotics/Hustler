@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useIframeSdk } from "@whop/react";
 
 interface WhopAuthState {
   userToken: string | null;
@@ -10,9 +11,10 @@ interface WhopAuthState {
 
 /**
  * Hook to get WHOP user authentication token
- * Works both in iframe context and development mode
+ * Uses official WHOP iframe SDK for production, test token for development
  */
 export function useWhopAuth(): WhopAuthState {
+  const iframeSdk = useIframeSdk();
   const [state, setState] = useState<WhopAuthState>({
     userToken: null,
     isLoading: true,
@@ -33,9 +35,23 @@ export function useWhopAuth(): WhopAuthState {
           return;
         }
 
-        // In production, try to get token from WHOP iframe context
+        // In production, WHOP iframe SDK doesn't provide getUserToken method
+        // The token is automatically passed via x-whop-user-token header to the backend
+        // For frontend, we need to rely on the backend authentication
+        if (iframeSdk) {
+          // Iframe SDK is available, but we don't get token directly
+          // The token is handled by the backend via headers
+          setState({
+            userToken: 'iframe-context', // Special marker for iframe context
+            isLoading: false,
+            error: null
+          });
+          return;
+        }
+
+        // Fallback: try legacy methods if iframe SDK is not available
         if (typeof window !== 'undefined') {
-          // Check for WHOP iframe SDK
+          // Check for WHOP iframe SDK in window object (legacy support)
           const whopSdk = (window as any).whopIframeSdk || 
                          (window as any).whop?.iframeSdk ||
                          (window as any).parent?.whopIframeSdk;
@@ -50,7 +66,7 @@ export function useWhopAuth(): WhopAuthState {
               });
               return;
             } catch (error) {
-              console.error('Failed to get user token from WHOP SDK:', error);
+              console.error('Failed to get user token from legacy WHOP SDK:', error);
             }
           }
 
@@ -64,7 +80,7 @@ export function useWhopAuth(): WhopAuthState {
             return;
           }
 
-          // Fallback: try to get token from URL parameters or headers
+          // Fallback: try to get token from URL parameters
           const urlParams = new URLSearchParams(window.location.search);
           const tokenFromUrl = urlParams.get('token') || urlParams.get('userToken');
           
@@ -105,7 +121,7 @@ export function useWhopAuth(): WhopAuthState {
     };
 
     getAuthToken();
-  }, []);
+  }, [iframeSdk]);
 
   return state;
 }
@@ -125,11 +141,24 @@ export function useAuthenticatedFetch() {
       throw new Error('No authentication token available');
     }
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'x-whop-user-token': userToken,
-      ...options.headers
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
     };
+
+    // Add existing headers from options
+    if (options.headers) {
+      Object.entries(options.headers).forEach(([key, value]) => {
+        if (typeof value === 'string') {
+          headers[key] = value;
+        }
+      });
+    }
+
+    // Only add x-whop-user-token header if we have a real token
+    // In iframe context, the token is automatically passed by WHOP
+    if (userToken !== 'iframe-context') {
+      headers['x-whop-user-token'] = userToken;
+    }
 
     return fetch(url, {
       ...options,

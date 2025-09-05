@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withRouteProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/simple-auth';
 
 /**
  * User Profile API Route
@@ -9,7 +9,7 @@ import { withRouteProtection, createSuccessResponse, createErrorResponse, type P
 /**
  * GET /api/user/profile - Get current user profile
  */
-async function getUserProfileHandler(context: ProtectedRouteContext) {
+async function getUserProfileHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
     
@@ -39,9 +39,9 @@ async function getUserProfileHandler(context: ProtectedRouteContext) {
 /**
  * PUT /api/user/profile - Update user profile
  */
-async function updateUserProfileHandler(context: ProtectedRouteContext) {
+async function updateUserProfileHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const { name, avatar } = await request.json();
 
     // Note: In a real implementation, you might want to update the database
@@ -70,5 +70,5 @@ async function updateUserProfileHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const GET = withRouteProtection(getUserProfileHandler);
-export const PUT = withRouteProtection(updateUserProfileHandler);
+export const GET = withCustomerAuth(getUserProfileHandler);
+export const PUT = withCustomerAuth(updateUserProfileHandler);

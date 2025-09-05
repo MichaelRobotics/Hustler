@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
 import { getFunnelAnalytics } from '../../../lib/actions/funnel-actions';
 
 /**
@@ -10,9 +10,9 @@ import { getFunnelAnalytics } from '../../../lib/actions/funnel-actions';
 /**
  * GET /api/analytics - Get analytics data
  */
-async function getAnalyticsHandler(context: ProtectedRouteContext) {
+async function getAnalyticsHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -41,4 +41,4 @@ async function getAnalyticsHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handler
-export const GET = withCustomerProtection(getAnalyticsHandler);
+export const GET = withCustomerAuth(getAnalyticsHandler);

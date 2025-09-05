@@ -2,6 +2,8 @@ import { Inter } from "next/font/google";
 import 'frosted-ui/styles.css';
 import "./globals.css";
 import { ThemeProvider } from '@/lib/components/common/ThemeProvider';
+import { AuthProvider } from '@/lib/context/auth-context';
+import { WhopIframeSdkProvider } from "@whop/react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -30,9 +32,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <WhopIframeSdkProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </ThemeProvider>
+        </WhopIframeSdkProvider>
       </body>
     </html>
   );

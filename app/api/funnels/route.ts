@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerProtection, createSuccessResponse, createErrorResponse, type ProtectedRouteContext } from '../../../lib/middleware';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/simple-auth';
 import { getFunnels, createFunnel } from '../../../lib/actions/funnel-actions';
 
 /**
@@ -10,9 +10,9 @@ import { getFunnels, createFunnel } from '../../../lib/actions/funnel-actions';
 /**
  * GET /api/funnels - List user's funnels
  */
-async function getFunnelsHandler(context: ProtectedRouteContext) {
+async function getFunnelsHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const url = new URL(request.url);
     
     // Extract query parameters
@@ -36,9 +36,9 @@ async function getFunnelsHandler(context: ProtectedRouteContext) {
 /**
  * POST /api/funnels - Create a new funnel
  */
-async function createFunnelHandler(context: ProtectedRouteContext) {
+async function createFunnelHandler(request: NextRequest, context: AuthContext) {
   try {
-    const { user, request } = context;
+    const { user } = context;
     const input = await request.json();
 
     if (!input.name) {
@@ -62,5 +62,5 @@ async function createFunnelHandler(context: ProtectedRouteContext) {
 }
 
 // Export the protected route handlers
-export const GET = withCustomerProtection(getFunnelsHandler);
-export const POST = withCustomerProtection(createFunnelHandler);
+export const GET = withCustomerAuth(getFunnelsHandler);
+export const POST = withCustomerAuth(createFunnelHandler);
