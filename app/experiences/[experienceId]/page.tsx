@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
-import { authenticateRequest } from "@/lib/middleware/simple-auth";
+import { whopSdk } from "@/lib/whop-sdk";
+import { getUserContext } from "@/lib/context/user-context";
 import { ExperienceView } from "@/lib/components/experiences";
 
 export default async function ExperiencePage({
@@ -10,16 +11,55 @@ export default async function ExperiencePage({
 	// Get experienceId from path params
 	const { experienceId } = await params;
 
-	// Create a mock request object for authentication
+	// Get headers from WHOP iframe
 	const headersList = await headers();
-	const mockRequest = {
-		headers: headersList,
-		url: `/experiences/${experienceId}`,
-		nextUrl: new URL(`/experiences/${experienceId}`, 'http://localhost:3000')
-	} as any;
 
-	// Use the unified authentication middleware
-	const authContext = await authenticateRequest(mockRequest);
+	let authContext = null;
+
+	try {
+		// Debug: Log all headers to see what WHOP is sending
+		console.log('WHOP Headers received:', {
+			'x-whop-user-token': headersList.get('x-whop-user-token') ? 'Present' : 'Missing',
+			'x-whop-company-id': headersList.get('x-whop-company-id') || 'Missing',
+			'whop-company-id': headersList.get('whop-company-id') || 'Missing',
+			'authorization': headersList.get('authorization') ? 'Present' : 'Missing',
+			'all-headers': Object.fromEntries(headersList.entries())
+		});
+
+		// Verify user token directly with WHOP SDK (as per WHOP docs)
+		const { userId } = await whopSdk.verifyUserToken(headersList);
+		console.log('Verified user ID:', userId);
+		
+		// Get company ID from headers
+		const whopCompanyId = headersList.get('x-whop-company-id') || 
+		                      headersList.get('whop-company-id') ||
+		                      process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+
+		console.log('Company ID found:', whopCompanyId);
+
+		if (!whopCompanyId) {
+			console.log('No company ID found in headers');
+		} else {
+			// Get user context (this will create company/user records if needed)
+			const userContext = await getUserContext(userId, whopCompanyId);
+			console.log('User context result:', userContext ? 'Success' : 'Failed');
+			
+			if (userContext?.isAuthenticated) {
+				authContext = {
+					user: userContext.user,
+					isAuthenticated: true,
+					hasAccess: userContext.user.accessLevel !== 'no_access'
+				};
+				console.log('Auth context created:', {
+					userId: authContext.user.id,
+					accessLevel: authContext.user.accessLevel,
+					companyId: authContext.user.companyId
+				});
+			}
+		}
+	} catch (error) {
+		console.error('Authentication error:', error);
+	}
 
 	if (!authContext?.isAuthenticated) {
 		return (
@@ -37,6 +77,14 @@ export default async function ExperiencePage({
 							<div className="flex justify-between">
 								<span className="text-gray-400">Experience ID:</span>
 								<span className="text-white font-mono">{experienceId}</span>
+							</div>
+							<div className="flex justify-between">
+								<span className="text-gray-400">WHOP User Token:</span>
+								<span className="text-white">{headersList.get('x-whop-user-token') ? 'Present' : 'Missing'}</span>
+							</div>
+							<div className="flex justify-between">
+								<span className="text-gray-400">WHOP Company ID:</span>
+								<span className="text-white font-mono">{headersList.get('x-whop-company-id') || headersList.get('whop-company-id') || 'Missing'}</span>
 							</div>
 							<div className="flex justify-between">
 								<span className="text-gray-400">Auth Context:</span>
