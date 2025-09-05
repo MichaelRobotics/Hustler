@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { authenticateRequest } from "@/lib/middleware/auth";
+import { authenticateRequest } from "@/lib/middleware/simple-auth";
 import { ExperienceView } from "@/lib/components/experiences";
 
 export default async function ExperiencePage({
