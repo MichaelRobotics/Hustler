@@ -41,11 +41,7 @@ async function getFunnelsHandler(request: NextRequest, context: AuthContext) {
     }
 
     // Get funnels using the full user context
-    const funnels = await getFunnels(userContext.user, {
-      page,
-      limit,
-      search
-    });
+    const funnels = await getFunnels(userContext.user, page, limit, search);
 
     return NextResponse.json({
       success: true,

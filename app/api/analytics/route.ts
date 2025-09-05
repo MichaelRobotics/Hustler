@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/whop-auth';
+import { withWhopAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/whop-auth';
 import { getFunnelAnalytics } from '../../../lib/actions/funnel-actions';
+import { getUserContext } from '../../../lib/context/user-context';
 
 /**
  * Analytics API Route
@@ -27,8 +28,27 @@ async function getAnalyticsHandler(request: NextRequest, context: AuthContext) {
       );
     }
 
+    // Use experience ID from URL or fallback to a default
+    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+
+    // Get the full user context from the simplified auth (whopCompanyId is now optional)
+    const userContext = await getUserContext(
+      user.userId,
+      '', // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+      'customer' // default access level
+    );
+
+    if (!userContext) {
+      return NextResponse.json(
+        { error: 'User context not found' },
+        { status: 401 }
+      );
+    }
+
     // Get analytics using server action
-    const analytics = await getFunnelAnalytics(user, funnelId, startDate, endDate);
+    const analytics = await getFunnelAnalytics(context.user, funnelId, startDate, endDate);
 
     return createSuccessResponse(analytics, 'Analytics retrieved successfully');
   } catch (error) {
@@ -41,4 +61,4 @@ async function getAnalyticsHandler(request: NextRequest, context: AuthContext) {
 }
 
 // Export the protected route handler
-export const GET = withCustomerAuth(getAnalyticsHandler);
+export const GET = withWhopAuth(getAnalyticsHandler);

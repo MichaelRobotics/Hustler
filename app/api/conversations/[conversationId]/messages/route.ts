@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withConversationAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/whop-auth';
 import { type AuthContext } from '../../../../../lib/middleware/whop-auth';
 import { getMessages, createMessage } from '../../../../../lib/actions/conversation-actions';
+import { getUserContext } from '../../../../../lib/context/user-context';
 
 /**
  * Conversation Messages API Route
@@ -13,6 +14,7 @@ import { getMessages, createMessage } from '../../../../../lib/actions/conversat
  */
 async function getMessagesHandler(request: NextRequest, context: AuthContext) {
   try {
+    const { user } = context;
     const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
     const url = new URL(request.url);
     
@@ -27,8 +29,27 @@ async function getMessagesHandler(request: NextRequest, context: AuthContext) {
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '50');
 
+    // Use experience ID from URL or fallback to a default
+    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+
+    // Get the full user context from the simplified auth (whopCompanyId is now optional)
+    const userContext = await getUserContext(
+      user.userId,
+      '', // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+      'customer' // default access level
+    );
+
+    if (!userContext) {
+      return NextResponse.json(
+        { error: 'User context not found' },
+        { status: 401 }
+      );
+    }
+
     // Get messages using server action
-    const result = await getMessages(context.user, conversationId, page, limit);
+    const result = // await getMessages(context.user, conversationId, page, limit);
 
     return createSuccessResponse(result, 'Messages retrieved successfully');
   } catch (error) {
@@ -89,5 +110,5 @@ async function createMessageHandler(request: NextRequest, context: AuthContext) 
 }
 
 // Export the protected route handlers with resource protection
-export const GET = withConversationAuth( getMessagesHandler);
-export const POST = withConversationAuth( createMessageHandler);
+// export const GET = withConversationAuth( getMessagesHandler);
+// export const POST = withConversationAuth( createMessageHandler);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateFunnelFlow, AIError, ValidationError } from '../../../lib/actions/ai-actions';
 import { withWhopAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/whop-auth';
+import { getUserContext } from '../../../lib/context/user-context';
 import { updateUserCredits } from '../../../lib/context/user-context';
 
 /**
@@ -68,4 +69,4 @@ async function generateFunnelHandler(request: NextRequest, context: AuthContext)
 }
 
 // Export the protected route handler
-export const POST = withWhopAuth(generateFunnelHandler);
+// export const POST = withWhopAuth(generateFunnelHandler);

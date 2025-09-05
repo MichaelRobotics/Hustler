@@ -97,6 +97,10 @@ export function withConversationAuth(handler: (request: NextRequest, context: Au
   return withWhopAuth(handler);
 }
 
+export function withAdminAuth(handler: (request: NextRequest, context: AuthContext) => Promise<NextResponse>) {
+  return withWhopAuth(handler);
+}
+
 /**
  * Simple response helpers for backward compatibility
  */

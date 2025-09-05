@@ -14,7 +14,7 @@ import type {
   BackendState, 
   StateAction
 } from '../state/types';
-import type { AuthenticatedUser } from '../middleware/whop-auth';
+import type { AuthenticatedUser } from './user-context';
 import { 
   useStateManager, 
   UseStateManagerOptions 
