@@ -102,8 +102,8 @@ export default function AdminPanel() {
     navigationHandleViewChange(view, selectedFunnel, currentView, setLibraryContext, setSelectedFunnelForLibrary);
   };
 
-  const handleAddFunnelWithNavigation = () => {
-    const newFunnel = handleAddFunnel();
+  const handleAddFunnelWithNavigation = async () => {
+    const newFunnel = await handleAddFunnel();
     if (newFunnel) {
       setCurrentView('resources');
     }
