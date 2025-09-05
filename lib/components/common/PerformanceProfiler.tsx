@@ -5,7 +5,7 @@ import React, { Profiler, ReactNode } from 'react';
 interface PerformanceProfilerProps {
   id: string;
   children: ReactNode;
-  onRender?: (id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => void;
+  onRender?: (id: string, phase: 'mount' | 'update' | 'nested-update', actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => void;
   enabled?: boolean;
 }
 
@@ -17,7 +17,7 @@ const PerformanceProfiler: React.FC<PerformanceProfilerProps> = React.memo(({
 }) => {
   const handleRender = (
     id: string,
-    phase: 'mount' | 'update',
+    phase: 'mount' | 'update' | 'nested-update',
     actualDuration: number,
     baseDuration: number,
     startTime: number,

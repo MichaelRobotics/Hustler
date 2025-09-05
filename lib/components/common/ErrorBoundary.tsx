@@ -118,8 +118,8 @@ class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-3 justify-center">
               <Button
                 onClick={this.resetErrorBoundary}
-                variant="outline"
-                size="sm"
+                variant="soft"
+                size="2"
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -128,7 +128,7 @@ class ErrorBoundary extends Component<Props, State> {
               
               <Button
                 onClick={() => window.location.reload()}
-                size="sm"
+                size="2"
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
