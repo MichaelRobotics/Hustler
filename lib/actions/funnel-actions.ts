@@ -1,6 +1,6 @@
 import { db } from '../supabase/db';
 import { funnels, funnelResources, resources, funnelAnalytics, experiences } from '../supabase/schema';
-import { eq, and, desc, asc, count, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, count, sql, inArray } from 'drizzle-orm';
 import { AuthenticatedUser } from '../context/user-context';
 import { generateFunnelFlow } from './ai-actions';
 import { updateUserCredits } from '../context/user-context';
@@ -75,7 +75,7 @@ export async function createFunnel(
       const userResources = await db.query.resources.findMany({
         where: and(
           eq(resources.experienceId, user.experienceId), // New: Experience-based filtering
-          sql`${resources.id} = ANY(${input.resources})`
+          inArray(resources.id, input.resources)
         )
       });
 
@@ -93,10 +93,10 @@ export async function createFunnel(
     }
 
     // Return the created funnel directly instead of fetching it again
-    const assignedResources = input.resources ? await db.query.resources.findMany({
+    const assignedResources = input.resources && input.resources.length > 0 ? await db.query.resources.findMany({
       where: and(
         eq(resources.experienceId, user.experienceId),
-        sql`${resources.id} = ANY(${input.resources})`
+        inArray(resources.id, input.resources)
       )
     }) : [];
 
@@ -315,11 +315,11 @@ export async function updateFunnel(
 
       // Add new resource assignments
       if (input.resources.length > 0) {
-        // Verify resources belong to user's company
+        // Verify resources belong to user's experience
         const userResources = await db.query.resources.findMany({
           where: and(
             eq(resources.experienceId, user.experienceId), // New: Experience-based filtering
-            sql`${resources.id} = ANY(${input.resources})`
+            inArray(resources.id, input.resources)
           )
         });
 
