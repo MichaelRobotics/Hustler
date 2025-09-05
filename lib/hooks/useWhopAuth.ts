@@ -33,7 +33,7 @@ export function useWhopAuth(): WhopAuthState {
           return;
         }
 
-        // In production, try to get token from WHOP iframe SDK
+        // In production, try to get token from WHOP iframe context
         if (typeof window !== 'undefined') {
           // Check for WHOP iframe SDK
           const whopSdk = (window as any).whopIframeSdk || 
@@ -52,6 +52,16 @@ export function useWhopAuth(): WhopAuthState {
             } catch (error) {
               console.error('Failed to get user token from WHOP SDK:', error);
             }
+          }
+
+          // Alternative: Check if we're in a WHOP iframe and token is available in window
+          if ((window as any).whopUserToken) {
+            setState({
+              userToken: (window as any).whopUserToken,
+              isLoading: false,
+              error: null
+            });
+            return;
           }
 
           // Fallback: try to get token from URL parameters or headers
@@ -117,7 +127,7 @@ export function useAuthenticatedFetch() {
 
     const headers = {
       'Content-Type': 'application/json',
-      'whop-dev-user-token': userToken,
+      'x-whop-user-token': userToken,
       ...options.headers
     };
 

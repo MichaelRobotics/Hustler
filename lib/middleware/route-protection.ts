@@ -79,10 +79,10 @@ export function createSuccessResponse<T>(
  * Extract WHOP user token from request headers
  */
 export function extractWhopToken(request: NextRequest): string | null {
-  // Try different header formats
-  const userToken = request.headers.get('whop-dev-user-token') || 
+  // Try different header formats (prioritize x-whop-user-token for iframe apps)
+  const userToken = request.headers.get('x-whop-user-token') ||
+                   request.headers.get('whop-dev-user-token') || 
                    request.headers.get('authorization')?.replace('Bearer ', '') ||
-                   request.headers.get('x-whop-user-token') ||
                    request.headers.get('whop-user-token');
   
   return userToken;
@@ -136,8 +136,8 @@ export function withRouteProtection(
         console.log('Using test token for development in route protection');
         tokenData = { userId: 'test-user-id' };
       } else {
-        // Verify token with WHOP SDK
-        tokenData = await whopSdk.verifyUserToken(userToken);
+        // Verify token with WHOP SDK (pass headers object, not just token)
+        tokenData = await whopSdk.verifyUserToken(request.headers);
         
         if (!tokenData || !tokenData.userId) {
           return createErrorResponse(
@@ -150,17 +150,7 @@ export function withRouteProtection(
       }
 
           const whopUserId = tokenData.userId;
-    let whopCompanyId = (tokenData as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-
-      // If no company ID in token, try to get it from user data
-      if (!whopCompanyId) {
-        try {
-          const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
-          whopCompanyId = (whopUser as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-        } catch (error) {
-          console.log('Could not get company ID from user data:', error);
-        }
-      }
+    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
 
       if (!whopCompanyId) {
         return createErrorResponse(
@@ -427,18 +417,7 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
       return null;
     }
 
-    let whopCompanyId = (tokenData as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-    
-    // If no company ID in token, try to get it from user data
-    if (!whopCompanyId) {
-      try {
-        const whopUser = await whopSdk.users.getUser({ userId: tokenData.userId });
-        whopCompanyId = (whopUser as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-      } catch (error) {
-        console.log('Could not get company ID from user data:', error);
-      }
-    }
-    
+    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
     if (!whopCompanyId) {
       return null;
     }

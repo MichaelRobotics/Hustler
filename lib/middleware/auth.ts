@@ -34,8 +34,9 @@ export interface AuthContext {
  */
 export async function authenticateRequest(request: NextRequest): Promise<AuthContext | null> {
   try {
-    // Extract WHOP user token from headers
-    const userToken = request.headers.get('whop-dev-user-token') || 
+    // Extract WHOP user token from headers (correct header for iframe apps)
+    const userToken = request.headers.get('x-whop-user-token') || 
+                     request.headers.get('whop-dev-user-token') || 
                      request.headers.get('authorization')?.replace('Bearer ', '');
     
     if (!userToken) {
@@ -49,8 +50,8 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       return await createTestUserContext();
     }
 
-    // Verify the token with WHOP SDK
-    const tokenData = await whopSdk.verifyUserToken(userToken);
+    // Verify the token with WHOP SDK (pass headers object, not just token)
+    const tokenData = await whopSdk.verifyUserToken(request.headers);
     
     if (!tokenData || !tokenData.userId) {
       console.log('Invalid WHOP token or missing userId');
@@ -59,22 +60,11 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
 
     const whopUserId = tokenData.userId;
     
-    // Get company ID from token data or environment
-    // Note: WHOP token may not include companyId, so we'll get it from user data
-    let whopCompanyId = (tokenData as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-    
-    // If no company ID in token, try to get it from user data
-    if (!whopCompanyId) {
-      try {
-        const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
-        whopCompanyId = (whopUser as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-      } catch (error) {
-        console.log('Could not get company ID from user data:', error);
-      }
-    }
+    // Get company ID from environment or extract from user context
+    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
     
     if (!whopCompanyId) {
-      console.log('No company ID found in token, user data, or environment');
+      console.log('No company ID found in environment');
       return null;
     }
 
