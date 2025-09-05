@@ -36,25 +36,39 @@ export default async function ExperiencePage({
 		                      process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
 
 		console.log('Company ID found:', whopCompanyId);
+		console.log('Environment company ID:', process.env.NEXT_PUBLIC_WHOP_COMPANY_ID);
 
 		if (!whopCompanyId) {
 			console.log('No company ID found in headers');
 		} else {
-			// Get user context (this will create company/user records if needed)
-			const userContext = await getUserContext(userId, whopCompanyId);
-			console.log('User context result:', userContext ? 'Success' : 'Failed');
+			// Check access to the experience first (as per WHOP docs)
+			console.log('Checking access to experience:', experienceId);
+			const experienceAccess = await whopSdk.access.checkIfUserHasAccessToExperience({
+				userId: userId,
+				experienceId: experienceId
+			});
 			
-			if (userContext?.isAuthenticated) {
-				authContext = {
-					user: userContext.user,
-					isAuthenticated: true,
-					hasAccess: userContext.user.accessLevel !== 'no_access'
-				};
-				console.log('Auth context created:', {
-					userId: authContext.user.id,
-					accessLevel: authContext.user.accessLevel,
-					companyId: authContext.user.companyId
-				});
+			console.log('Experience access result:', experienceAccess);
+			
+			if (experienceAccess.hasAccess) {
+				// Get user context (this will create company/user records if needed)
+				const userContext = await getUserContext(userId, whopCompanyId, false, experienceAccess.accessLevel);
+				console.log('User context result:', userContext ? 'Success' : 'Failed');
+				
+				if (userContext?.isAuthenticated) {
+					authContext = {
+						user: userContext.user,
+						isAuthenticated: true,
+						hasAccess: userContext.user.accessLevel !== 'no_access'
+					};
+					console.log('Auth context created:', {
+						userId: authContext.user.id,
+						accessLevel: authContext.user.accessLevel,
+						companyId: authContext.user.companyId
+					});
+				}
+			} else {
+				console.log('User does not have access to experience');
 			}
 		}
 	} catch (error) {

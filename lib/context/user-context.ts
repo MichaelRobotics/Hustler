@@ -26,7 +26,8 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 export async function getUserContext(
   whopUserId: string,
   whopCompanyId: string,
-  forceRefresh: boolean = false
+  forceRefresh: boolean = false,
+  accessLevel?: 'admin' | 'customer' | 'no_access'
 ): Promise<UserContext | null> {
   const cacheKey = `${whopUserId}:${whopCompanyId}`;
   
@@ -40,7 +41,7 @@ export async function getUserContext(
 
   try {
     // Fetch fresh user data
-    const userContext = await createUserContext(whopUserId, whopCompanyId);
+    const userContext = await createUserContext(whopUserId, whopCompanyId, accessLevel);
     
     if (userContext) {
       // Cache the result
@@ -62,15 +63,18 @@ export async function getUserContext(
  */
 async function createUserContext(
   whopUserId: string,
-  whopCompanyId: string
+  whopCompanyId: string,
+  accessLevel?: 'admin' | 'customer' | 'no_access'
 ): Promise<UserContext | null> {
   try {
     // Get or create company
+    console.log('Looking for company with whopCompanyId:', whopCompanyId);
     let company = await db.query.companies.findFirst({
       where: eq(companies.whopCompanyId, whopCompanyId)
     });
 
     if (!company) {
+      console.log('Company not found, creating new company...');
       // Create company in our database with basic info
       const [newCompany] = await db.insert(companies).values({
         whopCompanyId: whopCompanyId,
@@ -79,7 +83,10 @@ async function createUserContext(
         logo: null
       }).returning();
       
+      console.log('New company created:', newCompany);
       company = newCompany;
+    } else {
+      console.log('Existing company found:', company);
     }
 
     // Get or create user
@@ -140,8 +147,8 @@ async function createUserContext(
       await syncUserData(user);
     }
 
-    // Determine access level
-    const accessLevel = await determineAccessLevel(whopUserId, whopCompanyId);
+    // Determine access level (use provided level if available, otherwise determine from WHOP)
+    const finalAccessLevel = accessLevel || await determineAccessLevel(whopUserId, whopCompanyId);
 
     if (!user) {
       console.error('User not found after creation/update');
@@ -156,7 +163,7 @@ async function createUserContext(
       name: user.name,
       avatar: user.avatar || undefined,
       credits: user.credits,
-      accessLevel,
+      accessLevel: finalAccessLevel,
       company: {
         id: company.id,
         whopCompanyId: company.whopCompanyId,
@@ -216,18 +223,26 @@ async function syncUserData(user: any): Promise<void> {
  */
 async function determineAccessLevel(whopUserId: string, whopCompanyId: string): Promise<'admin' | 'customer' | 'no_access'> {
   try {
+    console.log('Determining access level for:', { whopUserId, whopCompanyId });
+    
     // Handle test user for development
     if (process.env.NODE_ENV === 'development' && whopUserId === 'test-user-id') {
+      console.log('Using test user access level: customer');
       return 'customer';
     }
 
     // Check if user has access to the company
+    console.log('Checking WHOP access for user to company...');
     const result = await whopSdk.access.checkIfUserHasAccessToCompany({
       userId: whopUserId,
       companyId: whopCompanyId
     });
 
-    return result.accessLevel || 'no_access';
+    console.log('WHOP access check result:', result);
+    const accessLevel = result.accessLevel || 'no_access';
+    console.log('Final access level:', accessLevel);
+    
+    return accessLevel;
   } catch (error) {
     console.error('Error determining access level:', error);
     return 'no_access';
