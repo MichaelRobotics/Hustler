@@ -59,11 +59,22 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
 
     const whopUserId = tokenData.userId;
     
-    // Get company ID from environment or extract from user context
-    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    // Get company ID from token data or environment
+    // Note: WHOP token may not include companyId, so we'll get it from user data
+    let whopCompanyId = (tokenData as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    
+    // If no company ID in token, try to get it from user data
+    if (!whopCompanyId) {
+      try {
+        const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
+        whopCompanyId = (whopUser as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+      } catch (error) {
+        console.log('Could not get company ID from user data:', error);
+      }
+    }
     
     if (!whopCompanyId) {
-      console.log('No company ID found in environment');
+      console.log('No company ID found in token, user data, or environment');
       return null;
     }
 

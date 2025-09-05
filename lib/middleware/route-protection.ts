@@ -150,7 +150,17 @@ export function withRouteProtection(
       }
 
           const whopUserId = tokenData.userId;
-    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    let whopCompanyId = (tokenData as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+
+      // If no company ID in token, try to get it from user data
+      if (!whopCompanyId) {
+        try {
+          const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
+          whopCompanyId = (whopUser as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+        } catch (error) {
+          console.log('Could not get company ID from user data:', error);
+        }
+      }
 
       if (!whopCompanyId) {
         return createErrorResponse(
@@ -417,7 +427,18 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
       return null;
     }
 
-    const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    let whopCompanyId = (tokenData as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    
+    // If no company ID in token, try to get it from user data
+    if (!whopCompanyId) {
+      try {
+        const whopUser = await whopSdk.users.getUser({ userId: tokenData.userId });
+        whopCompanyId = (whopUser as any).companyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+      } catch (error) {
+        console.log('Could not get company ID from user data:', error);
+      }
+    }
+    
     if (!whopCompanyId) {
       return null;
     }
