@@ -35,18 +35,53 @@ export function useWhopAuth(): WhopAuthState {
           return;
         }
 
-        // In production, WHOP iframe SDK doesn't provide getUserToken method
-        // The token is automatically passed via x-whop-user-token header to the backend
-        // For frontend, we need to rely on the backend authentication
+        // In production, try to get token from iframe context
         if (iframeSdk) {
-          // Iframe SDK is available, but we don't get token directly
-          // The token is handled by the backend via headers
-          setState({
-            userToken: 'iframe-context', // Special marker for iframe context
-            isLoading: false,
-            error: null
-          });
-          return;
+          // Try to get token from iframe SDK or window context
+          try {
+            // Check if iframeSdk has getUserToken method (using any type to avoid TypeScript errors)
+            if (typeof (iframeSdk as any).getUserToken === 'function') {
+              const token = await (iframeSdk as any).getUserToken();
+              setState({
+                userToken: token,
+                isLoading: false,
+                error: null
+              });
+              return;
+            }
+            
+            // Try to get token from window context (WHOP might expose it)
+            if (typeof window !== 'undefined') {
+              const whopToken = (window as any).whopUserToken || 
+                               (window as any).whop?.userToken ||
+                               (window as any).parent?.whopUserToken;
+              
+              if (whopToken) {
+                setState({
+                  userToken: whopToken,
+                  isLoading: false,
+                  error: null
+                });
+                return;
+              }
+            }
+            
+            // Fallback: iframe context without explicit token
+            setState({
+              userToken: 'iframe-context', // Special marker for iframe context
+              isLoading: false,
+              error: null
+            });
+            return;
+          } catch (error) {
+            console.error('Error getting token from iframe SDK:', error);
+            setState({
+              userToken: 'iframe-context',
+              isLoading: false,
+              error: null
+            });
+            return;
+          }
         }
 
         // Fallback: try legacy methods if iframe SDK is not available
@@ -154,11 +189,13 @@ export function useAuthenticatedFetch() {
       });
     }
 
-    // Only add x-whop-user-token header if we have a real token
-    // In iframe context, the token is automatically passed by WHOP
-    if (userToken !== 'iframe-context') {
+    // Add x-whop-user-token header for all requests
+    if (userToken && userToken !== 'iframe-context') {
       headers['x-whop-user-token'] = userToken;
     }
+    
+    // For iframe context, WHOP should automatically include the token in the request headers
+    // If we don't have a token, we'll make the request anyway and let WHOP handle it
 
     return fetch(url, {
       ...options,

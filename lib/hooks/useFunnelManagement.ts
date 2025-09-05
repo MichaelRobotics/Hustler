@@ -38,12 +38,15 @@ export function useFunnelManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Get authenticated fetch function
+  const { authenticatedFetch } = useAuthenticatedFetch();
+
   // Fetch funnels from API
   const fetchFunnels = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch('/api/funnels');
+      const response = await authenticatedFetch('/api/funnels');
       
       if (!response.ok) {
         throw new Error(`Failed to fetch funnels: ${response.statusText}`);
@@ -69,9 +72,8 @@ export function useFunnelManagement() {
     if (newFunnelName.trim()) {
       try {
         setError(null);
-        const response = await fetch('/api/funnels', {
+        const response = await authenticatedFetch('/api/funnels', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: newFunnelName.trim() })
         });
 
@@ -326,11 +328,8 @@ export function useFunnelManagement() {
       }));
 
       // Call the AI generation API
-      const response = await fetch('/api/generate-funnel', {
+      const response = await authenticatedFetch('/api/generate-funnel', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ resources: resourcesForAI }),
       });
 
