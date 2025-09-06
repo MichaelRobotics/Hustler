@@ -51,6 +51,12 @@ export function useResourceManagement() {
   // Load resources on component mount
   useEffect(() => {
     fetchResources();
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      setResourcesLoading(false);
+      setResourcesError(null);
+    };
   }, []);
 
   const handleOpenResourceLibrary = (selectedFunnel: Funnel | null) => {

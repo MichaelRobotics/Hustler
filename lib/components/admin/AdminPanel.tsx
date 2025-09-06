@@ -89,6 +89,33 @@ export default function AdminPanel() {
     handleBackToDashboard: resourceBackToDashboard,
   } = useResourceManagement();
 
+  // State synchronization: Update funnel resources when allResources changes
+  React.useEffect(() => {
+    if (allResources.length > 0 && funnels.length > 0) {
+      // Update funnels with latest resource data
+      setFunnels(prevFunnels => 
+        prevFunnels.map(funnel => {
+          if (funnel.resources && funnel.resources.length > 0) {
+            // Update funnel resources with latest resource data
+            const updatedResources = funnel.resources.map(funnelResource => {
+              const latestResource = allResources.find(r => r.id === funnelResource.id);
+              return latestResource || funnelResource;
+            }).filter(resource => 
+              // Remove resources that no longer exist
+              allResources.some(r => r.id === resource.id)
+            );
+            
+            return {
+              ...funnel,
+              resources: updatedResources
+            };
+          }
+          return funnel;
+        })
+      );
+    }
+  }, [allResources, setFunnels]);
+
   const {
     currentView,
     setCurrentView,

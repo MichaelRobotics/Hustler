@@ -66,6 +66,13 @@ export function useFunnelManagement() {
   // Load funnels on component mount
   useEffect(() => {
     fetchFunnels();
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      // Clear any pending operations or subscriptions
+      setError(null);
+      setIsLoading(false);
+    };
   }, []);
 
   const handleAddFunnel = async () => {

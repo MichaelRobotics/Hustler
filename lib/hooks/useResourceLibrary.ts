@@ -89,7 +89,7 @@ export const useResourceLibrary = (
       
       const data = await response.json();
       if (data.success && data.data) {
-        setAllResources([...allResources, data.data]);
+        setAllResources(prevResources => [...prevResources, data.data]);
         return data.data;
       }
     } catch (err) {
@@ -118,7 +118,7 @@ export const useResourceLibrary = (
       
       const data = await response.json();
       if (data.success && data.data) {
-        setAllResources(allResources.map(r => r.id === id ? data.data : r));
+        setAllResources(prevResources => prevResources.map(r => r.id === id ? data.data : r));
         return data.data;
       }
     } catch (err) {
@@ -143,7 +143,7 @@ export const useResourceLibrary = (
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      setAllResources(allResources.filter(r => r.id !== id));
+      setAllResources(prevResources => prevResources.filter(r => r.id !== id));
     } catch (err) {
       setError('Failed to delete resource');
       console.error('Error deleting resource:', err);
@@ -156,6 +156,8 @@ export const useResourceLibrary = (
   const handleAddResource = useCallback(async () => {
     if (newResource.name && newResource.link) {
       const resourceName = newResource.name;
+      
+      // Check for duplicate names using current state
       const isDuplicateName = allResources.some(resource => 
         resource.id !== newResource.id &&
         resource.name.toLowerCase() === resourceName.toLowerCase()
