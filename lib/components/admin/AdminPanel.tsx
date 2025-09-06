@@ -75,6 +75,8 @@ export default function AdminPanel() {
     handleGlobalGeneration,
     updateFunnel,
     removeResourceFromFunnel,
+    handleGenerationComplete,
+    handleGenerationError,
   } = useFunnelManagement();
 
   const {
@@ -350,6 +352,8 @@ export default function AdminPanel() {
           }
         }}
         onGoToFunnelProducts={() => setCurrentView('resources')}
+        onGenerationComplete={handleGenerationComplete}
+        onGenerationError={handleGenerationError}
       />
     );
   }
@@ -405,6 +409,8 @@ export default function AdminPanel() {
         }}
         onGoToFunnelProducts={() => setCurrentView('resources')}
         autoPreview={true} // Auto-switch to preview mode for fast navigation
+        onGenerationComplete={handleGenerationComplete}
+        onGenerationError={handleGenerationError}
       />
     );
   }

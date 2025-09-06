@@ -46,6 +46,8 @@ interface AIFunnelBuilderPageProps {
   onUpdate: (funnel: Funnel) => void;
   onGoToFunnelProducts: () => void;
   autoPreview?: boolean; // New: Auto-switch to preview mode
+  onGenerationComplete?: (funnelId: string) => void; // New: callback when generation is fully complete
+  onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
 }
 
 /**
@@ -62,7 +64,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   onBack, 
   onUpdate, 
   onGoToFunnelProducts,
-  autoPreview = false
+  autoPreview = false,
+  onGenerationComplete,
+  onGenerationError
 }) => {
   // State Management
   const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
@@ -170,6 +174,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                         selectedOffer={modals.selectedOffer}
                         onOfferSelect={(offerId) => modals.setSelectedOffer(offerId)}
                         funnelId={currentFunnel.id}
+                        onGenerationComplete={onGenerationComplete ? () => onGenerationComplete(currentFunnel.id) : undefined}
+                        onGenerationError={onGenerationError ? (error: Error) => onGenerationError(currentFunnel.id, error) : undefined}
                         ref={funnelVisualizerRef}
                       />
                     </div>

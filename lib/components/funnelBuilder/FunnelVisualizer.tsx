@@ -147,6 +147,8 @@ interface FunnelVisualizerProps {
   onOfferSelect?: (offerId: string) => void; // New: callback when offer is selected from visualization
   isDeployed?: boolean; // New: whether the funnel is currently deployed/live
   funnelId?: string; // New: funnel ID for visualization persistence
+  onGenerationComplete?: () => void; // New: callback when generation is fully complete (DB saved)
+  onGenerationError?: (error: Error) => void; // New: callback when generation fails
 }
 
 /**
@@ -167,7 +169,9 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
   selectedOffer,
   onOfferSelect,
   isDeployed = false,
-  funnelId
+  funnelId,
+  onGenerationComplete,
+  onGenerationError
 }, ref) => {
     // Ref to store DOM elements for measurement
     const blockRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -226,7 +230,9 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
         connectionStyle: 'curved' as const,
         autoLayout: true
       },
-      editingBlockId
+      editingBlockId,
+      onGenerationComplete,
+      onGenerationError
     });
 
     // Auto-save effect - separate from layout calculations

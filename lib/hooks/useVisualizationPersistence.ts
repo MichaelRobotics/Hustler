@@ -9,6 +9,7 @@ interface UseVisualizationPersistenceOptions {
   enabled?: boolean;
   debounceMs?: number;
   onSaveComplete?: () => void; // Callback when save is complete
+  onSaveError?: (error: Error) => void; // Callback when save fails
 }
 
 interface UseVisualizationPersistenceReturn {
@@ -27,7 +28,8 @@ export function useVisualizationPersistence({
   funnelId,
   enabled = true,
   debounceMs = 1000,
-  onSaveComplete
+  onSaveComplete,
+  onSaveError
 }: UseVisualizationPersistenceOptions): UseVisualizationPersistenceReturn {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSavingRef = useRef(false);
@@ -72,11 +74,16 @@ export function useVisualizationPersistence({
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         lastErrorRef.current = errorMessage;
         console.error('Error saving visualization state:', error);
+        
+        // Call the error callback if provided
+        if (onSaveError && error instanceof Error) {
+          onSaveError(error);
+        }
       } finally {
         isSavingRef.current = false;
       }
     }, debounceMs);
-  }, [funnelId, enabled, debounceMs, onSaveComplete]);
+  }, [funnelId, enabled, debounceMs, onSaveComplete, onSaveError]);
 
   // Load visualization state
   const loadVisualizationState = useCallback(async (): Promise<VisualizationState> => {
@@ -184,6 +191,7 @@ export function useAutoSaveVisualization({
 /**
  * Hook for coordinated saving of both funnel flow and visualization state
  * Saves flow immediately after visualization state is saved
+ * Handles generation completion and credit deduction
  */
 export function useCoordinatedFunnelSave({
   funnelId,
@@ -196,7 +204,9 @@ export function useCoordinatedFunnelSave({
   interactions,
   viewport,
   preferences,
-  editingBlockId
+  editingBlockId,
+  onGenerationComplete,
+  onGenerationError
 }: {
   funnelId: string;
   funnelFlow: any;
@@ -209,6 +219,8 @@ export function useCoordinatedFunnelSave({
   viewport: any;
   preferences: any;
   editingBlockId: string | null;
+  onGenerationComplete?: () => void;
+  onGenerationError?: (error: Error) => void;
 }) {
   // Function to save funnel flow to database
   const saveFunnelFlow = useCallback(async () => {
@@ -224,19 +236,32 @@ export function useCoordinatedFunnelSave({
       });
 
       if (!saveResponse.ok) {
+        const error = new Error(`Failed to save generated flow to database: ${saveResponse.statusText}`);
         console.error('Failed to save generated flow to database:', saveResponse.statusText);
+        throw error;
       } else {
         console.log('Generated flow saved to database successfully');
+        
+        // Call generation complete callback to release lock and deduct credits
+        if (onGenerationComplete) {
+          onGenerationComplete();
+        }
       }
     } catch (saveError) {
       console.error('Error saving generated flow to database:', saveError);
+      
+      // Call generation error callback to release lock and handle error
+      if (onGenerationError && saveError instanceof Error) {
+        onGenerationError(saveError);
+      }
     }
-  }, [funnelId, funnelFlow]);
+  }, [funnelId, funnelFlow, onGenerationComplete, onGenerationError]);
 
   // Use visualization persistence with flow save callback
   const { saveVisualizationState } = useVisualizationPersistence({ 
     funnelId,
-    onSaveComplete: saveFunnelFlow
+    onSaveComplete: saveFunnelFlow,
+    onSaveError: onGenerationError
   });
 
   // Auto-save when layout is complete and stable

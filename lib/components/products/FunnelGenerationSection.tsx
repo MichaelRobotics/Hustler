@@ -61,10 +61,11 @@ export const FunnelGenerationSection: React.FC<FunnelGenerationSectionProps> = (
 
     try {
       // Call the original generation handler first
+      // Credit deduction will happen in the generation completion callback
       await onGlobalGeneration(funnel.id);
       
-      // Only consume credit if generation was successful
-      await consumeCredit();
+      // Note: Credit deduction is now handled by the generation completion callback
+      // This ensures credits are only deducted after successful database save
     } catch (error) {
       console.error('Error during generation:', error);
       // Don't consume credit if generation failed

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 import { deduplicatedFetch } from '../utils/requestDeduplication';
 import { useOptimisticUpdates } from '../utils/optimisticUpdates';
@@ -247,6 +247,36 @@ export function useFunnelManagement() {
     );
   };
 
+  // Handle generation completion (when database save is successful)
+  const handleGenerationComplete = useCallback(async (funnelId: string) => {
+    try {
+      // Update generation status to completed
+      updateFunnelGenerationStatus(funnelId, 'completed');
+      console.log(`Generation completed and saved to database for funnel ${funnelId}`);
+      
+      // Deduct credit after successful database save
+      // This ensures credits are only consumed when generation is fully complete
+      const { consumeCredit } = await import('../actions/credit-actions');
+      const creditDeducted = await consumeCredit();
+      
+      if (creditDeducted) {
+        console.log(`Credit deducted for completed generation of funnel ${funnelId}`);
+      } else {
+        console.warn(`Failed to deduct credit for funnel ${funnelId}`);
+      }
+    } catch (error) {
+      console.error('Error in generation completion handler:', error);
+      // Still mark as completed since the funnel was saved successfully
+      updateFunnelGenerationStatus(funnelId, 'completed');
+    }
+  }, []);
+
+  // Handle generation error (when database save fails)
+  const handleGenerationError = useCallback((funnelId: string, error: Error) => {
+    updateFunnelGenerationStatus(funnelId, 'failed', error.message);
+    console.error(`Generation failed to save to database for funnel ${funnelId}:`, error);
+  }, []);
+
   // Improved generation function with per-funnel state
   const handleGlobalGeneration = async (funnelId: string) => {
     if (!funnelId || funnelId.trim() === '') return;
@@ -368,7 +398,8 @@ export function useFunnelManagement() {
       
       const updatedFunnel = { ...targetFunnel, flow: flowData };
       updateFunnelForGeneration(funnelId, updatedFunnel);
-      updateFunnelGenerationStatus(funnelId, 'completed');
+      // Keep generation status as 'generating' until database save completes
+      // This will be updated to 'completed' when onGenerationComplete is called
       
       // Flow will be saved to database when visualization state is saved
       // This ensures both flow and visualization are saved together
@@ -488,6 +519,8 @@ export function useFunnelManagement() {
     updateFunnel,
     removeResourceFromFunnel,
     fetchFunnels, // Add fetch function for manual refresh
+    handleGenerationComplete, // New: callback for generation completion
+    handleGenerationError, // New: callback for generation errors
   };
 }
 
