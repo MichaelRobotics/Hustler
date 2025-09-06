@@ -70,7 +70,7 @@ export const useResourceLibrary = (
     } finally {
       setLoading(false);
     }
-  }, [setAllResources]);
+  }, [setAllResources, allResources]);
 
   // Create resource via API
   const createResource = useCallback(async (resourceData: ResourceFormData) => {
@@ -89,7 +89,7 @@ export const useResourceLibrary = (
       
       const data = await response.json();
       if (data.success && data.data) {
-        setAllResources(prevResources => [...prevResources, data.data]);
+        setAllResources([...allResources, data.data]);
         return data.data;
       }
     } catch (err) {
@@ -99,7 +99,7 @@ export const useResourceLibrary = (
     } finally {
       setLoading(false);
     }
-  }, [setAllResources]);
+  }, [setAllResources, allResources]);
 
   // Update resource via API
   const updateResource = useCallback(async (id: string, updates: Partial<ResourceFormData>) => {
@@ -118,7 +118,7 @@ export const useResourceLibrary = (
       
       const data = await response.json();
       if (data.success && data.data) {
-        setAllResources(prevResources => prevResources.map(r => r.id === id ? data.data : r));
+        setAllResources(allResources.map(r => r.id === id ? data.data : r));
         return data.data;
       }
     } catch (err) {
@@ -128,7 +128,7 @@ export const useResourceLibrary = (
     } finally {
       setLoading(false);
     }
-  }, [setAllResources]);
+  }, [setAllResources, allResources]);
 
   // Delete resource via API
   const deleteResource = useCallback(async (id: string) => {
@@ -143,7 +143,7 @@ export const useResourceLibrary = (
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      setAllResources(prevResources => prevResources.filter(r => r.id !== id));
+      setAllResources(allResources.filter(r => r.id !== id));
     } catch (err) {
       setError('Failed to delete resource');
       console.error('Error deleting resource:', err);
@@ -151,7 +151,7 @@ export const useResourceLibrary = (
     } finally {
       setLoading(false);
     }
-  }, [setAllResources]);
+  }, [setAllResources, allResources]);
 
   const handleAddResource = useCallback(async () => {
     if (newResource.name && newResource.link) {
