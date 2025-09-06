@@ -35,6 +35,7 @@ export const experiences = pgTable('experiences', {
 }, (table) => ({
   whopExperienceIdIdx: index('experiences_whop_experience_id_idx').on(table.whopExperienceId),
   whopCompanyIdIdx: index('experiences_whop_company_id_idx').on(table.whopCompanyId),
+  updatedAtIdx: index('experiences_updated_at_idx').on(table.updatedAt),
 }));
 
 // Companies table removed - using experiences for multitenancy
@@ -52,6 +53,7 @@ export const users = pgTable('users', {
 }, (table) => ({
   whopUserIdIdx: index('users_whop_user_id_idx').on(table.whopUserId),
   experienceIdIdx: index('users_experience_id_idx').on(table.experienceId),
+  experienceUpdatedIdx: index('users_experience_updated_idx').on(table.experienceId, table.updatedAt),
 }));
 
 // ===== FUNNEL MANAGEMENT TABLES =====
@@ -73,6 +75,8 @@ export const funnels = pgTable('funnels', {
   userIdIdx: index('funnels_user_id_idx').on(table.userId),
   isDeployedIdx: index('funnels_is_deployed_idx').on(table.isDeployed),
   generationStatusIdx: index('funnels_generation_status_idx').on(table.generationStatus),
+  experienceUserUpdatedIdx: index('funnels_experience_user_updated_idx').on(table.experienceId, table.userId, table.updatedAt),
+  experienceDeployedIdx: index('funnels_experience_deployed_idx').on(table.experienceId, table.isDeployed),
 }));
 
 // ===== RESOURCE MANAGEMENT TABLES =====
@@ -94,6 +98,8 @@ export const resources = pgTable('resources', {
   userIdIdx: index('resources_user_id_idx').on(table.userId),
   typeIdx: index('resources_type_idx').on(table.type),
   whopProductIdIdx: index('resources_whop_product_id_idx').on(table.whopProductId),
+  experienceUserUpdatedIdx: index('resources_experience_user_updated_idx').on(table.experienceId, table.userId, table.updatedAt),
+  typeCategoryIdx: index('resources_type_category_idx').on(table.type, table.category),
 }));
 
 export const funnelResources = pgTable('funnel_resources', {

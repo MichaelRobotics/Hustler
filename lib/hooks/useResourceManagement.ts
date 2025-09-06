@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Resource } from '@/lib/types/resource';
+import { deduplicatedFetch } from '../utils/requestDeduplication';
 
 interface Funnel {
   id: string;
@@ -28,7 +29,7 @@ export function useResourceManagement() {
     try {
       setResourcesLoading(true);
       setResourcesError(null);
-      const response = await fetch('/api/resources');
+      const response = await deduplicatedFetch('/api/resources');
       
       if (!response.ok) {
         throw new Error(`Failed to fetch resources: ${response.statusText}`);
@@ -61,7 +62,7 @@ export function useResourceManagement() {
   const handleAddToFunnel = async (resource: Resource, selectedFunnel: Funnel, funnels: Funnel[], setFunnels: (funnels: Funnel[]) => void, setSelectedFunnel: (funnel: Funnel | null) => void) => {
     if (selectedFunnel) {
       try {
-        const response = await fetch(`/api/funnels/${selectedFunnel.id}/resources`, {
+        const response = await deduplicatedFetch(`/api/funnels/${selectedFunnel.id}/resources`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ resourceId: resource.id })

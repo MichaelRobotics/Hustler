@@ -135,28 +135,48 @@ export async function getFunnelById(
   funnelId: string
 ): Promise<FunnelWithResources> {
   try {
-    const funnel = await db.query.funnels.findFirst({
-      where: and(
+    // Use optimized join query instead of nested queries
+    const funnelWithResourcesRaw = await db
+      .select({
+        funnel: funnels,
+        resource: resources,
+        funnelResource: funnelResources
+      })
+      .from(funnels)
+      .leftJoin(funnelResources, eq(funnels.id, funnelResources.funnelId))
+      .leftJoin(resources, eq(funnelResources.resourceId, resources.id))
+      .where(and(
         eq(funnels.id, funnelId),
-        eq(funnels.experienceId, user.experienceId) // New: Experience-based filtering
-      ),
-      with: {
-        funnelResources: {
-          with: {
-            resource: true
-          }
-        }
-      }
-    });
+        eq(funnels.experienceId, user.experienceId)
+      ));
 
-    if (!funnel) {
+    if (funnelWithResourcesRaw.length === 0) {
       throw new Error('Funnel not found');
     }
+
+    const firstRow = funnelWithResourcesRaw[0];
+    const funnel = firstRow.funnel;
 
     // Check access permissions
     if (user.accessLevel === 'customer' && funnel.userId !== user.id) {
       throw new Error('Access denied: You can only access your own funnels');
     }
+
+    // Collect unique resources
+    const resourcesMap = new Map<string, any>();
+    funnelWithResourcesRaw.forEach((row: any) => {
+      if (row.resource && !resourcesMap.has(row.resource.id)) {
+        resourcesMap.set(row.resource.id, {
+          id: row.resource.id,
+          name: row.resource.name,
+          type: row.resource.type,
+          category: row.resource.category,
+          link: row.resource.link,
+          code: row.resource.code || undefined,
+          description: row.resource.description || undefined
+        });
+      }
+    });
 
     return {
       id: funnel.id,
@@ -169,15 +189,7 @@ export async function getFunnelById(
       sends: funnel.sends,
       createdAt: funnel.createdAt,
       updatedAt: funnel.updatedAt,
-      resources: funnel.funnelResources.map((fr: any) => ({
-        id: fr.resource.id,
-        name: fr.resource.name,
-        type: fr.resource.type,
-        category: fr.resource.category,
-        link: fr.resource.link,
-        code: fr.resource.code || undefined,
-        description: fr.resource.description || undefined
-      }))
+      resources: Array.from(resourcesMap.values())
     };
   } catch (error) {
     console.error('Error getting funnel:', error);
@@ -221,42 +233,59 @@ export async function getFunnels(
     
     const total = totalResult.count;
 
-    // Get funnels with resources
-    const funnelsList = await db.query.funnels.findMany({
-      where: whereConditions,
-      with: {
-        funnelResources: {
-          with: {
-            resource: true
-          }
-        }
-      },
-      orderBy: [desc(funnels.updatedAt)],
-      limit: limit,
-      offset: offset
-    });
+    // Get funnels with resources using optimized join query
+    const funnelsWithResourcesRaw = await db
+      .select({
+        funnel: funnels,
+        resource: resources,
+        funnelResource: funnelResources
+      })
+      .from(funnels)
+      .leftJoin(funnelResources, eq(funnels.id, funnelResources.funnelId))
+      .leftJoin(resources, eq(funnelResources.resourceId, resources.id))
+      .where(whereConditions)
+      .orderBy(desc(funnels.updatedAt))
+      .limit(limit)
+      .offset(offset);
 
-    const funnelsWithResources: FunnelWithResources[] = funnelsList.map((funnel: any) => ({
-      id: funnel.id,
-      name: funnel.name,
-      description: funnel.description || undefined,
-      flow: funnel.flow,
-      isDeployed: funnel.isDeployed,
-      wasEverDeployed: funnel.wasEverDeployed,
-      generationStatus: funnel.generationStatus,
-      sends: funnel.sends,
-      createdAt: funnel.createdAt,
-      updatedAt: funnel.updatedAt,
-      resources: funnel.funnelResources.map((fr: any) => ({
-        id: fr.resource.id,
-        name: fr.resource.name,
-        type: fr.resource.type,
-        category: fr.resource.category,
-        link: fr.resource.link,
-        code: fr.resource.code || undefined,
-        description: fr.resource.description || undefined
-      }))
-    }));
+    // Group resources by funnel
+    const funnelMap = new Map<string, FunnelWithResources>();
+    
+    funnelsWithResourcesRaw.forEach((row: any) => {
+      const funnel = row.funnel;
+      const resource = row.resource;
+      
+      if (!funnelMap.has(funnel.id)) {
+        funnelMap.set(funnel.id, {
+          id: funnel.id,
+          name: funnel.name,
+          description: funnel.description || undefined,
+          flow: funnel.flow,
+          isDeployed: funnel.isDeployed,
+          wasEverDeployed: funnel.wasEverDeployed,
+          generationStatus: funnel.generationStatus,
+          sends: funnel.sends,
+          createdAt: funnel.createdAt,
+          updatedAt: funnel.updatedAt,
+          resources: []
+        });
+      }
+      
+      // Add resource if it exists and not already added
+      if (resource && !funnelMap.get(funnel.id)!.resources.some(r => r.id === resource.id)) {
+        funnelMap.get(funnel.id)!.resources.push({
+          id: resource.id,
+          name: resource.name,
+          type: resource.type,
+          category: resource.category,
+          link: resource.link,
+          code: resource.code || undefined,
+          description: resource.description || undefined
+        });
+      }
+    });
+    
+    const funnelsWithResources: FunnelWithResources[] = Array.from(funnelMap.values());
 
     return {
       funnels: funnelsWithResources,
@@ -595,7 +624,7 @@ export async function regenerateFunnelFlow(
         'Funnel generation completed successfully!'
       );
 
-      // Deduct credit
+      // Deduct credit for regeneration
       const creditDeducted = await updateUserCredits(user.whopUserId, 1, 'subtract');
       
       if (!creditDeducted) {

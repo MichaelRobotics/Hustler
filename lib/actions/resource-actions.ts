@@ -212,38 +212,55 @@ export async function getResources(
     
     const total = totalResult.count;
 
-    // Get resources with funnels
-    const resourcesList = await db.query.resources.findMany({
-      where: whereConditions,
-      with: {
-        funnelResources: {
-          with: {
-            funnel: true
-          }
-        }
-      },
-      orderBy: [desc(resources.updatedAt)],
-      limit: limit,
-      offset: offset
-    });
+    // Get resources with funnels using optimized join query
+    const resourcesWithFunnelsRaw = await db
+      .select({
+        resource: resources,
+        funnel: funnels,
+        funnelResource: funnelResources
+      })
+      .from(resources)
+      .leftJoin(funnelResources, eq(resources.id, funnelResources.resourceId))
+      .leftJoin(funnels, eq(funnelResources.funnelId, funnels.id))
+      .where(whereConditions)
+      .orderBy(desc(resources.updatedAt))
+      .limit(limit)
+      .offset(offset);
 
-    const resourcesWithFunnels: ResourceWithFunnels[] = resourcesList.map((resource: any) => ({
-      id: resource.id,
-      name: resource.name,
-      type: resource.type,
-      category: resource.category,
-      link: resource.link,
-      code: resource.code || undefined,
-      description: resource.description || undefined,
-      whopProductId: resource.whopProductId || undefined,
-      createdAt: resource.createdAt,
-      updatedAt: resource.updatedAt,
-      funnels: resource.funnelResources.map((fr: any) => ({
-        id: fr.funnel.id,
-        name: fr.funnel.name,
-        isDeployed: fr.funnel.isDeployed
-      }))
-    }));
+    // Group funnels by resource
+    const resourceMap = new Map<string, ResourceWithFunnels>();
+    
+    resourcesWithFunnelsRaw.forEach((row: any) => {
+      const resource = row.resource;
+      const funnel = row.funnel;
+      
+      if (!resourceMap.has(resource.id)) {
+        resourceMap.set(resource.id, {
+          id: resource.id,
+          name: resource.name,
+          type: resource.type,
+          category: resource.category,
+          link: resource.link,
+          code: resource.code || undefined,
+          description: resource.description || undefined,
+          whopProductId: resource.whopProductId || undefined,
+          createdAt: resource.createdAt,
+          updatedAt: resource.updatedAt,
+          funnels: []
+        });
+      }
+      
+      // Add funnel if it exists and not already added
+      if (funnel && !resourceMap.get(resource.id)!.funnels.some(f => f.id === funnel.id)) {
+        resourceMap.get(resource.id)!.funnels.push({
+          id: funnel.id,
+          name: funnel.name,
+          isDeployed: funnel.isDeployed
+        });
+      }
+    });
+    
+    const resourcesWithFunnels: ResourceWithFunnels[] = Array.from(resourceMap.values());
 
     return {
       resources: resourcesWithFunnels,

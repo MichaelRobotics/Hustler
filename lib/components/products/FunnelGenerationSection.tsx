@@ -33,6 +33,29 @@ export const FunnelGenerationSection: React.FC<FunnelGenerationSectionProps> = (
     // Check if any funnel is already generating (not just this one)
     if (isAnyFunnelGenerating()) {
       console.log('Another funnel is already generating');
+      
+      // Show notification to user
+      const showNotification = (message: string) => {
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 z-50 px-4 py-3 bg-red-500 text-white rounded-lg border border-red-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs';
+        notification.textContent = message;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '×';
+        closeBtn.className = 'ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold';
+        closeBtn.onclick = () => notification.remove();
+        notification.appendChild(closeBtn);
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.remove();
+          }
+        }, 3000);
+      };
+      
+      showNotification('Another generation running');
       return;
     }
 

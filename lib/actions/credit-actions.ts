@@ -4,22 +4,18 @@ import { whopSdk } from '@/lib/whop-sdk';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { CREDIT_PACKS, type CreditPackId } from '../types/credit';
-
-// Credit balance tracking - users have a credit balance
-// In production, store this in your database
-const userCreditBalances = new Map<string, number>();
+import { getUserCredits as getDbUserCredits, updateUserCredits } from '../context/user-context';
 
 /**
- * Get user's credit balance
+ * Get user's credit balance from database
  */
 export async function getUserCredits(): Promise<number> {
   try {
     const headersList = await headers();
     const { userId } = await whopSdk.verifyUserToken(headersList);
     
-    // Get from in-memory storage (in production, use database)
-    // New users start with 2 free credits
-    return userCreditBalances.get(userId) ?? 2;
+    // Get from database
+    return await getDbUserCredits(userId);
   } catch (error) {
     console.error('Error getting user credits:', error);
     return 2; // Default to 2 free credits
@@ -42,18 +38,22 @@ export async function consumeCredit(): Promise<boolean> {
     const headersList = await headers();
     const { userId } = await whopSdk.verifyUserToken(headersList);
     
-    const currentCredits = userCreditBalances.get(userId) ?? 2;
+    // Check current credits first
+    const currentCredits = await getDbUserCredits(userId);
     
     if (currentCredits <= 0) {
       return false; // No credits available
     }
     
-    userCreditBalances.set(userId, currentCredits - 1);
+    // Update credits in database
+    const success = await updateUserCredits(userId, 1, 'subtract');
     
-    console.log(`User ${userId} consumed 1 credit. Remaining: ${currentCredits - 1}`);
+    if (success) {
+      console.log(`User ${userId} consumed 1 credit. Remaining: ${currentCredits - 1}`);
+      revalidatePath('/experiences');
+    }
     
-    revalidatePath('/experiences');
-    return true;
+    return success;
   } catch (error) {
     console.error('Error consuming credit:', error);
     throw error;
@@ -65,11 +65,15 @@ export async function consumeCredit(): Promise<boolean> {
  */
 export async function addCredits(userId: string, amount: number): Promise<void> {
   try {
-    const currentCredits = userCreditBalances.get(userId) ?? 2;
-    userCreditBalances.set(userId, currentCredits + amount);
+    const currentCredits = await getDbUserCredits(userId);
+    const success = await updateUserCredits(userId, amount, 'add');
     
-    console.log(`Added ${amount} credits to user ${userId}. New balance: ${currentCredits + amount}`);
-    revalidatePath('/experiences');
+    if (success) {
+      console.log(`Added ${amount} credits to user ${userId}. New balance: ${currentCredits + amount}`);
+      revalidatePath('/experiences');
+    } else {
+      throw new Error('Failed to add credits to database');
+    }
   } catch (error) {
     console.error('Error adding credits:', error);
     throw error;

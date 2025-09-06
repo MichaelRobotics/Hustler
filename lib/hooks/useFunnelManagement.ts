@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
+import { deduplicatedFetch } from '../utils/requestDeduplication';
+import { useOptimisticUpdates } from '../utils/optimisticUpdates';
 
 interface Funnel {
   id: string;
@@ -44,7 +46,7 @@ export function useFunnelManagement() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch('/api/funnels');
+      const response = await deduplicatedFetch('/api/funnels');
       
       if (!response.ok) {
         throw new Error(`Failed to fetch funnels: ${response.statusText}`);
@@ -70,7 +72,7 @@ export function useFunnelManagement() {
     if (newFunnelName.trim()) {
       try {
         setError(null);
-        const response = await fetch('/api/funnels', {
+        const response = await deduplicatedFetch('/api/funnels', {
           method: 'POST',
           body: JSON.stringify({ name: newFunnelName.trim() })
         });
@@ -111,7 +113,7 @@ export function useFunnelManagement() {
     if (funnelToDelete) {
       try {
         setError(null);
-        const response = await fetch(`/api/funnels/${funnelToDelete.id}`, {
+        const response = await deduplicatedFetch(`/api/funnels/${funnelToDelete.id}`, {
           method: 'DELETE'
         });
 
@@ -169,7 +171,7 @@ export function useFunnelManagement() {
   const handleSaveFunnelName = async (funnelId: string, newName: string) => {
     try {
       setError(null);
-      const response = await fetch(`/api/funnels/${funnelId}`, {
+      const response = await deduplicatedFetch(`/api/funnels/${funnelId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName })
@@ -281,7 +283,7 @@ export function useFunnelManagement() {
       return;
     }
 
-    // Update this funnel's generation status
+    // Update this funnel's generation status (atomic update to prevent race conditions)
     updateFunnelGenerationStatus(funnelId, 'generating');
     
     try {
@@ -326,7 +328,7 @@ export function useFunnelManagement() {
       }));
 
       // Call the AI generation API
-      const response = await fetch('/api/generate-funnel', {
+      const response = await deduplicatedFetch('/api/generate-funnel', {
         method: 'POST',
         body: JSON.stringify({ resources: resourcesForAI }),
       });
@@ -339,6 +341,10 @@ export function useFunnelManagement() {
       }
 
       if (!response.ok) {
+        // Handle insufficient credits error specifically
+        if (result.error === 'INSUFFICIENT_CREDITS') {
+          throw new Error('Insufficient credits to generate funnel. Please purchase more credits.');
+        }
         throw new Error(result.message || 'Failed to generate funnel');
       }
 
@@ -397,7 +403,7 @@ export function useFunnelManagement() {
   // Remove resource from funnel
   const removeResourceFromFunnel = async (funnelId: string, resourceId: string) => {
     try {
-      const response = await fetch(`/api/funnels/${funnelId}/resources/${resourceId}`, {
+      const response = await deduplicatedFetch(`/api/funnels/${funnelId}/resources/${resourceId}`, {
         method: 'DELETE'
       });
       
