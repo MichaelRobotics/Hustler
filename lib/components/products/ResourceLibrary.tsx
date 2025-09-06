@@ -32,6 +32,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     newResource,
     deleteConfirmation,
     filteredResources,
+    loading,
+    error,
     setSelectedCategory,
     setNewResource,
     handleAddResource,
@@ -42,7 +44,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     openEditModal,
     closeModal,
     isNameAvailable,
-    isResourceAssignedToAnyFunnel
+    isResourceAssignedToAnyFunnel,
+    fetchResources,
+    createResource,
+    updateResource,
+    deleteResource
   } = useResourceLibrary(allResources, allFunnels, setAllResources);
 
   const isResourceInFunnel = (resourceId: string) => {
@@ -87,25 +93,51 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             onCancel={cancelDelete}
           />
 
+          {/* Loading State */}
+          {loading && (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <span className="ml-2 text-muted-foreground">Loading resources...</span>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <div className="text-destructive font-medium">Error loading resources</div>
+                <button
+                  onClick={fetchResources}
+                  className="ml-auto text-sm text-destructive hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+            </div>
+          )}
+
           {/* Resources Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredResources.map(resource => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                funnel={funnel}
-                context={context}
-                isResourceInFunnel={isResourceInFunnel}
-                isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
-                onAddToFunnel={onAddToFunnel}
-                onEdit={openEditModal}
-                onDelete={handleDeleteResource}
-              />
-            ))}
-          </div>
+          {!loading && !error && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredResources.map(resource => (
+                <ResourceCard
+                  key={resource.id}
+                  resource={resource}
+                  funnel={funnel}
+                  context={context}
+                  isResourceInFunnel={isResourceInFunnel}
+                  isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
+                  onAddToFunnel={onAddToFunnel}
+                  onEdit={openEditModal}
+                  onDelete={handleDeleteResource}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Empty State */}
-          {filteredResources.length === 0 && (
+          {!loading && !error && filteredResources.length === 0 && (
             <LibraryEmptyState selectedCategory={selectedCategory} />
           )}
         </div>

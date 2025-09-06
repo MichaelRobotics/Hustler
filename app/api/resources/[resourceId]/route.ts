@@ -1,68 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withResourceAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/whop-auth';
-import { getResourceById, updateResource, deleteResource } from '../../../../lib/actions/resource-actions';
+import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/whop-auth';
+import { updateResource, deleteResource } from '../../../../lib/actions/resource-actions';
 import { getUserContext } from '../../../../lib/context/user-context';
 
 /**
  * Individual Resource API Route
- * Handles operations on specific resources with resource-level authorization
+ * Handles PUT and DELETE operations for specific resources with proper authentication and authorization
  */
 
 /**
- * GET /api/resources/[resourceId] - Get specific resource
- */
-async function getResourceHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    const resourceId = request.nextUrl.pathname.split('/').pop();
-    
-    if (!resourceId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Resource ID is required'
-      );
-    }
-
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
-
-    // Get the full user context from the simplified auth (whopCompanyId is now optional)
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
-
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
-
-    // Get resource using server action
-    const resource = await getResourceById(userContext.user, resourceId);
-
-    return createSuccessResponse(resource, 'Resource retrieved successfully');
-  } catch (error) {
-    console.error('Error getting resource:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
-}
-
-/**
- * PUT /api/resources/[resourceId] - Update specific resource
+ * PUT /api/resources/[resourceId] - Update a specific resource
  */
 async function updateResourceHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
-    const resourceId = request.nextUrl.pathname.split('/').pop();
-    const input = await request.json();
+    const resourceId = request.nextUrl.pathname.split('/')[3]; // Extract resourceId from path
     
     if (!resourceId) {
       return createErrorResponse(
@@ -71,10 +23,27 @@ async function updateResourceHandler(request: NextRequest, context: AuthContext)
       );
     }
 
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+    const input = await request.json();
 
-    // Get the full user context from the simplified auth (whopCompanyId is now optional)
+    // Validation
+    if (input.type && !['AFFILIATE', 'MY_PRODUCTS'].includes(input.type)) {
+      return createErrorResponse(
+        'INVALID_INPUT',
+        'Type must be either AFFILIATE or MY_PRODUCTS'
+      );
+    }
+
+    if (input.category && !['PAID', 'FREE_VALUE'].includes(input.category)) {
+      return createErrorResponse(
+        'INVALID_INPUT',
+        'Category must be either PAID or FREE_VALUE'
+      );
+    }
+
+    // Use experience ID from URL or fallback to a default
+    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
+
+    // Get the full user context
     const userContext = await getUserContext(
       user.userId,
       '', // whopCompanyId is optional for experience-based isolation
@@ -104,12 +73,12 @@ async function updateResourceHandler(request: NextRequest, context: AuthContext)
 }
 
 /**
- * DELETE /api/resources/[resourceId] - Delete specific resource
+ * DELETE /api/resources/[resourceId] - Delete a specific resource
  */
 async function deleteResourceHandler(request: NextRequest, context: AuthContext) {
   try {
     const { user } = context;
-    const resourceId = request.nextUrl.pathname.split('/').pop();
+    const resourceId = request.nextUrl.pathname.split('/')[3]; // Extract resourceId from path
     
     if (!resourceId) {
       return createErrorResponse(
@@ -119,9 +88,9 @@ async function deleteResourceHandler(request: NextRequest, context: AuthContext)
     }
 
     // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
 
-    // Get the full user context from the simplified auth (whopCompanyId is now optional)
+    // Get the full user context
     const userContext = await getUserContext(
       user.userId,
       '', // whopCompanyId is optional for experience-based isolation
@@ -140,7 +109,7 @@ async function deleteResourceHandler(request: NextRequest, context: AuthContext)
     // Delete resource using server action
     await deleteResource(userContext.user, resourceId);
 
-    return createSuccessResponse({ deleted: true }, 'Resource deleted successfully');
+    return createSuccessResponse(null, 'Resource deleted successfully');
   } catch (error) {
     console.error('Error deleting resource:', error);
     return createErrorResponse(
@@ -150,7 +119,6 @@ async function deleteResourceHandler(request: NextRequest, context: AuthContext)
   }
 }
 
-// Export the protected route handlers with resource protection
-export const GET = withResourceAuth(getResourceHandler);
-export const PUT = withResourceAuth(updateResourceHandler);
-export const DELETE = withResourceAuth(deleteResourceHandler);
+// Export handlers with authentication middleware
+export const PUT = withCustomerAuth(updateResourceHandler);
+export const DELETE = withCustomerAuth(deleteResourceHandler);

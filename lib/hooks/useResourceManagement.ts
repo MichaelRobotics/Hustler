@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Resource } from '@/lib/types/resource';
 
 interface Funnel {
@@ -20,6 +20,37 @@ export function useResourceManagement() {
   const [libraryContext, setLibraryContext] = useState<'global' | 'funnel'>('global');
   const [selectedFunnelForLibrary, setSelectedFunnelForLibrary] = useState<Funnel | null>(null);
   const [allResources, setAllResources] = useState<Resource[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
+  const [resourcesError, setResourcesError] = useState<string | null>(null);
+
+  // Fetch resources from API
+  const fetchResources = async () => {
+    try {
+      setResourcesLoading(true);
+      setResourcesError(null);
+      const response = await fetch('/api/resources');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch resources: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (data.success && data.data) {
+        setAllResources(data.data.resources || []);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch resources';
+      setResourcesError(errorMessage);
+      console.error('Error fetching resources:', err);
+    } finally {
+      setResourcesLoading(false);
+    }
+  };
+
+  // Load resources on component mount
+  useEffect(() => {
+    fetchResources();
+  }, []);
 
   const handleOpenResourceLibrary = (selectedFunnel: Funnel | null) => {
     setLibraryContext('funnel');
@@ -27,14 +58,35 @@ export function useResourceManagement() {
     return 'resourceLibrary';
   };
 
-  const handleAddToFunnel = (resource: Resource, selectedFunnel: Funnel, funnels: Funnel[], setFunnels: (funnels: Funnel[]) => void, setSelectedFunnel: (funnel: Funnel | null) => void) => {
+  const handleAddToFunnel = async (resource: Resource, selectedFunnel: Funnel, funnels: Funnel[], setFunnels: (funnels: Funnel[]) => void, setSelectedFunnel: (funnel: Funnel | null) => void) => {
     if (selectedFunnel) {
-      const updatedFunnel = {
-        ...selectedFunnel,
-        resources: [...(selectedFunnel.resources || []), resource]
-      };
-      setSelectedFunnel(updatedFunnel);
-      setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+      try {
+        const response = await fetch(`/api/funnels/${selectedFunnel.id}/resources`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resourceId: resource.id })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to add resource to funnel: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        if (data.success && data.data) {
+          const updatedFunnel = data.data;
+          setSelectedFunnel(updatedFunnel);
+          setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+        }
+      } catch (err) {
+        console.error('Error adding resource to funnel:', err);
+        // Fallback to local state update if API fails
+        const updatedFunnel = {
+          ...selectedFunnel,
+          resources: [...(selectedFunnel.resources || []), resource]
+        };
+        setSelectedFunnel(updatedFunnel);
+        setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+      }
     }
   };
 
@@ -47,6 +99,8 @@ export function useResourceManagement() {
     libraryContext,
     selectedFunnelForLibrary,
     allResources,
+    resourcesLoading,
+    resourcesError,
     
     // Setters
     setLibraryContext,
@@ -57,5 +111,6 @@ export function useResourceManagement() {
     handleOpenResourceLibrary,
     handleAddToFunnel,
     handleBackToDashboard,
+    fetchResources,
   };
 }

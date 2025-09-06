@@ -708,3 +708,110 @@ export async function getFunnelAnalytics(
     throw error;
   }
 }
+
+/**
+ * Add a resource to a funnel
+ */
+export async function addResourceToFunnel(
+  user: AuthenticatedUser,
+  funnelId: string,
+  resourceId: string
+): Promise<FunnelWithResources> {
+  try {
+    // Check if funnel exists and belongs to user
+    const [funnel] = await db
+      .select()
+      .from(funnels)
+      .where(and(
+        eq(funnels.id, funnelId),
+        eq(funnels.userId, user.id)
+      ))
+      .limit(1);
+
+    if (!funnel) {
+      throw new Error('Funnel not found or access denied');
+    }
+
+    // Check if resource exists and belongs to user
+    const [resource] = await db
+      .select()
+      .from(resources)
+      .where(and(
+        eq(resources.id, resourceId),
+        eq(resources.userId, user.id)
+      ))
+      .limit(1);
+
+    if (!resource) {
+      throw new Error('Resource not found or access denied');
+    }
+
+    // Check if resource is already in funnel
+    const [existingRelation] = await db
+      .select()
+      .from(funnelResources)
+      .where(and(
+        eq(funnelResources.funnelId, funnelId),
+        eq(funnelResources.resourceId, resourceId)
+      ))
+      .limit(1);
+
+    if (existingRelation) {
+      throw new Error('Resource is already in this funnel');
+    }
+
+    // Add resource to funnel
+    await db.insert(funnelResources).values({
+      funnelId,
+      resourceId
+    });
+
+    // Get updated funnel with resources
+    const updatedFunnel = await getFunnelById(user, funnelId);
+    if (!updatedFunnel) {
+      throw new Error('Failed to retrieve updated funnel');
+    }
+
+    return updatedFunnel;
+  } catch (error) {
+    console.error('Error adding resource to funnel:', error);
+    throw error;
+  }
+}
+
+/**
+ * Remove a resource from a funnel
+ */
+export async function removeResourceFromFunnel(
+  user: AuthenticatedUser,
+  funnelId: string,
+  resourceId: string
+): Promise<void> {
+  try {
+    // Check if funnel exists and belongs to user
+    const [funnel] = await db
+      .select()
+      .from(funnels)
+      .where(and(
+        eq(funnels.id, funnelId),
+        eq(funnels.userId, user.id)
+      ))
+      .limit(1);
+
+    if (!funnel) {
+      throw new Error('Funnel not found or access denied');
+    }
+
+    // Remove resource from funnel
+    await db
+      .delete(funnelResources)
+      .where(and(
+        eq(funnelResources.funnelId, funnelId),
+        eq(funnelResources.resourceId, resourceId)
+      ));
+
+  } catch (error) {
+    console.error('Error removing resource from funnel:', error);
+    throw error;
+  }
+}

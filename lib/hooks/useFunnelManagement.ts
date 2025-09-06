@@ -394,6 +394,45 @@ export function useFunnelManagement() {
     }
   };
 
+  // Remove resource from funnel
+  const removeResourceFromFunnel = async (funnelId: string, resourceId: string) => {
+    try {
+      const response = await fetch(`/api/funnels/${funnelId}/resources/${resourceId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to remove resource from funnel: ${response.statusText}`);
+      }
+      
+      // Update local state to reflect the removal
+      const updatedFunnels = funnels.map(f => {
+        if (f.id === funnelId) {
+          return {
+            ...f,
+            resources: f.resources?.filter(r => r.id !== resourceId) || []
+          };
+        }
+        return f;
+      });
+      
+      setFunnels(updatedFunnels);
+      
+      // Update selected funnel if it's the one being modified
+      if (selectedFunnel && selectedFunnel.id === funnelId) {
+        const updatedSelectedFunnel = {
+          ...selectedFunnel,
+          resources: selectedFunnel.resources?.filter(r => r.id !== resourceId) || []
+        };
+        setSelectedFunnel(updatedSelectedFunnel);
+      }
+      
+    } catch (err) {
+      console.error('Error removing resource from funnel:', err);
+      throw err;
+    }
+  };
+
   return {
     // State
     funnels,
@@ -431,6 +470,7 @@ export function useFunnelManagement() {
     updateFunnelForGeneration,
     handleGlobalGeneration,
     updateFunnel,
+    removeResourceFromFunnel,
     fetchFunnels, // Add fetch function for manual refresh
   };
 }

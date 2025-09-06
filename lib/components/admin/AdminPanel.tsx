@@ -74,6 +74,7 @@ export default function AdminPanel() {
     updateFunnelForGeneration,
     handleGlobalGeneration,
     updateFunnel,
+    removeResourceFromFunnel,
   } = useFunnelManagement();
 
   const {
@@ -227,6 +228,7 @@ export default function AdminPanel() {
         isAnyFunnelGenerating={isAnyFunnelGenerating}
         onEdit={() => {}}
         onGoToFunnelProducts={() => {}}
+        removeResourceFromFunnel={removeResourceFromFunnel}
       />
     );
   }

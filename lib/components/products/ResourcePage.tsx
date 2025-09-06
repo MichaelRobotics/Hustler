@@ -22,7 +22,8 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
   onGlobalGeneration,
   isGenerating,
   isAnyFunnelGenerating,
-  onGoToFunnelProducts
+  onGoToFunnelProducts,
+  removeResourceFromFunnel
 }) => {
   const {
     deleteConfirmation,
@@ -34,7 +35,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
     openOfflineConfirmation,
     closeOfflineConfirmation,
     takeFunnelOffline
-  } = useResourcePage(funnel, onUpdateFunnel);
+  } = useResourcePage(funnel, onUpdateFunnel, removeResourceFromFunnel);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">

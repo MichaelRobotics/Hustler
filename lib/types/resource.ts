@@ -62,6 +62,7 @@ export interface ResourcePageProps {
   isGenerating: (funnelId: string) => boolean;
   isAnyFunnelGenerating: () => boolean;
   onGoToFunnelProducts: () => void;
+  removeResourceFromFunnel: (funnelId: string, resourceId: string) => Promise<void>;
 }
 
 export interface DeleteConfirmation {

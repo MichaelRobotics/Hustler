@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Resource, ResourceFormData, DeleteConfirmation, Funnel } from '../types/resource';
 
 export const useResourceLibrary = (
@@ -21,6 +21,10 @@ export const useResourceLibrary = (
     resourceId: null,
     resourceName: ''
   });
+  
+  // Backend connection states
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const categoryOptions = useMemo(() => ['all', 'PAID', 'FREE_VALUE'], []);
 
@@ -47,7 +51,109 @@ export const useResourceLibrary = (
     [selectedCategory, allResources]
   );
 
-  const handleAddResource = useCallback(() => {
+  // Fetch resources from API
+  const fetchResources = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/resources');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.success && data.data) {
+        setAllResources(data.data.resources || []);
+      }
+    } catch (err) {
+      setError('Failed to fetch resources');
+      console.error('Error fetching resources:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [setAllResources]);
+
+  // Create resource via API
+  const createResource = useCallback(async (resourceData: ResourceFormData) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(resourceData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      if (data.success && data.data) {
+        setAllResources([...allResources, data.data]);
+        return data.data;
+      }
+    } catch (err) {
+      setError('Failed to create resource');
+      console.error('Error creating resource:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [setAllResources]);
+
+  // Update resource via API
+  const updateResource = useCallback(async (id: string, updates: Partial<ResourceFormData>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/resources/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      if (data.success && data.data) {
+        setAllResources(allResources.map(r => r.id === id ? data.data : r));
+        return data.data;
+      }
+    } catch (err) {
+      setError('Failed to update resource');
+      console.error('Error updating resource:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [setAllResources]);
+
+  // Delete resource via API
+  const deleteResource = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/resources/${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      setAllResources(allResources.filter(r => r.id !== id));
+    } catch (err) {
+      setError('Failed to delete resource');
+      console.error('Error deleting resource:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [setAllResources]);
+
+  const handleAddResource = useCallback(async () => {
     if (newResource.name && newResource.link) {
       const resourceName = newResource.name;
       const isDuplicateName = allResources.some(resource => 
@@ -56,36 +162,28 @@ export const useResourceLibrary = (
       );
       
       if (isDuplicateName) {
+        setError('Resource name already exists');
         return;
       }
       
-      if (newResource.id) {
-        // Editing existing resource
-        const updatedResources = allResources.map(r => 
-          r.id === newResource.id ? { ...r, ...newResource } : r
-        );
-        setAllResources(updatedResources);
-      } else {
-        // Adding new resource
-        const resource: Resource = {
-          id: Date.now().toString(),
-          name: newResource.name,
-          link: newResource.link,
-          type: newResource.type as 'AFFILIATE' | 'MY_PRODUCTS',
-          category: newResource.category as 'PAID' | 'FREE_VALUE',
-          description: newResource.description,
-          promoCode: newResource.promoCode
-        };
+      try {
+        if (newResource.id) {
+          // Editing existing resource
+          await updateResource(newResource.id, newResource);
+        } else {
+          // Adding new resource
+          await createResource(newResource as ResourceFormData);
+        }
         
-        const updatedResources = [...allResources, resource];
-        setAllResources(updatedResources);
+        // Reset form
+        setNewResource({ name: '', link: '', type: 'AFFILIATE', category: 'FREE_VALUE', description: '', promoCode: '' });
+        setIsAddingResource(false);
+      } catch (err) {
+        // Error is already set in the API functions
+        console.error('Error in handleAddResource:', err);
       }
-      
-      // Reset form
-      setNewResource({ name: '', link: '', type: 'AFFILIATE', category: 'FREE_VALUE', description: '', promoCode: '' });
-      setIsAddingResource(false);
     }
-  }, [newResource, allResources, setAllResources]);
+  }, [newResource, allResources, createResource, updateResource]);
 
   const handleDeleteResource = useCallback((resourceId: string, resourceName: string) => {
     setDeleteConfirmation({
@@ -95,13 +193,17 @@ export const useResourceLibrary = (
     });
   }, []);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (deleteConfirmation.resourceId) {
-      const updatedResources = allResources.filter(r => r.id !== deleteConfirmation.resourceId);
-      setAllResources(updatedResources);
-      setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      try {
+        await deleteResource(deleteConfirmation.resourceId);
+        setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      } catch (err) {
+        // Error is already set in the deleteResource function
+        console.error('Error in confirmDelete:', err);
+      }
     }
-  }, [deleteConfirmation.resourceId, allResources, setAllResources]);
+  }, [deleteConfirmation.resourceId, deleteResource]);
 
   const cancelDelete = useCallback(() => {
     setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
@@ -142,6 +244,8 @@ export const useResourceLibrary = (
     deleteConfirmation,
     categoryOptions,
     filteredResources,
+    loading,
+    error,
     
     // Actions
     setSelectedCategory,
@@ -153,6 +257,12 @@ export const useResourceLibrary = (
     openAddModal,
     openEditModal,
     closeModal,
+    
+    // Backend API functions
+    fetchResources,
+    createResource,
+    updateResource,
+    deleteResource,
     
     // Utilities
     isNameAvailable,

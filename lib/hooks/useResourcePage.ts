@@ -3,7 +3,8 @@ import { Resource, Funnel } from '../types/resource';
 
 export const useResourcePage = (
   funnel: Funnel,
-  onUpdateFunnel: (updatedFunnel: Funnel) => void
+  onUpdateFunnel: (updatedFunnel: Funnel) => void,
+  removeResourceFromFunnel: (funnelId: string, resourceId: string) => Promise<void>
 ) => {
   // Delete confirmation state
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ 
@@ -30,14 +31,21 @@ export const useResourcePage = (
     });
   }, []);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (deleteConfirmation.resourceId) {
-      const updatedResources = currentResources.filter(r => r.id !== deleteConfirmation.resourceId);
-      const updatedFunnel = { ...funnel, resources: updatedResources };
-      onUpdateFunnel(updatedFunnel);
-      setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      try {
+        await removeResourceFromFunnel(funnel.id, deleteConfirmation.resourceId);
+        setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      } catch (err) {
+        console.error('Error removing resource from funnel:', err);
+        // Fallback to local state update if API fails
+        const updatedResources = currentResources.filter(r => r.id !== deleteConfirmation.resourceId);
+        const updatedFunnel = { ...funnel, resources: updatedResources };
+        onUpdateFunnel(updatedFunnel);
+        setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      }
     }
-  }, [deleteConfirmation.resourceId, currentResources, funnel, onUpdateFunnel]);
+  }, [deleteConfirmation.resourceId, funnel.id, removeResourceFromFunnel, currentResources, funnel, onUpdateFunnel]);
 
   const cancelDelete = useCallback(() => {
     setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
