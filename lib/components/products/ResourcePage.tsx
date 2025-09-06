@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useResourcePage } from '../../hooks/useResourcePage';
+import { useAutoNavigation } from '../../hooks/useAutoNavigation';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 import { ResourcePageProps } from '../../types/resource';
 import { ResourcePageHeader } from './ResourcePageHeader';
@@ -36,6 +37,14 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
     closeOfflineConfirmation,
     takeFunnelOffline
   } = useResourcePage(funnel, onUpdateFunnel, removeResourceFromFunnel);
+
+  // Auto-navigation to funnel builder when generation completes
+  useAutoNavigation({
+    funnel,
+    isGenerating,
+    onNavigate: onGoToBuilder,
+    enabled: true // Enable auto-navigation for ResourcePage
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">

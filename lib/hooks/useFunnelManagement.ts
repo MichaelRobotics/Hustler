@@ -254,16 +254,8 @@ export function useFunnelManagement() {
       updateFunnelGenerationStatus(funnelId, 'completed');
       console.log(`Generation completed and saved to database for funnel ${funnelId}`);
       
-      // Deduct credit after successful database save
-      // This ensures credits are only consumed when generation is fully complete
-      const { consumeCredit } = await import('../actions/credit-actions');
-      const creditDeducted = await consumeCredit();
-      
-      if (creditDeducted) {
-        console.log(`Credit deducted for completed generation of funnel ${funnelId}`);
-      } else {
-        console.warn(`Failed to deduct credit for funnel ${funnelId}`);
-      }
+      // Note: Credit deduction is now handled server-side in the generation API
+      // No need to deduct credits here as it's already done securely on the server
     } catch (error) {
       console.error('Error in generation completion handler:', error);
       // Still mark as completed since the funnel was saved successfully
@@ -364,10 +356,13 @@ export function useFunnelManagement() {
         price: resource.price || 'FREE_VALUE'
       }));
 
-      // Call the AI generation API
+      // Call the AI generation API with funnelId
       const response = await deduplicatedFetch('/api/generate-funnel', {
         method: 'POST',
-        body: JSON.stringify({ resources: resourcesForAI }),
+        body: JSON.stringify({ 
+          resources: resourcesForAI,
+          funnelId: funnelId
+        }),
       });
 
       let result;
@@ -396,13 +391,13 @@ export function useFunnelManagement() {
         throw new Error('Flow data missing required properties (stages, blocks, or startBlockId)');
       }
       
-      const updatedFunnel = { ...targetFunnel, flow: flowData };
+      // Update local state with the generated flow
+      // The flow is already saved to database by the API
+      const updatedFunnel = { ...targetFunnel, flow: flowData, generationStatus: 'completed' as const };
       updateFunnelForGeneration(funnelId, updatedFunnel);
-      // Keep generation status as 'generating' until database save completes
-      // This will be updated to 'completed' when onGenerationComplete is called
       
-      // Flow will be saved to database when visualization state is saved
-      // This ensures both flow and visualization are saved together
+      // Generation is now complete - no need for onGenerationComplete callback
+      console.log(`Generation completed for funnel ${funnelId} - flow saved to database by API`);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

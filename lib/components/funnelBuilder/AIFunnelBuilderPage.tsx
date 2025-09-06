@@ -174,8 +174,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                         selectedOffer={modals.selectedOffer}
                         onOfferSelect={(offerId) => modals.setSelectedOffer(offerId)}
                         funnelId={currentFunnel.id}
-                        onGenerationComplete={onGenerationComplete ? () => onGenerationComplete(currentFunnel.id) : undefined}
-                        onGenerationError={onGenerationError ? (error: Error) => onGenerationError(currentFunnel.id, error) : undefined}
                         ref={funnelVisualizerRef}
                       />
                     </div>

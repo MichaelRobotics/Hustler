@@ -7,7 +7,7 @@ import BlockEditor from './BlockEditor';
 import CollapsibleText from '../common/CollapsibleText';
 import { useFunnelLayout } from '../../hooks/useFunnelLayout';
 import { useFunnelInteraction } from '../../hooks/useFunnelInteraction';
-import { useCoordinatedFunnelSave } from '../../hooks/useVisualizationPersistence';
+import { useAutoSaveVisualization } from '../../hooks/useVisualizationPersistence';
 import FunnelCanvas from './FunnelCanvas';
 import FunnelStage from './FunnelStage';
 
@@ -147,8 +147,6 @@ interface FunnelVisualizerProps {
   onOfferSelect?: (offerId: string) => void; // New: callback when offer is selected from visualization
   isDeployed?: boolean; // New: whether the funnel is currently deployed/live
   funnelId?: string; // New: funnel ID for visualization persistence
-  onGenerationComplete?: () => void; // New: callback when generation is fully complete (DB saved)
-  onGenerationError?: (error: Error) => void; // New: callback when generation fails
 }
 
 /**
@@ -169,9 +167,7 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
   selectedOffer,
   onOfferSelect,
   isDeployed = false,
-  funnelId,
-  onGenerationComplete,
-  onGenerationError
+  funnelId
 }, ref) => {
     // Ref to store DOM elements for measurement
     const blockRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -199,10 +195,9 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
       handleBlockClick
     } = useFunnelInteraction(funnelFlow, editingBlockId, setEditingBlockId, selectedOffer);
 
-    // Coordinated save of both visualization state and funnel flow
-    const { autoSave } = useCoordinatedFunnelSave({
+    // Separate visualization state saving (funnel flow saving is now handled by generation API)
+    const { autoSave } = useAutoSaveVisualization({
       funnelId: funnelId || '',
-      funnelFlow,
       layoutPhase,
       positions,
       lines,
@@ -230,9 +225,7 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
         connectionStyle: 'curved' as const,
         autoLayout: true
       },
-      editingBlockId,
-      onGenerationComplete,
-      onGenerationError
+      editingBlockId
     });
 
     // Auto-save effect - separate from layout calculations

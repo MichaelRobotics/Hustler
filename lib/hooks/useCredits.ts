@@ -38,21 +38,16 @@ export function useCredits(): UseCreditsReturn {
 
   const consumeCreditForGeneration = useCallback(async (): Promise<boolean> => {
     try {
-      const success = await consumeCredit();
-      if (success) {
-        setCredits(prev => {
-          const newCredits = Math.max(0, prev - 1);
-          setCanGenerateNow(newCredits > 0);
-          return newCredits;
-        });
-      }
-      return success;
+      // Note: Credit deduction is now handled server-side in the generation API
+      // This function is kept for backward compatibility but just refreshes the balance
+      await fetchCreditData();
+      return true;
     } catch (err) {
-      console.error('Error consuming credit:', err);
-      setError('Failed to consume credit');
+      console.error('Error refreshing credit data:', err);
+      setError('Failed to refresh credit data');
       return false;
     }
-  }, []);
+  }, [fetchCreditData]);
 
   const refresh = useCallback(async () => {
     await fetchCreditData();

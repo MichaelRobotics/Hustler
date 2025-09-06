@@ -51,6 +51,23 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     deleteResource
   } = useResourceLibrary(allResources, allFunnels, setAllResources);
 
+  // Auto-navigation to funnel builder when generation completes (only in funnel context)
+  useAutoNavigation({
+    funnel: funnel || { id: '', name: '', flow: undefined }, // Provide fallback for global context
+    isGenerating: (funnelId: string) => {
+      // Only check generation status if we have a funnel and it matches
+      if (!funnel || funnel.id !== funnelId) return false;
+      return isGenerating; // isGenerating is a boolean in ResourceLibrary
+    },
+    onNavigate: (funnel) => {
+      // Navigate to funnel builder when generation completes
+      if (onEdit) {
+        onEdit();
+      }
+    },
+    enabled: context === 'funnel' && !!funnel // Only enable in funnel context with a funnel
+  });
+
   const isResourceInFunnel = (resourceId: string) => {
     return funnel?.resources?.some(r => r.id === resourceId) || false;
   };
@@ -157,12 +174,9 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
               onEdit();
             }
           }}
-          onGeneration={async () => {
+          onGeneration={() => {
             if (funnel) {
-              // Switch to ResourcePage first to show generation progress
-              onGoToFunnelProducts();
-              // Start generation
-              await onGlobalGeneration();
+              onGlobalGeneration();
             }
           }}
           isGenerated={funnel ? hasValidFlow(funnel) : false}

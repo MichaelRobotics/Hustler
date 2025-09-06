@@ -2,7 +2,7 @@
 
 import { whopSdk } from '@/lib/whop-sdk';
 import { headers } from 'next/headers';
-import { revalidatePath } from 'next/cache';
+// Removed revalidatePath import - no longer needed
 import { CREDIT_PACKS, type CreditPackId } from '../types/credit';
 import { getUserCredits as getDbUserCredits, updateUserCredits } from '../context/user-context';
 
@@ -50,7 +50,7 @@ export async function consumeCredit(): Promise<boolean> {
     
     if (success) {
       console.log(`User ${userId} consumed 1 credit. Remaining: ${currentCredits - 1}`);
-      revalidatePath('/experiences');
+      // Removed revalidatePath - let client-side state handle UI updates
     }
     
     return success;
@@ -70,7 +70,7 @@ export async function addCredits(userId: string, amount: number): Promise<void> 
     
     if (success) {
       console.log(`Added ${amount} credits to user ${userId}. New balance: ${currentCredits + amount}`);
-      revalidatePath('/experiences');
+      // Removed revalidatePath - let client-side state handle UI updates
     } else {
       throw new Error('Failed to add credits to database');
     }

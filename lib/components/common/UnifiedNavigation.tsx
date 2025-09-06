@@ -31,7 +31,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
   showOnPage = 'all'
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { canGenerate, consumeCredit } = useCredits();
+  const { canGenerate, refresh: refreshCredits } = useCredits();
   const [showCreditModal, setShowCreditModal] = useState(false);
 
   const toggleExpanded = () => {
@@ -53,14 +53,14 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
     }
 
     try {
-      // Call the original generation handler first
+      // Call the generation handler - credit deduction is now handled server-side
       await onGeneration?.();
       
-      // Only consume credit if generation was successful
-      await consumeCredit();
+      // Refresh credit balance after successful generation
+      // The server-side generation API now handles credit deduction
+      await refreshCredits();
     } catch (error) {
       console.error('Error during generation:', error);
-      // Don't consume credit if generation failed
       // Don't show credit modal for generation failures
     }
   };
