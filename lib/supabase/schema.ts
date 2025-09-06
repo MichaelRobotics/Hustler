@@ -64,6 +64,7 @@ export const funnels = pgTable('funnels', {
   name: text('name').notNull(),
   description: text('description'),
   flow: jsonb('flow'), // The complete funnel flow JSON
+  visualizationState: jsonb('visualization_state').default('{}'), // User visualization preferences and layout
   isDeployed: boolean('is_deployed').default(false).notNull(),
   wasEverDeployed: boolean('was_ever_deployed').default(false).notNull(),
   generationStatus: generationStatusEnum('generation_status').default('idle').notNull(),
@@ -75,6 +76,7 @@ export const funnels = pgTable('funnels', {
   userIdIdx: index('funnels_user_id_idx').on(table.userId),
   isDeployedIdx: index('funnels_is_deployed_idx').on(table.isDeployed),
   generationStatusIdx: index('funnels_generation_status_idx').on(table.generationStatus),
+  visualizationStateIdx: index('funnels_visualization_state_idx').using('gin', table.visualizationState),
   experienceUserUpdatedIdx: index('funnels_experience_user_updated_idx').on(table.experienceId, table.userId, table.updatedAt),
   experienceDeployedIdx: index('funnels_experience_deployed_idx').on(table.experienceId, table.isDeployed),
 }));

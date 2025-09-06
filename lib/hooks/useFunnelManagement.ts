@@ -370,6 +370,9 @@ export function useFunnelManagement() {
       updateFunnelForGeneration(funnelId, updatedFunnel);
       updateFunnelGenerationStatus(funnelId, 'completed');
       
+      // Flow will be saved to database when visualization state is saved
+      // This ensures both flow and visualization are saved together
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Show a short, Whop-native notification instead of alert

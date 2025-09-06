@@ -44,7 +44,8 @@ interface StageLayout extends FunnelStage {
 export const useFunnelLayout = (
   funnelFlow: FunnelFlow | null,
   editingBlockId: string | null,
-  blockRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>
+  blockRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>,
+  funnelId?: string
 ) => {
   // State for layout calculations
   const [positions, setPositions] = React.useState<Record<string, Position>>({});

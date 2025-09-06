@@ -7,6 +7,7 @@ import BlockEditor from './BlockEditor';
 import CollapsibleText from '../common/CollapsibleText';
 import { useFunnelLayout } from '../../hooks/useFunnelLayout';
 import { useFunnelInteraction } from '../../hooks/useFunnelInteraction';
+import { useCoordinatedFunnelSave } from '../../hooks/useVisualizationPersistence';
 import FunnelCanvas from './FunnelCanvas';
 import FunnelStage from './FunnelStage';
 
@@ -145,6 +146,7 @@ interface FunnelVisualizerProps {
   selectedOffer?: string | null;
   onOfferSelect?: (offerId: string) => void; // New: callback when offer is selected from visualization
   isDeployed?: boolean; // New: whether the funnel is currently deployed/live
+  funnelId?: string; // New: funnel ID for visualization persistence
 }
 
 /**
@@ -164,7 +166,8 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
   onBlockUpdate,
   selectedOffer,
   onOfferSelect,
-  isDeployed = false
+  isDeployed = false,
+  funnelId
 }, ref) => {
     // Ref to store DOM elements for measurement
     const blockRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -179,7 +182,7 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
       itemCanvasWidth,
       totalCanvasHeight,
       layoutPhase
-    } = useFunnelLayout(funnelFlow, editingBlockId, blockRefs);
+    } = useFunnelLayout(funnelFlow, editingBlockId, blockRefs, funnelId);
 
     const {
       selectedOfferBlockId,
@@ -191,6 +194,52 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
       selectedPath,
       handleBlockClick
     } = useFunnelInteraction(funnelFlow, editingBlockId, setEditingBlockId, selectedOffer);
+
+    // Coordinated save of both visualization state and funnel flow
+    const { autoSave } = useCoordinatedFunnelSave({
+      funnelId: funnelId || '',
+      funnelFlow,
+      layoutPhase,
+      positions,
+      lines,
+      stageLayouts,
+      canvasDimensions: {
+        itemCanvasWidth,
+        totalCanvasHeight
+      },
+      interactions: {
+        selectedOfferBlockId,
+        selectedBlockForHighlight,
+        highlightedPath: {
+          blocks: Array.from(highlightedPath.blocks),
+          options: Array.from(highlightedPath.options)
+        }
+      },
+      viewport: {
+        scrollLeft: 0,
+        scrollTop: 0,
+        zoom: 1
+      },
+      preferences: {
+        showStageLabels: true,
+        compactMode: false,
+        connectionStyle: 'curved' as const,
+        autoLayout: true
+      },
+      editingBlockId
+    });
+
+    // Auto-save effect - separate from layout calculations
+    React.useEffect(() => {
+      if (funnelId && layoutPhase === 'final' && Object.keys(positions).length > 0 && lines.length > 0 && !editingBlockId) {
+        // Use setTimeout to avoid calling autoSave during render
+        const timeoutId = setTimeout(() => {
+          autoSave();
+        }, 500); // Longer delay to ensure layout is stable
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }, [funnelId, layoutPhase, positions, lines, editingBlockId, autoSave]);
 
     // Expose handleBlockClick function to parent component via ref
     React.useImperativeHandle(ref, () => ({

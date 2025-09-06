@@ -169,6 +169,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                         onBlockUpdate={handleBlockUpdate}
                         selectedOffer={modals.selectedOffer}
                         onOfferSelect={(offerId) => modals.setSelectedOffer(offerId)}
+                        funnelId={currentFunnel.id}
                         ref={funnelVisualizerRef}
                       />
                     </div>
