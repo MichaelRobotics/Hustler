@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FunnelWithResources } from '../actions/funnel-actions';
 import { ResourceWithFunnels } from '../actions/resource-actions';
+import { deduplicatedFetch } from '../utils/requestDeduplication';
 
 interface DashboardData {
   funnels: {
@@ -46,7 +47,7 @@ export function useDashboardData() {
         params.append('search', search);
       }
       
-      const response = await fetch(`/api/dashboard-data?${params}`);
+      const response = await deduplicatedFetch(`/api/dashboard-data?${params}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch dashboard data: ${response.statusText}`);

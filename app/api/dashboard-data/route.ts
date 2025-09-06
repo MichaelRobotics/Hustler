@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../lib/middleware/whop-auth';
 import { getFunnels } from '../../../lib/actions/funnel-actions';
 import { getResources } from '../../../lib/actions/resource-actions';
+import { db } from '../../../lib/supabase/db';
+import { users, experiences } from '../../../lib/supabase/schema';
+import { eq, and } from 'drizzle-orm';
 
 // Simple in-memory cache for dashboard responses
 const dashboardCache = new Map<string, { data: any; timestamp: number }>();
@@ -27,27 +30,63 @@ async function getDashboardDataHandler(request: NextRequest, context: AuthContex
     const search = url.searchParams.get('search') || undefined;
 
     // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
+    const whopExperienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
 
     // Check cache first
-    const cacheKey = `${user.userId}:${experienceId}:${page}:${limit}:${search || ''}`;
+    const cacheKey = `${user.userId}:${whopExperienceId}:${page}:${limit}:${search || ''}`;
     const cached = dashboardCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
       return createSuccessResponse(cached.data, 'Dashboard data retrieved from cache');
     }
 
-    // Create lightweight user object for performance (skip full user context)
-    const lightweightUser = {
-      id: user.userId,
-      whopUserId: user.userId,
-      experienceId: experienceId,
-      email: '',
-      name: 'User',
-      credits: 0,
+    // First get the experience UUID from the WHOP experience ID
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, whopExperienceId),
+      columns: { id: true }
+    });
+
+    if (!experience) {
+      return createErrorResponse(
+        'EXPERIENCE_NOT_FOUND',
+        'Experience not found in database'
+      );
+    }
+
+    // Get the database user ID efficiently without full user context
+    const dbUser = await db.query.users.findFirst({
+      where: and(
+        eq(users.whopUserId, user.userId),
+        eq(users.experienceId, experience.id)
+      ),
+      columns: {
+        id: true,
+        whopUserId: true,
+        experienceId: true,
+        email: true,
+        name: true,
+        credits: true
+      }
+    });
+
+    if (!dbUser) {
+      return createErrorResponse(
+        'USER_NOT_FOUND',
+        'User not found in database'
+      );
+    }
+
+    // Create lightweight authenticated user with correct database ID
+    const authenticatedUser = {
+      id: dbUser.id, // This is the correct database UUID
+      whopUserId: dbUser.whopUserId,
+      experienceId: dbUser.experienceId,
+      email: dbUser.email,
+      name: dbUser.name,
+      credits: dbUser.credits,
       accessLevel: 'customer' as const,
       experience: {
-        id: experienceId,
-        whopExperienceId: experienceId,
+        id: dbUser.experienceId,
+        whopExperienceId: whopExperienceId,
         whopCompanyId: '',
         name: 'Experience',
         description: undefined,
@@ -57,17 +96,17 @@ async function getDashboardDataHandler(request: NextRequest, context: AuthContex
 
     // Fetch funnels and resources in parallel for better performance
     const [funnelsResult, resourcesResult] = await Promise.all([
-      getFunnels(lightweightUser, page, limit, search),
-      getResources(lightweightUser, page, limit, search)
+      getFunnels(authenticatedUser, page, limit, search),
+      getResources(authenticatedUser, page, limit, search)
     ]);
 
     const dashboardData = {
       funnels: funnelsResult,
       resources: resourcesResult,
       user: {
-        id: lightweightUser.id,
-        experienceId: lightweightUser.experienceId,
-        accessLevel: lightweightUser.accessLevel
+        id: authenticatedUser.id,
+        experienceId: authenticatedUser.experienceId,
+        accessLevel: authenticatedUser.accessLevel
       }
     };
 

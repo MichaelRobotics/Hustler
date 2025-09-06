@@ -17,6 +17,7 @@ import DeploymentModal from './modals/DeploymentModal';
 
 import { useFunnelManagement } from '@/lib/hooks/useFunnelManagement';
 import { useResourceManagement } from '@/lib/hooks/useResourceManagement';
+import { useDashboardData } from '@/lib/hooks/useDashboardData';
 import { useViewNavigation } from '@/lib/hooks/useViewNavigation';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 import { generateMockData, generateSalesData } from '@/lib/utils/dataSimulation';
@@ -43,9 +44,22 @@ export default function AdminPanel() {
   const [isUserTyping, setIsUserTyping] = React.useState(false);
 
 
-  // Use the extracted hooks
+  // Use the optimized dashboard data hook for better performance
   const {
-    funnels,
+    funnels: dashboardFunnels,
+    resources: dashboardResources,
+    user: dashboardUser,
+    loading: dashboardLoading,
+    error: dashboardError,
+    fetchDashboardData,
+    updateFunnel: updateDashboardFunnel,
+    addFunnel: addDashboardFunnel,
+    removeFunnel: removeDashboardFunnel,
+  } = useDashboardData();
+
+  // Use the extracted hooks for actions (but use dashboard data for display)
+  const {
+    funnels: managementFunnels,
     selectedFunnel,
     isAddDialogOpen,
     isDeleteDialogOpen,
@@ -77,6 +91,9 @@ export default function AdminPanel() {
     removeResourceFromFunnel,
   } = useFunnelManagement();
 
+  // Use optimized dashboard funnels for display
+  const funnels = dashboardFunnels;
+
   const {
     libraryContext,
     selectedFunnelForLibrary,
@@ -106,6 +123,8 @@ export default function AdminPanel() {
   const handleAddFunnelWithNavigation = async () => {
     const newFunnel = await handleAddFunnel();
     if (newFunnel) {
+      // Sync the new funnel to dashboard state
+      addDashboardFunnel(newFunnel);
       setCurrentView('resources');
     }
   };
@@ -145,6 +164,22 @@ export default function AdminPanel() {
   const handleBackToDashboard = () => {
     setCurrentView('dashboard');
     setSelectedFunnel(null);
+  };
+
+  // Wrapper for delete handler that syncs with dashboard state
+  const handleConfirmDeleteWithSync = async () => {
+    if (funnelToDelete) {
+      await handleConfirmDelete();
+      // Sync the deletion to dashboard state
+      removeDashboardFunnel(funnelToDelete.id);
+    }
+  };
+
+  // Wrapper for funnel name save that syncs with dashboard state
+  const handleSaveFunnelNameWithSync = async (funnelId: string, newName: string) => {
+    await handleSaveFunnelName(funnelId, newName);
+    // Sync the update to dashboard state
+    updateDashboardFunnel(funnelId, { name: newName });
   };
 
   // Render different views based on current state
@@ -434,7 +469,7 @@ export default function AdminPanel() {
                   setFunnelToDelete={handleDeleteFunnel}
                   editingFunnelId={editingFunnelId}
                   setEditingFunnelId={setEditingFunnelId}
-                  handleSaveFunnelName={handleSaveFunnelName}
+                  handleSaveFunnelName={handleSaveFunnelNameWithSync}
                   onFunnelClick={handleFunnelClickWithNavigation}
                   handleDuplicateFunnel={handleDuplicateFunnel}
                   handleManageResources={handleManageResourcesWithNavigation}
@@ -454,7 +489,7 @@ export default function AdminPanel() {
                 isOpen={isDeleteDialogOpen}
                 onOpenChange={setIsDeleteDialogOpen}
                 funnelToDelete={funnelToDelete}
-                onConfirmDelete={handleConfirmDelete}
+                onConfirmDelete={handleConfirmDeleteWithSync}
               />
             </div>
           </div>
