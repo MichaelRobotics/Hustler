@@ -83,11 +83,20 @@ const UserChat: React.FC<UserChatProps> = ({
     }
   };
 
-  // Handle keyboard fold/unfold with smooth scroll
+  // Handle keyboard fold/unfold with smooth scroll (only on fold)
   useEffect(() => {
+    let previousViewportHeight = window.visualViewport?.height || window.innerHeight;
+    
     const handleViewportChange = () => {
-      // Timeout to let keyboard animation complete (longer for unfold)
-      setTimeout(scrollToBottom, 300);
+      const currentViewportHeight = window.visualViewport?.height || window.innerHeight;
+      
+      // Only scroll when keyboard appears (viewport height decreases)
+      if (currentViewportHeight < previousViewportHeight) {
+        // Timeout to let keyboard animation complete
+        setTimeout(scrollToBottom, 250);
+      }
+      
+      previousViewportHeight = currentViewportHeight;
     };
 
     if (window.visualViewport) {
