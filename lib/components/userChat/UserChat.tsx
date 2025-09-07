@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Text } from 'frosted-ui';
 import { Send, ArrowLeft, Sun, Moon, User } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
@@ -72,22 +72,22 @@ const UserChat: React.FC<UserChatProps> = ({
   const handleOptionClickLocal = (option: any, index: number) => {
     handleOptionClick(option, index);
     onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
-    // Smooth scroll after option click
-    setTimeout(scrollToBottom, 100);
+    // Immediate scroll for better performance
+    setTimeout(scrollToBottom, 50);
   };
 
-  // Smooth scroll to bottom after keyboard animation
-  const scrollToBottom = () => {
+  // Optimized scroll to bottom - no smooth animation for better performance
+  const scrollToBottom = useCallback(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ 
-        behavior: 'smooth',
+        behavior: 'auto',
         block: 'end',
         inline: 'nearest'
       });
     }
-  };
+  }, []);
 
-  // Handle keyboard fold/unfold with smooth scroll (only on fold)
+  // Optimized keyboard handling - reduced timeout for better performance
   useEffect(() => {
     let previousViewportHeight = window.visualViewport?.height || window.innerHeight;
     
@@ -96,8 +96,8 @@ const UserChat: React.FC<UserChatProps> = ({
       
       // Only scroll when keyboard appears (viewport height decreases)
       if (currentViewportHeight < previousViewportHeight) {
-        // Timeout to let keyboard animation complete
-        setTimeout(scrollToBottom, 250);
+        // Reduced timeout for faster response
+        setTimeout(scrollToBottom, 100);
       }
       
       previousViewportHeight = currentViewportHeight;
@@ -134,7 +134,21 @@ const UserChat: React.FC<UserChatProps> = ({
       key={`option-${i}`}
       onClick={() => handleOptionClickLocal(opt, i)}
       className="inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-blue-500 text-white text-left touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-      style={{ WebkitTapHighlightColor: 'transparent' }}
+      style={{ 
+        WebkitTapHighlightColor: 'transparent',
+        // Mobile performance optimizations
+        transform: 'translateZ(0)', // Hardware acceleration
+        WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
+        backfaceVisibility: 'hidden', // Prevent flickering
+        WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
+        // Optimize touch interactions
+        touchAction: 'manipulation',
+        // Prevent text selection
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none',
+        userSelect: 'none'
+      }}
     >
       <span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
         {i + 1}
@@ -146,7 +160,22 @@ const UserChat: React.FC<UserChatProps> = ({
   ));
 
   return (
-    <div className="h-screen w-full flex flex-col bg-surface dark:bg-surface touch-manipulation">
+    <div 
+      className="h-screen w-full flex flex-col bg-surface dark:bg-surface touch-manipulation"
+      style={{
+        // Mobile performance optimizations
+        transform: 'translateZ(0)', // Force hardware acceleration
+        WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
+        backfaceVisibility: 'hidden', // Prevent flickering
+        WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
+        // Prevent zoom on input focus (iOS)
+        WebkitTextSizeAdjust: '100%',
+        // Optimize touch interactions
+        touchAction: 'pan-y pinch-zoom',
+        // Prevent pull-to-refresh
+        overscrollBehavior: 'contain'
+      }}
+    >
       {/* Header */}
       <div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
         <div className="flex items-center justify-between">
@@ -200,10 +229,25 @@ const UserChat: React.FC<UserChatProps> = ({
       <div className="flex-1 flex flex-col min-h-0">
         {/* Messages */}
         <div 
-          className="flex-1 overflow-y-auto p-4 touch-pan-y"
+          className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide"
           style={{ 
             WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain'
+            overscrollBehavior: 'contain',
+            scrollBehavior: 'auto',
+            willChange: 'scroll-position',
+            // Mobile performance optimizations
+            transform: 'translateZ(0)', // Force hardware acceleration
+            backfaceVisibility: 'hidden', // Prevent flickering
+            perspective: '1000px', // Enable 3D acceleration
+            WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
+            WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
+            // Optimize scrolling performance
+            msOverflowStyle: 'none', // IE/Edge
+            // Prevent text selection during scroll
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none',
+            userSelect: 'none'
           }}
         >
           {messageList}
@@ -238,6 +282,20 @@ const UserChat: React.FC<UserChatProps> = ({
                     height: 'auto',
                     minHeight: '48px',
                     fontSize: '16px', // Prevents zoom on iOS
+                    // Mobile performance optimizations
+                    transform: 'translateZ(0)', // Hardware acceleration
+                    WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
+                    backfaceVisibility: 'hidden', // Prevent flickering
+                    WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
+                    // Prevent zoom on focus
+                    WebkitTextSizeAdjust: '100%',
+                    // Optimize touch interactions
+                    touchAction: 'manipulation',
+                    // Prevent text selection issues
+                    WebkitUserSelect: 'text',
+                    MozUserSelect: 'text',
+                    msUserSelect: 'text',
+                    userSelect: 'text'
                   }}
                 />
               </div>
@@ -246,7 +304,21 @@ const UserChat: React.FC<UserChatProps> = ({
                 onClick={handleSubmit}
                 disabled={!message.trim()}
                 className="p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
+                style={{ 
+                  WebkitTapHighlightColor: 'transparent',
+                  // Mobile performance optimizations
+                  transform: 'translateZ(0)', // Hardware acceleration
+                  WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
+                  backfaceVisibility: 'hidden', // Prevent flickering
+                  WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
+                  // Optimize touch interactions
+                  touchAction: 'manipulation',
+                  // Prevent text selection
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none',
+                  userSelect: 'none'
+                }}
               >
                 <Send size={18} className="text-white" />
               </button>
@@ -260,7 +332,21 @@ const UserChat: React.FC<UserChatProps> = ({
             <button
               onClick={startConversation}
               className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
+              style={{ 
+                WebkitTapHighlightColor: 'transparent',
+                // Mobile performance optimizations
+                transform: 'translateZ(0)', // Hardware acceleration
+                WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
+                backfaceVisibility: 'hidden', // Prevent flickering
+                WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
+                // Optimize touch interactions
+                touchAction: 'manipulation',
+                // Prevent text selection
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+                userSelect: 'none'
+              }}
             >
               Start Conversation
             </button>
