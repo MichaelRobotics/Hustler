@@ -105,9 +105,10 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
     );
   };
 
+
   return (
     <div 
-      className="h-screen w-full flex flex-col bg-surface dark:bg-surface touch-manipulation"
+      className="h-full w-full flex flex-col bg-surface dark:bg-surface touch-manipulation"
       style={{
         // Mobile performance optimizations
         transform: 'translateZ(0)',
