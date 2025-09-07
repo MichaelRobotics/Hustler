@@ -161,7 +161,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
   return (
     <div 
-      className="h-screen w-full flex flex-col bg-surface dark:bg-surface touch-manipulation"
+      className="h-screen w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300 touch-manipulation relative"
       style={{
         // Mobile performance optimizations
         transform: 'translateZ(0)', // Force hardware acceleration
@@ -176,8 +176,10 @@ const UserChat: React.FC<UserChatProps> = ({
         overscrollBehavior: 'contain'
       }}
     >
+      {/* Radial dot pattern background - same as LiveChat */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+      <div className="relative z-10 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -226,7 +228,7 @@ const UserChat: React.FC<UserChatProps> = ({
       </div>
 
       {/* Chat Container */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="relative z-10 flex-1 flex flex-col min-h-0">
         {/* Messages */}
         <div 
           className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide"
@@ -266,7 +268,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Input Area */}
         {options.length > 0 && currentBlockId && (
-          <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+          <div className="relative z-10 flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <textarea
@@ -328,7 +330,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Start Button */}
         {(options.length === 0 || !currentBlockId) && (
-          <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+          <div className="relative z-10 flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
             <button
               onClick={startConversation}
               className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
