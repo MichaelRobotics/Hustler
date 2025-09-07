@@ -57,7 +57,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
     return (
     <>
       {/* Desktop Sidebar - Icons Only */}
-      <div className={`hidden lg:block w-16 bg-gradient-to-br from-surface via-surface/95 to-surface/90 border-r border-border/50 dark:border-border/30 backdrop-blur-sm transition-all duration-300 ${className}`}>
+      <div className={`hidden lg:block w-16 bg-surface/95 dark:bg-surface/90 border-r border-border/50 dark:border-border/30 backdrop-blur-sm transition-all duration-300 ${className}`}>
         {/* Desktop Navigation - Icons Only */}
         <div className="pt-12 px-4 space-y-8">
           {/* Automations - Default Dashboard */}
@@ -145,7 +145,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-br from-surface via-surface/95 to-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? 'hidden' : 'block'}`}>
+      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? 'hidden' : 'block'}`}>
         <div className="flex items-center justify-around px-4 py-3">
           {/* Automations */}
           <Button

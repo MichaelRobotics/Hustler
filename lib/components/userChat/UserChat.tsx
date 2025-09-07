@@ -161,7 +161,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
   return (
     <div 
-      className="h-screen w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300 touch-manipulation relative"
+      className="h-screen w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 touch-manipulation"
       style={{
         // Mobile performance optimizations
         transform: 'translateZ(0)', // Force hardware acceleration
@@ -176,10 +176,8 @@ const UserChat: React.FC<UserChatProps> = ({
         overscrollBehavior: 'contain'
       }}
     >
-      {/* Radial dot pattern background - same as LiveChat */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
-      {/* Header */}
-      <div className="relative z-10 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+      {/* Header - Hidden on desktop */}
+      <div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -228,10 +226,10 @@ const UserChat: React.FC<UserChatProps> = ({
       </div>
 
       {/* Chat Container */}
-      <div className="relative z-10 flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Messages */}
         <div 
-          className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide"
+          className="flex-1 overflow-y-auto p-4 pb-20 lg:pb-4 touch-pan-y scrollbar-hide"
           style={{ 
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
@@ -268,7 +266,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Input Area */}
         {options.length > 0 && currentBlockId && (
-          <div className="relative z-10 flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+          <div className="lg:flex-shrink-0 lg:relative fixed bottom-0 left-0 right-0 lg:p-4 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom z-50">
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <textarea
@@ -330,7 +328,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Start Button */}
         {(options.length === 0 || !currentBlockId) && (
-          <div className="relative z-10 flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+          <div className="lg:flex-shrink-0 lg:relative fixed bottom-0 left-0 right-0 lg:p-4 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom z-50">
             <button
               onClick={startConversation}
               className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"

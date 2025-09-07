@@ -120,8 +120,8 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
         overscrollBehavior: 'contain'
       }}
     >
-      {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+      {/* Header - Hidden on desktop */}
+      <div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -170,7 +170,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
       <div className="flex-1 flex flex-col min-h-0">
         {/* Messages */}
         <div 
-          className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide"
+          className="flex-1 overflow-y-auto p-4 pb-20 lg:pb-4 touch-pan-y scrollbar-hide"
           style={{ 
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
@@ -201,7 +201,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
         </div>
 
         {/* Input Area */}
-        <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+        <div className="lg:flex-shrink-0 lg:relative fixed bottom-0 left-0 right-0 lg:p-4 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom z-50">
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <textarea
