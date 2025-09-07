@@ -120,7 +120,7 @@ const UserChat: React.FC<UserChatProps> = ({
       <div className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
         msg.type === 'user' 
           ? 'bg-blue-500 text-white' 
-          : 'bg-surface/60 dark:bg-surface/40 text-foreground dark:text-foreground'
+          : 'bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm'
       }`}>
         <Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
           {msg.text}
@@ -148,16 +148,16 @@ const UserChat: React.FC<UserChatProps> = ({
   return (
     <div className="h-screen w-full flex flex-col bg-surface dark:bg-surface touch-manipulation">
       {/* Header */}
-      <div className="flex-shrink-0 bg-surface/80 dark:bg-surface/60 border-b border-border/50 dark:border-border/30 px-4 py-3 safe-area-top">
+      <div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
               <button 
                 onClick={onBack} 
-                className="p-2 rounded-full touch-manipulation active:bg-surface/60 dark:active:bg-surface/40"
+                className="p-2 rounded-lg touch-manipulation text-muted-foreground hover:text-foreground hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <ArrowLeft size={20} className="text-foreground/70 dark:text-foreground/70" />
+                <ArrowLeft size={20} strokeWidth={2.5} />
               </button>
             )}
             
@@ -169,26 +169,31 @@ const UserChat: React.FC<UserChatProps> = ({
             )}
             
             <div>
-              <Text size="3" weight="semi-bold" className="text-foreground dark:text-foreground">
+              <Text size="3" weight="semi-bold" className="text-black dark:text-white">
                 Hustler
               </Text>
             </div>
           </div>
           
           {/* Theme Toggle Button */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-full touch-manipulation active:bg-surface/60 dark:active:bg-surface/40 transition-all duration-200 hover:scale-105"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-            title={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {appearance === 'dark' ? (
-              <Sun size={20} className="text-foreground/70 dark:text-foreground/70" />
-            ) : (
-              <Moon size={20} className="text-foreground/70 dark:text-foreground/70" />
-            )}
-          </button>
+          <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              title={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {appearance === 'dark' ? (
+                <Sun size={20} className="text-foreground/70 dark:text-foreground/70" />
+              ) : (
+                <Moon size={20} className="text-foreground/70 dark:text-foreground/70" />
+              )}
+            </button>
+          </div>
         </div>
+        
+        {/* Subtle Separator Line */}
+        <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mt-3" />
       </div>
 
       {/* Chat Container */}
@@ -217,7 +222,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Input Area */}
         {options.length > 0 && currentBlockId && (
-          <div className="flex-shrink-0 p-4 bg-surface/80 dark:bg-surface/60 border-t border-border/50 dark:border-border/30 safe-area-bottom">
+          <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <textarea
@@ -228,7 +233,7 @@ const UserChat: React.FC<UserChatProps> = ({
                   onInput={handleTextareaInput}
                   placeholder="Type a message..."
                   rows={1}
-                  className="w-full px-4 py-3 bg-surface/60 dark:bg-surface/40 border-0 rounded-xl text-base text-foreground dark:text-foreground placeholder:text-foreground/50 dark:placeholder:text-foreground/50 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation"
+                  className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 rounded-xl text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation shadow-sm"
                   style={{
                     height: 'auto',
                     minHeight: '48px',
@@ -251,7 +256,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Start Button */}
         {(options.length === 0 || !currentBlockId) && (
-          <div className="flex-shrink-0 p-4 bg-surface/80 dark:bg-surface/60 border-t border-border/50 dark:border-border/30 safe-area-bottom">
+          <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
             <button
               onClick={startConversation}
               className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
