@@ -65,10 +65,10 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
   // Auto-scroll when keyboard appears/disappears (visual viewport)
   useEffect(() => {
     const handleViewportChange = () => {
-      // Small delay to let keyboard animation complete
+      // Let keyboard fold first, then move input container in one movement
       setTimeout(() => {
         scrollToBottom();
-      }, 100);
+      }, 300); // Longer delay to let keyboard fully fold first
     };
 
     if (window.visualViewport) {
