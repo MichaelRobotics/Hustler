@@ -65,7 +65,7 @@ const UserChat: React.FC<UserChatProps> = ({
     target.style.height = Math.min(target.scrollHeight, 120) + 'px';
   };
 
-  const handleOptionClick = (option: any, index: number) => {
+  const handleOptionClickLocal = (option: any, index: number) => {
     handleOptionClick(option, index);
     onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
   };
@@ -91,7 +91,7 @@ const UserChat: React.FC<UserChatProps> = ({
   const optionsList = options.map((opt, i) => (
     <button
       key={`option-${i}`}
-      onClick={() => handleOptionClick(opt, i)}
+      onClick={() => handleOptionClickLocal(opt, i)}
       className="w-full p-3 text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg"
     >
       <Text size="2" className="text-gray-900 dark:text-gray-100">
@@ -180,7 +180,7 @@ const UserChat: React.FC<UserChatProps> = ({
       </div>
     </div>
   );
-});
+};
 
 UserChat.displayName = 'UserChat';
 
