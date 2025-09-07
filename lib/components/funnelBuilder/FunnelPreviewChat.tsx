@@ -347,93 +347,79 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
 
   return (
     <PerformanceProfiler id="FunnelPreviewChat">
-      {/* Main Chat Container - No inner wrapper */}
+      {/* Mobile-optimized Chat Header - Direct on background */}
+      <PerformanceProfiler id="FunnelPreviewChat-Header">
+        <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 ${
+          isMobile ? 'py-2 px-3' : 'py-3 px-4 sm:px-6 lg:px-8'
+        } border-b border-border/30 dark:border-border/20 ${PERFORMANCE_CLASSES.shadowMinimal}`}>
+          <ChatHeader />
+        </div>
+      </PerformanceProfiler>
+      
+      {/* Chat Messages - Direct rendering on background, no container */}
       <div 
-        className={`h-full flex flex-col ${PERFORMANCE_CLASSES.containerOptimized} ${PERFORMANCE_CLASSES.mobileOptimized} ${
-          isMobile ? PERFORMANCE_CLASSES.mobileSafeArea : ''
-        }`}
-        style={{
+        ref={chatContainerRef} 
+        className={`h-full ${PERFORMANCE_CLASSES.mobileScroll} ${
+          isMobile ? 'p-0 space-y-2 pt-3' : 'p-0 space-y-4 pt-6'
+        } scroll-smooth overflow-y-auto`}
+        style={{ 
+          scrollBehavior: 'smooth',
+          willChange: 'scroll-position',
           // Mobile keyboard adjustments (like Whop's native chat)
           ...(isMobile && isKeyboardOpen && {
             height: `calc(100vh - ${keyboardHeight}px)`,
             transition: 'height 0.3s ease-out'
+          }),
+          // Mobile-specific optimizations
+          ...(isMobile && {
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y'
           })
         }}
       >
-        {/* Mobile-optimized Chat Header */}
-        <PerformanceProfiler id="FunnelPreviewChat-Header">
-          <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 ${
-            isMobile ? 'py-2 px-3' : 'py-3 px-4 sm:px-6 lg:px-8'
-          } border-b border-border/30 dark:border-border/20 ${PERFORMANCE_CLASSES.shadowMinimal}`}>
-            <ChatHeader />
-          </div>
+        <PerformanceProfiler id="FunnelPreviewChat-Messages">
+          {messageList}
         </PerformanceProfiler>
         
-        {/* Chat Messages Area - Direct rendering, no inner container */}
-        <div 
-          ref={chatContainerRef} 
-          className={`flex-grow ${PERFORMANCE_CLASSES.mobileScroll} ${
-            isMobile ? 'p-0 space-y-2 pt-3' : 'p-0 space-y-4 pt-6'
-          } scroll-smooth`}
-          style={{ 
-            scrollBehavior: 'smooth',
-            willChange: 'scroll-position',
-            // Mobile-specific optimizations
-            ...(isMobile && {
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain',
-              touchAction: 'pan-y',
-              // Adjust height when keyboard is open
-              ...(isKeyboardOpen && {
-                height: `calc(100% - ${keyboardHeight}px)`,
-                transition: 'height 0.3s ease-out'
-              })
-            })
-          }}
-        >
-          <PerformanceProfiler id="FunnelPreviewChat-Messages">
-            {messageList}
-          </PerformanceProfiler>
-          
-          {/* Response Options - Direct in messages area */}
-          <PerformanceProfiler id="FunnelPreviewChat-Options">
-            <ChatOptions
-              options={options}
-              optionsLeadingToOffer={optionsLeadingToOffer}
-              selectedOffer={selectedOffer}
-              onOptionClick={handleOptionClick}
-            />
-          </PerformanceProfiler>
-          
-          <div ref={chatEndRef} />
-        </div>
+        {/* Response Options - Direct on background */}
+        <PerformanceProfiler id="FunnelPreviewChat-Options">
+          <ChatOptions
+            options={options}
+            optionsLeadingToOffer={optionsLeadingToOffer}
+            selectedOffer={selectedOffer}
+            onOptionClick={handleOptionClick}
+          />
+        </PerformanceProfiler>
         
-        {/* Conversation End State - Show Start Over when no options or conversation ended */}
-        {(options.length === 0 || !currentBlockId) && (
-          <PerformanceProfiler id="FunnelPreviewChat-Restart">
-            <ChatRestartButton onRestart={startConversation} />
-          </PerformanceProfiler>
-        )}
-
-        {/* Mobile-optimized Performance Debug Info (Development Only) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className={`fixed ${isMobile ? 'bottom-2 right-2' : 'bottom-4 right-4'} bg-black/80 text-white text-xs p-2 rounded ${
-            isMobile ? 'text-[10px]' : 'text-xs'
-          }`}>
-            <div>Preview Chat Performance:</div>
-            <div>Render: {performanceMetrics.renderTime.toFixed(1)}ms</div>
-            <div>Scroll: {performanceMetrics.scrollTime.toFixed(1)}ms</div>
-            <div>Memory: {performanceMetrics.memoryUsage}MB</div>
-            <div>Messages: {history.length}</div>
-            <div>Virtual: {shouldUseVirtualScrolling ? 'ON' : 'OFF'}</div>
-            <div className="text-green-400">Mobile: {isMobile ? 'YES' : 'NO'}</div>
-            <div className="text-blue-400">Touch: {isTouch ? 'YES' : 'NO'}</div>
-            <div className="text-yellow-400">Keyboard: {isKeyboardOpen ? 'OPEN' : 'CLOSED'}</div>
-            <div className="text-purple-400">Input Focus: {isInputFocused ? 'YES' : 'NO'}</div>
-            {isKeyboardOpen && <div className="text-orange-400">Height: {keyboardHeight}px</div>}
-          </div>
-        )}
+        <div ref={chatEndRef} />
       </div>
+      
+      {/* Conversation End State - Direct on background */}
+      {(options.length === 0 || !currentBlockId) && (
+        <PerformanceProfiler id="FunnelPreviewChat-Restart">
+          <ChatRestartButton onRestart={startConversation} />
+        </PerformanceProfiler>
+      )}
+
+      {/* Mobile-optimized Performance Debug Info (Development Only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className={`fixed ${isMobile ? 'bottom-2 right-2' : 'bottom-4 right-4'} bg-black/80 text-white text-xs p-2 rounded ${
+          isMobile ? 'text-[10px]' : 'text-xs'
+        }`}>
+          <div>Preview Chat Performance:</div>
+          <div>Render: {performanceMetrics.renderTime.toFixed(1)}ms</div>
+          <div>Scroll: {performanceMetrics.scrollTime.toFixed(1)}ms</div>
+          <div>Memory: {performanceMetrics.memoryUsage}MB</div>
+          <div>Messages: {history.length}</div>
+          <div>Virtual: {shouldUseVirtualScrolling ? 'ON' : 'OFF'}</div>
+          <div className="text-green-400">Mobile: {isMobile ? 'YES' : 'NO'}</div>
+          <div className="text-blue-400">Touch: {isTouch ? 'YES' : 'NO'}</div>
+          <div className="text-yellow-400">Keyboard: {isKeyboardOpen ? 'OPEN' : 'CLOSED'}</div>
+          <div className="text-purple-400">Input Focus: {isInputFocused ? 'YES' : 'NO'}</div>
+          {isKeyboardOpen && <div className="text-orange-400">Height: {keyboardHeight}px</div>}
+        </div>
+      )}
 
       {/* Completely Separate Chat Input - Fixed positioning when keyboard opens */}
       {options.length > 0 && currentBlockId && (

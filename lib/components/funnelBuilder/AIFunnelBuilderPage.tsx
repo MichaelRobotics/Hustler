@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Card } from 'frosted-ui';
 
 // Core Components
 import FunnelVisualizer from './FunnelVisualizer';
@@ -146,7 +145,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
           {/* Main Content Area */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 !mt-8">
-            <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
+            {/* Removed Card wrapper to eliminate fui-CardInner container */}
+            <div className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
               <div className="relative md:flex-grow md:overflow-auto p-0">
                 {/* API Error Modal */}
                 <ApiErrorModal
@@ -154,8 +154,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   onClose={() => validation.setApiError(null)}
                 />
 
-                {/* Main Content Area */}
-                <div className="flex-1 p-0">
+                {/* Main Content Area - Direct rendering without inner container */}
+                <div className="flex-1 p-0 h-full">
                   {isPreviewing ? (
                     <div className="h-full animate-in fade-in duration-0">
                       <FunnelPreviewChat 
@@ -180,7 +180,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   )}
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
 
           {/* Modals */}
