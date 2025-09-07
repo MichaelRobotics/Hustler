@@ -161,12 +161,12 @@ const WhopChatInput: React.FC<{
   }, [handleSubmit]);
 
   return (
-    <div className={`bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 ${
+    <div className={`bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl shadow-lg backdrop-blur-sm dark:shadow-black/20 ${
       isMobile ? 'p-3' : 'p-4'
     } ${isKeyboardOpen ? 'fixed bottom-0 left-0 right-0 z-50' : ''}`}>
       <form onSubmit={handleSubmit} className="flex items-end gap-3">
         <div className="flex-1">
-          <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 focus-within:border-blue-500 dark:focus-within:border-blue-400 transition-colors">
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 focus-within:border-violet-500 dark:focus-within:border-violet-400 transition-colors">
             <textarea
               ref={textareaRef}
               value={message}
@@ -189,7 +189,7 @@ const WhopChatInput: React.FC<{
         <Button
           type="submit"
           disabled={!message.trim()}
-          className={`bg-blue-500 hover:bg-blue-600 text-white rounded-full p-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          className={`bg-violet-500 hover:bg-violet-600 text-white rounded-full p-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             isMobile ? 'w-12 h-12' : 'w-10 h-10'
           }`}
         >
@@ -231,10 +231,10 @@ const WhopChatOptions: React.FC<{
 WhopChatOptions.displayName = 'WhopChatOptions';
 
 // Main Whop-style chat component
-const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
-  funnelFlow,
-  selectedOffer,
-  onOfferClick
+const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({ 
+  funnelFlow, 
+  selectedOffer, 
+  onOfferClick 
 }) => {
   const {
     history,
@@ -329,9 +329,9 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
   }, [options]);
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-      {/* Chat Header - Whop Style */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+    <>
+      {/* Chat Header - Whop Style - Direct on background */}
+      <div className="flex-shrink-0 bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl mb-6 p-4 shadow-lg backdrop-blur-sm dark:shadow-black/20">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-violet-500 rounded-full flex items-center justify-center">
             <Bot size={16} className="text-white" />
@@ -347,15 +347,17 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
         </div>
       </div>
 
-      {/* Chat Messages - Whop Style */}
+      {/* Chat Messages - Whop Style - Direct on background */}
       <div 
         ref={chatContainerRef}
-        className={`flex-1 overflow-y-auto ${
+        className={`bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl shadow-lg backdrop-blur-sm dark:shadow-black/20 ${
           isKeyboardOpen ? `pb-[${keyboardHeight}px]` : ''
         }`}
         style={{
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
+          height: 'calc(100vh - 200px)',
+          overflowY: 'auto',
           ...(isKeyboardOpen && {
             paddingBottom: `${keyboardHeight}px`,
             transition: 'padding-bottom 0.3s ease-out'
@@ -363,7 +365,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
         }}
       >
         {whopMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <div className="flex flex-col items-center justify-center h-full text-center px-4 py-8">
             <div className="w-16 h-16 bg-violet-100 dark:bg-violet-900 rounded-full flex items-center justify-center mb-4">
               <Bot size={32} className="text-violet-600 dark:text-violet-400" />
             </div>
@@ -411,16 +413,18 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
         )}
       </div>
 
-      {/* Chat Input - Whop Style */}
+      {/* Chat Input - Whop Style - Direct on background */}
       {whopMessages.length > 0 && currentBlockId && (
-        <WhopChatInput
-          onSendMessage={handleCustomInput}
-          placeholder="Type a message..."
-          isMobile={isMobile}
-          isKeyboardOpen={isKeyboardOpen}
-        />
+        <div className="mt-6">
+          <WhopChatInput
+            onSendMessage={handleCustomInput}
+            placeholder="Type a message..."
+            isMobile={isMobile}
+            isKeyboardOpen={isKeyboardOpen}
+          />
+        </div>
       )}
-    </div>
+    </>
   );
 });
 

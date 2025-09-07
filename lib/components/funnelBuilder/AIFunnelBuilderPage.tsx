@@ -157,13 +157,11 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 {/* Main Content Area - Direct rendering without inner container */}
                 <div className="flex-1 p-0 h-full">
                   {isPreviewing ? (
-                    <div className="h-full animate-in fade-in duration-0">
-                      <FunnelPreviewChat 
-                        funnelFlow={currentFunnel.flow} 
-                        selectedOffer={modals.selectedOffer || undefined} 
-                        onOfferClick={(offerId: string) => modals.setSelectedOffer(offerId)}
-                      />
-                    </div>
+                    <FunnelPreviewChat 
+                      funnelFlow={currentFunnel.flow} 
+                      selectedOffer={modals.selectedOffer || undefined} 
+                      onOfferClick={(offerId: string) => modals.setSelectedOffer(offerId)}
+                    />
                   ) : (
                     <div className="animate-in fade-in duration-0">
                       <FunnelVisualizer
