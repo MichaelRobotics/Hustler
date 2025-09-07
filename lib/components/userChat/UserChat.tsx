@@ -43,8 +43,8 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
-  // Ultra-optimized keyboard detection
-  const keyboardState = useOptimizedKeyboardDetection();
+  // Ultra-optimized keyboard detection with pre-calculation
+  const { isVisible, height, isAnimating, preCalculateKeyboardSpace } = useOptimizedKeyboardDetection();
 
   const {
     history,
@@ -101,6 +101,11 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     target.style.height = 'auto';
     target.style.height = Math.min(target.scrollHeight, 120) + 'px';
   }, []);
+
+  // Pre-calculate keyboard space when user focuses on input
+  const handleInputFocus = useCallback(() => {
+    preCalculateKeyboardSpace();
+  }, [preCalculateKeyboardSpace]);
 
   // Ultra-optimized message list with minimal re-renders
   const messageList = useMemo(() => 
@@ -201,11 +206,11 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
         <div 
           className="flex-1 flex flex-col min-h-0 overflow-hidden"
           style={{
-            height: keyboardState.isVisible 
-              ? `calc(100vh - ${keyboardState.height}px - 73px)` 
+            height: isVisible 
+              ? `calc(100vh - ${height}px - 73px)` 
               : 'calc(100vh - 73px)',
-            transform: keyboardState.isVisible 
-              ? `translate3d(0, -${keyboardState.height}px, 0)` 
+            transform: isVisible 
+              ? `translate3d(0, -${height}px, 0)` 
               : 'translate3d(0, 0, 0)',
             transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             willChange: 'transform',
@@ -263,6 +268,7 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
                       onChange={(e) => setMessage(e.target.value)}
                       onKeyDown={handleKeyDown}
                       onInput={handleTextareaInput}
+                      onFocus={handleInputFocus}
                       placeholder="Type a message..."
                       rows={1}
                       className="w-full px-4 py-3 pr-12 bg-gray-100 dark:bg-gray-700 border-0 rounded-2xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white dark:focus:bg-gray-600 transition-all duration-200 resize-none min-h-[44px] max-h-32 overflow-hidden"
@@ -306,11 +312,11 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
         <div 
           className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900"
           style={{
-            height: keyboardState.isVisible ? `${keyboardState.height}px` : '0px',
-            opacity: keyboardState.isVisible ? 1 : 0,
-            transform: keyboardState.isVisible 
+            height: isVisible ? `${height}px` : '0px',
+            opacity: isVisible ? 1 : 0,
+            transform: isVisible 
               ? 'translate3d(0, 0, 0)' 
-              : `translate3d(0, ${keyboardState.height}px, 0)`,
+              : `translate3d(0, ${height}px, 0)`,
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             willChange: 'transform, opacity, height',
           }}

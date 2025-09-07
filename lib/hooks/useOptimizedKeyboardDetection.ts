@@ -7,8 +7,8 @@ interface KeyboardState {
 }
 
 /**
- * Ultra-optimized keyboard detection hook with RAF throttling
- * Designed for 60fps performance and minimal re-renders
+ * Ultra-optimized keyboard detection hook with pre-calculation strategy
+ * Designed for 60fps performance and eliminates double movement
  */
 export const useOptimizedKeyboardDetection = () => {
   const [keyboardState, setKeyboardState] = useState<KeyboardState>({
@@ -21,15 +21,55 @@ export const useOptimizedKeyboardDetection = () => {
   const rafId = useRef<number | null>(null);
   const lastUpdateTime = useRef<number>(0);
   const isUpdating = useRef<boolean>(false);
+  const isPreCalculating = useRef<boolean>(false);
+  const preCalculatedHeight = useRef<number>(0);
 
-  // Set initial viewport height
+  // Set initial viewport height and pre-calculate keyboard height
   useEffect(() => {
     if (typeof window !== 'undefined') {
       initialViewportHeight.current = window.innerHeight;
+      
+      // Pre-calculate typical keyboard height based on device
+      const screenHeight = window.innerHeight;
+      const screenWidth = window.innerWidth;
+      
+      // Estimate keyboard height based on device characteristics
+      if (screenWidth < 768) { // Mobile devices
+        // Typical mobile keyboard heights
+        if (screenHeight < 700) { // Small phones
+          preCalculatedHeight.current = Math.min(screenHeight * 0.4, 280);
+        } else if (screenHeight < 900) { // Regular phones
+          preCalculatedHeight.current = Math.min(screenHeight * 0.35, 320);
+        } else { // Large phones
+          preCalculatedHeight.current = Math.min(screenHeight * 0.3, 350);
+        }
+      } else {
+        // Tablet/desktop - smaller keyboard
+        preCalculatedHeight.current = Math.min(screenHeight * 0.25, 250);
+      }
     }
   }, []);
 
-  // Ultra-fast keyboard detection with RAF throttling
+  // Pre-calculation function to prepare space before keyboard appears
+  const preCalculateKeyboardSpace = useCallback(() => {
+    if (isPreCalculating.current) return;
+    
+    isPreCalculating.current = true;
+    
+    // Immediately prepare space with pre-calculated height
+    setKeyboardState(prev => ({
+      isVisible: true,
+      height: preCalculatedHeight.current,
+      isAnimating: true,
+    }));
+    
+    // Reset pre-calculation flag after a short delay
+    setTimeout(() => {
+      isPreCalculating.current = false;
+    }, 100);
+  }, []);
+
+  // Ultra-fast keyboard detection with pre-calculation strategy
   const updateKeyboardState = useCallback(() => {
     if (typeof window === 'undefined' || isUpdating.current) return;
 
@@ -52,11 +92,15 @@ export const useOptimizedKeyboardDetection = () => {
     // Optimized threshold check
     const keyboardThreshold = 150;
     const isKeyboardVisible = heightDifference > keyboardThreshold;
-    const keyboardHeight = isKeyboardVisible ? Math.max(heightDifference, 0) : 0;
+    
+    // Use actual measured height when keyboard is visible, pre-calculated when preparing
+    const keyboardHeight = isKeyboardVisible 
+      ? Math.max(heightDifference, 0) 
+      : (isPreCalculating.current ? preCalculatedHeight.current : 0);
 
     setKeyboardState(prev => {
       const wasVisible = prev.isVisible;
-      const isNowVisible = isKeyboardVisible;
+      const isNowVisible = isKeyboardVisible || isPreCalculating.current;
       const isAnimating = wasVisible !== isNowVisible;
       
       // Only update if state actually changed
@@ -135,5 +179,8 @@ export const useOptimizedKeyboardDetection = () => {
     }
   }, [keyboardState.isAnimating]);
 
-  return keyboardState;
+  return {
+    ...keyboardState,
+    preCalculateKeyboardSpace,
+  };
 };
