@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Button, Text } from 'frosted-ui';
 import { Send, Bot, User, RotateCcw } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
+import { useKeyboard } from '../../context/KeyboardContext';
 
 // Optimized chat message types
 interface ChatMessage {
@@ -86,14 +87,16 @@ const OptimizedChatInput: React.FC<{
 }> = React.memo(({ onSendMessage, placeholder = "Type your message..." }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { setIsTyping } = useKeyboard();
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim()) {
       onSendMessage(message.trim());
       setMessage('');
+      setIsTyping(false);
     }
-  }, [message, onSendMessage]);
+  }, [message, onSendMessage, setIsTyping]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -110,14 +113,32 @@ const OptimizedChatInput: React.FC<{
     }
   }, [message]);
 
+  // Handle typing detection
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    setIsTyping(e.target.value.length > 0);
+  }, [setIsTyping]);
+
+  const handleFocus = useCallback(() => {
+    setIsTyping(true);
+  }, [setIsTyping]);
+
+  const handleBlur = useCallback(() => {
+    if (message.length === 0) {
+      setIsTyping(false);
+    }
+  }, [message.length, setIsTyping]);
+
   return (
     <form onSubmit={handleSubmit} className="flex items-end gap-2 p-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
       <div className="flex-1">
         <textarea
           ref={textareaRef}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder={placeholder}
           rows={1}
           className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"

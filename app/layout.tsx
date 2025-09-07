@@ -3,6 +3,7 @@ import 'frosted-ui/styles.css';
 import "./globals.css";
 import { ThemeProvider } from '@/lib/components/common/ThemeProvider';
 import { WhopIframeSdkProvider } from "@whop/react";
+import { KeyboardProvider } from '@/lib/context/KeyboardContext';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -33,7 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <WhopIframeSdkProvider>
           <ThemeProvider>
-            {children}
+            <KeyboardProvider>
+              {children}
+            </KeyboardProvider>
           </ThemeProvider>
         </WhopIframeSdkProvider>
       </body>

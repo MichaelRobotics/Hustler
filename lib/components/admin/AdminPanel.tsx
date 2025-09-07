@@ -21,6 +21,7 @@ import { useViewNavigation } from '@/lib/hooks/useViewNavigation';
 import { hasValidFlow } from '@/lib/helpers/funnel-validation';
 import { generateMockData, generateSalesData } from '@/lib/utils/dataSimulation';
 import { Resource } from '@/lib/types/resource';
+import { useKeyboard } from '@/lib/context/KeyboardContext';
 
 interface Funnel {
   id: string;
@@ -41,6 +42,9 @@ type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funne
 export default function AdminPanel() {
   // State for tracking typing in LiveChat
   const [isUserTyping, setIsUserTyping] = React.useState(false);
+  
+  // Get keyboard state from context
+  const { isTyping, isKeyboardOpen } = useKeyboard();
 
 
   // Use the extracted hooks
@@ -269,7 +273,7 @@ export default function AdminPanel() {
           <AdminSidebar
             currentView={currentView}
             onViewChange={handleViewChange}
-            className="flex-shrink-0 h-full"
+            className={`flex-shrink-0 h-full transition-all duration-300 ${(isTyping || isKeyboardOpen) ? 'hidden' : 'block'}`}
             libraryContext={libraryContext}
             currentFunnelForLibrary={selectedFunnelForLibrary}
           />
@@ -448,7 +452,7 @@ export default function AdminPanel() {
         <AdminSidebar
           currentView={currentView}
           onViewChange={handleViewChange}
-          className="flex-shrink-0 h-full"
+          className={`flex-shrink-0 h-full transition-all duration-300 ${(isTyping || isKeyboardOpen) ? 'hidden' : 'block'}`}
           libraryContext={libraryContext}
           currentFunnelForLibrary={selectedFunnelForLibrary}
           isUserTyping={isUserTyping}
@@ -457,7 +461,9 @@ export default function AdminPanel() {
         <div className="flex-1 overflow-auto w-full lg:w-auto">
           <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
             <div className="max-w-7xl mx-auto">
-              <AdminHeader onAddFunnel={() => setIsAddDialogOpen(true)} />
+              <div className={`transition-all duration-300 ${(isTyping || isKeyboardOpen) ? 'hidden' : 'block'}`}>
+                <AdminHeader onAddFunnel={() => setIsAddDialogOpen(true)} />
+              </div>
 
               <div className="mt-8">
                 <FunnelsDashboard

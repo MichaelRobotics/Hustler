@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Eye, Library, Zap, Plus, Edit3 } from 'lucide-react';
 import { useCredits } from '../../hooks/useCredits';
 import { CreditPackModal } from '../payments/CreditPackModal';
+import { useKeyboard } from '../../context/KeyboardContext';
 
 interface UnifiedNavigationProps {
   onPreview?: () => void;
@@ -16,6 +17,7 @@ interface UnifiedNavigationProps {
   isDeployed?: boolean; // New: Check if funnel is deployed/live
   className?: string;
   showOnPage?: 'resources' | 'aibuilder' | 'preview' | 'all' | 'analytics';
+  hideWhenTyping?: boolean; // New: Hide when user is typing
 }
 
 const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
@@ -28,11 +30,13 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
   isAnyFunnelGenerating,
   isDeployed = false,
   className = '',
-  showOnPage = 'all'
+  showOnPage = 'all',
+  hideWhenTyping = true
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { canGenerate, refresh: refreshCredits } = useCredits();
   const [showCreditModal, setShowCreditModal] = useState(false);
+  const { isTyping, isKeyboardOpen } = useKeyboard();
 
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
@@ -74,8 +78,13 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
     return null;
   }
 
+  // Hide when typing if hideWhenTyping is true
+  if (hideWhenTyping && (isTyping || isKeyboardOpen)) {
+    return null;
+  }
+
   return (
-    <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
+    <div className={`fixed bottom-6 right-6 z-50 transition-all duration-300 ${className}`}>
       <div className="flex flex-col items-center gap-3">
         {/* Preview Button - Show on resources and aibuilder pages, only if funnel is generated */}
         {isExpanded && onPreview && (showOnPage === 'resources' || showOnPage === 'aibuilder') && isGenerated && (
