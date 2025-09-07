@@ -256,9 +256,9 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
         </div>
 
         {/* Main Content Area */}
-        <div className={`flex-grow flex flex-col md:overflow-hidden gap-6 ${selectedConversation ? 'lg:mt-8' : 'mt-8'}`}>
+        <div className={`flex-grow flex flex-col md:overflow-hidden ${selectedConversation ? 'lg:gap-6 lg:mt-8' : 'gap-6 mt-8'}`}>
           {/* Mobile: Show conversation list or chat view */}
-          <div className={`lg:hidden ${selectedConversation ? 'h-screen' : 'h-[calc(100vh-300px)]'} min-h-[400px] overflow-hidden`}>
+          <div className={`lg:hidden ${selectedConversation ? 'fixed inset-0 top-0 left-0 right-0 bottom-0 z-40' : 'h-[calc(100vh-300px)]'} min-h-[400px] overflow-hidden`}>
             {selectedConversation ? (
               <div className="h-full animate-in fade-in duration-0">
                 <LiveChatView
