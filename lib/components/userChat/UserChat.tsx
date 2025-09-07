@@ -15,21 +15,14 @@ interface UserChatProps {
 }
 
 /**
- * --- Ultra-Optimized Native Whop Chat Component ---
+ * --- Simplified High-Performance Chat Component ---
  * 
- * This is an ultra-optimized version with:
- * - Lightning-fast keyboard detection (RAF throttled)
- * - Native Whop DM chat design
- * - Minimal re-renders and maximum performance
- * - Hardware-accelerated animations
- * - WhatsApp-like smooth transitions
- * 
- * Performance Optimizations:
- * - RAF-throttled keyboard detection
- * - Minimal state updates
- * - Hardware-accelerated transforms
- * - Optimized memoization
- * - Native driver animations
+ * Modern chat flow like Messenger with:
+ * - Minimal animations and clutter
+ * - Maximum performance
+ * - Clean, simple design
+ * - Native mobile behavior
+ * - Optimized for speed
  */
 const UserChat: React.FC<UserChatProps> = React.memo(({ 
   funnelFlow, 
@@ -40,8 +33,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-  
 
   const {
     history,
@@ -52,23 +43,17 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     options
   } = useFunnelPreviewChat(funnelFlow);
 
-  // Ultra-fast auto-scroll with RAF
+  // Simple auto-scroll for keyboard
   const scrollToBottom = useCallback(() => {
     if (chatEndRef.current) {
-      requestAnimationFrame(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
 
-
-  // Auto-scroll when keyboard appears/disappears (visual viewport)
+  // Keyboard handling - simple and fast
   useEffect(() => {
     const handleViewportChange = () => {
-      // Let keyboard fold first, then move input container in one movement
-      setTimeout(() => {
-        scrollToBottom();
-      }, 300); // Longer delay to let keyboard fully fold first
+      setTimeout(scrollToBottom, 200);
     };
 
     if (window.visualViewport) {
@@ -79,7 +64,7 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     }
   }, [scrollToBottom]);
 
-  // Optimized message handlers
+  // Message handlers
   const handleUserMessage = useCallback((message: string) => {
     handleCustomInput(message);
     onMessageSent?.(message, conversationId);
@@ -90,7 +75,7 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
   }, [handleOptionClick, onMessageSent, conversationId]);
 
-  // Ultra-fast form handling
+  // Form handling
   const handleSubmit = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
     if (message.trim()) {
@@ -106,191 +91,127 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     }
   }, [handleSubmit]);
 
-  // Optimized textarea resize
+  // Simple textarea resize
   const handleTextareaInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
     const target = e.target as HTMLTextAreaElement;
     target.style.height = 'auto';
     target.style.height = Math.min(target.scrollHeight, 120) + 'px';
   }, []);
 
-
-  // Ultra-optimized message list with minimal re-renders
+  // Simple message list
   const messageList = useMemo(() => 
     history.map((msg, index) => (
       <div 
-        key={`${msg.type}-${index}-${msg.text.length}`} 
-        className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} mb-3`}
+        key={`${msg.type}-${index}`} 
+        className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
       >
-        <div className="flex items-end gap-2 max-w-[85%]">
-          {/* Avatar - Only show for bot messages */}
-          {msg.type === 'bot' && (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Text size="1" weight="bold" className="text-white">
-                AI
-              </Text>
-            </div>
-          )}
-          
-          {/* Message Bubble - Native Whop DM Style */}
-          <div className={`px-4 py-3 rounded-2xl shadow-sm ${
-            msg.type === 'user' 
-              ? 'bg-gradient-to-br from-violet-500 to-violet-600 text-white rounded-br-md' 
-              : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-bl-md'
-          }`}>
-            <Text 
-              size="2" 
-              className={`whitespace-pre-wrap leading-relaxed ${
-                msg.type === 'user' ? 'text-white' : 'text-gray-900 dark:text-gray-100'
-              }`}
-            >
-              {msg.text}
-            </Text>
-          </div>
-
-          {/* User Avatar - Only show for user messages */}
-          {msg.type === 'user' && (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Text size="1" weight="bold" className="text-white">
-                You
-              </Text>
-            </div>
-          )}
+        <div className={`max-w-[80%] px-4 py-2 rounded-lg ${
+          msg.type === 'user' 
+            ? 'bg-blue-500 text-white' 
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+        }`}>
+          <Text size="2" className="whitespace-pre-wrap">
+            {msg.text}
+          </Text>
         </div>
       </div>
     )), [history]
   );
 
-  // Ultra-optimized options list
+  // Simple options list
   const optionsList = useMemo(() => 
     options.map((opt, i) => (
       <button
-        key={`option-${i}-${opt.text.length}`}
+        key={`option-${i}`}
         onClick={() => handleUserOptionClick(opt, i)}
-        className="w-full p-4 border rounded-2xl transition-all duration-200 text-left group bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 border-violet-400 hover:border-violet-500 shadow-sm hover:shadow-md transform hover:scale-[1.02] active:scale-[0.98]"
+        className="w-full p-3 text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 bg-white/20 border-white/30">
-            <Text size="1" weight="bold" className="text-white">
-              {i + 1}
-            </Text>
-          </div>
-          <Text size="2" className="text-white group-hover:text-white transition-colors font-medium">
-            {opt.text}
-          </Text>
-        </div>
+        <Text size="2" className="text-gray-900 dark:text-gray-100">
+          {opt.text}
+        </Text>
       </button>
     )), [options, handleUserOptionClick]
   );
 
   return (
     <ErrorBoundary>
-      <div className="h-screen w-full flex flex-col relative bg-gray-50 dark:bg-gray-900">
-        {/* Native Whop Header */}
+      <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900">
+        {/* Simple Header */}
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
           <div className="flex items-center gap-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
               </button>
             )}
-            <div className="flex-1">
+            <div>
               <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
                 AI Assistant
-              </Text>
-              <Text size="1" className="text-gray-500 dark:text-gray-400">
-                Online
               </Text>
             </div>
           </div>
         </div>
 
-        {/* Main Chat Container - Natural keyboard behavior */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* Messages Area - Optimized scrolling */}
-          <div 
-            ref={chatContainerRef} 
-            className="flex-1 overflow-y-auto p-4 space-y-1 min-h-0"
-            style={{ 
-              scrollBehavior: 'smooth',
-              WebkitOverflowScrolling: 'touch'
-            }}
-          >
-            <ErrorBoundary>
-              {messageList}
-            </ErrorBoundary>
+        {/* Chat Container */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {messageList}
             
-            {/* Options - Native Whop DM Style */}
+            {/* Options */}
             {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
-              <ErrorBoundary>
-                <div className="flex justify-end mb-3">
-                  <div className="flex items-end gap-2 max-w-[85%]">
-                    <div className="max-w-full">
-                      <div className="space-y-2">
-                        {optionsList}
-                      </div>
-                    </div>
-                    
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <Text size="1" weight="bold" className="text-white">
-                        You
-                      </Text>
-                    </div>
-                  </div>
-                </div>
-              </ErrorBoundary>
+              <div className="space-y-2 mt-4">
+                {optionsList}
+              </div>
             )}
             
             <div ref={chatEndRef} />
           </div>
 
-          {/* Native Whop Input Area - Ultra-optimized */}
+          {/* Input Area */}
           {options.length > 0 && currentBlockId && (
             <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
-                  <div className="relative">
-                    <textarea
-                      ref={textareaRef}
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onInput={handleTextareaInput}
-                      placeholder="Type a message..."
-                      rows={1}
-                      className="w-full px-4 py-3 pr-12 bg-gray-100 dark:bg-gray-700 border-0 rounded-2xl text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white dark:focus:bg-gray-600 transition-all duration-200 resize-none min-h-[44px] max-h-32 overflow-hidden"
-                      style={{
-                        height: 'auto',
-                        minHeight: '44px',
-                      }}
-                    />
-                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onInput={handleTextareaInput}
+                    placeholder="Type a message..."
+                    rows={1}
+                    className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[40px] max-h-32"
+                    style={{
+                      height: 'auto',
+                      minHeight: '40px',
+                    }}
+                  />
                 </div>
                 
                 <button
                   onClick={handleSubmit}
                   disabled={!message.trim()}
-                  className="p-3 rounded-full bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+                  className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  <Send size={18} strokeWidth={2.5} className="text-white" />
+                  <Send size={16} className="text-white" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* Start Over Button - Native Style */}
+          {/* Start Button */}
           {(options.length === 0 || !currentBlockId) && (
             <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex justify-center">
-                <button
-                  onClick={startConversation}
-                  className="px-6 py-3 bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white rounded-2xl font-medium transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                >
-                  Start Over
-                </button>
-              </div>
+              <button
+                onClick={startConversation}
+                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
+              >
+                Start Conversation
+              </button>
             </div>
           )}
         </div>
