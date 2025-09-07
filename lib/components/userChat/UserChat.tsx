@@ -2,9 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Text } from 'frosted-ui';
-import { Send, ArrowLeft } from 'lucide-react';
+import { Send, ArrowLeft, Sun, Moon } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelFlow } from '../../types/funnel';
+import { useTheme } from '../common/ThemeProvider';
 
 interface UserChatProps {
   funnelFlow: FunnelFlow;
@@ -32,6 +33,7 @@ const UserChat: React.FC<UserChatProps> = ({
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const { appearance, toggleTheme } = useTheme();
 
   const {
     history,
@@ -145,21 +147,37 @@ const UserChat: React.FC<UserChatProps> = ({
     <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900 touch-manipulation">
       {/* Header */}
       <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 safe-area-top">
-        <div className="flex items-center gap-3">
-          {onBack && (
-            <button 
-              onClick={onBack} 
-              className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
-            </button>
-          )}
-          <div>
-            <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
-              AI Assistant
-            </Text>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button 
+                onClick={onBack} 
+                className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
+              </button>
+            )}
+            <div>
+              <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
+                AI Assistant
+              </Text>
+            </div>
           </div>
+          
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700 transition-all duration-200 hover:scale-105"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+            title={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {appearance === 'dark' ? (
+              <Sun size={20} className="text-gray-600 dark:text-gray-300" />
+            ) : (
+              <Moon size={20} className="text-gray-600 dark:text-gray-300" />
+            )}
+          </button>
         </div>
       </div>
 
