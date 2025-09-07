@@ -61,9 +61,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     }
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [history, scrollToBottom]);
 
   // Auto-scroll when keyboard appears/disappears (visual viewport)
   useEffect(() => {
