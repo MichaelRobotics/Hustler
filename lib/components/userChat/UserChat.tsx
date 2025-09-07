@@ -129,8 +129,11 @@ const UserChat: React.FC<UserChatProps> = ({
     <button
       key={`option-${i}`}
       onClick={() => handleOptionClickLocal(opt, i)}
-      className="max-w-[80%] px-4 py-2 rounded-lg bg-blue-500 text-white text-left"
+      className="max-w-[80%] px-4 py-2 rounded-lg bg-blue-500 text-white text-left flex items-center gap-2"
     >
+      <span className="flex-shrink-0 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-medium">
+        {i + 1}
+      </span>
       <Text size="2" className="text-white">
         {opt.text}
       </Text>
