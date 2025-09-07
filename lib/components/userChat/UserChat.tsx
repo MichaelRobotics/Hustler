@@ -111,14 +111,14 @@ const UserChat: React.FC<UserChatProps> = ({
   const messageList = history.map((msg, index) => (
     <div 
       key={`${msg.type}-${index}`} 
-      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
+      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} mb-4 px-1`}
     >
-      <div className={`max-w-[80%] px-4 py-2 rounded-lg ${
+      <div className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
         msg.type === 'user' 
           ? 'bg-blue-500 text-white' 
           : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
       }`}>
-        <Text size="2" className="whitespace-pre-wrap">
+        <Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
           {msg.text}
         </Text>
       </div>
@@ -129,24 +129,29 @@ const UserChat: React.FC<UserChatProps> = ({
     <button
       key={`option-${i}`}
       onClick={() => handleOptionClickLocal(opt, i)}
-      className="max-w-[80%] px-4 py-2 rounded-lg bg-blue-500 text-white text-left flex items-center gap-2"
+      className="w-full px-4 py-3 rounded-lg bg-blue-500 text-white text-left flex items-center gap-3 touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+      style={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      <span className="flex-shrink-0 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-medium">
+      <span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
         {i + 1}
       </span>
-      <Text size="2" className="text-white">
+      <Text size="2" className="text-white leading-relaxed">
         {opt.text}
       </Text>
     </button>
   ));
 
   return (
-    <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900">
+    <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900 touch-manipulation">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 safe-area-top">
         <div className="flex items-center gap-3">
           {onBack && (
-            <button onClick={onBack} className="p-2 rounded-full">
+            <button 
+              onClick={onBack} 
+              className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+            >
               <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
             </button>
           )}
@@ -161,13 +166,19 @@ const UserChat: React.FC<UserChatProps> = ({
       {/* Chat Container */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div 
+          className="flex-1 overflow-y-auto p-4 touch-pan-y"
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain'
+          }}
+        >
           {messageList}
           
           {/* Options - User side (right side) */}
           {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
             <div className="flex justify-end mb-4">
-              <div className="space-y-2">
+              <div className="space-y-2 w-full max-w-[85%] sm:max-w-[80%]">
                 {optionsList}
               </div>
             </div>
@@ -178,7 +189,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Input Area */}
         {options.length > 0 && currentBlockId && (
-          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-bottom">
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <textarea
@@ -189,10 +200,11 @@ const UserChat: React.FC<UserChatProps> = ({
                   onInput={handleTextareaInput}
                   placeholder="Type a message..."
                   rows={1}
-                  className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none resize-none min-h-[40px] max-h-32"
+                  className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 border-0 rounded-xl text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation"
                   style={{
                     height: 'auto',
-                    minHeight: '40px',
+                    minHeight: '48px',
+                    fontSize: '16px', // Prevents zoom on iOS
                   }}
                 />
               </div>
@@ -200,9 +212,10 @@ const UserChat: React.FC<UserChatProps> = ({
               <button
                 onClick={handleSubmit}
                 disabled={!message.trim()}
-                className="p-2 rounded-lg bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <Send size={16} className="text-white" />
+                <Send size={18} className="text-white" />
               </button>
             </div>
           </div>
@@ -210,10 +223,11 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Start Button */}
         {(options.length === 0 || !currentBlockId) && (
-          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-bottom">
             <button
               onClick={startConversation}
-              className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium"
+              className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               Start Conversation
             </button>
