@@ -1,0 +1,661 @@
+{
+  "timestamp": "2025-09-07T14:05:04.938Z",
+  "summary": {
+    "totalTests": 4,
+    "passedTests": 0,
+    "failedTests": 4,
+    "successRate": 0
+  },
+  "results": [
+    {
+      "scenario": "Small Chat (10 messages)",
+      "mobile": {
+        "environment": "Mobile",
+        "scenario": "Small Chat (10 messages)",
+        "messageCount": 10,
+        "optimizations": [
+          {
+            "name": "mobileDetection",
+            "duration": 0.11342699999999972,
+            "result": true
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.02369600000000105,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904935
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904936
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                }
+              ],
+              "totalHeight": 1000,
+              "adjustedItemHeight": 100,
+              "isMobile": true
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.010170999999999708,
+            "result": {
+              "touchAction": "manipulation",
+              "webkitTapHighlight": "transparent",
+              "webkitOverflowScrolling": "touch",
+              "overscrollBehavior": "contain"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.02074100000000101,
+            "result": {
+              "spacing": 2,
+              "padding": 8,
+              "touchTargetSize": 48,
+              "safeAreaPadding": 20,
+              "optimizedForMobile": true
+            }
+          }
+        ]
+      },
+      "desktop": {
+        "environment": "Desktop",
+        "scenario": "Small Chat (10 messages)",
+        "messageCount": 10,
+        "optimizations": [
+          {
+            "name": "desktopDetection",
+            "duration": 0.07110400000000006,
+            "result": false
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.003334999999999866,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904935
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904936
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 5,
+                  "text": "Test message 6",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                }
+              ],
+              "totalHeight": 800,
+              "adjustedItemHeight": 80,
+              "isMobile": false
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.0021540000000008774,
+            "result": {
+              "touchAction": "auto"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.002064000000000732,
+            "result": {
+              "spacing": 4,
+              "padding": 16,
+              "touchTargetSize": 44,
+              "safeAreaPadding": 0,
+              "optimizedForMobile": false
+            }
+          }
+        ]
+      },
+      "improvement": -113.63006471133939
+    },
+    {
+      "scenario": "Medium Chat (30 messages)",
+      "mobile": {
+        "environment": "Mobile",
+        "scenario": "Medium Chat (30 messages)",
+        "messageCount": 30,
+        "optimizations": [
+          {
+            "name": "mobileDetection",
+            "duration": 0.0026060000000001082,
+            "result": true
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.003493999999999886,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904941
+                }
+              ],
+              "totalHeight": 3000,
+              "adjustedItemHeight": 100,
+              "isMobile": true
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.0009289999999992915,
+            "result": {
+              "touchAction": "manipulation",
+              "webkitTapHighlight": "transparent",
+              "webkitOverflowScrolling": "touch",
+              "overscrollBehavior": "contain"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.0020309999999987838,
+            "result": {
+              "spacing": 2,
+              "padding": 8,
+              "touchTargetSize": 48,
+              "safeAreaPadding": 20,
+              "optimizedForMobile": true
+            }
+          }
+        ]
+      },
+      "desktop": {
+        "environment": "Desktop",
+        "scenario": "Medium Chat (30 messages)",
+        "messageCount": 30,
+        "optimizations": [
+          {
+            "name": "desktopDetection",
+            "duration": 0.0012170000000004677,
+            "result": false
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.0018070000000030007,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904941
+                },
+                {
+                  "id": 5,
+                  "text": "Test message 6",
+                  "type": "assistant",
+                  "timestamp": 1757253904942
+                }
+              ],
+              "totalHeight": 2400,
+              "adjustedItemHeight": 80,
+              "isMobile": false
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.0004689999999989425,
+            "result": {
+              "touchAction": "auto"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.0017379999999995732,
+            "result": {
+              "spacing": 4,
+              "padding": 16,
+              "touchTargetSize": 44,
+              "safeAreaPadding": 0,
+              "optimizedForMobile": false
+            }
+          }
+        ]
+      },
+      "improvement": -73.19824125395972
+    },
+    {
+      "scenario": "Large Chat (100 messages)",
+      "mobile": {
+        "environment": "Mobile",
+        "scenario": "Large Chat (100 messages)",
+        "messageCount": 100,
+        "optimizations": [
+          {
+            "name": "mobileDetection",
+            "duration": 0.0017379999999995732,
+            "result": true
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.0032800000000001717,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904941
+                }
+              ],
+              "totalHeight": 10000,
+              "adjustedItemHeight": 100,
+              "isMobile": true
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.0027150000000020214,
+            "result": {
+              "touchAction": "manipulation",
+              "webkitTapHighlight": "transparent",
+              "webkitOverflowScrolling": "touch",
+              "overscrollBehavior": "contain"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.003004000000000673,
+            "result": {
+              "spacing": 2,
+              "padding": 8,
+              "touchTargetSize": 48,
+              "safeAreaPadding": 20,
+              "optimizedForMobile": true
+            }
+          }
+        ]
+      },
+      "desktop": {
+        "environment": "Desktop",
+        "scenario": "Large Chat (100 messages)",
+        "messageCount": 100,
+        "optimizations": [
+          {
+            "name": "desktopDetection",
+            "duration": 0.0009589999999981558,
+            "result": false
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.001881999999998385,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904941
+                },
+                {
+                  "id": 5,
+                  "text": "Test message 6",
+                  "type": "assistant",
+                  "timestamp": 1757253904942
+                }
+              ],
+              "totalHeight": 8000,
+              "adjustedItemHeight": 80,
+              "isMobile": false
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.0006729999999990355,
+            "result": {
+              "touchAction": "auto"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.0028849999999991383,
+            "result": {
+              "spacing": 4,
+              "padding": 16,
+              "touchTargetSize": 44,
+              "safeAreaPadding": 0,
+              "optimizedForMobile": false
+            }
+          }
+        ]
+      },
+      "improvement": -67.79184247556348
+    },
+    {
+      "scenario": "Very Large Chat (500 messages)",
+      "mobile": {
+        "environment": "Mobile",
+        "scenario": "Very Large Chat (500 messages)",
+        "messageCount": 500,
+        "optimizations": [
+          {
+            "name": "mobileDetection",
+            "duration": 0.0012320000000016762,
+            "result": true
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.00219200000000086,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904941
+                }
+              ],
+              "totalHeight": 50000,
+              "adjustedItemHeight": 100,
+              "isMobile": true
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.0007809999999999206,
+            "result": {
+              "touchAction": "manipulation",
+              "webkitTapHighlight": "transparent",
+              "webkitOverflowScrolling": "touch",
+              "overscrollBehavior": "contain"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.00178099999999759,
+            "result": {
+              "spacing": 2,
+              "padding": 8,
+              "touchTargetSize": 48,
+              "safeAreaPadding": 20,
+              "optimizedForMobile": true
+            }
+          }
+        ]
+      },
+      "desktop": {
+        "environment": "Desktop",
+        "scenario": "Very Large Chat (500 messages)",
+        "messageCount": 500,
+        "optimizations": [
+          {
+            "name": "desktopDetection",
+            "duration": 0.0007529999999995596,
+            "result": false
+          },
+          {
+            "name": "mobileVirtualScrolling",
+            "duration": 0.0016450000000034493,
+            "result": {
+              "visibleItems": [
+                {
+                  "id": 0,
+                  "text": "Test message 1",
+                  "type": "user",
+                  "timestamp": 1757253904937
+                },
+                {
+                  "id": 1,
+                  "text": "Test message 2",
+                  "type": "assistant",
+                  "timestamp": 1757253904938
+                },
+                {
+                  "id": 2,
+                  "text": "Test message 3",
+                  "type": "user",
+                  "timestamp": 1757253904939
+                },
+                {
+                  "id": 3,
+                  "text": "Test message 4",
+                  "type": "assistant",
+                  "timestamp": 1757253904940
+                },
+                {
+                  "id": 4,
+                  "text": "Test message 5",
+                  "type": "user",
+                  "timestamp": 1757253904941
+                },
+                {
+                  "id": 5,
+                  "text": "Test message 6",
+                  "type": "assistant",
+                  "timestamp": 1757253904942
+                }
+              ],
+              "totalHeight": 40000,
+              "adjustedItemHeight": 80,
+              "isMobile": false
+            }
+          },
+          {
+            "name": "touchHandling",
+            "duration": 0.000408000000000186,
+            "result": {
+              "touchAction": "auto"
+            }
+          },
+          {
+            "name": "mobileLayout",
+            "duration": 0.0016180000000005634,
+            "result": {
+              "spacing": 4,
+              "padding": 16,
+              "touchTargetSize": 44,
+              "safeAreaPadding": 0,
+              "optimizedForMobile": false
+            }
+          }
+        ]
+      },
+      "improvement": -35.30741410476857
+    }
+  ],
+  "optimizations": [
+    "Touch-friendly targets (44px+)",
+    "Mobile-optimized virtual scrolling",
+    "Touch gesture handling",
+    "Mobile-safe area support",
+    "iOS zoom prevention (16px font)",
+    "WebKit scroll optimizations",
+    "Reduced animation duration",
+    "Mobile-specific spacing",
+    "Touch manipulation CSS",
+    "Mobile performance monitoring"
+  ],
+  "environments": {
+    "mobile": {
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      "screenWidth": 375,
+      "screenHeight": 812,
+      "touchPoints": 1,
+      "isMobile": true,
+      "isTouch": true
+    },
+    "desktop": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "screenWidth": 1920,
+      "screenHeight": 1080,
+      "touchPoints": 0,
+      "isMobile": false,
+      "isTouch": false
+    }
+  }
+}

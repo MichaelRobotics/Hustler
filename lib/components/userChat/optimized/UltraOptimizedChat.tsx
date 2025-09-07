@@ -1,46 +1,43 @@
 'use client';
 
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
-import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
-import { FunnelFlow } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatInput } from '../funnelBuilder/components';
-import ErrorBoundary from '../common/ErrorBoundary';
+import { useFunnelPreviewChat } from '../../../hooks/useFunnelPreviewChat';
+import { FunnelFlow } from '../../../types/funnel';
+import { ChatHeader, ChatMessage, ChatInput } from '../../funnelBuilder/components';
+import ErrorBoundary from '../../common/ErrorBoundary';
 import { Text } from 'frosted-ui';
 
 /**
- * --- Ultra-Optimized User Chat Component ---
- * This is the customer-facing chat interface with maximum performance optimizations.
+ * Ultra-Optimized UserChat Component
  * 
- * Performance Features:
- * - GPU-accelerated animations with transform3d()
- * - Virtual scrolling for large message lists (50+ messages)
- * - Pre-computed path cache for instant lookups
- * - Aggressive memoization with React.memo
- * - Intersection Observer for scroll optimization
- * - Reduced DOM operations and re-renders
+ * Based on performance test results, this version implements:
+ * - Virtual scrolling for large message lists
+ * - Aggressive memoization and caching
+ * - Reduced DOM operations
+ * - Optimized re-render prevention
  * - Memory-efficient message handling
- * - Real-time performance monitoring
- *
- * @param {UserChatProps} props - The props passed to the component.
- * @param {FunnelFlow} props.funnelFlow - The funnel flow to interact with.
- * @param {string} [props.conversationId] - Optional conversation ID for tracking.
- * @param {Function} [props.onMessageSent] - Optional callback when user sends a message.
- * @returns {JSX.Element} The rendered UserChat component.
  */
 
-interface UserChatProps {
+interface UltraOptimizedChatProps {
   funnelFlow: FunnelFlow;
   conversationId?: string;
   onMessageSent?: (message: string, conversationId?: string) => void;
 }
 
-// Performance-optimized CSS classes
-const PERFORMANCE_CLASSES = {
+// Ultra-performance CSS classes
+const ULTRA_PERFORMANCE_CLASSES = {
+  // Minimal animations for maximum performance
   messageContainer: 'transform-gpu will-change-transform',
   messageSlideIn: 'animate-fade-in-up',
+  
+  // Optimized hover effects
   buttonHover: 'transition-transform duration-150 ease-out hover:scale-[1.01]',
   buttonActive: 'active:scale-[0.99]',
+  
+  // Minimal shadows and effects
   shadowMinimal: 'shadow-sm',
+  
+  // Performance-optimized containers
   containerOptimized: 'contain-layout contain-style',
 } as const;
 
@@ -75,7 +72,7 @@ const useVirtualScrolling = (items: any[], itemHeight: number = 80, containerHei
 const MemoizedChatMessage = React.memo(({ message, index }: { message: any; index: number }) => {
   return (
     <div 
-      className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} ${PERFORMANCE_CLASSES.messageContainer}`}
+      className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} ${ULTRA_PERFORMANCE_CLASSES.messageContainer}`}
       style={{ 
         animationDelay: `${index * 20}ms`,
         animationFillMode: 'forwards'
@@ -85,6 +82,7 @@ const MemoizedChatMessage = React.memo(({ message, index }: { message: any; inde
     </div>
   );
 }, (prevProps, nextProps) => {
+  // Custom comparison for maximum performance
   return (
     prevProps.message.text === nextProps.message.text &&
     prevProps.message.type === nextProps.message.type &&
@@ -112,8 +110,8 @@ const MemoizedOption = React.memo(({
       className={`
         w-full p-3 border rounded-xl text-left group 
         bg-violet-500 hover:bg-violet-600 border-violet-400 hover:border-violet-500
-        ${PERFORMANCE_CLASSES.buttonHover} ${PERFORMANCE_CLASSES.buttonActive}
-        ${PERFORMANCE_CLASSES.shadowMinimal}
+        ${ULTRA_PERFORMANCE_CLASSES.buttonHover} ${ULTRA_PERFORMANCE_CLASSES.buttonActive}
+        ${ULTRA_PERFORMANCE_CLASSES.shadowMinimal}
       `}
       style={{ willChange: 'transform' }}
     >
@@ -136,7 +134,7 @@ const MemoizedOption = React.memo(({
   );
 });
 
-const UserChat: React.FC<UserChatProps> = React.memo(({ 
+const UltraOptimizedChat: React.FC<UltraOptimizedChatProps> = React.memo(({ 
   funnelFlow, 
   conversationId,
   onMessageSent 
@@ -161,7 +159,11 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
 
   // Virtual scrolling for large message lists
   const shouldUseVirtualScrolling = history.length > 50;
-  const virtualScrolling = useVirtualScrolling(history, 80, 400);
+  const virtualScrolling = useVirtualScrolling(
+    history, 
+    80, // Estimated message height
+    400 // Container height
+  );
 
   // Aggressive memoization of message handlers
   const handleUserMessage = useCallback((message: string) => {
@@ -289,10 +291,10 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
 
   return (
     <ErrorBoundary>
-      <div className={`h-full flex flex-col ${PERFORMANCE_CLASSES.containerOptimized}`}>
+      <div className={`h-full flex flex-col ${ULTRA_PERFORMANCE_CLASSES.containerOptimized}`}>
         {/* Ultra-optimized Chat Header */}
         <ErrorBoundary>
-          <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 py-3 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 ${PERFORMANCE_CLASSES.shadowMinimal}`}>
+          <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 py-3 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 ${ULTRA_PERFORMANCE_CLASSES.shadowMinimal}`}>
             <ChatHeader />
           </div>
         </ErrorBoundary>
@@ -359,6 +361,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
   );
 });
 
-UserChat.displayName = 'UserChat';
+UltraOptimizedChat.displayName = 'UltraOptimizedChat';
 
-export default UserChat;
+export default UltraOptimizedChat;

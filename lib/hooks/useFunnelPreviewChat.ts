@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { FunnelFlow, FunnelBlockOption, ChatMessage } from '../types/funnel';
 
+// Global path cache for maximum performance
+const globalPathCache = new Map<string, boolean>();
+const globalPathCacheStats = { hits: 0, misses: 0 };
+
 export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffer?: string | null) => {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
@@ -52,16 +56,35 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     }
   }, [history]);
 
-  // Helper function to check if a path leads to the offer - memoized for performance
+  // Ultra-optimized path finding with global cache
   const doesPathLeadToOffer = useCallback((blockId: string, targetOfferId: string, visited: Set<string>): boolean => {
-    if (visited.has(blockId)) return false; // Prevent infinite loops
+    const cacheKey = `${blockId}-${targetOfferId}`;
+    
+    // Check global cache first
+    if (globalPathCache.has(cacheKey)) {
+      globalPathCacheStats.hits++;
+      return globalPathCache.get(cacheKey)!;
+    }
+    
+    if (visited.has(blockId)) {
+      globalPathCache.set(cacheKey, false);
+      globalPathCacheStats.misses++;
+      return false;
+    }
+    
     visited.add(blockId);
     
     const block = funnelFlow?.blocks[blockId];
-    if (!block) return false;
+    if (!block) {
+      globalPathCache.set(cacheKey, false);
+      globalPathCacheStats.misses++;
+      return false;
+    }
     
     // Check if this block is the offer block
     if (block.id === `offer_${targetOfferId}` || block.id === targetOfferId) {
+      globalPathCache.set(cacheKey, true);
+      globalPathCacheStats.misses++;
       return true;
     }
     
@@ -69,11 +92,15 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     if (block.options) {
       for (const option of block.options) {
         if (option.nextBlockId && doesPathLeadToOffer(option.nextBlockId, targetOfferId, visited)) {
+          globalPathCache.set(cacheKey, true);
+          globalPathCacheStats.misses++;
           return true;
         }
       }
     }
     
+    globalPathCache.set(cacheKey, false);
+    globalPathCacheStats.misses++;
     return false;
   }, [funnelFlow]);
 
