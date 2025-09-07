@@ -8,7 +8,7 @@ import { FunnelFlow } from '../../types/funnel';
 import { useTheme } from '../common/ThemeProvider';
 
 interface UserChatProps {
-  funnelFlow: FunnelFlow;
+  funnelFlow: FunnelFlow | null;
   conversationId?: string;
   onMessageSent?: (message: string, conversationId?: string) => void;
   onBack?: () => void;
@@ -43,6 +43,44 @@ const UserChat: React.FC<UserChatProps> = ({
     handleCustomInput,
     options
   } = useFunnelPreviewChat(funnelFlow);
+
+  // Show loading state if no funnel flow
+  if (!funnelFlow) {
+    return (
+      <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 safe-area-top">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {onBack && (
+                <button 
+                  onClick={onBack} 
+                  className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
+                </button>
+              )}
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <User size={16} className="text-white" />
+              </div>
+              <div>
+                <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
+                  Hustler
+                </Text>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Text size="3" className="text-gray-500 dark:text-gray-400">
+              No funnel flow available
+            </Text>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Direct handlers - no callbacks for maximum performance
   const handleSubmit = (e?: React.FormEvent) => {

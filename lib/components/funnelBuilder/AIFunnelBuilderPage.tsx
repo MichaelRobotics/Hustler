@@ -5,7 +5,7 @@ import { Card } from 'frosted-ui';
 
 // Core Components
 import FunnelVisualizer from './FunnelVisualizer';
-import FunnelPreviewChat from './FunnelPreviewChat';
+import UserChat from '../userChat/UserChat';
 import { FunnelBuilderHeader } from './FunnelBuilderHeader';
 import UnifiedNavigation from '../common/UnifiedNavigation';
 
@@ -48,6 +48,7 @@ interface AIFunnelBuilderPageProps {
   autoPreview?: boolean; // New: Auto-switch to preview mode
   onGenerationComplete?: (funnelId: string) => void; // New: callback when generation is fully complete
   onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
+  onPreviewNavigation?: (sourceView: string) => void; // New: callback when navigating to preview from this page
 }
 
 /**
@@ -66,7 +67,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   onGoToFunnelProducts,
   autoPreview = false,
   onGenerationComplete,
-  onGenerationError
+  onGenerationError,
+  onPreviewNavigation
 }) => {
   // State Management
   const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
@@ -158,10 +160,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                 <div className="flex-1 p-0">
                   {isPreviewing ? (
                     <div className="h-full animate-in fade-in duration-0">
-                      <FunnelPreviewChat 
+                      <UserChat 
                         funnelFlow={currentFunnel.flow} 
-                        selectedOffer={modals.selectedOffer} 
-                        onOfferClick={(offerId: string) => modals.setSelectedOffer(offerId)}
+                        onBack={() => setIsPreviewing(false)}
                       />
                     </div>
                   ) : (
@@ -229,7 +230,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
           {/* Unified Navigation */}
           <UnifiedNavigation
-            onPreview={() => setIsPreviewing(true)}
+            onPreview={() => {
+              onPreviewNavigation?.('funnelBuilder');
+              setIsPreviewing(true);
+            }}
             onFunnelProducts={onGoToFunnelProducts}
             onEdit={() => setIsPreviewing(false)}
             onGeneration={handleGenerationSuccess}

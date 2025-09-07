@@ -41,6 +41,8 @@ type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funne
 export default function AdminPanel() {
   // State for tracking typing in LiveChat
   const [isUserTyping, setIsUserTyping] = React.useState(false);
+  // State for tracking the source view when navigating to preview
+  const [previewSourceView, setPreviewSourceView] = React.useState<string | null>(null);
 
 
   // Use the extracted hooks
@@ -239,6 +241,7 @@ export default function AdminPanel() {
         }}
         onGoToPreview={(funnel) => {
           if (funnel && hasValidFlow(funnel)) {
+            setPreviewSourceView('resources');
             setSelectedFunnel(funnel);
             setCurrentView('preview');
           } else {
@@ -354,6 +357,7 @@ export default function AdminPanel() {
         onGoToFunnelProducts={() => setCurrentView('resources')}
         onGenerationComplete={handleGenerationComplete}
         onGenerationError={handleGenerationError}
+        onPreviewNavigation={(sourceView) => setPreviewSourceView(sourceView)}
       />
     );
   }
@@ -401,7 +405,15 @@ export default function AdminPanel() {
     return (
       <AIFunnelBuilderPage
         funnel={selectedFunnel}
-        onBack={handleBackToDashboard}
+        onBack={() => {
+          // Navigate back to the source view
+          if (previewSourceView) {
+            setCurrentView(previewSourceView as any);
+            setPreviewSourceView(null);
+          } else {
+            handleBackToDashboard();
+          }
+        }}
         onUpdate={(updatedFunnel) => {
           // Update funnel state
           setSelectedFunnel(updatedFunnel);
@@ -411,6 +423,7 @@ export default function AdminPanel() {
         autoPreview={true} // Auto-switch to preview mode for fast navigation
         onGenerationComplete={handleGenerationComplete}
         onGenerationError={handleGenerationError}
+        onPreviewNavigation={(sourceView) => setPreviewSourceView(sourceView)}
       />
     );
   }
