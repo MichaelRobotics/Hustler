@@ -5,7 +5,6 @@ import { Card } from 'frosted-ui';
 
 // Core Components
 import FunnelVisualizer from './FunnelVisualizer';
-import UserChat from '../userChat/UserChat';
 import { FunnelBuilderHeader } from './FunnelBuilderHeader';
 import UnifiedNavigation from '../common/UnifiedNavigation';
 
@@ -45,10 +44,9 @@ interface AIFunnelBuilderPageProps {
   onBack: () => void;
   onUpdate: (funnel: Funnel) => void;
   onGoToFunnelProducts: () => void;
-  autoPreview?: boolean; // New: Auto-switch to preview mode
+  onGoToPreview?: () => void; // New: Navigate to separate preview page
   onGenerationComplete?: (funnelId: string) => void; // New: callback when generation is fully complete
   onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
-  onPreviewNavigation?: (sourceView: string) => void; // New: callback when navigating to preview from this page
 }
 
 /**
@@ -56,7 +54,7 @@ interface AIFunnelBuilderPageProps {
  * 
  * Main component for creating and editing marketing funnels. Orchestrates:
  * - Resource management sidebar
- * - Main canvas for visualization/previewing
+ * - Main canvas for visualization
  * - All modals for resources and generations
  * - Core AI interaction logic for funnel flow generation
  */
@@ -65,14 +63,12 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   onBack, 
   onUpdate, 
   onGoToFunnelProducts,
-  autoPreview = false,
+  onGoToPreview,
   onGenerationComplete,
-  onGenerationError,
-  onPreviewNavigation
+  onGenerationError
 }) => {
   // State Management
   const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
-  const [isPreviewing, setIsPreviewing] = React.useState(false);
 
   // Refs
   const funnelVisualizerRef = React.useRef<{ handleBlockClick: (blockId: string) => void }>(null);
@@ -86,12 +82,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   React.useEffect(() => {
     setCurrentFunnel(funnel);
   }, [funnel]);
-
-  React.useEffect(() => {
-    if (autoPreview) {
-      setIsPreviewing(true);
-    }
-  }, [autoPreview]);
 
     const handleBlockUpdate = (updatedBlock: any) => {
         if (!updatedBlock) return;
@@ -158,27 +148,18 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
                 {/* Main Content Area */}
                 <div className="flex-1 p-0">
-                  {isPreviewing ? (
-                    <div className="h-full animate-in fade-in duration-0">
-                      <UserChat 
-                        funnelFlow={currentFunnel.flow} 
-                        onBack={() => setIsPreviewing(false)}
-                      />
-                    </div>
-                  ) : (
-                    <div className="animate-in fade-in duration-0">
-                      <FunnelVisualizer
-                        funnelFlow={currentFunnel.flow}
-                        editingBlockId={validation.editingBlockId}
-                        setEditingBlockId={validation.setEditingBlockId}
-                        onBlockUpdate={handleBlockUpdate}
-                        selectedOffer={modals.selectedOffer}
-                        onOfferSelect={(offerId) => modals.setSelectedOffer(offerId)}
-                        funnelId={currentFunnel.id}
-                        ref={funnelVisualizerRef}
-                      />
-                    </div>
-                  )}
+                  <div className="animate-in fade-in duration-0">
+                    <FunnelVisualizer
+                      funnelFlow={currentFunnel.flow}
+                      editingBlockId={validation.editingBlockId}
+                      setEditingBlockId={validation.setEditingBlockId}
+                      onBlockUpdate={handleBlockUpdate}
+                      selectedOffer={modals.selectedOffer}
+                      onOfferSelect={(offerId) => modals.setSelectedOffer(offerId)}
+                      funnelId={currentFunnel.id}
+                      ref={funnelVisualizerRef}
+                    />
+                  </div>
                 </div>
               </div>
             </Card>
@@ -230,17 +211,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
           {/* Unified Navigation */}
           <UnifiedNavigation
-            onPreview={() => {
-              onPreviewNavigation?.('funnelBuilder');
-              setIsPreviewing(true);
-            }}
+            onPreview={onGoToPreview}
             onFunnelProducts={onGoToFunnelProducts}
-            onEdit={() => setIsPreviewing(false)}
+            onEdit={() => {}} // No-op since we're always in edit mode
             onGeneration={handleGenerationSuccess}
             isGenerated={!!currentFunnel.flow}
             isGenerating={false}
             isDeployed={currentFunnel.isDeployed}
-            showOnPage={isPreviewing ? "preview" : "aibuilder"}
+            showOnPage="aibuilder"
           />
         </div>
       </div>

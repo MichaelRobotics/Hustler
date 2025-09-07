@@ -7,6 +7,7 @@ import FunnelAnalyticsPage from './FunnelAnalyticsPage';
 import ResourcePage from '../products/ResourcePage';
 import ResourceLibrary from '../products/ResourceLibrary';
 import AIFunnelBuilderPage from '../funnelBuilder/AIFunnelBuilderPage';
+import PreviewPage from '../preview/PreviewPage';
 import { LiveChatPage } from '../liveChat';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
@@ -41,8 +42,9 @@ type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funne
 export default function AdminPanel() {
   // State for tracking typing in LiveChat
   const [isUserTyping, setIsUserTyping] = React.useState(false);
-  // State for tracking the source view when navigating to preview
-  const [previewSourceView, setPreviewSourceView] = React.useState<string | null>(null);
+  
+  // State for tracking navigation source for preview
+  const [previewSource, setPreviewSource] = React.useState<'resources' | 'funnelBuilder' | 'analytics'>('resources');
 
 
   // Use the extracted hooks
@@ -241,8 +243,8 @@ export default function AdminPanel() {
         }}
         onGoToPreview={(funnel) => {
           if (funnel && hasValidFlow(funnel)) {
-            setPreviewSourceView('resources');
             setSelectedFunnel(funnel);
+            setPreviewSource('resources');
             setCurrentView('preview');
           } else {
             alert('This funnel needs to be generated first. Please generate the funnel before previewing.');
@@ -314,6 +316,7 @@ export default function AdminPanel() {
           onGoToPreview={(funnel) => {
             if (funnel && hasValidFlow(funnel)) {
               setSelectedFunnel(funnel);
+              setPreviewSource('resources');
               setCurrentView('preview');
             } else {
               alert('This funnel needs to be generated first. Please generate the funnel before previewing.');
@@ -355,9 +358,12 @@ export default function AdminPanel() {
           }
         }}
         onGoToFunnelProducts={() => setCurrentView('resources')}
+        onGoToPreview={() => {
+          setPreviewSource('funnelBuilder');
+          setCurrentView('preview');
+        }}
         onGenerationComplete={handleGenerationComplete}
         onGenerationError={handleGenerationError}
-        onPreviewNavigation={(sourceView) => setPreviewSourceView(sourceView)}
       />
     );
   }
@@ -402,28 +408,22 @@ export default function AdminPanel() {
   }
 
   if (currentView === 'preview' && selectedFunnel) {
+    const handleBackFromPreview = () => {
+      // Navigate back to the source page
+      if (previewSource === 'funnelBuilder') {
+        setCurrentView('funnelBuilder');
+      } else if (previewSource === 'analytics') {
+        setCurrentView('analytics');
+      } else {
+        setCurrentView('resources');
+      }
+    };
+
     return (
-      <AIFunnelBuilderPage
+      <PreviewPage
         funnel={selectedFunnel}
-        onBack={() => {
-          // Navigate back to the source view
-          if (previewSourceView) {
-            setCurrentView(previewSourceView as any);
-            setPreviewSourceView(null);
-          } else {
-            handleBackToDashboard();
-          }
-        }}
-        onUpdate={(updatedFunnel) => {
-          // Update funnel state
-          setSelectedFunnel(updatedFunnel);
-          setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
-        }}
-        onGoToFunnelProducts={() => setCurrentView('resources')}
-        autoPreview={true} // Auto-switch to preview mode for fast navigation
-        onGenerationComplete={handleGenerationComplete}
-        onGenerationError={handleGenerationError}
-        onPreviewNavigation={(sourceView) => setPreviewSourceView(sourceView)}
+        onBack={handleBackFromPreview}
+        sourcePage={previewSource}
       />
     );
   }
