@@ -187,7 +187,7 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
               </button>
             )}
             <div className="flex-1">
-              <Text size="3" weight="semibold" className="text-gray-900 dark:text-gray-100">
+              <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
                 AI Assistant
               </Text>
               <Text size="1" className="text-gray-500 dark:text-gray-400">
