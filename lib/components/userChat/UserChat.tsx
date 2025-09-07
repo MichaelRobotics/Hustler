@@ -129,15 +129,15 @@ const UserChat: React.FC<UserChatProps> = ({
     <button
       key={`option-${i}`}
       onClick={() => handleOptionClickLocal(opt, i)}
-      className="w-full pl-4 pr-0 py-3 rounded-lg bg-blue-500 text-white text-right flex items-center justify-end gap-3 touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+      className="inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-blue-500 text-white text-left touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
       style={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      <Text size="2" className="text-white leading-relaxed">
-        {opt.text}
-      </Text>
       <span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
         {i + 1}
       </span>
+      <Text size="2" className="text-white leading-relaxed">
+        {opt.text}
+      </Text>
     </button>
   ));
 
@@ -178,7 +178,7 @@ const UserChat: React.FC<UserChatProps> = ({
           {/* Options - User side (right side) */}
           {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
             <div className="flex justify-end mb-4 pr-0">
-              <div className="space-y-2 w-full max-w-[85%] sm:max-w-[80%]">
+              <div className="space-y-2 flex flex-col items-end">
                 {optionsList}
               </div>
             </div>
