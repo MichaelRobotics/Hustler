@@ -65,6 +65,23 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     scrollToBottom();
   }, [history, scrollToBottom]);
 
+  // Auto-scroll when keyboard appears/disappears (visual viewport)
+  useEffect(() => {
+    const handleViewportChange = () => {
+      // Small delay to let keyboard animation complete
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      return () => {
+        window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      };
+    }
+  }, [scrollToBottom]);
+
   // Optimized message handlers
   const handleUserMessage = useCallback((message: string) => {
     handleCustomInput(message);
@@ -106,7 +123,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
       <div 
         key={`${msg.type}-${index}-${msg.text.length}`} 
         className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} mb-3`}
-        style={{ willChange: 'transform' }}
       >
         <div className="flex items-end gap-2 max-w-[85%]">
           {/* Avatar - Only show for bot messages */}
@@ -154,7 +170,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
         key={`option-${i}-${opt.text.length}`}
         onClick={() => handleUserOptionClick(opt, i)}
         className="w-full p-4 border rounded-2xl transition-all duration-200 text-left group bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 border-violet-400 hover:border-violet-500 shadow-sm hover:shadow-md transform hover:scale-[1.02] active:scale-[0.98]"
-        style={{ willChange: 'transform' }}
       >
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 bg-white/20 border-white/30">
@@ -236,10 +251,7 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
 
           {/* Native Whop Input Area - Ultra-optimized */}
           {options.length > 0 && currentBlockId && (
-            <div 
-              className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700"
-              style={{ willChange: 'transform' }}
-            >
+            <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
                   <div className="relative">
@@ -264,7 +276,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
                   onClick={handleSubmit}
                   disabled={!message.trim()}
                   className="p-3 rounded-full bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                  style={{ willChange: 'transform' }}
                 >
                   <Send size={18} strokeWidth={2.5} className="text-white" />
                 </button>
@@ -279,7 +290,6 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
                 <button
                   onClick={startConversation}
                   className="px-6 py-3 bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white rounded-2xl font-medium transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                  style={{ willChange: 'transform' }}
                 >
                   Start Over
                 </button>
