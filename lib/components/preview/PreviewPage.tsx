@@ -37,9 +37,9 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
 
   // Get the funnel flow, fallback to empty flow if not available
   const funnelFlow = funnel.flow || {
+    startBlockId: '',
     stages: [],
-    blocks: {},
-    connections: []
+    blocks: {}
   };
 
   const handleMessageSent = (message: string, conversationId?: string) => {
