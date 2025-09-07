@@ -31,8 +31,13 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
   onBack
 }) => {
   const [message, setMessage] = useState('');
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [inputPosition, setInputPosition] = useState(0);
+  const [messagesPosition, setMessagesPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     history,
@@ -43,26 +48,46 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     options
   } = useFunnelPreviewChat(funnelFlow);
 
+  // Keyboard interaction sequence
+  const handleInputFocus = useCallback(() => {
+    if (isKeyboardOpen) return;
+    
+    setIsKeyboardOpen(true);
+    
+    // Step 1: Move input box up first
+    const keyboardHeight = window.innerHeight * 0.4; // Estimate keyboard height
+    setInputPosition(-keyboardHeight);
+    
+    // Step 2: After input moves, move messages container
+    setTimeout(() => {
+      setMessagesPosition(-keyboardHeight);
+    }, 150);
+    
+    // Step 3: Keyboard will appear naturally in the space created
+  }, [isKeyboardOpen]);
+
+  const handleInputBlur = useCallback(() => {
+    if (!isKeyboardOpen) return;
+    
+    // Step 1: Keyboard hides first (natural browser behavior)
+    // Step 2: Move input back to start position
+    setTimeout(() => {
+      setInputPosition(0);
+    }, 100);
+    
+    // Step 3: Move messages back to start position
+    setTimeout(() => {
+      setMessagesPosition(0);
+      setIsKeyboardOpen(false);
+    }, 250);
+  }, [isKeyboardOpen]);
+
   // Simple auto-scroll for keyboard
   const scrollToBottom = useCallback(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
-
-  // Keyboard handling - simple and fast
-  useEffect(() => {
-    const handleViewportChange = () => {
-      setTimeout(scrollToBottom, 200);
-    };
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange);
-      return () => {
-        window.visualViewport?.removeEventListener('resize', handleViewportChange);
-      };
-    }
-  }, [scrollToBottom]);
 
   // Message handlers
   const handleUserMessage = useCallback((message: string) => {
@@ -158,7 +183,14 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
         {/* Chat Container */}
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div 
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-4"
+            style={{
+              transform: `translateY(${messagesPosition}px)`,
+              transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
             {messageList}
             
             {/* Options */}
@@ -173,7 +205,14 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
 
           {/* Input Area */}
           {options.length > 0 && currentBlockId && (
-            <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+            <div 
+              ref={inputContainerRef}
+              className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700"
+              style={{
+                transform: `translateY(${inputPosition}px)`,
+                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
               <div className="flex items-end gap-3">
                 <div className="flex-1">
                   <textarea
@@ -182,6 +221,8 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onInput={handleTextareaInput}
+                    onFocus={handleInputFocus}
+                    onBlur={handleInputBlur}
                     placeholder="Type a message..."
                     rows={1}
                     className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[40px] max-h-32"
