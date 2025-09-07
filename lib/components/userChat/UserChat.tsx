@@ -12,7 +12,7 @@ interface UserChatProps {
   conversationId?: string;
   onMessageSent?: (message: string, conversationId?: string) => void;
   onBack?: () => void;
-  hideAvatar?: boolean; // New: Hide avatar icon in preview context
+  hideAvatar?: boolean;
 }
 
 /**
@@ -146,9 +146,9 @@ const UserChat: React.FC<UserChatProps> = ({
   ));
 
   return (
-    <div className="h-full w-full flex flex-col touch-manipulation">
+    <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900 touch-manipulation">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 safe-area-top">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -161,7 +161,7 @@ const UserChat: React.FC<UserChatProps> = ({
               </button>
             )}
             
-            {/* Avatar Icon - Hide in preview context */}
+            {/* Avatar Icon - only show if not hidden */}
             {!hideAvatar && (
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                 <User size={16} className="text-white" />
@@ -217,7 +217,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Input Area */}
         {options.length > 0 && currentBlockId && (
-          <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-bottom">
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <textarea
@@ -251,7 +251,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
         {/* Start Button */}
         {(options.length === 0 || !currentBlockId) && (
-          <div className="flex-shrink-0 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-bottom">
             <button
               onClick={startConversation}
               className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
