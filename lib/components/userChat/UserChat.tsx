@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Text } from 'frosted-ui';
-import { Send, ArrowLeft, Sun, Moon } from 'lucide-react';
+import { Text, Heading, Button } from 'frosted-ui';
+import { Send, ArrowLeft, User } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelFlow } from '../../types/funnel';
-import { useTheme } from '../common/ThemeProvider';
+import { ThemeToggle } from '../common/ThemeToggle';
 
 interface UserChatProps {
   funnelFlow: FunnelFlow;
@@ -33,7 +33,6 @@ const UserChat: React.FC<UserChatProps> = ({
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const { appearance, toggleTheme } = useTheme();
 
   const {
     history,
@@ -144,40 +143,46 @@ const UserChat: React.FC<UserChatProps> = ({
   ));
 
   return (
-    <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900 touch-manipulation">
+    <div className="h-screen w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 touch-manipulation">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 safe-area-top">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {onBack && (
-              <button 
-                onClick={onBack} 
-                className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
-              </button>
-            )}
-            <div>
-              <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
-                AI Assistant
-              </Text>
-            </div>
+      <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg safe-area-top">
+        {/* Top Section: Back Button + Avatar + Title */}
+        <div className="flex items-center gap-4 mb-6">
+          {onBack && (
+            <Button
+              size="2"
+              variant="ghost"
+              color="gray"
+              onClick={onBack}
+              className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
+              aria-label="Back to previous page"
+            >
+              <ArrowLeft size={20} strokeWidth={2.5} />
+            </Button>
+          )}
+          
+          {/* Avatar Icon */}
+          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+            <User size={16} className="text-white" />
           </div>
           
-          {/* Theme Toggle Button */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700 transition-all duration-200 hover:scale-105"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-            title={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {appearance === 'dark' ? (
-              <Sun size={20} className="text-gray-600 dark:text-gray-300" />
-            ) : (
-              <Moon size={20} className="text-gray-600 dark:text-gray-300" />
-            )}
-          </button>
+          <div>
+            <Heading size="6" weight="bold" className="text-black dark:text-white">
+              Hustler
+            </Heading>
+          </div>
+        </div>
+        
+        {/* Subtle Separator Line */}
+        <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
+        
+        {/* Bottom Section: Theme Toggle */}
+        <div className="flex justify-between items-center gap-2 sm:gap-3">
+          <div className="flex-shrink-0">
+            <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+              <ThemeToggle />
+            </div>
+          </div>
         </div>
       </div>
 
