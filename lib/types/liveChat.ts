@@ -87,6 +87,7 @@ export interface GetMessagesResponse {
 export interface LiveChatPageProps {
   onBack: () => void;
   onTypingChange?: (isTyping: boolean) => void;
+  onChatStateChange?: (isInChat: boolean) => void;
 }
 
 export interface ConversationListProps {

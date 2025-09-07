@@ -42,6 +42,8 @@ type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funne
 export default function AdminPanel() {
   // State for tracking typing in LiveChat
   const [isUserTyping, setIsUserTyping] = React.useState(false);
+  // State for tracking if we're in a chat conversation
+  const [isInChat, setIsInChat] = React.useState(false);
   
   // State for tracking navigation source for preview
   const [previewSource, setPreviewSource] = React.useState<'resources' | 'funnelBuilder' | 'analytics' | 'resourceLibrary'>('resources');
@@ -439,14 +441,15 @@ export default function AdminPanel() {
           <AdminSidebar
             currentView={currentView}
             onViewChange={handleViewChange}
-            className={`flex-shrink-0 h-full ${isUserTyping ? 'hidden' : 'block'}`}
-            isUserTyping={isUserTyping}
+            className={`flex-shrink-0 h-full ${isUserTyping || isInChat ? 'hidden' : 'block'}`}
+            isUserTyping={isUserTyping || isInChat}
           />
           
           <div className="flex-1 overflow-auto w-full lg:w-auto">
             <LiveChatPage
               onBack={handleBackToDashboard}
               onTypingChange={setIsUserTyping}
+              onChatStateChange={setIsInChat}
             />
           </div>
         </div>

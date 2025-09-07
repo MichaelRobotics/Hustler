@@ -121,7 +121,7 @@ const simulateAutoClose = (conversations: LiveChatConversation[]): LiveChatConve
   });
 };
 
-const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTypingChange }) => {
+const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTypingChange, onChatStateChange }) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<LiveChatConversation[]>(mockConversations);
   const [filters, setFilters] = useState<LiveChatFilters>({
@@ -139,6 +139,11 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
   const selectedConversation = useMemo(() => {
     return conversations.find(c => c.id === selectedConversationId) || null;
   }, [selectedConversationId, conversations]);
+
+  // Notify parent when we're in a chat conversation
+  useEffect(() => {
+    onChatStateChange?.(!!selectedConversation);
+  }, [selectedConversation, onChatStateChange]);
 
   // Simulate backend auto-closing behavior
   useEffect(() => {
