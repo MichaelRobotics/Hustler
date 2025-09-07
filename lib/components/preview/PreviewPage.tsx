@@ -19,7 +19,7 @@ interface Funnel {
 interface PreviewPageProps {
   funnel: Funnel;
   onBack: () => void;
-  sourcePage?: 'resources' | 'funnelBuilder' | 'analytics';
+  sourcePage?: 'resources' | 'funnelBuilder' | 'analytics' | 'resourceLibrary';
 }
 
 /**
@@ -63,15 +63,10 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
               onClick={onBack} 
               className="p-2 rounded-full touch-manipulation active:bg-gray-100 dark:active:bg-gray-700 transition-colors duration-200"
               style={{ WebkitTapHighlightColor: 'transparent' }}
-              title={`Back to ${sourcePage === 'funnelBuilder' ? 'Funnel Builder' : sourcePage === 'analytics' ? 'Analytics' : 'Resources'}`}
+              title={`Back to ${sourcePage === 'funnelBuilder' ? 'Funnel Builder' : sourcePage === 'analytics' ? 'Analytics' : sourcePage === 'resourceLibrary' ? 'Resource Library' : 'Resources'}`}
             >
               <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
             </button>
-            
-            {/* Avatar Icon */}
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-              <User size={16} className="text-white" />
-            </div>
             
             <div>
               <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
@@ -91,6 +86,7 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
           funnelFlow={funnelFlow}
           onMessageSent={handleMessageSent}
           onBack={onBack}
+          hideAvatar={true}
         />
       </div>
     </div>

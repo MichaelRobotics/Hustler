@@ -44,7 +44,7 @@ export default function AdminPanel() {
   const [isUserTyping, setIsUserTyping] = React.useState(false);
   
   // State for tracking navigation source for preview
-  const [previewSource, setPreviewSource] = React.useState<'resources' | 'funnelBuilder' | 'analytics'>('resources');
+  const [previewSource, setPreviewSource] = React.useState<'resources' | 'funnelBuilder' | 'analytics' | 'resourceLibrary'>('resources');
 
 
   // Use the extracted hooks
@@ -316,7 +316,7 @@ export default function AdminPanel() {
           onGoToPreview={(funnel) => {
             if (funnel && hasValidFlow(funnel)) {
               setSelectedFunnel(funnel);
-              setPreviewSource('resources');
+              setPreviewSource('resourceLibrary');
               setCurrentView('preview');
             } else {
               alert('This funnel needs to be generated first. Please generate the funnel before previewing.');
@@ -414,6 +414,8 @@ export default function AdminPanel() {
         setCurrentView('funnelBuilder');
       } else if (previewSource === 'analytics') {
         setCurrentView('analytics');
+      } else if (previewSource === 'resourceLibrary') {
+        setCurrentView('resourceLibrary');
       } else {
         setCurrentView('resources');
       }

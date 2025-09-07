@@ -12,6 +12,7 @@ interface UserChatProps {
   conversationId?: string;
   onMessageSent?: (message: string, conversationId?: string) => void;
   onBack?: () => void;
+  hideAvatar?: boolean; // New: Hide avatar icon in preview context
 }
 
 /**
@@ -28,7 +29,8 @@ const UserChat: React.FC<UserChatProps> = ({
   funnelFlow, 
   conversationId,
   onMessageSent,
-  onBack
+  onBack,
+  hideAvatar = false
 }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -159,10 +161,12 @@ const UserChat: React.FC<UserChatProps> = ({
               </button>
             )}
             
-            {/* Avatar Icon */}
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-              <User size={16} className="text-white" />
-            </div>
+            {/* Avatar Icon - Hide in preview context */}
+            {!hideAvatar && (
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <User size={16} className="text-white" />
+              </div>
+            )}
             
             <div>
               <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
