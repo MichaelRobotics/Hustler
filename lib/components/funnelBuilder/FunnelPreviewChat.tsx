@@ -1,325 +1,288 @@
 'use client';
 
-import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { Button, Text } from 'frosted-ui';
+import { Send, Bot, User, RotateCcw } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
-import { FunnelPreviewChatProps } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton } from './components';
-import OptimizedChatInput from './components/OptimizedChatInput';
-import PerformanceProfiler from '../common/PerformanceProfiler';
 
-/**
- * --- Ultra-Optimized Funnel Preview Chat Component ---
- * This component simulates a user conversation with the generated chatbot flow with maximum performance.
- * 
- * Performance Features:
- * - GPU-accelerated animations with transform3d()
- * - Virtual scrolling for large message lists (50+ messages)
- * - Pre-computed path cache for instant lookups
- * - Aggressive memoization with React.memo
- * - Intersection Observer for scroll optimization
- * - Reduced DOM operations and re-renders
- * - Memory-efficient message handling
- * - Real-time performance monitoring
- *
- * Features:
- * - Option clicking for normal flow testing
- * - Custom text input for edge case testing
- * - Invalid input handling with friendly reminders
- * - Escalation to creator after multiple invalid inputs
- * - Auto-scrolling and responsive design
- *
- * @param {FunnelPreviewChatProps} props - The props passed to the component.
- * @param {FunnelFlow | null} props.funnelFlow - The generated funnel flow object containing stages and blocks.
- * @returns {JSX.Element} The rendered FunnelPreviewChat component.
- */
+// Whop-style chat message types
+interface ChatMessage {
+  id: string;
+  type: 'user' | 'bot' | 'system';
+  content: string;
+  timestamp: number;
+  user?: {
+    id: string;
+    name: string;
+    username: string;
+    profilePicture?: {
+      sourceUrl: string;
+    };
+  };
+  isEdited?: boolean;
+  isPinned?: boolean;
+  attachments?: Array<{
+    id: string;
+    contentType: string;
+    sourceUrl: string;
+  }>;
+}
 
-// Performance-optimized CSS classes with mobile enhancements
-const PERFORMANCE_CLASSES = {
-  messageContainer: 'transform-gpu will-change-transform',
-  messageSlideIn: 'animate-fade-in-up',
-  buttonHover: 'transition-transform duration-150 ease-out hover:scale-[1.01]',
-  buttonActive: 'active:scale-[0.99]',
-  shadowMinimal: 'shadow-sm',
-  containerOptimized: 'contain-layout contain-style',
-  // Mobile-specific optimizations
-  mobileTouchTarget: 'min-h-[44px] min-w-[44px] touch-manipulation',
-  mobileScroll: 'overflow-y-auto overscroll-behavior-contain -webkit-overflow-scrolling-touch',
-  mobileSafeArea: 'pb-safe-area-inset-bottom pt-safe-area-inset-top',
-  mobileOptimized: 'select-none touch-pan-y',
-} as const;
+// Whop-style chat options
+interface ChatOption {
+  id: string;
+  text: string;
+  leadingToOffer?: boolean;
+}
 
-// Mobile detection hook
-const useMobileDetection = () => {
+interface FunnelPreviewChatProps {
+  funnelFlow: any;
+  selectedOffer?: string;
+  onOfferClick?: (offerId: string) => void;
+}
+
+// Whop-style message component
+const WhopChatMessage: React.FC<{ message: ChatMessage; isMobile: boolean }> = React.memo(({ message, isMobile }) => {
+  const isUser = message.type === 'user';
+  const isBot = message.type === 'bot';
+  const isSystem = message.type === 'system';
+
+  if (isSystem) {
+    return (
+      <div className="flex justify-center my-4">
+        <div className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-sm px-3 py-1 rounded-full">
+          {message.content}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 ${isMobile ? 'px-3' : 'px-4'}`}>
+      <div className={`flex items-start gap-3 max-w-[80%] ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        {/* Avatar */}
+        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+          isUser 
+            ? 'bg-blue-500' 
+            : isBot 
+            ? 'bg-violet-500' 
+            : 'bg-gray-500'
+        }`}>
+          {isUser ? (
+            <User size={16} className="text-white" />
+          ) : isBot ? (
+            <Bot size={16} className="text-white" />
+          ) : (
+            <Text size="1" weight="bold" className="text-white">
+              {message.user?.name?.charAt(0) || 'U'}
+            </Text>
+          )}
+        </div>
+
+        {/* Message Content */}
+        <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+          {/* User Info */}
+          {!isUser && message.user && (
+            <div className="flex items-center gap-2 mb-1">
+              <Text size="2" weight="medium" className="text-gray-900 dark:text-gray-100">
+                {message.user.name}
+              </Text>
+              <Text size="1" className="text-gray-500 dark:text-gray-400">
+                @{message.user.username}
+              </Text>
+            </div>
+          )}
+
+          {/* Message Bubble */}
+          <div className={`px-4 py-2 rounded-2xl ${
+            isUser 
+              ? 'bg-blue-500 text-white rounded-br-md' 
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md'
+          } ${isMobile ? 'text-sm' : 'text-base'}`}>
+            <Text size={isMobile ? "2" : "3"} className="whitespace-pre-wrap">
+              {message.content}
+            </Text>
+          </div>
+
+          {/* Timestamp */}
+          <Text size="1" className={`text-gray-500 dark:text-gray-400 mt-1 ${
+            isUser ? 'text-right' : 'text-left'
+          }`}>
+            {new Date(message.timestamp).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </Text>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+WhopChatMessage.displayName = 'WhopChatMessage';
+
+// Whop-style chat input component
+const WhopChatInput: React.FC<{
+  onSendMessage: (message: string) => void;
+  placeholder?: string;
+  isMobile: boolean;
+  isKeyboardOpen: boolean;
+}> = React.memo(({ onSendMessage, placeholder = "Type a message...", isMobile, isKeyboardOpen }) => {
+  const [message, setMessage] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustTextareaHeight = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [message, adjustTextareaHeight]);
+
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (message.trim()) {
+      onSendMessage(message.trim());
+      setMessage('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    }
+  }, [message, onSendMessage]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  }, [handleSubmit]);
+
+  return (
+    <div className={`bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 ${
+      isMobile ? 'p-3' : 'p-4'
+    } ${isKeyboardOpen ? 'fixed bottom-0 left-0 right-0 z-50' : ''}`}>
+      <form onSubmit={handleSubmit} className="flex items-end gap-3">
+        <div className="flex-1">
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 focus-within:border-blue-500 dark:focus-within:border-blue-400 transition-colors">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              rows={1}
+              className={`w-full px-4 py-3 bg-transparent border-0 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none resize-none overflow-hidden ${
+                isMobile ? 'text-base' : 'text-sm'
+              }`}
+              style={{
+                height: 'auto',
+                minHeight: '44px',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            />
+          </div>
+        </div>
+        
+        <Button
+          type="submit"
+          disabled={!message.trim()}
+          className={`bg-blue-500 hover:bg-blue-600 text-white rounded-full p-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            isMobile ? 'w-12 h-12' : 'w-10 h-10'
+          }`}
+        >
+          <Send size={isMobile ? 20 : 18} />
+        </Button>
+      </form>
+    </div>
+  );
+});
+
+WhopChatInput.displayName = 'WhopChatInput';
+
+// Whop-style chat options component
+const WhopChatOptions: React.FC<{
+  options: ChatOption[];
+  onOptionClick: (option: ChatOption) => void;
+  isMobile: boolean;
+}> = React.memo(({ options, onOptionClick, isMobile }) => {
+  if (options.length === 0) return null;
+
+  return (
+    <div className={`flex flex-wrap gap-2 ${isMobile ? 'px-3 pb-3' : 'px-4 pb-4'}`}>
+      {options.map((option) => (
+        <Button
+          key={option.id}
+          onClick={() => onOptionClick(option)}
+          variant="surface"
+          className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-full px-4 py-2 text-sm transition-colors ${
+            option.leadingToOffer ? 'border-violet-300 dark:border-violet-600 text-violet-600 dark:text-violet-400' : ''
+          }`}
+        >
+          {option.text}
+        </Button>
+      ))}
+    </div>
+  );
+});
+
+WhopChatOptions.displayName = 'WhopChatOptions';
+
+// Main Whop-style chat component
+const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
+  funnelFlow,
+  selectedOffer,
+  onOfferClick
+}) => {
+  const {
+    history,
+    options,
+    currentBlockId,
+    startConversation,
+    handleOptionClick,
+    handleCustomInput
+  } = useFunnelPreviewChat(funnelFlow, selectedOffer);
+
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
-  const [isTouch, setIsTouch] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
     const checkMobile = () => {
-      const userAgent = navigator.userAgent;
-      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      const isSmallScreen = window.innerWidth < 768;
-      
-      setIsMobile(isMobileDevice || isSmallScreen);
-      setIsTouch(isTouchDevice);
+      setIsMobile(window.innerWidth < 768);
     };
-
+    
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  return { isMobile, isTouch };
-};
-
-// Mobile-optimized virtual scrolling hook
-const useVirtualScrolling = (items: any[], itemHeight: number = 80, containerHeight: number = 400, isMobile: boolean = false) => {
-  const [scrollTop, setScrollTop] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Adjust item height for mobile (larger touch targets)
-  const adjustedItemHeight = isMobile ? Math.max(itemHeight, 100) : itemHeight;
-  const adjustedContainerHeight = isMobile ? Math.min(containerHeight, window.innerHeight * 0.6) : containerHeight;
-
-  const visibleStart = Math.floor(scrollTop / adjustedItemHeight);
-  const visibleEnd = Math.min(
-    visibleStart + Math.ceil(adjustedContainerHeight / adjustedItemHeight) + 1,
-    items.length
-  );
-
-  const visibleItems = items.slice(visibleStart, visibleEnd);
-  const offsetY = visibleStart * adjustedItemHeight;
-
-  // Throttled scroll handler for mobile performance
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    if (isMobile) {
-      // Use RAF for smoother mobile scrolling
-      requestAnimationFrame(() => {
-        setScrollTop(e.currentTarget.scrollTop);
-      });
-    } else {
-      setScrollTop(e.currentTarget.scrollTop);
-    }
-  }, [isMobile]);
-
-  return {
-    containerRef,
-    visibleItems,
-    offsetY,
-    handleScroll,
-    totalHeight: items.length * adjustedItemHeight,
-    adjustedItemHeight
-  };
-};
-
-// Mobile-optimized message memoization
-const MemoizedChatMessage = React.memo(({ message, index, isMobile }: { message: any; index: number; isMobile: boolean }) => {
-  return (
-    <div 
-      className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} ${PERFORMANCE_CLASSES.messageContainer} ${
-        isMobile ? 'px-2 py-1' : 'px-4 py-2'
-      }`}
-      style={{ 
-        animationDelay: `${index * (isMobile ? 10 : 20)}ms`, // Faster animations on mobile
-        animationFillMode: 'forwards',
-        // Mobile-specific optimizations
-        ...(isMobile && {
-          minHeight: '44px',
-          touchAction: 'manipulation'
-        })
-      }}
-    >
-      <ChatMessage message={message} />
-    </div>
-  );
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.message.text === nextProps.message.text &&
-    prevProps.message.type === nextProps.message.type &&
-    prevProps.index === nextProps.index &&
-    prevProps.isMobile === nextProps.isMobile
-  );
-});
-const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({ 
-  funnelFlow, 
-  selectedOffer, 
-  onOfferClick 
-}) => {
-  const {
-    history,
-    currentBlockId,
-    chatEndRef,
-    chatContainerRef,
-    optionsLeadingToOffer,
-    startConversation,
-    handleOptionClick,
-    handleCustomInput,
-    options
-  } = useFunnelPreviewChat(funnelFlow, selectedOffer);
-
-  // Mobile detection
-  const { isMobile, isTouch } = useMobileDetection();
-
-  // Mobile keyboard handling (like Whop's native chat)
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const [initialViewportHeight, setInitialViewportHeight] = useState(0);
-
-  // Performance tracking
-  const [performanceMetrics, setPerformanceMetrics] = useState({
-    renderTime: 0,
-    scrollTime: 0,
-    memoryUsage: 0
-  });
-
-  // Mobile-optimized virtual scrolling
-  const shouldUseVirtualScrolling = history.length > (isMobile ? 30 : 50); // Lower threshold for mobile
-  const virtualScrolling = useVirtualScrolling(history, 80, 400, isMobile);
-
-  // Ultra-optimized message list with mobile enhancements
-  const messageList = useMemo(() => {
-    if (shouldUseVirtualScrolling) {
-      return (
-        <div 
-          ref={virtualScrolling.containerRef}
-          className={`h-full ${PERFORMANCE_CLASSES.mobileScroll}`}
-          onScroll={virtualScrolling.handleScroll}
-          style={{ 
-            height: isMobile ? '60vh' : '400px',
-            // Mobile-specific optimizations
-            ...(isMobile && {
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain'
-            })
-          }}
-        >
-          <div style={{ height: virtualScrolling.totalHeight, position: 'relative' }}>
-            <div style={{ transform: `translate3d(0, ${virtualScrolling.offsetY}px, 0)` }}>
-              {virtualScrolling.visibleItems.map((msg, index) => (
-                <MemoizedChatMessage 
-                  key={`msg-${msg.type}-${index}-${msg.text.slice(0, 10)}`}
-                  message={msg} 
-                  index={index}
-                  isMobile={isMobile}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // For small lists, use regular rendering with mobile optimizations
-    return history.map((msg, index) => (
-      <MemoizedChatMessage 
-        key={`msg-${msg.type}-${index}-${msg.text.slice(0, 10)}`}
-        message={msg} 
-        index={index}
-        isMobile={isMobile}
-      />
-    ));
-  }, [history, shouldUseVirtualScrolling, virtualScrolling, isMobile]);
-
-  // Optimized scroll behavior with throttling
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const handleOptimizedScroll = useCallback(() => {
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    
-    scrollTimeoutRef.current = setTimeout(() => {
-      const startTime = performance.now();
-      
-      if (chatEndRef.current) {
-        chatEndRef.current.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'end'
-        });
-      }
-      
-      const endTime = performance.now();
-      setPerformanceMetrics(prev => ({
-        ...prev,
-        scrollTime: endTime - startTime
-      }));
-    }, 16); // Throttle to 60fps
-  }, [chatEndRef]);
-
-  // Effect for optimized auto-scroll
-  useEffect(() => {
-    if (history.length > 0) {
-      handleOptimizedScroll();
-    }
-  }, [history.length, handleOptimizedScroll]);
-
-  // Mobile keyboard detection and handling (like Whop's native chat)
+  // Mobile keyboard detection
   useEffect(() => {
     if (!isMobile) return;
 
-    // Store initial viewport height
-    const storeInitialHeight = () => {
-      setInitialViewportHeight(window.innerHeight);
-    };
-
-    // Handle keyboard open/close with smooth animations
     const handleKeyboardChange = () => {
       const currentHeight = window.visualViewport?.height || window.innerHeight;
-      const heightDifference = initialViewportHeight - currentHeight;
+      const heightDifference = window.innerHeight - currentHeight;
       
-      // Keyboard is considered open if viewport height decreased significantly
-      const keyboardThreshold = 150; // Minimum height difference to consider keyboard open
+      const keyboardThreshold = 150;
       const isKeyboardOpenNow = heightDifference > keyboardThreshold;
       
       setIsKeyboardOpen(isKeyboardOpenNow);
       setKeyboardHeight(isKeyboardOpenNow ? heightDifference : 0);
-      
-      // Auto-scroll to keep input visible when keyboard opens
-      if (isKeyboardOpenNow && chatEndRef.current) {
-        setTimeout(() => {
-          chatEndRef.current?.scrollIntoView({ 
-            behavior: 'smooth',
-            block: 'end'
-          });
-        }, 100); // Small delay to allow keyboard animation
-      }
     };
 
-    // Handle input focus/blur
-    const handleInputFocus = () => {
-      setIsInputFocused(true);
-      // Small delay to allow keyboard to open
-      setTimeout(handleKeyboardChange, 300);
-    };
-
-    const handleInputBlur = () => {
-      setIsInputFocused(false);
-      // Small delay to allow keyboard to close
-      setTimeout(handleKeyboardChange, 300);
-    };
-
-    // Initialize
-    storeInitialHeight();
-
-    // Listen for viewport changes (modern browsers)
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleKeyboardChange);
     } else {
-      // Fallback for older browsers
       window.addEventListener('resize', handleKeyboardChange);
     }
-
-    // Listen for focus/blur events on inputs
-    document.addEventListener('focusin', handleInputFocus);
-    document.addEventListener('focusout', handleInputBlur);
-
-    // Handle orientation changes
-    window.addEventListener('orientationchange', () => {
-      setTimeout(() => {
-        storeInitialHeight();
-        handleKeyboardChange();
-      }, 500);
-    });
 
     return () => {
       if (window.visualViewport) {
@@ -327,120 +290,140 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
       } else {
         window.removeEventListener('resize', handleKeyboardChange);
       }
-      document.removeEventListener('focusin', handleInputFocus);
-      document.removeEventListener('focusout', handleInputBlur);
-      window.removeEventListener('orientationchange', storeInitialHeight);
     };
-  }, [isMobile, initialViewportHeight, chatEndRef]);
+  }, [isMobile]);
 
-  // Memory usage monitoring
+  // Auto-scroll to bottom
   useEffect(() => {
-    if ('memory' in performance) {
-      const memory = (performance as any).memory;
-      const memoryUsage = Math.round(memory.usedJSHeapSize / 1024 / 1024);
-      setPerformanceMetrics(prev => ({
-        ...prev,
-        memoryUsage
-      }));
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [history.length]);
+  }, [history]);
+
+  // Convert history to Whop-style messages
+  const whopMessages: ChatMessage[] = useMemo(() => {
+    return history.map((msg, index) => ({
+      id: `msg-${index}`,
+      type: msg.type as 'user' | 'bot' | 'system',
+      content: msg.text,
+      timestamp: Date.now() - (history.length - index) * 1000,
+      user: msg.type === 'bot' ? {
+        id: 'bot',
+        name: 'AI Assistant',
+        username: 'ai_assistant'
+      } : msg.type === 'user' ? {
+        id: 'user',
+        name: 'You',
+        username: 'you'
+      } : undefined
+    }));
+  }, [history]);
+
+  // Convert options to Whop-style options
+  const whopOptions: ChatOption[] = useMemo(() => {
+    return options.map((option, index) => ({
+      id: `option-${index}`,
+      text: option.text,
+      leadingToOffer: false // Default to false since FunnelBlockOption doesn't have this property
+    }));
+  }, [options]);
 
   return (
-    <PerformanceProfiler id="FunnelPreviewChat">
-      {/* Mobile-optimized Chat Header - Direct on background */}
-      <PerformanceProfiler id="FunnelPreviewChat-Header">
-        <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 ${
-          isMobile ? 'py-2 px-3' : 'py-3 px-4 sm:px-6 lg:px-8'
-        } border-b border-border/30 dark:border-border/20 ${PERFORMANCE_CLASSES.shadowMinimal}`}>
-          <ChatHeader />
+    <div className="h-full flex flex-col bg-white dark:bg-gray-900">
+      {/* Chat Header - Whop Style */}
+      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-violet-500 rounded-full flex items-center justify-center">
+            <Bot size={16} className="text-white" />
+          </div>
+          <div>
+            <Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
+              AI Assistant
+            </Text>
+            <Text size="2" className="text-gray-500 dark:text-gray-400">
+              Online
+            </Text>
+          </div>
         </div>
-      </PerformanceProfiler>
-      
-      {/* Chat Messages - Direct rendering on background, no container */}
+      </div>
+
+      {/* Chat Messages - Whop Style */}
       <div 
-        ref={chatContainerRef} 
-        className={`h-full ${PERFORMANCE_CLASSES.mobileScroll} ${
-          isMobile ? 'p-0 space-y-2 pt-3' : 'p-0 space-y-4 pt-6'
-        } scroll-smooth overflow-y-auto`}
-        style={{ 
-          scrollBehavior: 'smooth',
-          willChange: 'scroll-position',
-          // Mobile keyboard adjustments (like Whop's native chat)
-          ...(isMobile && isKeyboardOpen && {
-            height: `calc(100vh - ${keyboardHeight}px)`,
-            transition: 'height 0.3s ease-out'
-          }),
-          // Mobile-specific optimizations
-          ...(isMobile && {
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            touchAction: 'pan-y'
+        ref={chatContainerRef}
+        className={`flex-1 overflow-y-auto ${
+          isKeyboardOpen ? `pb-[${keyboardHeight}px]` : ''
+        }`}
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
+          ...(isKeyboardOpen && {
+            paddingBottom: `${keyboardHeight}px`,
+            transition: 'padding-bottom 0.3s ease-out'
           })
         }}
       >
-        <PerformanceProfiler id="FunnelPreviewChat-Messages">
-          {messageList}
-        </PerformanceProfiler>
-        
-        {/* Response Options - Direct on background */}
-        <PerformanceProfiler id="FunnelPreviewChat-Options">
-          <ChatOptions
-            options={options}
-            optionsLeadingToOffer={optionsLeadingToOffer}
-            selectedOffer={selectedOffer}
-            onOptionClick={handleOptionClick}
-          />
-        </PerformanceProfiler>
-        
-        <div ref={chatEndRef} />
+        {whopMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="w-16 h-16 bg-violet-100 dark:bg-violet-900 rounded-full flex items-center justify-center mb-4">
+              <Bot size={32} className="text-violet-600 dark:text-violet-400" />
+            </div>
+            <Text size="4" weight="semi-bold" className="text-gray-900 dark:text-gray-100 mb-2">
+              Welcome to the AI Assistant
+            </Text>
+            <Text size="3" className="text-gray-500 dark:text-gray-400 mb-6">
+              Start a conversation by typing a message or choosing from the options below.
+            </Text>
+            <Button
+              onClick={() => startConversation()}
+              className="bg-violet-500 hover:bg-violet-600 text-white px-6 py-3 rounded-full"
+            >
+              <RotateCcw size={16} className="mr-2" />
+              Start Conversation
+            </Button>
+          </div>
+        ) : (
+          <div className="py-4">
+            {whopMessages.map((message) => (
+              <WhopChatMessage
+                key={message.id}
+                message={message}
+                isMobile={isMobile}
+              />
+            ))}
+            
+            {/* Chat Options */}
+            {whopOptions.length > 0 && (
+              <WhopChatOptions
+                options={whopOptions}
+                onOptionClick={(option) => {
+                  const originalOptionIndex = options.findIndex(opt => opt.text === option.text);
+                  if (originalOptionIndex !== -1) {
+                    const originalOption = options[originalOptionIndex];
+                    handleOptionClick(originalOption, originalOptionIndex);
+                  }
+                }}
+                isMobile={isMobile}
+              />
+            )}
+            
+            <div ref={chatEndRef} />
+          </div>
+        )}
       </div>
-      
-      {/* Conversation End State - Direct on background */}
-      {(options.length === 0 || !currentBlockId) && (
-        <PerformanceProfiler id="FunnelPreviewChat-Restart">
-          <ChatRestartButton onRestart={startConversation} />
-        </PerformanceProfiler>
-      )}
 
-      {/* Mobile-optimized Performance Debug Info (Development Only) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className={`fixed ${isMobile ? 'bottom-2 right-2' : 'bottom-4 right-4'} bg-black/80 text-white text-xs p-2 rounded ${
-          isMobile ? 'text-[10px]' : 'text-xs'
-        }`}>
-          <div>Preview Chat Performance:</div>
-          <div>Render: {performanceMetrics.renderTime.toFixed(1)}ms</div>
-          <div>Scroll: {performanceMetrics.scrollTime.toFixed(1)}ms</div>
-          <div>Memory: {performanceMetrics.memoryUsage}MB</div>
-          <div>Messages: {history.length}</div>
-          <div>Virtual: {shouldUseVirtualScrolling ? 'ON' : 'OFF'}</div>
-          <div className="text-green-400">Mobile: {isMobile ? 'YES' : 'NO'}</div>
-          <div className="text-blue-400">Touch: {isTouch ? 'YES' : 'NO'}</div>
-          <div className="text-yellow-400">Keyboard: {isKeyboardOpen ? 'OPEN' : 'CLOSED'}</div>
-          <div className="text-purple-400">Input Focus: {isInputFocused ? 'YES' : 'NO'}</div>
-          {isKeyboardOpen && <div className="text-orange-400">Height: {keyboardHeight}px</div>}
-        </div>
+      {/* Chat Input - Whop Style */}
+      {whopMessages.length > 0 && currentBlockId && (
+        <WhopChatInput
+          onSendMessage={handleCustomInput}
+          placeholder="Type a message..."
+          isMobile={isMobile}
+          isKeyboardOpen={isKeyboardOpen}
+        />
       )}
-
-      {/* Completely Separate Chat Input - Fixed positioning when keyboard opens */}
-      {options.length > 0 && currentBlockId && (
-        <PerformanceProfiler id="FunnelPreviewChat-Input">
-          <OptimizedChatInput
-            onSendMessage={handleCustomInput}
-            placeholder="Type or choose response"
-            onFocus={() => setIsInputFocused(true)}
-            onBlur={() => setIsInputFocused(false)}
-            isMobile={isMobile}
-            isKeyboardOpen={isKeyboardOpen}
-          />
-        </PerformanceProfiler>
-      )}
-    </PerformanceProfiler>
+    </div>
   );
 });
 
 FunnelPreviewChat.displayName = 'FunnelPreviewChat';
 
 export default FunnelPreviewChat;
-
-
-

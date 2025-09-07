@@ -88,7 +88,7 @@ export default function TestOptimizedChatPage() {
             ) : (
               <FunnelPreviewChat
                 funnelFlow={mockFunnelFlow}
-                selectedOffer={null}
+                selectedOffer={undefined}
                 onOfferClick={() => {}}
               />
             )}

@@ -160,7 +160,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                     <div className="h-full animate-in fade-in duration-0">
                       <FunnelPreviewChat 
                         funnelFlow={currentFunnel.flow} 
-                        selectedOffer={modals.selectedOffer} 
+                        selectedOffer={modals.selectedOffer || undefined} 
                         onOfferClick={(offerId: string) => modals.setSelectedOffer(offerId)}
                       />
                     </div>
