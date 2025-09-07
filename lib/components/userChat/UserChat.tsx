@@ -3,7 +3,8 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelFlow } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatInput } from '../funnelBuilder/components';
+import { ChatHeader, ChatMessage } from '../funnelBuilder/components';
+import OptimizedChatInput from '../funnelBuilder/components/OptimizedChatInput';
 import ErrorBoundary from '../common/ErrorBoundary';
 import { Text } from 'frosted-ui';
 
@@ -34,7 +35,7 @@ interface UserChatProps {
   onMessageSent?: (message: string, conversationId?: string) => void;
 }
 
-// Performance-optimized CSS classes
+// Performance-optimized CSS classes with mobile enhancements
 const PERFORMANCE_CLASSES = {
   messageContainer: 'transform-gpu will-change-transform',
   messageSlideIn: 'animate-fade-in-up',
@@ -42,7 +43,36 @@ const PERFORMANCE_CLASSES = {
   buttonActive: 'active:scale-[0.99]',
   shadowMinimal: 'shadow-sm',
   containerOptimized: 'contain-layout contain-style',
+  // Mobile-specific optimizations
+  mobileTouchTarget: 'min-h-[44px] min-w-[44px] touch-manipulation',
+  mobileScroll: 'overflow-y-auto overscroll-behavior-contain -webkit-overflow-scrolling-touch',
+  mobileSafeArea: 'pb-safe-area-inset-bottom pt-safe-area-inset-top',
+  mobileOptimized: 'select-none touch-pan-y',
 } as const;
+
+// Mobile detection hook
+const useMobileDetection = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent;
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth < 768;
+      
+      setIsMobile(isMobileDevice || isSmallScreen);
+      setIsTouch(isTouchDevice);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return { isMobile, isTouch };
+};
 
 // Virtual scrolling hook for large message lists
 const useVirtualScrolling = (items: any[], itemHeight: number = 80, containerHeight: number = 400) => {
@@ -151,6 +181,15 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     handleCustomInput,
     options
   } = useFunnelPreviewChat(funnelFlow);
+
+  // Mobile detection
+  const { isMobile, isTouch } = useMobileDetection();
+
+  // Mobile keyboard handling (like Whop's native chat)
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [initialViewportHeight, setInitialViewportHeight] = useState(0);
 
   // Performance tracking
   const [performanceMetrics, setPerformanceMetrics] = useState({
@@ -275,6 +314,86 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
     }
   }, [history.length, handleOptimizedScroll]);
 
+  // Mobile keyboard detection and handling (like Whop's native chat)
+  useEffect(() => {
+    if (!isMobile) return;
+
+    // Store initial viewport height
+    const storeInitialHeight = () => {
+      setInitialViewportHeight(window.innerHeight);
+    };
+
+    // Handle keyboard open/close with smooth animations
+    const handleKeyboardChange = () => {
+      const currentHeight = window.visualViewport?.height || window.innerHeight;
+      const heightDifference = initialViewportHeight - currentHeight;
+      
+      // Keyboard is considered open if viewport height decreased significantly
+      const keyboardThreshold = 150; // Minimum height difference to consider keyboard open
+      const isKeyboardOpenNow = heightDifference > keyboardThreshold;
+      
+      setIsKeyboardOpen(isKeyboardOpenNow);
+      setKeyboardHeight(isKeyboardOpenNow ? heightDifference : 0);
+      
+      // Auto-scroll to keep input visible when keyboard opens
+      if (isKeyboardOpenNow && chatEndRef.current) {
+        setTimeout(() => {
+          chatEndRef.current?.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'end'
+          });
+        }, 100); // Small delay to allow keyboard animation
+      }
+    };
+
+    // Handle input focus/blur
+    const handleInputFocus = () => {
+      setIsInputFocused(true);
+      // Small delay to allow keyboard to open
+      setTimeout(handleKeyboardChange, 300);
+    };
+
+    const handleInputBlur = () => {
+      setIsInputFocused(false);
+      // Small delay to allow keyboard to close
+      setTimeout(handleKeyboardChange, 300);
+    };
+
+    // Initialize
+    storeInitialHeight();
+
+    // Listen for viewport changes (modern browsers)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleKeyboardChange);
+    } else {
+      // Fallback for older browsers
+      window.addEventListener('resize', handleKeyboardChange);
+    }
+
+    // Listen for focus/blur events on inputs
+    document.addEventListener('focusin', handleInputFocus);
+    document.addEventListener('focusout', handleInputBlur);
+
+    // Handle orientation changes
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        storeInitialHeight();
+        handleKeyboardChange();
+      }, 500);
+    });
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleKeyboardChange);
+      } else {
+        window.removeEventListener('resize', handleKeyboardChange);
+      }
+      document.removeEventListener('focusin', handleInputFocus);
+      document.removeEventListener('focusout', handleInputBlur);
+      window.removeEventListener('orientationchange', storeInitialHeight);
+    };
+  }, [isMobile, initialViewportHeight, chatEndRef]);
+
   // Memory usage monitoring
   useEffect(() => {
     if ('memory' in performance) {
@@ -289,28 +408,55 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
 
   return (
     <ErrorBoundary>
-      <div className={`h-full flex flex-col ${PERFORMANCE_CLASSES.containerOptimized}`}>
+      {/* Main Chat Container - No inner wrapper */}
+      <div 
+        className={`h-full flex flex-col ${PERFORMANCE_CLASSES.containerOptimized} ${PERFORMANCE_CLASSES.mobileOptimized} ${
+          isMobile ? PERFORMANCE_CLASSES.mobileSafeArea : ''
+        }`}
+        style={{
+          // Mobile keyboard adjustments (like Whop's native chat)
+          ...(isMobile && isKeyboardOpen && {
+            height: `calc(100vh - ${keyboardHeight}px)`,
+            transition: 'height 0.3s ease-out'
+          })
+        }}
+      >
         {/* Ultra-optimized Chat Header */}
         <ErrorBoundary>
-          <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 py-3 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 ${PERFORMANCE_CLASSES.shadowMinimal}`}>
+          <div className={`sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 ${
+            isMobile ? 'py-2 px-3' : 'py-3 px-4 sm:px-6 lg:px-8'
+          } border-b border-border/30 dark:border-border/20 ${PERFORMANCE_CLASSES.shadowMinimal}`}>
             <ChatHeader />
           </div>
         </ErrorBoundary>
         
-        {/* Ultra-optimized Chat Messages Area */}
+        {/* Chat Messages Area - Direct rendering, no inner container */}
         <div 
           ref={chatContainerRef} 
-          className="flex-grow overflow-y-auto p-0 space-y-4 pt-6 scroll-smooth"
+          className={`flex-grow ${PERFORMANCE_CLASSES.mobileScroll} ${
+            isMobile ? 'p-0 space-y-2 pt-3' : 'p-0 space-y-4 pt-6'
+          } scroll-smooth`}
           style={{ 
             scrollBehavior: 'smooth',
-            willChange: 'scroll-position'
+            willChange: 'scroll-position',
+            // Mobile-specific optimizations
+            ...(isMobile && {
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain',
+              touchAction: 'pan-y',
+              // Adjust height when keyboard is open
+              ...(isKeyboardOpen && {
+                height: `calc(100% - ${keyboardHeight}px)`,
+                transition: 'height 0.3s ease-out'
+              })
+            })
           }}
         >
           <ErrorBoundary>
             {messageList}
           </ErrorBoundary>
           
-          {/* Ultra-optimized Options Display */}
+          {/* Ultra-optimized Options Display - Direct in messages area */}
           {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
             <ErrorBoundary>
               <div className="flex justify-end">
@@ -333,28 +479,40 @@ const UserChat: React.FC<UserChatProps> = React.memo(({
           
           <div ref={chatEndRef} />
         </div>
-        
-        {/* Ultra-optimized Chat Input */}
-        {options.length > 0 && currentBlockId && (
-          <ErrorBoundary>
-            <ChatInput
-              onSendMessage={handleUserMessage}
-              placeholder="Type or choose response"
-            />
-          </ErrorBoundary>
-        )}
 
-        {/* Performance Debug Info (Development Only) */}
+        {/* Mobile-optimized Performance Debug Info (Development Only) */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 left-4 bg-black/80 text-white text-xs p-2 rounded">
+          <div className={`fixed ${isMobile ? 'bottom-2 left-2' : 'bottom-4 left-4'} bg-black/80 text-white text-xs p-2 rounded ${
+            isMobile ? 'text-[10px]' : 'text-xs'
+          }`}>
+            <div>User Chat Performance:</div>
             <div>Render: {performanceMetrics.renderTime.toFixed(1)}ms</div>
             <div>Scroll: {performanceMetrics.scrollTime.toFixed(1)}ms</div>
             <div>Memory: {performanceMetrics.memoryUsage}MB</div>
             <div>Messages: {history.length}</div>
             <div>Virtual: {shouldUseVirtualScrolling ? 'ON' : 'OFF'}</div>
+            <div className="text-green-400">Mobile: {isMobile ? 'YES' : 'NO'}</div>
+            <div className="text-blue-400">Touch: {isTouch ? 'YES' : 'NO'}</div>
+            <div className="text-yellow-400">Keyboard: {isKeyboardOpen ? 'OPEN' : 'CLOSED'}</div>
+            <div className="text-purple-400">Input Focus: {isInputFocused ? 'YES' : 'NO'}</div>
+            {isKeyboardOpen && <div className="text-orange-400">Height: {keyboardHeight}px</div>}
           </div>
         )}
       </div>
+
+      {/* Completely Separate Chat Input - Fixed positioning when keyboard opens */}
+      {options.length > 0 && currentBlockId && (
+        <ErrorBoundary>
+          <OptimizedChatInput
+            onSendMessage={handleUserMessage}
+            placeholder="Type or choose response"
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+            isMobile={isMobile}
+            isKeyboardOpen={isKeyboardOpen}
+          />
+        </ErrorBoundary>
+      )}
     </ErrorBoundary>
   );
 });

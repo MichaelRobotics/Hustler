@@ -3,7 +3,8 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelPreviewChatProps } from '../../types/funnel';
-import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton, ChatInput } from './components';
+import { ChatHeader, ChatMessage, ChatOptions, ChatRestartButton } from './components';
+import OptimizedChatInput from './components/OptimizedChatInput';
 import PerformanceProfiler from '../common/PerformanceProfiler';
 
 /**
@@ -346,6 +347,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
 
   return (
     <PerformanceProfiler id="FunnelPreviewChat">
+      {/* Main Chat Container - No inner wrapper */}
       <div 
         className={`h-full flex flex-col ${PERFORMANCE_CLASSES.containerOptimized} ${PERFORMANCE_CLASSES.mobileOptimized} ${
           isMobile ? PERFORMANCE_CLASSES.mobileSafeArea : ''
@@ -367,7 +369,7 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
           </div>
         </PerformanceProfiler>
         
-        {/* Mobile-optimized Chat Messages Area */}
+        {/* Chat Messages Area - Direct rendering, no inner container */}
         <div 
           ref={chatContainerRef} 
           className={`flex-grow ${PERFORMANCE_CLASSES.mobileScroll} ${
@@ -392,48 +394,19 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
           <PerformanceProfiler id="FunnelPreviewChat-Messages">
             {messageList}
           </PerformanceProfiler>
+          
+          {/* Response Options - Direct in messages area */}
+          <PerformanceProfiler id="FunnelPreviewChat-Options">
+            <ChatOptions
+              options={options}
+              optionsLeadingToOffer={optionsLeadingToOffer}
+              selectedOffer={selectedOffer}
+              onOptionClick={handleOptionClick}
+            />
+          </PerformanceProfiler>
+          
           <div ref={chatEndRef} />
         </div>
-        
-        {/* Response Options */}
-        <PerformanceProfiler id="FunnelPreviewChat-Options">
-          <ChatOptions
-            options={options}
-            optionsLeadingToOffer={optionsLeadingToOffer}
-            selectedOffer={selectedOffer}
-            onOptionClick={handleOptionClick}
-          />
-        </PerformanceProfiler>
-        
-        {/* Chat Input - Only show when there are options available */}
-        {options.length > 0 && currentBlockId && (
-          <PerformanceProfiler id="FunnelPreviewChat-Input">
-            <div 
-              style={{
-                // Mobile keyboard adjustments for input (like Whop's native chat)
-                ...(isMobile && isKeyboardOpen && {
-                  position: 'fixed',
-                  bottom: '0px',
-                  left: '0px',
-                  right: '0px',
-                  zIndex: 50,
-                  backgroundColor: 'var(--surface)',
-                  borderTop: '1px solid var(--border)',
-                  transition: 'all 0.3s ease-out'
-                })
-              }}
-            >
-              <ChatInput
-                onSendMessage={handleCustomInput}
-                placeholder="Type or choose response"
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
-                isMobile={isMobile}
-                isKeyboardOpen={isKeyboardOpen}
-              />
-            </div>
-          </PerformanceProfiler>
-        )}
         
         {/* Conversation End State - Show Start Over when no options or conversation ended */}
         {(options.length === 0 || !currentBlockId) && (
@@ -461,6 +434,20 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(({
           </div>
         )}
       </div>
+
+      {/* Completely Separate Chat Input - Fixed positioning when keyboard opens */}
+      {options.length > 0 && currentBlockId && (
+        <PerformanceProfiler id="FunnelPreviewChat-Input">
+          <OptimizedChatInput
+            onSendMessage={handleCustomInput}
+            placeholder="Type or choose response"
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+            isMobile={isMobile}
+            isKeyboardOpen={isKeyboardOpen}
+          />
+        </PerformanceProfiler>
+      )}
     </PerformanceProfiler>
   );
 });
