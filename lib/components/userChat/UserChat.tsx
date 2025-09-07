@@ -75,15 +75,19 @@ const UserChat: React.FC<UserChatProps> = ({
   // Smooth scroll to bottom after keyboard animation
   const scrollToBottom = () => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      chatEndRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'end',
+        inline: 'nearest'
+      });
     }
   };
 
   // Handle keyboard fold/unfold with smooth scroll
   useEffect(() => {
     const handleViewportChange = () => {
-      // Small timeout to let keyboard animation complete
-      setTimeout(scrollToBottom, 250);
+      // Timeout to let keyboard animation complete (longer for unfold)
+      setTimeout(scrollToBottom, 300);
     };
 
     if (window.visualViewport) {
