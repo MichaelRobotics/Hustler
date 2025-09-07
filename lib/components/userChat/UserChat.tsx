@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Text } from 'frosted-ui';
 import { Send, ArrowLeft } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
@@ -68,7 +68,31 @@ const UserChat: React.FC<UserChatProps> = ({
   const handleOptionClickLocal = (option: any, index: number) => {
     handleOptionClick(option, index);
     onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
+    // Smooth scroll after option click
+    setTimeout(scrollToBottom, 100);
   };
+
+  // Smooth scroll to bottom after keyboard animation
+  const scrollToBottom = () => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // Handle keyboard fold/unfold with smooth scroll
+  useEffect(() => {
+    const handleViewportChange = () => {
+      // Small timeout to let keyboard animation complete
+      setTimeout(scrollToBottom, 250);
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      return () => {
+        window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      };
+    }
+  }, []);
 
   // Direct rendering - no memoization for maximum performance
   const messageList = history.map((msg, index) => (
@@ -92,9 +116,9 @@ const UserChat: React.FC<UserChatProps> = ({
     <button
       key={`option-${i}`}
       onClick={() => handleOptionClickLocal(opt, i)}
-      className="w-full p-3 text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg"
+      className="max-w-[80%] px-4 py-2 rounded-lg bg-blue-500 text-white text-left"
     >
-      <Text size="2" className="text-gray-900 dark:text-gray-100">
+      <Text size="2" className="text-white">
         {opt.text}
       </Text>
     </button>
@@ -124,10 +148,12 @@ const UserChat: React.FC<UserChatProps> = ({
         <div className="flex-1 overflow-y-auto p-4">
           {messageList}
           
-          {/* Options */}
+          {/* Options - User side (right side) */}
           {history.length > 0 && history[history.length - 1].type === 'bot' && options.length > 0 && (
-            <div className="space-y-2 mt-4">
-              {optionsList}
+            <div className="flex justify-end mb-4">
+              <div className="space-y-2">
+                {optionsList}
+              </div>
             </div>
           )}
           
