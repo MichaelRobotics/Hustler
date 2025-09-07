@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Card } from 'frosted-ui';
 
 // Core Components
 import FunnelVisualizer from './FunnelVisualizer';
@@ -19,7 +20,6 @@ import { ApiErrorModal } from './modals/ApiErrorModal';
 import { useFunnelDeployment } from '../../hooks/useFunnelDeployment';
 import { useFunnelValidation } from '../../hooks/useFunnelValidation';
 import { useModalManagement } from '../../hooks/useModalManagement';
-import { useKeyboard } from '../../context/KeyboardContext';
 
 // Type definitions
 interface Funnel {
@@ -79,7 +79,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   const deployment = useFunnelDeployment(currentFunnel, onUpdate);
   const validation = useFunnelValidation();
   const modals = useModalManagement();
-  const { isTyping, isKeyboardOpen } = useKeyboard();
 
   // Effects
   React.useEffect(() => {
@@ -133,24 +132,21 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         
         <div className="relative p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-          {/* Enhanced Header with Whop Design Patterns - Hide when typing in preview mode */}
-          <div className={`transition-all duration-300 ${(isPreviewing && (isTyping || isKeyboardOpen)) ? 'hidden' : 'block'}`}>
-            <FunnelBuilderHeader
-              onBack={onBack}
-              isDeployed={!!currentFunnel.isDeployed}
-              selectedOffer={modals.selectedOffer}
-              hasFlow={!!currentFunnel.flow}
-              hasApiError={!!validation.apiError}
-              onOpenOfferSelection={modals.openOfferSelection}
-              onOpenOfflineConfirmation={modals.openOfflineConfirmation}
-              onDeploy={deployment.handleDeploy}
-            />
-          </div>
+          {/* Enhanced Header with Whop Design Patterns - Always Visible */}
+          <FunnelBuilderHeader
+            onBack={onBack}
+            isDeployed={!!currentFunnel.isDeployed}
+            selectedOffer={modals.selectedOffer}
+            hasFlow={!!currentFunnel.flow}
+            hasApiError={!!validation.apiError}
+            onOpenOfferSelection={modals.openOfferSelection}
+            onOpenOfflineConfirmation={modals.openOfflineConfirmation}
+            onDeploy={deployment.handleDeploy}
+          />
 
           {/* Main Content Area */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 !mt-8">
-            {/* Removed Card wrapper to eliminate fui-CardInner container */}
-            <div className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
+            <Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
               <div className="relative md:flex-grow md:overflow-auto p-0">
                 {/* API Error Modal */}
                 <ApiErrorModal
@@ -158,14 +154,16 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   onClose={() => validation.setApiError(null)}
                 />
 
-                {/* Main Content Area - Direct rendering without inner container */}
-                <div className="flex-1 p-0 h-full">
+                {/* Main Content Area */}
+                <div className="flex-1 p-0">
                   {isPreviewing ? (
-                    <FunnelPreviewChat 
-                      funnelFlow={currentFunnel.flow} 
-                      selectedOffer={modals.selectedOffer || undefined} 
-                      onOfferClick={(offerId: string) => modals.setSelectedOffer(offerId)}
-                    />
+                    <div className="h-full animate-in fade-in duration-0">
+                      <FunnelPreviewChat 
+                        funnelFlow={currentFunnel.flow} 
+                        selectedOffer={modals.selectedOffer} 
+                        onOfferClick={(offerId: string) => modals.setSelectedOffer(offerId)}
+                      />
+                    </div>
                   ) : (
                     <div className="animate-in fade-in duration-0">
                       <FunnelVisualizer
@@ -182,7 +180,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
                   )}
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* Modals */}
@@ -239,7 +237,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
             isGenerating={false}
             isDeployed={currentFunnel.isDeployed}
             showOnPage={isPreviewing ? "preview" : "aibuilder"}
-            hideWhenTyping={true}
           />
         </div>
       </div>

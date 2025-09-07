@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import UserChat from './UserChat';
-import { mockFunnelFlow } from './mockData';
+import { UserChatExact } from './UserChatExact';
 
 /**
  * --- Customer View Component ---
@@ -37,9 +36,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
   };
 
   return (
-    <UserChat
-      funnelFlow={mockFunnelFlow}
-      conversationId={conversationId}
+    <UserChatExact
       onMessageSent={handleMessageSentInternal}
     />
   );
