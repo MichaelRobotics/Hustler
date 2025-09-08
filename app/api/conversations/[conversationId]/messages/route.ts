@@ -1,8 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withConversationAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/whop-auth';
-import { type AuthContext } from '../../../../../lib/middleware/whop-auth';
-import { getMessages, createMessage } from '../../../../../lib/actions/conversation-actions';
-import { getUserContext } from '../../../../../lib/context/user-context';
+import { type NextRequest, NextResponse } from "next/server";
+import {
+	createMessage,
+	getMessages,
+} from "../../../../../lib/actions/conversation-actions";
+import { getUserContext } from "../../../../../lib/context/user-context";
+import {
+	createErrorResponse,
+	createSuccessResponse,
+	withConversationAuth,
+} from "../../../../../lib/middleware/whop-auth";
+import type { AuthContext } from "../../../../../lib/middleware/whop-auth";
 
 /**
  * Conversation Messages API Route
@@ -13,95 +20,101 @@ import { getUserContext } from '../../../../../lib/context/user-context';
  * GET /api/conversations/[conversationId]/messages - Get messages for a conversation
  */
 async function getMessagesHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
-    const url = new URL(request.url);
-    
-    if (!conversationId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Conversation ID is required'
-      );
-    }
+	try {
+		const { user } = context;
+		const conversationId = request.nextUrl.pathname.split("/")[3]; // Extract conversationId from path
+		const url = new URL(request.url);
 
-    // Extract query parameters
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '50');
+		if (!conversationId) {
+			return createErrorResponse(
+				"MISSING_RESOURCE_ID",
+				"Conversation ID is required",
+			);
+		}
 
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+		// Extract query parameters
+		const page = Number.parseInt(url.searchParams.get("page") || "1");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
 
-    // Get the full user context from the simplified auth (whopCompanyId is now optional)
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context from the simplified auth (whopCompanyId is now optional)
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Get messages using server action
-    const result = { messages: [], total: 0, page, limit }; // Dummy data for build
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    return createSuccessResponse(result, 'Messages retrieved successfully');
-  } catch (error) {
-    console.error('Error getting messages:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Get messages using server action
+		const result = { messages: [], total: 0, page, limit }; // Dummy data for build
+
+		return createSuccessResponse(result, "Messages retrieved successfully");
+	} catch (error) {
+		console.error("Error getting messages:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 /**
  * POST /api/conversations/[conversationId]/messages - Create a new message
  */
-async function createMessageHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const conversationId = request.nextUrl.pathname.split('/')[3]; // Extract conversationId from path
-    const input = await request.json();
-    
-    if (!conversationId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Conversation ID is required'
-      );
-    }
+async function createMessageHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const conversationId = request.nextUrl.pathname.split("/")[3]; // Extract conversationId from path
+		const input = await request.json();
 
-    // Validation
-    if (!input.type || !input.content) {
-      return createErrorResponse(
-        'MISSING_REQUIRED_FIELDS',
-        'Message type and content are required'
-      );
-    }
+		if (!conversationId) {
+			return createErrorResponse(
+				"MISSING_RESOURCE_ID",
+				"Conversation ID is required",
+			);
+		}
 
-    if (!['user', 'bot', 'system'].includes(input.type)) {
-      return createErrorResponse(
-        'INVALID_INPUT',
-        'Message type must be user, bot, or system'
-      );
-    }
+		// Validation
+		if (!input.type || !input.content) {
+			return createErrorResponse(
+				"MISSING_REQUIRED_FIELDS",
+				"Message type and content are required",
+			);
+		}
 
-    // Create message using server action - temporarily disabled for build
-    const newMessage = { id: 'temp', conversationId, type: input.type, content: input.content }; // Dummy data for build
+		if (!["user", "bot", "system"].includes(input.type)) {
+			return createErrorResponse(
+				"INVALID_INPUT",
+				"Message type must be user, bot, or system",
+			);
+		}
 
-    return createSuccessResponse(newMessage, 'Message created successfully', 201);
-  } catch (error) {
-    console.error('Error creating message:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Create message using server action - temporarily disabled for build
+		const newMessage = {
+			id: "temp",
+			conversationId,
+			type: input.type,
+			content: input.content,
+		}; // Dummy data for build
+
+		return createSuccessResponse(
+			newMessage,
+			"Message created successfully",
+			201,
+		);
+	} catch (error) {
+		console.error("Error creating message:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 // Export the protected route handlers with resource protection

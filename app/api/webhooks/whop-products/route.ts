@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createSuccessResponse, createErrorResponse } from '../../../../lib/middleware/whop-auth';
-import { whopProductSync } from '../../../../lib/sync/whop-product-sync';
+import { type NextRequest, NextResponse } from "next/server";
+import {
+	createErrorResponse,
+	createSuccessResponse,
+} from "../../../../lib/middleware/whop-auth";
+import { whopProductSync } from "../../../../lib/sync/whop-product-sync";
 
 /**
  * Whop Products Webhook API Route
@@ -11,33 +14,30 @@ import { whopProductSync } from '../../../../lib/sync/whop-product-sync';
  * POST /api/webhooks/whop-products - Handle Whop product webhook events
  */
 async function handleWhopProductWebhook(request: NextRequest) {
-  try {
-    const body = await request.json();
-    
-    // Validate webhook signature (in production, you'd verify the signature)
-    const signature = request.headers.get('x-whop-signature');
-    if (!signature) {
-      return createErrorResponse(
-        'MISSING_SIGNATURE',
-        'Webhook signature is required'
-      );
-    }
+	try {
+		const body = await request.json();
 
-    // Handle webhook update - extract company ID from webhook data
-    const companyId = body.data?.company_id || body.company_id || 'unknown';
-    await whopProductSync.handleWebhookUpdate(companyId, body);
+		// Validate webhook signature (in production, you'd verify the signature)
+		const signature = request.headers.get("x-whop-signature");
+		if (!signature) {
+			return createErrorResponse(
+				"MISSING_SIGNATURE",
+				"Webhook signature is required",
+			);
+		}
 
-    return createSuccessResponse(
-      { received: true, type: body.type },
-      'Webhook processed successfully'
-    );
-  } catch (error) {
-    console.error('Error processing Whop product webhook:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Handle webhook update - extract company ID from webhook data
+		const companyId = body.data?.company_id || body.company_id || "unknown";
+		await whopProductSync.handleWebhookUpdate(companyId, body);
+
+		return createSuccessResponse(
+			{ received: true, type: body.type },
+			"Webhook processed successfully",
+		);
+	} catch (error) {
+		console.error("Error processing Whop product webhook:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 // Export the webhook handler (no auth required for webhooks)

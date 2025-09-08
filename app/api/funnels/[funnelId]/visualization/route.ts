@@ -1,11 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withFunnelAuth, createSuccessResponse, createErrorResponse } from '../../../../../lib/middleware/whop-auth';
-import { type AuthContext } from '../../../../../lib/middleware/whop-auth';
-import { getUserContext } from '../../../../../lib/context/user-context';
-import { db } from '../../../../../lib/supabase/db';
-import { funnels } from '../../../../../lib/supabase/schema';
-import { eq, and } from 'drizzle-orm';
-import { VisualizationState } from '../../../../../lib/types/visualization';
+import { and, eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
+import { getUserContext } from "../../../../../lib/context/user-context";
+import {
+	createErrorResponse,
+	createSuccessResponse,
+	withFunnelAuth,
+} from "../../../../../lib/middleware/whop-auth";
+import type { AuthContext } from "../../../../../lib/middleware/whop-auth";
+import { db } from "../../../../../lib/supabase/db";
+import { funnels } from "../../../../../lib/supabase/schema";
+import type { VisualizationState } from "../../../../../lib/types/visualization";
 
 /**
  * Funnel Visualization State API Route
@@ -15,165 +19,172 @@ import { VisualizationState } from '../../../../../lib/types/visualization';
 /**
  * GET /api/funnels/[funnelId]/visualization - Get visualization state
  */
-async function getVisualizationStateHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    const funnelId = request.nextUrl.pathname.split('/')[3]; // Extract funnelId from path
-    
-    if (!funnelId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Funnel ID is required'
-      );
-    }
+async function getVisualizationStateHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const { user } = context;
+		const funnelId = request.nextUrl.pathname.split("/")[3]; // Extract funnelId from path
 
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
+		if (!funnelId) {
+			return createErrorResponse(
+				"MISSING_RESOURCE_ID",
+				"Funnel ID is required",
+			);
+		}
 
-    // Get the full user context
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV";
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Get funnel with visualization state
-    const funnel = await db.query.funnels.findFirst({
-      where: and(
-        eq(funnels.id, funnelId),
-        eq(funnels.experienceId, userContext.user.experienceId)
-      ),
-      columns: {
-        id: true,
-        visualizationState: true
-      }
-    });
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    if (!funnel) {
-      return createErrorResponse(
-        'RESOURCE_NOT_FOUND',
-        'Funnel not found'
-      );
-    }
+		// Get funnel with visualization state
+		const funnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, funnelId),
+				eq(funnels.experienceId, userContext.user.experienceId),
+			),
+			columns: {
+				id: true,
+				visualizationState: true,
+			},
+		});
 
-    // Check access permissions
-    if (userContext.user.accessLevel === 'customer' && funnel.userId !== userContext.user.id) {
-      return createErrorResponse(
-        'ACCESS_DENIED',
-        'Access denied: You can only access your own funnels'
-      );
-    }
+		if (!funnel) {
+			return createErrorResponse("RESOURCE_NOT_FOUND", "Funnel not found");
+		}
 
-    // Return visualization state (default to empty object if null)
-    const visualizationState = funnel.visualizationState || {};
+		// Check access permissions
+		if (
+			userContext.user.accessLevel === "customer" &&
+			funnel.userId !== userContext.user.id
+		) {
+			return createErrorResponse(
+				"ACCESS_DENIED",
+				"Access denied: You can only access your own funnels",
+			);
+		}
 
-    return createSuccessResponse(visualizationState, 'Visualization state retrieved successfully');
-  } catch (error) {
-    console.error('Error getting visualization state:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Return visualization state (default to empty object if null)
+		const visualizationState = funnel.visualizationState || {};
+
+		return createSuccessResponse(
+			visualizationState,
+			"Visualization state retrieved successfully",
+		);
+	} catch (error) {
+		console.error("Error getting visualization state:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 /**
  * PUT /api/funnels/[funnelId]/visualization - Save visualization state
  */
-async function saveVisualizationStateHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    const funnelId = request.nextUrl.pathname.split('/')[3]; // Extract funnelId from path
-    
-    if (!funnelId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Funnel ID is required'
-      );
-    }
+async function saveVisualizationStateHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const { user } = context;
+		const funnelId = request.nextUrl.pathname.split("/")[3]; // Extract funnelId from path
 
-    // Parse request body
-    const visualizationState: VisualizationState = await request.json();
+		if (!funnelId) {
+			return createErrorResponse(
+				"MISSING_RESOURCE_ID",
+				"Funnel ID is required",
+			);
+		}
 
-    // Validate visualization state structure
-    if (!visualizationState || typeof visualizationState !== 'object') {
-      return createErrorResponse(
-        'INVALID_INPUT',
-        'Invalid visualization state format'
-      );
-    }
+		// Parse request body
+		const visualizationState: VisualizationState = await request.json();
 
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
+		// Validate visualization state structure
+		if (!visualizationState || typeof visualizationState !== "object") {
+			return createErrorResponse(
+				"INVALID_INPUT",
+				"Invalid visualization state format",
+			);
+		}
 
-    // Get the full user context
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV";
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Check if funnel exists and user has access
-    const existingFunnel = await db.query.funnels.findFirst({
-      where: and(
-        eq(funnels.id, funnelId),
-        eq(funnels.experienceId, userContext.user.experienceId)
-      )
-    });
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    if (!existingFunnel) {
-      return createErrorResponse(
-        'RESOURCE_NOT_FOUND',
-        'Funnel not found'
-      );
-    }
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, funnelId),
+				eq(funnels.experienceId, userContext.user.experienceId),
+			),
+		});
 
-    // Check access permissions
-    if (userContext.user.accessLevel === 'customer' && existingFunnel.userId !== userContext.user.id) {
-      return createErrorResponse(
-        'ACCESS_DENIED',
-        'Access denied: You can only update your own funnels'
-      );
-    }
+		if (!existingFunnel) {
+			return createErrorResponse("RESOURCE_NOT_FOUND", "Funnel not found");
+		}
 
-    // Update funnel with new visualization state
-    const [updatedFunnel] = await db.update(funnels)
-      .set({
-        visualizationState: visualizationState,
-        updatedAt: new Date()
-      })
-      .where(eq(funnels.id, funnelId))
-      .returning({
-        id: funnels.id,
-        visualizationState: funnels.visualizationState
-      });
+		// Check access permissions
+		if (
+			userContext.user.accessLevel === "customer" &&
+			existingFunnel.userId !== userContext.user.id
+		) {
+			return createErrorResponse(
+				"ACCESS_DENIED",
+				"Access denied: You can only update your own funnels",
+			);
+		}
 
-    return createSuccessResponse(updatedFunnel, 'Visualization state saved successfully');
-  } catch (error) {
-    console.error('Error saving visualization state:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Update funnel with new visualization state
+		const [updatedFunnel] = await db
+			.update(funnels)
+			.set({
+				visualizationState: visualizationState,
+				updatedAt: new Date(),
+			})
+			.where(eq(funnels.id, funnelId))
+			.returning({
+				id: funnels.id,
+				visualizationState: funnels.visualizationState,
+			});
+
+		return createSuccessResponse(
+			updatedFunnel,
+			"Visualization state saved successfully",
+		);
+	} catch (error) {
+		console.error("Error saving visualization state:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 // Export the protected route handlers

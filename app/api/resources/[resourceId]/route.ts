@@ -1,7 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withCustomerAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/whop-auth';
-import { updateResource, deleteResource } from '../../../../lib/actions/resource-actions';
-import { getUserContext } from '../../../../lib/context/user-context';
+import { type NextRequest, NextResponse } from "next/server";
+import {
+	deleteResource,
+	updateResource,
+} from "../../../../lib/actions/resource-actions";
+import { getUserContext } from "../../../../lib/context/user-context";
+import {
+	type AuthContext,
+	createErrorResponse,
+	createSuccessResponse,
+	withCustomerAuth,
+} from "../../../../lib/middleware/whop-auth";
 
 /**
  * Individual Resource API Route
@@ -11,112 +19,119 @@ import { getUserContext } from '../../../../lib/context/user-context';
 /**
  * PUT /api/resources/[resourceId] - Update a specific resource
  */
-async function updateResourceHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    const resourceId = request.nextUrl.pathname.split('/')[3]; // Extract resourceId from path
-    
-    if (!resourceId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Resource ID is required'
-      );
-    }
+async function updateResourceHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const { user } = context;
+		const resourceId = request.nextUrl.pathname.split("/")[3]; // Extract resourceId from path
 
-    const input = await request.json();
+		if (!resourceId) {
+			return createErrorResponse(
+				"MISSING_RESOURCE_ID",
+				"Resource ID is required",
+			);
+		}
 
-    // Validation
-    if (input.type && !['AFFILIATE', 'MY_PRODUCTS'].includes(input.type)) {
-      return createErrorResponse(
-        'INVALID_INPUT',
-        'Type must be either AFFILIATE or MY_PRODUCTS'
-      );
-    }
+		const input = await request.json();
 
-    if (input.category && !['PAID', 'FREE_VALUE'].includes(input.category)) {
-      return createErrorResponse(
-        'INVALID_INPUT',
-        'Category must be either PAID or FREE_VALUE'
-      );
-    }
+		// Validation
+		if (input.type && !["AFFILIATE", "MY_PRODUCTS"].includes(input.type)) {
+			return createErrorResponse(
+				"INVALID_INPUT",
+				"Type must be either AFFILIATE or MY_PRODUCTS",
+			);
+		}
 
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
+		if (input.category && !["PAID", "FREE_VALUE"].includes(input.category)) {
+			return createErrorResponse(
+				"INVALID_INPUT",
+				"Category must be either PAID or FREE_VALUE",
+			);
+		}
 
-    // Get the full user context
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV";
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Update resource using server action
-    const updatedResource = await updateResource(userContext.user, resourceId, input);
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    return createSuccessResponse(updatedResource, 'Resource updated successfully');
-  } catch (error) {
-    console.error('Error updating resource:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Update resource using server action
+		const updatedResource = await updateResource(
+			userContext.user,
+			resourceId,
+			input,
+		);
+
+		return createSuccessResponse(
+			updatedResource,
+			"Resource updated successfully",
+		);
+	} catch (error) {
+		console.error("Error updating resource:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 /**
  * DELETE /api/resources/[resourceId] - Delete a specific resource
  */
-async function deleteResourceHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    const resourceId = request.nextUrl.pathname.split('/')[3]; // Extract resourceId from path
-    
-    if (!resourceId) {
-      return createErrorResponse(
-        'MISSING_RESOURCE_ID',
-        'Resource ID is required'
-      );
-    }
+async function deleteResourceHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const { user } = context;
+		const resourceId = request.nextUrl.pathname.split("/")[3]; // Extract resourceId from path
 
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV';
+		if (!resourceId) {
+			return createErrorResponse(
+				"MISSING_RESOURCE_ID",
+				"Resource ID is required",
+			);
+		}
 
-    // Get the full user context
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV";
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Delete resource using server action
-    await deleteResource(userContext.user, resourceId);
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    return createSuccessResponse(null, 'Resource deleted successfully');
-  } catch (error) {
-    console.error('Error deleting resource:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Delete resource using server action
+		await deleteResource(userContext.user, resourceId);
+
+		return createSuccessResponse(null, "Resource deleted successfully");
+	} catch (error) {
+		console.error("Error deleting resource:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 // Export handlers with authentication middleware

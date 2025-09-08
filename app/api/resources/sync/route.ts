@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withWhopAuth, createSuccessResponse, createErrorResponse, type AuthContext } from '../../../../lib/middleware/whop-auth';
-import { whopProductSync } from '../../../../lib/sync/whop-product-sync';
-import { getUserContext } from '../../../../lib/context/user-context';
+import { type NextRequest, NextResponse } from "next/server";
+import { getUserContext } from "../../../../lib/context/user-context";
+import {
+	type AuthContext,
+	createErrorResponse,
+	createSuccessResponse,
+	withWhopAuth,
+} from "../../../../lib/middleware/whop-auth";
+import { whopProductSync } from "../../../../lib/sync/whop-product-sync";
 
 /**
  * Resource Sync API Route
@@ -11,79 +16,89 @@ import { getUserContext } from '../../../../lib/context/user-context';
 /**
  * POST /api/resources/sync - Sync resources with Whop products
  */
-async function syncResourcesHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+async function syncResourcesHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const { user } = context;
 
-    // Get the full user context from the simplified auth (whopCompanyId is now optional)
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context from the simplified auth (whopCompanyId is now optional)
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Start sync process
-    const syncResult = await whopProductSync.syncCompanyProducts(userContext.user);
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    return createSuccessResponse(syncResult, 'Resource sync initiated successfully');
-  } catch (error) {
-    console.error('Error syncing resources:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Start sync process
+		const syncResult = await whopProductSync.syncCompanyProducts(
+			userContext.user,
+		);
+
+		return createSuccessResponse(
+			syncResult,
+			"Resource sync initiated successfully",
+		);
+	} catch (error) {
+		console.error("Error syncing resources:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 /**
  * GET /api/resources/sync - Get sync status
  */
-async function getSyncStatusHandler(request: NextRequest, context: AuthContext) {
-  try {
-    const { user } = context;
-    
-    // Use experience ID from URL or fallback to a default
-    const experienceId = user.experienceId || 'exp_wl5EtbHqAqLdjV'; // Fallback for API routes
+async function getSyncStatusHandler(
+	request: NextRequest,
+	context: AuthContext,
+) {
+	try {
+		const { user } = context;
 
-    // Get the full user context from the simplified auth (whopCompanyId is now optional)
-    const userContext = await getUserContext(
-      user.userId,
-      '', // whopCompanyId is optional for experience-based isolation
-      experienceId,
-      false, // forceRefresh
-      'customer' // default access level
-    );
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
 
-    if (!userContext) {
-      return NextResponse.json(
-        { error: 'User context not found' },
-        { status: 401 }
-      );
-    }
+		// Get the full user context from the simplified auth (whopCompanyId is now optional)
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
 
-    // Get sync status
-    const syncStatus = await whopProductSync.getSyncStatus(userContext.user.experience.whopCompanyId);
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
 
-    return createSuccessResponse(syncStatus, 'Sync status retrieved successfully');
-  } catch (error) {
-    console.error('Error getting sync status:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      (error as Error).message
-    );
-  }
+		// Get sync status
+		const syncStatus = await whopProductSync.getSyncStatus(
+			userContext.user.experience.whopCompanyId,
+		);
+
+		return createSuccessResponse(
+			syncStatus,
+			"Sync status retrieved successfully",
+		);
+	} catch (error) {
+		console.error("Error getting sync status:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
 }
 
 // Export the protected route handlers

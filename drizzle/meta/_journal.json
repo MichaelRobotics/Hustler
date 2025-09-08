@@ -1,41 +1,41 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1757077572694,
-      "tag": "20250905130612_happy_zarda",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1757103184512,
-      "tag": "20250905201304_parallel_wendigo",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1757104989346,
-      "tag": "20250905204309_real_machine_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1757162709647,
-      "tag": "20250906124509_lean_power_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1757173856658,
-      "tag": "20250906155056_purple_wild_child",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1757077572694,
+			"tag": "20250905130612_happy_zarda",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1757103184512,
+			"tag": "20250905201304_parallel_wendigo",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1757104989346,
+			"tag": "20250905204309_real_machine_man",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1757162709647,
+			"tag": "20250906124509_lean_power_man",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1757173856658,
+			"tag": "20250906155056_purple_wild_child",
+			"breakpoints": true
+		}
+	]
 }

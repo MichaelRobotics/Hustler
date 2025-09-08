@@ -1,23 +1,28 @@
-'use client';
+"use client";
 
-import { useCallback, useRef } from 'react';
-import { VisualizationState, DEFAULT_VISUALIZATION_STATE, isVisualizationStateReadyToSave, createVisualizationState } from '../types/visualization';
-import { deduplicatedFetch } from '../utils/requestDeduplication';
+import { useCallback, useRef } from "react";
+import {
+	DEFAULT_VISUALIZATION_STATE,
+	type VisualizationState,
+	createVisualizationState,
+	isVisualizationStateReadyToSave,
+} from "../types/visualization";
+import { deduplicatedFetch } from "../utils/requestDeduplication";
 
 interface UseVisualizationPersistenceOptions {
-  funnelId: string;
-  enabled?: boolean;
-  debounceMs?: number;
-  onSaveComplete?: () => void; // Callback when save is complete
-  onSaveError?: (error: Error) => void; // Callback when save fails
+	funnelId: string;
+	enabled?: boolean;
+	debounceMs?: number;
+	onSaveComplete?: () => void; // Callback when save is complete
+	onSaveError?: (error: Error) => void; // Callback when save fails
 }
 
 interface UseVisualizationPersistenceReturn {
-  saveVisualizationState: (state: VisualizationState) => Promise<void>;
-  loadVisualizationState: () => Promise<VisualizationState>;
-  isSaving: boolean;
-  isLoading: boolean;
-  lastError: string | null;
+	saveVisualizationState: (state: VisualizationState) => Promise<void>;
+	loadVisualizationState: () => Promise<VisualizationState>;
+	isSaving: boolean;
+	isLoading: boolean;
+	lastError: string | null;
 }
 
 /**
@@ -25,167 +30,189 @@ interface UseVisualizationPersistenceReturn {
  * Handles debounced saving and loading of visualization preferences
  */
 export function useVisualizationPersistence({
-  funnelId,
-  enabled = true,
-  debounceMs = 1000,
-  onSaveComplete,
-  onSaveError
+	funnelId,
+	enabled = true,
+	debounceMs = 1000,
+	onSaveComplete,
+	onSaveError,
 }: UseVisualizationPersistenceOptions): UseVisualizationPersistenceReturn {
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isSavingRef = useRef(false);
-  const isLoadingRef = useRef(false);
-  const lastErrorRef = useRef<string | null>(null);
+	const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const isSavingRef = useRef(false);
+	const isLoadingRef = useRef(false);
+	const lastErrorRef = useRef<string | null>(null);
 
-  // Debounced save function
-  const saveVisualizationState = useCallback(async (state: VisualizationState) => {
-    if (!enabled || !funnelId) return;
+	// Debounced save function
+	const saveVisualizationState = useCallback(
+		async (state: VisualizationState) => {
+			if (!enabled || !funnelId) return;
 
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
+			// Clear existing timeout
+			if (saveTimeoutRef.current) {
+				clearTimeout(saveTimeoutRef.current);
+			}
 
-    // Set new timeout for debounced save
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        isSavingRef.current = true;
-        lastErrorRef.current = null;
+			// Set new timeout for debounced save
+			saveTimeoutRef.current = setTimeout(async () => {
+				try {
+					isSavingRef.current = true;
+					lastErrorRef.current = null;
 
-        const response = await deduplicatedFetch(`/api/funnels/${funnelId}/visualization`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(state)
-        });
+					const response = await deduplicatedFetch(
+						`/api/funnels/${funnelId}/visualization`,
+						{
+							method: "PUT",
+							headers: {
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify(state),
+						},
+					);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to save visualization state');
-        }
+					if (!response.ok) {
+						const errorData = await response.json();
+						throw new Error(
+							errorData.message || "Failed to save visualization state",
+						);
+					}
 
-        console.log('Visualization state saved successfully');
-        
-        // Call the completion callback if provided
-        if (onSaveComplete) {
-          onSaveComplete();
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        lastErrorRef.current = errorMessage;
-        console.error('Error saving visualization state:', error);
-        
-        // Call the error callback if provided
-        if (onSaveError && error instanceof Error) {
-          onSaveError(error);
-        }
-      } finally {
-        isSavingRef.current = false;
-      }
-    }, debounceMs);
-  }, [funnelId, enabled, debounceMs, onSaveComplete, onSaveError]);
+					console.log("Visualization state saved successfully");
 
-  // Load visualization state
-  const loadVisualizationState = useCallback(async (): Promise<VisualizationState> => {
-    if (!enabled || !funnelId) {
-      return DEFAULT_VISUALIZATION_STATE;
-    }
+					// Call the completion callback if provided
+					if (onSaveComplete) {
+						onSaveComplete();
+					}
+				} catch (error) {
+					const errorMessage =
+						error instanceof Error ? error.message : "Unknown error";
+					lastErrorRef.current = errorMessage;
+					console.error("Error saving visualization state:", error);
 
-    try {
-      isLoadingRef.current = true;
-      lastErrorRef.current = null;
+					// Call the error callback if provided
+					if (onSaveError && error instanceof Error) {
+						onSaveError(error);
+					}
+				} finally {
+					isSavingRef.current = false;
+				}
+			}, debounceMs);
+		},
+		[funnelId, enabled, debounceMs, onSaveComplete, onSaveError],
+	);
 
-      const response = await deduplicatedFetch(`/api/funnels/${funnelId}/visualization`);
+	// Load visualization state
+	const loadVisualizationState =
+		useCallback(async (): Promise<VisualizationState> => {
+			if (!enabled || !funnelId) {
+				return DEFAULT_VISUALIZATION_STATE;
+			}
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to load visualization state');
-      }
+			try {
+				isLoadingRef.current = true;
+				lastErrorRef.current = null;
 
-      const data = await response.json();
-      const loadedState = data.data || DEFAULT_VISUALIZATION_STATE;
+				const response = await deduplicatedFetch(
+					`/api/funnels/${funnelId}/visualization`,
+				);
 
-      console.log('Visualization state loaded successfully');
-      return loadedState;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      lastErrorRef.current = errorMessage;
-      console.error('Error loading visualization state:', error);
-      return DEFAULT_VISUALIZATION_STATE;
-    } finally {
-      isLoadingRef.current = false;
-    }
-  }, [funnelId, enabled]);
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(
+						errorData.message || "Failed to load visualization state",
+					);
+				}
 
-  return {
-    saveVisualizationState,
-    loadVisualizationState,
-    isSaving: isSavingRef.current,
-    isLoading: isLoadingRef.current,
-    lastError: lastErrorRef.current
-  };
+				const data = await response.json();
+				const loadedState = data.data || DEFAULT_VISUALIZATION_STATE;
+
+				console.log("Visualization state loaded successfully");
+				return loadedState;
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : "Unknown error";
+				lastErrorRef.current = errorMessage;
+				console.error("Error loading visualization state:", error);
+				return DEFAULT_VISUALIZATION_STATE;
+			} finally {
+				isLoadingRef.current = false;
+			}
+		}, [funnelId, enabled]);
+
+	return {
+		saveVisualizationState,
+		loadVisualizationState,
+		isSaving: isSavingRef.current,
+		isLoading: isLoadingRef.current,
+		lastError: lastErrorRef.current,
+	};
 }
 
 /**
  * Hook for auto-saving visualization state when layout is complete
  */
 export function useAutoSaveVisualization({
-  funnelId,
-  layoutPhase,
-  positions,
-  lines,
-  stageLayouts,
-  canvasDimensions,
-  interactions,
-  viewport,
-  preferences,
-  editingBlockId
+	funnelId,
+	layoutPhase,
+	positions,
+	lines,
+	stageLayouts,
+	canvasDimensions,
+	interactions,
+	viewport,
+	preferences,
+	editingBlockId,
 }: {
-  funnelId: string;
-  layoutPhase: 'measure' | 'final';
-  positions: Record<string, any>;
-  lines: any[];
-  stageLayouts: any[];
-  canvasDimensions: { itemCanvasWidth: number; totalCanvasHeight: number };
-  interactions: any;
-  viewport: any;
-  preferences: any;
-  editingBlockId: string | null;
+	funnelId: string;
+	layoutPhase: "measure" | "final";
+	positions: Record<string, any>;
+	lines: any[];
+	stageLayouts: any[];
+	canvasDimensions: { itemCanvasWidth: number; totalCanvasHeight: number };
+	interactions: any;
+	viewport: any;
+	preferences: any;
+	editingBlockId: string | null;
 }) {
-  const { saveVisualizationState } = useVisualizationPersistence({ funnelId });
+	const { saveVisualizationState } = useVisualizationPersistence({ funnelId });
 
-  // Auto-save when layout is complete and stable
-  const autoSave = useCallback(() => {
-    if (isVisualizationStateReadyToSave(layoutPhase, positions, lines, editingBlockId)) {
-      const state = createVisualizationState(
-        layoutPhase,
-        positions,
-        lines,
-        stageLayouts,
-        canvasDimensions,
-        interactions,
-        viewport,
-        preferences
-      );
+	// Auto-save when layout is complete and stable
+	const autoSave = useCallback(() => {
+		if (
+			isVisualizationStateReadyToSave(
+				layoutPhase,
+				positions,
+				lines,
+				editingBlockId,
+			)
+		) {
+			const state = createVisualizationState(
+				layoutPhase,
+				positions,
+				lines,
+				stageLayouts,
+				canvasDimensions,
+				interactions,
+				viewport,
+				preferences,
+			);
 
-      if (state) {
-        saveVisualizationState(state);
-      }
-    }
-  }, [
-    layoutPhase,
-    positions,
-    lines,
-    stageLayouts,
-    canvasDimensions,
-    interactions,
-    viewport,
-    preferences,
-    editingBlockId,
-    saveVisualizationState
-  ]);
+			if (state) {
+				saveVisualizationState(state);
+			}
+		}
+	}, [
+		layoutPhase,
+		positions,
+		lines,
+		stageLayouts,
+		canvasDimensions,
+		interactions,
+		viewport,
+		preferences,
+		editingBlockId,
+		saveVisualizationState,
+	]);
 
-  return { autoSave };
+	return { autoSave };
 }
 
 // Removed useCoordinatedFunnelSave - funnel flow saving is now handled by the generation API

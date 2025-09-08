@@ -1,57 +1,71 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import Toast from './Toast';
+import type React from "react";
+import { createContext, useCallback, useContext, useState } from "react";
+import Toast from "./Toast";
 
 interface ToastMessage {
-  id: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  duration?: number;
+	id: string;
+	message: string;
+	type: "info" | "success" | "warning" | "error";
+	duration?: number;
 }
 
 interface ToastContextType {
-  showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error', duration?: number) => void;
+	showToast: (
+		message: string,
+		type?: "info" | "success" | "warning" | "error",
+		duration?: number,
+	) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const useToast = () => {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
+	const context = useContext(ToastContext);
+	if (!context) {
+		throw new Error("useToast must be used within a ToastProvider");
+	}
+	return context;
 };
 
-export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
+	children,
+}) => {
+	const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const showToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', duration: number = 3000) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    const newToast: ToastMessage = { id, message, type, duration };
-    
-    setToasts(prev => [...prev, newToast]);
-  }, []);
+	const showToast = useCallback(
+		(
+			message: string,
+			type: "info" | "success" | "warning" | "error" = "info",
+			duration = 3000,
+		) => {
+			const id = Math.random().toString(36).substr(2, 9);
+			const newToast: ToastMessage = { id, message, type, duration };
 
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
-  }, []);
+			setToasts((prev) => [...prev, newToast]);
+		},
+		[],
+	);
 
-  return (
-    <ToastContext.Provider value={{ showToast }}>
-      {children}
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          duration={toast.duration}
-          onClose={() => removeToast(toast.id)}
-        />
-      ))}
-    </ToastContext.Provider>
-  );
+	const removeToast = useCallback((id: string) => {
+		setToasts((prev) => prev.filter((toast) => toast.id !== id));
+	}, []);
+
+	return (
+		<ToastContext.Provider value={{ showToast }}>
+			{children}
+			{toasts.map((toast) => (
+				<Toast
+					key={toast.id}
+					message={toast.message}
+					type={toast.type}
+					duration={toast.duration}
+					onClose={() => removeToast(toast.id)}
+				/>
+			))}
+		</ToastContext.Provider>
+	);
 };
 
 export default ToastProvider;

@@ -1,8 +1,8 @@
+import { addCredits, getCreditPack } from "@/lib/actions/credit-actions";
+import type { CreditPackId } from "@/lib/types/credit";
 import { waitUntil } from "@vercel/functions";
 import { makeWebhookValidator } from "@whop/api";
 import type { NextRequest } from "next/server";
-import { addCredits, getCreditPack } from "@/lib/actions/credit-actions";
-import { type CreditPackId } from "@/lib/types/credit";
 
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
@@ -25,13 +25,17 @@ export async function POST(request: NextRequest): Promise<Response> {
 		);
 
 		// Check if this is a credit pack purchase
-		if (metadata?.type === 'credit_pack' && metadata?.packId && metadata?.credits) {
+		if (
+			metadata?.type === "credit_pack" &&
+			metadata?.packId &&
+			metadata?.credits
+		) {
 			waitUntil(
 				handleCreditPackPurchase(
 					user_id,
 					metadata.packId as CreditPackId,
 					metadata.credits as number,
-					id
+					id,
 				),
 			);
 		} else {
@@ -58,29 +62,32 @@ async function handleCreditPackPurchase(
 	paymentId: string,
 ) {
 	if (!user_id) {
-		console.error('No user_id provided for credit pack purchase');
+		console.error("No user_id provided for credit pack purchase");
 		return;
 	}
 
 	try {
-		console.log(`Processing credit pack purchase: ${packId} for user ${user_id}`);
-		
+		console.log(
+			`Processing credit pack purchase: ${packId} for user ${user_id}`,
+		);
+
 		// Add credits to user's balance
 		await addCredits(user_id, credits);
-		
+
 		// Get pack info for logging
 		const pack = await getCreditPack(packId);
-		console.log(`Successfully added ${credits} credits to user ${user_id} from ${pack.name} purchase`);
-		
+		console.log(
+			`Successfully added ${credits} credits to user ${user_id} from ${pack.name} purchase`,
+		);
+
 		// You could also send a notification to the user here
 		// await whopSdk.notifications.sendNotification({
 		//   userId: user_id,
 		//   title: 'Credits Added!',
 		//   message: `You've received ${credits} credits from your ${pack.name} purchase!`
 		// });
-		
 	} catch (error) {
-		console.error('Error processing credit pack purchase:', error);
+		console.error("Error processing credit pack purchase:", error);
 		// In production, you might want to implement retry logic or alerting here
 	}
 }

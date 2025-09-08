@@ -1,18 +1,20 @@
 import { Inter } from "next/font/google";
-import 'frosted-ui/styles.css';
+import "frosted-ui/styles.css";
 import "./globals.css";
-import { ThemeProvider } from '@/lib/components/common/ThemeProvider';
+import { ThemeProvider } from "@/lib/components/common/ThemeProvider";
 import { WhopIframeSdkProvider } from "@whop/react";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en" className={inter.className}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+export default function RootLayout({
+	children,
+}: { children: React.ReactNode }) {
+	return (
+		<html lang="en" className={inter.className}>
+			<head>
+				<script
+					dangerouslySetInnerHTML={{
+						__html: `
               (function() {
                 try {
                   var theme = localStorage.getItem('theme');
@@ -27,16 +29,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 } catch (e) {}
               })();
             `,
-          }}
-        />
-      </head>
-      <body>
-        <WhopIframeSdkProvider>
-          <ThemeProvider>
-            {children}
-          </ThemeProvider>
-        </WhopIframeSdkProvider>
-      </body>
-    </html>
-  );
+					}}
+				/>
+			</head>
+			<body>
+				<WhopIframeSdkProvider>
+					<ThemeProvider>{children}</ThemeProvider>
+				</WhopIframeSdkProvider>
+			</body>
+		</html>
+	);
 }

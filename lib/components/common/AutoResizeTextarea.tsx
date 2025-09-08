@@ -1,11 +1,12 @@
-'use client';
+"use client";
 
-import React from 'react';
+import React from "react";
 
-interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  value: string;
-  onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  className?: string;
+interface AutoResizeTextareaProps
+	extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+	value: string;
+	onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+	className?: string;
 }
 
 /**
@@ -20,42 +21,39 @@ interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextA
  * @param {object} props - Any other props to pass to the textarea element.
  * @returns {JSX.Element} The rendered textarea component.
  */
-const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({ 
-  value, 
-  onChange, 
-  className, 
-  ...props 
+const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
+	value,
+	onChange,
+	className,
+	...props
 }) => {
-    // Create a ref to hold the textarea DOM element.
-    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+	// Create a ref to hold the textarea DOM element.
+	const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-    // Use useLayoutEffect to measure and adjust the textarea's height
-    // before the browser paints the screen. This prevents flickering.
-    React.useLayoutEffect(() => {
-        if (textareaRef.current) {
-            // Temporarily reset the height to 'auto' to allow the browser
-            // to calculate the natural scrollHeight of the content.
-            textareaRef.current.style.height = 'auto';
-            
-            // Set the textarea's height to its scrollHeight to perfectly fit the content.
-            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-        }
-    }, [value]); // This effect re-runs whenever the textarea's value changes.
+	// Use useLayoutEffect to measure and adjust the textarea's height
+	// before the browser paints the screen. This prevents flickering.
+	React.useLayoutEffect(() => {
+		if (textareaRef.current) {
+			// Temporarily reset the height to 'auto' to allow the browser
+			// to calculate the natural scrollHeight of the content.
+			textareaRef.current.style.height = "auto";
 
-    return (
-        <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={onChange}
-            className={className}
-            // Hide the vertical scrollbar as the height adjusts automatically.
-            style={{ overflow: 'hidden' }}
-            {...props}
-        />
-    );
+			// Set the textarea's height to its scrollHeight to perfectly fit the content.
+			textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+		}
+	}, [value]); // This effect re-runs whenever the textarea's value changes.
+
+	return (
+		<textarea
+			ref={textareaRef}
+			value={value}
+			onChange={onChange}
+			className={className}
+			// Hide the vertical scrollbar as the height adjusts automatically.
+			style={{ overflow: "hidden" }}
+			{...props}
+		/>
+	);
 };
 
 export default AutoResizeTextarea;
-
-
-

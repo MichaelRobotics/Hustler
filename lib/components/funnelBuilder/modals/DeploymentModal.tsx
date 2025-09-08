@@ -1,46 +1,53 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { Heading, Text } from 'frosted-ui';
+import { Heading, Text } from "frosted-ui";
+import type React from "react";
 
 interface DeploymentModalProps {
-  isDeploying: boolean;
-  deploymentLog: string[];
+	isDeploying: boolean;
+	deploymentLog: string[];
 }
 
-export const DeploymentModal: React.FC<DeploymentModalProps> = ({ 
-  isDeploying, 
-  deploymentLog 
+export const DeploymentModal: React.FC<DeploymentModalProps> = ({
+	isDeploying,
+	deploymentLog,
 }) => {
-  if (!isDeploying) return null;
+	if (!isDeploying) return null;
 
-  return (
-    <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
-      <div className="p-6">
-        <div className="text-center space-y-4">
-          {/* Animated Loading Icon with Play Symbol */}
-          <div className="relative w-16 h-16 mx-auto">
-            <div className="absolute inset-0 w-16 h-16 border-4 border-green-200 dark:border-green-800 rounded-full animate-pulse"></div>
-            <div className="absolute inset-2 w-12 h-12 border-4 border-transparent border-t-green-500 rounded-full animate-spin"></div>
-            <div className="absolute inset-4 w-8 h-8 bg-green-500 rounded-full animate-ping"></div>
-            {/* Play Icon in Center */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-            </div>
-          </div>
-          
-          <Heading size="4" weight="bold" className="text-gray-900 dark:text-white">
-            Going Live! 🚀
-          </Heading>
-          
-          <Text size="2" className="text-gray-600 dark:text-gray-300">
-            Setting up your funnel for customers...
-          </Text>
-        </div>
-      </div>
-    </div>
-  );
+	return (
+		<div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
+			<div className="p-6">
+				<div className="text-center space-y-4">
+					{/* Animated Loading Icon with Play Symbol */}
+					<div className="relative w-16 h-16 mx-auto">
+						<div className="absolute inset-0 w-16 h-16 border-4 border-green-200 dark:border-green-800 rounded-full animate-pulse"></div>
+						<div className="absolute inset-2 w-12 h-12 border-4 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+						<div className="absolute inset-4 w-8 h-8 bg-green-500 rounded-full animate-ping"></div>
+						{/* Play Icon in Center */}
+						<div className="absolute inset-0 flex items-center justify-center">
+							<svg
+								className="w-6 h-6 text-white animate-pulse"
+								fill="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path d="M8 5v14l11-7z" />
+							</svg>
+						</div>
+					</div>
+
+					<Heading
+						size="4"
+						weight="bold"
+						className="text-gray-900 dark:text-white"
+					>
+						Going Live! 🚀
+					</Heading>
+
+					<Text size="2" className="text-gray-600 dark:text-gray-300">
+						Setting up your funnel for customers...
+					</Text>
+				</div>
+			</div>
+		</div>
+	);
 };
-

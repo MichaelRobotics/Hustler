@@ -1,178 +1,203 @@
-'use client';
+"use client";
 
-import React from 'react';
+import React from "react";
 
 interface Funnel {
-  id: string;
-  name: string;
-  flow?: any;
-  isDeployed?: boolean;
-  wasEverDeployed?: boolean;
-  resources?: Resource[];
+	id: string;
+	name: string;
+	flow?: any;
+	isDeployed?: boolean;
+	wasEverDeployed?: boolean;
+	resources?: Resource[];
 }
 
 interface Resource {
-  id: string;
-  type: 'AFFILIATE' | 'MY_PRODUCTS' | 'CONTENT' | 'TOOL';
-  name: string;
-  link: string;
-  promoCode?: string;
-  category?: string;
+	id: string;
+	type: "AFFILIATE" | "MY_PRODUCTS" | "CONTENT" | "TOOL";
+	name: string;
+	link: string;
+	promoCode?: string;
+	category?: string;
 }
 
 interface DeploymentValidation {
-  isValid: boolean;
-  message: string;
-  missingProducts: string[];
-  extraProducts: string[];
+	isValid: boolean;
+	message: string;
+	missingProducts: string[];
+	extraProducts: string[];
 }
 
 export const useFunnelDeployment = (
-  currentFunnel: Funnel,
-  onUpdate: (funnel: Funnel) => void,
-  enableCalculationsForGoLive?: () => void
+	currentFunnel: Funnel,
+	onUpdate: (funnel: Funnel) => void,
+	enableCalculationsForGoLive?: () => void,
 ) => {
-  const [isDeploying, setIsDeploying] = React.useState(false);
-  const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
-  const [deploymentValidation, setDeploymentValidation] = React.useState<DeploymentValidation | null>(null);
-  const deployIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+	const [isDeploying, setIsDeploying] = React.useState(false);
+	const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
+	const [deploymentValidation, setDeploymentValidation] =
+		React.useState<DeploymentValidation | null>(null);
+	const deployIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // Validate that assigned products match generated funnel products
-  const validateDeployment = (): { isValid: boolean; message: string; missingProducts: string[]; extraProducts: string[] } => {
-    if (!currentFunnel.flow || !currentFunnel.resources) {
-      return { 
-        isValid: false, 
-        message: "Funnel must be generated and have assigned products to deploy.", 
-        missingProducts: [], 
-        extraProducts: [] 
-      };
-    }
+	// Validate that assigned products match generated funnel products
+	const validateDeployment = (): {
+		isValid: boolean;
+		message: string;
+		missingProducts: string[];
+		extraProducts: string[];
+	} => {
+		if (!currentFunnel.flow || !currentFunnel.resources) {
+			return {
+				isValid: false,
+				message:
+					"Funnel must be generated and have assigned products to deploy.",
+				missingProducts: [],
+				extraProducts: [],
+			};
+		}
 
-    // Extract product names from the generated funnel flow (what the AI actually offers)
-    const generatedProductNames = new Set<string>();
-    
-    // Look for offer blocks in the flow using resourceName field
-    Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
-      // Check if this block has a resourceName field (offer block)
-      if (block.resourceName && typeof block.resourceName === 'string') {
-        generatedProductNames.add(block.resourceName);
-      }
-    });
-    
-    // Check which generated products are missing from "Assigned Products"
-    const missingProducts: string[] = [];
-    const extraProducts: string[] = [];
-    
-    // Find missing products (generated but not assigned)
-    generatedProductNames.forEach(productName => {
-      const isAssigned = currentFunnel.resources?.some(resource => 
-        resource.name.toLowerCase() === productName.toLowerCase()
-      );
-      if (!isAssigned) {
-        missingProducts.push(productName);
-      }
-    });
-    
-    // Find extra products (assigned but not generated)
-    currentFunnel.resources?.forEach(resource => {
-      const isGenerated = Array.from(generatedProductNames).some(generatedName => 
-        generatedName.toLowerCase() === resource.name.toLowerCase()
-      );
-      if (!isGenerated) {
-        extraProducts.push(resource.id);
-      }
-    });
+		// Extract product names from the generated funnel flow (what the AI actually offers)
+		const generatedProductNames = new Set<string>();
 
-    // Simple validation - just check if there's a mismatch
-    if (missingProducts.length > 0 || extraProducts.length > 0) {
-      return { 
-        isValid: false, 
-        message: "Product mismatch detected", 
-        missingProducts, 
-        extraProducts 
-      };
-    }
+		// Look for offer blocks in the flow using resourceName field
+		// Only check blocks in the OFFER stage, not VALUE_DELIVERY (free resources)
+		Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
+			// Check if this block is in the OFFER stage and has a resourceName field
+			const isOfferBlock = currentFunnel.flow.stages.some(
+				(stage: any) =>
+					stage.name === "OFFER" && stage.blockIds.includes(block.id),
+			);
+			if (
+				isOfferBlock &&
+				block.resourceName &&
+				typeof block.resourceName === "string"
+			) {
+				generatedProductNames.add(block.resourceName);
+			}
+		});
 
-    return { isValid: true, message: "", missingProducts: [], extraProducts: [] };
-  };
+		// Check which generated products are missing from "Assigned Products"
+		const missingProducts: string[] = [];
+		const extraProducts: string[] = [];
 
-  const handleDeploy = () => {
-    // Enable calculations for Go Live action
-    if (enableCalculationsForGoLive) {
-      enableCalculationsForGoLive();
-    }
+		// Find missing products (generated but not assigned)
+		generatedProductNames.forEach((productName) => {
+			const isAssigned = currentFunnel.resources?.some(
+				(resource) => resource.name.toLowerCase() === productName.toLowerCase(),
+			);
+			if (!isAssigned) {
+				missingProducts.push(productName);
+			}
+		});
 
-    // Validate deployment before proceeding
-    const validation = validateDeployment();
-    if (!validation.isValid) {
-      setDeploymentValidation(validation);
-      return;
-    }
+		// Find extra products (assigned but not generated)
+		currentFunnel.resources?.forEach((resource) => {
+			const isGenerated = Array.from(generatedProductNames).some(
+				(generatedName) =>
+					generatedName.toLowerCase() === resource.name.toLowerCase(),
+			);
+			if (!isGenerated) {
+				extraProducts.push(resource.id);
+			}
+		});
 
-    setIsDeploying(true);
-    setDeploymentLog(['Deployment initiated...']);
+		// Simple validation - just check if there's a mismatch
+		if (missingProducts.length > 0 || extraProducts.length > 0) {
+			return {
+				isValid: false,
+				message: "Product mismatch detected",
+				missingProducts,
+				extraProducts,
+			};
+		}
 
-    const steps = [
-      'Connecting to server...',
-      'Authenticating...',
-      'Uploading funnel data...',
-      'Validating funnel structure...',
-      'Provisioning resources...',
-      'Finalizing deployment...',
-      '✅ Deployment successful!'
-    ];
+		return {
+			isValid: true,
+			message: "",
+			missingProducts: [],
+			extraProducts: [],
+		};
+	};
 
-    let stepIndex = 0;
-    deployIntervalRef.current = setInterval(() => {
-      if (stepIndex < steps.length) {
-        setDeploymentLog(prev => [...prev, steps[stepIndex]]);
-        stepIndex++;
-      } else {
-        if (deployIntervalRef.current) {
-          clearInterval(deployIntervalRef.current);
-        }
-        setTimeout(() => {
-          setIsDeploying(false);
-          // Mark funnel as deployed and set wasEverDeployed
-          const updatedFunnel = { 
-            ...currentFunnel, 
-            isDeployed: true,
-            wasEverDeployed: true 
-          };
-          
-          // Debug logging
-          console.log('Deployment completed, updating funnel:', updatedFunnel);
-          
-          // Update parent component with deployed funnel
-          onUpdate(updatedFunnel);
-          
-          // Add deployment success to log
-          setDeploymentLog(prev => [...prev, '🎉 Deployment completed! Navigating to analytics...']);
-          
-          // Small delay to ensure state is updated before navigation
-          setTimeout(() => {
-            // The parent component will handle navigation to analytics
-          }, 500);
-        }, 2000); // Keep deployment message for 2s
-      }
-    }, 700);
-  };
+	const handleDeploy = () => {
+		// Enable calculations for Go Live action
+		if (enableCalculationsForGoLive) {
+			enableCalculationsForGoLive();
+		}
 
-  React.useEffect(() => {
-    // Cleanup interval on component unmount
-    return () => {
-      if (deployIntervalRef.current) {
-        clearInterval(deployIntervalRef.current);
-      }
-    };
-  }, []);
+		// Validate deployment before proceeding
+		const validation = validateDeployment();
+		if (!validation.isValid) {
+			setDeploymentValidation(validation);
+			return;
+		}
 
-  return {
-    isDeploying,
-    deploymentLog,
-    deploymentValidation,
-    setDeploymentValidation,
-    handleDeploy,
-    validateDeployment
-  };
+		setIsDeploying(true);
+		setDeploymentLog(["Deployment initiated..."]);
+
+		const steps = [
+			"Connecting to server...",
+			"Authenticating...",
+			"Uploading funnel data...",
+			"Validating funnel structure...",
+			"Provisioning resources...",
+			"Finalizing deployment...",
+			"✅ Deployment successful!",
+		];
+
+		let stepIndex = 0;
+		deployIntervalRef.current = setInterval(() => {
+			if (stepIndex < steps.length) {
+				setDeploymentLog((prev) => [...prev, steps[stepIndex]]);
+				stepIndex++;
+			} else {
+				if (deployIntervalRef.current) {
+					clearInterval(deployIntervalRef.current);
+				}
+				setTimeout(() => {
+					setIsDeploying(false);
+					// Mark funnel as deployed and set wasEverDeployed
+					const updatedFunnel = {
+						...currentFunnel,
+						isDeployed: true,
+						wasEverDeployed: true,
+					};
+
+					// Debug logging
+					console.log("Deployment completed, updating funnel:", updatedFunnel);
+
+					// Update parent component with deployed funnel
+					onUpdate(updatedFunnel);
+
+					// Add deployment success to log
+					setDeploymentLog((prev) => [
+						...prev,
+						"🎉 Deployment completed! Navigating to analytics...",
+					]);
+
+					// Small delay to ensure state is updated before navigation
+					setTimeout(() => {
+						// The parent component will handle navigation to analytics
+					}, 500);
+				}, 2000); // Keep deployment message for 2s
+			}
+		}, 700);
+	};
+
+	React.useEffect(() => {
+		// Cleanup interval on component unmount
+		return () => {
+			if (deployIntervalRef.current) {
+				clearInterval(deployIntervalRef.current);
+			}
+		};
+	}, []);
+
+	return {
+		isDeploying,
+		deploymentLog,
+		deploymentValidation,
+		setDeploymentValidation,
+		handleDeploy,
+		validateDeployment,
+	};
 };
