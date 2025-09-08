@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowLeft, Send, User } from 'lucide-react';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { LiveChatConversation, LiveChatMessage } from '../../types/liveChat';
+import TypingIndicator from '../common/TypingIndicator';
 
 interface LiveChatUserInterfaceProps {
   conversation: LiveChatConversation;
@@ -20,7 +21,9 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
 }) => {
   const [newMessage, setNewMessage] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-scroll to bottom when new messages arrive
   const messageCount = conversation.messages.length;
@@ -44,12 +47,29 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
   const handleSendMessage = useCallback(async () => {
     if (newMessage.trim() && !isSendingMessage) {
       setIsSendingMessage(true);
+      
+      // Clear any existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Show typing indicator FIRST
+      setIsTyping(true);
+      
       try {
         await onSendMessage(newMessage.trim());
         setNewMessage('');
+        
+        // Hide typing indicator after a delay (simulating response time)
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+        }, 2000 + Math.random() * 2000); // Random delay between 2-4 seconds
+        
         setTimeout(scrollToBottom, 50);
       } catch (error) {
         console.error('Failed to send message:', error);
+        // Hide typing indicator on error
+        setIsTyping(false);
       } finally {
         setIsSendingMessage(false);
       }
@@ -62,6 +82,15 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
       handleSendMessage();
     }
   }, [handleSendMessage]);
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleTextareaInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
     const target = e.target as HTMLTextAreaElement;
@@ -170,7 +199,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
       <div className="flex-1 flex flex-col min-h-0">
         {/* Messages */}
         <div 
-          className="flex-1 overflow-y-auto p-4 pb-20 lg:pb-4 touch-pan-y scrollbar-hide"
+          className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide"
           style={{ 
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
@@ -195,13 +224,23 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
           ) : (
             <>
               {conversation.messages.map(renderMessage)}
+              
+              {/* Typing Indicator */}
+              {isTyping && (
+                <div className="flex justify-start mb-4">
+                  <div className="max-w-[80%] px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm">
+                    <TypingIndicator text={`${conversation.user.name} is typing...`} />
+                  </div>
+                </div>
+              )}
+              
               <div ref={chatEndRef} />
             </>
           )}
         </div>
 
-        {/* Input Area */}
-        <div className="lg:flex-shrink-0 lg:relative fixed bottom-0 left-0 right-0 lg:p-4 px-4 py-2 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom z-50">
+        {/* Input Area - Now below the overflow container */}
+        <div className="flex-shrink-0 px-4 py-2 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <textarea

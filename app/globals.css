@@ -12,3 +12,101 @@ body {
 	color: var(--foreground);
 	font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Chat Performance Optimizations */
+.chat-optimized {
+	-webkit-tap-highlight-color: transparent;
+	transform: translateZ(0);
+	-webkit-transform: translateZ(0);
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	touch-action: manipulation;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+.chat-input-optimized {
+	transform: translateZ(0);
+	-webkit-transform: translateZ(0);
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	-webkit-text-size-adjust: 100%;
+	touch-action: manipulation;
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	-ms-user-select: text;
+	user-select: text;
+}
+
+.chat-input-container {
+	position: relative;
+	padding: 1rem;
+	background: var(--surface);
+	border-top: 1px solid var(--border);
+	flex-shrink: 0;
+}
+
+.chat-input-container-lg {
+	position: relative;
+	padding: 1rem;
+}
+
+.chat-messages-container {
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	scroll-behavior: auto;
+	will-change: scroll-position;
+	transform: translateZ(0);
+	backface-visibility: hidden;
+	perspective: 1000px;
+	-webkit-transform: translateZ(0);
+	-webkit-backface-visibility: hidden;
+	-ms-overflow-style: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+/* Typing Indicator Animation */
+.typing-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background-color: #9ca3af;
+	animation: typing 1.4s infinite ease-in-out;
+	transform: translateZ(0);
+	-webkit-transform: translateZ(0);
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+}
+
+.typing-dot-1 {
+	animation-delay: -0.32s;
+}
+
+.typing-dot-2 {
+	animation-delay: -0.16s;
+}
+
+.typing-dot-3 {
+	animation-delay: 0s;
+}
+
+@keyframes typing {
+	0%, 80%, 100% {
+		transform: scale(0.8);
+		opacity: 0.5;
+	}
+	40% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+/* Dark mode typing dots */
+.dark .typing-dot {
+	background-color: #6b7280;
+}

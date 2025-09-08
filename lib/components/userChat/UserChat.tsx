@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Text } from 'frosted-ui';
 import { Send, ArrowLeft, Sun, Moon, User } from 'lucide-react';
 import { useFunnelPreviewChat } from '../../hooks/useFunnelPreviewChat';
 import { FunnelFlow } from '../../types/funnel';
 import { useTheme } from '../common/ThemeProvider';
+import TypingIndicator from '../common/TypingIndicator';
 
 interface UserChatProps {
   funnelFlow: FunnelFlow;
@@ -33,8 +34,10 @@ const UserChat: React.FC<UserChatProps> = ({
   hideAvatar = false
 }) => {
   const [message, setMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { appearance, toggleTheme } = useTheme();
 
   const {
@@ -63,18 +66,13 @@ const UserChat: React.FC<UserChatProps> = ({
     }
   };
 
-  const handleTextareaInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+  const handleTextareaInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
     const target = e.target as HTMLTextAreaElement;
-    target.style.height = 'auto';
-    target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-  };
-
-  const handleOptionClickLocal = (option: any, index: number) => {
-    handleOptionClick(option, index);
-    onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
-    // Immediate scroll for better performance
-    setTimeout(scrollToBottom, 50);
-  };
+    requestAnimationFrame(() => {
+      target.style.height = 'auto';
+      target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+    });
+  }, []);
 
   // Optimized scroll to bottom - no smooth animation for better performance
   const scrollToBottom = useCallback(() => {
@@ -86,6 +84,29 @@ const UserChat: React.FC<UserChatProps> = ({
       });
     }
   }, []);
+
+  const handleOptionClickLocal = useCallback((option: any, index: number) => {
+    // Clear any existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Show typing indicator FIRST
+    setIsTyping(true);
+    
+    // Send user message immediately
+    onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
+    
+    // Hide typing indicator and show bot response after delay
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      // Process the option AFTER typing indicator ends
+      handleOptionClick(option, index);
+    }, 1500 + Math.random() * 1000); // Random delay between 1.5-2.5 seconds
+    
+    // Immediate scroll for better performance
+    setTimeout(scrollToBottom, 50);
+  }, [handleOptionClick, onMessageSent, conversationId, scrollToBottom]);
 
   // Optimized keyboard handling - reduced timeout for better performance
   useEffect(() => {
@@ -111,8 +132,17 @@ const UserChat: React.FC<UserChatProps> = ({
     }
   }, []);
 
-  // Direct rendering - no memoization for maximum performance
-  const messageList = history.map((msg, index) => (
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Memoized message component for better performance
+  const MessageComponent = React.memo(({ msg, index }: { msg: any; index: number }) => (
     <div 
       key={`${msg.type}-${index}`} 
       className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} mb-4 px-1`}
@@ -129,35 +159,42 @@ const UserChat: React.FC<UserChatProps> = ({
     </div>
   ));
 
-  const optionsList = options.map((opt, i) => (
+  // Memoized option component for better performance
+  const OptionComponent = React.memo(({ option, index, onClick }: { option: any; index: number; onClick: (option: any, index: number) => void }) => (
     <button
-      key={`option-${i}`}
-      onClick={() => handleOptionClickLocal(opt, i)}
-      className="inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-blue-500 text-white text-left touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-      style={{ 
-        WebkitTapHighlightColor: 'transparent',
-        // Mobile performance optimizations
-        transform: 'translateZ(0)', // Hardware acceleration
-        WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
-        backfaceVisibility: 'hidden', // Prevent flickering
-        WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
-        // Optimize touch interactions
-        touchAction: 'manipulation',
-        // Prevent text selection
-        WebkitUserSelect: 'none',
-        MozUserSelect: 'none',
-        msUserSelect: 'none',
-        userSelect: 'none'
-      }}
+      key={`option-${index}`}
+      onClick={() => onClick(option, index)}
+      className="chat-optimized inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-blue-500 text-white text-left touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
     >
       <span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
-        {i + 1}
+        {index + 1}
       </span>
       <Text size="2" className="text-white leading-relaxed">
-        {opt.text}
+        {option.text}
       </Text>
     </button>
   ));
+
+  // Memoized message list
+  const messageList = useMemo(() => 
+    history.map((msg, index) => (
+      <MessageComponent key={`${msg.type}-${index}`} msg={msg} index={index} />
+    )), 
+    [history]
+  );
+
+  // Memoized options list
+  const optionsList = useMemo(() => 
+    options.map((opt, i) => (
+      <OptionComponent
+        key={`option-${i}`}
+        option={opt}
+        index={i}
+        onClick={handleOptionClickLocal}
+      />
+    )), 
+    [options, handleOptionClickLocal]
+  );
 
   return (
     <div 
@@ -229,26 +266,7 @@ const UserChat: React.FC<UserChatProps> = ({
       <div className="flex-1 flex flex-col min-h-0">
         {/* Messages */}
         <div 
-          className="flex-1 overflow-y-auto p-4 pb-20 lg:pb-4 touch-pan-y scrollbar-hide"
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            scrollBehavior: 'auto',
-            willChange: 'scroll-position',
-            // Mobile performance optimizations
-            transform: 'translateZ(0)', // Force hardware acceleration
-            backfaceVisibility: 'hidden', // Prevent flickering
-            perspective: '1000px', // Enable 3D acceleration
-            WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
-            WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
-            // Optimize scrolling performance
-            msOverflowStyle: 'none', // IE/Edge
-            // Prevent text selection during scroll
-            WebkitUserSelect: 'none',
-            MozUserSelect: 'none',
-            msUserSelect: 'none',
-            userSelect: 'none'
-          }}
+          className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide chat-messages-container"
         >
           {messageList}
           
@@ -261,12 +279,21 @@ const UserChat: React.FC<UserChatProps> = ({
             </div>
           )}
           
+          {/* Typing Indicator */}
+          {isTyping && (
+            <div className="flex justify-start mb-4">
+              <div className="max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm">
+                <TypingIndicator text="Hustler is typing..." />
+              </div>
+            </div>
+          )}
+          
           <div ref={chatEndRef} />
         </div>
 
-        {/* Input Area */}
+        {/* Input Area - Now below the overflow container */}
         {options.length > 0 && currentBlockId && (
-          <div className="lg:flex-shrink-0 lg:relative fixed bottom-0 left-0 right-0 lg:p-4 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom z-50">
+          <div className="flex-shrink-0 chat-input-container safe-area-bottom">
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <textarea
@@ -277,25 +304,11 @@ const UserChat: React.FC<UserChatProps> = ({
                   onInput={handleTextareaInput}
                   placeholder="Type a message..."
                   rows={1}
-                  className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 rounded-xl text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation shadow-sm"
+                  className="chat-input-optimized w-full px-4 py-3 bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 rounded-xl text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation shadow-sm"
                   style={{
                     height: 'auto',
                     minHeight: '48px',
-                    fontSize: '16px', // Prevents zoom on iOS
-                    // Mobile performance optimizations
-                    transform: 'translateZ(0)', // Hardware acceleration
-                    WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
-                    backfaceVisibility: 'hidden', // Prevent flickering
-                    WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
-                    // Prevent zoom on focus
-                    WebkitTextSizeAdjust: '100%',
-                    // Optimize touch interactions
-                    touchAction: 'manipulation',
-                    // Prevent text selection issues
-                    WebkitUserSelect: 'text',
-                    MozUserSelect: 'text',
-                    msUserSelect: 'text',
-                    userSelect: 'text'
+                    fontSize: '16px' // Prevents zoom on iOS
                   }}
                 />
               </div>
@@ -303,22 +316,7 @@ const UserChat: React.FC<UserChatProps> = ({
               <button
                 onClick={handleSubmit}
                 disabled={!message.trim()}
-                className="p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-                style={{ 
-                  WebkitTapHighlightColor: 'transparent',
-                  // Mobile performance optimizations
-                  transform: 'translateZ(0)', // Hardware acceleration
-                  WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
-                  backfaceVisibility: 'hidden', // Prevent flickering
-                  WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
-                  // Optimize touch interactions
-                  touchAction: 'manipulation',
-                  // Prevent text selection
-                  WebkitUserSelect: 'none',
-                  MozUserSelect: 'none',
-                  msUserSelect: 'none',
-                  userSelect: 'none'
-                }}
+                className="chat-optimized p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
               >
                 <Send size={18} className="text-white" />
               </button>
@@ -326,27 +324,12 @@ const UserChat: React.FC<UserChatProps> = ({
           </div>
         )}
 
-        {/* Start Button */}
+        {/* Start Button - Now below the overflow container */}
         {(options.length === 0 || !currentBlockId) && (
-          <div className="lg:flex-shrink-0 lg:relative fixed bottom-0 left-0 right-0 lg:p-4 p-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom z-50">
+          <div className="flex-shrink-0 chat-input-container safe-area-bottom">
             <button
               onClick={startConversation}
-              className="w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-              style={{ 
-                WebkitTapHighlightColor: 'transparent',
-                // Mobile performance optimizations
-                transform: 'translateZ(0)', // Hardware acceleration
-                WebkitTransform: 'translateZ(0)', // iOS hardware acceleration
-                backfaceVisibility: 'hidden', // Prevent flickering
-                WebkitBackfaceVisibility: 'hidden', // iOS flicker prevention
-                // Optimize touch interactions
-                touchAction: 'manipulation',
-                // Prevent text selection
-                WebkitUserSelect: 'none',
-                MozUserSelect: 'none',
-                msUserSelect: 'none',
-                userSelect: 'none'
-              }}
+              className="chat-optimized w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
             >
               Start Conversation
             </button>
