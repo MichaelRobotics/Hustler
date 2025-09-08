@@ -17,6 +17,9 @@ export const useResourcePage = (
     resourceName: ''
   });
 
+  // Removing state for instant feedback
+  const [removingResourceId, setRemovingResourceId] = useState<string | null>(null);
+
   // Offline confirmation state
   const [offlineConfirmation, setOfflineConfirmation] = useState(false);
 
@@ -33,16 +36,23 @@ export const useResourcePage = (
 
   const confirmDelete = useCallback(async () => {
     if (deleteConfirmation.resourceId) {
+      // Close dialog instantly
+      setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      
+      // Set removing state
+      setRemovingResourceId(deleteConfirmation.resourceId);
+      
       try {
         await removeResourceFromFunnel(funnel.id, deleteConfirmation.resourceId);
-        setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
       } catch (err) {
         console.error('Error removing resource from funnel:', err);
         // Fallback to local state update if API fails
         const updatedResources = currentResources.filter(r => r.id !== deleteConfirmation.resourceId);
         const updatedFunnel = { ...funnel, resources: updatedResources };
         onUpdateFunnel(updatedFunnel);
-        setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      } finally {
+        // Clear removing state
+        setRemovingResourceId(null);
       }
     }
   }, [deleteConfirmation.resourceId, funnel.id, removeResourceFromFunnel, currentResources, funnel, onUpdateFunnel]);
@@ -68,6 +78,7 @@ export const useResourcePage = (
   return {
     // State
     deleteConfirmation,
+    removingResourceId,
     offlineConfirmation,
     currentResources,
     

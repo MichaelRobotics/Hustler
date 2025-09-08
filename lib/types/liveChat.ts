@@ -13,7 +13,7 @@ export interface LiveChatUser {
 export interface LiveChatMessage {
   id: string;
   conversationId: string;
-  type: 'user' | 'bot' | 'system';
+  type: 'user' | 'bot' | 'system' | 'agent'; // Added 'agent' type for agent messages
   text: string;
   timestamp: Date;
   isRead: boolean;
@@ -54,7 +54,7 @@ export interface LiveChatFilters {
 export interface CreateMessageRequest {
   conversationId: string;
   text: string;
-  type: 'bot' | 'system';
+  type: 'bot' | 'system' | 'agent';
 }
 
 export interface CreateMessageResponse {

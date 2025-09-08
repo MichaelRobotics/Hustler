@@ -1,5 +1,5 @@
-import React from 'react';
-import { Check, Plus, PenLine, Trash2, Sparkles, Target } from 'lucide-react';
+import React, { useState } from 'react';
+import { Check, Plus, PenLine, Trash2, Sparkles, Target, X } from 'lucide-react';
 import { Text, Button } from 'frosted-ui';
 import { Resource, Funnel } from '../../types/resource';
 
@@ -12,6 +12,8 @@ interface ResourceCardProps {
   onAddToFunnel?: (resource: Resource) => void;
   onEdit: (resource: Resource) => void;
   onDelete: (resourceId: string, resourceName: string) => void;
+  onUpdate?: (resourceId: string, updatedResource: Partial<Resource>) => Promise<void>;
+  isRemoving?: boolean;
 }
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({
@@ -22,8 +24,14 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
   isResourceAssignedToAnyFunnel,
   onAddToFunnel,
   onEdit,
-  onDelete
+  onDelete,
+  onUpdate,
+  isRemoving = false
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [editedResource, setEditedResource] = useState<Partial<Resource>>(resource);
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'AFFILIATE': return <Sparkles className="w-5 h-5 text-violet-400" strokeWidth={2.5} />;
@@ -39,6 +47,141 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
       default: return 'Product';
     }
   };
+
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    setEditedResource(resource);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editedResource.name?.trim() || !editedResource.link?.trim()) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (onUpdate) {
+        await onUpdate(resource.id, editedResource);
+      }
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update resource:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedResource(resource);
+  };
+
+  const handleAssignToFunnel = () => {
+    if (!onAddToFunnel) return;
+    
+    setIsAssigning(true);
+    try {
+      onAddToFunnel(resource);
+      // Reset assigning state after a short delay
+      setTimeout(() => setIsAssigning(false), 1000);
+    } catch (error) {
+      console.error('Failed to assign resource to funnel:', error);
+      setIsAssigning(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="group bg-gradient-to-br from-violet-50/80 via-violet-100/60 to-violet-200/40 dark:from-violet-900/80 dark:via-violet-800/60 dark:to-indigo-900/30 p-4 rounded-xl border-2 border-violet-500/60 dark:border-violet-400/70 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-violet-400 rounded-full animate-pulse" />
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
+              {getTypeLabel(editedResource.type || 'AFFILIATE')}
+            </span>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              editedResource.category === 'PAID' 
+                ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' 
+                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+            }`}>
+              {editedResource.category === 'PAID' ? 'Paid' : 'Free Value'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleSaveEdit}
+              disabled={isSaving || !editedResource.name?.trim() || !editedResource.link?.trim()}
+              className="px-3 py-1 text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              disabled={isSaving}
+              className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <X size={14} strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="space-y-3">
+          {/* Type and Category Selectors */}
+          <div className="flex gap-2">
+            <select
+              value={editedResource.type || 'AFFILIATE'}
+              onChange={(e) => setEditedResource({...editedResource, type: e.target.value as 'AFFILIATE' | 'MY_PRODUCTS'})}
+              disabled={isSaving}
+              className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="AFFILIATE">Affiliate</option>
+              <option value="MY_PRODUCTS">My Product</option>
+            </select>
+            <select
+              value={editedResource.category || 'FREE_VALUE'}
+              onChange={(e) => setEditedResource({...editedResource, category: e.target.value as 'PAID' | 'FREE_VALUE'})}
+              disabled={isSaving}
+              className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="FREE_VALUE">Free Value</option>
+              <option value="PAID">Paid</option>
+            </select>
+          </div>
+
+          {/* Name Field */}
+          <input
+            type="text"
+            value={editedResource.name || ''}
+            onChange={(e) => setEditedResource({...editedResource, name: e.target.value})}
+            placeholder="Product name..."
+            disabled={isSaving}
+            className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            autoFocus
+          />
+
+          {/* URL Field */}
+          <input
+            type="url"
+            value={editedResource.link || ''}
+            onChange={(e) => setEditedResource({...editedResource, link: e.target.value})}
+            placeholder="Product URL..."
+            disabled={isSaving}
+            className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+
+          {/* Promo Code Field */}
+          <input
+            type="text"
+            value={editedResource.promoCode || ''}
+            onChange={(e) => setEditedResource({...editedResource, promoCode: e.target.value})}
+            placeholder="Promo code (optional)..."
+            disabled={isSaving}
+            className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="group bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-800/80 dark:via-gray-700/60 dark:to-indigo-900/30 p-4 rounded-xl border border-border/50 dark:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
@@ -57,49 +200,68 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-1">
-          {context === 'funnel' && (
-            isResourceInFunnel(resource.id) ? (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-                <Check size={12} strokeWidth={2.5} />
-                Assigned
-              </div>
-            ) : (
-              <Button
-                size="1"
-                color="violet"
-                onClick={() => onAddToFunnel?.(resource)}
-                className="px-2 py-1 text-xs"
-              >
-                <Plus size={12} strokeWidth={2.5} className="mr-1" />
-                Assign
-              </Button>
-            )
-          )}
-          
-          {context === 'global' && !isResourceAssignedToAnyFunnel(resource.id) && (
-            <Button
-              size="1"
-              color="violet"
-              onClick={() => onEdit(resource)}
-              className="px-2 py-1 text-xs"
-            >
-              <PenLine size={12} strokeWidth={2.5} className="mr-1" />
-              Edit
-            </Button>
-          )}
-          
-          {/* Delete Button - Only show when resource is not assigned to any funnel */}
-          {!isResourceAssignedToAnyFunnel(resource.id) && (
-            <Button
-              size="1"
-              variant="ghost"
-              color="red"
-              onClick={() => onDelete(resource.id, resource.name)}
-              className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
-              aria-label="Delete product"
-            >
-              <Trash2 size={14} strokeWidth={2.5} />
-            </Button>
+          {isRemoving ? (
+            <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
+              <div className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse" />
+              <span className="hidden sm:inline font-semibold">Removing</span>
+              <span className="sm:hidden">●</span>
+            </span>
+          ) : (
+            <>
+              {context === 'funnel' && (
+                isResourceInFunnel(resource.id) ? (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                    <Check size={12} strokeWidth={2.5} />
+                    Assigned
+                  </div>
+                ) : (
+                  <Button
+                    size="1"
+                    color="violet"
+                    onClick={handleAssignToFunnel}
+                    disabled={isAssigning}
+                    className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus size={12} strokeWidth={2.5} className="mr-1" />
+                    {isAssigning ? 'Assigning...' : 'Assign'}
+                  </Button>
+                )
+              )}
+              
+              {context === 'global' && !isResourceAssignedToAnyFunnel(resource.id) && (
+                isSaving ? (
+                  <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/60 dark:to-blue-800/60 text-blue-800 dark:text-blue-200 border-2 border-blue-300 dark:border-blue-600 shadow-sm">
+                    <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full mr-2 animate-pulse" />
+                    <span className="hidden sm:inline font-semibold">Saving</span>
+                    <span className="sm:hidden">●</span>
+                  </span>
+                ) : (
+                  <Button
+                    size="1"
+                    color="violet"
+                    onClick={handleStartEdit}
+                    className="px-2 py-1 text-xs"
+                  >
+                    <PenLine size={12} strokeWidth={2.5} className="mr-1" />
+                    Edit
+                  </Button>
+                )
+              )}
+              
+              {/* Delete Button - Only show when resource is not assigned to any funnel */}
+              {!isResourceAssignedToAnyFunnel(resource.id) && (
+                <Button
+                  size="1"
+                  variant="ghost"
+                  color="red"
+                  onClick={() => onDelete(resource.id, resource.name)}
+                  className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                  aria-label="Delete product"
+                >
+                  <Trash2 size={14} strokeWidth={2.5} />
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>

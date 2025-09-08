@@ -54,6 +54,7 @@ export const useFunnelLayout = (
   const [itemCanvasWidth, setItemCanvasWidth] = React.useState(0);
   const [totalCanvasHeight, setTotalCanvasHeight] = React.useState(0);
   const [layoutPhase, setLayoutPhase] = React.useState<'measure' | 'final'>('measure');
+  const [layoutCompleted, setLayoutCompleted] = React.useState(false);
 
   const ITEM_WIDTH = 280;
   const STAGE_Y_GAP = 120;
@@ -61,15 +62,27 @@ export const useFunnelLayout = (
 
   // Reset layout when the funnel flow changes.
   React.useEffect(() => {
+    // Only reset if layout is not completed
+    if (layoutCompleted) {
+      return; // Layout is completed, no more resets
+    }
+    
     blockRefs.current = {};
     setLayoutPhase('measure');
-  }, [funnelFlow]);
+    setLayoutCompleted(false);
+  }, [funnelFlow, layoutCompleted]);
 
   // Reset layout when editing state changes (blocks change dimensions)
   React.useEffect(() => {
+    // Only allow recalculations if layout is not completed
+    if (layoutCompleted) {
+      return; // Layout is completed, no more recalculations
+    }
+
     if (editingBlockId) {
       // When editing starts, we need to recalculate layout
       setLayoutPhase('measure');
+      setLayoutCompleted(false);
     } else {
       // When editing ends, trigger final layout calculation
       if (Object.keys(positions).length > 0) {
@@ -80,7 +93,7 @@ export const useFunnelLayout = (
         return () => clearTimeout(timer);
       }
     }
-  }, [editingBlockId, positions]);
+  }, [editingBlockId, positions, layoutCompleted]);
 
   // Trigger final layout calculation after blocks are rendered and measured
   React.useEffect(() => {
@@ -105,6 +118,11 @@ export const useFunnelLayout = (
   React.useLayoutEffect(() => {
     if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks || Object.keys(funnelFlow.blocks).length === 0) {
       return;
+    }
+
+    // Prevent any recalculations after layout is completed
+    if (layoutCompleted) {
+      return; // Layout is already completed, no more calculations
     }
 
     let maxStageWidth = 0;
@@ -199,8 +217,11 @@ export const useFunnelLayout = (
         });
       });
       setLines(finalLines);
+      
+      // Mark layout as completed after final phase calculations are done
+      setLayoutCompleted(true);
     }
-  }, [funnelFlow, layoutPhase, editingBlockId]);
+  }, [funnelFlow, layoutPhase, editingBlockId, layoutCompleted]);
 
   return {
     positions,

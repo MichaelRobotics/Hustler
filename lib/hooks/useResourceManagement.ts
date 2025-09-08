@@ -65,7 +65,7 @@ export function useResourceManagement() {
     return 'resourceLibrary';
   };
 
-  const handleAddToFunnel = async (resource: Resource, selectedFunnel: Funnel, funnels: Funnel[], setFunnels: (funnels: Funnel[]) => void, setSelectedFunnel: (funnel: Funnel | null) => void) => {
+  const handleAddToFunnel = async (resource: Resource, selectedFunnel: Funnel, funnels: Funnel[], setFunnels: (funnels: Funnel[]) => void, setSelectedFunnel: (funnel: Funnel | null) => void): Promise<void> => {
     if (selectedFunnel) {
       try {
         const response = await deduplicatedFetch(`/api/funnels/${selectedFunnel.id}/resources`, {
@@ -93,6 +93,7 @@ export function useResourceManagement() {
         };
         setSelectedFunnel(updatedFunnel);
         setFunnels(funnels.map(f => f.id === updatedFunnel.id ? updatedFunnel : f));
+        throw err; // Re-throw to let the component handle the error
       }
     }
   };

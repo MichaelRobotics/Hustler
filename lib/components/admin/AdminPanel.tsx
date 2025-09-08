@@ -47,6 +47,12 @@ export default function AdminPanel() {
   
   // State for tracking navigation source for preview
   const [previewSource, setPreviewSource] = React.useState<'resources' | 'funnelBuilder' | 'analytics' | 'resourceLibrary'>('resources');
+  
+  // State for tracking if rename is active (to hide sidebar)
+  const [isRenaming, setIsRenaming] = React.useState(false);
+  
+  // State for tracking if we're creating a new funnel inline
+  const [isCreatingNewFunnel, setIsCreatingNewFunnel] = React.useState(false);
 
 
   // Use the extracted hooks
@@ -173,13 +179,21 @@ export default function AdminPanel() {
     }
   };
 
-  const handleAddToFunnelWithState = (resource: Resource) => {
-    handleAddToFunnel(resource, selectedFunnel!, funnels, setFunnels, setSelectedFunnel);
+  const handleAddToFunnelWithState = async (resource: Resource) => {
+    await handleAddToFunnel(resource, selectedFunnel!, funnels, setFunnels, setSelectedFunnel);
   };
 
   const handleBackToDashboard = () => {
     setCurrentView('dashboard');
     setSelectedFunnel(null);
+  };
+
+  // Handle inline funnel creation
+  const handleCreateNewFunnelInline = () => {
+    setIsCreatingNewFunnel(true);
+    setIsRenaming(true);
+    setEditingFunnelId('new-funnel-temp');
+    setNewFunnelName(''); // Initialize with empty name
   };
 
   // Render different views based on current state
@@ -454,23 +468,26 @@ export default function AdminPanel() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
       
       <div className="flex h-screen">
-        <AdminSidebar
-          currentView={currentView}
-          onViewChange={handleViewChange}
-          className="flex-shrink-0 h-full"
-          libraryContext={libraryContext}
-          currentFunnelForLibrary={selectedFunnelForLibrary}
-          isUserTyping={isUserTyping}
-        />
+        {!isRenaming && (
+          <AdminSidebar
+            currentView={currentView}
+            onViewChange={handleViewChange}
+            className="flex-shrink-0 h-full"
+            libraryContext={libraryContext}
+            currentFunnelForLibrary={selectedFunnelForLibrary}
+            isUserTyping={isUserTyping}
+          />
+        )}
         
         <div className="flex-1 overflow-auto w-full lg:w-auto">
           <div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
             <div className="max-w-7xl mx-auto">
-              <AdminHeader onAddFunnel={() => setIsAddDialogOpen(true)} />
+              <AdminHeader onAddFunnel={handleCreateNewFunnelInline} />
 
               <div className="mt-8">
                 <FunnelsDashboard
                   funnels={funnels}
+                  setFunnels={setFunnels}
                   handleEditFunnel={handleEditFunnelWithNavigation}
                   handleDeployFunnel={handleDeployFunnel}
                   setFunnelToDelete={handleDeleteFunnel}
@@ -480,18 +497,16 @@ export default function AdminPanel() {
                   onFunnelClick={handleFunnelClickWithNavigation}
                   handleDuplicateFunnel={handleDuplicateFunnel}
                   handleManageResources={handleManageResourcesWithNavigation}
+                  isRenaming={isRenaming}
+                  setIsRenaming={setIsRenaming}
+                  isCreatingNewFunnel={isCreatingNewFunnel}
+                  setIsCreatingNewFunnel={setIsCreatingNewFunnel}
+                  newFunnelName={newFunnelName}
+                  setNewFunnelName={setNewFunnelName}
                 />
               </div>
 
               {/* Modals */}
-              <AddFunnelModal
-                isOpen={isAddDialogOpen}
-                onOpenChange={setIsAddDialogOpen}
-                newFunnelName={newFunnelName}
-                onNewFunnelNameChange={setNewFunnelName}
-                onAddFunnel={handleAddFunnelWithNavigation}
-              />
-
               <DeleteFunnelModal
                 isOpen={isDeleteDialogOpen}
                 onOpenChange={setIsDeleteDialogOpen}

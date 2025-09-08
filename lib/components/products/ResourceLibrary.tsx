@@ -31,6 +31,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     isAddingResource,
     newResource,
     deleteConfirmation,
+    removingResourceId,
     filteredResources,
     loading,
     error,
@@ -51,8 +52,63 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
     deleteResource
   } = useResourceLibrary(allResources, allFunnels, setAllResources);
 
+  // State for inline product creation
+  const [isCreatingNewProduct, setIsCreatingNewProduct] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+
   const isResourceInFunnel = (resourceId: string) => {
     return funnel?.resources?.some(r => r.id === resourceId) || false;
+  };
+
+  // Handle inline product creation
+  const handleCreateNewProductInline = () => {
+    setIsCreatingNewProduct(true);
+    setNewResource({
+      name: '',
+      link: '',
+      type: 'AFFILIATE',
+      category: 'FREE_VALUE',
+      description: '',
+      promoCode: ''
+    });
+  };
+
+  // Handle saving new product
+  const handleSaveNewProduct = async () => {
+    if (!newResource.name?.trim() || !newResource.link?.trim()) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await createResource(newResource as any);
+      setIsCreatingNewProduct(false);
+      setNewResource({
+        name: '',
+        link: '',
+        type: 'AFFILIATE',
+        category: 'FREE_VALUE',
+        description: '',
+        promoCode: ''
+      });
+    } catch (error) {
+      console.error('Failed to create product:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle canceling new product creation
+  const handleCancelNewProduct = () => {
+    setIsCreatingNewProduct(false);
+    setNewResource({
+      name: '',
+      link: '',
+      type: 'AFFILIATE',
+      category: 'FREE_VALUE',
+      description: '',
+      promoCode: ''
+    });
   };
 
   return (
@@ -66,7 +122,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
           <ResourceLibraryHeader
             context={context}
             onBack={onBack}
-            onAddProduct={openAddModal}
+            onAddProduct={handleCreateNewProductInline}
             filteredResourcesCount={filteredResources.length}
           />
 
@@ -75,16 +131,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             {/* Content goes here - heading removed as requested */}
           </div>
 
-          {/* Add/Edit Resource Modal */}
-          <LibraryResourceModal
-            isOpen={isAddingResource}
-            resource={newResource}
-            onClose={closeModal}
-            onSubmit={handleAddResource}
-            onChange={setNewResource}
-            isNameAvailable={isNameAvailable}
-            context={context}
-          />
+          {/* Add/Edit Resource Modal - Removed for inline creation */}
 
           {/* Delete Resource Modal */}
           <LibraryResourceDeleteModal
@@ -92,14 +139,6 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             onConfirm={confirmDelete}
             onCancel={cancelDelete}
           />
-
-          {/* Loading State */}
-          {loading && (
-            <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <span className="ml-2 text-muted-foreground">Loading resources...</span>
-            </div>
-          )}
 
           {/* Error State */}
           {error && (
@@ -118,8 +157,102 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
           )}
 
           {/* Resources Grid */}
-          {!loading && !error && (
+          {!error && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* New Product Creation Card */}
+              {isCreatingNewProduct && (
+                <div className="group bg-gradient-to-br from-violet-50/80 via-violet-100/60 to-violet-200/40 dark:from-violet-900/80 dark:via-violet-800/60 dark:to-indigo-900/30 p-4 rounded-xl border-2 border-violet-500/60 dark:border-violet-400/70 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 bg-violet-400 rounded-full animate-pulse" />
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
+                        {newResource.type === 'AFFILIATE' ? 'Affiliate' : 'My Product'}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        newResource.category === 'PAID' 
+                          ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' 
+                          : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                      }`}>
+                        {newResource.category === 'PAID' ? 'Paid' : 'Free Value'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={handleSaveNewProduct}
+                        disabled={isSaving || !newResource.name?.trim() || !newResource.link?.trim()}
+                        className="px-3 py-1 text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSaving ? 'Saving...' : '+ Add'}
+                      </button>
+                      <button
+                        onClick={handleCancelNewProduct}
+                        disabled={isSaving}
+                        className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {/* Type and Category Selectors */}
+                    <div className="flex gap-2">
+                      <select
+                        value={newResource.type || 'AFFILIATE'}
+                        onChange={(e) => setNewResource({...newResource, type: e.target.value as 'AFFILIATE' | 'MY_PRODUCTS'})}
+                        disabled={isSaving}
+                        className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="AFFILIATE">Affiliate</option>
+                        <option value="MY_PRODUCTS">My Product</option>
+                      </select>
+                      <select
+                        value={newResource.category || 'FREE_VALUE'}
+                        onChange={(e) => setNewResource({...newResource, category: e.target.value as 'PAID' | 'FREE_VALUE'})}
+                        disabled={isSaving}
+                        className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="FREE_VALUE">Free Value</option>
+                        <option value="PAID">Paid</option>
+                      </select>
+                    </div>
+
+                    {/* Name Field */}
+                    <input
+                      type="text"
+                      value={newResource.name || ''}
+                      onChange={(e) => setNewResource({...newResource, name: e.target.value})}
+                      placeholder="Product name..."
+                      disabled={isSaving}
+                      className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      autoFocus
+                    />
+
+                    {/* URL Field */}
+                    <input
+                      type="url"
+                      value={newResource.link || ''}
+                      onChange={(e) => setNewResource({...newResource, link: e.target.value})}
+                      placeholder="Product URL..."
+                      disabled={isSaving}
+                      className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+
+                    {/* Promo Code Field */}
+                    <input
+                      type="text"
+                      value={newResource.promoCode || ''}
+                      onChange={(e) => setNewResource({...newResource, promoCode: e.target.value})}
+                      placeholder="Promo code (optional)..."
+                      disabled={isSaving}
+                      className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              )}
+
               {filteredResources.map(resource => (
                 <ResourceCard
                   key={resource.id}
@@ -131,13 +264,15 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                   onAddToFunnel={onAddToFunnel}
                   onEdit={openEditModal}
                   onDelete={handleDeleteResource}
+                  onUpdate={updateResource}
+                  isRemoving={removingResourceId === resource.id}
                 />
               ))}
             </div>
           )}
 
           {/* Empty State */}
-          {!loading && !error && filteredResources.length === 0 && (
+          {!error && filteredResources.length === 0 && (
             <LibraryEmptyState selectedCategory={selectedCategory} />
           )}
         </div>

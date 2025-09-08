@@ -21,6 +21,7 @@ export const useResourceLibrary = (
     resourceId: null,
     resourceName: ''
   });
+  const [removingResourceId, setRemovingResourceId] = useState<string | null>(null);
   
   // Backend connection states
   const [loading, setLoading] = useState(false);
@@ -197,12 +198,20 @@ export const useResourceLibrary = (
 
   const confirmDelete = useCallback(async () => {
     if (deleteConfirmation.resourceId) {
+      // Close dialog instantly
+      setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
+      
+      // Set removing state
+      setRemovingResourceId(deleteConfirmation.resourceId);
+      
       try {
         await deleteResource(deleteConfirmation.resourceId);
-        setDeleteConfirmation({ show: false, resourceId: null, resourceName: '' });
       } catch (err) {
         // Error is already set in the deleteResource function
         console.error('Error in confirmDelete:', err);
+      } finally {
+        // Clear removing state
+        setRemovingResourceId(null);
       }
     }
   }, [deleteConfirmation.resourceId, deleteResource]);
@@ -244,6 +253,7 @@ export const useResourceLibrary = (
     isAddingResource,
     newResource,
     deleteConfirmation,
+    removingResourceId,
     categoryOptions,
     filteredResources,
     loading,

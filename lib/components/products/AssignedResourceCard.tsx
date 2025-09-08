@@ -3,18 +3,21 @@ import { Trash2, Sparkles, Target } from 'lucide-react';
 import { Text, Button } from 'frosted-ui';
 import { Resource, Funnel } from '../../types/resource';
 
+// AssignedResourceCard component for displaying assigned products with removal functionality
 interface AssignedResourceCardProps {
   resource: Resource;
   funnel: Funnel;
   onDelete: (resourceId: string, resourceName: string) => void;
   isGenerating?: boolean;
+  isRemoving?: boolean;
 }
 
 export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
   resource,
   funnel,
   onDelete,
-  isGenerating = false
+  isGenerating = false,
+  isRemoving = false
 }) => {
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -49,18 +52,26 @@ export const AssignedResourceCard: React.FC<AssignedResourceCardProps> = ({
           </span>
         </div>
         
-        {/* Delete Button - Only show when funnel is not live and not generating */}
+        {/* Delete Button or Removing State - Only show when funnel is not live and not generating */}
         {!funnel.isDeployed && !isGenerating && (
-          <Button
-            size="1"
-            variant="ghost"
-            color="red"
-            onClick={() => onDelete(resource.id, resource.name)}
-            className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
-            aria-label="Remove product"
-          >
-            <Trash2 size={14} strokeWidth={2.5} />
-          </Button>
+          isRemoving ? (
+            <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
+              <div className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse" />
+              <span className="hidden sm:inline font-semibold">Removing</span>
+              <span className="sm:hidden">●</span>
+            </span>
+          ) : (
+            <Button
+              size="1"
+              variant="ghost"
+              color="red"
+              onClick={() => onDelete(resource.id, resource.name)}
+              className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+              aria-label="Remove product"
+            >
+              <Trash2 size={14} strokeWidth={2.5} />
+            </Button>
+          )
         )}
       </div>
       

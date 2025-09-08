@@ -28,6 +28,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 }) => {
   const {
     deleteConfirmation,
+    removingResourceId,
     offlineConfirmation,
     currentResources,
     handleDeleteResource,
@@ -84,6 +85,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
                     funnel={funnel}
                     onDelete={handleDeleteResource}
                     isGenerating={isGenerating(funnel.id)}
+                    isRemoving={removingResourceId === resource.id}
                   />
                 ))}
               </div>

@@ -117,25 +117,27 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
   };
 
   const renderMessage = (message: LiveChatMessage) => {
-    const isBot = message.type === 'bot';
+    // Agent perspective: agent messages on right, user messages on left
+    const isAgent = message.type === 'bot' || message.type === 'system' || message.type === 'agent';
+    const isUser = message.type === 'user';
     
     return (
       <div
         key={message.id}
-        className={`flex ${isBot ? 'justify-start' : 'justify-end'} mb-4`}
+        className={`flex ${isAgent ? 'justify-end' : 'justify-start'} mb-4`}
       >
         <div
           className={`max-w-[80%] px-4 py-3 rounded-xl ${
-            isBot
-              ? 'bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm'
-              : 'bg-blue-500 text-white'
+            isAgent
+              ? 'bg-blue-500 text-white' // Agent messages: blue on right
+              : 'bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm' // User messages: white on left
           }`}
         >
           <div className="text-sm leading-relaxed">
             {message.text}
           </div>
           <div className={`text-xs mt-1 ${
-            isBot ? 'text-gray-500 dark:text-gray-400' : 'text-blue-100'
+            isAgent ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
           }`}>
             {formatTime(message.timestamp)}
           </div>
@@ -235,7 +237,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
             <>
               {conversation.messages.map(renderMessage)}
               
-              {/* Typing Indicator */}
+              {/* Typing Indicator - User is typing (appears on left) */}
               {isTyping && (
                 <div className="flex justify-start mb-4">
                   <div className="max-w-[80%] px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm">
@@ -258,7 +260,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onInput={handleTextareaInput}
-                placeholder={`Reply to ${conversation.user.name}...`}
+                placeholder={`Type your message to ${conversation.user.name}...`}
                 rows={1}
                 className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 rounded-xl text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation shadow-sm"
                 style={{
@@ -296,7 +298,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
                 userSelect: 'none'
               }}
             >
-              <Send size={18} className="text-white" />
+              <Send size={18} className="text-white dark:text-gray-100" />
             </button>
           </div>
         </div>

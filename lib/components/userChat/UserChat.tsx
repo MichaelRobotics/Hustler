@@ -336,7 +336,7 @@ const UserChat: React.FC<UserChatProps> = ({
                 disabled={!message.trim()}
                 className="chat-optimized p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
               >
-                <Send size={18} className="text-white" />
+                <Send size={18} className="text-white dark:text-gray-100" />
               </button>
             </div>
           </div>
