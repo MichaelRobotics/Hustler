@@ -71,10 +71,17 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
   const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
 
   // Refs
-  const funnelVisualizerRef = React.useRef<{ handleBlockClick: (blockId: string) => void }>(null);
+  const funnelVisualizerRef = React.useRef<{ 
+    handleBlockClick: (blockId: string) => void;
+    enableCalculationsForGoLive: () => void;
+  }>(null);
 
   // Custom Hooks
-  const deployment = useFunnelDeployment(currentFunnel, onUpdate);
+  const deployment = useFunnelDeployment(
+    currentFunnel, 
+    onUpdate, 
+    () => funnelVisualizerRef.current?.enableCalculationsForGoLive?.()
+  );
   const validation = useFunnelValidation();
   const modals = useModalManagement();
 

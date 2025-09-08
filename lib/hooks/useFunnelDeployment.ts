@@ -29,7 +29,8 @@ interface DeploymentValidation {
 
 export const useFunnelDeployment = (
   currentFunnel: Funnel,
-  onUpdate: (funnel: Funnel) => void
+  onUpdate: (funnel: Funnel) => void,
+  enableCalculationsForGoLive?: () => void
 ) => {
   const [isDeploying, setIsDeploying] = React.useState(false);
   const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
@@ -96,6 +97,11 @@ export const useFunnelDeployment = (
   };
 
   const handleDeploy = () => {
+    // Enable calculations for Go Live action
+    if (enableCalculationsForGoLive) {
+      enableCalculationsForGoLive();
+    }
+
     // Validate deployment before proceeding
     const validation = validateDeployment();
     if (!validation.isValid) {

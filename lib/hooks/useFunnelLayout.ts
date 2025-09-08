@@ -55,6 +55,7 @@ export const useFunnelLayout = (
   const [totalCanvasHeight, setTotalCanvasHeight] = React.useState(0);
   const [layoutPhase, setLayoutPhase] = React.useState<'measure' | 'final'>('measure');
   const [layoutCompleted, setLayoutCompleted] = React.useState(false);
+  const [performanceMode, setPerformanceMode] = React.useState(false);
 
   const ITEM_WIDTH = 280;
   const STAGE_Y_GAP = 120;
@@ -62,27 +63,29 @@ export const useFunnelLayout = (
 
   // Reset layout when the funnel flow changes.
   React.useEffect(() => {
-    // Only reset if layout is not completed
-    if (layoutCompleted) {
-      return; // Layout is completed, no more resets
+    // Only reset if not in performance mode
+    if (performanceMode) {
+      return; // Performance mode active, no more resets
     }
     
     blockRefs.current = {};
     setLayoutPhase('measure');
     setLayoutCompleted(false);
-  }, [funnelFlow, layoutCompleted]);
+    setPerformanceMode(false);
+  }, [funnelFlow, performanceMode]);
 
   // Reset layout when editing state changes (blocks change dimensions)
   React.useEffect(() => {
-    // Only allow recalculations if layout is not completed
-    if (layoutCompleted) {
-      return; // Layout is completed, no more recalculations
+    // Only allow recalculations if not in performance mode
+    if (performanceMode) {
+      return; // Performance mode active, no more recalculations
     }
 
     if (editingBlockId) {
       // When editing starts, we need to recalculate layout
       setLayoutPhase('measure');
       setLayoutCompleted(false);
+      setPerformanceMode(false);
     } else {
       // When editing ends, trigger final layout calculation
       if (Object.keys(positions).length > 0) {
@@ -93,7 +96,7 @@ export const useFunnelLayout = (
         return () => clearTimeout(timer);
       }
     }
-  }, [editingBlockId, positions, layoutCompleted]);
+  }, [editingBlockId, positions, performanceMode]);
 
   // Trigger final layout calculation after blocks are rendered and measured
   React.useEffect(() => {
@@ -120,9 +123,9 @@ export const useFunnelLayout = (
       return;
     }
 
-    // Prevent any recalculations after layout is completed
-    if (layoutCompleted) {
-      return; // Layout is already completed, no more calculations
+    // Prevent any recalculations when in performance mode
+    if (performanceMode) {
+      return; // Performance mode active, no more calculations
     }
 
     let maxStageWidth = 0;
@@ -220,8 +223,36 @@ export const useFunnelLayout = (
       
       // Mark layout as completed after final phase calculations are done
       setLayoutCompleted(true);
+      
+      // Activate performance mode - freeze all calculations
+      setPerformanceMode(true);
     }
   }, [funnelFlow, layoutPhase, editingBlockId, layoutCompleted]);
+
+  // Functions to temporarily disable performance mode for specific actions
+  const enableCalculationsForOfferSelection = React.useCallback(() => {
+    if (performanceMode) {
+      setPerformanceMode(false);
+      // Re-enable performance mode after a short delay
+      setTimeout(() => setPerformanceMode(true), 100);
+    }
+  }, [performanceMode]);
+
+  const enableCalculationsForBlockHighlight = React.useCallback(() => {
+    if (performanceMode) {
+      setPerformanceMode(false);
+      // Re-enable performance mode after a short delay
+      setTimeout(() => setPerformanceMode(true), 100);
+    }
+  }, [performanceMode]);
+
+  const enableCalculationsForGoLive = React.useCallback(() => {
+    if (performanceMode) {
+      setPerformanceMode(false);
+      // Re-enable performance mode after a short delay
+      setTimeout(() => setPerformanceMode(true), 100);
+    }
+  }, [performanceMode]);
 
   return {
     positions,
@@ -229,6 +260,10 @@ export const useFunnelLayout = (
     stageLayouts,
     itemCanvasWidth,
     totalCanvasHeight,
-    layoutPhase
+    layoutPhase,
+    performanceMode,
+    enableCalculationsForOfferSelection,
+    enableCalculationsForBlockHighlight,
+    enableCalculationsForGoLive
   };
 };

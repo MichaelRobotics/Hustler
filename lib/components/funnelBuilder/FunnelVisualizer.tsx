@@ -181,7 +181,11 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
       stageLayouts,
       itemCanvasWidth,
       totalCanvasHeight,
-      layoutPhase
+      layoutPhase,
+      performanceMode,
+      enableCalculationsForOfferSelection,
+      enableCalculationsForBlockHighlight,
+      enableCalculationsForGoLive
     } = useFunnelLayout(funnelFlow, editingBlockId, blockRefs, funnelId);
 
     const {
@@ -193,7 +197,15 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
       highlightedPath,
       selectedPath,
       handleBlockClick
-    } = useFunnelInteraction(funnelFlow, editingBlockId, setEditingBlockId, selectedOffer);
+    } = useFunnelInteraction(
+      funnelFlow, 
+      editingBlockId, 
+      setEditingBlockId, 
+      selectedOffer,
+      performanceMode,
+      enableCalculationsForOfferSelection,
+      enableCalculationsForBlockHighlight
+    );
 
     // Separate visualization state saving (funnel flow saving is now handled by generation API)
     const { autoSave } = useAutoSaveVisualization({
@@ -240,9 +252,10 @@ const FunnelVisualizer = React.memo(React.forwardRef<{ handleBlockClick: (blockI
       }
     }, [funnelId, layoutPhase, positions, lines, editingBlockId, autoSave]);
 
-    // Expose handleBlockClick function to parent component via ref
+    // Expose functions to parent component via ref
     React.useImperativeHandle(ref, () => ({
-        handleBlockClick
+        handleBlockClick,
+        enableCalculationsForGoLive
     }));
 
     if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks) {

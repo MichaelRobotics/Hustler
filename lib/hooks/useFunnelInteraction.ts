@@ -26,7 +26,10 @@ export const useFunnelInteraction = (
   funnelFlow: FunnelFlow | null,
   editingBlockId: string | null,
   setEditingBlockId: (blockId: string | null) => void,
-  selectedOffer?: string | null
+  selectedOffer?: string | null,
+  performanceMode?: boolean,
+  enableCalculationsForOfferSelection?: () => void,
+  enableCalculationsForBlockHighlight?: () => void
 ) => {
   // State for user interaction
   const [selectedOfferBlockId, setSelectedOfferBlockId] = React.useState<string | null>(null);
@@ -83,11 +86,17 @@ export const useFunnelInteraction = (
     const isOfferBlock = offerBlocks.some(offer => offer.id === blockId);
     
     if (isOfferBlock) {
-      // If it's an offer block, set both states for consistent behavior
+      // If it's an offer block, enable calculations and set both states
+      if (performanceMode && enableCalculationsForOfferSelection) {
+        enableCalculationsForOfferSelection();
+      }
       setSelectedOfferBlockId(blockId);
       setSelectedBlockForHighlight(blockId);
     } else {
-      // For non-offer blocks, just toggle the highlight
+      // For non-offer blocks, enable calculations and toggle highlight
+      if (performanceMode && enableCalculationsForBlockHighlight) {
+        enableCalculationsForBlockHighlight();
+      }
       setSelectedBlockForHighlight(prev => (prev === blockId ? null : blockId));
     }
   };
@@ -102,16 +111,13 @@ export const useFunnelInteraction = (
   // Effect to update selected offer when prop changes (for web view highlighting)
   React.useEffect(() => {
     if (selectedOffer) {
+      // Enable calculations when offer is selected externally
+      if (performanceMode && enableCalculationsForOfferSelection) {
+        enableCalculationsForOfferSelection();
+      }
       setSelectedOfferBlockId(selectedOffer);
     }
-  }, [selectedOffer]);
-
-  // Effect to update selected offer when prop changes (for web view highlighting)
-  React.useEffect(() => {
-    if (selectedOffer) {
-      setSelectedOfferBlockId(selectedOffer);
-    }
-  }, [selectedOffer]);
+  }, [selectedOffer, performanceMode, enableCalculationsForOfferSelection]);
 
   // Memoized calculation for the path in the mobile view.
   const selectedPath = React.useMemo(() => {
