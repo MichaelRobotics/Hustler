@@ -48,6 +48,7 @@ export interface ResourceLibraryProps {
   isAnyFunnelGenerating?: () => boolean;
   onGoToFunnelProducts: () => void;
   context: 'global' | 'funnel';
+  onModalStateChange?: (isModalOpen: boolean) => void;
 }
 
 export interface ResourcePageProps {

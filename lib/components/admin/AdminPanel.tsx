@@ -53,6 +53,9 @@ const AdminPanel = React.memo(() => {
   
   // State for tracking if we're creating a new funnel inline
   const [isCreatingNewFunnel, setIsCreatingNewFunnel] = React.useState(false);
+  
+  // State for tracking when modals are open (to disable sidebar)
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = React.useState(false);
 
 
   // Use the extracted hooks
@@ -196,6 +199,11 @@ const AdminPanel = React.memo(() => {
     setNewFunnelName(''); // Initialize with empty name
   }, [setIsCreatingNewFunnel, setIsRenaming, setEditingFunnelId, setNewFunnelName]);
 
+  // Handle library modal state changes
+  const handleLibraryModalStateChange = useCallback((isModalOpen: boolean) => {
+    setIsLibraryModalOpen(isModalOpen);
+  }, []);
+
   // Render different views based on current state
   if (currentView === 'analytics' && selectedFunnel) {
     // Debug logging
@@ -293,6 +301,7 @@ const AdminPanel = React.memo(() => {
             className="flex-shrink-0 h-full"
             libraryContext={libraryContext}
             currentFunnelForLibrary={selectedFunnelForLibrary}
+            disabled={isLibraryModalOpen}
           />
           
           <div className="flex-1 overflow-auto w-full lg:w-auto">
@@ -309,6 +318,7 @@ const AdminPanel = React.memo(() => {
               isAnyFunnelGenerating={isAnyFunnelGenerating}
               onGoToFunnelProducts={() => setCurrentView('resources')}
               context={libraryContext}
+              onModalStateChange={handleLibraryModalStateChange}
             />
           </div>
         </div>
@@ -343,6 +353,7 @@ const AdminPanel = React.memo(() => {
           isAnyFunnelGenerating={isAnyFunnelGenerating}
           onGoToFunnelProducts={() => setCurrentView('resources')}
           context={libraryContext}
+          onModalStateChange={handleLibraryModalStateChange}
         />
       );
     }
@@ -396,6 +407,7 @@ const AdminPanel = React.memo(() => {
             className="flex-shrink-0 h-full"
             libraryContext={libraryContext}
             currentFunnelForLibrary={selectedFunnelForLibrary}
+            disabled={isLibraryModalOpen}
           />
           
           <div className="flex-1 overflow-auto w-full lg:w-auto">
@@ -476,6 +488,7 @@ const AdminPanel = React.memo(() => {
             libraryContext={libraryContext}
             currentFunnelForLibrary={selectedFunnelForLibrary}
             isUserTyping={isUserTyping}
+            disabled={isLibraryModalOpen}
           />
         )}
         

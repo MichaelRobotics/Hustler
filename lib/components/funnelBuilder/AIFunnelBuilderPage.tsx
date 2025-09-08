@@ -131,17 +131,19 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
         
         <div className="relative p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-          {/* Enhanced Header with Whop Design Patterns - Always Visible */}
-          <FunnelBuilderHeader
-            onBack={onBack}
-            isDeployed={!!currentFunnel.isDeployed}
-            selectedOffer={modals.selectedOffer}
-            hasFlow={!!currentFunnel.flow}
-            hasApiError={!!validation.apiError}
-            onOpenOfferSelection={modals.openOfferSelection}
-            onOpenOfflineConfirmation={modals.openOfflineConfirmation}
-            onDeploy={deployment.handleDeploy}
-          />
+          {/* Enhanced Header with Whop Design Patterns - Hidden when editing */}
+          {!validation.editingBlockId && (
+            <FunnelBuilderHeader
+              onBack={onBack}
+              isDeployed={!!currentFunnel.isDeployed}
+              selectedOffer={modals.selectedOffer}
+              hasFlow={!!currentFunnel.flow}
+              hasApiError={!!validation.apiError}
+              onOpenOfferSelection={modals.openOfferSelection}
+              onOpenOfflineConfirmation={modals.openOfflineConfirmation}
+              onDeploy={deployment.handleDeploy}
+            />
+          )}
 
           {/* Main Content Area */}
           <div className="flex-grow flex flex-col md:overflow-hidden gap-6 !mt-8">

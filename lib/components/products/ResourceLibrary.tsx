@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useResourceLibrary } from '../../hooks/useResourceLibrary';
 import { ResourceLibraryProps } from '../../types/resource';
 import { ResourceLibraryHeader } from './ResourceLibraryHeader';
@@ -24,7 +24,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   isGenerating,
   isAnyFunnelGenerating,
   onGoToFunnelProducts,
-  context
+  context,
+  onModalStateChange
 }) => {
   const {
     selectedCategory,
@@ -55,6 +56,12 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
   // State for inline product creation
   const [isCreatingNewProduct, setIsCreatingNewProduct] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+
+  // Notify parent when modal states change
+  useEffect(() => {
+    const isModalOpen = isAddingResource || deleteConfirmation.show || isCreatingNewProduct;
+    onModalStateChange?.(isModalOpen);
+  }, [isAddingResource, deleteConfirmation.show, isCreatingNewProduct, onModalStateChange]);
 
   const isResourceInFunnel = (resourceId: string) => {
     return funnel?.resources?.some(r => r.id === resourceId) || false;

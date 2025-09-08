@@ -21,6 +21,7 @@ interface AdminSidebarProps {
   libraryContext?: 'global' | 'funnel';
   currentFunnelForLibrary?: { id: string; name: string } | null;
   isUserTyping?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -38,7 +39,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(({
   className = '',
   libraryContext = 'global',
   currentFunnelForLibrary = null,
-  isUserTyping = false
+  isUserTyping = false,
+  disabled = false
 }) => {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   
@@ -54,13 +56,15 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(({
 
 
   const handleViewChange = useCallback((view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat') => {
+    if (disabled) return; // Prevent navigation when disabled
     onViewChange(view);
-  }, [onViewChange]);
+  }, [onViewChange, disabled]);
 
     return (
     <>
       {/* Desktop Sidebar - Icons Only */}
-      <div className={`hidden lg:block w-16 bg-surface/95 dark:bg-surface/90 border-r border-border/50 dark:border-border/30 backdrop-blur-sm transition-all duration-300 ${className}`}>
+      {!disabled && (
+        <div className={`hidden lg:block w-16 bg-surface/95 dark:bg-surface/90 border-r border-border/50 dark:border-border/30 backdrop-blur-sm transition-all duration-300 ${className}`}>
         {/* Desktop Navigation - Icons Only */}
         <div className="pt-12 px-4 space-y-8">
           {/* Automations - Default Dashboard */}
@@ -145,10 +149,12 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(({
 
 
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation */}
-      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? 'hidden' : 'block'}`}>
+      {!disabled && (
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? 'hidden' : 'block'}`}>
         <div className="flex items-center justify-around px-4 py-3">
           {/* Automations */}
           <Button
@@ -219,7 +225,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(({
             <Text size="1" weight="semi-bold" className="text-xs">Chat</Text>
           </Button>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Pro Version Upgrade Modal */}
       <Dialog.Root open={isProModalOpen} onOpenChange={setIsProModalOpen}>
