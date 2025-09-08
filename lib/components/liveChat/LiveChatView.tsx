@@ -7,9 +7,7 @@ import { LiveChatViewProps } from '../../types/liveChat';
 const LiveChatView: React.FC<LiveChatViewProps> = React.memo(({
   conversation,
   onSendMessage,
-  onUpdateConversation,
   onBack,
-  onTypingChange,
   isLoading = false
 }) => {
   return (

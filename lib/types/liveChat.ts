@@ -105,9 +105,7 @@ export interface ConversationListProps {
 export interface LiveChatViewProps {
   conversation: LiveChatConversation;
   onSendMessage: (message: string) => void;
-  onUpdateConversation: (conversation: LiveChatConversation) => void;
   onBack: () => void;
-  onTypingChange?: (isTyping: boolean) => void;
   isLoading?: boolean;
 }
 

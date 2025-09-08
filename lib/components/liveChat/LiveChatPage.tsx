@@ -7,7 +7,6 @@
  * 
  * Backend Integration Points:
  * - handleSendMessage: Ready for API call to POST /api/live-chat/messages
- * - handleUpdateConversation: Ready for API call to PATCH /api/live-chat/conversations
  * - State management: Includes isLoading, hasMore, error states for API calls
  * - Auto-refresh: Ready for periodic conversation updates
  * - Real-time updates: Prepared for WebSocket integration
@@ -32,7 +31,6 @@ import { ThemeToggle } from '../common/ThemeToggle';
 import ConversationList from './ConversationList';
 import LiveChatView from './LiveChatView';
 import LiveChatHeader from './LiveChatHeader';
-import PerformanceProfiler from '../common/PerformanceProfiler';
 import { LiveChatPageProps, LiveChatConversation, LiveChatFilters } from '../../types/liveChat';
 
 // Mock data for development - replace with real data fetching
@@ -121,7 +119,7 @@ const simulateAutoClose = (conversations: LiveChatConversation[]): LiveChatConve
   });
 };
 
-const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTypingChange, onChatStateChange }) => {
+const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<LiveChatConversation[]>(mockConversations);
   const [filters, setFilters] = useState<LiveChatFilters>({
@@ -140,10 +138,6 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
     return conversations.find(c => c.id === selectedConversationId) || null;
   }, [selectedConversationId, conversations]);
 
-  // Notify parent when we're in a chat conversation
-  useEffect(() => {
-    onChatStateChange?.(!!selectedConversation);
-  }, [selectedConversation, onChatStateChange]);
 
   // Simulate backend auto-closing behavior
   useEffect(() => {
@@ -199,28 +193,6 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
     );
   }, [selectedConversationId]);
 
-  const handleUpdateConversation = async (updatedConversation: LiveChatConversation) => {
-    // TODO: Replace with actual API call when backend is ready
-    // const response = await updateConversation(updatedConversation.id, {
-    //   status: updatedConversation.status,
-    //   isArchived: updatedConversation.isArchived
-    // });
-    
-    // For now, update local state directly
-    setConversations(prevConversations => 
-      prevConversations.map(conv => 
-        conv.id === updatedConversation.id 
-          ? { ...updatedConversation, updatedAt: new Date() } // Backend-ready field
-          : conv
-      )
-    );
-    
-    // Auto-switch the filter view to match the new conversation status
-    setFilters(prevFilters => ({
-      ...prevFilters,
-      status: updatedConversation.status
-    }));
-  };
 
   // Handle search reset
   const handleSearchReset = () => {
@@ -230,19 +202,12 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
   // Handle search state change
   const handleSearchStateChange = (isOpen: boolean) => {
     setIsSearchOpen(isOpen);
-    // Notify parent component about the combined state (input focus OR search open)
-    onTypingChange?.(isOpen);
   };
 
-  // Handle input focus/blur from chat view
-  const handleInputFocusChange = (isFocused: boolean) => {
-    // Notify parent component about the combined state (input focus OR search open)
-    onTypingChange?.(isFocused || isSearchOpen);
-  };
 
   return (
-    <div className={`relative ${selectedConversation ? 'lg:p-4 lg:pb-8' : 'p-4 sm:p-6 lg:p-8'} pb-20 lg:pb-8`}>
-      <div className="max-w-7xl mx-auto">
+    <div className={`relative h-full w-full ${selectedConversation ? 'lg:p-4 lg:pb-8' : 'p-4 sm:p-6 lg:p-8'} pb-20 lg:pb-8`}>
+      <div className="h-full w-full">
         {/* Enhanced Header with Whop Design Patterns - Hidden on mobile when in chat */}
         <div className={`${selectedConversation ? 'hidden lg:block' : 'block'}`}>
           <LiveChatHeader
@@ -264,9 +229,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
                 <LiveChatView
                   conversation={selectedConversation}
                   onSendMessage={handleSendMessage}
-                  onUpdateConversation={handleUpdateConversation}
                   onBack={() => setSelectedConversationId(null)}
-                  onTypingChange={handleInputFocusChange}
                 />
               </div>
             ) : (
@@ -284,36 +247,30 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, onTyping
           </div>
 
           {/* Desktop: Show both side by side */}
-          <div className="hidden lg:grid lg:grid-cols-3 gap-6 h-[calc(100vh-300px)] min-h-[500px] max-h-[calc(100vh-300px)]">
+          <div className="hidden lg:grid lg:grid-cols-4 gap-6 h-[calc(100vh-200px)] min-h-[500px] max-h-[calc(100vh-200px)]">
             {/* Conversation List */}
             <div className="lg:col-span-1 overflow-hidden">
-              <PerformanceProfiler id="ConversationList">
-                <ConversationList
-                  conversations={conversations}
-                  selectedConversationId={selectedConversationId || undefined}
-                  onSelectConversation={handleSelectConversation}
-                  filters={{ ...filters, searchQuery }}
-                  onFiltersChange={setFilters}
-                  onSearchReset={handleSearchReset}
-                  isLoading={isLoading}
-                />
-              </PerformanceProfiler>
+              <ConversationList
+                conversations={conversations}
+                selectedConversationId={selectedConversationId || undefined}
+                onSelectConversation={handleSelectConversation}
+                filters={{ ...filters, searchQuery }}
+                onFiltersChange={setFilters}
+                onSearchReset={handleSearchReset}
+                isLoading={isLoading}
+              />
             </div>
 
             {/* Chat View */}
-            <div className="lg:col-span-2 overflow-hidden h-full">
+            <div className="lg:col-span-3 overflow-hidden h-full">
               {selectedConversation ? (
                 <div className="h-full animate-in fade-in duration-0">
-                  <PerformanceProfiler id="LiveChatView">
-                    <LiveChatView
-                      conversation={selectedConversation}
-                      onSendMessage={handleSendMessage}
-                      onUpdateConversation={handleUpdateConversation}
-                      onBack={() => setSelectedConversationId(null)}
-                      onTypingChange={handleInputFocusChange}
-                      isLoading={isLoading}
-                    />
-                  </PerformanceProfiler>
+                  <LiveChatView
+                    conversation={selectedConversation}
+                    onSendMessage={handleSendMessage}
+                    onBack={() => setSelectedConversationId(null)}
+                    isLoading={isLoading}
+                  />
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center">
