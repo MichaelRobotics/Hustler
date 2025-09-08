@@ -92,6 +92,16 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
     };
   }, []);
 
+  // Auto-scroll when typing indicator appears
+  useEffect(() => {
+    if (isTyping) {
+      // Scroll when typing indicator appears
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [isTyping, scrollToBottom]);
+
   const handleTextareaInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
     const target = e.target as HTMLTextAreaElement;
     target.style.height = 'auto';

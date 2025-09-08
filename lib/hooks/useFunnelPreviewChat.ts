@@ -39,7 +39,7 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     startConversation();
   }, [startConversation]);
 
-  // Effect to handle auto-scrolling as new messages are added
+  // Effect to handle auto-scrolling as new messages are added (optimized)
   useEffect(() => {
     if (history.length === 1) {
       // On the first message, scroll the container to the top
@@ -47,8 +47,10 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
         chatContainerRef.current.scrollTop = 0;
       }
     } else {
-      // For all subsequent messages, scroll to the end
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // For all subsequent messages, use requestAnimationFrame for smooth performance
+      requestAnimationFrame(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      });
     }
   }, [history]);
 
@@ -185,8 +187,7 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     
     // If the selected option has no next block, the conversation ends
     if (!option.nextBlockId) {
-      const endMessage: ChatMessage = { type: 'bot', text: "This path has ended. You can start over to explore other options." };
-      setHistory(prev => [...prev, userMessage, endMessage]);
+      setHistory(prev => [...prev, userMessage]);
       setCurrentBlockId(null);
       return;
     }
@@ -248,9 +249,7 @@ export const useFunnelPreviewChat = (funnelFlow: FunnelFlow | null, selectedOffe
     if (currentBlockId && funnelFlow) {
       const currentBlock = funnelFlow.blocks[currentBlockId];
       if (currentBlock && (!currentBlock.options || currentBlock.options.length === 0)) {
-        // If we reach a block with no options, add a message and end the conversation
-        const endMessage: ChatMessage = { type: 'bot', text: "This path has ended. You can start over to explore other options." };
-        setHistory(prev => [...prev, endMessage]);
+        // If we reach a block with no options, end the conversation silently
         setCurrentBlockId(null);
       }
     }

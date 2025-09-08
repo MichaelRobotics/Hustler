@@ -74,11 +74,12 @@ const UserChat: React.FC<UserChatProps> = ({
     });
   }, []);
 
-  // Optimized scroll to bottom - no smooth animation for better performance
+  // Optimized scroll to bottom - mobile performance optimized
   const scrollToBottom = useCallback(() => {
     if (chatEndRef.current) {
+      // Use instant scroll for better mobile performance
       chatEndRef.current.scrollIntoView({ 
-        behavior: 'auto',
+        behavior: 'instant',
         block: 'end',
         inline: 'nearest'
       });
@@ -103,9 +104,6 @@ const UserChat: React.FC<UserChatProps> = ({
       // Process the option AFTER typing indicator ends
       handleOptionClick(option, index);
     }, 1500 + Math.random() * 1000); // Random delay between 1.5-2.5 seconds
-    
-    // Immediate scroll for better performance
-    setTimeout(scrollToBottom, 50);
   }, [handleOptionClick, onMessageSent, conversationId, scrollToBottom]);
 
   // Optimized keyboard handling - reduced timeout for better performance
@@ -140,6 +138,26 @@ const UserChat: React.FC<UserChatProps> = ({
       }
     };
   }, []);
+
+  // Auto-scroll when history changes (optimized for mobile performance)
+  useEffect(() => {
+    if (history.length > 0) {
+      // Use requestAnimationFrame for better performance
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [history, scrollToBottom]);
+
+  // Auto-scroll when typing indicator appears/disappears
+  useEffect(() => {
+    if (isTyping) {
+      // Scroll when typing indicator appears
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [isTyping, scrollToBottom]);
 
   // Memoized message component for better performance
   const MessageComponent = React.memo(({ msg, index }: { msg: any; index: number }) => (

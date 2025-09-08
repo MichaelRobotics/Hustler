@@ -70,10 +70,10 @@ Added a "user is typing" animation indicator to UserChat and LiveChat components
 
 ### **Animation Flow**
 1. **User selects option** → User message appears immediately
-2. **Typing indicator appears** → Shows bot is preparing response
+2. **Typing indicator appears** → Shows bot is preparing response + auto-scrolls to show it
 3. **Animated dots bounce** → Visual feedback that bot is working
 4. **Random delay (1.5-2.5s)** → Simulates realistic response time
-5. **Indicator disappears** → Bot message appears
+5. **Indicator disappears** → Bot message appears + auto-scrolls to show it
 
 ### **Visual Design**
 - **Message bubble style**: Matches existing chat design
