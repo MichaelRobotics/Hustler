@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Edit, Settings, Copy, Trash2, Check, X, Circle } from 'lucide-react';
 import { Heading, Text, Button } from 'frosted-ui';
@@ -43,7 +43,7 @@ interface FunnelsDashboardProps {
   setNewFunnelName: (name: string) => void;
 }
 
-export default function FunnelsDashboard({
+const FunnelsDashboard = React.memo(({
     funnels, 
     setFunnels,
     handleEditFunnel, 
@@ -62,7 +62,7 @@ export default function FunnelsDashboard({
     setIsCreatingNewFunnel,
     newFunnelName,
     setNewFunnelName
-}: FunnelsDashboardProps) {
+}: FunnelsDashboardProps) => {
 
     // State to track which dropdown is open and which button is highlighted
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -70,8 +70,8 @@ export default function FunnelsDashboard({
     const [editingName, setEditingName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
-    // Handle creating a new funnel
-    const handleCreateNewFunnel = async (funnelName: string) => {
+    // Memoized handler for creating a new funnel
+    const handleCreateNewFunnel = useCallback(async (funnelName: string) => {
         setIsSaving(true);
         try {
             const response = await fetch('/api/funnels', {
@@ -104,8 +104,23 @@ export default function FunnelsDashboard({
         } finally {
             setIsSaving(false);
         }
-    };
+    }, [funnels, setFunnels, setIsCreatingNewFunnel, setIsRenaming, setEditingFunnelId, setNewFunnelName]);
 
+    // Memoized computed values for better performance
+    const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
+    
+    const funnelCards = useMemo(() => funnels.map((funnel) => {
+        const isValid = hasValidFlow(funnel.flow);
+        const isGenerating = funnel.generationStatus === 'generating';
+        const isEditing = editingFunnelId === funnel.id;
+        
+        return {
+            ...funnel,
+            isValid,
+            isGenerating,
+            isEditing
+        };
+    }), [funnels, editingFunnelId]);
 
     return (
       <div className="space-y-6">
@@ -186,7 +201,7 @@ export default function FunnelsDashboard({
               </div>
           )}
 
-          {funnels.map((funnel) => (
+          {funnelCards.map((funnel) => (
               <div
                   key={funnel.id}
                   onClick={() => onFunnelClick(funnel)}
@@ -203,7 +218,7 @@ export default function FunnelsDashboard({
                                       <span className="hidden sm:inline font-semibold">Saving</span>
                                       <span className="sm:hidden">●</span>
                                   </span>
-                              ) : funnel.isDeployed && hasValidFlow(funnel) ? (
+                              ) : funnel.isDeployed && funnel.isValid ? (
                                   <span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
                                       <Circle className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse fill-current" strokeWidth={0} />
                                       <span className="hidden sm:inline font-semibold">Live</span>
@@ -222,7 +237,7 @@ export default function FunnelsDashboard({
 
                   {/* Card Body - Enhanced with smooth gradients for both themes */}
                   <div className="p-4 bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-900/80 dark:via-gray-800/60 dark:to-indigo-900/30">
-                            {editingFunnelId === funnel.id ? (
+                            {funnel.isEditing ? (
                           <div className="space-y-3">
                                     <input
                                         type="text"
@@ -440,5 +455,9 @@ export default function FunnelsDashboard({
             </div>
         </div>
     );
-}
+});
+
+FunnelsDashboard.displayName = 'FunnelsDashboard';
+
+export default FunnelsDashboard;
 

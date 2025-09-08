@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import FunnelsDashboard from './FunnelsDashboard';
 import FunnelAnalyticsPage from './FunnelAnalyticsPage';
 import ResourcePage from '../products/ResourcePage';
@@ -39,7 +39,7 @@ interface Funnel {
 
 type View = 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat';
 
-export default function AdminPanel() {
+const AdminPanel = React.memo(() => {
   // State for tracking typing in LiveChat
   const [isUserTyping, setIsUserTyping] = React.useState(false);
   // State for tracking if we're in a chat conversation
@@ -139,62 +139,62 @@ export default function AdminPanel() {
     handleBackToDashboard: navigationBackToDashboard,
   } = useViewNavigation();
 
-  // Combined handlers that integrate the hooks
-  const handleViewChange = (view: View) => {
+  // Memoized handlers for better performance
+  const handleViewChange = useCallback((view: View) => {
     navigationHandleViewChange(view, selectedFunnel, currentView, setLibraryContext, setSelectedFunnelForLibrary);
-  };
+  }, [navigationHandleViewChange, selectedFunnel, currentView, setLibraryContext, setSelectedFunnelForLibrary]);
 
-  const handleAddFunnelWithNavigation = async () => {
+  const handleAddFunnelWithNavigation = useCallback(async () => {
     const newFunnel = await handleAddFunnel();
     if (newFunnel) {
       setCurrentView('resources');
     }
-  };
+  }, [handleAddFunnel, setCurrentView]);
 
-  const handleEditFunnelWithNavigation = (funnel: Funnel) => {
+  const handleEditFunnelWithNavigation = useCallback((funnel: Funnel) => {
     const targetView = handleEditFunnel(funnel);
     if (targetView) {
       setCurrentView(targetView as View);
     }
-  };
+  }, [handleEditFunnel, setCurrentView]);
 
-  const handleFunnelClickWithNavigation = (funnel: Funnel) => {
+  const handleFunnelClickWithNavigation = useCallback((funnel: Funnel) => {
     const targetView = onFunnelClick(funnel);
     if (targetView) {
       setCurrentView(targetView as View);
     }
-  };
+  }, [onFunnelClick, setCurrentView]);
 
-  const handleManageResourcesWithNavigation = (funnel: Funnel) => {
+  const handleManageResourcesWithNavigation = useCallback((funnel: Funnel) => {
     const targetView = handleManageResources(funnel);
     if (targetView) {
       setCurrentView(targetView as View);
     }
-  };
+  }, [handleManageResources, setCurrentView]);
 
-  const handleOpenResourceLibraryWithNavigation = () => {
+  const handleOpenResourceLibraryWithNavigation = useCallback(() => {
     const targetView = handleOpenResourceLibrary(selectedFunnel);
     if (targetView) {
       setCurrentView(targetView as View);
     }
-  };
+  }, [handleOpenResourceLibrary, selectedFunnel, setCurrentView]);
 
-  const handleAddToFunnelWithState = async (resource: Resource) => {
+  const handleAddToFunnelWithState = useCallback(async (resource: Resource) => {
     await handleAddToFunnel(resource, selectedFunnel!, funnels, setFunnels, setSelectedFunnel);
-  };
+  }, [handleAddToFunnel, selectedFunnel, funnels, setFunnels, setSelectedFunnel]);
 
-  const handleBackToDashboard = () => {
+  const handleBackToDashboard = useCallback(() => {
     setCurrentView('dashboard');
     setSelectedFunnel(null);
-  };
+  }, [setCurrentView, setSelectedFunnel]);
 
   // Handle inline funnel creation
-  const handleCreateNewFunnelInline = () => {
+  const handleCreateNewFunnelInline = useCallback(() => {
     setIsCreatingNewFunnel(true);
     setIsRenaming(true);
     setEditingFunnelId('new-funnel-temp');
     setNewFunnelName(''); // Initialize with empty name
-  };
+  }, [setIsCreatingNewFunnel, setIsRenaming, setEditingFunnelId, setNewFunnelName]);
 
   // Render different views based on current state
   if (currentView === 'analytics' && selectedFunnel) {
@@ -519,4 +519,8 @@ export default function AdminPanel() {
       </div>
     </div>
   );
-}
+});
+
+AdminPanel.displayName = 'AdminPanel';
+
+export default AdminPanel;

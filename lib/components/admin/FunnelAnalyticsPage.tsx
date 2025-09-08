@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import SalesPerformance from './SalesPerformance';
 import FunnelAnalytics from './FunnelAnalytics';
 import { ArrowLeft, Settings, Activity, Edit3 } from 'lucide-react';
@@ -29,7 +29,7 @@ interface FunnelAnalyticsPageProps {
  * @param {FunnelAnalyticsPageProps} props - The props passed to the component.
  * @returns {JSX.Element} The rendered FunnelAnalyticsPage component.
  */
-const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
+const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(({
   funnel,
   allUsers,
   allSalesData,
@@ -45,17 +45,33 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
     funnel.id
   );
 
-  // Debug logging
-  console.log('FunnelAnalyticsPage Debug:', {
-    funnelId: funnel.id,
+  // Memoized computed values for better performance
+  const funnelValidation = useMemo(() => ({
+    isValid: hasValidFlow(funnel),
     isDeployed: funnel.isDeployed,
-    wasEverDeployed: funnel.wasEverDeployed,
-    hasValidFlow: hasValidFlow(funnel),
-    allUsersCount: allUsers.length,
-    allSalesDataCount: allSalesData.length,
-    funnelStats,
-    salesStats
-  });
+    wasEverDeployed: funnel.wasEverDeployed
+  }), [funnel]);
+
+  // Memoized handlers
+  const handleGoToBuilder = useCallback(() => {
+    onGoToBuilder(funnel);
+  }, [onGoToBuilder, funnel]);
+
+  const handleGlobalGeneration = useCallback(async () => {
+    await onGlobalGeneration();
+  }, [onGlobalGeneration]);
+
+  // Debug logging (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('FunnelAnalyticsPage Debug:', {
+      funnelId: funnel.id,
+      ...funnelValidation,
+      allUsersCount: allUsers.length,
+      allSalesDataCount: allSalesData.length,
+      funnelStats,
+      salesStats
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
@@ -99,18 +115,12 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
               </div>
               
               {/* Right Side: Edit Button - Only show if funnel has valid flow */}
-              {hasValidFlow(funnel) && (
+              {funnelValidation.isValid && (
                 <div className="flex-shrink-0">
                   <Button
                     size="3"
                     color="violet"
-                    onClick={() => {
-                    if (hasValidFlow(funnel)) {
-                      onGoToBuilder(funnel);
-                    } else {
-                      console.warn('Cannot edit funnel without valid flow');
-                    }
-                  }}
+                    onClick={handleGoToBuilder}
                     className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
                   >
                     <Edit3 size={20} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
@@ -182,14 +192,16 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = ({
         <UnifiedNavigation
           onPreview={() => {}} // No preview in analytics
           onFunnelProducts={() => {}} // Already on analytics page
-          onGeneration={onGlobalGeneration}
-          isGenerated={hasValidFlow(funnel)}
+          onGeneration={handleGlobalGeneration}
+          isGenerated={funnelValidation.isValid}
           isGenerating={isGenerating}
           showOnPage="analytics" // Hide on analytics page
         />
       )}
     </div>
   );
-};
+});
+
+FunnelAnalyticsPage.displayName = 'FunnelAnalyticsPage';
 
 export default FunnelAnalyticsPage;

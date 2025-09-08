@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Button, Text, Heading } from 'frosted-ui';
 import * as Dialog from '@radix-ui/react-dialog';
 import { 
@@ -32,7 +32,7 @@ interface AdminSidebarProps {
  * 
  * Following Whop's design patterns for clean, organized navigation.
  */
-const AdminSidebar: React.FC<AdminSidebarProps> = ({
+const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(({
   currentView,
   onViewChange,
   className = '',
@@ -42,17 +42,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
 }) => {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   
-  const isDashboardView = currentView === 'dashboard';
-  const isLibraryView = currentView === 'resourceLibrary';
-  const isAnalyticsView = currentView === 'analytics';
-  const isResourcesView = currentView === 'resources';
-  const isFunnelBuilderView = currentView === 'funnelBuilder';
-  const isLiveChatView = currentView === 'liveChat';
+  // Memoized view states for better performance
+  const viewStates = useMemo(() => ({
+    isDashboardView: currentView === 'dashboard',
+    isLibraryView: currentView === 'resourceLibrary',
+    isAnalyticsView: currentView === 'analytics',
+    isResourcesView: currentView === 'resources',
+    isFunnelBuilderView: currentView === 'funnelBuilder',
+    isLiveChatView: currentView === 'liveChat'
+  }), [currentView]);
 
 
-  const handleViewChange = (view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat') => {
+  const handleViewChange = useCallback((view: 'dashboard' | 'analytics' | 'resources' | 'resourceLibrary' | 'funnelBuilder' | 'preview' | 'liveChat') => {
     onViewChange(view);
-  };
+  }, [onViewChange]);
 
     return (
     <>
@@ -64,10 +67,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
             <Button
               variant="ghost"
-              color={isDashboardView ? "violet" : "gray"}
+              color={viewStates.isDashboardView ? "violet" : "gray"}
               onClick={() => handleViewChange('dashboard')}
               className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
-                isDashboardView 
+                viewStates.isDashboardView 
                   ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
                   : 'hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground'
               }`}
@@ -76,7 +79,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <div className="relative">
                 <Zap size={20} strokeWidth={2} />
               </div>
-              {isDashboardView && (
+              {viewStates.isDashboardView && (
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
               )}
 
@@ -87,10 +90,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
             <Button
               variant="ghost"
-              color={isLibraryView ? "violet" : "gray"}
+              color={viewStates.isLibraryView ? "violet" : "gray"}
               onClick={() => handleViewChange('resourceLibrary')}
               className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
-                isLibraryView 
+                viewStates.isLibraryView 
                   ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
                   : 'hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground'
               }`}
@@ -99,14 +102,14 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <div className="relative">
                 <Library size={20} strokeWidth={2} />
               </div>
-              {isLibraryView && (
+              {viewStates.isLibraryView && (
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
               )}
 
             </Button>
             
             {/* Context Indicator */}
-            {isLibraryView && libraryContext === 'funnel' && currentFunnelForLibrary && (
+            {viewStates.isLibraryView && libraryContext === 'funnel' && currentFunnelForLibrary && (
               <div className="mt-2 px-2 py-1 bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-700/30 rounded-lg">
                 <div className="text-xs text-violet-700 dark:text-violet-300 font-medium truncate">
                   {currentFunnelForLibrary.name}
@@ -122,10 +125,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
             <Button
               variant="ghost"
-              color={isLiveChatView ? "violet" : "gray"}
+              color={viewStates.isLiveChatView ? "violet" : "gray"}
               onClick={() => handleViewChange('liveChat')}
               className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
-                isLiveChatView 
+                viewStates.isLiveChatView 
                   ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
                   : 'hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground'
               }`}
@@ -134,7 +137,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <div className="relative">
                 <MessageCircle size={20} strokeWidth={2} />
               </div>
-              {isLiveChatView && (
+              {viewStates.isLiveChatView && (
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
               )}
             </Button>
@@ -150,17 +153,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {/* Automations */}
           <Button
             variant="ghost"
-            color={isDashboardView ? "violet" : "gray"}
+            color={viewStates.isDashboardView ? "violet" : "gray"}
             onClick={() => handleViewChange('dashboard')}
             className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 min-h-[60px] ${
-              isDashboardView 
+              viewStates.isDashboardView 
                 ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
                 : 'text-muted-foreground active:text-foreground active:bg-surface/80 dark:active:bg-surface/60'
             }`}
           >
             <div className="relative mb-1">
               <Zap size={20} strokeWidth={2} />
-              {isDashboardView && (
+              {viewStates.isDashboardView && (
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
               )}
             </div>
@@ -170,24 +173,24 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {/* Library */}
           <Button
             variant="ghost"
-            color={isLibraryView ? "violet" : "gray"}
+            color={viewStates.isLibraryView ? "violet" : "gray"}
             onClick={() => handleViewChange('resourceLibrary')}
             className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 min-h-[60px] ${
-              isLibraryView 
+              viewStates.isLibraryView 
                 ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
                 : 'text-muted-foreground active:text-foreground active:bg-surface/80 dark:active:bg-surface/60'
             }`}
           >
             <div className="relative mb-1">
               <Library size={20} strokeWidth={2} />
-              {isLibraryView && (
+              {viewStates.isLibraryView && (
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
               )}
             </div>
             <Text size="1" weight="semi-bold" className="text-xs">Library</Text>
             
             {/* Mobile Context Indicator */}
-            {isLibraryView && libraryContext === 'funnel' && currentFunnelForLibrary && (
+            {viewStates.isLibraryView && libraryContext === 'funnel' && currentFunnelForLibrary && (
               <div className="mt-1 px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-700/30 rounded-md">
                 <div className="text-[10px] text-violet-700 dark:text-violet-300 font-medium truncate max-w-[60px]">
                   {currentFunnelForLibrary.name}
@@ -199,17 +202,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {/* Live Chat */}
           <Button
             variant="ghost"
-            color={isLiveChatView ? "violet" : "gray"}
+            color={viewStates.isLiveChatView ? "violet" : "gray"}
             onClick={() => handleViewChange('liveChat')}
             className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 min-h-[60px] ${
-              isLiveChatView 
+              viewStates.isLiveChatView 
                 ? 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
                 : 'text-muted-foreground active:text-foreground active:bg-surface/80 dark:active:bg-surface/60'
             }`}
           >
             <div className="relative mb-1">
               <MessageCircle size={20} strokeWidth={2} />
-              {isLiveChatView && (
+              {viewStates.isLiveChatView && (
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
               )}
             </div>
@@ -265,6 +268,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </Dialog.Root>
     </>
   );
-};
+});
+
+AdminSidebar.displayName = 'AdminSidebar';
 
 export default AdminSidebar;
