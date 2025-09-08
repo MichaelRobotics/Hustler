@@ -109,18 +109,20 @@ const FunnelsDashboard = React.memo(({
     // Memoized computed values for better performance
     const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
     
-    const funnelCards = useMemo(() => funnels.map((funnel) => {
-        const isValid = hasValidFlow(funnel.flow);
-        const isGenerating = funnel.generationStatus === 'generating';
-        const isEditing = editingFunnelId === funnel.id;
-        
-        return {
-            ...funnel,
-            isValid,
-            isGenerating,
-            isEditing
-        };
-    }), [funnels, editingFunnelId]);
+    const funnelCards = useMemo(() => funnels
+        .filter(funnel => funnel != null) // Filter out null funnels
+        .map((funnel) => {
+            const isValid = hasValidFlow(funnel);
+            const isGenerating = funnel.generationStatus === 'generating';
+            const isEditing = editingFunnelId === funnel.id;
+            
+            return {
+                ...funnel,
+                isValid,
+                isGenerating,
+                isEditing
+            };
+        }), [funnels, editingFunnelId]);
 
     return (
       <div className="space-y-6">

@@ -26,7 +26,12 @@ interface Funnel {
  * @param funnel - The funnel object to validate
  * @returns boolean - True if the funnel has valid, complete flow data
  */
-export const hasValidFlow = (funnel: Funnel): boolean => {
+export const hasValidFlow = (funnel: Funnel | null): boolean => {
+  // Check if funnel exists
+  if (!funnel) {
+    return false;
+  }
+  
   // Check if flow exists
   if (!funnel.flow) {
     return false;
@@ -62,7 +67,7 @@ export const hasValidFlow = (funnel: Funnel): boolean => {
  * @param funnel - The funnel object to check
  * @returns boolean - True if flow property exists (even if empty)
  */
-export const hasFlowProperty = (funnel: Funnel): boolean => {
-  return !!funnel.flow;
+export const hasFlowProperty = (funnel: Funnel | null): boolean => {
+  return !!(funnel && funnel.flow);
 };
 
