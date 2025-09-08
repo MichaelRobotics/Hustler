@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import { Card, Text, Button } from 'frosted-ui';
 import { ArrowUpDown, Search } from 'lucide-react';
 import ConversationCard from './ConversationCard';
@@ -17,6 +17,9 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(({
   isLoading = false
 }) => {
 
+  // Performance optimization: cache search query
+  const searchQuery = useMemo(() => filters.searchQuery?.trim().toLowerCase() || '', [filters.searchQuery]);
+  
   // Filter and sort conversations based on current filters
   const filteredConversations = useMemo(() => {
     let filtered = conversations.filter(conv => conv && conv.status); // Add defensive check
@@ -26,23 +29,22 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(({
       filtered = filtered.filter(conv => conv.status === filters.status);
     }
 
-    // Filter by search query
-    if (filters.searchQuery?.trim()) {
-      const query = filters.searchQuery.toLowerCase();
+    // Filter by search query (optimized with cached query)
+    if (searchQuery) {
       filtered = filtered.filter(conv => 
-        conv.user.name.toLowerCase().includes(query) ||
-        conv.user.email?.toLowerCase().includes(query) ||
-        conv.funnelName.toLowerCase().includes(query)
+        conv.user.name.toLowerCase().includes(searchQuery) ||
+        conv.user.email?.toLowerCase().includes(searchQuery) ||
+        conv.funnelName.toLowerCase().includes(searchQuery)
       );
     }
 
-    // Sort by last message time
+    // Sort by last message time (optimized with cached timestamps)
     return filtered.sort((a, b) => {
-      const timeA = new Date(a.lastMessageAt).getTime();
-      const timeB = new Date(b.lastMessageAt).getTime();
+      const timeA = a.lastMessageAt.getTime();
+      const timeB = b.lastMessageAt.getTime();
       return filters.sortBy === 'oldest' ? timeA - timeB : timeB - timeA;
     });
-  }, [conversations, filters]);
+  }, [conversations, filters.status, searchQuery, filters.sortBy]);
 
   const handleSortChange = useCallback((sortBy: 'newest' | 'oldest') => {
     onFiltersChange({ ...filters, sortBy });

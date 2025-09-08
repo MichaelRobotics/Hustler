@@ -24,7 +24,7 @@
  * - Error handling structure is in place
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Card, Text, Heading, Button } from 'frosted-ui';
 import { ArrowLeft, MessageCircle, Search } from 'lucide-react';
 import { ThemeToggle } from '../common/ThemeToggle';
@@ -103,7 +103,7 @@ const mockConversations: LiveChatConversation[] = [
   },
 ];
 
-// Utility function to simulate backend auto-closing logic
+// Optimized utility function to simulate backend auto-closing logic
 const simulateAutoClose = (conversations: LiveChatConversation[]): LiveChatConversation[] => {
   const now = new Date();
   return conversations.map(conv => {
@@ -117,6 +117,23 @@ const simulateAutoClose = (conversations: LiveChatConversation[]): LiveChatConve
     }
     return conv;
   });
+};
+
+// Debounce utility for search
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
 };
 
 const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
@@ -134,14 +151,26 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Performance optimizations
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastUpdateRef = useRef<number>(0);
+
   const selectedConversation = useMemo(() => {
     return conversations.find(c => c.id === selectedConversationId) || null;
   }, [selectedConversationId, conversations]);
 
 
-  // Simulate backend auto-closing behavior
+  // Optimized backend auto-closing behavior with throttling
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateConversations = () => {
+      const now = performance.now();
+      // Throttle updates to prevent excessive re-renders
+      if (now - lastUpdateRef.current < 5000) { // 5 second throttle
+        return;
+      }
+      lastUpdateRef.current = now;
+
       setConversations(prevConversations => {
         const updatedConversations = simulateAutoClose(prevConversations);
         // Only update if there were changes - use shallow comparison instead of JSON.stringify
@@ -152,9 +181,16 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
         
         return hasChanges ? updatedConversations : prevConversations;
       });
-    }, 60000); // Check every minute
+    };
 
-    return () => clearInterval(interval);
+    // Reduced frequency from 60s to 2 minutes for better performance
+    intervalRef.current = setInterval(updateConversations, 120000); // Check every 2 minutes
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, []);
 
   const handleSelectConversation = useCallback((conversationId: string) => {
@@ -177,6 +213,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
       isRead: true,
     };
 
+    // Optimized state update with functional update to prevent stale closures
     setConversations(prevConversations => 
       prevConversations.map(conv => 
         conv.id === selectedConversationId 
@@ -194,15 +231,22 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
   }, [selectedConversationId]);
 
 
-  // Handle search reset
-  const handleSearchReset = () => {
+  // Memoized handlers for better performance
+  const handleSearchReset = useCallback(() => {
     setSearchQuery('');
-  };
+  }, []);
 
-  // Handle search state change
-  const handleSearchStateChange = (isOpen: boolean) => {
+  const handleSearchStateChange = useCallback((isOpen: boolean) => {
     setIsSearchOpen(isOpen);
-  };
+  }, []);
+
+  const handleFiltersChange = useCallback((newFilters: LiveChatFilters) => {
+    setFilters(newFilters);
+  }, []);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
 
   return (
@@ -214,8 +258,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
             onBack={onBack}
             filters={filters}
             searchQuery={searchQuery}
-            onFiltersChange={setFilters}
-            onSearchChange={setSearchQuery}
+            onFiltersChange={handleFiltersChange}
+            onSearchChange={handleSearchChange}
             onSearchStateChange={handleSearchStateChange}
           />
         </div>
@@ -238,8 +282,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
                   conversations={conversations}
                   selectedConversationId={selectedConversationId || undefined}
                   onSelectConversation={handleSelectConversation}
-                  filters={{ ...filters, searchQuery }}
-                  onFiltersChange={setFilters}
+                  filters={{ ...filters, searchQuery: debouncedSearchQuery }}
+                  onFiltersChange={handleFiltersChange}
                   onSearchReset={handleSearchReset}
                 />
               </div>
@@ -254,8 +298,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
                 conversations={conversations}
                 selectedConversationId={selectedConversationId || undefined}
                 onSelectConversation={handleSelectConversation}
-                filters={{ ...filters, searchQuery }}
-                onFiltersChange={setFilters}
+                filters={{ ...filters, searchQuery: debouncedSearchQuery }}
+                onFiltersChange={handleFiltersChange}
                 onSearchReset={handleSearchReset}
                 isLoading={isLoading}
               />

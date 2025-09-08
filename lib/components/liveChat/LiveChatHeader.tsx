@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Heading, Button } from 'frosted-ui';
 import { ArrowLeft, Search, ArrowUpDown, X } from 'lucide-react';
 import { ThemeToggle } from '../common/ThemeToggle';
@@ -15,7 +15,7 @@ interface LiveChatHeaderProps {
   onSearchStateChange?: (isSearchOpen: boolean) => void;
 }
 
-const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
+const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(({
   onBack,
   filters,
   searchQuery,
@@ -34,26 +34,37 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
     }
   }, [isMobileSearchOpen]);
 
-  // Handle mobile search input change
-  const handleMobileSearchChange = (value: string) => {
+  // Memoized handlers for better performance
+  const handleMobileSearchChange = useCallback((value: string) => {
     setMobileSearchQuery(value);
     onSearchChange(value);
-  };
+  }, [onSearchChange]);
 
-  // Handle mobile search close
-  const handleMobileSearchClose = () => {
+  const handleMobileSearchClose = useCallback(() => {
     setIsMobileSearchOpen(false);
     setMobileSearchQuery('');
     onSearchChange('');
     onSearchStateChange?.(false);
-  };
+  }, [onSearchChange, onSearchStateChange]);
 
-  // Handle mobile search open
-  const handleMobileSearchOpen = () => {
+  const handleMobileSearchOpen = useCallback(() => {
     setIsMobileSearchOpen(true);
     setMobileSearchQuery(searchQuery);
     onSearchStateChange?.(true);
-  };
+  }, [searchQuery, onSearchStateChange]);
+
+  // Memoized filter handlers
+  const handleStatusToggle = useCallback(() => {
+    onFiltersChange({ ...filters, status: (filters.status || 'open') === 'open' ? 'closed' : 'open' });
+  }, [filters, onFiltersChange]);
+
+  const handleSortToggle = useCallback(() => {
+    onFiltersChange({ ...filters, sortBy: (filters.sortBy || 'newest') === 'newest' ? 'oldest' : 'newest' });
+  }, [filters, onFiltersChange]);
+
+  // Memoized computed values
+  const isOpenStatus = useMemo(() => (filters.status || 'open') === 'open', [filters.status]);
+  const isNewestSort = useMemo(() => (filters.sortBy || 'newest') === 'newest', [filters.sortBy]);
   return (
     <div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
       {/* Top Section: Back Button + Title + Search */}
@@ -149,23 +160,23 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
         {/* Left Side: Toggle Filter Button */}
         <div className="flex-shrink-0 flex items-center gap-2">
           <div className={`p-1 rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-200 ${
-            (filters.status || 'open') === 'open'
+            isOpenStatus
               ? 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-500 shadow-green-500/25 dark:shadow-green-500/30' 
               : 'bg-gray-50 dark:bg-gray-900/30 border-gray-400 dark:border-gray-500 shadow-gray-500/25 dark:shadow-gray-500/30'
           }`}>
             <Button
               size="3"
               variant="ghost"
-              color={(filters.status || 'open') === 'open' ? 'green' : 'gray'}
-              onClick={() => onFiltersChange({ ...filters, status: (filters.status || 'open') === 'open' ? 'closed' : 'open' })}
+              color={isOpenStatus ? 'green' : 'gray'}
+              onClick={handleStatusToggle}
               className={`px-4 sm:px-6 py-3 transition-all duration-200 group ${
-                (filters.status || 'open') === 'open'
+                isOpenStatus
                   ? 'text-green-700 dark:text-green-300' 
                   : 'text-gray-700 dark:text-gray-300'
               }`}
             >
               <span className="font-semibold text-sm sm:text-base">
-                {(filters.status || 'open') === 'open' ? 'Open' : 'Closed'}
+                {isOpenStatus ? 'Open' : 'Closed'}
               </span>
             </Button>
           </div>
@@ -185,9 +196,9 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
               size="3"
               variant="ghost"
               color="violet"
-              onClick={() => onFiltersChange({ ...filters, sortBy: (filters.sortBy || 'newest') === 'newest' ? 'oldest' : 'newest' })}
+              onClick={handleSortToggle}
               className="px-4 sm:px-6 py-3 text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-all duration-200 group"
-              title={`Sort by ${(filters.sortBy || 'newest') === 'newest' ? 'Oldest' : 'Newest'}`}
+              title={`Sort by ${isNewestSort ? 'Oldest' : 'Newest'}`}
             >
               <ArrowUpDown size={18} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300 sm:w-5 sm:h-5" />
             </Button>
@@ -196,6 +207,8 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = ({
       </div>
     </div>
   );
-};
+});
+
+LiveChatHeader.displayName = 'LiveChatHeader';
 
 export default LiveChatHeader;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, Send, User } from 'lucide-react';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { LiveChatConversation, LiveChatMessage } from '../../types/liveChat';
@@ -24,23 +24,40 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageCountRef = useRef<number>(0);
 
-  // Auto-scroll to bottom when new messages arrive
-  const messageCount = conversation.messages.length;
+  // Memoized message count to prevent unnecessary re-renders
+  const messageCount = useMemo(() => conversation.messages.length, [conversation.messages.length]);
   
   const scrollToBottom = useCallback(() => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({
-        behavior: 'auto',
-        block: 'end',
-        inline: 'nearest'
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({
+            behavior: 'auto',
+            block: 'end',
+            inline: 'nearest'
+          });
+        }
       });
     }
   }, []);
 
+  // Optimized auto-scroll with throttling
   useEffect(() => {
-    if (messageCount > 0) {
-      setTimeout(scrollToBottom, 50);
+    // Only scroll if message count actually changed
+    if (messageCount > 0 && messageCount !== lastMessageCountRef.current) {
+      lastMessageCountRef.current = messageCount;
+      
+      // Clear any existing scroll timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Throttle scroll to prevent excessive DOM manipulation
+      scrollTimeoutRef.current = setTimeout(scrollToBottom, 100);
     }
   }, [messageCount, scrollToBottom]);
 
@@ -65,7 +82,10 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
           setIsTyping(false);
         }, 2000 + Math.random() * 2000); // Random delay between 2-4 seconds
         
-        setTimeout(scrollToBottom, 50);
+        // Optimized scroll with requestAnimationFrame
+        requestAnimationFrame(() => {
+          scrollToBottom();
+        });
       } catch (error) {
         console.error('Failed to send message:', error);
         // Hide typing indicator on error
@@ -83,11 +103,14 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
     }
   }, [handleSendMessage]);
 
-  // Cleanup typing timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
     };
   }, []);
@@ -104,19 +127,24 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
 
   const handleTextareaInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
     const target = e.target as HTMLTextAreaElement;
-    target.style.height = 'auto';
-    target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+    // Use requestAnimationFrame for smoother height adjustment
+    requestAnimationFrame(() => {
+      target.style.height = 'auto';
+      target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+    });
   }, []);
 
-  const formatTime = (date: Date) => {
+  // Memoized time formatter to prevent recreation on every render
+  const formatTime = useCallback((date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
     }).format(date);
-  };
+  }, []);
 
-  const renderMessage = (message: LiveChatMessage) => {
+  // Memoized message renderer to prevent unnecessary re-renders
+  const renderMessage = useCallback((message: LiveChatMessage) => {
     // Agent perspective: agent messages on right, user messages on left
     const isAgent = message.type === 'bot' || message.type === 'system' || message.type === 'agent';
     const isUser = message.type === 'user';
@@ -144,7 +172,12 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
         </div>
       </div>
     );
-  };
+  }, [formatTime]);
+
+  // Memoized messages list to prevent unnecessary re-renders
+  const messagesList = useMemo(() => {
+    return conversation.messages.map(renderMessage);
+  }, [conversation.messages, renderMessage]);
 
 
   return (
@@ -235,7 +268,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
             </div>
           ) : (
             <>
-              {conversation.messages.map(renderMessage)}
+              {messagesList}
               
               {/* Typing Indicator - User is typing (appears on left) */}
               {isTyping && (
@@ -260,7 +293,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo((
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onInput={handleTextareaInput}
-                placeholder={`Type your message to ${conversation.user.name}...`}
+                placeholder="Message..."
                 rows={1}
                 className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 rounded-xl text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[48px] max-h-32 touch-manipulation shadow-sm"
                 style={{
