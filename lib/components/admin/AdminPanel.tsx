@@ -626,6 +626,7 @@ const AdminPanel = React.memo(() => {
 									setIsCreatingNewFunnel={setIsCreatingNewFunnel}
 									newFunnelName={newFunnelName}
 									setNewFunnelName={setNewFunnelName}
+									funnelToDelete={funnelToDelete}
 								/>
 							</div>
 

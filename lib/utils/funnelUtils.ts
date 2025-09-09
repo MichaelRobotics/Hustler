@@ -4,29 +4,7 @@
  * Keeping these functions separate helps to maintain a clean and organized codebase.
  */
 
-interface FunnelBlockOption {
-	text: string;
-	nextBlockId: string | null;
-}
-
-interface FunnelBlock {
-	id: string;
-	message: string;
-	options: FunnelBlockOption[];
-}
-
-interface FunnelStage {
-	id: string;
-	name: string;
-	explanation: string;
-	blockIds: string[];
-}
-
-interface FunnelFlow {
-	startBlockId: string;
-	stages: FunnelStage[];
-	blocks: Record<string, FunnelBlock>;
-}
+import { FunnelFlow, FunnelStage, FunnelBlock, FunnelBlockOption } from "@/lib/types/funnel";
 
 interface Resource {
 	id: string;

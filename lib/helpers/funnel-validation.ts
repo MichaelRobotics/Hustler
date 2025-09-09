@@ -4,11 +4,7 @@
  * robust checking across the application.
  */
 
-interface FunnelFlow {
-	startBlockId: string;
-	stages: any[];
-	blocks: Record<string, any>;
-}
+import { FunnelFlow } from "@/lib/types/funnel";
 
 interface Funnel {
 	id: string;

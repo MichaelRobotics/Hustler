@@ -10,9 +10,16 @@ export interface FunnelBlock {
 	resourceName?: string;
 }
 
+export interface FunnelStage {
+	id: string;
+	name: string;
+	explanation: string;
+	blockIds: string[];
+}
+
 export interface FunnelFlow {
 	startBlockId: string;
-	stages: any[];
+	stages: FunnelStage[];
 	blocks: Record<string, FunnelBlock>;
 }
 

@@ -37,6 +37,7 @@ export function useFunnelManagement() {
 	const [funnelToDelete, setFunnelToDelete] = useState<Funnel | null>(null);
 	const [editingFunnelId, setEditingFunnelId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const [isDeleting, setIsDeleting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	// Use regular fetch since authentication is handled server-side
@@ -122,6 +123,8 @@ export function useFunnelManagement() {
 		if (funnelToDelete) {
 			try {
 				setError(null);
+				setIsDeleting(true);
+				
 				const response = await deduplicatedFetch(
 					`/api/funnels/${funnelToDelete.id}`,
 					{
@@ -142,6 +145,8 @@ export function useFunnelManagement() {
 					err instanceof Error ? err.message : "Failed to delete funnel";
 				setError(errorMessage);
 				console.error("Error deleting funnel:", err);
+			} finally {
+				setIsDeleting(false);
 			}
 		}
 	};
@@ -540,6 +545,7 @@ export function useFunnelManagement() {
 		funnelToDelete,
 		editingFunnelId,
 		isLoading,
+		isDeleting,
 		error,
 
 		// Setters
