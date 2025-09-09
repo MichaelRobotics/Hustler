@@ -252,30 +252,21 @@ export const useFunnelLayout = (
 		}
 	}, [funnelFlow, layoutPhase, editingBlockId, layoutCompleted]);
 
-	// Functions to temporarily disable performance mode for specific actions
+	// Functions for specific actions - performance mode stays active
 	const enableCalculationsForOfferSelection = React.useCallback(() => {
-		if (performanceMode) {
-			setPerformanceMode(false);
-			// Re-enable performance mode after a short delay
-			setTimeout(() => setPerformanceMode(true), 100);
-		}
-	}, [performanceMode]);
+		// Performance mode remains active - no calculations needed for offer selection
+		// Highlighting calculations are handled by useFunnelInteraction hook
+	}, []);
 
 	const enableCalculationsForBlockHighlight = React.useCallback(() => {
-		if (performanceMode) {
-			setPerformanceMode(false);
-			// Re-enable performance mode after a short delay
-			setTimeout(() => setPerformanceMode(true), 100);
-		}
-	}, [performanceMode]);
+		// Performance mode remains active - no calculations needed for block highlighting
+		// Highlighting calculations are handled by useFunnelInteraction hook
+	}, []);
 
 	const enableCalculationsForGoLive = React.useCallback(() => {
-		if (performanceMode) {
-			setPerformanceMode(false);
-			// Re-enable performance mode after a short delay
-			setTimeout(() => setPerformanceMode(true), 100);
-		}
-	}, [performanceMode]);
+		// Performance mode remains active - no layout calculations needed for Go Live
+		// Deployment validation is handled by useFunnelDeployment hook
+	}, []);
 
 	return {
 		positions,

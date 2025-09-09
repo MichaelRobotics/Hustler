@@ -76,8 +76,6 @@ const AdminPanel = React.memo(() => {
 		newFunnelName,
 		funnelToDelete,
 		editingFunnelId,
-		isDeleting,
-		error,
 		setFunnels,
 		setSelectedFunnel,
 		setIsAddDialogOpen,
