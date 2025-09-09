@@ -134,10 +134,10 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 			// Immediately hide sidebar when starting to edit
 			setIsEditingResource(true);
 		} else {
-			// Add small delay before showing sidebar when canceling edit
+			// Add delay before showing sidebar when canceling edit (matches mobile keyboard close animation)
 			setTimeout(() => {
 				setIsEditingResource(false);
-			}, 150); // Small delay to allow for smooth transition
+			}, 250); // 250ms delay to match mobile keyboard close animation
 		}
 	};
 
