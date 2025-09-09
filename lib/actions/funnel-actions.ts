@@ -11,6 +11,7 @@ import {
 } from "../supabase/schema";
 import { realTimeUpdates } from "../websocket/updates";
 import { generateFunnelFlow } from "./ai-actions";
+import { PRODUCT_LIMITS, GLOBAL_LIMITS } from "../types/resource";
 
 export interface CreateFunnelInput {
 	name: string;
@@ -62,6 +63,23 @@ export async function createFunnel(
 	input: CreateFunnelInput,
 ): Promise<FunnelWithResources> {
 	try {
+		// Check global funnel limit before creating
+		const existingFunnelsCount = await db
+			.select({ count: count() })
+			.from(funnels)
+			.where(
+				and(
+					eq(funnels.experienceId, user.experienceId),
+					eq(funnels.userId, user.id),
+				),
+			);
+
+		if (existingFunnelsCount[0].count >= GLOBAL_LIMITS.FUNNELS) {
+			throw new Error(
+				`Cannot create funnel: limit reached (max ${GLOBAL_LIMITS.FUNNELS} funnels per account)`,
+			);
+		}
+
 		// Create the funnel
 		const [newFunnel] = await db
 			.insert(funnels)
@@ -91,6 +109,26 @@ export async function createFunnel(
 			if (userResources.length !== input.resources.length) {
 				throw new Error(
 					"Some resources do not exist or belong to different experience",
+				);
+			}
+
+			// Check product limits before assigning resources
+			const paidCount = userResources.filter(
+				(r: any) => r.category === "PAID",
+			).length;
+			const freeValueCount = userResources.filter(
+				(r: any) => r.category === "FREE_VALUE",
+			).length;
+
+			if (paidCount > PRODUCT_LIMITS.PAID) {
+				throw new Error(
+					`Cannot create funnel: too many paid products (max ${PRODUCT_LIMITS.PAID} paid products per funnel)`,
+				);
+			}
+
+			if (freeValueCount > PRODUCT_LIMITS.FREE_VALUE) {
+				throw new Error(
+					`Cannot create funnel: too many free products (max ${PRODUCT_LIMITS.FREE_VALUE} free products per funnel)`,
 				);
 			}
 
@@ -381,6 +419,26 @@ export async function updateFunnel(
 				if (userResources.length !== input.resources.length) {
 					throw new Error(
 						"Some resources do not exist or belong to different experience",
+					);
+				}
+
+				// Check product limits before assigning resources
+				const paidCount = userResources.filter(
+					(r: any) => r.category === "PAID",
+				).length;
+				const freeValueCount = userResources.filter(
+					(r: any) => r.category === "FREE_VALUE",
+				).length;
+
+				if (paidCount > PRODUCT_LIMITS.PAID) {
+					throw new Error(
+						`Cannot update funnel: too many paid products (max ${PRODUCT_LIMITS.PAID} paid products per funnel)`,
+					);
+				}
+
+				if (freeValueCount > PRODUCT_LIMITS.FREE_VALUE) {
+					throw new Error(
+						`Cannot update funnel: too many free products (max ${PRODUCT_LIMITS.FREE_VALUE} free products per funnel)`,
 					);
 				}
 
@@ -829,6 +887,39 @@ export async function addResourceToFunnel(
 
 		if (existingRelation) {
 			throw new Error("Resource is already in this funnel");
+		}
+
+		// Check product limits before adding
+		const currentResources = await db
+			.select({
+				resource: resources,
+			})
+			.from(funnelResources)
+			.innerJoin(resources, eq(funnelResources.resourceId, resources.id))
+			.where(eq(funnelResources.funnelId, funnelId));
+
+		// Count current resources by category
+		const paidCount = currentResources.filter(
+			(r: any) => r.resource.category === "PAID",
+		).length;
+		const freeValueCount = currentResources.filter(
+			(r: any) => r.resource.category === "FREE_VALUE",
+		).length;
+
+		// Check if adding this resource would exceed limits
+		if (resource.category === "PAID" && paidCount >= PRODUCT_LIMITS.PAID) {
+			throw new Error(
+				`Cannot add paid product: limit reached (max ${PRODUCT_LIMITS.PAID} paid products per funnel)`,
+			);
+		}
+
+		if (
+			resource.category === "FREE_VALUE" &&
+			freeValueCount >= PRODUCT_LIMITS.FREE_VALUE
+		) {
+			throw new Error(
+				`Cannot add free product: limit reached (max ${PRODUCT_LIMITS.FREE_VALUE} free products per funnel)`,
+			);
 		}
 
 		// Add resource to funnel

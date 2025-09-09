@@ -1,6 +1,7 @@
 "use client";
 
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
+import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Button, Heading, Text } from "frosted-ui";
 import {
@@ -13,7 +14,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { ThemeToggle } from "../common/ThemeToggle";
 
 interface Funnel {
@@ -51,6 +52,7 @@ interface FunnelsDashboardProps {
 	newFunnelName: string;
 	setNewFunnelName: (name: string) => void;
 	funnelToDelete: Funnel | null;
+	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
 }
 
 const FunnelsDashboard = React.memo(
@@ -74,6 +76,7 @@ const FunnelsDashboard = React.memo(
 		newFunnelName,
 		setNewFunnelName,
 		funnelToDelete,
+		isFunnelNameAvailable,
 	}: FunnelsDashboardProps) => {
 		// State to track which dropdown is open and which button is highlighted
 		const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -83,51 +86,68 @@ const FunnelsDashboard = React.memo(
 		const [editingName, setEditingName] = useState("");
 		const [isSaving, setIsSaving] = useState(false);
 
-		// Memoized handler for creating a new funnel
-		const handleCreateNewFunnel = useCallback(
-			async (funnelName: string) => {
-				setIsSaving(true);
-				try {
-					const response = await fetch("/api/funnels", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ name: funnelName.trim() }),
-					});
-
-					if (!response.ok) {
-						const errorData = await response.json();
-						throw new Error(errorData.message || "Failed to create funnel");
-					}
-
-					const data = await response.json();
-					const newFunnel = data.data;
-
-					// Update funnels state (like the original handleAddFunnel)
-					setFunnels([...funnels, newFunnel]);
-
-					// Reset states
-					setIsCreatingNewFunnel(false);
-					handleSetIsRenaming(false);
-					setEditingFunnelId(null);
-					setNewFunnelName("");
-
-					return newFunnel;
-				} catch (error) {
-					console.error("Error creating funnel:", error);
-					throw error;
-				} finally {
-					setIsSaving(false);
+		// Initialize editing name when editing starts
+		useEffect(() => {
+			if (editingFunnelId) {
+				const funnel = funnels.find((f) => f.id === editingFunnelId);
+				if (funnel) {
+					setEditingName(funnel.name);
 				}
-			},
-			[
-				funnels,
-				setFunnels,
-				setIsCreatingNewFunnel,
-				setIsRenaming,
-				setEditingFunnelId,
-				setNewFunnelName,
-			],
-		);
+			}
+		}, [editingFunnelId, funnels]);
+
+	// Memoized handler for creating a new funnel
+	const handleCreateNewFunnel = useCallback(
+		async (funnelName: string) => {
+			// Check if name is available
+			if (!isFunnelNameAvailable(funnelName)) {
+				console.error("Funnel name already exists");
+				return;
+			}
+
+			setIsSaving(true);
+			try {
+				const response = await fetch("/api/funnels", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ name: funnelName.trim() }),
+				});
+
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(errorData.message || "Failed to create funnel");
+				}
+
+				const data = await response.json();
+				const newFunnel = data.data;
+
+				// Update funnels state (like the original handleAddFunnel)
+				setFunnels([...funnels, newFunnel]);
+
+				// Reset states
+				setIsCreatingNewFunnel(false);
+				handleSetIsRenaming(false);
+				setEditingFunnelId(null);
+				setNewFunnelName("");
+
+				return newFunnel;
+			} catch (error) {
+				console.error("Error creating funnel:", error);
+				throw error;
+			} finally {
+				setIsSaving(false);
+			}
+		},
+		[
+			funnels,
+			setFunnels,
+			setIsCreatingNewFunnel,
+			setIsRenaming,
+			setEditingFunnelId,
+			setNewFunnelName,
+			isFunnelNameAvailable,
+		],
+	);
 
 		// Memoized computed values for better performance
 		const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
@@ -200,9 +220,18 @@ const FunnelsDashboard = React.memo(
 											onChange={(e) => setNewFunnelName(e.target.value)}
 											placeholder="Enter funnel name..."
 											disabled={isSaving}
-											className="w-full px-4 py-3 border-2 border-violet-300 dark:border-violet-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+											className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+												newFunnelName && !isFunnelNameAvailable(newFunnelName)
+													? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
+													: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
+											}`}
 											autoFocus
 										/>
+										{newFunnelName && !isFunnelNameAvailable(newFunnelName) && (
+											<div className="mt-2 text-sm text-red-600 dark:text-red-400">
+												This name is already taken. Please choose a different one.
+											</div>
+										)}
 									</div>
 									<div className="flex gap-2">
 										<Button
@@ -216,7 +245,11 @@ const FunnelsDashboard = React.memo(
 													console.error("Failed to create funnel:", error);
 												}
 											}}
-											disabled={isSaving || !newFunnelName.trim()}
+											disabled={
+												isSaving || 
+												!newFunnelName.trim() || 
+												!isFunnelNameAvailable(newFunnelName)
+											}
 											className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 dark:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
 											aria-label="Save funnel name"
 										>
@@ -323,10 +356,19 @@ const FunnelsDashboard = React.memo(
 											value={editingName}
 											onChange={(e) => setEditingName(e.target.value)}
 											disabled={isSaving}
-											className="w-full border-2 border-border/60 dark:border-violet-500/40 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-900 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/60 dark:focus:border-violet-400/80 transition-all duration-200 shadow-sm dark:shadow-lg dark:shadow-black/20 disabled:opacity-50 disabled:cursor-not-allowed"
+											className={`w-full border-2 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-900 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm dark:shadow-lg dark:shadow-black/20 disabled:opacity-50 disabled:cursor-not-allowed ${
+												editingName && !isFunnelNameAvailable(editingName, funnel.id)
+													? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
+													: "border-border/60 dark:border-violet-500/40 focus:ring-violet-500/50 focus:border-violet-500/60 dark:focus:border-violet-400/80"
+											}`}
 											autoFocus
 											onClick={(e) => e.stopPropagation()}
 										/>
+										{editingName && !isFunnelNameAvailable(editingName, funnel.id) && (
+											<div className="mt-1 text-xs text-red-600 dark:text-red-400">
+												This name is already taken. Please choose a different one.
+											</div>
+										)}
 										<div className="flex gap-2">
 											<Button
 												size="2"
@@ -357,7 +399,11 @@ const FunnelsDashboard = React.memo(
 														}
 													}
 												}}
-												disabled={isSaving}
+												disabled={
+													isSaving || 
+													!editingName.trim() || 
+													!isFunnelNameAvailable(editingName, funnel.id)
+												}
 												className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 dark:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
 												aria-label="Save funnel name"
 											>

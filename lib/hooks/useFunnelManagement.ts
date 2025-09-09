@@ -43,12 +43,34 @@ export function useFunnelManagement() {
 
 	// Use regular fetch since authentication is handled server-side
 
-	// Fetch funnels from API
+	// Helper function to check if a funnel name is available
+	// Normalizes names by removing extra spaces and converting to lowercase for comparison
+	const isFunnelNameAvailable = useCallback(
+		(name: string, currentId?: string): boolean => {
+			if (!name.trim()) return true;
+			
+			// Normalize the input name: trim, replace multiple spaces with single space, lowercase
+			const normalizedInputName = name.trim().replace(/\s+/g, ' ').toLowerCase();
+			
+			return !funnels.some(
+				(funnel) => {
+					// Normalize existing funnel name the same way
+					const normalizedExistingName = funnel.name.trim().replace(/\s+/g, ' ').toLowerCase();
+					return funnel.id !== currentId && normalizedExistingName === normalizedInputName;
+				}
+			);
+		},
+		[funnels],
+	);
+
+	// Fetch funnels from API - load one by one for better performance
 	const fetchFunnels = async () => {
 		try {
 			setIsLoading(true);
 			setError(null);
-			const response = await deduplicatedFetch("/api/funnels");
+			
+			// Load funnels with limit to prevent loading all at once
+			const response = await deduplicatedFetch("/api/funnels?limit=10");
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch funnels: ${response.statusText}`);
@@ -80,6 +102,12 @@ export function useFunnelManagement() {
 
 	const handleAddFunnel = async () => {
 		if (newFunnelName.trim()) {
+			// Check if name is available
+			if (!isFunnelNameAvailable(newFunnelName)) {
+				setError("Funnel name already exists. Please choose a different name.");
+				return;
+			}
+
 			try {
 				setError(null);
 				const response = await deduplicatedFetch("/api/funnels", {
@@ -198,6 +226,12 @@ export function useFunnelManagement() {
 	};
 
 	const handleSaveFunnelName = async (funnelId: string, newName: string) => {
+		// Check if name is available (excluding current funnel)
+		if (!isFunnelNameAvailable(newName, funnelId)) {
+			setError("Funnel name already exists. Please choose a different name.");
+			return;
+		}
+
 		try {
 			setError(null);
 			const response = await deduplicatedFetch(`/api/funnels/${funnelId}`, {
@@ -584,5 +618,8 @@ export function useFunnelManagement() {
 		fetchFunnels, // Add fetch function for manual refresh
 		handleGenerationComplete, // New: callback for generation completion
 		handleGenerationError, // New: callback for generation errors
+		
+		// Utilities
+		isFunnelNameAvailable,
 	};
 }

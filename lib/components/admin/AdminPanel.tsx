@@ -19,6 +19,7 @@ import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { useFunnelManagement } from "@/lib/hooks/useFunnelManagement";
 import { useResourceManagement } from "@/lib/hooks/useResourceManagement";
 import { useViewNavigation } from "@/lib/hooks/useViewNavigation";
+import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import type { Resource } from "@/lib/types/resource";
 import {
 	generateMockData,
@@ -101,6 +102,7 @@ const AdminPanel = React.memo(() => {
 		removeResourceFromFunnel,
 		handleGenerationComplete,
 		handleGenerationError,
+		isFunnelNameAvailable,
 	} = useFunnelManagement();
 
 	const {
@@ -607,7 +609,11 @@ const AdminPanel = React.memo(() => {
 				<div className="flex-1 overflow-auto w-full lg:w-auto">
 					<div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
 						<div className="max-w-7xl mx-auto">
-							<AdminHeader onAddFunnel={handleCreateNewFunnelInline} />
+							<AdminHeader 
+								onAddFunnel={handleCreateNewFunnelInline}
+								funnelCount={funnels.length}
+								maxFunnels={GLOBAL_LIMITS.FUNNELS}
+							/>
 
 							<div className="mt-8">
 								<FunnelsDashboard
@@ -629,6 +635,7 @@ const AdminPanel = React.memo(() => {
 									newFunnelName={newFunnelName}
 									setNewFunnelName={setNewFunnelName}
 									funnelToDelete={funnelToDelete}
+									isFunnelNameAvailable={isFunnelNameAvailable}
 								/>
 							</div>
 

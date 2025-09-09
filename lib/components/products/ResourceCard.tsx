@@ -10,12 +10,14 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { canAssignResource } from "../../helpers/product-limits";
 import type { Funnel, Resource } from "../../types/resource";
 
 interface ResourceCardProps {
 	resource: Resource;
 	funnel?: Funnel;
 	context: "global" | "funnel";
+	allResources: Resource[];
 	isResourceInFunnel: (resourceId: string) => boolean;
 	isResourceAssignedToAnyFunnel: (resourceId: string) => boolean;
 	onAddToFunnel?: (resource: Resource) => void;
@@ -33,6 +35,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	resource,
 	funnel,
 	context,
+	allResources,
 	isResourceInFunnel,
 	isResourceAssignedToAnyFunnel,
 	onAddToFunnel,
@@ -82,6 +85,23 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			return;
 		}
 
+		// Check if name is available (excluding current resource)
+		const isNameValid = !allResources.some(
+			(r) => {
+				if (r.id === resource.id) return false; // Skip current resource
+				// Normalize both names for comparison
+				const normalizedInputName = editedResource.name?.trim().replace(/\s+/g, ' ').toLowerCase();
+				const normalizedExistingName = r.name.trim().replace(/\s+/g, ' ').toLowerCase();
+				return normalizedExistingName === normalizedInputName;
+			}
+		);
+
+		if (!isNameValid) {
+			// You could set an error state here or show a toast notification
+			console.error("Product name already exists");
+			return;
+		}
+
 		setIsSaving(true);
 		try {
 			if (onUpdate) {
@@ -103,7 +123,13 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	};
 
 	const handleAssignToFunnel = () => {
-		if (!onAddToFunnel) return;
+		if (!onAddToFunnel || !funnel) return;
+
+		// Check if we can assign this resource (not at limit)
+		if (!canAssignResource(funnel, resource)) {
+			console.log("Cannot assign resource: limit reached for category", resource.category);
+			return;
+		}
 
 		setIsAssigning(true);
 		try {
@@ -141,7 +167,13 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 							disabled={
 								isSaving ||
 								!editedResource.name?.trim() ||
-								!editedResource.link?.trim()
+								!editedResource.link?.trim() ||
+								allResources.some((r) => {
+									if (r.id === resource.id) return false;
+									const normalizedInputName = editedResource.name?.trim().replace(/\s+/g, ' ').toLowerCase();
+									const normalizedExistingName = r.name.trim().replace(/\s+/g, ' ').toLowerCase();
+									return normalizedExistingName === normalizedInputName;
+								})
 							}
 							className="px-3 py-1 text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 						>
@@ -199,9 +231,30 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						}
 						placeholder="Product name..."
 						disabled={isSaving}
-						className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+						className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+							editedResource.name && 
+							allResources.some((r) => {
+								if (r.id === resource.id) return false;
+								const normalizedInputName = editedResource.name?.trim().replace(/\s+/g, ' ').toLowerCase();
+								const normalizedExistingName = r.name.trim().replace(/\s+/g, ' ').toLowerCase();
+								return normalizedExistingName === normalizedInputName;
+							})
+								? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
+								: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
+						}`}
 						autoFocus
 					/>
+					{editedResource.name && 
+						allResources.some((r) => {
+							if (r.id === resource.id) return false;
+							const normalizedInputName = editedResource.name?.trim().replace(/\s+/g, ' ').toLowerCase();
+							const normalizedExistingName = r.name.trim().replace(/\s+/g, ' ').toLowerCase();
+							return normalizedExistingName === normalizedInputName;
+						}) && (
+						<div className="mt-1 text-xs text-red-600 dark:text-red-400">
+							This name is already taken. Please choose a different one.
+						</div>
+					)}
 
 					{/* URL Field */}
 					<input
@@ -266,6 +319,10 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
 										<Check size={12} strokeWidth={2.5} />
 										Assigned
+									</div>
+								) : funnel && !canAssignResource(funnel, resource) ? (
+									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
+										<span className="font-bold">MAX</span>
 									</div>
 								) : (
 									<Button

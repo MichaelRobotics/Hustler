@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db";
 import { funnelResources, funnels, resources } from "../supabase/schema";
+import { GLOBAL_LIMITS } from "../types/resource";
 import { whopSdk } from "../whop-sdk";
 
 export interface CreateResourceInput {
@@ -68,6 +69,23 @@ export async function createResource(
 	input: CreateResourceInput,
 ): Promise<ResourceWithFunnels> {
 	try {
+		// Check global product limit before creating
+		const existingResourcesCount = await db
+			.select({ count: count() })
+			.from(resources)
+			.where(
+				and(
+					eq(resources.experienceId, user.experienceId),
+					eq(resources.userId, user.id),
+				),
+			);
+
+		if (existingResourcesCount[0].count >= GLOBAL_LIMITS.PRODUCTS) {
+			throw new Error(
+				`Cannot create product: limit reached (max ${GLOBAL_LIMITS.PRODUCTS} products per account)`,
+			);
+		}
+
 		// Validate WHOP product ID if provided
 		// Note: WHOP SDK products API might not be available in current version
 		if (input.type === "MY_PRODUCTS" && input.whopProductId) {

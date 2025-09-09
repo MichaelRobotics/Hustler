@@ -72,3 +72,20 @@ export interface DeleteConfirmation {
 	resourceId: string | null;
 	resourceName: string;
 }
+
+// Product limits per funnel
+export const PRODUCT_LIMITS = {
+	PAID: 5,
+	FREE_VALUE: 5,
+} as const;
+
+// Global limits for whop owners
+export const GLOBAL_LIMITS = {
+	FUNNELS: 10,
+	PRODUCTS: 20,
+} as const;
+
+export interface ProductLimits {
+	paid: number;
+	freeValue: number;
+}

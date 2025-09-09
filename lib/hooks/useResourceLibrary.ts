@@ -38,13 +38,20 @@ export const useResourceLibrary = (
 	const categoryOptions = useMemo(() => ["all", "PAID", "FREE_VALUE"], []);
 
 	// Helper function to check if a name is available
+	// Normalizes names by removing extra spaces and converting to lowercase for comparison
 	const isNameAvailable = useCallback(
 		(name: string, currentId?: string): boolean => {
 			if (!name.trim()) return true;
+			
+			// Normalize the input name: trim, replace multiple spaces with single space, lowercase
+			const normalizedInputName = name.trim().replace(/\s+/g, ' ').toLowerCase();
+			
 			return !allResources.some(
-				(resource) =>
-					resource.id !== currentId &&
-					resource.name.toLowerCase() === name.toLowerCase(),
+				(resource) => {
+					// Normalize existing resource name the same way
+					const normalizedExistingName = resource.name.trim().replace(/\s+/g, ' ').toLowerCase();
+					return resource.id !== currentId && normalizedExistingName === normalizedInputName;
+				}
 			);
 		},
 		[allResources],
@@ -332,5 +339,8 @@ export const useResourceLibrary = (
 		// Utilities
 		isNameAvailable,
 		isResourceAssignedToAnyFunnel,
+		
+		// Error management
+		setError,
 	};
 };

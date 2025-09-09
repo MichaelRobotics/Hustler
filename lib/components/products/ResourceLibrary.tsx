@@ -51,6 +51,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 		createResource,
 		updateResource,
 		deleteResource,
+		setError,
 	} = useResourceLibrary(allResources, allFunnels, setAllResources);
 
 	// State for inline product creation
@@ -93,6 +94,12 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	// Handle saving new product
 	const handleSaveNewProduct = async () => {
 		if (!newResource.name?.trim() || !newResource.link?.trim()) {
+			return;
+		}
+
+		// Check if name is available
+		if (!isNameAvailable(newResource.name)) {
+			setError("Product name already exists. Please choose a different name.");
 			return;
 		}
 
@@ -154,6 +161,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						onBack={onBack}
 						onAddProduct={handleCreateNewProductInline}
 						filteredResourcesCount={filteredResources.length}
+						funnel={funnel}
+						allResourcesCount={allResources.length}
 					/>
 
 					{/* Resources Counter Section */}
@@ -220,7 +229,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 												disabled={
 													isSaving ||
 													!newResource.name?.trim() ||
-													!newResource.link?.trim()
+													!newResource.link?.trim() ||
+													!isNameAvailable(newResource.name || "")
 												}
 												className="px-3 py-1 text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 											>
@@ -285,14 +295,27 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										<input
 											type="text"
 											value={newResource.name || ""}
-											onChange={(e) =>
-												setNewResource({ ...newResource, name: e.target.value })
-											}
+											onChange={(e) => {
+												setNewResource({ ...newResource, name: e.target.value });
+												// Clear error when user starts typing
+												if (error && error.includes("Product name already exists")) {
+													setError(null);
+												}
+											}}
 											placeholder="Product name..."
 											disabled={isSaving}
-											className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+											className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+												newResource.name && !isNameAvailable(newResource.name)
+													? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
+													: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
+											}`}
 											autoFocus
 										/>
+										{newResource.name && !isNameAvailable(newResource.name) && (
+											<div className="mt-1 text-xs text-red-600 dark:text-red-400">
+												This name is already taken. Please choose a different one.
+											</div>
+										)}
 
 										{/* URL Field */}
 										<input
@@ -330,6 +353,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 									resource={resource}
 									funnel={funnel}
 									context={context}
+									allResources={allResources}
 									isResourceInFunnel={isResourceInFunnel}
 									isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
 									onAddToFunnel={onAddToFunnel}

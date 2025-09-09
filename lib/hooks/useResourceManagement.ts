@@ -2,6 +2,7 @@
 
 import type { Resource } from "@/lib/types/resource";
 import { useEffect, useState } from "react";
+import { canAssignResource } from "../helpers/product-limits";
 import { deduplicatedFetch } from "../utils/requestDeduplication";
 
 interface Funnel {
@@ -27,12 +28,14 @@ export function useResourceManagement() {
 	const [resourcesLoading, setResourcesLoading] = useState(true);
 	const [resourcesError, setResourcesError] = useState<string | null>(null);
 
-	// Fetch resources from API
+	// Fetch resources from API - load one by one for better performance
 	const fetchResources = async () => {
 		try {
 			setResourcesLoading(true);
 			setResourcesError(null);
-			const response = await deduplicatedFetch("/api/resources");
+			
+			// Load resources with limit to prevent loading all at once
+			const response = await deduplicatedFetch("/api/resources?limit=20");
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch resources: ${response.statusText}`);
@@ -77,6 +80,11 @@ export function useResourceManagement() {
 		setSelectedFunnel: (funnel: Funnel | null) => void,
 	): Promise<void> => {
 		if (selectedFunnel) {
+			// Check if we can assign this resource (not at limit)
+			if (!canAssignResource(selectedFunnel, resource)) {
+				throw new Error(`Cannot assign ${resource.category === "PAID" ? "paid" : "free"} product: limit reached (max 5 per category)`);
+			}
+
 			try {
 				const response = await deduplicatedFetch(
 					`/api/funnels/${selectedFunnel.id}/resources`,
