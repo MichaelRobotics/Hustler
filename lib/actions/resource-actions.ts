@@ -32,6 +32,7 @@ export interface ResourceWithFunnels {
 	category: "PAID" | "FREE_VALUE";
 	link: string;
 	code?: string;
+	promoCode?: string; // Frontend compatibility field
 	description?: string;
 	whopProductId?: string;
 	createdAt: Date;
@@ -119,6 +120,7 @@ export async function createResource(
 			category: newResource.category,
 			link: newResource.link,
 			code: newResource.code || undefined,
+			promoCode: newResource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: newResource.description || undefined,
 			whopProductId: newResource.whopProductId || undefined,
 			createdAt: newResource.createdAt,
@@ -169,6 +171,7 @@ export async function getResourceById(
 			category: resource.category,
 			link: resource.link,
 			code: resource.code || undefined,
+			promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: resource.description || undefined,
 			whopProductId: resource.whopProductId || undefined,
 			createdAt: resource.createdAt,
@@ -270,6 +273,7 @@ export async function getResources(
 					category: resource.category,
 					link: resource.link,
 					code: resource.code || undefined,
+					promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 					description: resource.description || undefined,
 					whopProductId: resource.whopProductId || undefined,
 					createdAt: resource.createdAt,

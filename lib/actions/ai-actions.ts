@@ -121,26 +121,16 @@ Fix this invalid JSON to match the required two-part funnel structure. Return on
 Invalid JSON:
 ${badJson}
 
-**REQUIRED STRUCTURE:**
+**CRITICAL RULES:**
 - FUNNEL_1: WELCOME → VALUE_DELIVERY → TRANSITION
 - FUNNEL_2: EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
-- VALUE_DELIVERY blocks: ONLY use resources with category "FREE_VALUE"
-- OFFER blocks: ONLY use resources with category "PAID"
-- **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
-- **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
+- VALUE_DELIVERY: ONLY "FREE_VALUE" resources
+- OFFER: ONLY "PAID" resources
+- ALL messages max 5 lines (except first "Answer by...")
+- OFFER/TRANSITION: 3-part structure (Value Stack + FOMO + CTA)
 - Each VALUE_DELIVERY block MUST have "resourceName" field with exact resource name from category FREE_VALUE
 - Each OFFER block MUST have "resourceName" field with exact resource name from category PAID
-- TRANSITION blocks must link to corresponding EXPERIENCE_QUALIFICATION blocks
-- First WELCOME block must have option with "nextBlockId": null
-- NO imaginary products - only use exact resource names from provided list
-
-**CATEGORY-BASED RESOURCE PLACEMENT:**
-- VALUE_DELIVERY blocks: Use resources with category "FREE_VALUE" only
-- OFFER blocks: Use resources with category "PAID" only
-- **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
-- **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
-- resourceName must exactly match the resource name from the provided list
-- NO imaginary or made-up product names
+- resourceName must match exactly from provided list
 
 **CORRECT JSON STRUCTURE:**
 \`\`\`json
@@ -150,37 +140,37 @@ ${badJson}
     {
       "id": "stage-welcome",
       "name": "WELCOME",
-      "explanation": "[F1] Initial greeting and user segmentation.",
+      "explanation": "Initial greeting and user segmentation.",
       "blockIds": ["welcome_1"]
     },
     {
       "id": "stage-value-delivery",
       "name": "VALUE_DELIVERY",
-      "explanation": "[F1] Deliver resources with category FREE_VALUE to build trust.",
+      "explanation": "Deliver free resources to build trust.",
       "blockIds": ["value_trading_guide"]
     },
     {
       "id": "stage-transition",
       "name": "TRANSITION",
-      "explanation": "[F1] Ends the first funnel and directs user to an external link.",
+      "explanation": "Ends first funnel and directs to live chat.",
       "blockIds": ["transition_to_vip_chat"]
     },
     {
       "id": "stage-experience",
       "name": "EXPERIENCE_QUALIFICATION",
-      "explanation": "[F2] Qualify user's skill level. Assumes they are coming from Funnel 1.",
+      "explanation": "Qualify user's skill level.",
       "blockIds": ["experience_qual_1"]
     },
     {
       "id": "stage-pain-point",
       "name": "PAIN_POINT_QUALIFICATION",
-      "explanation": "[F2] Identify the user's primary challenge.",
+      "explanation": "Identify user's primary challenge.",
       "blockIds": ["pain_point_1"]
     },
     {
       "id": "stage-offer",
       "name": "OFFER",
-      "explanation": "[F2] Present resources with category PAID as the solution.",
+      "explanation": "Present paid resources as solution.",
       "blockIds": ["offer_risk_management"]
     }
   ],
@@ -347,7 +337,7 @@ export const generateFunnelFlow = async (
 	const resourceList = resources
 		.map((r) => {
 			const categoryLabel = r.category; // Use exact category: "PAID" or "FREE_VALUE"
-			let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type})`;
+			let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type}, Link: ${r.link})`;
 		if (r.promoCode) {
 			details += ` [Promo Code: ${r.promoCode}]`;
 			}
@@ -357,6 +347,11 @@ export const generateFunnelFlow = async (
 
 	const prompt =`
 	You are an expert marketing funnel strategist. Your task is to create a branching chatbot conversation flow in a hierarchical JSON format. This flow represents a **complete, two-part funnel system** that transitions a user from a public chat to a private, personalized session.
+	
+	**🚨 CRITICAL MESSAGE LENGTH RULE 🚨**
+	**EVERY MESSAGE MUST BE 5 LINES OR FEWER** (except first funnel "Answer by..." instruction)
+	**COUNT EVERY LINE INCLUDING EMPTY LINES**
+	**VIOLATION = REJECTION**
 	
 	**CRITICAL INSTRUCTION**: You MUST create separate blocks for each resource based on their category:
 	- Each resource with category "FREE_VALUE" gets its own VALUE_DELIVERY block
@@ -415,8 +410,36 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
 	
 	**4. FOR ITEMS IN \`FUNNEL_1\`'s 'TRANSITION' STAGE:**
-	This is the final block of Funnel 1. The message must congratulate the user and provide a compelling reason to move to the second chat, along with a placeholder link.
-	*Example:* "Excellent. You've completed the first step... Click below to begin your Personal Strategy Session... ➡️ [LINK_TO_PRIVATE_CHAT] ⬅️"
+	This is the final block of Funnel 1. The message must follow the 3-part structure to encourage clicking into the live chat:
+	
+	**Part 1: Value Stack Presentation**
+	- Congratulate them on completing the first step
+	- Emphasize the value they've already received
+	- Hint at the exclusive value waiting in the private session
+	
+	**Part 2: Fear of Missing Out + Belonging**
+	- Create urgency about the private session opportunity
+	- Position it as exclusive and limited
+	- Contrast those who take action vs those who don't
+	- Use phrases like "This private session isn't for everyone" or "Only serious people get access"
+	
+	**Part 3: Call to Action**
+	- Create urgency with time-sensitive language
+	- Use phrases like "If you start now, you can still..." vs "If you wait, you might miss..."
+	- End with a strong CTA text like "Start Your Private Session Now" or similar
+	- Include normal link (not button): [LINK_TO_PRIVATE_CHAT]
+	
+	**Example Structure (5-LINE TRANSITION MESSAGE):**
+	"Excellent! You've completed step one. ✅
+	
+	This private session isn't for everyone. Only serious people get access.
+	
+	The Hesitator: Waits for 'perfect time,' misses opportunities.
+	
+	The Action Taker: Seizes the moment, builds success.
+	
+	Start your Strategy Session: [LINK_TO_PRIVATE_CHAT]"
+	
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have options that connect to the corresponding EXPERIENCE_QUALIFICATION blocks in Funnel 2. These options should have generic connector text like "Continue" or "Start Session" - they are system connectors only and will not be displayed as user choices in the preview chat.
 	
 	**5. FOR ITEMS WITH AN OFFER (in \`FUNNEL_2\`'s 'OFFER' stage):**
@@ -425,6 +448,52 @@ export const generateFunnelFlow = async (
 	- **Resource Details**: Include the resource name and link.
 	- **Closing**: An encouraging call to action.
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
+	
+	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
+	- **ALL messages** (except first funnel "Answer by..." instruction) must be **5 lines or fewer**
+	- **First funnel "Answer by..." instruction** does NOT count toward the 5-line limit
+	- **VIOLATION WILL RESULT IN REJECTION**: Any message over 5 lines will be rejected
+	- Keep messages concise and impactful
+	- Use line breaks strategically for readability
+	- **COUNT EVERY LINE**: Empty lines count as lines
+	- **EXAMPLES OF 5-LINE MESSAGES:**
+		* "Welcome! What's your main goal?\n\nAnswer by pasting one of those numbers" (3 lines - exempt)
+		* "Perfect choice! Here's your free resource.\n\nLink: [URL]\n\nReply 'done' when ready." (5 lines)
+		* "Our service isn't for everyone.\n\nWe work with specific partners.\n\nWhich type are you?\n\n> Take Action Now <" (5 lines)
+	
+	**7. OFFER MESSAGE DESIGN (CRITICAL FOR PAID PRODUCTS):**
+	Each OFFER message must follow this exact 3-part structure:
+	
+	**Part 1: Value Stack Presentation**
+	- Present the value stack to show you give far more than you charge
+	- List specific benefits, features, or outcomes
+	- Make the value proposition clear and compelling
+	
+	**Part 2: Fear of Missing Out + Belonging**
+	- Create urgency and exclusivity
+	- Position the offer as for a "specific type of person"
+	- Contrast "The Observer" (hesitant, watches others succeed) vs "The Action Taker" (decisive, builds success)
+	- Make them choose which type they want to be
+	- Use phrases like "Our Service Isn't For Everyone" or "This isn't for everyone"
+	
+	**Part 3: Call to Action**
+	- Create urgency with time-sensitive language
+	- Use phrases like "If you start now, you can still leverage..." vs "If you wait, you will be forced to..."
+	- End with a strong CTA button text like "Seize Your Advantage Now" or similar
+	- Include resource link that will be placed in the button
+	- **If promo code is available**: Include it in the message (e.g., "Use code SALES20 for 20% off")
+	- Make the action clear and compelling
+	
+	**Example Structure (5-LINE OFFER MESSAGE):**
+	"Our Service Isn't For Everyone. We work with specific partners.
+
+	The Observer: Watches others succeed, hesitates endlessly.
+
+	The Action Taker: Seizes opportunity, builds success.
+
+	Which one will you be? Use code SALES20 for 20% off.
+
+	> Seize Your Advantage Now < [RESOURCE_LINK]"
 	
 	---
 	
@@ -452,18 +521,12 @@ export const generateFunnelFlow = async (
 		 - Do NOT mix resources in the same block
 	
 	3.  **FUNNEL 1: "WELCOME GATE" STRUCTURE (CHAT 1)**
-		 * **Goal**: To hook the user, deliver resources with category "FREE_VALUE", and transition them to Funnel 2.
-		 * **STAGES Order**: \`WELCOME\` -> \`VALUE_DELIVERY\` -> \`TRANSITION\`.
-		 * **\`WELCOME\` Stage**: Greets the user and asks the first question (e.g., niche).
-		 * **\`VALUE_DELIVERY\` Stage**: Contains ONE block for EACH resource with category "FREE_VALUE". Each block presents its specific resource and instructs the user to reply 'done' to continue. Each block must have one option like \`{"text": "done", "nextBlockId": "..."}\`.
-		 * **\`TRANSITION\` Stage**: This is the final stage of Funnel 1. Its message must contain the congratulatory text and a placeholder link (e.g., \`[LINK_TO_PRIVATE_CHAT]\`) to the second chat. It has no options.
+		 * **Goal**: Welcome user, deliver free value, transition to second chat.
+		 * **Stages**: WELCOME → VALUE_DELIVERY → TRANSITION
 	
 	4.  **FUNNEL 2: "STRATEGY SESSION" STRUCTURE (CHAT 2)**
-		 * **Goal**: To perform a deep qualification of the user and present hyper-targeted resources with category "PAID".
-		 * **STAGES Order**: \`EXPERIENCE_QUALIFICATION\` -> \`PAIN_POINT_QUALIFICATION\` -> \`OFFER\`.
-		 * **\`EXPERIENCE_QUALIFICATION\` Stage**: This is the starting point of Funnel 2. It re-welcomes the user and asks about their experience level in relation to the FREE_VALUE resource they just consumed. **CRITICAL**: Each VALUE_DELIVERY path must have its own specific EXPERIENCE_QUALIFICATION block that the TRANSITION stage links to.
-		 * **\`PAIN_POINT_QUALIFICATION\` Stage**: Asks the user to identify their biggest challenge.
-		 * **\`OFFER\` Stage**: Contains ONE block for EACH resource with category "PAID". Each block presents its specific resource that solves the user's stated pain point.
+		 * **Goal**: Qualify user and present targeted paid resources.
+		 * **Stages**: EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 	
 	5.  **BRANCHING LOGIC - TRANSITION TO EXPERIENCE_QUALIFICATION CONNECTIONS**:
 		 * **CRITICAL**: Each VALUE_DELIVERY block must have its own corresponding EXPERIENCE_QUALIFICATION block.
@@ -543,6 +606,19 @@ export const generateFunnelFlow = async (
 	- Resource with category "PAID": "Product A" → Offer Block 1: \`resourceName: "Product A"\`
 	- Resource with category "PAID": "Product B" → Offer Block 2: \`resourceName: "Product A"\` ❌ DUPLICATE!
 	
+	### VALIDATION CHECKLIST (CRITICAL - CHECK BEFORE GENERATING)
+	
+	Before generating the JSON, verify:
+	1. **MESSAGE LENGTH**: Every message (except first funnel "Answer by...") is 5 lines or fewer
+	2. **RESOURCE MAPPING**: Each FREE_VALUE resource → VALUE_DELIVERY block, each PAID resource → OFFER block
+	3. **EXACT NAMES**: resourceName fields match exactly with provided resource names
+	4. **LINKS INCLUDED**: Use actual links from the resource list in messages
+	5. **PROMO CODES**: If available, include promo codes in OFFER messages
+	6. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
+	7. **TRANSITION STRUCTURE**: TRANSITION messages follow 3-part structure (Value Stack + FOMO + CTA) with normal link to live chat
+	8. **NO DUPLICATES**: Each resource appears in exactly one block
+	9. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
+	
 	### JSON OUTPUT STRUCTURE
 	
 	Generate a clean, raw JSON object. Do not wrap it in markdown. The JSON must have the standard FunnelFlow structure: \`startBlockId\`, \`stages\`, and \`blocks\`. All stages and blocks from both funnels are combined into this single structure.
@@ -555,37 +631,37 @@ export const generateFunnelFlow = async (
 		 {
 			"id": "stage-welcome",
 			"name": "WELCOME",
-			"explanation": "[F1] Initial greeting and user segmentation.",
+			"explanation": "Initial greeting and user segmentation.",
 			"blockIds": ["welcome_1"]
 		 },
 		 {
 			"id": "stage-value-delivery",
 			"name": "VALUE_DELIVERY",
-			"explanation": "[F1] Deliver resources with category FREE_VALUE to build trust.",
+			"explanation": "Deliver free resources to build trust.",
 			"blockIds": ["value_trading_guide"]
 		 },
 		 {
 			"id": "stage-transition",
 			"name": "TRANSITION",
-			"explanation": "[F1] Ends the first funnel and directs user to an external link.",
+			"explanation": "Ends first funnel and directs to live chat.",
 			"blockIds": ["transition_to_vip_chat"]
 		 },
 		 {
 			"id": "stage-experience",
 			"name": "EXPERIENCE_QUALIFICATION",
-			"explanation": "[F2] Qualify user's skill level. Assumes they are coming from Funnel 1.",
+			"explanation": "Qualify user's skill level.",
 			"blockIds": ["experience_qual_1"]
 		 },
 		 {
 			"id": "stage-pain-point",
 			"name": "PAIN_POINT_QUALIFICATION",
-			"explanation": "[F2] Identify the user's primary challenge.",
+			"explanation": "Identify user's primary challenge.",
 			"blockIds": ["pain_point_1"]
 		 },
 		 {
 			"id": "stage-offer",
 			"name": "OFFER",
-			"explanation": "[F2] Present resources with category PAID as the solution.",
+			"explanation": "Present paid resources as solution.",
 			"blockIds": ["offer_risk_management"]
 		 }
 	  ],

@@ -58,16 +58,16 @@ export const useFunnelDeployment = (
 		// Extract product names from the generated funnel flow (what the AI actually offers)
 		const generatedProductNames = new Set<string>();
 
-		// Look for offer blocks in the flow using resourceName field
-		// Only check blocks in the OFFER stage, not VALUE_DELIVERY (free resources)
+		// Look for blocks in both OFFER and VALUE_DELIVERY stages using resourceName field
 		Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
-			// Check if this block is in the OFFER stage and has a resourceName field
-			const isOfferBlock = currentFunnel.flow.stages.some(
+			// Check if this block is in the OFFER or VALUE_DELIVERY stage and has a resourceName field
+			const isRelevantBlock = currentFunnel.flow.stages.some(
 				(stage: any) =>
-					stage.name === "OFFER" && stage.blockIds.includes(block.id),
+					(stage.name === "OFFER" || stage.name === "VALUE_DELIVERY") && 
+					stage.blockIds.includes(block.id),
 			);
 			if (
-				isOfferBlock &&
+				isRelevantBlock &&
 				block.resourceName &&
 				typeof block.resourceName === "string"
 			) {

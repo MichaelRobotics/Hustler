@@ -26,19 +26,20 @@ export const useFunnelValidation = () => {
 		null,
 	);
 
-	// Get offer blocks for selection - Only OFFER stage blocks, not VALUE_DELIVERY
+	// Get offer blocks for selection - Both OFFER and VALUE_DELIVERY stage blocks
 	const getOfferBlocks = React.useCallback((currentFunnel: Funnel) => {
 		if (!currentFunnel.flow) return [];
 
-		// Only get blocks in the OFFER stage with resourceName (paid products)
+		// Get blocks in both OFFER and VALUE_DELIVERY stages with resourceName
 		return Object.values(currentFunnel.flow.blocks)
 			.filter((block: any) => {
-				const isOfferBlock = currentFunnel.flow.stages.some(
+				const isRelevantBlock = currentFunnel.flow.stages.some(
 					(stage: any) =>
-						stage.name === "OFFER" && stage.blockIds.includes(block.id),
+						(stage.name === "OFFER" || stage.name === "VALUE_DELIVERY") && 
+						stage.blockIds.includes(block.id),
 				);
 				return (
-					isOfferBlock &&
+					isRelevantBlock &&
 					block.resourceName &&
 					typeof block.resourceName === "string"
 				);

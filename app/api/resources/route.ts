@@ -125,8 +125,15 @@ async function createResourceHandler(
 			);
 		}
 
+		// Map promoCode to code for database compatibility
+		const resourceData = {
+			...input,
+			code: input.promoCode || input.code,
+		};
+		delete resourceData.promoCode; // Remove promoCode as it's not expected by the backend
+
 		// Create resource using server action
-		const newResource = await createResource(userContext.user, input);
+		const newResource = await createResource(userContext.user, resourceData);
 
 		return createSuccessResponse(
 			newResource,

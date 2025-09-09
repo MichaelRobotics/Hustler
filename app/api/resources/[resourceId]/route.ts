@@ -70,11 +70,18 @@ async function updateResourceHandler(
 			);
 		}
 
+		// Map promoCode to code for database compatibility
+		const resourceData = {
+			...input,
+			code: input.promoCode || input.code,
+		};
+		delete resourceData.promoCode; // Remove promoCode as it's not expected by the backend
+
 		// Update resource using server action
 		const updatedResource = await updateResource(
 			userContext.user,
 			resourceId,
-			input,
+			resourceData,
 		);
 
 		return createSuccessResponse(
