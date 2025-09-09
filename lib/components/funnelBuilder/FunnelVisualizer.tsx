@@ -423,29 +423,41 @@ const FunnelVisualizer = React.memo(
 															{block.message}
 														</p>
 													</div>
-													{block.options && block.options.length > 0 && (
-														<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
-															{block.options.map((opt, i) => (
-																<div
-																	key={`${block.id}-opt-${i}`}
-																	className={`text-foreground text-xs rounded-xl p-3 text-left transition-all duration-300 ${highlightedPath.options.has(`${block.id}_${opt.nextBlockId}`) ? "bg-amber-500/20 ring-1 ring-amber-500/50 shadow-lg shadow-amber-500/20" : "bg-surface/50 dark:bg-surface/30 hover:bg-surface/60 dark:hover:bg-surface/40 border border-border/30 dark:border-border/20"}`}
-																>
-																	<div className="flex items-start gap-2">
-																		<div className="flex-shrink-0 w-5 h-5 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
-																			<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
-																				{i + 1}
-																			</span>
-																		</div>
-																		<div className="flex-1">
-																			<p className="whitespace-normal font-medium">
-																				{opt.text}
-																			</p>
+													{block.options && block.options.length > 0 && (() => {
+														// Check if this block is in a TRANSITION stage
+														const isTransitionBlock = funnelFlow.stages.some(
+															stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+														);
+														
+														// Hide options for TRANSITION stage blocks (they represent external links)
+														if (isTransitionBlock) {
+															return null;
+														}
+														
+														return (
+															<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
+																{block.options.map((opt, i) => (
+																	<div
+																		key={`${block.id}-opt-${i}`}
+																		className={`text-foreground text-xs rounded-xl p-3 text-left transition-all duration-300 ${highlightedPath.options.has(`${block.id}_${opt.nextBlockId}`) ? "bg-amber-500/20 ring-1 ring-amber-500/50 shadow-lg shadow-amber-500/20" : "bg-surface/50 dark:bg-surface/30 hover:bg-surface/60 dark:hover:bg-surface/40 border border-border/30 dark:border-border/20"}`}
+																	>
+																		<div className="flex items-start gap-2">
+																			<div className="flex-shrink-0 w-5 h-5 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
+																				<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+																					{i + 1}
+																				</span>
+																			</div>
+																			<div className="flex-1">
+																				<p className="whitespace-normal font-medium">
+																					{opt.text}
+																				</p>
+																			</div>
 																		</div>
 																	</div>
-																</div>
-															))}
-														</div>
-													)}
+																))}
+															</div>
+														);
+													})()}
 												</>
 											)}
 										</div>

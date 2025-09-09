@@ -52,7 +52,7 @@
 		"@whop/react": "0.2.36",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
-		"dotenv": "^17.2.1",
+		"dotenv": "^17.2.2",
 		"drizzle-orm": "^0.44.5",
 		"frosted-ui": "0.0.1-canary.78",
 		"lucide-react": "^0.542.0",

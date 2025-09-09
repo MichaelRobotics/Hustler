@@ -24,7 +24,7 @@ export interface FunnelFlow {
 }
 
 export interface ChatMessage {
-	type: "user" | "bot";
+	type: "user" | "bot" | "system";
 	text: string;
 }
 

@@ -141,9 +141,20 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 															</div>
 
 															{/* Enhanced Block Options with Frosted UI */}
-															{block.options && block.options.length > 0 && (
-																<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
-																	{block.options.map((opt, i) => (
+															{block.options && block.options.length > 0 && (() => {
+																// Check if this block is in a TRANSITION stage
+																const isTransitionBlock = funnelFlow.stages.some(
+																	stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+																);
+																
+																// Hide options for TRANSITION stage blocks (they represent external links)
+																if (isTransitionBlock) {
+																	return null;
+																}
+																
+																return (
+																	<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
+																		{block.options.map((opt, i) => (
 																		<div
 																			key={`${blockId}-opt-${i}`}
 																			className={`text-foreground text-xs rounded-xl p-3 text-left transition-all duration-300 ${
@@ -169,7 +180,8 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 																		</div>
 																	))}
 																</div>
-															)}
+																);
+															})()}
 														</>
 													)}
 												</div>

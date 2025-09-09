@@ -93,11 +93,21 @@ const FunnelPreviewChat: React.FC<FunnelPreviewChatProps> = React.memo(
 					)}
 
 					{/* Conversation End State - Show Start Over when no options or conversation ended */}
-					{(options.length === 0 || !currentBlockId) && (
-						<PerformanceProfiler id="FunnelPreviewChat-Restart">
-							<ChatRestartButton onRestart={startConversation} />
-						</PerformanceProfiler>
-					)}
+					{(() => {
+						// Don't show Start Conversation button if we're in a TRANSITION stage
+						const isTransitionBlock = currentBlockId && funnelFlow?.stages.some(
+							stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlockId)
+						);
+						
+						// Show button only when conversation is truly ended (no current block) or no options available (but not in TRANSITION)
+						const shouldShowStartButton = (!currentBlockId || (options.length === 0 && !isTransitionBlock));
+						
+						return shouldShowStartButton && (
+							<PerformanceProfiler id="FunnelPreviewChat-Restart">
+								<ChatRestartButton onRestart={startConversation} />
+							</PerformanceProfiler>
+						);
+					})()}
 				</div>
 			</PerformanceProfiler>
 		);

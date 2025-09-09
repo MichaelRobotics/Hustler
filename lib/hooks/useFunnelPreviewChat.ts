@@ -22,12 +22,21 @@ export const useFunnelPreviewChat = (
 			return block.message;
 		}
 
+		// Check if this block is in a TRANSITION stage - don't show options for these
+		const isTransitionBlock = funnelFlow?.stages.some(
+			stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+		);
+
+		if (isTransitionBlock) {
+			return block.message; // Don't include options for TRANSITION blocks
+		}
+
 		const numberedOptions = block.options
 			.map((opt: any, index: number) => `${index + 1}. ${opt.text}`)
 			.join("\n");
 
 		return `${block.message}\n\n${numberedOptions}`;
-	}, []);
+	}, [funnelFlow]);
 
 	// Function to start or restart the conversation
 	const startConversation = useCallback(() => {
@@ -146,8 +155,18 @@ export const useFunnelPreviewChat = (
 
 	// Memoize options to prevent unnecessary re-computations
 	const options = useMemo(() => {
-		return currentBlock?.options || [];
-	}, [currentBlock]);
+		if (!currentBlock?.options) return [];
+		
+		// Check if this block is in a TRANSITION stage - don't show options for these
+		const isTransitionBlock = funnelFlow?.stages.some(
+			stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
+		);
+		
+		// Return empty array for TRANSITION blocks (they auto-proceed)
+		if (isTransitionBlock) return [];
+		
+		return currentBlock.options;
+	}, [currentBlock, funnelFlow]);
 
 	// Helper function to check if input matches a valid option
 	const isValidOption = useCallback(
@@ -213,14 +232,22 @@ export const useFunnelPreviewChat = (
 	// Handler for when a user clicks on a chat option
 	const handleOptionClick = useCallback(
 		(option: FunnelBlockOption, index: number) => {
-			const userMessage: ChatMessage = {
-				type: "user",
-				text: `${index + 1}. ${option.text}`,
-			};
+			// Check if we're in a TRANSITION stage - handle differently
+			const currentBlock = funnelFlow?.blocks[currentBlockId || ""];
+			const isTransitionBlock = currentBlock && 
+				funnelFlow?.stages.some(stage => 
+					stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
+				);
 
 			// If the selected option has no next block, the conversation ends
 			if (!option.nextBlockId) {
-				setHistory((prev) => [...prev, userMessage]);
+				if (!isTransitionBlock) {
+					const userMessage: ChatMessage = {
+						type: "user",
+						text: `${index + 1}. ${option.text}`,
+					};
+					setHistory((prev) => [...prev, userMessage]);
+				}
 				setCurrentBlockId(null);
 				return;
 			}
@@ -229,9 +256,31 @@ export const useFunnelPreviewChat = (
 
 			// If the next block exists, add the user's and the bot's messages to the history
 			if (nextBlock) {
+				// Check if we're transitioning from TRANSITION stage to EXPERIENCE_QUALIFICATION stage
+				const isTransitionToLiveChat = isTransitionBlock &&
+					funnelFlow?.stages.some(stage => 
+						stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(option.nextBlockId)
+					);
+
+				// Add transition marker if moving from DM funnel to Live Chat
+				if (isTransitionToLiveChat) {
+					const transitionMarker: ChatMessage = {
+						type: "system",
+						text: "redirect_to_live_chat", // Special marker for background styling
+					};
+					setHistory((prev) => [...prev, transitionMarker]);
+				} else if (!isTransitionBlock) {
+					// Only add user message if not in TRANSITION stage
+					const userMessage: ChatMessage = {
+						type: "user",
+						text: `${index + 1}. ${option.text}`,
+					};
+					setHistory((prev) => [...prev, userMessage]);
+				}
+
 				const completeMessage = constructCompleteMessage(nextBlock);
 				const botMessage: ChatMessage = { type: "bot", text: completeMessage };
-				setHistory((prev) => [...prev, userMessage, botMessage]);
+				setHistory((prev) => [...prev, botMessage]);
 				setCurrentBlockId(option.nextBlockId);
 			} else {
 				// If the next block ID is invalid, end the conversation
@@ -239,11 +288,19 @@ export const useFunnelPreviewChat = (
 					type: "bot",
 					text: "This path encountered an error. You can start over to try again.",
 				};
-				setHistory((prev) => [...prev, userMessage, errorMessage]);
+				if (!isTransitionBlock) {
+					const userMessage: ChatMessage = {
+						type: "user",
+						text: `${index + 1}. ${option.text}`,
+					};
+					setHistory((prev) => [...prev, userMessage, errorMessage]);
+				} else {
+					setHistory((prev) => [...prev, errorMessage]);
+				}
 				setCurrentBlockId(null);
 			}
 		},
-		[funnelFlow, constructCompleteMessage],
+		[funnelFlow, constructCompleteMessage, currentBlockId],
 	);
 
 	// Handler for custom text input
@@ -291,19 +348,35 @@ export const useFunnelPreviewChat = (
 		[currentBlockId, funnelFlow, isValidOption, handleOptionClick],
 	);
 
-	// Effect to handle blocks with no options (dead-end paths)
+	// Effect to handle blocks with no options (dead-end paths) and TRANSITION blocks
 	useEffect(() => {
 		if (currentBlockId && funnelFlow) {
 			const currentBlock = funnelFlow.blocks[currentBlockId];
-			if (
-				currentBlock &&
-				(!currentBlock.options || currentBlock.options.length === 0)
-			) {
-				// If we reach a block with no options, end the conversation silently
+			if (!currentBlock) return;
+			
+			// Check if this is a TRANSITION stage block - auto-proceed to next stage
+			const isTransitionBlock = funnelFlow.stages.some(
+				stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
+			);
+			
+			if (isTransitionBlock && currentBlock.options && currentBlock.options.length > 0) {
+				// Auto-proceed to the first option (there should only be one for TRANSITION blocks)
+				const firstOption = currentBlock.options[0];
+				if (firstOption.nextBlockId) {
+					// Use shorter timeout for TRANSITION blocks to reduce flickering
+					setTimeout(() => {
+						handleOptionClick(firstOption, 0);
+					}, 50);
+				}
+				return;
+			}
+			
+			// If we reach a block with no options, end the conversation silently
+			if (!currentBlock.options || currentBlock.options.length === 0) {
 				setCurrentBlockId(null);
 			}
 		}
-	}, [currentBlockId, funnelFlow]);
+	}, [currentBlockId, funnelFlow, handleOptionClick]);
 
 	return {
 		history,
