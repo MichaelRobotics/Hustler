@@ -4,6 +4,7 @@ import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { useCallback, useEffect, useState } from "react";
 import { useOptimisticUpdates } from "../utils/optimisticUpdates";
 import { deduplicatedFetch } from "../utils/requestDeduplication";
+import { robustDelete } from "../utils/robustFetch";
 
 interface Funnel {
 	id: string;
@@ -125,26 +126,32 @@ export function useFunnelManagement() {
 				setError(null);
 				setIsDeleting(true);
 				
-				const response = await deduplicatedFetch(
-					`/api/funnels/${funnelToDelete.id}`,
-					{
-						method: "DELETE",
-					},
-				);
+				// Use robust delete with timeout and retry logic
+				const response = await robustDelete(`/api/funnels/${funnelToDelete.id}`, {
+					headers: { "Content-Type": "application/json" },
+				});
 
-				if (!response.ok) {
-					const errorData = await response.json();
-					throw new Error(errorData.message || "Failed to delete funnel");
+				// Parse response data
+				const data = await response.json();
+				
+				if (!data.success) {
+					throw new Error(data.message || "Failed to delete funnel");
 				}
 
+				// Update UI state
 				setFunnels(funnels.filter((f) => f.id !== funnelToDelete.id));
 				setFunnelToDelete(null);
 				setIsDeleteDialogOpen(false);
+				
+				console.log("Funnel deleted successfully:", funnelToDelete.name);
 			} catch (err) {
 				const errorMessage =
 					err instanceof Error ? err.message : "Failed to delete funnel";
 				setError(errorMessage);
 				console.error("Error deleting funnel:", err);
+				
+				// Keep the funnel in the list if deletion failed
+				// The user can try again
 			} finally {
 				setIsDeleting(false);
 			}
