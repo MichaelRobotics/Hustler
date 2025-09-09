@@ -46,6 +46,17 @@ async function getFunnelsHandler(request: NextRequest, context: AuthContext) {
 		// Get funnels using the full user context
 		const funnels = await getFunnels(userContext.user, page, limit, search);
 
+		// Debug logging
+		console.log("Funnels API Debug:", {
+			userId: userContext.user.id,
+			experienceId: userContext.user.experienceId,
+			accessLevel: userContext.user.accessLevel,
+			requestedLimit: limit,
+			returnedFunnels: funnels.funnels.length,
+			totalFunnels: funnels.total,
+			funnelIds: funnels.funnels.map(f => f.id)
+		});
+
 		return NextResponse.json({
 			success: true,
 			data: funnels,

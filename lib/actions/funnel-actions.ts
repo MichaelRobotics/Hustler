@@ -287,7 +287,17 @@ export async function getFunnels(
 
 		const total = totalResult.count;
 
-		// Get funnels with resources using optimized join query
+		// First get the funnels with pagination
+		const paginatedFunnels = await db
+			.select()
+			.from(funnels)
+			.where(whereConditions)
+			.orderBy(desc(funnels.updatedAt))
+			.limit(limit)
+			.offset(offset);
+
+		// Then get resources for these funnels
+		const funnelIds = paginatedFunnels.map((f: any) => f.id);
 		const funnelsWithResourcesRaw = await db
 			.select({
 				funnel: funnels,
@@ -297,10 +307,7 @@ export async function getFunnels(
 			.from(funnels)
 			.leftJoin(funnelResources, eq(funnels.id, funnelResources.funnelId))
 			.leftJoin(resources, eq(funnelResources.resourceId, resources.id))
-			.where(whereConditions)
-			.orderBy(desc(funnels.updatedAt))
-			.limit(limit)
-			.offset(offset);
+			.where(inArray(funnels.id, funnelIds));
 
 		// Group resources by funnel
 		const funnelMap = new Map<string, FunnelWithResources>();

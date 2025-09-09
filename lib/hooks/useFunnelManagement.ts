@@ -70,13 +70,22 @@ export function useFunnelManagement() {
 			setError(null);
 			
 			// Load funnels with limit to prevent loading all at once
-			const response = await deduplicatedFetch("/api/funnels?limit=10");
+			const response = await deduplicatedFetch("/api/funnels?limit=20");
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch funnels: ${response.statusText}`);
 			}
 
 			const data = await response.json();
+			
+			// Debug logging
+			console.log("Frontend Funnels Debug:", {
+				apiResponse: data,
+				receivedFunnels: data.data?.funnels?.length || 0,
+				totalFunnels: data.data?.total || 0,
+				funnelIds: data.data?.funnels?.map((f: any) => f.id) || []
+			});
+			
 			setFunnels(data.data.funnels || []);
 		} catch (err) {
 			const errorMessage =
