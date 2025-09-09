@@ -431,7 +431,7 @@ export function useFunnelManagement() {
 					name: resource.name,
 					link: resource.link,
 					code: resource.promoCode || "",
-					price: resource.price || "FREE_VALUE",
+					price: resource.category, // Use the actual category field
 				}),
 			);
 
