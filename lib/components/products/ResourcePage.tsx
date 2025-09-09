@@ -9,9 +9,11 @@ import UnifiedNavigation from "../common/UnifiedNavigation";
 import { AssignedResourceCard } from "./AssignedResourceCard";
 import { AssignedResourcesEmptyState } from "./AssignedResourcesEmptyState";
 import { FunnelGenerationSection } from "./FunnelGenerationSection";
+import { InsufficientProductsValidation } from "./InsufficientProductsValidation";
 import { ResourcePageHeader } from "./ResourcePageHeader";
 import { OfflineConfirmationModal } from "./modals/OfflineConfirmationModal";
 import { RemoveResourceModal } from "./modals/RemoveResourceModal";
+import { validateFunnelProducts } from "../../helpers/funnel-product-validation";
 
 const ResourcePage: React.FC<ResourcePageProps> = ({
 	funnel,
@@ -47,6 +49,9 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 		enabled: true, // Enable auto-navigation for ResourcePage
 	});
 
+	// Check product validation
+	const productValidation = validateFunnelProducts(funnel);
+
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
 			{/* Enhanced Background Pattern */}
@@ -64,14 +69,23 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 						isGenerating={isGenerating}
 					/>
 
-					{/* Generate Section - Only visible when products exist but no funnel is generated */}
-					<FunnelGenerationSection
-						funnel={funnel}
-						currentResources={currentResources}
-						isGenerating={isGenerating}
-						isAnyFunnelGenerating={isAnyFunnelGenerating}
-						onGlobalGeneration={onGlobalGeneration}
-					/>
+					{/* Generate Section or Validation Message - Show generation when valid, validation when missing products */}
+					{currentResources.length > 0 && productValidation.isValid ? (
+						<FunnelGenerationSection
+							funnel={funnel}
+							currentResources={currentResources}
+							isGenerating={isGenerating}
+							isAnyFunnelGenerating={isAnyFunnelGenerating}
+							onGlobalGeneration={onGlobalGeneration}
+						/>
+					) : currentResources.length > 0 && !productValidation.isValid ? (
+						<div className="mt-8 mb-8">
+							<InsufficientProductsValidation
+								hasPaidProducts={productValidation.hasPaidProducts}
+								hasFreeProducts={productValidation.hasFreeProducts}
+							/>
+						</div>
+					) : null}
 
 					{/* Current Resources Section */}
 					<div className="mt-8">
@@ -112,9 +126,11 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 				onCancel={closeOfflineConfirmation}
 			/>
 
-			{/* Unified Navigation - Hide when funnel is generating OR when no resources and no funnel generated */}
+			{/* Unified Navigation - Hide when funnel is generating, when no resources and no funnel generated, or when missing PAID or FREE products */}
 			{!isGenerating(funnel.id) &&
-				(currentResources.length > 0 || hasValidFlow(funnel)) && (
+				(currentResources.length > 0 || hasValidFlow(funnel)) &&
+				productValidation.hasPaidProducts &&
+				productValidation.hasFreeProducts && (
 					<UnifiedNavigation
 						onPreview={() => onGoToPreview(funnel)}
 						onFunnelProducts={onGoToFunnelProducts}
@@ -124,6 +140,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 						isGenerating={isGenerating(funnel.id)}
 						isAnyFunnelGenerating={isAnyFunnelGenerating}
 						isDeployed={funnel.isDeployed}
+						funnel={funnel}
 						showOnPage="resources"
 					/>
 				)}

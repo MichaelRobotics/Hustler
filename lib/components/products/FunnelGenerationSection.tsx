@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCredits } from "../../hooks/useCredits";
 import type { Funnel, Resource } from "../../types/resource";
 import { CreditPackModal } from "../payments/CreditPackModal";
+import { shouldDisableGeneration, validateFunnelProducts } from "../../helpers/funnel-product-validation";
 
 interface FunnelGenerationSectionProps {
 	funnel: Funnel;
@@ -27,6 +28,36 @@ export const FunnelGenerationSection: React.FC<
 	const [showCreditModal, setShowCreditModal] = useState(false);
 
 	const handleGeneration = async () => {
+		// Check if funnel has required PAID products (at least 1 PAID)
+		const productValidation = validateFunnelProducts(funnel);
+		if (!productValidation.hasPaidProducts) {
+			// Show notification to user
+			const showNotification = (message: string) => {
+				const notification = document.createElement("div");
+				notification.className =
+					"fixed top-4 right-4 z-50 px-4 py-3 bg-amber-500 text-white rounded-lg border border-amber-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
+				notification.textContent = message;
+
+				const closeBtn = document.createElement("button");
+				closeBtn.innerHTML = "×";
+				closeBtn.className =
+					"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
+				closeBtn.onclick = () => notification.remove();
+				notification.appendChild(closeBtn);
+
+				document.body.appendChild(notification);
+
+				setTimeout(() => {
+					if (notification.parentNode) {
+						notification.remove();
+					}
+				}, 4000);
+			};
+
+			showNotification("Add at least 1 PAID product to generate");
+			return;
+		}
+
 		// Check if user can generate (has credits)
 		if (!canGenerate) {
 			setShowCreditModal(true);
@@ -81,6 +112,11 @@ export const FunnelGenerationSection: React.FC<
 	const handlePurchaseSuccess = () => {
 		setShowCreditModal(false);
 	};
+
+	// Check if generation should be disabled (only for PAID products)
+	const productValidation = validateFunnelProducts(funnel);
+	const isGenerationDisabled = !productValidation.hasPaidProducts;
+
 	if (funnel.flow || currentResources.length === 0) {
 		return null;
 	}
@@ -103,11 +139,11 @@ export const FunnelGenerationSection: React.FC<
 						) : (
 							<button
 								onClick={handleGeneration}
-								disabled={funnel.generationStatus === "generating"}
-								className={`group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-500 ease-out cursor-pointer ${
-									funnel.generationStatus === "generating"
+								disabled={funnel.generationStatus === "generating" || isGenerationDisabled}
+								className={`group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 transition-all duration-500 ease-out ${
+									funnel.generationStatus === "generating" || isGenerationDisabled
 										? "opacity-50 cursor-not-allowed"
-										: ""
+										: "animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 cursor-pointer"
 								}`}
 							>
 								<div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 via-green-500 to-emerald-500 dark:from-green-300 dark:via-green-400 dark:to-emerald-400 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-green-400/50 transition-all duration-300 relative">
@@ -126,6 +162,11 @@ export const FunnelGenerationSection: React.FC<
 								{currentResources.length} product
 								{currentResources.length !== 1 ? "s" : ""} selected
 							</Text>
+							{isGenerationDisabled && productValidation.missingTypes.includes("PAID") && (
+								<Text size="2" color="amber" className="text-amber-600 dark:text-amber-400 font-medium">
+									Need at least 1 PAID product
+								</Text>
+							)}
 							<Heading
 								size="5"
 								weight="bold"

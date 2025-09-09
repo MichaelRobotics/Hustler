@@ -77,15 +77,6 @@ export function useFunnelManagement() {
 			}
 
 			const data = await response.json();
-			
-			// Debug logging
-			console.log("Frontend Funnels Debug:", {
-				apiResponse: data,
-				receivedFunnels: data.data?.funnels?.length || 0,
-				totalFunnels: data.data?.total || 0,
-				funnelIds: data.data?.funnels?.map((f: any) => f.id) || []
-			});
-			
 			setFunnels(data.data.funnels || []);
 		} catch (err) {
 			const errorMessage =

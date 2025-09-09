@@ -10,6 +10,7 @@ import { ResourceCard } from "./ResourceCard";
 import { ResourceLibraryHeader } from "./ResourceLibraryHeader";
 import { LibraryResourceDeleteModal } from "./modals/LibraryResourceDeleteModal";
 import { LibraryResourceModal } from "./modals/LibraryResourceModal";
+import { validateFunnelProducts } from "../../helpers/funnel-product-validation";
 
 const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	funnel,
@@ -374,11 +375,13 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 				</div>
 			</div>
 
-			{/* Unified Navigation - Only show in funnel context, with preview functionality, and hide when generating or when no resources and no funnel generated */}
+			{/* Unified Navigation - Only show in funnel context, with preview functionality, and hide when generating, when no resources and no funnel generated, or when missing PAID or FREE products */}
 			{context === "funnel" &&
 				!isGenerating &&
 				funnel &&
-				((funnel.resources?.length || 0) > 0 || hasValidFlow(funnel)) && (
+				((funnel.resources?.length || 0) > 0 || hasValidFlow(funnel)) &&
+				validateFunnelProducts(funnel).hasPaidProducts &&
+				validateFunnelProducts(funnel).hasFreeProducts && (
 					<UnifiedNavigation
 						onPreview={() => {
 							if (funnel && onGoToPreview) {
@@ -403,6 +406,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						isGenerating={isGenerating}
 						isAnyFunnelGenerating={isAnyFunnelGenerating}
 						isDeployed={funnel?.isDeployed}
+						funnel={funnel}
 						showOnPage="resources"
 					/>
 				)}

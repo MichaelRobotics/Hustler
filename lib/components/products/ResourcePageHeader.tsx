@@ -3,6 +3,7 @@ import { ArrowLeft, Library } from "lucide-react";
 import type React from "react";
 import type { Funnel, Resource } from "../../types/resource";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { validateFunnelProducts } from "../../helpers/funnel-product-validation";
 
 interface ResourcePageHeaderProps {
 	funnel: Funnel;
@@ -21,6 +22,9 @@ export const ResourcePageHeader: React.FC<ResourcePageHeaderProps> = ({
 	onOpenOfflineConfirmation,
 	isGenerating,
 }) => {
+	// Check if validation conditions are met for animation
+	const productValidation = validateFunnelProducts(funnel);
+	const shouldAnimateLibrary = currentResources.length === 0 || !productValidation.isValid;
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 			{/* Top Section: Back Button + Title */}
@@ -88,7 +92,7 @@ export const ResourcePageHeader: React.FC<ResourcePageHeaderProps> = ({
 								color="violet"
 								onClick={onOpenResourceLibrary}
 								className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group ${
-									currentResources.length === 0
+									shouldAnimateLibrary
 										? "animate-pulse animate-bounce"
 										: ""
 								}`}
@@ -97,7 +101,7 @@ export const ResourcePageHeader: React.FC<ResourcePageHeaderProps> = ({
 									size={20}
 									strokeWidth={2.5}
 									className={`transition-transform duration-300 ${
-										currentResources.length === 0
+										shouldAnimateLibrary
 											? "animate-spin"
 											: "group-hover:rotate-12"
 									}`}

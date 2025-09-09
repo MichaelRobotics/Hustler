@@ -5,6 +5,8 @@ import type React from "react";
 import { useState } from "react";
 import { useCredits } from "../../hooks/useCredits";
 import { CreditPackModal } from "../payments/CreditPackModal";
+import { shouldDisableGeneration, validateFunnelProducts } from "../../helpers/funnel-product-validation";
+import type { Funnel } from "../../types/resource";
 
 interface UnifiedNavigationProps {
 	onPreview?: () => void;
@@ -15,6 +17,7 @@ interface UnifiedNavigationProps {
 	isGenerating?: boolean;
 	isAnyFunnelGenerating?: () => boolean; // New: Check if any funnel is generating
 	isDeployed?: boolean; // New: Check if funnel is deployed/live
+	funnel?: Funnel; // New: Funnel object for validation
 	className?: string;
 	showOnPage?: "resources" | "aibuilder" | "preview" | "all" | "analytics";
 }
@@ -28,6 +31,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	isGenerating = false,
 	isAnyFunnelGenerating,
 	isDeployed = false,
+	funnel,
 	className = "",
 	showOnPage = "all",
 }) => {
@@ -40,6 +44,35 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	};
 
 	const handleGeneration = async () => {
+		// Check if funnel has required PAID products (at least 1 PAID)
+		if (funnel && !validateFunnelProducts(funnel).hasPaidProducts) {
+			// Show notification to user
+			const showNotification = (message: string) => {
+				const notification = document.createElement("div");
+				notification.className =
+					"fixed top-4 right-4 z-50 px-4 py-3 bg-amber-500 text-white rounded-lg border border-amber-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
+				notification.textContent = message;
+
+				const closeBtn = document.createElement("button");
+				closeBtn.innerHTML = "×";
+				closeBtn.className =
+					"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
+				closeBtn.onclick = () => notification.remove();
+				notification.appendChild(closeBtn);
+
+				document.body.appendChild(notification);
+
+				setTimeout(() => {
+					if (notification.parentNode) {
+						notification.remove();
+					}
+				}, 4000);
+			};
+
+			showNotification("Add at least 1 PAID product to generate");
+			return;
+		}
+
 		// Check if user can generate (has credits)
 		if (!canGenerate) {
 			setShowCreditModal(true);
@@ -145,8 +178,8 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 						</button>
 					)}
 
-				{/* Generation Button - Hide when funnel is live, generating, or already generated */}
-				{isExpanded && !isDeployed && !isGenerated && (
+				{/* Generation Button - Hide when funnel is live, generating, already generated, or missing PAID or FREE products */}
+				{isExpanded && !isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasPaidProducts && validateFunnelProducts(funnel).hasFreeProducts)) && (
 					<button
 						onClick={handleGeneration}
 						disabled={isGenerating}
