@@ -54,11 +54,40 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 
 	return (
 		<div className="p-4 space-y-4">
-			{/* Message Section */}
+			{/* Message Section with Action Buttons */}
 			<div>
-				<label className="text-xs text-violet-600 dark:text-violet-400 font-bold mb-2 block uppercase tracking-wider">
-					Message
-				</label>
+				<div className="flex justify-between items-center mb-2">
+					<label className="text-xs text-violet-600 dark:text-violet-400 font-bold uppercase tracking-wider">
+						Message
+					</label>
+					<div className="flex gap-2">
+						<button
+							onClick={onCancel}
+							className="px-3 py-1.5 text-xs rounded-lg bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 text-muted-foreground hover:text-foreground hover:bg-surface/60 dark:hover:bg-surface/40 transition-all duration-200 font-medium"
+						>
+							Cancel
+						</button>
+						<button
+							onClick={() => onSave(editedBlock)}
+							className="px-3 py-1.5 text-xs rounded-lg bg-violet-500 hover:bg-violet-600 dark:bg-violet-600 dark:hover:bg-violet-700 text-white font-medium transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 flex items-center gap-1.5"
+						>
+							<svg
+								className="w-3 h-3"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M5 13l4 4L19 7"
+								/>
+							</svg>
+							Save
+						</button>
+					</div>
+				</div>
 				<AutoResizeTextarea
 					className="w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl p-3 text-foreground text-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200 resize-none"
 					value={editedBlock.message}
@@ -97,35 +126,6 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 					</div>
 				</div>
 			)}
-
-			{/* Action Buttons */}
-			<div className="flex justify-end gap-3 pt-2">
-				<button
-					onClick={onCancel}
-					className="px-4 py-2 text-sm rounded-xl bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 text-muted-foreground hover:text-foreground hover:bg-surface/60 dark:hover:bg-surface/40 transition-all duration-200 font-medium"
-				>
-					Cancel
-				</button>
-				<button
-					onClick={() => onSave(editedBlock)}
-					className="px-4 py-2 text-sm rounded-xl bg-violet-500 hover:bg-violet-600 dark:bg-violet-600 dark:hover:bg-violet-700 text-white font-medium transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 flex items-center gap-2"
-				>
-					<svg
-						className="w-4 h-4"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth="2"
-							d="M5 13l4 4L19 7"
-						/>
-					</svg>
-					Save Changes
-				</button>
-			</div>
 		</div>
 	);
 };

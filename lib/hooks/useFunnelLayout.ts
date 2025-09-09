@@ -85,20 +85,14 @@ export const useFunnelLayout = (
 			return; // Performance mode active, no more recalculations
 		}
 
-		if (editingBlockId) {
-			// When editing starts, we need to recalculate layout
-			setLayoutPhase("measure");
-			setLayoutCompleted(false);
-			setPerformanceMode(false);
-		} else {
+		// Only trigger recalculations when editing ENDS (save/cancel), not when editing starts
+		if (!editingBlockId && Object.keys(positions).length > 0) {
 			// When editing ends, trigger final layout calculation
-			if (Object.keys(positions).length > 0) {
-				const timer = setTimeout(() => {
-					setLayoutPhase("final");
-				}, 100); // Slightly longer delay to ensure DOM updates
+			const timer = setTimeout(() => {
+				setLayoutPhase("final");
+			}, 100); // Slightly longer delay to ensure DOM updates
 
-				return () => clearTimeout(timer);
-			}
+			return () => clearTimeout(timer);
 		}
 	}, [editingBlockId, positions, performanceMode]);
 
