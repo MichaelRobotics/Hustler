@@ -258,8 +258,9 @@ export const useFunnelPreviewChat = (
 			if (nextBlock) {
 				// Check if we're transitioning from TRANSITION stage to EXPERIENCE_QUALIFICATION stage
 				const isTransitionToLiveChat = isTransitionBlock &&
+					option.nextBlockId &&
 					funnelFlow?.stages.some(stage => 
-						stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(option.nextBlockId)
+						stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(option.nextBlockId!)
 					);
 
 				// Add transition marker if moving from DM funnel to Live Chat
