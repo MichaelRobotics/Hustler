@@ -56,16 +56,20 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	// State for inline product creation
 	const [isCreatingNewProduct, setIsCreatingNewProduct] = React.useState(false);
 	const [isSaving, setIsSaving] = React.useState(false);
+	
+	// State for tracking if any resource is being edited
+	const [isEditingResource, setIsEditingResource] = React.useState(false);
 
 	// Notify parent when modal states change
 	useEffect(() => {
 		const isModalOpen =
-			isAddingResource || deleteConfirmation.show || isCreatingNewProduct;
+			isAddingResource || deleteConfirmation.show || isCreatingNewProduct || isEditingResource;
 		onModalStateChange?.(isModalOpen);
 	}, [
 		isAddingResource,
 		deleteConfirmation.show,
 		isCreatingNewProduct,
+		isEditingResource,
 		onModalStateChange,
 	]);
 
@@ -122,6 +126,19 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 			description: "",
 			promoCode: "",
 		});
+	};
+
+	// Handle editing state changes
+	const handleEditingChange = (isEditing: boolean) => {
+		if (isEditing) {
+			// Immediately hide sidebar when starting to edit
+			setIsEditingResource(true);
+		} else {
+			// Add small delay before showing sidebar when canceling edit
+			setTimeout(() => {
+				setIsEditingResource(false);
+			}, 150); // Small delay to allow for smooth transition
+		}
 	};
 
 	return (
@@ -320,6 +337,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 									onDelete={handleDeleteResource}
 									onUpdate={updateResource}
 									isRemoving={removingResourceId === resource.id}
+									onEditingChange={handleEditingChange}
 								/>
 							))}
 						</div>

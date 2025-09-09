@@ -26,6 +26,7 @@ interface ResourceCardProps {
 		updatedResource: Partial<Resource>,
 	) => Promise<void>;
 	isRemoving?: boolean;
+	onEditingChange?: (isEditing: boolean) => void;
 }
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({
@@ -39,6 +40,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	onDelete,
 	onUpdate,
 	isRemoving = false,
+	onEditingChange,
 }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
@@ -72,6 +74,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	const handleStartEdit = () => {
 		setIsEditing(true);
 		setEditedResource(resource);
+		onEditingChange?.(true);
 	};
 
 	const handleSaveEdit = async () => {
@@ -85,6 +88,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 				await onUpdate(resource.id, editedResource);
 			}
 			setIsEditing(false);
+			onEditingChange?.(false);
 		} catch (error) {
 			console.error("Failed to update resource:", error);
 		} finally {
@@ -95,6 +99,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	const handleCancelEdit = () => {
 		setIsEditing(false);
 		setEditedResource(resource);
+		onEditingChange?.(false);
 	};
 
 	const handleAssignToFunnel = () => {
@@ -297,8 +302,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									</Button>
 								))}
 
-							{/* Delete Button - Only show when resource is not assigned to any funnel */}
-							{!isResourceAssignedToAnyFunnel(resource.id) && (
+							{/* Delete Button - Only show when resource is not assigned to any funnel and not currently assigning */}
+							{!isResourceAssignedToAnyFunnel(resource.id) && !isAssigning && (
 								<Button
 									size="1"
 									variant="ghost"

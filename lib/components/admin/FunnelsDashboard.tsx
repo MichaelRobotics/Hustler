@@ -107,7 +107,7 @@ const FunnelsDashboard = React.memo(
 
 					// Reset states
 					setIsCreatingNewFunnel(false);
-					setIsRenaming(false);
+					handleSetIsRenaming(false);
 					setEditingFunnelId(null);
 					setNewFunnelName("");
 
@@ -131,6 +131,19 @@ const FunnelsDashboard = React.memo(
 
 		// Memoized computed values for better performance
 		const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
+
+		// Wrapper function to handle timeout for setIsRenaming (matches mobile keyboard close animation)
+		const handleSetIsRenaming = useCallback((isRenaming: boolean) => {
+			if (isRenaming) {
+				// Immediately hide sidebar when starting to rename
+				setIsRenaming(true);
+			} else {
+				// Add delay before showing sidebar when canceling rename (matches mobile keyboard close animation)
+				setTimeout(() => {
+					setIsRenaming(false);
+				}, 250); // 250ms delay to match mobile keyboard close animation
+			}
+		}, [setIsRenaming]);
 
 		const funnelCards = useMemo(
 			() =>
@@ -218,7 +231,7 @@ const FunnelsDashboard = React.memo(
 												e.stopPropagation();
 												setEditingFunnelId(null);
 												setNewFunnelName("");
-												setIsRenaming(false);
+												handleSetIsRenaming(false);
 												setIsCreatingNewFunnel(false);
 											}}
 											disabled={isSaving}
@@ -333,7 +346,7 @@ const FunnelsDashboard = React.memo(
 																funnel.id,
 																editingName,
 															);
-															setIsRenaming(false); // Show sidebar after saving
+															handleSetIsRenaming(false); // Show sidebar after saving with timeout
 														} catch (error) {
 															console.error(
 																"Failed to save funnel name:",
@@ -359,7 +372,7 @@ const FunnelsDashboard = React.memo(
 													e.stopPropagation();
 													setEditingFunnelId(null);
 													setEditingName("");
-													setIsRenaming(false); // Show sidebar after cancelling
+													handleSetIsRenaming(false); // Show sidebar after cancelling with timeout
 													setIsCreatingNewFunnel(false); // Reset creation state
 												}}
 												disabled={isSaving}
@@ -464,7 +477,7 @@ const FunnelsDashboard = React.memo(
 													e.stopPropagation();
 													setEditingFunnelId(funnel.id);
 													setEditingName(funnel.name);
-													setIsRenaming(true); // Hide sidebar when renaming
+													handleSetIsRenaming(true); // Hide sidebar when renaming
 													setOpenDropdownId(null);
 													setHighlightedButtonId(null);
 												}}

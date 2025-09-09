@@ -363,14 +363,16 @@ const AdminPanel = React.memo(() => {
 		if (libraryContext === "global") {
 			return (
 				<div className="flex h-screen">
-					<AdminSidebar
-						currentView={currentView}
-						onViewChange={handleViewChange}
-						className="flex-shrink-0 h-full"
-						libraryContext={libraryContext}
-						currentFunnelForLibrary={selectedFunnelForLibrary}
-						disabled={isLibraryModalOpen}
-					/>
+					{!isLibraryModalOpen && (
+						<AdminSidebar
+							currentView={currentView}
+							onViewChange={handleViewChange}
+							className="flex-shrink-0 h-full"
+							libraryContext={libraryContext}
+							currentFunnelForLibrary={selectedFunnelForLibrary}
+							disabled={isLibraryModalOpen}
+						/>
+					)}
 
 					<div className="flex-1 overflow-auto w-full lg:w-auto">
 						<ResourceLibrary
