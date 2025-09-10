@@ -503,6 +503,36 @@ export async function deleteFunnel(
 }
 
 /**
+ * Check if any other funnel is currently deployed
+ */
+export async function checkForOtherLiveFunnels(
+	user: AuthenticatedUser,
+	excludeFunnelId?: string,
+): Promise<{ hasLiveFunnel: boolean; liveFunnelName?: string }> {
+	try {
+		const liveFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.experienceId, user.experienceId),
+				eq(funnels.isDeployed, true),
+				excludeFunnelId ? sql`${funnels.id} != ${excludeFunnelId}` : sql`1=1`,
+			),
+			columns: {
+				id: true,
+				name: true,
+			},
+		});
+
+		return {
+			hasLiveFunnel: !!liveFunnel,
+			liveFunnelName: liveFunnel?.name,
+		};
+	} catch (error) {
+		console.error("Error checking for live funnels:", error);
+		return { hasLiveFunnel: false };
+	}
+}
+
+/**
  * Deploy funnel
  */
 export async function deployFunnel(
@@ -530,6 +560,12 @@ export async function deployFunnel(
 		// Check if funnel has a flow
 		if (!existingFunnel.flow) {
 			throw new Error("Cannot deploy funnel without a flow");
+		}
+
+		// Check if any other funnel is currently live
+		const liveFunnelCheck = await checkForOtherLiveFunnels(user, funnelId);
+		if (liveFunnelCheck.hasLiveFunnel) {
+			throw new Error(`Funnel "${liveFunnelCheck.liveFunnelName}" is currently live.`);
 		}
 
 		// Update funnel deployment status

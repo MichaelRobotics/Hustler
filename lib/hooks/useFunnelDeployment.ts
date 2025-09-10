@@ -25,6 +25,7 @@ interface DeploymentValidation {
 	message: string;
 	missingProducts: string[];
 	extraProducts: string[];
+	liveFunnelName?: string;
 }
 
 export const useFunnelDeployment = (
@@ -36,15 +37,17 @@ export const useFunnelDeployment = (
 	const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
 	const [deploymentValidation, setDeploymentValidation] =
 		React.useState<DeploymentValidation | null>(null);
+	const [deploymentAction, setDeploymentAction] = React.useState<'deploy' | 'undeploy'>('deploy');
 	const deployIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
 	// Validate that assigned products match generated funnel products
-	const validateDeployment = (): {
+	const validateDeployment = async (): Promise<{
 		isValid: boolean;
 		message: string;
 		missingProducts: string[];
 		extraProducts: string[];
-	} => {
+		liveFunnelName?: string;
+	}> => {
 		if (!currentFunnel.flow || !currentFunnel.resources) {
 			return {
 				isValid: false,
@@ -53,6 +56,26 @@ export const useFunnelDeployment = (
 				missingProducts: [],
 				extraProducts: [],
 			};
+		}
+
+		// Check if any other funnel is currently live
+		try {
+			const response = await fetch(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}`);
+			if (response.ok) {
+				const data = await response.json();
+				if (data.success && data.data.hasLiveFunnel) {
+					return {
+						isValid: false,
+						message: `Funnel "${data.data.liveFunnelName}" is currently live.`,
+						missingProducts: [],
+						extraProducts: [],
+						liveFunnelName: data.data.liveFunnelName,
+					};
+				}
+			}
+		} catch (error) {
+			console.error("Error checking for live funnels:", error);
+			// Continue with deployment if check fails
 		}
 
 		// Extract product names from the generated funnel flow (what the AI actually offers)
@@ -118,69 +141,169 @@ export const useFunnelDeployment = (
 		};
 	};
 
-	const handleDeploy = () => {
+	const handleDeploy = async () => {
 		// Enable calculations for Go Live action
 		if (enableCalculationsForGoLive) {
 			enableCalculationsForGoLive();
 		}
 
 		// Validate deployment before proceeding
-		const validation = validateDeployment();
+		const validation = await validateDeployment();
 		if (!validation.isValid) {
 			setDeploymentValidation(validation);
 			return;
 		}
 
+		setDeploymentAction('deploy');
 		setIsDeploying(true);
 		setDeploymentLog(["Deployment initiated..."]);
 
-		const steps = [
-			"Connecting to server...",
-			"Authenticating...",
-			"Uploading funnel data...",
-			"Validating funnel structure...",
-			"Provisioning resources...",
-			"Finalizing deployment...",
-			"✅ Deployment successful!",
-		];
+		try {
+			// Make actual API call to deploy funnel
+			const response = await fetch(`/api/funnels/${currentFunnel.id}/deploy`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			});
 
-		let stepIndex = 0;
-		deployIntervalRef.current = setInterval(() => {
-			if (stepIndex < steps.length) {
-				setDeploymentLog((prev) => [...prev, steps[stepIndex]]);
-				stepIndex++;
-			} else {
-				if (deployIntervalRef.current) {
-					clearInterval(deployIntervalRef.current);
-				}
-				setTimeout(() => {
-					setIsDeploying(false);
-					// Mark funnel as deployed and set wasEverDeployed
-					const updatedFunnel = {
-						...currentFunnel,
-						isDeployed: true,
-						wasEverDeployed: true,
-					};
-
-					// Debug logging
-					console.log("Deployment completed, updating funnel:", updatedFunnel);
-
-					// Update parent component with deployed funnel
-					onUpdate(updatedFunnel);
-
-					// Add deployment success to log
-					setDeploymentLog((prev) => [
-						...prev,
-						"🎉 Deployment completed! Navigating to analytics...",
-					]);
-
-					// Small delay to ensure state is updated before navigation
-					setTimeout(() => {
-						// The parent component will handle navigation to analytics
-					}, 500);
-				}, 2000); // Keep deployment message for 2s
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
 			}
-		}, 700);
+
+			const result = await response.json();
+			
+			if (!result.success) {
+				throw new Error(result.message || 'Deployment failed');
+			}
+
+			// Update deployment log with success
+			setDeploymentLog((prev) => [
+				...prev,
+				"✅ Deployment successful!",
+				"🎉 Funnel is now live and receiving customers!",
+			]);
+
+			// Update the funnel with the deployed data from backend
+			const deployedFunnel = result.data;
+			const updatedFunnel = {
+				...currentFunnel,
+				...deployedFunnel,
+				isDeployed: true,
+				wasEverDeployed: true,
+			};
+
+			// Debug logging
+			console.log("Deployment completed, updating funnel:", updatedFunnel);
+
+			// Update parent component with deployed funnel
+			onUpdate(updatedFunnel);
+
+			// Small delay to show success message before closing
+			setTimeout(() => {
+				setIsDeploying(false);
+			}, 2000);
+
+		} catch (error) {
+			console.error("Deployment failed:", error);
+			
+			// Update deployment log with error
+			setDeploymentLog((prev) => [
+				...prev,
+				"❌ Deployment failed!",
+				`Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			]);
+
+			// Show error in validation modal
+			setDeploymentValidation({
+				isValid: false,
+				message: `Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				missingProducts: [],
+				extraProducts: [],
+			});
+
+			// Stop deployment after showing error
+			setTimeout(() => {
+				setIsDeploying(false);
+			}, 3000);
+		}
+	};
+
+	const handleUndeploy = async () => {
+		setDeploymentAction('undeploy');
+		setIsDeploying(true);
+		setDeploymentLog(["Taking funnel offline..."]);
+
+		try {
+			// Make actual API call to undeploy funnel
+			const response = await fetch(`/api/funnels/${currentFunnel.id}/undeploy`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			const result = await response.json();
+			
+			if (!result.success) {
+				throw new Error(result.message || 'Undeployment failed');
+			}
+
+			// Update deployment log with success
+			setDeploymentLog((prev) => [
+				...prev,
+				"✅ Funnel taken offline successfully!",
+				"🔴 Funnel is no longer receiving customers.",
+			]);
+
+			// Update the funnel with the undeployed data from backend
+			const undeployedFunnel = result.data;
+			const updatedFunnel = {
+				...currentFunnel,
+				...undeployedFunnel,
+				isDeployed: false,
+			};
+
+			// Debug logging
+			console.log("Undeployment completed, updating funnel:", updatedFunnel);
+
+			// Update parent component with undeployed funnel
+			onUpdate(updatedFunnel);
+
+			// Small delay to show success message before closing
+			setTimeout(() => {
+				setIsDeploying(false);
+			}, 2000);
+
+		} catch (error) {
+			console.error("Undeployment failed:", error);
+			
+			// Update deployment log with error
+			setDeploymentLog((prev) => [
+				...prev,
+				"❌ Failed to take funnel offline!",
+				`Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			]);
+
+			// Show error in validation modal
+			setDeploymentValidation({
+				isValid: false,
+				message: `Failed to take funnel offline: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				missingProducts: [],
+				extraProducts: [],
+			});
+
+			// Stop deployment after showing error
+			setTimeout(() => {
+				setIsDeploying(false);
+			}, 3000);
+		}
 	};
 
 	React.useEffect(() => {
@@ -196,8 +319,10 @@ export const useFunnelDeployment = (
 		isDeploying,
 		deploymentLog,
 		deploymentValidation,
+		deploymentAction,
 		setDeploymentValidation,
 		handleDeploy,
+		handleUndeploy,
 		validateDeployment,
 	};
 };

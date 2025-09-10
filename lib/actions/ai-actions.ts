@@ -126,8 +126,10 @@ ${badJson}
 - FUNNEL_2: EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 - VALUE_DELIVERY: ONLY "FREE_VALUE" resources
 - OFFER: ONLY "PAID" resources
-- ALL messages max 5 lines (except first "Answer by...")
-- OFFER/TRANSITION: 3-part structure (Value Stack + FOMO + CTA)
+- ALL messages max 5 lines (except first "Answer by..." and OFFER messages)
+- OFFER messages max 8 lines with proper paragraph spacing
+- OFFER: 3-part structure (Value Stack + FOMO + CTA)
+- TRANSITION: Simple conversational bridge, NO 3-part structure, NO "Observer/Action Taker" contrast
 - Each VALUE_DELIVERY block MUST have "resourceName" field with exact resource name from category FREE_VALUE
 - Each OFFER block MUST have "resourceName" field with exact resource name from category PAID
 - resourceName must match exactly from provided list
@@ -177,7 +179,7 @@ ${badJson}
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?\\n\\nAnswer by pasting one of those numbers",
+      "message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?\\n\\nAnswer with number/keyword",
       "options": [
         {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
         {"text": "Just exploring for now", "nextBlockId": null}
@@ -382,12 +384,12 @@ export const generateFunnelFlow = async (
 	The 'message' string must be structured exactly like this:
 	- **Line 1**: A short, impactful headline.
 	- **Line 2**: An empty line for spacing.
-	- **Line 3**: The instruction: "Answer by pasting one of those numbers".
+	- **Line 3**: The instruction: "Answer with number/keyword".
 	
 	*Example Message for Funnel 1:*
 	"Welcome! What's your main goal?
 	
-	Answer by pasting one of those numbers"
+	Answer with number/keyword"
 	
 	**IMPORTANT**: Do NOT include the numbered options in the message text. The options are defined in the 'options' array.
 	
@@ -396,10 +398,19 @@ export const generateFunnelFlow = async (
 	- **Line 1**: A direct question as the headline.
 	- **Line 2**: An empty line for spacing.
 	
+	**EXPERIENCE_QUALIFICATION SPECIFIC RULES:**
+	- Be engaging and specific about what you're assessing
+	- Reference the topic/domain clearly (e.g., "with sales", "in trading", "with marketing")
+	- Use phrases like "Now let's assess your current level with [topic]" or "Let's see where you stand with [topic]"
+	- Ask for honest self-assessment: "Where would you honestly place yourself right now?"
+	- Avoid generic phrases like "what's your current experience level"
+	
 	**CRITICAL**: This message format must NOT include the "Answer by..." instruction line.
 	
 	*Example Message for Funnel 2:*
-	"Based on the guide you just saw, where would you place your current skill level?
+	"Now let's assess your current level with this topic.
+	
+	Where would you honestly place yourself right now?
 	
 	"
 	
@@ -410,33 +421,26 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
 	
 	**4. FOR ITEMS IN \`FUNNEL_1\`'s 'TRANSITION' STAGE:**
-	This is the final block of Funnel 1. The message must follow the 3-part structure to encourage clicking into the live chat:
+	This is the final block of Funnel 1. The message should naturally bridge to the live chat experience:
 	
-	**Part 1: Value Stack Presentation**
 	- Congratulate them on completing the first step
-	- Emphasize the value they've already received
-	- Hint at the exclusive value waiting in the private session
-	
-	**Part 2: Fear of Missing Out + Belonging**
-	- Create urgency about the private session opportunity
-	- Position it as exclusive and limited
-	- Contrast those who take action vs those who don't
-	- Use phrases like "This private session isn't for everyone" or "Only serious people get access"
-	
-	**Part 3: Call to Action**
-	- Create urgency with time-sensitive language
-	- Use phrases like "If you start now, you can still..." vs "If you wait, you might miss..."
-	- End with a strong CTA text like "Start Your Private Session Now" or similar
+	- Explain what comes next in the strategy session
+	- Keep it conversational and encouraging
 	- Include normal link (not button): [LINK_TO_PRIVATE_CHAT]
+	- **FORBIDDEN**: Do NOT use the 3-part OFFER structure (Value Stack + FOMO + CTA)
+	- **FORBIDDEN**: Do NOT use "The Observer" vs "The Action Taker" contrast
+	- **FORBIDDEN**: Do NOT use "Our Service Isn't For Everyone" or similar exclusivity language
+	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
+	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
 	**Example Structure (5-LINE TRANSITION MESSAGE):**
 	"Excellent! You've completed step one. ✅
 	
-	This private session isn't for everyone. Only serious people get access.
+	Now let's move to your personalized strategy session.
 	
-	The Hesitator: Waits for 'perfect time,' misses opportunities.
+	This is where we'll dive deeper into your specific situation.
 	
-	The Action Taker: Seizes the moment, builds success.
+	Ready to continue?
 	
 	Start your Strategy Session: [LINK_TO_PRIVATE_CHAT]"
 	
@@ -450,16 +454,20 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **ALL messages** (except first funnel "Answer by..." instruction) must be **5 lines or fewer**
+	- **ALL messages** (except first funnel "Answer by..." instruction and OFFER messages) must be **5 lines or fewer**
+	- **OFFER messages** can be **8 lines or fewer** to accommodate proper paragraph spacing
 	- **First funnel "Answer by..." instruction** does NOT count toward the 5-line limit
-	- **VIOLATION WILL RESULT IN REJECTION**: Any message over 5 lines will be rejected
+	- **VIOLATION WILL RESULT IN REJECTION**: Any message over its limit will be rejected
 	- Keep messages concise and impactful
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
-	- **EXAMPLES OF 5-LINE MESSAGES:**
-		* "Welcome! What's your main goal?\n\nAnswer by pasting one of those numbers" (3 lines - exempt)
+	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
+	- **LINK FORMATTING**: All links/buttons must be on separate lines after empty line. No empty lines at end of message. Add empty line after link/button if there's more text
+	- **EXAMPLES OF MESSAGE LENGTHS:**
+		* "Welcome! What's your main goal?\n\nAnswer with number/keyword" (3 lines - exempt)
 		* "Perfect choice! Here's your free resource.\n\nLink: [URL]\n\nReply 'done' when ready." (5 lines)
 		* "Our service isn't for everyone.\n\nWe work with specific partners.\n\nWhich type are you?\n\n> Take Action Now <" (5 lines)
+		* OFFER messages can be up to 8 lines with proper paragraph spacing
 	
 	**7. OFFER MESSAGE DESIGN (CRITICAL FOR PAID PRODUCTS):**
 	Each OFFER message must follow this exact 3-part structure:
@@ -468,13 +476,17 @@ export const generateFunnelFlow = async (
 	- Present the value stack to show you give far more than you charge
 	- List specific benefits, features, or outcomes
 	- Make the value proposition clear and compelling
+	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
+	- End with a bridge that naturally leads to the contrast (e.g., "But here's the thing..." or "However...")
 	
 	**Part 2: Fear of Missing Out + Belonging**
 	- Create urgency and exclusivity
 	- Position the offer as for a "specific type of person"
+	- Use smooth transitions like "In my experience, there are two types of people:", "I've noticed something interesting:", "But here's what I've observed:", "However, I've learned that", or "The truth is, there are two kinds of people:"
 	- Contrast "The Observer" (hesitant, watches others succeed) vs "The Action Taker" (decisive, builds success)
 	- Make them choose which type they want to be
 	- Use phrases like "Our Service Isn't For Everyone" or "This isn't for everyone"
+	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
 	**Part 3: Call to Action**
 	- Create urgency with time-sensitive language
@@ -483,13 +495,15 @@ export const generateFunnelFlow = async (
 	- Include resource link that will be placed in the button
 	- **If promo code is available**: Include it in the message (e.g., "Use code SALES20 for 20% off")
 	- Make the action clear and compelling
+	- **SENTENCE RULE**: Use shorter, more impactful sentences. Separate every 2 sentences with an empty line for better readability
+	- **LINK RULE**: All links/buttons must be on separate lines after empty line. No empty lines at end of message
 	
-	**Example Structure (5-LINE OFFER MESSAGE):**
-	"Our Service Isn't For Everyone. We work with specific partners.
+	**Example Structure (8-LINE OFFER MESSAGE):**
+	"You're ready to transform your sales game! With the Sales Pro Course, you'll gain proven strategies.
 
-	The Observer: Watches others succeed, hesitates endlessly.
+	Our Service Isn't For Everyone. We work with specific partners.
 
-	The Action Taker: Seizes opportunity, builds success.
+	The Observer: Watches others succeed, hesitates endlessly. The Action Taker: Seizes opportunity, builds success.
 
 	Which one will you be? Use code SALES20 for 20% off.
 
@@ -609,15 +623,17 @@ export const generateFunnelFlow = async (
 	### VALIDATION CHECKLIST (CRITICAL - CHECK BEFORE GENERATING)
 	
 	Before generating the JSON, verify:
-	1. **MESSAGE LENGTH**: Every message (except first funnel "Answer by...") is 5 lines or fewer
+	1. **MESSAGE LENGTH**: Every message (except first funnel "Answer by..." and OFFER messages) is 5 lines or fewer; OFFER messages can be 8 lines or fewer
 	2. **RESOURCE MAPPING**: Each FREE_VALUE resource → VALUE_DELIVERY block, each PAID resource → OFFER block
 	3. **EXACT NAMES**: resourceName fields match exactly with provided resource names
 	4. **LINKS INCLUDED**: Use actual links from the resource list in messages
 	5. **PROMO CODES**: If available, include promo codes in OFFER messages
 	6. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
-	7. **TRANSITION STRUCTURE**: TRANSITION messages follow 3-part structure (Value Stack + FOMO + CTA) with normal link to live chat
-	8. **NO DUPLICATES**: Each resource appears in exactly one block
-	9. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
+	7. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
+	8. **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
+	9. **LINK FORMATTING**: All links/buttons on separate lines after empty line, no empty lines at end
+	10. **NO DUPLICATES**: Each resource appears in exactly one block
+	11. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	
 	### JSON OUTPUT STRUCTURE
 	
@@ -668,7 +684,7 @@ export const generateFunnelFlow = async (
 	  "blocks": {
 		 "welcome_1": {
 			"id": "welcome_1",
-			"message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?\\n\\nAnswer by pasting one of those numbers",
+			"message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?\\n\\nAnswer with number/keyword",
 			"options": [
 			  {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
 			  {"text": "Just exploring for now", "nextBlockId": null}

@@ -168,6 +168,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 					<DeploymentModal
 						isDeploying={deployment.isDeploying}
 						deploymentLog={deployment.deploymentLog}
+						action={deployment.deploymentAction}
 					/>
 
 					{/* Bottom margin spacer */}
@@ -192,10 +193,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 					<OfflineConfirmationModal
 						isOpen={modals.offlineConfirmation}
 						onClose={modals.closeOfflineConfirmation}
-						onConfirm={() => {
-							const updatedFunnel = { ...currentFunnel, isDeployed: false };
-							setCurrentFunnel(updatedFunnel);
-							onUpdate(updatedFunnel);
+						onConfirm={async () => {
+							await deployment.handleUndeploy();
 							modals.closeOfflineConfirmation();
 						}}
 					/>

@@ -18,6 +18,7 @@ interface DeploymentValidation {
 	message: string;
 	missingProducts: string[];
 	extraProducts: string[];
+	liveFunnelName?: string;
 }
 
 interface ValidationModalProps {
@@ -54,11 +55,29 @@ export const ValidationModal: React.FC<ValidationModalProps> = ({
 				</div>
 
 				<div className="space-y-6">
-					<div className="text-center">
-						<Text size="3" className="text-muted-foreground">
-							Products don't match. Fix your products or generate a new funnel.
-						</Text>
-					</div>
+					{/* Live Funnel Conflict */}
+					{validation.liveFunnelName && (
+						<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-6">
+							<div className="flex items-center gap-3 mb-4">
+								<div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+								<Heading size="3" weight="bold" className="text-red-800 dark:text-red-200">
+									Another Funnel is Live
+								</Heading>
+							</div>
+							<Text size="3" className="text-red-700 dark:text-red-300 mb-4">
+								Funnel <span className="font-semibold">"{validation.liveFunnelName}"</span> is currently live.
+							</Text>
+						</div>
+					)}
+
+					{/* Product Mismatch - only show if no live funnel conflict */}
+					{!validation.liveFunnelName && (
+						<>
+							<div className="text-center">
+								<Text size="3" className="text-muted-foreground">
+									Products don't match. Fix your products or generate a new funnel.
+								</Text>
+							</div>
 
 					{/* Missing Products Section */}
 					{validation.missingProducts.length > 0 && (
@@ -156,15 +175,28 @@ export const ValidationModal: React.FC<ValidationModalProps> = ({
 						</div>
 					)}
 
+					{/* Action Buttons */}
 					<div className="flex justify-center pt-4">
-						<Button
-							color="violet"
-							onClick={onGoToProducts}
-							className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:bg-violet-500/60"
-						>
-							Go to Assigned Products
-						</Button>
+						{validation.liveFunnelName ? (
+							<Button
+								color="gray"
+								onClick={onClose}
+								className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-xl shadow-xl shadow-gray-500/30 hover:shadow-gray-500/50 hover:scale-105 transition-all duration-300 dark:bg-gray-500 dark:hover:bg-gray-600 dark:shadow-gray-500/40 dark:hover:bg-gray-500/60"
+							>
+								Close
+							</Button>
+						) : (
+							<Button
+								color="violet"
+								onClick={onGoToProducts}
+								className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:bg-violet-500/60"
+							>
+								Go to Assigned Products
+							</Button>
+						)}
 					</div>
+						</>
+					)}
 				</div>
 			</div>
 		</div>

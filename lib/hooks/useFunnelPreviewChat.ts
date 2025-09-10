@@ -22,13 +22,20 @@ export const useFunnelPreviewChat = (
 			return block.message;
 		}
 
-		// Check if this block is in a TRANSITION stage - don't show options for these
-		const isTransitionBlock = funnelFlow?.stages.some(
-			stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+		// Check if this block is in a stage that should not show numbered options
+		// Stages without numbered options: VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION, OFFER
+		const shouldHideOptions = funnelFlow?.stages.some(
+			stage => 
+				(stage.name === "VALUE_DELIVERY" ||
+				 stage.name === "TRANSITION" || 
+				 stage.name === "EXPERIENCE_QUALIFICATION" || 
+				 stage.name === "PAIN_POINT_QUALIFICATION" || 
+				 stage.name === "OFFER") && 
+				stage.blockIds.includes(block.id)
 		);
 
-		if (isTransitionBlock) {
-			return block.message; // Don't include options for TRANSITION blocks
+		if (shouldHideOptions) {
+			return block.message; // Don't include options for specified stages
 		}
 
 		const numberedOptions = block.options
@@ -244,7 +251,7 @@ export const useFunnelPreviewChat = (
 				if (!isTransitionBlock) {
 					const userMessage: ChatMessage = {
 						type: "user",
-						text: `${index + 1}. ${option.text}`,
+						text: option.text,
 					};
 					setHistory((prev) => [...prev, userMessage]);
 				}
@@ -274,7 +281,7 @@ export const useFunnelPreviewChat = (
 					// Only add user message if not in TRANSITION stage
 					const userMessage: ChatMessage = {
 						type: "user",
-						text: `${index + 1}. ${option.text}`,
+						text: option.text,
 					};
 					setHistory((prev) => [...prev, userMessage]);
 				}

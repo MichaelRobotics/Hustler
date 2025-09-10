@@ -1,0 +1,61 @@
+import { type NextRequest, NextResponse } from "next/server";
+import { checkForOtherLiveFunnels } from "../../../../lib/actions/funnel-actions";
+import {
+	createErrorResponse,
+	createSuccessResponse,
+	withFunnelAuth,
+} from "../../../../lib/middleware/whop-auth";
+import type { AuthContext } from "../../../../lib/middleware/whop-auth";
+import { getUserContext } from "../../../../lib/context/user-context";
+
+/**
+ * Check Live Funnels API Route
+ * Checks if any other funnel is currently live
+ */
+
+/**
+ * GET /api/funnels/check-live - Check if any other funnel is live
+ */
+async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContext) {
+	try {
+		const { user } = context;
+		const { searchParams } = new URL(request.url);
+		const excludeFunnelId = searchParams.get("excludeFunnelId");
+
+		// Use experience ID from URL or fallback to a default
+		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
+
+		// Get the full user context from the simplified auth
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			"customer", // default access level
+		);
+
+		if (!userContext) {
+			return NextResponse.json(
+				{ error: "User context not found" },
+				{ status: 401 },
+			);
+		}
+
+		// Check for live funnels
+		const liveFunnelCheck = await checkForOtherLiveFunnels(
+			userContext.user,
+			excludeFunnelId || undefined,
+		);
+
+		return createSuccessResponse(
+			liveFunnelCheck,
+			"Live funnel check completed",
+		);
+	} catch (error) {
+		console.error("Error checking live funnels:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
+}
+
+// Export the protected route handler
+export const GET = withFunnelAuth(checkLiveFunnelsHandler);
