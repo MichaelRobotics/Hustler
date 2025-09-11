@@ -24,7 +24,14 @@ async function connectWebSocketHandler(
 		const { user } = context;
 
 		// Use experience ID from URL or fallback to a default
-		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
+		// Validate experience ID is provided
+		if (!user.experienceId) {
+			return NextResponse.json(
+				{ error: "Experience ID is required" },
+				{ status: 400 },
+			);
+		}
+		const experienceId = user.experienceId;
 
 		// Return connection info (actual connection handled by React hooks)
 		return createSuccessResponse(
@@ -53,7 +60,14 @@ async function getWebSocketStatusHandler(
 		const { user } = context;
 
 		// Use experience ID from URL or fallback to a default
-		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
+		// Validate experience ID is provided
+		if (!user.experienceId) {
+			return NextResponse.json(
+				{ error: "Experience ID is required" },
+				{ status: 400 },
+			);
+		}
+		const experienceId = user.experienceId;
 
 		return createSuccessResponse(
 			{

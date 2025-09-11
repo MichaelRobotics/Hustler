@@ -264,7 +264,7 @@ class AnalyticsSystem {
 			const funnel = await db.query.funnels.findFirst({
 				where: and(
 					eq(funnels.id, funnelId),
-					eq(funnels.experienceId, user.experienceId),
+					eq(funnels.experienceId, user.experience.id),
 				),
 			});
 
@@ -447,7 +447,7 @@ class AnalyticsSystem {
 			const targetUser = await db.query.users.findFirst({
 				where: and(
 					eq(users.id, userId),
-					eq(users.experienceId, user.experienceId),
+					eq(users.experienceId, user.experience.id),
 				),
 			});
 
@@ -605,7 +605,7 @@ class AnalyticsSystem {
 				.from(funnels)
 				.where(
 					and(
-						eq(funnels.experienceId, user.experienceId),
+						eq(funnels.experienceId, user.experience.id),
 						eq(funnels.isDeployed, true),
 					),
 				);
