@@ -98,6 +98,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.56.0
         version: 2.57.2
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       '@vercel/functions':
         specifier: ^2.0.3
         version: 2.0.3
@@ -146,6 +149,9 @@ importers:
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
     devDependencies:
       '@biomejs/biome':
         specifier: ^1.9.4
