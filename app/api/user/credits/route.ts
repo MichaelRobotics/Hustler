@@ -22,8 +22,18 @@ async function getUserCreditsHandler(
 	try {
 		const { user } = context;
 
-		// Get fresh credits from database
-		const currentCredits = await getUserCredits(user.userId);
+		// Get experienceId from user context or fallback
+		const experienceId = user.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+		
+		if (!experienceId) {
+			return createErrorResponse(
+				"MISSING_EXPERIENCE_ID",
+				"Experience ID not found",
+			);
+		}
+
+		// Get fresh credits from database for specific experience
+		const currentCredits = await getUserCredits(user.userId, experienceId);
 
 		const creditsInfo = {
 			current: currentCredits,

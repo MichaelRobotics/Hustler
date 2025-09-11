@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { getUserContext } from "../../../../lib/context/user-context";
 import {
 	type AuthContext,
@@ -22,8 +23,29 @@ async function getUserProfileHandler(
 	try {
 		const { user } = context;
 
-		// Use experience ID from URL or fallback to a default
-		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
+		// Get experience ID from user context or request headers
+		let experienceId = user.experienceId;
+		
+		// If no experienceId in user context, try to get from request headers
+		if (!experienceId) {
+			const headersList = await headers();
+			const url = new URL(request.url);
+			const pathExperienceId = url.pathname.match(/\/experiences\/([^\/]+)/)?.[1];
+			
+			if (pathExperienceId) {
+				experienceId = pathExperienceId;
+			} else {
+				// Last resort: use environment variable
+				experienceId = process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+			}
+		}
+
+		if (!experienceId) {
+			return NextResponse.json(
+				{ error: "Experience ID not found" },
+				{ status: 400 },
+			);
+		}
 
 		// Get the full user context from the simplified auth (whopCompanyId is now optional)
 		const userContext = await getUserContext(

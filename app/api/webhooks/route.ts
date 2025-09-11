@@ -67,6 +67,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 					metadata.packId as CreditPackId,
 					metadata.credits as number,
 					id,
+					metadata?.experienceId as string, // Pass experienceId from metadata
 				),
 			);
 		} else {
@@ -107,19 +108,28 @@ async function handleCreditPackPurchase(
 	packId: CreditPackId,
 	credits: number,
 	paymentId: string,
+	experienceId?: string,
 ) {
 	if (!user_id) {
 		console.error("No user_id provided for credit pack purchase");
 		return;
 	}
 
+	// Use provided experienceId or fallback to environment variable
+	const expId = experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+	
+	if (!expId) {
+		console.error("No experienceId available for credit pack purchase");
+		return;
+	}
+
 	try {
 		console.log(
-			`Processing credit pack purchase: ${packId} for user ${user_id}`,
+			`Processing credit pack purchase: ${packId} for user ${user_id} in experience ${expId}`,
 		);
 
-		// Add credits to user's balance
-		await addCredits(user_id, credits);
+		// Add credits to user's balance for specific experience
+		await addCredits(user_id, expId, credits);
 
 		// Get pack info for logging
 		const pack = await getCreditPack(packId);

@@ -11,15 +11,15 @@ import { CREDIT_PACKS, type CreditPackId } from "../types/credit";
 import type { AuthenticatedUser } from "../types/user";
 
 /**
- * Get user's credit balance from database
+ * Get user's credit balance from database (experience-aware)
  */
-export async function getUserCredits(): Promise<number> {
+export async function getUserCredits(experienceId: string): Promise<number> {
 	try {
 		const headersList = await headers();
 		const { userId } = await whopSdk.verifyUserToken(headersList);
 
-		// Get from database
-		return await getDbUserCredits(userId);
+		// Get from database for specific experience
+		return await getDbUserCredits(userId, experienceId);
 	} catch (error) {
 		console.error("Error getting user credits:", error);
 		return 0; // Default to 0 credits (only admins get credits)
@@ -30,18 +30,21 @@ export async function getUserCredits(): Promise<number> {
  * Check if user can generate (has credits available)
  * Only admins can generate funnels
  */
-export async function canGenerate(user?: AuthenticatedUser): Promise<boolean> {
+export async function canGenerate(user?: AuthenticatedUser, experienceId?: string): Promise<boolean> {
 	try {
 		// If no user provided, try to get from context
 		if (!user) {
 			const headersList = await headers();
 			const { userId } = await whopSdk.verifyUserToken(headersList);
 			
+			// Use provided experienceId or fallback to environment variable
+			const expId = experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+			
 			// Get user context
 			const userContext = await getUserContext(
 				userId,
 				"",
-				process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "",
+				expId,
 				false
 			);
 			
@@ -69,18 +72,21 @@ export async function canGenerate(user?: AuthenticatedUser): Promise<boolean> {
  * Consume 1 credit for generation
  * Only admins can consume credits
  */
-export async function consumeCredit(user?: AuthenticatedUser): Promise<boolean> {
+export async function consumeCredit(user?: AuthenticatedUser, experienceId?: string): Promise<boolean> {
 	try {
 		// If no user provided, try to get from context
 		if (!user) {
 			const headersList = await headers();
 			const { userId } = await whopSdk.verifyUserToken(headersList);
 			
+			// Use provided experienceId or fallback to environment variable
+			const expId = experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+			
 			// Get user context
 			const userContext = await getUserContext(
 				userId,
 				"",
-				process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "",
+				expId,
 				false
 			);
 			
@@ -103,12 +109,19 @@ export async function consumeCredit(user?: AuthenticatedUser): Promise<boolean> 
 			return false; // No credits available
 		}
 
-		// Update credits in database
-		const success = await updateUserCredits(user.whopUserId, 1, "subtract");
+		// Use experienceId from user context or provided parameter
+		const expId = experienceId || user.experienceId;
+		if (!expId) {
+			console.error("No experienceId available for credit consumption");
+			return false;
+		}
+
+		// Update credits in database for specific experience
+		const success = await updateUserCredits(user.whopUserId, expId, 1, "subtract");
 
 		if (success) {
 			console.log(
-				`Admin ${user.whopUserId} consumed 1 credit. Remaining: ${currentCredits - 1}`,
+				`Admin ${user.whopUserId} consumed 1 credit in experience ${expId}. Remaining: ${currentCredits - 1}`,
 			);
 		}
 
@@ -121,18 +134,20 @@ export async function consumeCredit(user?: AuthenticatedUser): Promise<boolean> 
 
 /**
  * Add credits to user's balance (called from webhook after purchase)
+ * Note: This function needs experienceId to be passed from the webhook context
  */
 export async function addCredits(
 	userId: string,
+	experienceId: string,
 	amount: number,
 ): Promise<void> {
 	try {
-		const currentCredits = await getDbUserCredits(userId);
-		const success = await updateUserCredits(userId, amount, "add");
+		const currentCredits = await getDbUserCredits(userId, experienceId);
+		const success = await updateUserCredits(userId, experienceId, amount, "add");
 
 		if (success) {
 			console.log(
-				`Added ${amount} credits to user ${userId}. New balance: ${currentCredits + amount}`,
+				`Added ${amount} credits to user ${userId} in experience ${experienceId}. New balance: ${currentCredits + amount}`,
 			);
 		} else {
 			throw new Error("Failed to add credits to database");

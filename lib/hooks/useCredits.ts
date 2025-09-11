@@ -34,9 +34,17 @@ export function useCredits(user: AuthenticatedUser | null): UseCreditsReturn {
 		try {
 			setIsLoading(true);
 			setError(null);
+			
+			// Get experienceId from user context
+			const experienceId = user?.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+			
+			if (!experienceId) {
+				throw new Error("Experience ID not found");
+			}
+			
 			const [userCredits, canGen] = await Promise.all([
-				getUserCredits(),
-				canGenerate(user),
+				getUserCredits(experienceId),
+				canGenerate(user, experienceId),
 			]);
 			setCredits(userCredits);
 			setCanGenerateNow(canGen);
@@ -54,8 +62,15 @@ export function useCredits(user: AuthenticatedUser | null): UseCreditsReturn {
 		}
 
 		try {
-			// Use the updated consumeCredit function with user context
-			const success = await consumeCredit(user);
+			// Get experienceId from user context
+			const experienceId = user?.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+			
+			if (!experienceId) {
+				throw new Error("Experience ID not found");
+			}
+			
+			// Use the updated consumeCredit function with user context and experienceId
+			const success = await consumeCredit(user, experienceId);
 			if (success) {
 				await fetchCreditData(); // Refresh the balance
 			}

@@ -386,20 +386,24 @@ async function determineAccessLevel(
 }
 
 /**
- * Update user credits in context and database
+ * Update user credits in context and database (experience-aware)
  */
 export async function updateUserCredits(
 	whopUserId: string,
+	experienceId: string,
 	creditChange: number,
 	operation: "add" | "subtract" = "subtract",
 ): Promise<boolean> {
 	try {
 		const user = await db.query.users.findFirst({
-			where: eq(users.whopUserId, whopUserId),
+			where: and(
+				eq(users.whopUserId, whopUserId),
+				eq(users.experienceId, experienceId)
+			),
 		});
 
 		if (!user) {
-			console.error("User not found for credit update:", whopUserId);
+			console.error("User not found for credit update:", { whopUserId, experienceId });
 			return false;
 		}
 
@@ -416,8 +420,8 @@ export async function updateUserCredits(
 			})
 			.where(eq(users.id, user.id));
 
-		// Invalidate cache for this user
-		invalidateUserCache(whopUserId);
+		// Invalidate cache for this user-experience combination
+		invalidateUserCache(`${whopUserId}:${experienceId}`);
 
 		return true;
 	} catch (error) {
@@ -427,12 +431,15 @@ export async function updateUserCredits(
 }
 
 /**
- * Get user credits from context or database
+ * Get user credits from context or database (experience-aware)
  */
-export async function getUserCredits(whopUserId: string): Promise<number> {
+export async function getUserCredits(whopUserId: string, experienceId: string): Promise<number> {
 	try {
 		const user = await db.query.users.findFirst({
-			where: eq(users.whopUserId, whopUserId),
+			where: and(
+				eq(users.whopUserId, whopUserId),
+				eq(users.experienceId, experienceId)
+			),
 		});
 
 		return user?.credits || 0;
@@ -443,18 +450,23 @@ export async function getUserCredits(whopUserId: string): Promise<number> {
 }
 
 /**
- * Invalidate user cache
+ * Invalidate user cache (supports both old and new key formats)
  */
-export function invalidateUserCache(whopUserId: string): void {
-	const keysToDelete: string[] = [];
-
-	for (const [key, context] of userContextCache.entries()) {
-		if (context.user.whopUserId === whopUserId) {
-			keysToDelete.push(key);
+export function invalidateUserCache(cacheKey: string): void {
+	// Handle both old format (whopUserId) and new format (whopUserId:experienceId)
+	if (cacheKey.includes(':')) {
+		// New format: whopUserId:experienceId
+		userContextCache.delete(cacheKey);
+	} else {
+		// Old format: whopUserId only - invalidate all experiences for this user
+		const keysToDelete: string[] = [];
+		for (const [key, context] of userContextCache.entries()) {
+			if (context.user.whopUserId === cacheKey) {
+				keysToDelete.push(key);
+			}
 		}
+		keysToDelete.forEach((key) => userContextCache.delete(key));
 	}
-
-	keysToDelete.forEach((key) => userContextCache.delete(key));
 }
 
 /**

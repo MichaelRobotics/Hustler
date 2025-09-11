@@ -104,6 +104,7 @@ async function generateFunnelHandler(
 		// Deduct credit AFTER successful generation and database save (server-side for security)
 		const creditDeducted = await updateUserCredits(
 			userContext.user.whopUserId,
+			userContext.user.experienceId,
 			1,
 			"subtract",
 		);
