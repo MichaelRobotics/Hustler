@@ -842,26 +842,38 @@ export async function addResourceToFunnel(
 	resourceId: string,
 ): Promise<FunnelWithResources> {
 	try {
-		// Check if funnel exists and belongs to user
-		const [funnel] = await db
-			.select()
-			.from(funnels)
-			.where(and(eq(funnels.id, funnelId), eq(funnels.userId, user.id)))
-			.limit(1);
+		// Check if funnel exists and user has access (following consistent auth pattern)
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, funnelId),
+				eq(funnels.experienceId, user.experienceId), // Experience-based filtering
+			),
+		});
 
-		if (!funnel) {
-			throw new Error("Funnel not found or access denied");
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
 		}
 
-		// Check if resource exists and belongs to user
-		const [resource] = await db
-			.select()
-			.from(resources)
-			.where(and(eq(resources.id, resourceId), eq(resources.userId, user.id)))
-			.limit(1);
+		// Check access permissions
+		if (user.accessLevel === "customer" && existingFunnel.userId !== user.id) {
+			throw new Error("Access denied: You can only add resources to your own funnels");
+		}
 
-		if (!resource) {
-			throw new Error("Resource not found or access denied");
+		// Check if resource exists and user has access (following consistent auth pattern)
+		const existingResource = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.id, resourceId),
+				eq(resources.experienceId, user.experienceId), // Experience-based filtering
+			),
+		});
+
+		if (!existingResource) {
+			throw new Error("Resource not found");
+		}
+
+		// Check access permissions for resource
+		if (user.accessLevel === "customer" && existingResource.userId !== user.id) {
+			throw new Error("Access denied: You can only add your own resources to funnels");
 		}
 
 		// Check if resource is already in funnel
@@ -898,14 +910,14 @@ export async function addResourceToFunnel(
 		).length;
 
 		// Check if adding this resource would exceed limits
-		if (resource.category === "PAID" && paidCount >= PRODUCT_LIMITS.PAID) {
+		if (existingResource.category === "PAID" && paidCount >= PRODUCT_LIMITS.PAID) {
 			throw new Error(
 				`Cannot add paid product: limit reached (max ${PRODUCT_LIMITS.PAID} paid products per funnel)`,
 			);
 		}
 
 		if (
-			resource.category === "FREE_VALUE" &&
+			existingResource.category === "FREE_VALUE" &&
 			freeValueCount >= PRODUCT_LIMITS.FREE_VALUE
 		) {
 			throw new Error(
@@ -941,15 +953,21 @@ export async function removeResourceFromFunnel(
 	resourceId: string,
 ): Promise<void> {
 	try {
-		// Check if funnel exists and belongs to user
-		const [funnel] = await db
-			.select()
-			.from(funnels)
-			.where(and(eq(funnels.id, funnelId), eq(funnels.userId, user.id)))
-			.limit(1);
+		// Check if funnel exists and user has access (following consistent auth pattern)
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, funnelId),
+				eq(funnels.experienceId, user.experienceId), // Experience-based filtering
+			),
+		});
 
-		if (!funnel) {
-			throw new Error("Funnel not found or access denied");
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		// Check access permissions
+		if (user.accessLevel === "customer" && existingFunnel.userId !== user.id) {
+			throw new Error("Access denied: You can only remove resources from your own funnels");
 		}
 
 		// Remove resource from funnel
