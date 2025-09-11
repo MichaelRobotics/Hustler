@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useOptimisticUpdates } from "../utils/optimisticUpdates";
 import { deduplicatedFetch } from "../utils/requestDeduplication";
 import { robustDelete } from "../utils/robustFetch";
+import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api-client";
 
 interface Funnel {
 	id: string;
@@ -69,8 +70,13 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 			setIsLoading(true);
 			setError(null);
 			
+			const experienceId = user?.experienceId;
+			if (!experienceId) {
+				throw new Error("Experience ID is required");
+			}
+			
 			// Load funnels with limit to prevent loading all at once
-			const response = await deduplicatedFetch("/api/funnels?limit=20");
+			const response = await apiGet("/api/funnels?limit=20", experienceId);
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch funnels: ${response.statusText}`);
@@ -90,7 +96,9 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 
 	// Load funnels on component mount
 	useEffect(() => {
-		fetchFunnels();
+		if (user?.experienceId) {
+			fetchFunnels();
+		}
 
 		// Cleanup function to prevent memory leaks
 		return () => {
@@ -98,7 +106,7 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 			setError(null);
 			setIsLoading(false);
 		};
-	}, []);
+	}, [user?.experienceId]);
 
 	const handleAddFunnel = async () => {
 		if (newFunnelName.trim()) {
@@ -436,14 +444,16 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 			);
 
 			// Call the AI generation API with funnelId and experienceId
-			const response = await deduplicatedFetch("/api/generate-funnel", {
-				method: "POST",
-				body: JSON.stringify({
-					resources: resourcesForAI,
-					funnelId: funnelId,
-					experienceId: user?.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "",
-				}),
-			});
+			const experienceId = user?.experienceId;
+			if (!experienceId) {
+				throw new Error("Experience ID is required");
+			}
+			
+			const response = await apiPost("/api/generate-funnel", {
+				resources: resourcesForAI,
+				funnelId: funnelId,
+				experienceId: experienceId,
+			}, experienceId);
 
 			let result;
 			try {

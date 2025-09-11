@@ -273,6 +273,7 @@ export async function getFunnels(
 		// Add search filter
 		if (search) {
 			whereConditions = and(
+				whereConditions,
 				sql`${funnels.name} ILIKE ${"%" + search + "%"}`,
 			)!;
 		}

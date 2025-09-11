@@ -34,8 +34,14 @@ async function updateFunnelHandler(request: NextRequest, context: AuthContext) {
 		// Parse request body
 		const input = await request.json();
 
-		// Use experience ID from URL or fallback to a default
-		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
+		// Validate experience ID is provided
+		if (!user.experienceId) {
+			return NextResponse.json(
+				{ error: "Experience ID is required" },
+				{ status: 400 },
+			);
+		}
+		const experienceId = user.experienceId;
 
 		// Get the full user context from the simplified auth (whopCompanyId is now optional)
 		const userContext = await getUserContext(
@@ -78,8 +84,14 @@ async function deleteFunnelHandler(request: NextRequest, context: AuthContext) {
 			);
 		}
 
-		// Use experience ID from URL or fallback to a default
-		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
+		// Validate experience ID is provided
+		if (!user.experienceId) {
+			return NextResponse.json(
+				{ error: "Experience ID is required" },
+				{ status: 400 },
+			);
+		}
+		const experienceId = user.experienceId;
 
 		// Get the full user context from the simplified auth (whopCompanyId is now optional)
 		const userContext = await getUserContext(

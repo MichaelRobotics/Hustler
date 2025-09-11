@@ -32,16 +32,22 @@ export async function authenticateWhopUser(
 			return null;
 		}
 
-		// Extract experienceId from request URL if available
+		// Extract experienceId from request URL or headers
 		let experienceId: string | undefined;
 		if (request) {
-			const url = new URL(request.url);
-			const pathParts = url.pathname.split("/");
-			const experienceIndex = pathParts.indexOf("experiences");
-			experienceId =
-				experienceIndex !== -1 && pathParts[experienceIndex + 1]
-					? pathParts[experienceIndex + 1]
-					: undefined;
+			// First try to get from X-Experience-ID header (for API calls)
+			experienceId = request.headers.get("X-Experience-ID") || undefined;
+			
+			// If not in header, try to extract from URL path
+			if (!experienceId) {
+				const url = new URL(request.url);
+				const pathParts = url.pathname.split("/");
+				const experienceIndex = pathParts.indexOf("experiences");
+				experienceId =
+					experienceIndex !== -1 && pathParts[experienceIndex + 1]
+						? pathParts[experienceIndex + 1]
+						: undefined;
+			}
 		}
 
 		return {
