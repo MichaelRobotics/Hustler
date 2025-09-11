@@ -23,6 +23,7 @@ import {
 import { db } from "../../../lib/supabase/db-server";
 import { conversations, funnels } from "../../../lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
+import { getUserContext } from "../../../lib/context/user-context";
 
 /**
  * GET /api/internal-chat - Get internal chat session details
@@ -51,11 +52,26 @@ async function getInternalChatHandler(
 			);
 		}
 
+		// Get full user context to access experience.id for database queries
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			user.experienceId,
+			false, // forceRefresh
+		);
+
+		if (!userContext?.isAuthenticated) {
+			return createErrorResponse(
+				"USER_NOT_FOUND",
+				"User context not found",
+			);
+		}
+
 		// Get conversation details
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, user.experienceId),
+				eq(conversations.experienceId, userContext.user.experience.id),
 			),
 			with: {
 				funnel: true,
@@ -146,11 +162,26 @@ async function createInternalChatHandler(
 			);
 		}
 
+		// Get full user context to access experience.id for database queries
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			user.experienceId,
+			false, // forceRefresh
+		);
+
+		if (!userContext?.isAuthenticated) {
+			return createErrorResponse(
+				"USER_NOT_FOUND",
+				"User context not found",
+			);
+		}
+
 		// Verify DM conversation exists and belongs to user's experience
 		const dmConversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, dmConversationId),
-				eq(conversations.experienceId, user.experienceId),
+				eq(conversations.experienceId, userContext.user.experience.id),
 			),
 		});
 
@@ -165,7 +196,7 @@ async function createInternalChatHandler(
 		const funnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId),
+				eq(funnels.experienceId, userContext.user.experience.id),
 			),
 		});
 
@@ -231,11 +262,26 @@ async function updateInternalChatHandler(
 			);
 		}
 
+		// Get full user context to access experience.id for database queries
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			user.experienceId,
+			false, // forceRefresh
+		);
+
+		if (!userContext?.isAuthenticated) {
+			return createErrorResponse(
+				"USER_NOT_FOUND",
+				"User context not found",
+			);
+		}
+
 		// Verify conversation exists and is an internal chat
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, user.experienceId),
+				eq(conversations.experienceId, userContext.user.experience.id),
 			),
 		});
 
@@ -368,11 +414,26 @@ async function generateChatLinkHandler(
 			);
 		}
 
+		// Get full user context to access experience.id for database queries
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			user.experienceId,
+			false, // forceRefresh
+		);
+
+		if (!userContext?.isAuthenticated) {
+			return createErrorResponse(
+				"USER_NOT_FOUND",
+				"User context not found",
+			);
+		}
+
 		// Verify conversation exists and is an internal chat
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, user.experienceId),
+				eq(conversations.experienceId, userContext.user.experience.id),
 			),
 		});
 

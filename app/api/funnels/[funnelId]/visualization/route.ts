@@ -57,7 +57,7 @@ async function getVisualizationStateHandler(
 		const funnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, userContext.user.experienceId),
+				eq(funnels.experienceId, userContext.user.experience.id),
 			),
 			columns: {
 				id: true,
@@ -145,7 +145,7 @@ async function saveVisualizationStateHandler(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, userContext.user.experienceId),
+				eq(funnels.experienceId, userContext.user.experience.id),
 			),
 		});
 
