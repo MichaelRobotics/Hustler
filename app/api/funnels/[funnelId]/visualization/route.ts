@@ -7,7 +7,7 @@ import {
 	withFunnelAuth,
 } from "../../../../../lib/middleware/whop-auth";
 import type { AuthContext } from "../../../../../lib/middleware/whop-auth";
-import { db } from "../../../../../lib/supabase/db";
+import { db } from "../../../../../lib/supabase/db-server";
 import { funnels } from "../../../../../lib/supabase/schema";
 import type { VisualizationState } from "../../../../../lib/types/visualization";
 
@@ -43,7 +43,7 @@ async function getVisualizationStateHandler(
 			"", // whopCompanyId is optional for experience-based isolation
 			experienceId,
 			false, // forceRefresh
-			"customer", // default access level
+			// Don't pass access level - let it be determined from Whop API
 		);
 
 		if (!userContext) {
@@ -131,7 +131,7 @@ async function saveVisualizationStateHandler(
 			"", // whopCompanyId is optional for experience-based isolation
 			experienceId,
 			false, // forceRefresh
-			"customer", // default access level
+			// Don't pass access level - let it be determined from Whop API
 		);
 
 		if (!userContext) {

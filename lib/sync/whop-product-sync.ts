@@ -7,9 +7,9 @@
 
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 import { experiences, resources, users } from "../supabase/schema";
-import { realTimeUpdates } from "../websocket/updates";
+// WebSocket functionality moved to React hooks
 import { whopSdk } from "../whop-sdk";
 
 export interface WhopProduct {
@@ -68,14 +68,7 @@ class WhopProductSync {
 
 		try {
 			// Send sync started notification
-			await realTimeUpdates.sendResourceSyncUpdate(
-				user,
-				"experience-sync",
-				"Experience Products",
-				"sync_started",
-				0,
-				"Starting product synchronization...",
-			);
+			// Real-time updates moved to React hooks
 
 			const result: SyncResult = {
 				success: true,
@@ -90,14 +83,7 @@ class WhopProductSync {
 			const whopProducts = await this.fetchWhopProducts(user, options);
 
 			if (whopProducts.length === 0) {
-				await realTimeUpdates.sendResourceSyncUpdate(
-					user,
-					"company-sync",
-					"Company Products",
-					"sync_completed",
-					100,
-					"No products found to sync",
-				);
+				// Real-time updates moved to React hooks
 				return result;
 			}
 
@@ -113,26 +99,19 @@ class WhopProductSync {
 				// Update progress
 				options.onProgress?.(
 					progress,
-					`Processing batch ${batchNumber}/${totalBatches}`,
+					`Processing batch ${batchNumber}/${totalBatches}`
 				);
 
-				await realTimeUpdates.sendResourceSyncUpdate(
-					user,
-					"company-sync",
-					"Company Products",
-					"sync_progress",
-					progress,
-					`Processing batch ${batchNumber}/${totalBatches}`,
-				);
+				// Real-time updates moved to React hooks
 
 				// Process batch
 				for (const product of batch) {
 					try {
-						const syncResult = await this.syncProduct(
-							user,
-							product,
-							options.forceUpdate,
-						);
+					const syncResult = await this.syncProduct(
+						user,
+						product,
+						options.forceUpdate,
+					);
 						result.synced++;
 
 						if (syncResult.created) {
@@ -159,25 +138,11 @@ class WhopProductSync {
 			this.lastSyncTime.set(syncKey, new Date());
 
 			// Send completion notification
-			await realTimeUpdates.sendResourceSyncUpdate(
-				user,
-				"experience-sync",
-				"Experience Products",
-				"sync_completed",
-				100,
-				`Sync completed: ${result.created} created, ${result.updated} updated, ${result.errors} errors`,
-			);
+			// Real-time updates moved to React hooks
 
 			return result;
 		} catch (error) {
-			await realTimeUpdates.sendResourceSyncUpdate(
-				user,
-				"experience-sync",
-				"Experience Products",
-				"sync_failed",
-				0,
-				`Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-			);
+			// Real-time updates moved to React hooks
 
 			throw error;
 		} finally {
@@ -460,8 +425,8 @@ class WhopProductSync {
 		return {
 			lastSync: this.lastSyncTime.get(syncKey),
 			isSyncing: this.syncInProgress.get(syncKey) || false,
-			totalProducts,
-			syncedProducts,
+			totalProducts: 0, // TODO: Calculate actual total
+			syncedProducts: 0, // TODO: Calculate actual synced
 		};
 	}
 

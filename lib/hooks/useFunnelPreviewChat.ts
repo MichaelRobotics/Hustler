@@ -8,6 +8,7 @@ import type {
 export const useFunnelPreviewChat = (
 	funnelFlow: FunnelFlow | null,
 	selectedOffer?: string | null,
+	conversation?: any,
 ) => {
 	const [history, setHistory] = useState<ChatMessage[]>([]);
 	const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
@@ -23,12 +24,12 @@ export const useFunnelPreviewChat = (
 		}
 
 		// Check if this block is in a stage that should not show numbered options
-		// Stages without numbered options: VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION, OFFER
+		// Stages without numbered options: VALUE_DELIVERY, TRANSITION, PAIN_POINT_QUALIFICATION, OFFER
+		// NOTE: EXPERIENCE_QUALIFICATION should show options - it's the main qualification stage
 		const shouldHideOptions = funnelFlow?.stages.some(
 			stage => 
 				(stage.name === "VALUE_DELIVERY" ||
 				 stage.name === "TRANSITION" || 
-				 stage.name === "EXPERIENCE_QUALIFICATION" || 
 				 stage.name === "PAIN_POINT_QUALIFICATION" || 
 				 stage.name === "OFFER") && 
 				stage.blockIds.includes(block.id)
@@ -47,20 +48,48 @@ export const useFunnelPreviewChat = (
 
 	// Function to start or restart the conversation
 	const startConversation = useCallback(() => {
-		if (funnelFlow && funnelFlow.startBlockId) {
-			const startBlock = funnelFlow.blocks[funnelFlow.startBlockId];
+		if (funnelFlow) {
+			// Use conversation's currentBlockId if available (for internal chat), otherwise use startBlockId
+			const startBlockId = conversation?.currentBlockId || funnelFlow.startBlockId;
+			const startBlock = funnelFlow.blocks[startBlockId];
+			
 			if (startBlock) {
 				const completeMessage = constructCompleteMessage(startBlock);
 				setHistory([{ type: "bot", text: completeMessage }]);
-				setCurrentBlockId(funnelFlow.startBlockId);
+				setCurrentBlockId(startBlockId);
 			}
 		}
-	}, [funnelFlow, constructCompleteMessage]);
+	}, [funnelFlow, constructCompleteMessage, conversation?.currentBlockId]);
 
 	// Start the conversation when the component mounts or the funnelFlow changes
 	useEffect(() => {
-		startConversation();
-	}, [startConversation]);
+		// Only start conversation if we don't have existing conversation messages
+		// (for internal chat with DM history, we don't want to override the existing messages)
+		if (!conversation?.messages || conversation.messages.length === 0) {
+			startConversation();
+		} else {
+			// For internal chat with existing messages, just set the current block ID
+			const startBlockId = conversation?.currentBlockId || funnelFlow?.startBlockId;
+			if (startBlockId) {
+				setCurrentBlockId(startBlockId);
+				
+				// Check if we need to add the bot message for the current block
+				// (this happens when transitioning from DM to internal chat)
+				const currentBlock = funnelFlow?.blocks[startBlockId];
+				if (currentBlock && funnelFlow) {
+					// Check if the last message in conversation is not from the current block
+					const lastMessage = conversation.messages[conversation.messages.length - 1];
+					const needsBotMessage = !lastMessage || 
+						(lastMessage.type === "user" && lastMessage.metadata?.blockId !== startBlockId);
+					
+					if (needsBotMessage) {
+						const completeMessage = constructCompleteMessage(currentBlock);
+						setHistory(prev => [...prev, { type: "bot", text: completeMessage }]);
+					}
+				}
+			}
+		}
+	}, [startConversation, conversation?.messages, conversation?.currentBlockId, funnelFlow, constructCompleteMessage]);
 
 	// Effect to handle auto-scrolling as new messages are added (optimized)
 	useEffect(() => {

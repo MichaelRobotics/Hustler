@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, eq } from "drizzle-orm";
 import {
 	boolean,
 	check,
@@ -71,14 +71,15 @@ export const users = pgTable(
 	"users",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		whopUserId: text("whop_user_id").notNull().unique(),
+		whopUserId: text("whop_user_id").notNull(),
 		experienceId: uuid("experience_id")
 			.notNull()
 			.references(() => experiences.id, { onDelete: "cascade" }), // Experience-based scoping
 		email: text("email").notNull(),
 		name: text("name").notNull(),
 		avatar: text("avatar"),
-		credits: integer("credits").default(2).notNull(),
+		credits: integer("credits").default(0).notNull(),
+		accessLevel: text("access_level").notNull().default("customer"), // WHOP access level: admin/customer/no_access
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -88,6 +89,16 @@ export const users = pgTable(
 		experienceUpdatedIdx: index("users_experience_updated_idx").on(
 			table.experienceId,
 			table.updatedAt,
+		),
+		accessLevelIdx: index("users_access_level_idx").on(table.accessLevel),
+		experienceAccessLevelIdx: index("users_experience_access_level_idx").on(
+			table.experienceId,
+			table.accessLevel,
+		),
+		// Unique constraint: one user record per whop_user_id per experience
+		whopUserExperienceUnique: unique("users_whop_user_experience_unique").on(
+			table.whopUserId,
+			table.experienceId,
 		),
 	}),
 );
@@ -216,6 +227,10 @@ export const conversations = pgTable(
 		funnelId: uuid("funnel_id")
 			.notNull()
 			.references(() => funnels.id, { onDelete: "cascade" }),
+		userId: uuid("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }), // Direct user reference
+		whopUserId: text("whop_user_id").notNull(), // Direct Whop user ID for faster lookups
 		status: conversationStatusEnum("status").default("active").notNull(),
 		currentBlockId: text("current_block_id"),
 		userPath: jsonb("user_path"), // Track user's path through funnel
@@ -228,7 +243,14 @@ export const conversations = pgTable(
 			table.experienceId,
 		),
 		funnelIdIdx: index("conversations_funnel_id_idx").on(table.funnelId),
+		userIdIdx: index("conversations_user_id_idx").on(table.userId),
+		whopUserIdIdx: index("conversations_whop_user_id_idx").on(table.whopUserId),
 		statusIdx: index("conversations_status_idx").on(table.status),
+		// Unique constraint for one active conversation per user per experience
+		uniqueActiveUserConversation: unique("unique_active_user_conversation").on(
+			table.experienceId,
+			table.userId,
+		),
 	}),
 );
 

@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { updateUserCredits } from "../context/user-context";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 import {
 	experiences,
 	funnelAnalytics,
@@ -9,7 +9,6 @@ import {
 	funnels,
 	resources,
 } from "../supabase/schema";
-import { realTimeUpdates } from "../websocket/updates";
 import { generateFunnelFlow } from "./ai-actions";
 import { PRODUCT_LIMITS, GLOBAL_LIMITS } from "../types/resource";
 
@@ -274,7 +273,6 @@ export async function getFunnels(
 		// Add search filter
 		if (search) {
 			whereConditions = and(
-				whereConditions,
 				sql`${funnels.name} ILIKE ${"%" + search + "%"}`,
 			)!;
 		}
@@ -579,13 +577,7 @@ export async function deployFunnel(
 			.where(eq(funnels.id, funnelId))
 			.returning();
 
-		// Send real-time deployment notification
-		await realTimeUpdates.sendFunnelDeploymentUpdate(
-			user,
-			funnelId,
-			existingFunnel.name,
-			true,
-		);
+		// Real-time notifications moved to React hooks
 
 		return await getFunnelById(user, funnelId);
 	} catch (error) {
@@ -629,13 +621,7 @@ export async function undeployFunnel(
 			.where(eq(funnels.id, funnelId))
 			.returning();
 
-		// Send real-time undeployment notification
-		await realTimeUpdates.sendFunnelDeploymentUpdate(
-			user,
-			funnelId,
-			existingFunnel.name,
-			false,
-		);
+		// Real-time notifications moved to React hooks
 
 		return await getFunnelById(user, funnelId);
 	} catch (error) {
@@ -671,11 +657,9 @@ export async function regenerateFunnelFlow(
 			throw new Error("Funnel not found");
 		}
 
-		// Check access permissions
-		if (user.accessLevel === "customer" && existingFunnel.userId !== user.id) {
-			throw new Error(
-				"Access denied: You can only regenerate your own funnels",
-			);
+		// Check access permissions - only admins can regenerate
+		if (user.accessLevel !== "admin") {
+			throw new Error("Access denied: Only admins can regenerate funnels");
 		}
 
 		// Check if user has sufficient credits
@@ -693,14 +677,7 @@ export async function regenerateFunnelFlow(
 			.where(eq(funnels.id, funnelId));
 
 		// Send real-time generation started notification
-		await realTimeUpdates.sendFunnelGenerationUpdate(
-			user,
-			funnelId,
-			existingFunnel.name,
-			"generation_started",
-			0,
-			"Starting funnel generation...",
-		);
+		// Real-time notifications moved to React hooks
 
 		try {
 			// Prepare resources for AI generation
@@ -714,27 +691,13 @@ export async function regenerateFunnelFlow(
 			}));
 
 			// Send progress update
-			await realTimeUpdates.sendFunnelGenerationUpdate(
-				user,
-				funnelId,
-				existingFunnel.name,
-				"generation_progress",
-				50,
-				"Generating funnel flow with AI...",
-			);
+			// Real-time notifications moved to React hooks
 
 			// Generate new flow using AI
 			const generatedFlow = await generateFunnelFlow(resourcesForAI);
 
 			// Send progress update
-			await realTimeUpdates.sendFunnelGenerationUpdate(
-				user,
-				funnelId,
-				existingFunnel.name,
-				"generation_progress",
-				90,
-				"Finalizing funnel flow...",
-			);
+			// Real-time notifications moved to React hooks
 
 			// Update funnel with new flow
 			const [updatedFunnel] = await db
@@ -749,14 +712,7 @@ export async function regenerateFunnelFlow(
 				.returning();
 
 			// Send completion notification
-			await realTimeUpdates.sendFunnelGenerationUpdate(
-				user,
-				funnelId,
-				existingFunnel.name,
-				"generation_completed",
-				100,
-				"Funnel generation completed successfully!",
-			);
+			// Real-time notifications moved to React hooks
 
 			// Deduct credit for regeneration
 			const creditDeducted = await updateUserCredits(
@@ -781,14 +737,7 @@ export async function regenerateFunnelFlow(
 				.where(eq(funnels.id, funnelId));
 
 			// Send failure notification
-			await realTimeUpdates.sendFunnelGenerationUpdate(
-				user,
-				funnelId,
-				existingFunnel.name,
-				"generation_failed",
-				0,
-				`Funnel generation failed: ${(aiError as Error).message}`,
-			);
+			// Real-time notifications moved to React hooks
 
 			throw aiError;
 		}
@@ -832,7 +781,6 @@ export async function getFunnelAnalytics(
 
 		if (startDate) {
 			dateFilter = and(
-				dateFilter,
 				sql`${funnelAnalytics.date} >= ${startDate}`,
 			)!;
 		}
@@ -967,8 +915,8 @@ export async function addResourceToFunnel(
 
 		// Add resource to funnel
 		await db.insert(funnelResources).values({
-			funnelId,
-			resourceId,
+			funnelId: funnelId,
+			resourceId: resourceId,
 		});
 
 		// Get updated funnel with resources

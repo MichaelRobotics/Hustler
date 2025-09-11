@@ -13,7 +13,7 @@ import {
 	createSuccessResponse,
 	withWhopAuth,
 } from "../../../lib/middleware/whop-auth";
-import { db } from "../../../lib/supabase/db";
+import { db } from "../../../lib/supabase/db-server";
 import { funnels } from "../../../lib/supabase/schema";
 
 /**
@@ -34,13 +34,27 @@ async function generateFunnelHandler(
 			);
 		}
 
-		// Check if user has sufficient credits before generation
+		// Check if user is admin and has sufficient credits
 		const userContext = await getUserContext(
 			context.user.userId,
 			"",
 			context.user.experienceId || "",
 		);
-		if (!userContext || userContext.user.credits < 1) {
+		if (!userContext) {
+			return createErrorResponse(
+				"USER_NOT_FOUND",
+				"User context not found",
+			);
+		}
+		
+		if (userContext.user.accessLevel !== "admin") {
+			return createErrorResponse(
+				"ACCESS_DENIED",
+				"Only admins can generate funnels",
+			);
+		}
+		
+		if (userContext.user.credits < 1) {
 			return createErrorResponse(
 				"INSUFFICIENT_CREDITS",
 				"Insufficient credits to generate funnel. Please purchase more credits.",

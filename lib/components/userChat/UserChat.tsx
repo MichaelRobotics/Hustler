@@ -10,13 +10,18 @@ import React, {
 	useMemo,
 } from "react";
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
+import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
+// Server-side functions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "../../types/funnel";
+import type { ConversationWithMessages } from "../../types/user";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 
 interface UserChatProps {
 	funnelFlow: FunnelFlow;
 	conversationId?: string;
+	conversation?: ConversationWithMessages;
+	experienceId?: string;
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
@@ -35,35 +40,212 @@ interface UserChatProps {
 const UserChat: React.FC<UserChatProps> = ({
 	funnelFlow,
 	conversationId,
+	conversation,
+	experienceId,
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
 }) => {
 	const [message, setMessage] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
+	const [conversationMessages, setConversationMessages] = useState<Array<{
+		id: string;
+		type: "user" | "bot" | "system";
+		content: string;
+		metadata?: any;
+		createdAt: Date;
+	}>>([]);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
 
+	// WebSocket integration for conversation-based chat
+	const { isConnected, sendMessage, sendTypingIndicator, typingUsers } = useWhopWebSocket({
+		conversationId: conversationId || "",
+		experienceId: experienceId || "",
+		onMessage: (newMessage) => {
+			setConversationMessages(prev => [...prev, {
+				id: newMessage.id,
+				type: newMessage.type,
+				content: newMessage.content,
+				metadata: newMessage.metadata,
+				createdAt: newMessage.createdAt,
+			}]);
+			scrollToBottom();
+		},
+		onTyping: (isTyping, userId) => {
+			if (userId !== "system") {
+				setIsTyping(isTyping);
+			}
+		},
+		onError: (error) => {
+			console.error("WebSocket error:", error);
+		},
+	});
+
+	// Initialize conversation messages from backend data
+	useEffect(() => {
+		if (conversation?.messages) {
+			const formattedMessages = conversation.messages.map(msg => ({
+				id: msg.id,
+				type: msg.type,
+				content: msg.content,
+				metadata: msg.metadata,
+				createdAt: msg.createdAt,
+			}));
+			setConversationMessages(formattedMessages);
+		}
+	}, [conversation?.messages]);
+
+	// Get current block ID from conversation state (not from preview hook)
+	const currentBlockId = conversation?.currentBlockId || null;
+	
+	// Get options for current block from funnel flow
+	const currentBlock = currentBlockId ? funnelFlow?.blocks[currentBlockId] : null;
+	const options = currentBlock?.options || [];
+
+	// Get funnel navigation functions (only for option handling)
 	const {
-		history,
-		currentBlockId,
-		startConversation,
-		handleOptionClick,
-		handleCustomInput,
-		options,
-	} = useFunnelPreviewChat(funnelFlow);
+		handleOptionClick: previewHandleOptionClick,
+		handleCustomInput: previewHandleCustomInput,
+	} = useFunnelPreviewChat(funnelFlow, undefined, conversation);
 
 	// Direct handlers - no callbacks for maximum performance
-	const handleSubmit = (e?: React.FormEvent) => {
+	const handleSubmit = async (e?: React.FormEvent) => {
 		e?.preventDefault();
-		if (message.trim()) {
-			handleCustomInput(message.trim());
-			onMessageSent?.(message.trim(), conversationId);
-			setMessage("");
+		if (!message.trim()) return;
+
+		const messageContent = message.trim();
+		setMessage("");
+
+		// Handle conversation-based chat
+		if (conversationId && experienceId && isConnected) {
+			// Add user message to local state immediately
+			const userMessage = {
+				id: `temp-${Date.now()}`,
+				type: "user" as const,
+				content: messageContent,
+				createdAt: new Date(),
+			};
+			setConversationMessages(prev => [...prev, userMessage]);
+
+			// Send via WebSocket
+			await sendMessage(messageContent, "user");
+
+			// Handle funnel navigation if current block has options
+			const currentBlock = funnelFlow.blocks[currentBlockId || ""];
+			if (currentBlock?.options) {
+				const selectedOption = currentBlock.options.find((opt: any) => 
+					opt.text.toLowerCase() === messageContent.toLowerCase()
+				);
+
+				if (selectedOption) {
+					await handleConversationOptionSelection(selectedOption);
+				} else {
+					// Handle invalid response
+					await handleInvalidResponse(messageContent);
+				}
+			}
+		} else {
+			// Handle preview mode (existing functionality)
+			previewHandleCustomInput(messageContent);
 		}
+
+		onMessageSent?.(messageContent, conversationId);
+		scrollToBottom();
 	};
+
+	// Handle conversation option selection
+	const handleConversationOptionSelection = useCallback(async (option: { text: string; nextBlockId: string | null }) => {
+		try {
+			if (!conversationId) return;
+
+		// Navigate funnel via API route
+		const response = await fetch('/api/userchat/navigate-funnel', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				conversationId,
+				navigationData: {
+					text: option.text,
+					value: option.text,
+					blockId: option.nextBlockId || currentBlockId || "",
+				},
+			}),
+		});
+
+		const result = await response.json();
+
+			if (result.success && result.conversation) {
+				// Add bot response
+				const nextBlock = option.nextBlockId ? funnelFlow.blocks[option.nextBlockId] : null;
+				if (nextBlock) {
+					const botMessage = {
+						id: `bot-${Date.now()}`,
+						type: "bot" as const,
+						content: nextBlock.message || "Thank you for your response.",
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, botMessage]);
+					await sendMessage(botMessage.content, "bot");
+				}
+
+				// Check for funnel completion
+				if (option.nextBlockId === "COMPLETED" || result.conversation.status === "completed") {
+					await handleFunnelCompletion();
+				}
+			}
+		} catch (error) {
+			console.error("Error handling conversation option selection:", error);
+		}
+	}, [conversationId, currentBlockId, funnelFlow, sendMessage]);
+
+	// Handle invalid response
+	const handleInvalidResponse = useCallback(async (userInput: string) => {
+		const errorMessage = {
+			id: `error-${Date.now()}`,
+			type: "bot" as const,
+			content: "Please choose from the provided options above.",
+			createdAt: new Date(),
+		};
+		setConversationMessages(prev => [...prev, errorMessage]);
+		await sendMessage(errorMessage.content, "bot");
+	}, [sendMessage]);
+
+	// Handle funnel completion
+	const handleFunnelCompletion = useCallback(async () => {
+		try {
+			if (!conversationId) return;
+
+			// Complete funnel via API route
+		const response = await fetch('/api/userchat/complete-funnel', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				conversationId,
+			}),
+		});
+
+		const result = await response.json();
+			if (result.success) {
+				const completionMessage = {
+					id: `completion-${Date.now()}`,
+					type: "system" as const,
+					content: "🎉 Congratulations! You've completed the funnel. Thank you for your time!",
+					createdAt: new Date(),
+				};
+				setConversationMessages(prev => [...prev, completionMessage]);
+				await sendMessage(completionMessage.content, "system");
+			}
+		} catch (error) {
+			console.error("Error handling funnel completion:", error);
+		}
+	}, [conversationId, sendMessage]);
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === "Enter" && !e.shiftKey) {
@@ -79,8 +261,19 @@ const UserChat: React.FC<UserChatProps> = ({
 				target.style.height = "auto";
 				target.style.height = Math.min(target.scrollHeight, 120) + "px";
 			});
+
+			// Send typing indicator for conversation-based chat
+			if (conversationId && experienceId && isConnected) {
+				if (typingTimeoutRef.current) {
+					clearTimeout(typingTimeoutRef.current);
+				}
+				sendTypingIndicator(true);
+				typingTimeoutRef.current = setTimeout(() => {
+					sendTypingIndicator(false);
+				}, 1000);
+			}
 		},
-		[],
+		[conversationId, experienceId, isConnected, sendTypingIndicator],
 	);
 
 	// Optimized scroll to bottom - mobile performance optimized
@@ -108,17 +301,28 @@ const UserChat: React.FC<UserChatProps> = ({
 			// Send user message immediately
 			onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
 
-			// Hide typing indicator and show bot response after delay
-			typingTimeoutRef.current = setTimeout(
-				() => {
-					setIsTyping(false);
-					// Process the option AFTER typing indicator ends
-					handleOptionClick(option, index);
-				},
-				1500 + Math.random() * 1000,
-			); // Random delay between 1.5-2.5 seconds
+			// Handle option selection based on conversation type
+			if (conversationId && experienceId && isConnected) {
+				// Use backend conversation handling
+				typingTimeoutRef.current = setTimeout(
+					() => {
+						setIsTyping(false);
+						handleConversationOptionSelection(option);
+					},
+					1500 + Math.random() * 1000,
+				);
+			} else {
+				// Fallback to preview mode
+				typingTimeoutRef.current = setTimeout(
+					() => {
+						setIsTyping(false);
+						previewHandleOptionClick(option, index);
+					},
+					1500 + Math.random() * 1000,
+				);
+			}
 		},
-		[handleOptionClick, onMessageSent, conversationId, scrollToBottom],
+		[conversationId, experienceId, isConnected, handleConversationOptionSelection, previewHandleOptionClick, onMessageSent, scrollToBottom],
 	);
 
 	// Optimized keyboard handling - reduced timeout for better performance
@@ -269,18 +473,24 @@ const UserChat: React.FC<UserChatProps> = ({
 		),
 	);
 
-	// Memoized message list
-	const messageList = useMemo(
-		() =>
-			history.map((msg, index) => (
-				<MessageComponent
-					key={`${msg.type}-${index}`}
-					msg={msg}
-					index={index}
-				/>
-			)),
-		[history],
-	);
+	// Memoized message list - show conversation messages if available, otherwise preview messages
+	const messageList = useMemo(() => {
+		const messagesToShow = conversationId && conversationMessages.length > 0 
+			? conversationMessages.map(msg => ({
+				type: msg.type,
+				text: msg.content,
+				timestamp: msg.createdAt,
+			}))
+			: Array.isArray(history) ? history : [];
+
+		return messagesToShow.map((msg: any, index: number) => (
+			<MessageComponent
+				key={`${msg.type}-${index}`}
+				msg={msg}
+				index={index}
+			/>
+		));
+	}, [history, conversationMessages, conversationId]);
 
 	// Memoized options list
 	const optionsList = useMemo(
@@ -342,6 +552,14 @@ const UserChat: React.FC<UserChatProps> = ({
 							>
 								Hustler
 							</Text>
+							{conversationId && (
+								<div className="flex items-center gap-2 mt-1">
+									<div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+									<span className="text-xs text-gray-500 dark:text-gray-400">
+										{isConnected ? 'Connected' : 'Disconnected'}
+									</span>
+								</div>
+							)}
 						</div>
 					</div>
 
@@ -383,8 +601,8 @@ const UserChat: React.FC<UserChatProps> = ({
 					{messageList}
 
 					{/* Options - User side (right side) */}
-					{history.length > 0 &&
-						history[history.length - 1].type === "bot" &&
+					{conversationMessages.length > 0 &&
+						conversationMessages[conversationMessages.length - 1].type === "bot" &&
 						options.length > 0 && (
 							<div className="flex justify-end mb-4 pr-0">
 								<div className="space-y-2 flex flex-col items-end">
@@ -450,12 +668,9 @@ const UserChat: React.FC<UserChatProps> = ({
 					
 					return shouldShowStartButton && (
 						<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-							<button
-								onClick={startConversation}
-								className="chat-optimized w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-							>
-								Start Conversation
-							</button>
+							<div className="w-full py-4 text-center text-muted-foreground">
+								No conversation available
+							</div>
 						</div>
 					);
 				})()}

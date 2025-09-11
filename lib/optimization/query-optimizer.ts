@@ -7,7 +7,7 @@
 
 import { redisCache } from "../cache/redis-cache";
 import { performanceMonitoring } from "../monitoring/performance";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 
 export interface QueryBatch {
 	queries: Array<{

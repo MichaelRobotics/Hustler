@@ -7,7 +7,7 @@
 
 import { redisCache } from "../cache/redis-cache";
 import type { AuthenticatedUser } from "../context/user-context";
-import { realTimeUpdates } from "../websocket/updates";
+// WebSocket functionality moved to React hooks
 import {
 	type BackendState,
 	type ConflictResolution,

@@ -5,9 +5,10 @@ import { headers } from "next/headers";
 import {
 	getUserCredits as getDbUserCredits,
 	updateUserCredits,
+	getUserContext,
 } from "../context/user-context";
-// Removed revalidatePath import - no longer needed
 import { CREDIT_PACKS, type CreditPackId } from "../types/credit";
+import type { AuthenticatedUser } from "../types/user";
 
 /**
  * Get user's credit balance from database
@@ -21,41 +22,94 @@ export async function getUserCredits(): Promise<number> {
 		return await getDbUserCredits(userId);
 	} catch (error) {
 		console.error("Error getting user credits:", error);
-		return 2; // Default to 2 free credits
+		return 0; // Default to 0 credits (only admins get credits)
 	}
 }
 
 /**
  * Check if user can generate (has credits available)
+ * Only admins can generate funnels
  */
-export async function canGenerate(): Promise<boolean> {
-	const credits = await getUserCredits();
-	return credits > 0; // Can generate if credits > 0
+export async function canGenerate(user?: AuthenticatedUser): Promise<boolean> {
+	try {
+		// If no user provided, try to get from context
+		if (!user) {
+			const headersList = await headers();
+			const { userId } = await whopSdk.verifyUserToken(headersList);
+			
+			// Get user context
+			const userContext = await getUserContext(
+				userId,
+				"",
+				process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "",
+				false
+			);
+			
+			if (!userContext?.isAuthenticated) {
+				return false;
+			}
+			
+			user = userContext.user;
+		}
+
+		// Check if user is admin
+		if (user.accessLevel !== "admin") {
+			return false; // Only admins can generate
+		}
+		
+		// Check if user has credits
+		return (user.credits ?? 0) > 0; // Can generate if credits > 0
+	} catch (error) {
+		console.error("Error checking if user can generate:", error);
+		return false;
+	}
 }
 
 /**
  * Consume 1 credit for generation
+ * Only admins can consume credits
  */
-export async function consumeCredit(): Promise<boolean> {
+export async function consumeCredit(user?: AuthenticatedUser): Promise<boolean> {
 	try {
-		const headersList = await headers();
-		const { userId } = await whopSdk.verifyUserToken(headersList);
+		// If no user provided, try to get from context
+		if (!user) {
+			const headersList = await headers();
+			const { userId } = await whopSdk.verifyUserToken(headersList);
+			
+			// Get user context
+			const userContext = await getUserContext(
+				userId,
+				"",
+				process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "",
+				false
+			);
+			
+			if (!userContext?.isAuthenticated) {
+				return false;
+			}
+			
+			user = userContext.user;
+		}
+
+		// Check if user is admin
+		if (user.accessLevel !== "admin") {
+			return false; // Only admins can consume credits
+		}
 
 		// Check current credits first
-		const currentCredits = await getDbUserCredits(userId);
+		const currentCredits = user.credits ?? 0;
 
 		if (currentCredits <= 0) {
 			return false; // No credits available
 		}
 
 		// Update credits in database
-		const success = await updateUserCredits(userId, 1, "subtract");
+		const success = await updateUserCredits(user.whopUserId, 1, "subtract");
 
 		if (success) {
 			console.log(
-				`User ${userId} consumed 1 credit. Remaining: ${currentCredits - 1}`,
+				`Admin ${user.whopUserId} consumed 1 credit. Remaining: ${currentCredits - 1}`,
 			);
-			// Removed revalidatePath - let client-side state handle UI updates
 		}
 
 		return success;
@@ -80,7 +134,6 @@ export async function addCredits(
 			console.log(
 				`Added ${amount} credits to user ${userId}. New balance: ${currentCredits + amount}`,
 			);
-			// Removed revalidatePath - let client-side state handle UI updates
 		} else {
 			throw new Error("Failed to add credits to database");
 		}

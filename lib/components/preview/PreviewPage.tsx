@@ -2,7 +2,7 @@
 
 import type React from "react";
 import type { FunnelFlow } from "../../types/funnel";
-import UserChat from "../userChat/UserChat";
+import PreviewChat from "./PreviewChat";
 
 interface Funnel {
 	id: string;
@@ -23,6 +23,7 @@ interface PreviewPageProps {
  * Preview Page Component
  *
  * Dedicated preview page that shows the funnel flow as a chat interface.
+ * Uses the same frontend design as UserChat but without WebSocket functionality.
  * Provides a clean, focused experience for testing the generated funnel.
  */
 const PreviewPage: React.FC<PreviewPageProps> = ({
@@ -48,11 +49,11 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
 	};
 
 	return (
-		<UserChat
+		<PreviewChat
 			funnelFlow={funnelFlow}
 			onMessageSent={handleMessageSent}
 			onBack={onBack}
-			hideAvatar={true}
+			hideAvatar={false}
 		/>
 	);
 };

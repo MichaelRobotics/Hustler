@@ -1,12 +1,19 @@
+/**
+ * Unified Whop SDK Configuration
+ * 
+ * Centralized SDK initialization following Whop best practices
+ * Use this instead of creating multiple SDK instances
+ */
+
 import { WhopServerSdk } from "@whop/api";
 
+// Unified Whop SDK instance
 export const whopSdk = WhopServerSdk({
-	// Add your app id here - this is required.
-	// You can get this from the Whop dashboard after creating an app section.
+	// This is the appId of your app. You can find this in the "App Settings" section of your app's Whop dashboard.
 	appId: process.env.NEXT_PUBLIC_WHOP_APP_ID ?? "fallback",
 
 	// Add your app api key here - this is required.
-	// You can get this from the Whop dashboard after creating an app section.
+	// You can get this from the Whop dashboard after creating an app in the "API Keys" section.
 	appApiKey: process.env.WHOP_API_KEY ?? "fallback",
 
 	// This will make api requests on behalf of this user.
@@ -21,3 +28,6 @@ export const whopSdk = WhopServerSdk({
 	// This can also be applied later with the `withCompany` function.
 	companyId: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
 });
+
+// Re-export for backward compatibility
+export { whopSdk as whopApi };

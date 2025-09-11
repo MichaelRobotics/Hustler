@@ -31,7 +31,7 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 			"", // whopCompanyId is optional for experience-based isolation
 			experienceId,
 			false, // forceRefresh
-			"customer", // default access level
+			// Don't pass access level - let it be determined from Whop API
 		);
 
 		if (!userContext) {

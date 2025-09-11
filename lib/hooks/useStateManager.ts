@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AuthenticatedUser } from "../context/user-context";
+import type { AuthenticatedUser } from "../types/user";
 import { stateManager } from "../state/manager";
 import {
 	type BackendState,

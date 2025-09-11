@@ -1,7 +1,7 @@
 "use client";
 
 import { Text } from "frosted-ui";
-import { Circle } from "lucide-react";
+import { Circle, MessageSquare, Clock, Archive, AlertCircle, CheckCircle } from "lucide-react";
 import React from "react";
 import type { ConversationCardProps } from "../../types/liveChat";
 
@@ -33,6 +33,36 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 				default:
 					return "border-l-gray-500";
 			}
+		};
+
+		const getStatusIcon = (status: string) => {
+			switch (status) {
+				case "open":
+					return <Circle size={12} className="text-green-500 fill-current" />;
+				case "closed":
+					return <CheckCircle size={12} className="text-gray-500" />;
+				default:
+					return <AlertCircle size={12} className="text-gray-500" />;
+			}
+		};
+
+		const getPriorityIndicator = (conversation: any) => {
+			// Check if conversation has high priority metadata
+			if (conversation.metadata?.priority === "high") {
+				return <AlertCircle size={12} className="text-red-500" />;
+			}
+			if (conversation.metadata?.priority === "urgent") {
+				return <AlertCircle size={12} className="text-red-600 fill-current" />;
+			}
+			return null;
+		};
+
+		const getFunnelProgress = (conversation: any) => {
+			// Calculate funnel progress based on interactions
+			const totalSteps = 10; // Assuming 10 steps max
+			const completedSteps = conversation.metadata?.completedSteps || 0;
+			const progress = Math.min(100, (completedSteps / totalSteps) * 100);
+			return progress;
 		};
 
 		const handleClick = () => {
@@ -72,15 +102,31 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 									{conversation.user.isOnline && (
 										<Circle size={6} className="text-green-500 fill-current" />
 									)}
+									{getStatusIcon(conversation.status)}
+									{getPriorityIndicator(conversation)}
+								</div>
+								<div className="flex items-center gap-2 mt-1">
+									<Text size="1" color="gray" className="text-muted-foreground">
+										{conversation.funnelName}
+									</Text>
+									{conversation.isArchived && (
+										<Archive size={10} className="text-gray-400" />
+									)}
 								</div>
 							</div>
 						</div>
 
-						{/* Time moved to right corner */}
-						<div className="flex-shrink-0">
+						{/* Time and message count */}
+						<div className="flex-shrink-0 flex flex-col items-end gap-1">
 							<Text size="1" color="gray" className="text-muted-foreground">
 								{formatTime(conversation.lastMessageAt)}
 							</Text>
+							<div className="flex items-center gap-1">
+								<MessageSquare size={10} className="text-gray-400" />
+								<Text size="1" color="gray" className="text-muted-foreground">
+									{conversation.messageCount}
+								</Text>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -90,10 +136,52 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 					<Text
 						size="1"
 						color="gray"
-						className="text-muted-foreground line-clamp-1"
+						className="text-muted-foreground line-clamp-1 mb-2"
 					>
 						{conversation.lastMessage}
 					</Text>
+					
+					{/* Funnel Progress Bar */}
+					{conversation.metadata?.completedSteps && (
+						<div className="mb-2">
+							<div className="flex items-center justify-between mb-1">
+								<Text size="1" color="gray" className="text-muted-foreground">
+									Funnel Progress
+								</Text>
+								<Text size="1" color="gray" className="text-muted-foreground">
+									{Math.round(getFunnelProgress(conversation))}%
+								</Text>
+							</div>
+							<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+								<div
+									className="bg-gradient-to-r from-violet-500 to-purple-500 h-1.5 rounded-full transition-all duration-300"
+									style={{ width: `${getFunnelProgress(conversation)}%` }}
+								></div>
+							</div>
+						</div>
+					)}
+
+					{/* Additional Metadata */}
+					<div className="flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							{conversation.autoCloseAt && (
+								<div className="flex items-center gap-1">
+									<Clock size={10} className="text-gray-400" />
+									<Text size="1" color="gray" className="text-muted-foreground">
+										Auto-close: {formatTime(conversation.autoCloseAt)}
+									</Text>
+								</div>
+							)}
+						</div>
+						
+						{/* Conversation Duration */}
+						<div className="flex items-center gap-1">
+							<Clock size={10} className="text-gray-400" />
+							<Text size="1" color="gray" className="text-muted-foreground">
+								{Math.round((Date.now() - conversation.startedAt.getTime()) / (1000 * 60 * 60))}h
+							</Text>
+						</div>
+					</div>
 				</div>
 			</div>
 		);

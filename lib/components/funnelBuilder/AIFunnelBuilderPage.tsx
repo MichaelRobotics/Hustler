@@ -217,6 +217,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 						onEdit={() => {}} // No-op since we're always in edit mode
 						onGeneration={handleGenerationSuccess}
 						isGenerated={!!currentFunnel.flow}
+						user={null}
 						isGenerating={false}
 						isDeployed={currentFunnel.isDeployed}
 						showOnPage="aibuilder"

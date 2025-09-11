@@ -17,6 +17,7 @@ import { validateFunnelProducts } from "../../helpers/funnel-product-validation"
 
 const ResourcePage: React.FC<ResourcePageProps> = ({
 	funnel,
+	user,
 	onBack,
 	onGoToBuilder,
 	onGoToPreview,
@@ -73,6 +74,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 					{currentResources.length > 0 && productValidation.isValid ? (
 						<FunnelGenerationSection
 							funnel={funnel}
+							user={user}
 							currentResources={currentResources}
 							isGenerating={isGenerating}
 							isAnyFunnelGenerating={isAnyFunnelGenerating}
@@ -142,6 +144,7 @@ const ResourcePage: React.FC<ResourcePageProps> = ({
 						isDeployed={funnel.isDeployed}
 						funnel={funnel}
 						showOnPage="resources"
+						user={user}
 					/>
 				)}
 		</div>

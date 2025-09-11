@@ -1,41 +1,83 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1757077572694,
-			"tag": "20250905130612_happy_zarda",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1757103184512,
-			"tag": "20250905201304_parallel_wendigo",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1757104989346,
-			"tag": "20250905204309_real_machine_man",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1757162709647,
-			"tag": "20250906124509_lean_power_man",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1757173856658,
-			"tag": "20250906155056_purple_wild_child",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1757077572694,
+      "tag": "20250905130612_happy_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1757103184512,
+      "tag": "20250905201304_parallel_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1757104989346,
+      "tag": "20250905204309_real_machine_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1757162709647,
+      "tag": "20250906124509_lean_power_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1757173856658,
+      "tag": "20250906155056_purple_wild_child",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1757539734884,
+      "tag": "20250910212854_green_polaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1757592005580,
+      "tag": "20250911120005_jazzy_fat_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1757607220257,
+      "tag": "20250911161340_aspiring_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1757607357695,
+      "tag": "20250911161557_sturdy_ghost_rider",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1757611301610,
+      "tag": "20250911172141_mean_sentinels",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1757612392196,
+      "tag": "20250911173952_sloppy_skullbuster",
+      "breakpoints": true
+    }
+  ]
 }

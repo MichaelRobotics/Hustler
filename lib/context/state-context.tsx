@@ -24,7 +24,7 @@ import type {
 	StateAction,
 	StateContext,
 } from "../state/types";
-import type { AuthenticatedUser } from "./user-context";
+import type { AuthenticatedUser } from "../types/user";
 
 interface StateContextType {
 	// State

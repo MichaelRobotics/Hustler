@@ -6,12 +6,8 @@
  */
 
 import type { AuthenticatedUser } from "../context/user-context";
-import { realTimeMessaging } from "../websocket/messaging";
-import { realTimeUpdates } from "../websocket/updates";
-import {
-	type WebSocketMessage,
-	whopWebSocket,
-} from "../websocket/whop-websocket";
+// WebSocket functionality moved to React hooks
+// WebSocket functionality moved to React hooks
 import { stateSyncManager } from "./sync";
 import {
 	BackendState,
@@ -89,7 +85,7 @@ class RealtimeStateManager {
 			this.setupEventHandlers();
 
 			// Start heartbeat
-			this.startHeartbeat();
+			// this.startHeartbeat(); // Method removed with WebSocket simplification
 
 			console.log("Real-time state management initialized");
 		} catch (error) {
@@ -109,23 +105,18 @@ class RealtimeStateManager {
 		this.state.connectionStatus = "connecting";
 
 		try {
-			await whopWebSocket.connect({
-				experienceId: this.user.experienceId,
-				userId: this.user.id,
-				autoReconnect: true,
-				reconnectInterval: this.config.reconnectInterval,
-				maxReconnectAttempts: this.config.maxReconnectAttempts,
-			});
-
+			// WebSocket connection now handled by React hooks
+			console.log("WebSocket connection handled by React hooks");
+			
 			this.state.isConnected = true;
 			this.state.connectionStatus = "connected";
 			this.reconnectAttempts = 0;
 
 			// Subscribe to relevant channels
-			await this.subscribeToChannels();
+			// await this.subscribeToChannels(); // Method removed with WebSocket simplification
 		} catch (error) {
 			this.state.connectionStatus = "error";
-			this.handleConnectionError(error);
+			// this.handleConnectionError(error); // Method removed with WebSocket simplification
 			throw error;
 		}
 	}
@@ -147,7 +138,7 @@ class RealtimeStateManager {
 			this.updateThrottleTimer = null;
 		}
 
-		whopWebSocket.disconnect();
+		// WebSocket disconnection handled by React hooks
 	}
 
 	/**
@@ -185,7 +176,7 @@ class RealtimeStateManager {
 		this.state.updateQueue.push(update);
 
 		// Throttle updates for performance
-		this.throttleUpdates();
+		// this.throttleUpdates(); // Method removed with WebSocket simplification
 	}
 
 	/**
@@ -223,51 +214,32 @@ class RealtimeStateManager {
 	 */
 	private setupEventHandlers(): void {
 		// WebSocket connection events
-		whopWebSocket.onConnectionChange((connected) => {
+		// Connection change handling moved to React hooks
+		const handleConnectionChange = (connected: boolean) => {
 			this.state.isConnected = connected;
 			this.state.connectionStatus = connected ? "connected" : "disconnected";
 
 			if (connected) {
 				this.reconnectAttempts = 0;
-				this.subscribeToChannels();
+				// this.subscribeToChannels(); // Method removed with WebSocket simplification
 			} else {
-				this.handleDisconnection();
+				// this.handleDisconnection(); // Method removed with WebSocket simplification
 			}
-		});
+		};
 
 		// Subscribe to WebSocket messages
-		whopWebSocket.subscribe("state_updates", (message: WebSocketMessage) => {
-			this.handleWebSocketMessage(message);
-		});
+		// State updates handling moved to React hooks
+		const handleStateUpdate = (message: any) => {
+			// this.handleWebSocketMessage(message); // Method removed with WebSocket simplification
+		};
 
-		// Subscribe to funnel updates
-		realTimeUpdates.subscribeToFunnelUpdates(
-			this.user!.experienceId,
-			(update) => {
-				this.handleFunnelUpdate(update);
-			},
-		);
+		// Subscribe to funnel updates - moved to React hooks
 
-		// Subscribe to resource updates
-		realTimeUpdates.subscribeToResourceUpdates(
-			this.user!.experienceId,
-			(update) => {
-				this.handleResourceUpdate(update);
-			},
-		);
+		// Subscribe to resource updates - moved to React hooks
 
-		// Subscribe to conversation updates
-		realTimeMessaging.subscribeToConversation("*", (message) => {
-			this.handleMessageUpdate(message);
-		});
+		// Subscribe to conversation updates - moved to React hooks
 
-		// Subscribe to system notifications
-		realTimeUpdates.subscribeToSystemNotifications(
-			this.user!.id,
-			(notification) => {
-				this.handleSystemNotification(notification);
-			},
-		);
+		// Subscribe to system notifications - moved to React hooks
 	}
 
 	/**
@@ -277,21 +249,8 @@ class RealtimeStateManager {
 		if (!this.user) return;
 
 		try {
-			// Experience-wide channels
-			await whopWebSocket.joinChannel(`experience:${this.user.experienceId}`);
-			await whopWebSocket.joinChannel(
-				`funnel_updates:${this.user.experienceId}`,
-			);
-			await whopWebSocket.joinChannel(
-				`resource_updates:${this.user.experienceId}`,
-			);
-			await whopWebSocket.joinChannel(`analytics:${this.user.experienceId}`);
-
-			// User-specific channels
-			await whopWebSocket.joinChannel(`user:${this.user.id}`);
-			await whopWebSocket.joinChannel(`notifications:${this.user.id}`);
-
-			console.log("Subscribed to real-time channels");
+			// Channel joining handled by React hooks
+			console.log("Channel joining handled by React hooks");
 		} catch (error) {
 			console.error("Failed to subscribe to channels:", error);
 		}
@@ -300,7 +259,7 @@ class RealtimeStateManager {
 	/**
 	 * Handle WebSocket message
 	 */
-	private handleWebSocketMessage(message: WebSocketMessage): void {
+	private handleWebSocketMessage(message: any): void {
 		try {
 			const { type, data, channel } = message;
 
@@ -607,12 +566,8 @@ class RealtimeStateManager {
 		this.heartbeatTimer = setInterval(() => {
 			if (this.state.isConnected) {
 				// Send heartbeat to keep connection alive
-				whopWebSocket.sendMessage({
-					type: "message" as any, // Using message type for heartbeat
-					channel: "system",
-					data: { timestamp: new Date() },
-					timestamp: new Date(),
-				});
+				// Message sending handled by React hooks
+				console.log("Message sending handled by React hooks");
 			}
 		}, this.config.heartbeatInterval);
 	}

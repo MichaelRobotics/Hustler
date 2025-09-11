@@ -1,3 +1,5 @@
+import type { AuthenticatedUser } from "./user";
+
 export interface Resource {
 	id: string;
 	name: string;
@@ -51,6 +53,7 @@ export interface ResourceLibraryProps {
 
 export interface ResourcePageProps {
 	funnel: Funnel;
+	user: AuthenticatedUser | null;
 	onBack: () => void;
 	onUpdateFunnel: (updatedFunnel: Funnel) => void;
 	onEdit: () => void;

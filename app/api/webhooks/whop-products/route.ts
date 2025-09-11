@@ -1,9 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { makeWebhookValidator } from "@whop/api";
 import {
 	createErrorResponse,
 	createSuccessResponse,
 } from "../../../../lib/middleware/whop-auth";
 import { whopProductSync } from "../../../../lib/sync/whop-product-sync";
+
+const validateWebhook = makeWebhookValidator({
+	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
+});
 
 /**
  * Whop Products Webhook API Route
@@ -15,16 +20,11 @@ import { whopProductSync } from "../../../../lib/sync/whop-product-sync";
  */
 async function handleWhopProductWebhook(request: NextRequest) {
 	try {
-		const body = await request.json();
+		// Validate webhook signature using Whop best practices
+		await validateWebhook(request);
+		console.log("Webhook signature validation passed");
 
-		// Validate webhook signature (in production, you'd verify the signature)
-		const signature = request.headers.get("x-whop-signature");
-		if (!signature) {
-			return createErrorResponse(
-				"MISSING_SIGNATURE",
-				"Webhook signature is required",
-			);
-		}
+		const body = await request.json();
 
 		// Handle webhook update - extract company ID from webhook data
 		const companyId = body.data?.company_id || body.company_id || "unknown";

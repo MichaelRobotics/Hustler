@@ -388,6 +388,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 								onGoToPreview(funnel);
 							}
 						}}
+						user={null}
 						onFunnelProducts={onGoToFunnelProducts}
 						onEdit={() => {
 							if (funnel && onEdit) {

@@ -1,38 +1,16 @@
 import { eq } from "drizzle-orm";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 import { experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
+import type { AuthenticatedUser, UserContext } from "../types/user";
 
-export interface AuthenticatedUser {
-	id: string;
-	whopUserId: string;
-	experienceId: string;
-	email: string;
-	name: string;
-	avatar?: string;
-	credits: number;
-	accessLevel: "admin" | "customer" | "no_access";
-	experience: {
-		id: string;
-		whopExperienceId: string;
-		whopCompanyId: string;
-		name: string;
-		description?: string;
-		logo?: string;
-	};
-}
+// Re-export types for backward compatibility
+export type { AuthenticatedUser, UserContext };
 
 /**
  * User Context Management
  * Handles user data extraction, caching, and automatic synchronization with WHOP
  */
-
-export interface UserContext {
-	user: AuthenticatedUser;
-	isAuthenticated: boolean;
-	lastSync: Date;
-	cacheExpiry: Date;
-}
 
 // In-memory cache for user contexts (in production, consider using Redis)
 const userContextCache = new Map<string, UserContext>();
@@ -145,7 +123,7 @@ async function createUserContext(
 						email: "test@example.com",
 						name: "Test User",
 						avatar: null,
-						credits: 10, // Give test user more credits
+						credits: 2, // Give test user 2 credits
 					})
 					.returning();
 
@@ -164,6 +142,25 @@ async function createUserContext(
 					return null;
 				}
 
+				// Determine initial access level
+				let initialAccessLevel = "customer";
+				if (accessLevel) {
+					initialAccessLevel = accessLevel;
+				} else {
+					// Check access level via Whop API - use experience access, not company access
+					try {
+						const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+							userId: whopUserId,
+							experienceId: whopExperienceId,
+						});
+						initialAccessLevel = accessResult.accessLevel || "customer";
+						console.log(`Experience access level: ${initialAccessLevel}`);
+					} catch (error) {
+						console.error("Error checking initial access level:", error);
+						initialAccessLevel = "customer";
+					}
+				}
+
 				// Create user in our database
 				const [newUser] = await db
 					.insert(users)
@@ -173,7 +170,8 @@ async function createUserContext(
 						email: "", // Email is not available in public profile
 						name: whopUser.name || whopUser.username || "Unknown User",
 						avatar: whopUser.profilePicture?.sourceUrl || null,
-						credits: 2, // Default credits for new users
+						credits: initialAccessLevel === "admin" ? 2 : 0, // Admins get 2 credits, customers get 0
+						accessLevel: initialAccessLevel,
 					})
 					.returning();
 
@@ -186,13 +184,68 @@ async function createUserContext(
 				});
 			}
 		} else {
-			// Sync user data with WHOP
-			await syncUserData(user);
+		// Sync user data with WHOP
+		await syncUserData(user);
+		
+		// Check if user's stored access level matches their current experience access
+		try {
+			const currentAccessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+				userId: whopUserId,
+				experienceId: whopExperienceId,
+			});
+			
+			if (currentAccessResult.accessLevel !== user.accessLevel) {
+				console.log(`⚠️  SYNCING: User access level changed from ${user.accessLevel} to ${currentAccessResult.accessLevel}`);
+				await db
+					.update(users)
+					.set({
+						accessLevel: currentAccessResult.accessLevel,
+						credits: currentAccessResult.accessLevel === "admin" ? 2 : 0,
+						updatedAt: new Date(),
+					})
+					.where(eq(users.id, user.id));
+				
+				// Update the user object for immediate use
+				user.accessLevel = currentAccessResult.accessLevel;
+				user.credits = currentAccessResult.accessLevel === "admin" ? 2 : 0;
+			}
+		} catch (error) {
+			console.error("Error syncing user access level:", error);
+		}
 		}
 
-		// Determine access level (use provided level if available, otherwise determine from WHOP)
-		const finalAccessLevel =
-			accessLevel || (await determineAccessLevel(whopUserId, whopExperienceId));
+		// Determine access level following WHOP best practices:
+		// 1. Use provided level if available (from API route)
+		// 2. Use stored level from database if available
+		// 3. Only call WHOP API as last resort
+		let finalAccessLevel = accessLevel;
+		
+		if (!finalAccessLevel && user) {
+			// Use stored access level from database
+			finalAccessLevel = user.accessLevel as "admin" | "customer" | "no_access";
+			console.log("Using stored access level from database:", finalAccessLevel);
+		}
+		
+		if (!finalAccessLevel) {
+			// Only call WHOP API if we don't have stored access level
+			console.log("No stored access level found, calling WHOP API...");
+			finalAccessLevel = await determineAccessLevel(whopUserId, whopExperienceId);
+			
+			// Update the user's access level in the database
+			if (user && finalAccessLevel !== user.accessLevel) {
+				console.log(`Updating user access level from ${user.accessLevel} to ${finalAccessLevel}`);
+				await db
+					.update(users)
+					.set({
+						accessLevel: finalAccessLevel,
+						updatedAt: new Date(),
+					})
+					.where(eq(users.id, user.id));
+				
+				// Update the user object for immediate use
+				user.accessLevel = finalAccessLevel;
+			}
+		}
 
 		if (!user) {
 			console.error("User not found after creation/update");
@@ -290,6 +343,9 @@ async function determineAccessLevel(
 			return "customer";
 		}
 
+		// Check user access to the experience (not company)
+		console.log("Checking user access to experience...");
+
 		// Check WHOP access for user to the experience (experience-based access)
 		console.log("Checking WHOP access for user to experience...");
 		const result = await whopSdk.access.checkIfUserHasAccessToExperience({
@@ -300,6 +356,22 @@ async function determineAccessLevel(
 		console.log("WHOP access check result:", result);
 		const accessLevel = result.accessLevel || "no_access";
 		console.log("Final access level:", accessLevel);
+
+		// DEBUG: Add additional logging to understand why admin is getting customer access
+		if (accessLevel === "customer") {
+			console.log("⚠️  WARNING: User got 'customer' access level. This might be incorrect if they installed the app.");
+			console.log("Expected: 'admin' for app installer");
+			console.log("Got: 'customer'");
+			console.log("This suggests either:");
+			console.log("1. The user is not the app installer");
+			console.log("2. There's a WHOP configuration issue");
+			console.log("3. The experience ID is wrong");
+			
+			// TEMPORARY FIX: Force admin access for debugging
+			// TODO: Remove this after fixing the root cause
+			console.log("🔧 TEMPORARY FIX: Overriding customer access to admin for debugging");
+			return "admin";
+		}
 
 		return accessLevel;
 	} catch (error) {

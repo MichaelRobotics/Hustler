@@ -5,7 +5,7 @@ import {
 	createSuccessResponse,
 	withWhopAuth,
 } from "../../../../lib/middleware/whop-auth";
-import { whopWebSocket } from "../../../../lib/websocket/whop-websocket";
+// WebSocket functionality moved to React hooks
 
 /**
  * WebSocket Connection API Route
@@ -13,7 +13,8 @@ import { whopWebSocket } from "../../../../lib/websocket/whop-websocket";
  */
 
 /**
- * POST /api/websocket/connect - Establish WebSocket connection
+ * POST /api/websocket/connect - WebSocket connection info
+ * Note: WebSocket connections are now handled by React hooks
  */
 async function connectWebSocketHandler(
 	request: NextRequest,
@@ -25,25 +26,18 @@ async function connectWebSocketHandler(
 		// Use experience ID from URL or fallback to a default
 		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV"; // Fallback for API routes
 
-		// Connect to WebSocket
-		const connectionResult = await whopWebSocket.connect({
-			userId: user.userId,
-			experienceId,
-			autoReconnect: true,
-			reconnectInterval: 5000,
-			maxReconnectAttempts: 5,
-		});
-
+		// Return connection info (actual connection handled by React hooks)
 		return createSuccessResponse(
 			{
-				connected: true,
+				connected: false, // Will be true when React hooks establish connection
 				userId: user.userId,
 				experienceId,
+				message: "WebSocket connection handled by React hooks"
 			},
-			"WebSocket connection established successfully",
+			"WebSocket connection info retrieved successfully",
 		);
 	} catch (error) {
-		console.error("Error connecting to WebSocket:", error);
+		console.error("Error getting WebSocket info:", error);
 		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
 	}
 }

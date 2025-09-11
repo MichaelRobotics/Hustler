@@ -18,7 +18,7 @@ import {
 	sum,
 } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 import {
 	conversations,
 	experiences,
@@ -29,7 +29,7 @@ import {
 	resources,
 	users,
 } from "../supabase/schema";
-import { realTimeUpdates } from "../websocket/updates";
+// WebSocket functionality moved to React hooks
 
 export interface FunnelPerformanceMetrics {
 	funnelId: string;
@@ -166,17 +166,7 @@ class AnalyticsSystem {
 				});
 
 				if (experience) {
-					await realTimeUpdates.sendAnalyticsUpdate(
-						experience.id,
-						"funnel_analytics",
-						{
-							type: "funnel_start",
-							funnelId,
-							funnelName: funnel.name,
-							conversationId,
-							timestamp: new Date(),
-						},
-					);
+					// Real-time updates moved to React hooks
 				}
 			}
 		} catch (error) {
@@ -208,17 +198,7 @@ class AnalyticsSystem {
 				});
 
 				if (experience) {
-					await realTimeUpdates.sendAnalyticsUpdate(
-						experience.id,
-						"funnel_analytics",
-						{
-							type: "funnel_completion",
-							funnelId,
-							funnelName: funnel.name,
-							conversationId,
-							timestamp: new Date(),
-						},
-					);
+					// Real-time updates moved to React hooks
 				}
 			}
 		} catch (error) {
@@ -252,18 +232,7 @@ class AnalyticsSystem {
 				});
 
 				if (experience) {
-					await realTimeUpdates.sendAnalyticsUpdate(
-						experience.id,
-						"revenue_update",
-						{
-							type: "conversion",
-							funnelId,
-							funnelName: funnel.name,
-							conversationId,
-							revenue,
-							timestamp: new Date(),
-						},
-					);
+					// Real-time updates moved to React hooks
 				}
 			}
 		} catch (error) {

@@ -43,13 +43,13 @@ async function addResourceToFunnelHandler(
 		// Use experience ID from URL or fallback to a default
 		const experienceId = user.experienceId || "exp_wl5EtbHqAqLdjV";
 
-		// Get the full user context
+		// Get the full user context - let it determine access level from Whop API
 		const userContext = await getUserContext(
 			user.userId,
 			"", // whopCompanyId is optional for experience-based isolation
 			experienceId,
 			false, // forceRefresh
-			"customer", // default access level
+			// Don't pass access level - let it be determined from Whop API
 		);
 
 		if (!userContext) {
@@ -58,6 +58,13 @@ async function addResourceToFunnelHandler(
 				{ status: 401 },
 			);
 		}
+
+		// Debug: Log the values being passed
+		console.log("🔍 DEBUG - Adding resource to funnel:");
+		console.log("  - funnelId:", funnelId);
+		console.log("  - resourceId:", resourceId);
+		console.log("  - user.id:", userContext.user.id);
+		console.log("  - user.accessLevel:", userContext.user.accessLevel);
 
 		// Add resource to funnel using server action
 		const updatedFunnel = await addResourceToFunnel(

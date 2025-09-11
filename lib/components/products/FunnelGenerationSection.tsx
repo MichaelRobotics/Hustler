@@ -4,11 +4,13 @@ import type React from "react";
 import { useState } from "react";
 import { useCredits } from "../../hooks/useCredits";
 import type { Funnel, Resource } from "../../types/resource";
+import type { AuthenticatedUser } from "../../types/user";
 import { CreditPackModal } from "../payments/CreditPackModal";
 import { shouldDisableGeneration, validateFunnelProducts } from "../../helpers/funnel-product-validation";
 
 interface FunnelGenerationSectionProps {
 	funnel: Funnel;
+	user: AuthenticatedUser | null;
 	currentResources: Resource[];
 	isGenerating: (funnelId: string) => boolean;
 	isAnyFunnelGenerating: () => boolean;
@@ -19,12 +21,13 @@ export const FunnelGenerationSection: React.FC<
 	FunnelGenerationSectionProps
 > = ({
 	funnel,
+	user,
 	currentResources,
 	isGenerating,
 	isAnyFunnelGenerating,
 	onGlobalGeneration,
 }) => {
-	const { canGenerate, consumeCredit } = useCredits();
+	const { canGenerate, consumeCredit } = useCredits(user);
 	const [showCreditModal, setShowCreditModal] = useState(false);
 
 	const handleGeneration = async () => {
@@ -58,7 +61,7 @@ export const FunnelGenerationSection: React.FC<
 			return;
 		}
 
-		// Check if user can generate (has credits)
+		// Check if user can generate (admin with credits)
 		if (!canGenerate) {
 			setShowCreditModal(true);
 			return;

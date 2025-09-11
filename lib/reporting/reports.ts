@@ -19,7 +19,7 @@ import {
 } from "drizzle-orm";
 import { analyticsSystem } from "../analytics/analytics";
 import type { AuthenticatedUser } from "../context/user-context";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 import {
 	conversations,
 	experiences,

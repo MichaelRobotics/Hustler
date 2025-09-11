@@ -42,6 +42,11 @@ export interface LiveChatConversation {
 	isArchived?: boolean; // If conversation is archived
 	createdAt: Date; // When conversation was created
 	updatedAt: Date; // Last update timestamp
+	metadata?: {
+		completedSteps?: number;
+		totalSteps?: number;
+		[key: string]: any;
+	};
 }
 
 export interface LiveChatFilters {

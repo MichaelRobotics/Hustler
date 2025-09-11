@@ -242,6 +242,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 						onGeneration={handleGlobalGeneration}
 						isGenerated={funnelValidation.isValid}
 						isGenerating={isGenerating}
+						user={null}
 						showOnPage="analytics" // Hide on analytics page
 					/>
 				)}

@@ -21,6 +21,7 @@ import { useResourceManagement } from "@/lib/hooks/useResourceManagement";
 import { useViewNavigation } from "@/lib/hooks/useViewNavigation";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import type { Resource } from "@/lib/types/resource";
+import type { AuthenticatedUser } from "@/lib/types/user";
 import {
 	generateMockData,
 	generateSalesData,
@@ -48,7 +49,11 @@ type View =
 	| "preview"
 	| "liveChat";
 
-const AdminPanel = React.memo(() => {
+interface AdminPanelProps {
+	user: AuthenticatedUser | null;
+}
+
+const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	// State for tracking typing in LiveChat
 	const [isUserTyping, setIsUserTyping] = React.useState(false);
 	// State for tracking if we're in a chat conversation
@@ -315,6 +320,7 @@ const AdminPanel = React.memo(() => {
 		return (
 			<ResourcePage
 				funnel={currentFunnel}
+				user={user}
 				onBack={() => {
 					if (hasValidFlow(selectedFunnel)) {
 						setCurrentView("analytics");

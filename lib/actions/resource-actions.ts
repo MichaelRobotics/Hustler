@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
 import { funnelResources, funnels, resources } from "../supabase/schema";
 import { GLOBAL_LIMITS } from "../types/resource";
 import { whopSdk } from "../whop-sdk";

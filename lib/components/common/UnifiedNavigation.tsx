@@ -7,6 +7,7 @@ import { useCredits } from "../../hooks/useCredits";
 import { CreditPackModal } from "../payments/CreditPackModal";
 import { shouldDisableGeneration, validateFunnelProducts } from "../../helpers/funnel-product-validation";
 import type { Funnel } from "../../types/resource";
+import type { AuthenticatedUser } from "../../types/user";
 
 interface UnifiedNavigationProps {
 	onPreview?: () => void;
@@ -20,6 +21,7 @@ interface UnifiedNavigationProps {
 	funnel?: Funnel; // New: Funnel object for validation
 	className?: string;
 	showOnPage?: "resources" | "aibuilder" | "preview" | "all" | "analytics";
+	user?: AuthenticatedUser | null; // New: User context for credits
 }
 
 const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
@@ -34,9 +36,10 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	funnel,
 	className = "",
 	showOnPage = "all",
+	user = null,
 }) => {
 	const [isExpanded, setIsExpanded] = useState(false);
-	const { canGenerate, refresh: refreshCredits } = useCredits();
+	const { canGenerate, refresh: refreshCredits } = useCredits(user);
 	const [showCreditModal, setShowCreditModal] = useState(false);
 
 	const toggleExpanded = () => {

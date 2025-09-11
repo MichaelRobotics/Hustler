@@ -43,7 +43,7 @@ async function updateFunnelHandler(request: NextRequest, context: AuthContext) {
 			"", // whopCompanyId is optional for experience-based isolation
 			experienceId,
 			false, // forceRefresh
-			"customer", // default access level
+			// Don't pass access level - let it be determined from Whop API
 		);
 
 		if (!userContext) {
@@ -87,7 +87,7 @@ async function deleteFunnelHandler(request: NextRequest, context: AuthContext) {
 			"", // whopCompanyId is optional for experience-based isolation
 			experienceId,
 			false, // forceRefresh
-			"customer", // default access level
+			// Don't pass access level - let it be determined from Whop API
 		);
 
 		if (!userContext) {

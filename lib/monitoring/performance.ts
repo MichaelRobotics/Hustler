@@ -5,8 +5,8 @@
  * API response times, error rates, and resource usage.
  */
 
-import { db } from "../supabase/db";
-import { realTimeUpdates } from "../websocket/updates";
+import { db } from "../supabase/db-server";
+// WebSocket functionality moved to React hooks
 
 export interface PerformanceMetrics {
 	timestamp: Date;
@@ -321,16 +321,7 @@ class PerformanceMonitoring {
 	): Promise<void> {
 		try {
 			// Send real-time notification
-			await realTimeUpdates.sendSystemNotification(
-				"system", // Would need actual company ID in production
-				severity === "high"
-					? "error"
-					: severity === "medium"
-						? "warning"
-						: "info",
-				`${type.charAt(0).toUpperCase() + type.slice(1)} Alert`,
-				message,
-			);
+			// Real-time updates moved to React hooks
 
 			console.warn(
 				`[${severity.toUpperCase()}] ${type.toUpperCase()} ALERT: ${message}`,

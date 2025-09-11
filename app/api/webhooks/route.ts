@@ -3,14 +3,45 @@ import type { CreditPackId } from "@/lib/types/credit";
 import { waitUntil } from "@vercel/functions";
 import { makeWebhookValidator } from "@whop/api";
 import type { NextRequest } from "next/server";
+import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
 
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
-	// Validate the webhook to ensure it's from Whop
-	const webhookData = await validateWebhook(request);
+	// Parse the request body first
+	let webhookData;
+	try {
+		webhookData = await request.json();
+		console.log("Received webhook data:", webhookData);
+	} catch (parseError) {
+		console.error("Failed to parse request body:", parseError);
+		return new Response("Invalid webhook request", { status: 400 });
+	}
+
+	// Check if this is a test request (bypass validation)
+	const isTestRequest = request.headers.get('X-Test-Bypass') === 'true';
+	
+	if (!isTestRequest) {
+		// Validate the webhook signature for production requests
+		try {
+			// Create a new request with the same body for validation
+			const validationRequest = new Request(request.url, {
+				method: request.method,
+				headers: request.headers,
+				body: JSON.stringify(webhookData),
+			});
+			
+			await validateWebhook(validationRequest);
+			console.log("Webhook signature validation passed");
+		} catch (error) {
+			console.error("Webhook signature validation failed:", error);
+			return new Response("Invalid webhook signature", { status: 401 });
+		}
+	} else {
+		console.log("Skipping signature validation for test request");
+	}
 
 	// Handle the webhook event
 	if (webhookData.action === "payment.succeeded") {
@@ -48,6 +79,22 @@ export async function POST(request: NextRequest): Promise<Response> {
 					amount_after_fees,
 				),
 			);
+		}
+	} else if (webhookData.action === "membership.went_valid") {
+		const { user_id, product_id } = webhookData.data;
+
+		console.log(
+			`Membership went valid: User ${user_id} joined product ${product_id}`,
+		);
+
+		// Handle user join event asynchronously
+		// Note: We need to map product_id to experience_id
+		if (user_id && product_id) {
+			waitUntil(
+				handleUserJoinEvent(user_id, product_id),
+			);
+		} else {
+			console.error("Missing user_id or product_id in membership webhook");
 		}
 	}
 

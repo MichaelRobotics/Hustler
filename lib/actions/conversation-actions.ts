@@ -1,13 +1,16 @@
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
-import { db } from "../supabase/db";
+import { db } from "../supabase/db-server";
+import type { ConversationWithMessages } from "../types/user";
+
+// Re-export type for backward compatibility
+export type { ConversationWithMessages };
 import {
 	conversations,
 	funnelInteractions,
 	funnels,
 	messages,
 } from "../supabase/schema";
-import { realTimeMessaging } from "../websocket/messaging";
 
 export interface CreateConversationInput {
 	funnelId: string;
@@ -35,35 +38,6 @@ export interface CreateInteractionInput {
 	nextBlockId?: string;
 }
 
-export interface ConversationWithMessages {
-	id: string;
-	funnelId: string;
-	status: "active" | "completed" | "abandoned";
-	currentBlockId?: string;
-	userPath?: any;
-	metadata?: any;
-	createdAt: Date;
-	updatedAt: Date;
-	messages: Array<{
-		id: string;
-		type: "user" | "bot" | "system";
-		content: string;
-		metadata?: any;
-		createdAt: Date;
-	}>;
-	interactions: Array<{
-		id: string;
-		blockId: string;
-		optionText: string;
-		nextBlockId?: string;
-		createdAt: Date;
-	}>;
-	funnel: {
-		id: string;
-		name: string;
-		isDeployed: boolean;
-	};
-}
 
 export interface ConversationListResponse {
 	conversations: ConversationWithMessages[];
@@ -71,6 +45,7 @@ export interface ConversationListResponse {
 	page: number;
 	limit: number;
 }
+
 
 /**
  * Create a new conversation
@@ -448,19 +423,8 @@ export async function createMessage(
 			})
 			.returning();
 
-		// Send real-time message notification
-		try {
-			await realTimeMessaging.sendMessage(
-				user,
-				input.conversationId,
-				input.content,
-				input.type,
-				input.metadata,
-			);
-		} catch (wsError) {
-			console.warn("Failed to send real-time message notification:", wsError);
-			// Don't fail the message creation if WebSocket fails
-		}
+		// Real-time messaging moved to React hooks
+		// Message will be broadcast via WebSocket in the frontend
 
 		return {
 			id: newMessage.id,
@@ -478,6 +442,101 @@ export async function createMessage(
 /**
  * Get messages for a conversation
  */
+/**
+ * Update conversation from UserChat (without user authentication)
+ * Used for internal chat sessions where user authentication is handled differently
+ */
+export async function updateConversationFromUserChat(
+	conversationId: string,
+	messageContent: string,
+	messageType: "user" | "bot" | "system",
+	metadata?: any,
+): Promise<{ success: boolean; conversation?: ConversationWithMessages; error?: string }> {
+	try {
+		// Verify conversation exists
+		const conversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+			with: {
+				funnel: true,
+				messages: {
+					orderBy: (messages: any, { asc }: any) => [asc(messages.createdAt)],
+				},
+				interactions: {
+					orderBy: (funnelInteractions: any, { asc }: any) => [asc(funnelInteractions.createdAt)],
+				},
+			},
+		});
+
+		if (!conversation) {
+			return {
+				success: false,
+				error: "Conversation not found",
+			};
+		}
+
+		// Create the message
+		const [newMessage] = await db
+			.insert(messages)
+			.values({
+				conversationId: conversationId,
+				type: messageType,
+				content: messageContent,
+				metadata: metadata || null,
+			})
+			.returning();
+
+		// Update conversation last message timestamp
+		await db
+			.update(conversations)
+			.set({
+				updatedAt: new Date(),
+			})
+			.where(eq(conversations.id, conversationId));
+
+		// Return updated conversation
+		const updatedConversation: ConversationWithMessages = {
+			id: conversation.id,
+			funnelId: conversation.funnelId,
+			status: conversation.status,
+			currentBlockId: conversation.currentBlockId || undefined,
+			userPath: conversation.userPath,
+			metadata: conversation.metadata,
+			createdAt: conversation.createdAt,
+			updatedAt: new Date(),
+			messages: [...conversation.messages, {
+				id: newMessage.id,
+				type: newMessage.type as "user" | "bot" | "system",
+				content: newMessage.content,
+				metadata: newMessage.metadata,
+				createdAt: newMessage.createdAt,
+			}],
+			interactions: conversation.interactions.map((interaction: any) => ({
+				id: interaction.id,
+				blockId: interaction.blockId,
+				response: interaction.response,
+				metadata: interaction.metadata,
+				createdAt: interaction.createdAt,
+			})),
+			funnel: {
+				id: conversation.funnel.id,
+				name: conversation.funnel.name,
+				isDeployed: conversation.funnel.isDeployed,
+			},
+		};
+
+		return {
+			success: true,
+			conversation: updatedConversation,
+		};
+	} catch (error) {
+		console.error("Error updating conversation from UserChat:", error);
+		return {
+			success: false,
+			error: "Failed to update conversation",
+		};
+	}
+}
+
 export async function getMessages(
 	user: AuthenticatedUser,
 	conversationId: string,
@@ -779,5 +838,164 @@ export async function abandonConversation(
 	} catch (error) {
 		console.error("Error abandoning conversation:", error);
 		throw error;
+	}
+}
+
+// ============================================================================
+// CONSOLIDATED FUNCTIONS FROM userchat-actions.ts AND livechat-actions.ts
+// ============================================================================
+
+export interface LoadConversationResult {
+	success: boolean;
+	conversation?: ConversationWithMessages;
+	funnelFlow?: any; // FunnelFlow type
+	error?: string;
+}
+
+/**
+ * Load conversation for user with access validation (consolidated from userchat-actions.ts)
+ */
+export async function loadConversationForUser(
+	conversationId: string,
+	experienceId: string,
+): Promise<LoadConversationResult> {
+	try {
+		console.log(`Loading conversation ${conversationId} for experience ${experienceId}`);
+
+		// Query conversation with user access validation
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId),
+			),
+			with: {
+				funnel: true,
+				messages: {
+					orderBy: (messages: any, { asc }: any) => [asc(messages.createdAt)],
+				},
+				funnelInteractions: {
+					orderBy: (funnelInteractions: any, { asc }: any) => [asc(funnelInteractions.createdAt)],
+				},
+			},
+		});
+
+		if (!conversation) {
+			return {
+				success: false,
+				error: "Conversation not found",
+			};
+		}
+
+		// Get funnel flow
+		const funnelFlow = conversation.funnel?.flow;
+
+		return {
+			success: true,
+			conversation,
+			funnelFlow,
+		};
+	} catch (error) {
+		console.error("Error loading conversation for user:", error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
+	}
+}
+
+/**
+ * Navigate funnel in UserChat (consolidated from userchat-actions.ts)
+ */
+export async function navigateFunnelInUserChat(
+	conversationId: string,
+	messageContent: string,
+	messageType: "user" | "bot" | "system" = "user",
+): Promise<{ success: boolean; response?: any; error?: string }> {
+	try {
+		// Get conversation
+		const conversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+			with: {
+				funnel: true,
+			},
+		});
+
+		if (!conversation) {
+			return { success: false, error: "Conversation not found" };
+		}
+
+		// Record user message
+		// Note: This function needs proper user context for full implementation
+		// For now, we'll skip message recording in this simplified version
+		console.log(`User message: ${messageContent} (type: ${messageType})`);
+
+		// Process through funnel logic (simplified)
+		// This would normally call the funnel processing logic
+		const response = {
+			type: "bot",
+			content: "Thank you for your message. Processing...",
+			timestamp: new Date(),
+		};
+
+		// Record bot response
+		// Note: This function needs proper user context for full implementation
+		// For now, we'll skip message recording in this simplified version
+		console.log(`Bot response: ${response.content}`);
+
+		return { success: true, response };
+	} catch (error) {
+		console.error("Error navigating funnel in UserChat:", error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
+	}
+}
+
+/**
+ * Get conversation messages for UserChat (consolidated from userchat-actions.ts)
+ */
+export async function getConversationMessagesForUserChat(
+	conversationId: string,
+): Promise<{ success: boolean; messages?: any[]; error?: string }> {
+	try {
+		const conversationMessages = await db.query.messages.findMany({
+			where: eq(messages.conversationId, conversationId),
+			orderBy: (messages: any, { asc }: any) => [asc(messages.createdAt)],
+		});
+
+		return { success: true, messages: conversationMessages };
+	} catch (error) {
+		console.error("Error getting conversation messages for UserChat:", error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
+	}
+}
+
+/**
+ * Handle funnel completion in UserChat (consolidated from userchat-actions.ts)
+ */
+export async function handleFunnelCompletionInUserChat(
+	conversationId: string,
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		// Update conversation status to completed
+		await db
+			.update(conversations)
+			.set({
+				status: "completed",
+				updatedAt: new Date(),
+			})
+			.where(eq(conversations.id, conversationId));
+
+		return { success: true };
+	} catch (error) {
+		console.error("Error handling funnel completion in UserChat:", error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
 	}
 }

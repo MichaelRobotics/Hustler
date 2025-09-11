@@ -6,6 +6,7 @@ import {
 	consumeCredit,
 	getUserCredits,
 } from "../actions/credit-actions";
+import type { AuthenticatedUser } from "../types/user";
 
 export interface UseCreditsReturn {
 	credits: number;
@@ -16,19 +17,26 @@ export interface UseCreditsReturn {
 	refresh: () => Promise<void>;
 }
 
-export function useCredits(): UseCreditsReturn {
+export function useCredits(user: AuthenticatedUser | null): UseCreditsReturn {
 	const [credits, setCredits] = useState<number>(0);
 	const [canGenerateNow, setCanGenerateNow] = useState<boolean>(true);
 	const [isLoading, setIsLoading] = useState<boolean>(true);
 	const [error, setError] = useState<string | null>(null);
 
 	const fetchCreditData = useCallback(async () => {
+		if (!user) {
+			setCredits(0);
+			setCanGenerateNow(false);
+			setIsLoading(false);
+			return;
+		}
+
 		try {
 			setIsLoading(true);
 			setError(null);
 			const [userCredits, canGen] = await Promise.all([
 				getUserCredits(),
-				canGenerate(),
+				canGenerate(user),
 			]);
 			setCredits(userCredits);
 			setCanGenerateNow(canGen);
@@ -38,20 +46,26 @@ export function useCredits(): UseCreditsReturn {
 		} finally {
 			setIsLoading(false);
 		}
-	}, []);
+	}, [user]);
 
 	const consumeCreditForGeneration = useCallback(async (): Promise<boolean> => {
-		try {
-			// Note: Credit deduction is now handled server-side in the generation API
-			// This function is kept for backward compatibility but just refreshes the balance
-			await fetchCreditData();
-			return true;
-		} catch (err) {
-			console.error("Error refreshing credit data:", err);
-			setError("Failed to refresh credit data");
+		if (!user) {
 			return false;
 		}
-	}, [fetchCreditData]);
+
+		try {
+			// Use the updated consumeCredit function with user context
+			const success = await consumeCredit(user);
+			if (success) {
+				await fetchCreditData(); // Refresh the balance
+			}
+			return success;
+		} catch (err) {
+			console.error("Error consuming credit:", err);
+			setError("Failed to consume credit");
+			return false;
+		}
+	}, [user, fetchCreditData]);
 
 	const refresh = useCallback(async () => {
 		await fetchCreditData();
