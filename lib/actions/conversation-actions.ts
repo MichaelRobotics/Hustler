@@ -78,7 +78,7 @@ export async function createConversation(
 		const [newConversation] = await db
 			.insert(conversations)
 			.values({
-				experienceId: user.experienceId,
+				experienceId: user.experience.id,
 				funnelId: input.funnelId,
 				status: "active",
 				currentBlockId: null,

@@ -100,7 +100,7 @@ export async function createResource(
 		const [newResource] = await db
 			.insert(resources)
 			.values({
-				experienceId: user.experienceId,
+				experienceId: user.experience.id,
 				userId: user.id,
 				name: input.name,
 				type: input.type,
