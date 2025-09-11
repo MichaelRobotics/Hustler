@@ -68,7 +68,7 @@ export async function createFunnel(
 			.from(funnels)
 			.where(
 				and(
-					eq(funnels.experienceId, user.experienceId),
+					eq(funnels.experienceId, user.experience.id), // Use database UUID for foreign key
 					eq(funnels.userId, user.id),
 				),
 			);
@@ -83,7 +83,7 @@ export async function createFunnel(
 		const [newFunnel] = await db
 			.insert(funnels)
 			.values({
-				experienceId: user.experienceId, // Experience-based scoping
+				experienceId: user.experience.id, // Use database UUID for foreign key
 				userId: user.id,
 				name: input.name,
 				description: input.description || null,
@@ -100,7 +100,7 @@ export async function createFunnel(
 			// Verify resources belong to user's experience
 			const userResources = await db.query.resources.findMany({
 				where: and(
-					eq(resources.experienceId, user.experienceId), // New: Experience-based filtering
+					eq(resources.experienceId, user.experience.id), // Use database UUID for foreign key
 					inArray(resources.id, input.resources),
 				),
 			});
@@ -145,7 +145,7 @@ export async function createFunnel(
 			input.resources && input.resources.length > 0
 				? await db.query.resources.findMany({
 						where: and(
-							eq(resources.experienceId, user.experienceId),
+							eq(resources.experienceId, user.experience.id),
 							inArray(resources.id, input.resources),
 						),
 					})
@@ -199,7 +199,7 @@ export async function getFunnelById(
 			.where(
 				and(
 					eq(funnels.id, funnelId),
-					eq(funnels.experienceId, user.experienceId),
+					eq(funnels.experienceId, user.experience.id),
 				),
 			);
 
@@ -263,7 +263,7 @@ export async function getFunnels(
 		const offset = (page - 1) * limit;
 
 		// Build where conditions - use experience-based filtering
-		let whereConditions = eq(funnels.experienceId, user.experienceId);
+		let whereConditions = eq(funnels.experienceId, user.experience.id);
 
 		// For customers, also filter by user ID to ensure data isolation
 		if (user.accessLevel === "customer") {
@@ -376,7 +376,7 @@ export async function updateFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // New: Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // New: Experience-based filtering
 			),
 		});
 
@@ -416,7 +416,7 @@ export async function updateFunnel(
 				// Verify resources belong to user's experience
 				const userResources = await db.query.resources.findMany({
 					where: and(
-						eq(resources.experienceId, user.experienceId), // New: Experience-based filtering
+						eq(resources.experienceId, user.experience.id), // Use database UUID for foreign key
 						inArray(resources.id, input.resources),
 					),
 				});
@@ -477,7 +477,7 @@ export async function deleteFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // New: Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // New: Experience-based filtering
 			),
 		});
 
@@ -510,7 +510,7 @@ export async function checkForOtherLiveFunnels(
 	try {
 		const liveFunnel = await db.query.funnels.findFirst({
 			where: and(
-				eq(funnels.experienceId, user.experienceId),
+				eq(funnels.experienceId, user.experience.id),
 				eq(funnels.isDeployed, true),
 				excludeFunnelId ? sql`${funnels.id} != ${excludeFunnelId}` : sql`1=1`,
 			),
@@ -542,7 +542,7 @@ export async function deployFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // New: Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // New: Experience-based filtering
 			),
 		});
 
@@ -598,7 +598,7 @@ export async function undeployFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // New: Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // New: Experience-based filtering
 			),
 		});
 
@@ -642,7 +642,7 @@ export async function regenerateFunnelFlow(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // New: Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // New: Experience-based filtering
 			),
 			with: {
 				funnelResources: {
@@ -717,7 +717,7 @@ export async function regenerateFunnelFlow(
 			// Deduct credit for regeneration
 			const creditDeducted = await updateUserCredits(
 				user.whopUserId,
-				user.experienceId,
+				user.experience.whopExperienceId,
 				1,
 				"subtract",
 			);
@@ -762,7 +762,7 @@ export async function getFunnelAnalytics(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId),
+				eq(funnels.experienceId, user.experience.id),
 			),
 		});
 
@@ -847,7 +847,7 @@ export async function addResourceToFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // Experience-based filtering
 			),
 		});
 
@@ -864,7 +864,7 @@ export async function addResourceToFunnel(
 		const existingResource = await db.query.resources.findFirst({
 			where: and(
 				eq(resources.id, resourceId),
-				eq(resources.experienceId, user.experienceId), // Experience-based filtering
+				eq(resources.experienceId, user.experience.id), // Use database UUID for foreign key
 			),
 		});
 
@@ -958,7 +958,7 @@ export async function removeResourceFromFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId), // Experience-based filtering
+				eq(funnels.experienceId, user.experience.id), // Experience-based filtering
 			),
 		});
 

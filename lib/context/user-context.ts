@@ -274,15 +274,15 @@ async function createUserContext(
 		const authenticatedUser: AuthenticatedUser = {
 			id: user.id,
 			whopUserId: user.whopUserId,
-			experienceId: user.experienceId!, // Experience-based scoping
+			experienceId: experience.whopExperienceId, // Use the actual Whop experience ID for API calls
 			email: user.email,
 			name: user.name,
 			avatar: user.avatar || undefined,
 			credits: user.credits,
 			accessLevel: finalAccessLevel,
 			experience: {
-				id: experience.id,
-				whopExperienceId: experience.whopExperienceId,
+				id: experience.id, // Database UUID for foreign key relationships
+				whopExperienceId: experience.whopExperienceId, // Whop experience ID for API calls
 				whopCompanyId: experience.whopCompanyId,
 				name: experience.name,
 				description: experience.description || undefined,

@@ -75,7 +75,7 @@ async function generateFunnelHandler(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, userContext.user.experienceId),
+				eq(funnels.experienceId, userContext.user.experience.id), // Use database ID for foreign key
 			),
 		});
 
@@ -114,7 +114,7 @@ async function generateFunnelHandler(
 		// Deduct credit AFTER successful generation and database save (server-side for security)
 		const creditDeducted = await updateUserCredits(
 			userContext.user.whopUserId,
-			userContext.user.experienceId,
+			userContext.user.experience.whopExperienceId,
 			1,
 			"subtract",
 		);
