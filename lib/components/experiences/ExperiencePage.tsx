@@ -172,10 +172,8 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({ experienceId }) => {
 			return (
 				<CustomerView
 					userName={currentUser.name}
-					whopUserId={currentUser.whopUserId}
 					experienceId={experienceId}
 					onMessageSent={handleCustomerMessage}
-					accessLevel="customer"
 				/>
 			);
 		}
@@ -200,10 +198,8 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({ experienceId }) => {
 		return (
 			<CustomerView
 				userName={currentUser.name}
-				whopUserId={currentUser.whopUserId}
 				experienceId={experienceId}
 				onMessageSent={handleCustomerMessage}
-				accessLevel="admin"
 			/>
 		);
 	}

@@ -59,13 +59,6 @@ async function addResourceToFunnelHandler(
 			);
 		}
 
-		// Debug: Log the values being passed
-		console.log("🔍 DEBUG - Adding resource to funnel:");
-		console.log("  - funnelId:", funnelId);
-		console.log("  - resourceId:", resourceId);
-		console.log("  - user.id:", userContext.user.id);
-		console.log("  - user.accessLevel:", userContext.user.accessLevel);
-
 		// Add resource to funnel using server action
 		const updatedFunnel = await addResourceToFunnel(
 			userContext.user,
