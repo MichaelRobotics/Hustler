@@ -76,7 +76,7 @@ export async function createResource(
 			.from(resources)
 			.where(
 				and(
-					eq(resources.experienceId, user.experienceId),
+					eq(resources.experienceId, user.experience.id),
 					eq(resources.userId, user.id),
 				),
 			);
@@ -144,7 +144,7 @@ export async function getResourceById(
 		const resource = await db.query.resources.findFirst({
 			where: and(
 				eq(resources.id, resourceId),
-				eq(resources.experienceId, user.experienceId),
+				eq(resources.experienceId, user.experience.id),
 			),
 			with: {
 				funnelResources: {
@@ -203,7 +203,7 @@ export async function getResources(
 		const offset = (page - 1) * limit;
 
 		// Build where conditions
-		let whereConditions = eq(resources.experienceId, user.experienceId);
+		let whereConditions = eq(resources.experienceId, user.experience.id);
 
 		// Add user filter for customers
 		if (user.accessLevel === "customer") {
@@ -324,7 +324,7 @@ export async function updateResource(
 		const existingResource = await db.query.resources.findFirst({
 			where: and(
 				eq(resources.id, resourceId),
-				eq(resources.experienceId, user.experienceId),
+				eq(resources.experienceId, user.experience.id),
 			),
 		});
 
@@ -391,7 +391,7 @@ export async function deleteResource(
 		const existingResource = await db.query.resources.findFirst({
 			where: and(
 				eq(resources.id, resourceId),
-				eq(resources.experienceId, user.experienceId),
+				eq(resources.experienceId, user.experience.id),
 			),
 		});
 
@@ -509,7 +509,7 @@ export async function bulkDeleteResources(
 		// Verify all resources belong to user's company
 		const userResources = await db.query.resources.findMany({
 			where: and(
-				eq(resources.experienceId, user.experienceId),
+				eq(resources.experienceId, user.experience.id),
 				inArray(resources.id, resourceIds),
 			),
 		});
@@ -579,7 +579,7 @@ export async function assignResourcesToFunnel(
 		const existingFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experienceId),
+				eq(funnels.experienceId, user.experience.id),
 			),
 		});
 
@@ -596,7 +596,7 @@ export async function assignResourcesToFunnel(
 		if (resourceIds.length > 0) {
 			const userResources = await db.query.resources.findMany({
 				where: and(
-					eq(resources.experienceId, user.experienceId),
+					eq(resources.experienceId, user.experience.id),
 					inArray(resources.id, resourceIds),
 				),
 			});
