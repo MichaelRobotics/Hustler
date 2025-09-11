@@ -29,7 +29,7 @@ interface AIResource {
 	code: string; // promoCode converted to code for consistency
 }
 
-export function useFunnelManagement() {
+export function useFunnelManagement(user?: { experienceId?: string } | null) {
 	const [funnels, setFunnels] = useState<Funnel[]>([]);
 	const [selectedFunnel, setSelectedFunnel] = useState<Funnel | null>(null);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -435,12 +435,13 @@ export function useFunnelManagement() {
 				}),
 			);
 
-			// Call the AI generation API with funnelId
+			// Call the AI generation API with funnelId and experienceId
 			const response = await deduplicatedFetch("/api/generate-funnel", {
 				method: "POST",
 				body: JSON.stringify({
 					resources: resourcesForAI,
 					funnelId: funnelId,
+					experienceId: user?.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "",
 				}),
 			});
 

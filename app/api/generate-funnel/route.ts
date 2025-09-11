@@ -25,7 +25,7 @@ async function generateFunnelHandler(
 	context: AuthContext,
 ) {
 	try {
-		const { resources, funnelId } = await request.json();
+		const { resources, funnelId, experienceId } = await request.json();
 
 		if (!funnelId) {
 			return createErrorResponse(
@@ -34,11 +34,21 @@ async function generateFunnelHandler(
 			);
 		}
 
+		// Get experienceId from request body or fallback to environment variable
+		const finalExperienceId = experienceId || context.user.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
+		
+		if (!finalExperienceId) {
+			return createErrorResponse(
+				"MISSING_EXPERIENCE_ID",
+				"Experience ID is required for generation",
+			);
+		}
+
 		// Check if user is admin and has sufficient credits
 		const userContext = await getUserContext(
 			context.user.userId,
 			"",
-			context.user.experienceId || "",
+			finalExperienceId,
 		);
 		if (!userContext) {
 			return createErrorResponse(

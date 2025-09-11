@@ -717,7 +717,6 @@ export async function regenerateFunnelFlow(
 			// Deduct credit for regeneration
 			const creditDeducted = await updateUserCredits(
 				user.whopUserId,
-				user.experienceId,
 				1,
 				"subtract",
 			);

@@ -108,7 +108,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleGenerationComplete,
 		handleGenerationError,
 		isFunnelNameAvailable,
-	} = useFunnelManagement();
+	} = useFunnelManagement(user);
 
 	const {
 		libraryContext,
