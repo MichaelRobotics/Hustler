@@ -77,10 +77,8 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 		}
 
 		// Check if user can generate (has credits)
-		if (!canGenerate) {
-			setShowCreditModal(true);
-			return;
-		}
+		// Note: Credit check is now handled server-side for security
+		// Client-side check removed to prevent bypassing
 
 		// Check if any funnel is already generating (prefer isAnyFunnelGenerating if available)
 		const anyGenerating = isAnyFunnelGenerating

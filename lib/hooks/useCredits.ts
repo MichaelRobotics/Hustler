@@ -42,12 +42,12 @@ export function useCredits(user: AuthenticatedUser | null): UseCreditsReturn {
 				throw new Error("Experience ID not found");
 			}
 			
-			const [userCredits, canGen] = await Promise.all([
-				getUserCredits(experienceId),
-				canGenerate(user, experienceId),
-			]);
+			// Only fetch credits - canGenerate check is now handled server-side for security
+			const userCredits = await getUserCredits(experienceId);
 			setCredits(userCredits);
-			setCanGenerateNow(canGen);
+			// Note: canGenerateNow is now determined by server-side validation
+			// Client-side check removed to prevent security bypass
+			setCanGenerateNow(true); // Let server handle the actual validation
 		} catch (err) {
 			console.error("Error fetching credit data:", err);
 			setError("Failed to load credit data");
@@ -56,31 +56,13 @@ export function useCredits(user: AuthenticatedUser | null): UseCreditsReturn {
 		}
 	}, [user]);
 
+	// Note: Credit consumption is now handled server-side for security
+	// Client-side credit consumption removed to prevent bypassing
 	const consumeCreditForGeneration = useCallback(async (): Promise<boolean> => {
-		if (!user) {
-			return false;
-		}
-
-		try {
-			// Get experienceId from user context
-			const experienceId = user?.experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
-			
-			if (!experienceId) {
-				throw new Error("Experience ID not found");
-			}
-			
-			// Use the updated consumeCredit function with user context and experienceId
-			const success = await consumeCredit(user, experienceId);
-			if (success) {
-				await fetchCreditData(); // Refresh the balance
-			}
-			return success;
-		} catch (err) {
-			console.error("Error consuming credit:", err);
-			setError("Failed to consume credit");
-			return false;
-		}
-	}, [user, fetchCreditData]);
+		// Credit deduction is handled server-side in the generation API
+		// This function is kept for compatibility but does nothing
+		return true;
+	}, []);
 
 	const refresh = useCallback(async () => {
 		await fetchCreditData();

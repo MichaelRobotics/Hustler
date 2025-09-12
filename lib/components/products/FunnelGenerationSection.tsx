@@ -61,11 +61,8 @@ export const FunnelGenerationSection: React.FC<
 			return;
 		}
 
-		// Check if user can generate (admin with credits)
-		if (!canGenerate) {
-			setShowCreditModal(true);
-			return;
-		}
+		// Note: Credit check is now handled server-side for security
+		// Client-side check removed to prevent bypassing
 
 		// Check if any funnel is already generating (not just this one)
 		if (isAnyFunnelGenerating()) {
