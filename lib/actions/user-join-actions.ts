@@ -10,7 +10,7 @@ import { db } from "../supabase/db-server";
 import { experiences, funnels, conversations, messages } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { dmMonitoringService } from "./dm-monitoring-actions";
-import { findOrCreateUserForConversation, closeExistingActiveConversationsByWhopUserId } from "./user-management-actions";
+import { createConversation, addMessage } from "./simplified-conversation-actions";
 import type { FunnelFlow } from "../types/funnel";
 
 /**
@@ -39,6 +39,16 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
+		// Get experience record for the conversation
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.whopExperienceId, productId),
+		});
+
+		if (!experience) {
+			console.error(`Experience not found for product ${productId}`);
+			return;
+		}
+
 		// Extract welcome message from funnel flow
 		const welcomeMessage = getWelcomeMessage(liveFunnel.flow);
 		if (!welcomeMessage) {
@@ -46,14 +56,13 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-	// Create DM conversation record first
-	const conversationId = await createDMConversation(
-		productId,
-		liveFunnel.id,
-		userId,
-		liveFunnel.flow.startBlockId,
-		null, // memberId will be set later
-	);
+		// Create conversation record
+		const conversationId = await createConversation(
+			experience.id,
+			liveFunnel.id,
+			userId,
+			liveFunnel.flow.startBlockId,
+		);
 
 	// Send welcome DM and record it
 	const dmSent = await sendWelcomeDM(userId, welcomeMessage, conversationId);
@@ -222,18 +231,7 @@ export async function sendWelcomeDM(
 
 		// Record welcome message in database if conversationId is provided
 		if (conversationId) {
-			await db.insert(messages).values({
-				conversationId: conversationId,
-				type: "bot",
-				content: message,
-				metadata: {
-					blockId: "welcome",
-					timestamp: new Date().toISOString(),
-					dmPhase: true,
-					welcomeMessage: true,
-				},
-			});
-
+			await addMessage(conversationId, "bot", message);
 			console.log(`Recorded welcome message in conversation ${conversationId}`);
 		}
 
@@ -255,65 +253,3 @@ export async function sendWelcomeDM(
 	}
 }
 
-/**
- * Create DM conversation record
- * 
- * @param productId - Whop product ID (from membership webhook)
- * @param funnelId - Internal funnel ID
- * @param whopUserId - Whop user ID
- * @param startBlockId - Starting block ID
- * @param memberId - Whop member ID for DM monitoring
- * @returns Conversation ID
- */
-export async function createDMConversation(
-	productId: string,
-	funnelId: string,
-	whopUserId: string,
-	startBlockId: string,
-	memberId?: string | null,
-): Promise<string> {
-	try {
-		// Get the experience record to get our internal experience ID
-		// Note: In Whop, product_id maps to experience_id in our system
-		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, productId),
-		});
-
-		if (!experience) {
-			throw new Error(`Experience not found for whopExperienceId: ${productId}`);
-		}
-
-		// Find or create user for conversation binding
-		const userId = await findOrCreateUserForConversation(
-			whopUserId,
-			experience.id
-		);
-
-		// Close any existing active conversations for this user
-		await closeExistingActiveConversationsByWhopUserId(whopUserId, experience.id);
-
-		// Create conversation record with user binding
-		const [newConversation] = await db.insert(conversations).values({
-			experienceId: experience.id,
-			funnelId: funnelId,
-			userId: userId, // Direct user reference
-			whopUserId: whopUserId, // Direct Whop user ID for faster lookups
-			status: "active",
-			currentBlockId: startBlockId,
-			userPath: [startBlockId], // Initialize user path with start block
-			metadata: {
-				type: "dm",
-				phase: "welcome",
-				whopUserId: whopUserId,
-				whopMemberId: memberId, // Store member ID for DM monitoring
-				whopProductId: productId,
-			},
-		}).returning();
-
-		console.log(`Created DM conversation for user ${whopUserId} (${userId}) with funnel ${funnelId}`);
-		return newConversation.id;
-	} catch (error) {
-		console.error("Error creating DM conversation:", error);
-		throw error; // Re-throw to be handled by caller
-	}
-}

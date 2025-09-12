@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleFunnelCompletionInUserChat } from "@/lib/actions/conversation-actions";
+import { handleFunnelCompletionInUserChat } from "@/lib/actions/simplified-conversation-actions";
 
 export async function POST(request: NextRequest) {
 	try {

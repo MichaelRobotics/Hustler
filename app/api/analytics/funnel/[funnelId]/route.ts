@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { analyticsSystem } from "../../../../../lib/analytics/analytics";
+import { simplifiedAnalyticsSystem } from "../../../../../lib/analytics/analytics";
 import { getUserContext } from "../../../../../lib/context/user-context";
 import {
 	type AuthContext,
@@ -9,7 +9,7 @@ import {
 } from "../../../../../lib/middleware/whop-auth";
 
 /**
- * Funnel Analytics API Route
+ * Simplified Funnel Analytics API Route
  * Handles funnel-specific analytics with proper authentication and authorization
  */
 
@@ -68,7 +68,13 @@ async function getFunnelAnalyticsHandler(
 			);
 		}
 
-		const metrics = { totalViews: 0, totalConversions: 0, conversionRate: 0 }; // Dummy data for build
+		// Get basic funnel metrics using simplified system
+		const metrics = await simplifiedAnalyticsSystem.getFunnelBasicMetrics(
+			userContext.user,
+			funnelId,
+			startDate,
+			endDate,
+		);
 
 		return createSuccessResponse(
 			metrics,
@@ -80,5 +86,5 @@ async function getFunnelAnalyticsHandler(
 	}
 }
 
-// Export the protected route handler
+// Export the protected route handlers
 export const GET = withWhopAuth(getFunnelAnalyticsHandler);

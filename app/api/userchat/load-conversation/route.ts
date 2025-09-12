@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadConversationForUser } from "@/lib/actions/conversation-actions";
+import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences } from "@/lib/supabase/schema";
-import { eq } from "drizzle-orm";
+import { conversations, experiences, funnels, messages } from "@/lib/supabase/schema";
+import { eq, and } from "drizzle-orm";
+import { whopSdk } from "@/lib/whop-sdk";
+import { headers } from "next/headers";
+import type { FunnelFlow } from "@/lib/types/funnel";
 
 export async function POST(request: NextRequest) {
   try {
-    const { conversationId } = await request.json();
+    const { conversationId, experienceId, whopUserId } = await request.json();
 
     if (!conversationId) {
       return NextResponse.json(
@@ -20,6 +23,7 @@ export async function POST(request: NextRequest) {
       where: eq(conversations.id, conversationId),
       with: {
         experience: true,
+        funnel: true,
       },
     });
 
@@ -30,42 +34,104 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mock user for now - in production this would come from authentication
-    const mockUser = {
-      id: "550e8400-e29b-41d4-a716-446655440000",
-      whopUserId: "550e8400-e29b-41d4-a716-446655440001",
-      experienceId: conversation.experienceId, // Use the actual experience ID from the conversation
-      email: "user@example.com",
-      name: "Test User",
-      credits: 100,
-      accessLevel: "customer" as const,
-      experience: {
-        id: conversation.experienceId,
-        whopExperienceId: conversation.experience?.whopExperienceId || "unknown",
-        whopCompanyId: conversation.experience?.whopCompanyId || "unknown",
-        name: conversation.experience?.name || "Unknown Experience",
-      },
-    };
-
-    const result = await loadConversationForUser(conversationId, conversation.experienceId);
-
-    // Debug logging for admin testing
-    if (result.conversation?.metadata?.type === "admin_triggered") {
-      console.log(`Admin conversation loaded successfully:`, {
-        conversationId,
-        hasFunnelFlow: !!result.funnelFlow
-      });
+    // Get the funnel flow to check stages
+    const funnelFlow = conversation.funnel?.flow as FunnelFlow;
+    if (!funnelFlow) {
+      return NextResponse.json(
+        { success: false, error: "Funnel flow not found" },
+        { status: 404 }
+      );
     }
 
-    if (result.success && result.conversation) {
+    // Determine conversation stage and status
+    const currentBlockId = conversation.currentBlockId;
+    const isTransitionStage = currentBlockId && funnelFlow.stages.some(
+      stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlockId)
+    );
+    const isExperienceQualificationStage = currentBlockId && funnelFlow.stages.some(
+      stage => stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
+    );
+    const isWelcomeStage = currentBlockId && funnelFlow.stages.some(
+      stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlockId)
+    );
+    const isValueDeliveryStage = currentBlockId && funnelFlow.stages.some(
+      stage => stage.name === "VALUE_DELIVERY" && stage.blockIds.includes(currentBlockId)
+    );
+
+    // Check if conversation is in DM funnel phase (between WELCOME and VALUE_DELIVERY)
+    const isDMFunnelActive = (isWelcomeStage || isValueDeliveryStage) && !isTransitionStage && !isExperienceQualificationStage;
+
+    // Handle TRANSITION stage - automatically transition to EXPERIENCE_QUALIFICATION
+    if (isTransitionStage) {
+      console.log(`Conversation ${conversationId} is in TRANSITION stage, transitioning to EXPERIENCE_QUALIFICATION`);
+      
+      // Find the first EXPERIENCE_QUALIFICATION block
+      const experienceQualificationStage = funnelFlow.stages.find(
+        stage => stage.name === "EXPERIENCE_QUALIFICATION"
+      );
+      
+      if (experienceQualificationStage && experienceQualificationStage.blockIds.length > 0) {
+        const firstExperienceBlockId = experienceQualificationStage.blockIds[0];
+        
+        // Update conversation to EXPERIENCE_QUALIFICATION stage
+        await db
+          .update(conversations)
+          .set({
+            currentBlockId: firstExperienceBlockId,
+            userPath: [...(conversation.userPath || []), firstExperienceBlockId],
+            updatedAt: new Date(),
+          })
+          .where(eq(conversations.id, conversationId));
+
+        // Add the EXPERIENCE_QUALIFICATION agent message
+        const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
+        if (experienceBlock?.message) {
+          await db.insert(messages).values({
+            conversationId: conversationId,
+            type: "bot",
+            content: experienceBlock.message,
+          });
+        }
+
+        // Reload the updated conversation
+        const updatedConversation = await getConversationById(conversationId, conversation.experienceId);
+        if (updatedConversation) {
+          return NextResponse.json({
+            success: true,
+            conversation: updatedConversation,
+            funnelFlow: funnelFlow,
+            stageInfo: {
+              currentStage: "EXPERIENCE_QUALIFICATION",
+              isDMFunnelActive: false,
+              isTransitionStage: false,
+              isExperienceQualificationStage: true,
+            }
+          });
+        }
+      }
+    }
+
+    // Load the conversation data
+    const conversationData = await getConversationById(conversationId, conversation.experienceId);
+
+    if (conversationData) {
       return NextResponse.json({
         success: true,
-        conversation: result.conversation,
-        funnelFlow: result.funnelFlow || null,
+        conversation: conversationData,
+        funnelFlow: funnelFlow,
+        stageInfo: {
+          currentStage: isTransitionStage ? "TRANSITION" : 
+                      isExperienceQualificationStage ? "EXPERIENCE_QUALIFICATION" :
+                      isWelcomeStage ? "WELCOME" :
+                      isValueDeliveryStage ? "VALUE_DELIVERY" : "UNKNOWN",
+          isDMFunnelActive: isDMFunnelActive,
+          isTransitionStage: isTransitionStage,
+          isExperienceQualificationStage: isExperienceQualificationStage,
+        }
       });
     } else {
       return NextResponse.json(
-        { success: false, error: result.error || "Failed to load conversation" },
+        { success: false, error: "Failed to load conversation" },
         { status: 404 }
       );
     }

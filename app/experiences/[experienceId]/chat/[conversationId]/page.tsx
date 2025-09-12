@@ -30,6 +30,12 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [stageInfo, setStageInfo] = useState<{
+		currentStage: string;
+		isDMFunnelActive: boolean;
+		isTransitionStage: boolean;
+		isExperienceQualificationStage: boolean;
+	} | null>(null);
 
 	// Resolve async params
 	useEffect(() => {
@@ -45,6 +51,7 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 			try {
 				setLoading(true);
 				setError(null);
+
 
 				// Call API route to load conversation
 				const response = await fetch('/api/userchat/load-conversation', {
@@ -66,6 +73,7 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 
 				setConversation(result.conversation || null);
 				setFunnelFlow(result.funnelFlow || null);
+				setStageInfo(result.stageInfo || null);
 			} catch (err) {
 				console.error("Error loading conversation:", err);
 				setError("An unexpected error occurred");
@@ -153,17 +161,17 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 		);
 	}
 
-	// Validate conversation type
-	if (conversation.metadata?.type !== "internal") {
+	// Validate conversation is active and has a current block
+	if (!conversation.currentBlockId) {
 		return (
 			<div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
 				<div className="text-center max-w-md mx-auto p-6">
-					<div className="text-yellow-500 text-6xl mb-4">🔒</div>
+					<div className="text-yellow-500 text-6xl mb-4">⏳</div>
 					<h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-						Invalid Conversation Type
+						Conversation Not Ready
 					</h1>
 					<p className="text-gray-600 dark:text-gray-400 mb-6">
-						This conversation is not available for chat interface.
+						This conversation is not yet ready for the chat interface. Please complete the initial setup first.
 					</p>
 					<button
 						onClick={handleBack}
@@ -187,6 +195,7 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 				onMessageSent={handleMessageSent}
 				onBack={handleBack}
 				hideAvatar={false}
+				stageInfo={stageInfo || undefined}
 			/>
 		</div>
 	);

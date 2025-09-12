@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { completeDMToInternalTransition } from "@/lib/actions/internal-chat-transition-actions";
+import { completeDMToInternalTransition } from "@/lib/actions/simplified-conversation-actions";
 
 /**
  * Complete DM to internal chat transition
@@ -49,16 +49,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Complete the transition
-    const internalConversationId = await completeDMToInternalTransition(
+    const success = await completeDMToInternalTransition(
       dmConversationId,
       dmConversation.experienceId,
-      funnelId,
       transitionMessage || "Ready for your Personal Strategy Session! Click below: [LINK_TO_PRIVATE_CHAT]"
     );
 
     return NextResponse.json({
-      success: true,
-      internalConversationId,
+      success,
       dmConversationId,
       experienceId: dmConversation.experienceId,
     });

@@ -11,7 +11,7 @@ import { db } from "../supabase/db-server";
 import { conversations, funnels, funnelInteractions, messages } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelBlock, FunnelBlockOption, FunnelFlow } from "../types/funnel";
-import { completeDMToInternalTransition } from "./internal-chat-transition-actions";
+import { updateConversationBlock, addMessage } from "./simplified-conversation-actions";
 
 /**
  * Error message templates for progressive error handling
@@ -306,16 +306,7 @@ export class DMMonitoringService {
 			}
 
 			// Record user message in database
-			await db.insert(messages).values({
-				conversationId: conversationId,
-				type: "user",
-				content: userMessage,
-				metadata: {
-					blockId: conversation.currentBlockId,
-					timestamp: new Date().toISOString(),
-					dmPhase: true,
-				},
-			});
+			await addMessage(conversationId, "user", userMessage);
 
 			console.log(`Recorded user message in DM conversation ${conversationId}: ${userMessage}`);
 
@@ -453,16 +444,11 @@ export class DMMonitoringService {
 				nextBlockId: nextBlockId,
 			});
 
-			// Update conversation
-			const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
-			
-			await db.update(conversations)
-				.set({
-					currentBlockId: nextBlockId,
-					userPath: updatedUserPath,
-					updatedAt: new Date(),
-				})
-				.where(eq(conversations.id, conversationId));
+		// Update conversation
+		const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
+		if (nextBlockId) {
+			await updateConversationBlock(conversationId, nextBlockId, updatedUserPath);
+		}
 
 			// Handle end of funnel or send next message
 			if (!nextBlockId) {
@@ -508,16 +494,7 @@ export class DMMonitoringService {
 			});
 
 			// Record bot message in database
-			await db.insert(messages).values({
-				conversationId: conversation.id,
-				type: "bot",
-				content: nextBlock.message,
-				metadata: {
-					blockId: nextBlockId,
-					timestamp: new Date().toISOString(),
-					dmPhase: true,
-				},
-			});
+			await addMessage(conversation.id, "bot", nextBlock.message);
 
 			console.log(`Sent and recorded next message to user ${whopUserId} for block ${nextBlockId}`);
 
@@ -568,23 +545,22 @@ export class DMMonitoringService {
 			const transitionMessage = currentBlock?.message || "Ready for your Personal Strategy Session! Click the link below to continue.";
 
 		// Complete the transition to internal chat (synchronously)
-		const internalConversationId = await completeDMToInternalTransition(
+		await this.completeDMToInternalTransition(
 			conversation.id,
 			conversation.experienceId,
-			conversation.funnelId,
 			transitionMessage
 		);
 
-		console.log(`Successfully transitioned to internal chat ${internalConversationId}`);
+			console.log(`Successfully transitioned conversation ${conversation.id} to internal chat`);
 
-		// Stop monitoring this DM conversation
-		await this.stopMonitoring(conversation.id);
+			// Stop monitoring this DM conversation
+			await this.stopMonitoring(conversation.id);
 
 		} catch (error) {
 			console.error(`Error handling Funnel 1 completion for conversation ${conversation.id}:`, error);
 			
 			// Fallback: send error message and complete conversation
-			const whopUserId = conversation.metadata?.whopUserId;
+			const whopUserId = conversation.whopUserId;
 			if (whopUserId) {
 				await whopSdk.messages.sendDirectMessageToUser({
 					toUserIdOrUsername: whopUserId,
@@ -622,7 +598,7 @@ export class DMMonitoringService {
 				.where(eq(conversations.id, conversation.id));
 
 			// Send completion message
-			const whopUserId = conversation.metadata?.whopUserId;
+			const whopUserId = conversation.whopUserId;
 			if (whopUserId) {
 				await whopSdk.messages.sendDirectMessageToUser({
 					toUserIdOrUsername: whopUserId,
@@ -937,6 +913,77 @@ export class DMMonitoringService {
 		} catch (error) {
 			console.error("Error stopping timeout cleanup:", error);
 		}
+	}
+
+	/**
+	 * Complete transition from DM to internal chat (simplified)
+	 */
+	private async completeDMToInternalTransition(
+		conversationId: string,
+		experienceId: string,
+		transitionMessage: string,
+	): Promise<void> {
+		try {
+			console.log(`Completing DM to internal chat transition for conversation ${conversationId}`);
+
+			// Get conversation with funnel
+			const conversation = await db.query.conversations.findFirst({
+				where: and(
+					eq(conversations.id, conversationId),
+					eq(conversations.experienceId, experienceId),
+				),
+				with: {
+					funnel: true,
+				},
+			});
+
+			if (!conversation || !conversation.funnel?.flow) {
+				throw new Error(`Conversation or funnel not found for ${conversationId}`);
+			}
+
+			const funnelFlow = conversation.funnel.flow as FunnelFlow;
+
+			// Find the first EXPERIENCE_QUALIFICATION block (start of Funnel 2)
+			const experienceQualStage = funnelFlow.stages.find(
+				stage => stage.name === "EXPERIENCE_QUALIFICATION"
+			);
+
+			if (!experienceQualStage || experienceQualStage.blockIds.length === 0) {
+				throw new Error("No EXPERIENCE_QUALIFICATION stage found in funnel flow");
+			}
+
+			const firstExperienceQualBlockId = experienceQualStage.blockIds[0];
+
+			// Update conversation to EXPERIENCE_QUALIFICATION stage
+			const updatedUserPath = [...(conversation.userPath || []), firstExperienceQualBlockId];
+			await updateConversationBlock(conversationId, firstExperienceQualBlockId, updatedUserPath);
+
+			// Generate and send transition message
+			const chatLink = await this.generateChatLink(conversationId, experienceId);
+			const personalizedMessage = transitionMessage.replace(
+				/\[LINK_TO_PRIVATE_CHAT\]/g,
+				chatLink
+			);
+
+			// Send transition message
+			await whopSdk.messages.sendDirectMessageToUser({
+				toUserIdOrUsername: conversation.whopUserId,
+				message: personalizedMessage,
+			});
+
+			console.log(`Successfully completed DM to internal chat transition for conversation ${conversationId}`);
+		} catch (error) {
+			console.error(`Error completing DM to internal chat transition:`, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Generate chat link for conversation
+	 */
+	private async generateChatLink(conversationId: string, experienceId: string): Promise<string> {
+		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000";
+		return `${baseUrl}/experiences/${experienceId}/chat/${conversationId}`;
 	}
 }
 

@@ -37,7 +37,6 @@ export const conversationStatusEnum = pgEnum("conversation_status", [
 export const messageTypeEnum = pgEnum("message_type", [
 	"user",
 	"bot",
-	"system",
 ]);
 
 // ===== CORE WHOP INTEGRATION TABLES =====
@@ -227,14 +226,10 @@ export const conversations = pgTable(
 		funnelId: uuid("funnel_id")
 			.notNull()
 			.references(() => funnels.id, { onDelete: "cascade" }),
-		userId: uuid("user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "cascade" }), // Direct user reference
-		whopUserId: text("whop_user_id").notNull(), // Direct Whop user ID for faster lookups
+		whopUserId: text("whop_user_id").notNull(), // Direct Whop user ID for user identification
 		status: conversationStatusEnum("status").default("active").notNull(),
 		currentBlockId: text("current_block_id"),
 		userPath: jsonb("user_path"), // Track user's path through funnel
-		metadata: jsonb("metadata"), // Additional conversation data
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -243,13 +238,12 @@ export const conversations = pgTable(
 			table.experienceId,
 		),
 		funnelIdIdx: index("conversations_funnel_id_idx").on(table.funnelId),
-		userIdIdx: index("conversations_user_id_idx").on(table.userId),
 		whopUserIdIdx: index("conversations_whop_user_id_idx").on(table.whopUserId),
 		statusIdx: index("conversations_status_idx").on(table.status),
-		// Unique constraint for one active conversation per user per experience
+		// Unique constraint for one active conversation per whop_user per experience
 		uniqueActiveUserConversation: unique("unique_active_user_conversation").on(
 			table.experienceId,
-			table.userId,
+			table.whopUserId,
 		),
 	}),
 );
@@ -263,7 +257,6 @@ export const messages = pgTable(
 			.references(() => conversations.id, { onDelete: "cascade" }),
 		type: messageTypeEnum("type").notNull(),
 		content: text("content").notNull(),
-		metadata: jsonb("metadata"), // Additional message data
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => ({

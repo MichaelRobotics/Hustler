@@ -175,6 +175,8 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({ experienceId }) => {
 					userName={currentUser.name}
 					experienceId={experienceId}
 					onMessageSent={handleCustomerMessage}
+					userType="customer"
+					whopUserId={currentUser.whopUserId}
 				/>
 			);
 		}
@@ -201,6 +203,8 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({ experienceId }) => {
 				userName={currentUser.name}
 				experienceId={experienceId}
 				onMessageSent={handleCustomerMessage}
+				userType="admin"
+				whopUserId={currentUser.whopUserId}
 			/>
 		);
 	}
