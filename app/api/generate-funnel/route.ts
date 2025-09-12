@@ -45,10 +45,12 @@ async function generateFunnelHandler(
 		}
 
 		// Check if user is admin and has sufficient credits
+		// Force refresh to get latest credit data
 		const userContext = await getUserContext(
 			context.user.userId,
 			"",
 			finalExperienceId,
+			true, // force refresh to bypass cache
 		);
 		if (!userContext) {
 			return createErrorResponse(

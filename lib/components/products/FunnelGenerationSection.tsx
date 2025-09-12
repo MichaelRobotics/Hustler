@@ -61,8 +61,76 @@ export const FunnelGenerationSection: React.FC<
 			return;
 		}
 
-		// Note: Credit check is now handled server-side for security
-		// Client-side check removed to prevent bypassing
+		// CREDIT VALIDATION - Check credits BEFORE any other checks
+		try {
+			const experienceId = user?.experienceId;
+			if (!experienceId) {
+				throw new Error("Experience ID is required");
+			}
+
+			// Call dedicated credit validation endpoint
+			const { apiPost } = await import("../../utils/api-client");
+			const creditValidationResponse = await apiPost("/api/validate-credits", {
+				experienceId: experienceId,
+			}, experienceId);
+
+			if (!creditValidationResponse.ok) {
+				const creditError = await creditValidationResponse.json();
+				
+				// Show specific credit error notification
+				const showNotification = (message: string) => {
+					const notification = document.createElement("div");
+					notification.className =
+						"fixed top-4 right-4 z-50 px-4 py-3 bg-red-500 text-white rounded-lg border border-red-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
+					notification.textContent = message;
+
+					const closeBtn = document.createElement("button");
+					closeBtn.innerHTML = "×";
+					closeBtn.className =
+						"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
+					closeBtn.onclick = () => notification.remove();
+					notification.appendChild(closeBtn);
+
+					document.body.appendChild(notification);
+
+					setTimeout(() => {
+						if (notification.parentNode) {
+							notification.remove();
+						}
+					}, 5000);
+				};
+
+				showNotification(creditError.message || "Insufficient credits to generate funnel");
+				return;
+			}
+		} catch (error) {
+			console.error("Credit validation failed:", error);
+			// Show error notification
+			const showNotification = (message: string) => {
+				const notification = document.createElement("div");
+				notification.className =
+					"fixed top-4 right-4 z-50 px-4 py-3 bg-red-500 text-white rounded-lg border border-red-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
+				notification.textContent = message;
+
+				const closeBtn = document.createElement("button");
+				closeBtn.innerHTML = "×";
+				closeBtn.className =
+					"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
+				closeBtn.onclick = () => notification.remove();
+				notification.appendChild(closeBtn);
+
+				document.body.appendChild(notification);
+
+				setTimeout(() => {
+					if (notification.parentNode) {
+						notification.remove();
+					}
+				}, 5000);
+			};
+
+			showNotification("Failed to validate credits. Please try again.");
+			return;
+		}
 
 		// Check if any funnel is already generating (not just this one)
 		if (isAnyFunnelGenerating()) {
