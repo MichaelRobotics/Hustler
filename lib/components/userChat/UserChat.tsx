@@ -160,12 +160,8 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversation?.currentBlockId]);
 
-	// Handle different conversation states
-	const isNoConversation = !conversationId || !conversation;
-	const isDMFunnelActive = stageInfo?.isDMFunnelActive || false;
-	const isTransitionStage = stageInfo?.isTransitionStage || false;
+	// Handle different conversation states (simplified to match preview)
 	const isExperienceQualificationStage = stageInfo?.isExperienceQualificationStage || false;
-	const currentStage = stageInfo?.currentStage || "UNKNOWN";
 
 	// Get funnel navigation functions (only for option handling)
 	const {
@@ -462,15 +458,15 @@ const UserChat: React.FC<UserChatProps> = ({
 		};
 	}, []);
 
-	// Auto-scroll when history changes (optimized for mobile performance)
+	// Auto-scroll when conversation messages change (optimized for mobile performance)
 	useEffect(() => {
-		if (history.length > 0) {
+		if (conversationMessages.length > 0) {
 			// Use requestAnimationFrame for better performance
 			requestAnimationFrame(() => {
 				scrollToBottom();
 			});
 		}
-	}, [history, scrollToBottom]);
+	}, [conversationMessages, scrollToBottom]);
 
 	// Auto-scroll when typing indicator appears/disappears
 	useEffect(() => {
@@ -572,15 +568,13 @@ const UserChat: React.FC<UserChatProps> = ({
 		),
 	);
 
-	// Memoized message list - show conversation messages if available, otherwise preview messages
+	// Memoized message list - show conversation messages
 	const messageList = useMemo(() => {
-		const messagesToShow = conversationId && conversationMessages.length > 0 
-			? conversationMessages.map(msg => ({
-				type: msg.type,
-				text: msg.content,
-				timestamp: msg.createdAt,
-			}))
-			: Array.isArray(history) ? history : [];
+		const messagesToShow = conversationMessages.map(msg => ({
+			type: msg.type,
+			text: msg.content,
+			timestamp: msg.createdAt,
+		}));
 
 		return messagesToShow.map((msg: any, index: number) => (
 			<MessageComponent
@@ -589,7 +583,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				index={index}
 			/>
 		));
-	}, [history, conversationMessages, conversationId]);
+	}, [conversationMessages]);
 
 	// Memoized options list
 	const optionsList = useMemo(
@@ -755,77 +749,6 @@ const UserChat: React.FC<UserChatProps> = ({
 					</div>
 				)}
 
-				{/* Conversation State Display - Now below the overflow container */}
-				{(() => {
-					// Handle different conversation states
-					if (isNoConversation) {
-						return (
-							<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-								<div className="w-full py-4 text-center">
-									<div className="text-gray-500 text-6xl mb-4">💬</div>
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-										No Conversation
-									</h3>
-									<p className="text-gray-600 dark:text-gray-400 mb-4">
-										You don't have an active conversation yet.
-									</p>
-								</div>
-							</div>
-						);
-					}
-
-					if (isDMFunnelActive) {
-						return (
-							<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-								<div className="w-full py-4 text-center">
-									<div className="text-blue-500 text-6xl mb-4">📱</div>
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-										DM Funnel Active
-									</h3>
-									<p className="text-gray-600 dark:text-gray-400 mb-4">
-										You're currently in the DM funnel phase. Please complete it to access the chat interface.
-									</p>
-									<div className="text-sm text-gray-500 dark:text-gray-400">
-										Current Stage: {currentStage}
-									</div>
-								</div>
-							</div>
-						);
-					}
-
-					if (isTransitionStage) {
-						return (
-							<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-								<div className="w-full py-4 text-center">
-									<div className="text-yellow-500 text-6xl mb-4">⏳</div>
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-										Transitioning to Chat
-									</h3>
-									<p className="text-gray-600 dark:text-gray-400 mb-4">
-										You're transitioning from DM to chat interface. Please wait...
-									</p>
-									<div className="text-sm text-gray-500 dark:text-gray-400">
-										Current Stage: {currentStage}
-									</div>
-								</div>
-							</div>
-						);
-					}
-
-					// Show normal chat interface for EXPERIENCE_QUALIFICATION and other active stages
-					if (isExperienceQualificationStage || (currentBlockId && options.length > 0)) {
-						return null; // Let the normal chat interface show
-					}
-
-					// Fallback for other states
-					return (
-						<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-							<div className="w-full py-4 text-center text-muted-foreground">
-								No conversation available
-							</div>
-						</div>
-					);
-				})()}
 			</div>
 		</div>
 	);

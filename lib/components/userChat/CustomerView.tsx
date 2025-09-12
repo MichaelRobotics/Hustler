@@ -3,6 +3,7 @@
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
 import UserChat from "./UserChat";
+import { AdminNavbar } from "./AdminNavbar";
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
 import { apiPost } from "../../utils/api-client";
@@ -43,7 +44,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	} | null>(null);
 	
 	// Admin state
-	const [adminMode, setAdminMode] = useState(false);
 	const [adminLoading, setAdminLoading] = useState(false);
 	const [adminError, setAdminError] = useState<string | null>(null);
 	const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
@@ -309,88 +309,23 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		// If user is admin, show admin controls even without funnel
 		if (userType === "admin") {
 			return (
-				<div className="h-screen w-full flex flex-col">
-					{/* Admin Controls - Show even without funnel */}
-					<div className="flex-shrink-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-						<div className="max-w-4xl mx-auto">
-							<div className="flex items-center justify-between mb-4">
-								<div className="flex items-center gap-2">
-									<Settings size={20} className="text-gray-600 dark:text-gray-400" />
-									<Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
-										Admin Controls
-									</Text>
-								</div>
-								<button
-									onClick={() => setAdminMode(!adminMode)}
-									className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-								>
-									{adminMode ? "Hide" : "Show"} Admin Panel
-								</button>
-							</div>
-
-							{adminMode && (
-								<div className="space-y-4">
-									{/* Status Display */}
-									<div className="p-3 bg-white dark:bg-gray-700 rounded-lg border">
-										<div className="flex items-center gap-2 mb-2">
-											<div className="w-2 h-2 rounded-full bg-gray-400"></div>
-											<Text size="2" className="text-gray-900 dark:text-gray-100">
-											No Active Conversation
-											</Text>
-										</div>
-										<div className="text-sm text-gray-600 dark:text-gray-400">
-											No conversation found. Use the trigger DM button to start a conversation.
-										</div>
-									</div>
-
-									{/* Action Buttons */}
-									<div className="flex gap-2">
-										<button
-											onClick={checkConversationStatus}
-											disabled={adminLoading}
-											className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-										>
-											<MessageSquare size={16} />
-											Refresh Status
-										</button>
-										
-										<button
-											onClick={triggerDMForAdmin}
-											disabled={adminLoading}
-											className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-										>
-											<Play size={16} />
-											Trigger DM (Admin)
-										</button>
-										
-										<button
-											onClick={resetConversations}
-											disabled={adminLoading}
-											className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-										>
-											<RotateCcw size={16} />
-											Reset All
-										</button>
-									</div>
-
-									{/* Admin Messages */}
-									{adminError && (
-										<div className="p-2 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
-											{adminError}
-										</div>
-									)}
-									{adminSuccess && (
-										<div className="p-2 bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300">
-											{adminSuccess}
-										</div>
-									)}
-								</div>
-							)}
-						</div>
+				<div className="h-screen w-full relative">
+					{/* Admin Navbar - Layered overlay */}
+					<div className="absolute top-0 left-0 right-0 z-50">
+						<AdminNavbar
+							conversationId={conversationId}
+							stageInfo={stageInfo}
+							adminLoading={adminLoading}
+							adminError={adminError}
+							adminSuccess={adminSuccess}
+							onCheckStatus={checkConversationStatus}
+							onTriggerDM={triggerDMForAdmin}
+							onResetConversations={resetConversations}
+						/>
 					</div>
 
 					{/* Main Content - No Conversation Message */}
-					<div className="flex-1 flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
+					<div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
 						<div className="text-center max-w-md mx-auto p-6">
 							<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
 								<svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -450,107 +385,30 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		shouldShowUserChat,
 		funnelFlow: !!funnelFlow,
 		userType,
-		adminMode,
 		shouldShowAdminPanel: userType === "admin"
 	});
 
 	// Render UserChat with real data
 	return (
-		<div className="h-screen w-full flex flex-col">
-			{/* Admin Controls - Only show for admins */}
+		<div className="h-screen w-full relative">
+			{/* Admin Navbar - Layered overlay for admins */}
 			{userType === "admin" && (
-				<div className="flex-shrink-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-					<div className="max-w-4xl mx-auto">
-						<div className="flex items-center justify-between mb-4">
-							<div className="flex items-center gap-2">
-								<Settings size={20} className="text-gray-600 dark:text-gray-400" />
-								<Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
-									Admin Controls
-								</Text>
-							</div>
-							<button
-								onClick={() => setAdminMode(!adminMode)}
-								className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-							>
-								{adminMode ? "Hide" : "Show"} Admin Panel
-							</button>
-						</div>
-
-						{adminMode && (
-							<div className="space-y-4">
-								{/* Status Display */}
-								<div className="p-3 bg-white dark:bg-gray-700 rounded-lg border">
-									<div className="flex items-center gap-2 mb-2">
-										<div className={`w-2 h-2 rounded-full ${conversationId ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-										<Text size="2" className="text-gray-900 dark:text-gray-100">
-											{conversationId ? 'Active Conversation' : 'No Active Conversation'}
-										</Text>
-									</div>
-									{conversationId && (
-										<div className="text-sm text-gray-600 dark:text-gray-400">
-											Conversation ID: {conversationId}
-										</div>
-									)}
-									{stageInfo && (
-										<div className="text-sm text-gray-600 dark:text-gray-400">
-											Current Stage: {stageInfo.currentStage}
-											{stageInfo.isDMFunnelActive && " (DM Funnel Active)"}
-											{stageInfo.isTransitionStage && " (Transitioning)"}
-											{stageInfo.isExperienceQualificationStage && " (Experience Qualification)"}
-										</div>
-									)}
-								</div>
-
-								{/* Action Buttons */}
-								<div className="flex gap-2">
-									<button
-										onClick={checkConversationStatus}
-										disabled={adminLoading}
-										className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-									>
-										<MessageSquare size={16} />
-										Refresh Status
-									</button>
-									
-									<button
-										onClick={triggerDMForAdmin}
-										disabled={adminLoading || !!conversationId}
-										className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-									>
-										<Play size={16} />
-										Trigger DM (Admin)
-									</button>
-									
-									<button
-										onClick={resetConversations}
-										disabled={adminLoading}
-										className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-									>
-										<RotateCcw size={16} />
-										Reset All
-									</button>
-								</div>
-
-
-								{/* Admin Messages */}
-								{adminError && (
-									<div className="p-2 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
-										{adminError}
-									</div>
-								)}
-								{adminSuccess && (
-									<div className="p-2 bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300">
-										{adminSuccess}
-									</div>
-								)}
-							</div>
-						)}
-					</div>
+				<div className="absolute top-0 left-0 right-0 z-50">
+					<AdminNavbar
+						conversationId={conversationId}
+						stageInfo={stageInfo}
+						adminLoading={adminLoading}
+						adminError={adminError}
+						adminSuccess={adminSuccess}
+						onCheckStatus={checkConversationStatus}
+						onTriggerDM={triggerDMForAdmin}
+						onResetConversations={resetConversations}
+					/>
 				</div>
 			)}
 
-			{/* Main Content Area */}
-			<div className="flex-1 min-h-0">
+			{/* Main Content Area - Full height, no scrollbars */}
+			<div className="h-full w-full">
 				{shouldShowUserChat ? (
 					/* Show UserChat only when in EXPERIENCE_QUALIFICATION stage */
 					<UserChat

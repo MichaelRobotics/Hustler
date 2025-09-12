@@ -373,27 +373,6 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 					</div>
 				)}
 
-				{/* Start Button - Now below the overflow container */}
-				{(() => {
-					// Don't show Start Conversation button if we're in a TRANSITION stage
-					const isTransitionBlock = currentBlockId && funnelFlow?.stages.some(
-						stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlockId)
-					);
-					
-					// Show button only when conversation is truly ended (no current block) or no options available (but not in TRANSITION)
-					const shouldShowStartButton = (!currentBlockId || (options.length === 0 && !isTransitionBlock));
-					
-					return shouldShowStartButton && (
-						<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-							<button
-								onClick={startConversation}
-								className="chat-optimized w-full py-4 bg-blue-500 text-white rounded-xl font-medium text-base touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
-							>
-								Start Conversation
-							</button>
-						</div>
-					);
-				})()}
 			</div>
 		</div>
 	);
