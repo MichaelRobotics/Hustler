@@ -82,6 +82,8 @@ async function createFunnelHandler(request: NextRequest, context: AuthContext) {
 		}
 
 		// Validate experience ID is provided
+		console.log("🔍 Funnels API - user.experienceId:", user.experienceId);
+		console.log("🔍 Funnels API - user object:", JSON.stringify(user, null, 2));
 		if (!user.experienceId) {
 			return NextResponse.json(
 				{ error: "Experience ID is required" },

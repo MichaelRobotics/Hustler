@@ -41,6 +41,7 @@ import LiveChatHeader from "./LiveChatHeader";
 import LiveChatView from "./LiveChatView";
 import { useLiveChatWebSocket } from "../../hooks/useLiveChatWebSocket";
 import type { AuthenticatedUser } from "../../types/user";
+import { apiGet, apiPost } from "../../utils/api-client";
 // Database actions moved to API routes to avoid client-side imports
 
 // Real data integration - no more mock data
@@ -194,7 +195,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 				limit: "20",
 			});
 
-			const response = await fetch(`/api/livechat/conversations?${params}`);
+			const response = await apiGet(`/api/livechat/conversations?${params}`, user.experienceId);
 			const result = await response.json();
 
 			if (!result.success) {
@@ -224,7 +225,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 
 		try {
 			// Call API route for conversation details
-			const response = await fetch(`/api/livechat/conversations/${conversationId}`);
+			const response = await apiGet(`/api/livechat/conversations/${conversationId}`, user.experienceId);
 			const result = await response.json();
 
 			if (!result.success) {
@@ -293,17 +294,11 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 				await sendWebSocketMessage(message, "bot");
 
 				// Also send via API for persistence
-				const response = await fetch(`/api/livechat/conversations/${selectedConversationId}`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						action: 'send_message',
-						message,
-						messageType: 'text',
-					}),
-				});
+				const response = await apiPost(`/api/livechat/conversations/${selectedConversationId}`, {
+					action: 'send_message',
+					message,
+					messageType: 'text',
+				}, user.experienceId);
 
 				const result = await response.json();
 

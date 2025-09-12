@@ -4,6 +4,7 @@ import type { Resource } from "@/lib/types/resource";
 import { useEffect, useState } from "react";
 import { canAssignResource } from "../helpers/product-limits";
 import { deduplicatedFetch } from "../utils/requestDeduplication";
+import { apiGet, apiPost } from "../utils/api-client";
 
 interface Funnel {
 	id: string;
@@ -18,7 +19,7 @@ interface Funnel {
 	lastGeneratedAt?: number;
 }
 
-export function useResourceManagement() {
+export function useResourceManagement(user?: { experienceId?: string } | null) {
 	const [libraryContext, setLibraryContext] = useState<"global" | "funnel">(
 		"global",
 	);
@@ -34,8 +35,13 @@ export function useResourceManagement() {
 			setResourcesLoading(true);
 			setResourcesError(null);
 			
+			const experienceId = user?.experienceId;
+			if (!experienceId) {
+				throw new Error("Experience ID is required");
+			}
+			
 			// Load resources with limit to prevent loading all at once
-			const response = await deduplicatedFetch("/api/resources?limit=20");
+			const response = await apiGet("/api/resources?limit=20", experienceId);
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch resources: ${response.statusText}`);
@@ -86,13 +92,15 @@ export function useResourceManagement() {
 			}
 
 			try {
-				const response = await deduplicatedFetch(
+				const experienceId = user?.experienceId;
+				if (!experienceId) {
+					throw new Error("Experience ID is required");
+				}
+				
+				const response = await apiPost(
 					`/api/funnels/${selectedFunnel.id}/resources`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ resourceId: resource.id }),
-					},
+					{ resourceId: resource.id },
+					experienceId
 				);
 
 				if (!response.ok) {

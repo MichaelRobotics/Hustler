@@ -27,6 +27,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	onGoToFunnelProducts,
 	context,
 	onModalStateChange,
+	user,
 }) => {
 	const {
 		selectedCategory,
@@ -53,7 +54,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 		updateResource,
 		deleteResource,
 		setError,
-	} = useResourceLibrary(allResources, allFunnels, setAllResources);
+	} = useResourceLibrary(allResources, allFunnels, setAllResources, user);
 
 	// State for inline product creation
 	const [isCreatingNewProduct, setIsCreatingNewProduct] = React.useState(false);

@@ -5,11 +5,13 @@ import type {
 	Resource,
 	ResourceFormData,
 } from "../types/resource";
+import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api-client";
 
 export const useResourceLibrary = (
 	allResources: Resource[],
 	allFunnels: Funnel[],
 	setAllResources: (resources: Resource[]) => void,
+	user?: { experienceId?: string } | null,
 ) => {
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
 	const [isAddingResource, setIsAddingResource] = useState(false);
@@ -84,7 +86,12 @@ export const useResourceLibrary = (
 		setLoading(true);
 		setError(null);
 		try {
-			const response = await fetch("/api/resources");
+			// Check if user context is available
+			if (!user?.experienceId) {
+				throw new Error("Experience ID is required");
+			}
+
+			const response = await apiGet("/api/resources", user.experienceId);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
@@ -98,7 +105,7 @@ export const useResourceLibrary = (
 		} finally {
 			setLoading(false);
 		}
-	}, [setAllResources, allResources]);
+	}, [setAllResources, allResources, user?.experienceId]);
 
 	// Create resource via API
 	const createResource = useCallback(
@@ -106,11 +113,12 @@ export const useResourceLibrary = (
 			setLoading(true);
 			setError(null);
 			try {
-				const response = await fetch("/api/resources", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(resourceData),
-				});
+				// Check if user context is available
+				if (!user?.experienceId) {
+					throw new Error("Experience ID is required");
+				}
+
+				const response = await apiPost("/api/resources", resourceData, user.experienceId);
 
 				if (!response.ok) {
 					throw new Error(`HTTP error! status: ${response.status}`);
@@ -129,7 +137,7 @@ export const useResourceLibrary = (
 				setLoading(false);
 			}
 		},
-		[setAllResources, allResources],
+		[setAllResources, allResources, user?.experienceId],
 	);
 
 	// Update resource via API
@@ -138,11 +146,12 @@ export const useResourceLibrary = (
 			setLoading(true);
 			setError(null);
 			try {
-				const response = await fetch(`/api/resources/${id}`, {
-					method: "PUT",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(updates),
-				});
+				// Check if user context is available
+				if (!user?.experienceId) {
+					throw new Error("Experience ID is required");
+				}
+
+				const response = await apiPut(`/api/resources/${id}`, updates, user.experienceId);
 
 				if (!response.ok) {
 					throw new Error(`HTTP error! status: ${response.status}`);
@@ -163,7 +172,7 @@ export const useResourceLibrary = (
 				setLoading(false);
 			}
 		},
-		[setAllResources, allResources],
+		[setAllResources, allResources, user?.experienceId],
 	);
 
 	// Delete resource via API
@@ -172,9 +181,12 @@ export const useResourceLibrary = (
 			setLoading(true);
 			setError(null);
 			try {
-				const response = await fetch(`/api/resources/${id}`, {
-					method: "DELETE",
-				});
+				// Check if user context is available
+				if (!user?.experienceId) {
+					throw new Error("Experience ID is required");
+				}
+
+				const response = await apiDelete(`/api/resources/${id}`, user.experienceId);
 
 				if (!response.ok) {
 					throw new Error(`HTTP error! status: ${response.status}`);
@@ -189,7 +201,7 @@ export const useResourceLibrary = (
 				setLoading(false);
 			}
 		},
-		[setAllResources, allResources],
+		[setAllResources, allResources, user?.experienceId],
 	);
 
 	const handleAddResource = useCallback(async () => {

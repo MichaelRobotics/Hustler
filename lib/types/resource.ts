@@ -49,6 +49,7 @@ export interface ResourceLibraryProps {
 	onGoToFunnelProducts: () => void;
 	context: "global" | "funnel";
 	onModalStateChange?: (isModalOpen: boolean) => void;
+	user?: { experienceId?: string } | null;
 }
 
 export interface ResourcePageProps {

@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import UserChat from "./UserChat";
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
+import { apiPost } from "../../utils/api-client";
 
 /**
  * --- Customer View Component ---
@@ -42,16 +43,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setError(null);
 
 			// Step 1: Load conversation and funnel data via API
-			const response = await fetch('/api/userchat/load-conversation', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					experienceId,
-					userName: userName || "Customer",
-				}),
-			});
+			const response = await apiPost('/api/userchat/load-conversation', {
+				experienceId,
+				userName: userName || "Customer",
+			}, experienceId);
 
 			const result = await response.json();
 

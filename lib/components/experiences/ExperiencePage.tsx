@@ -6,6 +6,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import ViewSelectionPanel from "./ViewSelectionPanel";
 import type { AuthenticatedUser } from "@/lib/types/user";
+import { apiGet } from "@/lib/utils/api-client";
 
 /**
  * --- Experience View Component ---
@@ -35,7 +36,7 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({ experienceId }) => {
 		const fetchUserContext = async () => {
 			try {
 				setLoading(true);
-				const response = await fetch(`/api/user/context?experienceId=${experienceId}`);
+				const response = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
 				
 				if (!response.ok) {
 					if (response.status === 403) {

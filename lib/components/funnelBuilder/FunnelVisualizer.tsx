@@ -162,6 +162,7 @@ interface FunnelVisualizerProps {
 	onOfferSelect?: (offerId: string) => void; // New: callback when offer is selected from visualization
 	isDeployed?: boolean; // New: whether the funnel is currently deployed/live
 	funnelId?: string; // New: funnel ID for visualization persistence
+	user?: { experienceId?: string } | null; // New: user context for authentication
 }
 
 /**
@@ -189,6 +190,7 @@ const FunnelVisualizer = React.memo(
 				onOfferSelect,
 				isDeployed = false,
 				funnelId,
+				user,
 			},
 			ref,
 		) => {
@@ -261,6 +263,7 @@ const FunnelVisualizer = React.memo(
 					autoLayout: true,
 				},
 				editingBlockId,
+				user,
 			});
 
 			// Auto-save effect - separate from layout calculations

@@ -47,6 +47,7 @@ interface AIFunnelBuilderPageProps {
 	onGoToPreview?: () => void; // New: Navigate to separate preview page
 	onGenerationComplete?: (funnelId: string) => void; // New: callback when generation is fully complete
 	onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
+	user?: { experienceId?: string } | null;
 }
 
 /**
@@ -66,6 +67,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	onGoToPreview,
 	onGenerationComplete,
 	onGenerationError,
+	user,
 }) => {
 	// State Management
 	const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
@@ -79,6 +81,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	// Custom Hooks
 	const deployment = useFunnelDeployment(currentFunnel, onUpdate, () =>
 		funnelVisualizerRef.current?.enableCalculationsForGoLive?.(),
+		user,
 	);
 	const validation = useFunnelValidation();
 	const modals = useModalManagement();
@@ -156,6 +159,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 												modals.setSelectedOffer(offerId)
 											}
 											funnelId={currentFunnel.id}
+											user={user}
 											ref={funnelVisualizerRef}
 										/>
 									</div>

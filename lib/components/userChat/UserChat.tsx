@@ -14,6 +14,7 @@ import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
 // Server-side functions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
+import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 
@@ -162,20 +163,14 @@ const UserChat: React.FC<UserChatProps> = ({
 			if (!conversationId) return;
 
 		// Navigate funnel via API route
-		const response = await fetch('/api/userchat/navigate-funnel', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
+		const response = await apiPost('/api/userchat/navigate-funnel', {
+			conversationId,
+			navigationData: {
+				text: option.text,
+				value: option.text,
+				blockId: option.nextBlockId || currentBlockId || "",
 			},
-			body: JSON.stringify({
-				conversationId,
-				navigationData: {
-					text: option.text,
-					value: option.text,
-					blockId: option.nextBlockId || currentBlockId || "",
-				},
-			}),
-		});
+		}, experienceId);
 
 		const result = await response.json();
 
@@ -221,15 +216,9 @@ const UserChat: React.FC<UserChatProps> = ({
 			if (!conversationId) return;
 
 			// Complete funnel via API route
-		const response = await fetch('/api/userchat/complete-funnel', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				conversationId,
-			}),
-		});
+		const response = await apiPost('/api/userchat/complete-funnel', {
+			conversationId,
+		}, experienceId);
 
 		const result = await response.json();
 			if (result.success) {

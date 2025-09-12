@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { apiGet, apiPost } from "../utils/api-client";
 
 interface Funnel {
 	id: string;
@@ -32,6 +33,7 @@ export const useFunnelDeployment = (
 	currentFunnel: Funnel,
 	onUpdate: (funnel: Funnel) => void,
 	enableCalculationsForGoLive?: () => void,
+	user?: { experienceId?: string } | null,
 ) => {
 	const [isDeploying, setIsDeploying] = React.useState(false);
 	const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
@@ -60,7 +62,12 @@ export const useFunnelDeployment = (
 
 		// Check if any other funnel is currently live
 		try {
-			const response = await fetch(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}`);
+			// Check if user context is available
+			if (!user?.experienceId) {
+				throw new Error("Experience ID is required");
+			}
+
+			const response = await apiGet(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}`, user.experienceId);
 			if (response.ok) {
 				const data = await response.json();
 				if (data.success && data.data.hasLiveFunnel) {
@@ -159,13 +166,13 @@ export const useFunnelDeployment = (
 		setDeploymentLog(["Deployment initiated..."]);
 
 		try {
+			// Check if user context is available
+			if (!user?.experienceId) {
+				throw new Error("Experience ID is required");
+			}
+
 			// Make actual API call to deploy funnel
-			const response = await fetch(`/api/funnels/${currentFunnel.id}/deploy`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-			});
+			const response = await apiPost(`/api/funnels/${currentFunnel.id}/deploy`, {}, user.experienceId);
 
 			if (!response.ok) {
 				const errorData = await response.json();
@@ -236,13 +243,13 @@ export const useFunnelDeployment = (
 		setDeploymentLog(["Taking funnel offline..."]);
 
 		try {
+			// Check if user context is available
+			if (!user?.experienceId) {
+				throw new Error("Experience ID is required");
+			}
+
 			// Make actual API call to undeploy funnel
-			const response = await fetch(`/api/funnels/${currentFunnel.id}/undeploy`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-			});
+			const response = await apiPost(`/api/funnels/${currentFunnel.id}/undeploy`, {}, user.experienceId);
 
 			if (!response.ok) {
 				const errorData = await response.json();
@@ -313,7 +320,7 @@ export const useFunnelDeployment = (
 				clearInterval(deployIntervalRef.current);
 			}
 		};
-	}, []);
+	}, [user?.experienceId]);
 
 	return {
 		isDeploying,

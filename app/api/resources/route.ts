@@ -113,6 +113,8 @@ async function createResourceHandler(
 		}
 
 		// Validate experience ID is provided
+		console.log("🔍 Resources API - user.experienceId:", user.experienceId);
+		console.log("🔍 Resources API - user object:", JSON.stringify(user, null, 2));
 		if (!user.experienceId) {
 			return NextResponse.json(
 				{ error: "Experience ID is required" },

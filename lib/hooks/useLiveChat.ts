@@ -10,14 +10,16 @@ import type {
 	LiveChatMessage,
 	UpdateConversationRequest,
 } from "../types/liveChat";
+import { apiGet, apiPost, apiPut } from "../utils/api-client";
 
 interface UseLiveChatOptions {
 	autoRefresh?: boolean;
 	refreshInterval?: number;
+	user?: { experienceId?: string } | null;
 }
 
 export const useLiveChat = (options: UseLiveChatOptions = {}) => {
-	const { autoRefresh = true, refreshInterval = 30000 } = options;
+	const { autoRefresh = true, refreshInterval = 30000, user } = options;
 
 	// State management
 	const [conversations, setConversations] = useState<LiveChatConversation[]>(
@@ -47,27 +49,27 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 			setIsLoading(true);
 			setError(null);
 
-			try {
-				// Cancel previous request
-				if (abortControllerRef.current) {
-					abortControllerRef.current.abort();
-				}
+		try {
+			// Check if user context is available
+			if (!user?.experienceId) {
+				throw new Error("Experience ID is required");
+			}
 
-				abortControllerRef.current = new AbortController();
+			// Cancel previous request
+			if (abortControllerRef.current) {
+				abortControllerRef.current.abort();
+			}
 
-				const params = new URLSearchParams({
-					status: filters.status || "open",
-					sortBy: filters.sortBy || "newest",
-					...(searchQuery && { search: searchQuery }),
-					...(reset ? {} : { offset: conversations.length.toString() }),
-				});
+			abortControllerRef.current = new AbortController();
 
-				const response = await fetch(`/api/live-chat/conversations?${params}`, {
-					signal: abortControllerRef.current.signal,
-					headers: {
-						"Content-Type": "application/json",
-					},
-				});
+			const params = new URLSearchParams({
+				status: filters.status || "open",
+				sortBy: filters.sortBy || "newest",
+				...(searchQuery && { search: searchQuery }),
+				...(reset ? {} : { offset: conversations.length.toString() }),
+			});
+
+			const response = await apiGet(`/api/live-chat/conversations?${params}`, user.experienceId);
 
 				if (!response.ok) {
 					throw new Error(
@@ -93,23 +95,22 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 				setIsLoading(false);
 			}
 		},
-		[conversations.length, filters, searchQuery, isLoading],
+		[conversations.length, filters, searchQuery, isLoading, user?.experienceId],
 	);
 
 	// Send message to conversation
 	const sendMessage = useCallback(
 		async (conversationId: string, message: CreateMessageRequest) => {
 			try {
-				const response = await fetch(`/api/live-chat/messages`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						...message,
-						conversationId,
-					}),
-				});
+				// Check if user context is available
+				if (!user?.experienceId) {
+					throw new Error("Experience ID is required");
+				}
+
+				const response = await apiPost(`/api/live-chat/messages`, {
+					...message,
+					conversationId,
+				}, user.experienceId);
 
 				if (!response.ok) {
 					throw new Error(`Failed to send message: ${response.statusText}`);
@@ -139,22 +140,22 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 				throw error;
 			}
 		},
-		[],
+		[user?.experienceId],
 	);
 
 	// Update conversation status
 	const updateConversation = useCallback(
 		async (conversationId: string, updates: UpdateConversationRequest) => {
 			try {
-				const response = await fetch(
+				// Check if user context is available
+				if (!user?.experienceId) {
+					throw new Error("Experience ID is required");
+				}
+
+				const response = await apiPut(
 					`/api/live-chat/conversations/${conversationId}`,
-					{
-						method: "PATCH",
-						headers: {
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify(updates),
-					},
+					updates,
+					user.experienceId
 				);
 
 				if (!response.ok) {
@@ -180,25 +181,26 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 				throw error;
 			}
 		},
-		[],
+		[user?.experienceId],
 	);
 
 	// Fetch messages for a specific conversation
 	const fetchMessages = useCallback(
 		async (conversationId: string, reset = false) => {
-			try {
-				const params = new URLSearchParams({
-					...(reset ? {} : { offset: "0" }),
-				});
+		try {
+			// Check if user context is available
+			if (!user?.experienceId) {
+				throw new Error("Experience ID is required");
+			}
 
-				const response = await fetch(
-					`/api/live-chat/conversations/${conversationId}/messages?${params}`,
-					{
-						headers: {
-							"Content-Type": "application/json",
-						},
-					},
-				);
+			const params = new URLSearchParams({
+				...(reset ? {} : { offset: "0" }),
+			});
+
+			const response = await apiGet(
+				`/api/live-chat/conversations/${conversationId}/messages?${params}`,
+				user.experienceId
+			);
 
 				if (!response.ok) {
 					throw new Error(`Failed to fetch messages: ${response.statusText}`);
@@ -227,7 +229,7 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 				throw error;
 			}
 		},
-		[],
+		[user?.experienceId],
 	);
 
 	// Auto-refresh conversations

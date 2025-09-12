@@ -118,10 +118,14 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 
 			try {
 				setError(null);
-				const response = await deduplicatedFetch("/api/funnels", {
-					method: "POST",
-					body: JSON.stringify({ name: newFunnelName.trim() }),
-				});
+				const experienceId = user?.experienceId;
+				if (!experienceId) {
+					throw new Error("Experience ID is required");
+				}
+				
+				const response = await apiPost("/api/funnels", {
+					name: newFunnelName.trim(),
+				}, experienceId);
 
 				if (!response.ok) {
 					const errorData = await response.json();
@@ -242,11 +246,14 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 
 		try {
 			setError(null);
-			const response = await deduplicatedFetch(`/api/funnels/${funnelId}`, {
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ name: newName }),
-			});
+			const experienceId = user?.experienceId;
+			if (!experienceId) {
+				throw new Error("Experience ID is required");
+			}
+			
+			const response = await apiPut(`/api/funnels/${funnelId}`, {
+				name: newName,
+			}, experienceId);
 
 			if (!response.ok) {
 				const errorData = await response.json();
@@ -546,11 +553,14 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 		resourceId: string,
 	) => {
 		try {
-			const response = await deduplicatedFetch(
+			const experienceId = user?.experienceId;
+			if (!experienceId) {
+				throw new Error("Experience ID is required");
+			}
+			
+			const response = await apiDelete(
 				`/api/funnels/${funnelId}/resources/${resourceId}`,
-				{
-					method: "DELETE",
-				},
+				experienceId
 			);
 
 			if (!response.ok) {

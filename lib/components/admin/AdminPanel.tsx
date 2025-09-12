@@ -20,6 +20,7 @@ import { useFunnelManagement } from "@/lib/hooks/useFunnelManagement";
 import { useResourceManagement } from "@/lib/hooks/useResourceManagement";
 import { useViewNavigation } from "@/lib/hooks/useViewNavigation";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
+import { apiPut } from "@/lib/utils/api-client";
 import type { Resource } from "@/lib/types/resource";
 import type { AuthenticatedUser } from "@/lib/types/user";
 import {
@@ -120,7 +121,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleOpenResourceLibrary,
 		handleAddToFunnel,
 		handleBackToDashboard: resourceBackToDashboard,
-	} = useResourceManagement();
+	} = useResourceManagement(user);
 
 	// State synchronization: Update funnel resources when allResources changes
 	React.useEffect(() => {
@@ -389,6 +390,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							allFunnels={funnels}
 							setAllResources={setAllResources}
 							onBack={undefined}
+							user={user}
 							onAddToFunnel={undefined}
 							onEdit={undefined}
 							onGlobalGeneration={() => handleGlobalGeneration("")}
@@ -409,6 +411,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 					allFunnels={funnels}
 					setAllResources={setAllResources}
 					onBack={() => setCurrentView("resources")}
+					user={user}
 					onAddToFunnel={handleAddToFunnelWithState}
 					onEdit={() => {
 						if (selectedFunnel && hasValidFlow(selectedFunnel)) {
@@ -465,14 +468,10 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 
 					// Save flow data to database
 					try {
-						const response = await fetch(`/api/funnels/${updatedFunnel.id}`, {
-							method: "PUT",
-							headers: { "Content-Type": "application/json" },
-							body: JSON.stringify({
-								flow: updatedFunnel.flow,
-								name: updatedFunnel.name,
-							}),
-						});
+						const response = await apiPut(`/api/funnels/${updatedFunnel.id}`, {
+							flow: updatedFunnel.flow,
+							name: updatedFunnel.name,
+						}, user?.experienceId);
 
 						if (!response.ok) {
 							const errorData = await response.json();
@@ -511,6 +510,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				}}
 				onGenerationComplete={handleGenerationComplete}
 				onGenerationError={handleGenerationError}
+				user={user}
 			/>
 		);
 	}
@@ -642,6 +642,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 									setNewFunnelName={setNewFunnelName}
 									funnelToDelete={funnelToDelete}
 									isFunnelNameAvailable={isFunnelNameAvailable}
+									user={user}
 								/>
 							</div>
 

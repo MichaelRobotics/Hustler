@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
+import { apiPost } from "../utils/api-client";
 
 export interface UserChatMessage {
 	id: string;
@@ -93,17 +94,11 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 			// For user messages, also process through funnel system
 			if (type === "user") {
 				try {
-					const response = await fetch('/api/userchat/process-message', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-							conversationId: config.conversationId,
-							messageContent: content,
-							messageType: type,
-						}),
-					});
+					const response = await apiPost('/api/userchat/process-message', {
+						conversationId: config.conversationId,
+						messageContent: content,
+						messageType: type,
+					}, config.experienceId);
 
 					if (response.ok) {
 						const result = await response.json();

@@ -2,6 +2,7 @@
 
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
+import { apiPost } from "@/lib/utils/api-client";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Button, Heading, Text } from "frosted-ui";
 import {
@@ -53,6 +54,7 @@ interface FunnelsDashboardProps {
 	setNewFunnelName: (name: string) => void;
 	funnelToDelete: Funnel | null;
 	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
+	user?: { experienceId?: string } | null;
 }
 
 const FunnelsDashboard = React.memo(
@@ -77,6 +79,7 @@ const FunnelsDashboard = React.memo(
 		setNewFunnelName,
 		funnelToDelete,
 		isFunnelNameAvailable,
+		user,
 	}: FunnelsDashboardProps) => {
 		// State to track which dropdown is open and which button is highlighted
 		const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -105,13 +108,17 @@ const FunnelsDashboard = React.memo(
 				return;
 			}
 
+			// Check if user context is available
+			if (!user?.experienceId) {
+				console.error("Experience ID is required");
+				return;
+			}
+
 			setIsSaving(true);
 			try {
-				const response = await fetch("/api/funnels", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name: funnelName.trim() }),
-				});
+				const response = await apiPost("/api/funnels", {
+					name: funnelName.trim()
+				}, user.experienceId);
 
 				if (!response.ok) {
 					const errorData = await response.json();
@@ -146,6 +153,7 @@ const FunnelsDashboard = React.memo(
 			setEditingFunnelId,
 			setNewFunnelName,
 			isFunnelNameAvailable,
+			user?.experienceId,
 		],
 	);
 

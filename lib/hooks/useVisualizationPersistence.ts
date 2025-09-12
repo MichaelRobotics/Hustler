@@ -8,6 +8,7 @@ import {
 	isVisualizationStateReadyToSave,
 } from "../types/visualization";
 import { deduplicatedFetch } from "../utils/requestDeduplication";
+import { apiPut, apiGet } from "../utils/api-client";
 
 interface UseVisualizationPersistenceOptions {
 	funnelId: string;
@@ -15,6 +16,7 @@ interface UseVisualizationPersistenceOptions {
 	debounceMs?: number;
 	onSaveComplete?: () => void; // Callback when save is complete
 	onSaveError?: (error: Error) => void; // Callback when save fails
+	user?: { experienceId?: string } | null;
 }
 
 interface UseVisualizationPersistenceReturn {
@@ -35,6 +37,7 @@ export function useVisualizationPersistence({
 	debounceMs = 1000,
 	onSaveComplete,
 	onSaveError,
+	user,
 }: UseVisualizationPersistenceOptions): UseVisualizationPersistenceReturn {
 	const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const isSavingRef = useRef(false);
@@ -57,15 +60,15 @@ export function useVisualizationPersistence({
 					isSavingRef.current = true;
 					lastErrorRef.current = null;
 
-					const response = await deduplicatedFetch(
+					// Check if user context is available
+					if (!user?.experienceId) {
+						throw new Error("Experience ID is required");
+					}
+
+					const response = await apiPut(
 						`/api/funnels/${funnelId}/visualization`,
-						{
-							method: "PUT",
-							headers: {
-								"Content-Type": "application/json",
-							},
-							body: JSON.stringify(state),
-						},
+						state,
+						user.experienceId
 					);
 
 					if (!response.ok) {
@@ -96,7 +99,7 @@ export function useVisualizationPersistence({
 				}
 			}, debounceMs);
 		},
-		[funnelId, enabled, debounceMs, onSaveComplete, onSaveError],
+		[funnelId, enabled, debounceMs, onSaveComplete, onSaveError, user?.experienceId],
 	);
 
 	// Load visualization state
@@ -106,12 +109,19 @@ export function useVisualizationPersistence({
 				return DEFAULT_VISUALIZATION_STATE;
 			}
 
+			// Check if user context is available
+			if (!user?.experienceId) {
+				console.warn("Experience ID is required for loading visualization state");
+				return DEFAULT_VISUALIZATION_STATE;
+			}
+
 			try {
 				isLoadingRef.current = true;
 				lastErrorRef.current = null;
 
-				const response = await deduplicatedFetch(
+				const response = await apiGet(
 					`/api/funnels/${funnelId}/visualization`,
+					user.experienceId
 				);
 
 				if (!response.ok) {
@@ -135,7 +145,7 @@ export function useVisualizationPersistence({
 			} finally {
 				isLoadingRef.current = false;
 			}
-		}, [funnelId, enabled]);
+		}, [funnelId, enabled, user?.experienceId]);
 
 	return {
 		saveVisualizationState,
@@ -160,6 +170,7 @@ export function useAutoSaveVisualization({
 	viewport,
 	preferences,
 	editingBlockId,
+	user,
 }: {
 	funnelId: string;
 	layoutPhase: "measure" | "final";
@@ -171,8 +182,9 @@ export function useAutoSaveVisualization({
 	viewport: any;
 	preferences: any;
 	editingBlockId: string | null;
+	user?: { experienceId?: string } | null;
 }) {
-	const { saveVisualizationState } = useVisualizationPersistence({ funnelId });
+	const { saveVisualizationState } = useVisualizationPersistence({ funnelId, user });
 
 	// Auto-save when layout is complete and stable
 	const autoSave = useCallback(() => {

@@ -19,6 +19,9 @@ export async function apiRequest(
 	const headers = new Headers(fetchOptions.headers);
 	if (experienceId) {
 		headers.set('X-Experience-ID', experienceId);
+		console.log("🔍 API Client - Setting X-Experience-ID header:", experienceId);
+	} else {
+		console.log("🔍 API Client - No experience ID provided");
 	}
 	
 	// Add Content-Type if not already set and we have a body
