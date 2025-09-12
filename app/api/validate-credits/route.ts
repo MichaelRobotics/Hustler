@@ -60,11 +60,7 @@ async function validateCreditsHandler(
 			return createErrorResponse(
 				"INSUFFICIENT_CREDITS",
 				`Insufficient credits to generate funnel. Required: ${requiredCredits}, Available: ${currentCredits}. Please purchase more credits.`,
-				{
-					requiredCredits,
-					currentCredits,
-					shortfall: requiredCredits - currentCredits,
-				}
+				400
 			);
 		}
 
