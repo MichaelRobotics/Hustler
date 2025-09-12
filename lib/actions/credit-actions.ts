@@ -18,8 +18,21 @@ export async function getUserCredits(experienceId: string): Promise<number> {
 		const headersList = await headers();
 		const { userId } = await whopSdk.verifyUserToken(headersList);
 
-		// Get from database for specific experience
-		return await getDbUserCredits(userId, experienceId);
+		// Get the full user context to get the database experience ID
+		const userContext = await getUserContext(
+			userId,
+			"", // whopCompanyId is optional
+			experienceId, // This is the Whop Experience ID
+			false, // forceRefresh
+		);
+
+		if (!userContext) {
+			console.error("User context not found for credits");
+			return 0;
+		}
+
+		// Use the database experience ID from the user context
+		return await getDbUserCredits(userId, userContext.user.experience.id);
 	} catch (error) {
 		console.error("Error getting user credits:", error);
 		return 0; // Default to 0 credits (only admins get credits)
@@ -109,19 +122,37 @@ export async function consumeCredit(user?: AuthenticatedUser, experienceId?: str
 			return false; // No credits available
 		}
 
-		// Use experienceId from user context or provided parameter
-		const expId = experienceId || user.experienceId;
-		if (!expId) {
+		// Get the database experience ID from user context
+		let dbExperienceId: string;
+		if (user.experienceId) {
+			// If user has experienceId, it's the database UUID
+			dbExperienceId = user.experienceId;
+		} else if (experienceId) {
+			// If experienceId is provided, get user context to get database ID
+			const userContext = await getUserContext(
+				user.whopUserId,
+				"",
+				experienceId, // This is the Whop Experience ID
+				false
+			);
+			
+			if (!userContext) {
+				console.error("User context not found for credit consumption");
+				return false;
+			}
+			
+			dbExperienceId = userContext.user.experience.id;
+		} else {
 			console.error("No experienceId available for credit consumption");
 			return false;
 		}
 
 		// Update credits in database for specific experience
-		const success = await updateUserCredits(user.whopUserId, expId, 1, "subtract");
+		const success = await updateUserCredits(user.whopUserId, dbExperienceId, 1, "subtract");
 
 		if (success) {
 			console.log(
-				`Admin ${user.whopUserId} consumed 1 credit in experience ${expId}. Remaining: ${currentCredits - 1}`,
+				`Admin ${user.whopUserId} consumed 1 credit in experience ${dbExperienceId}. Remaining: ${currentCredits - 1}`,
 			);
 		}
 
@@ -142,8 +173,21 @@ export async function addCredits(
 	amount: number,
 ): Promise<void> {
 	try {
-		const currentCredits = await getDbUserCredits(userId, experienceId);
-		const success = await updateUserCredits(userId, experienceId, amount, "add");
+		// Get user context to get the database experience ID
+		const userContext = await getUserContext(
+			userId,
+			"", // whopCompanyId is optional
+			experienceId, // This is the Whop Experience ID
+			false, // forceRefresh
+		);
+
+		if (!userContext) {
+			console.error("User context not found for adding credits");
+			return;
+		}
+
+		const currentCredits = await getDbUserCredits(userId, userContext.user.experience.id);
+		const success = await updateUserCredits(userId, userContext.user.experience.id, amount, "add");
 
 		if (success) {
 			console.log(

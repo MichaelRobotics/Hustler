@@ -31,6 +31,8 @@ interface AIResource {
 }
 
 export function useFunnelManagement(user?: { experienceId?: string } | null) {
+	const experienceId = user?.experienceId;
+	
 	const [funnels, setFunnels] = useState<Funnel[]>([]);
 	const [selectedFunnel, setSelectedFunnel] = useState<Funnel | null>(null);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -118,13 +120,8 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 
 			try {
 				setError(null);
-				const experienceId = user?.experienceId;
-				if (!experienceId) {
-					throw new Error("Experience ID is required");
-				}
-				
 				const response = await apiPost("/api/funnels", {
-					name: newFunnelName.trim(),
+					name: newFunnelName.trim()
 				}, experienceId);
 
 				if (!response.ok) {
@@ -166,10 +163,8 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 				setError(null);
 				setIsDeleting(true);
 				
-				// Use robust delete with timeout and retry logic
-				const response = await robustDelete(`/api/funnels/${funnelToDelete.id}`, {
-					headers: { "Content-Type": "application/json" },
-				});
+				// Use API client for proper authentication
+				const response = await apiDelete(`/api/funnels/${funnelToDelete.id}`, experienceId);
 
 				// Parse response data
 				const data = await response.json();
@@ -246,13 +241,8 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 
 		try {
 			setError(null);
-			const experienceId = user?.experienceId;
-			if (!experienceId) {
-				throw new Error("Experience ID is required");
-			}
-			
 			const response = await apiPut(`/api/funnels/${funnelId}`, {
-				name: newName,
+				name: newName
 			}, experienceId);
 
 			if (!response.ok) {
@@ -553,11 +543,6 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 		resourceId: string,
 	) => {
 		try {
-			const experienceId = user?.experienceId;
-			if (!experienceId) {
-				throw new Error("Experience ID is required");
-			}
-			
 			const response = await apiDelete(
 				`/api/funnels/${funnelId}/resources/${resourceId}`,
 				experienceId
