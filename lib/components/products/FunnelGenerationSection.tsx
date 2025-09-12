@@ -27,7 +27,7 @@ export const FunnelGenerationSection: React.FC<
 	isAnyFunnelGenerating,
 	onGlobalGeneration,
 }) => {
-	const { canGenerate, consumeCredit } = useCredits(user);
+	const { canGenerate, consumeCredit, refresh: refreshCredits } = useCredits(user);
 	const [showCreditModal, setShowCreditModal] = useState(false);
 
 	const handleGeneration = async () => {
@@ -103,8 +103,9 @@ export const FunnelGenerationSection: React.FC<
 			// Credit deduction will happen in the generation completion callback
 			await onGlobalGeneration(funnel.id);
 
-			// Note: Credit deduction is now handled by the generation completion callback
-			// This ensures credits are only deducted after successful database save
+			// Refresh credit balance after successful generation
+			// The server-side generation API now handles credit deduction
+			await refreshCredits();
 		} catch (error) {
 			console.error("Error during generation:", error);
 			// Don't consume credit if generation failed
