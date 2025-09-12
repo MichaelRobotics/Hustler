@@ -98,7 +98,7 @@ async function processFunnelNavigation(
 }> {
   try {
     const { text, value, blockId } = navigationData;
-    const currentBlockId = conversation.currentBlockId;
+    const currentBlockId = blockId || conversation.currentBlockId;
 
     // Find the current block
     const currentBlock = funnelFlow.blocks[currentBlockId];
@@ -106,14 +106,26 @@ async function processFunnelNavigation(
       throw new Error(`Current block ${currentBlockId} not found`);
     }
 
-    // Find the selected option
-    const selectedOption = currentBlock.options?.find(opt => 
-      opt.text.toLowerCase() === text.toLowerCase() ||
-      opt.text.toLowerCase() === value.toLowerCase()
-    );
+    // Debug: Log available options
+    console.log(`Available options in block ${currentBlockId}:`, currentBlock.options?.map(opt => opt.text));
+    console.log(`Looking for option: "${text}"`);
+
+    // Find the selected option with better matching
+    const selectedOption = currentBlock.options?.find(opt => {
+      const optionText = opt.text.toLowerCase().trim();
+      const searchText = text.toLowerCase().trim();
+      const searchValue = value.toLowerCase().trim();
+      
+      return optionText === searchText || 
+             optionText === searchValue ||
+             optionText.includes(searchText) ||
+             searchText.includes(optionText);
+    });
 
     if (!selectedOption) {
-      throw new Error(`Option "${text}" not found in block ${currentBlockId}`);
+      console.error(`Option "${text}" not found in block ${currentBlockId}`);
+      console.error(`Available options:`, currentBlock.options?.map(opt => `"${opt.text}"`));
+      throw new Error(`Option "${text}" not found in block ${currentBlockId}. Available options: ${currentBlock.options?.map(opt => opt.text).join(', ')}`);
     }
 
     const nextBlockId = selectedOption.nextBlockId;

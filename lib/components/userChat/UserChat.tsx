@@ -63,6 +63,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		metadata?: any;
 		createdAt: Date;
 	}>>([]);
+	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -74,9 +75,20 @@ const UserChat: React.FC<UserChatProps> = ({
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
 			console.log("UserChat: Received WebSocket message:", newMessage);
-			// Instead of adding to local state, refresh the entire conversation
-			// This ensures we get the latest state from the database
-			refreshConversation();
+			// Only refresh if it's a message we don't already have locally
+			// This prevents unnecessary refreshes when we already have the message
+			const messageExists = conversationMessages.some(msg => 
+				msg.content === newMessage.content && 
+				msg.type === newMessage.type &&
+				Math.abs(new Date(msg.createdAt).getTime() - new Date(newMessage.createdAt).getTime()) < 5000 // 5 second tolerance
+			);
+			
+			if (!messageExists) {
+				console.log("UserChat: New message detected, refreshing conversation...");
+				refreshConversation();
+			} else {
+				console.log("UserChat: Message already exists locally, skipping refresh");
+			}
 			scrollToBottom();
 		},
 		onTyping: (isTyping, userId) => {
@@ -134,12 +146,19 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversationId, experienceId]);
 
-	// Get current block ID from conversation state (not from preview hook)
-	const currentBlockId = conversation?.currentBlockId || null;
+	// Get current block ID from conversation state or local state
+	const currentBlockId = localCurrentBlockId || conversation?.currentBlockId || null;
 	
 	// Get options for current block from funnel flow
 	const currentBlock = currentBlockId ? funnelFlow?.blocks[currentBlockId] : null;
 	const options = currentBlock?.options || [];
+
+	// Update local current block ID when conversation changes
+	useEffect(() => {
+		if (conversation?.currentBlockId) {
+			setLocalCurrentBlockId(conversation.currentBlockId);
+		}
+	}, [conversation?.currentBlockId]);
 
 	// Handle different conversation states
 	const isNoConversation = !conversationId || !conversation;
@@ -164,22 +183,58 @@ const UserChat: React.FC<UserChatProps> = ({
 
 		// Handle conversation-based chat
 		if (conversationId && experienceId && isConnected) {
-			// Send via WebSocket (this will trigger a conversation refresh)
-			await sendMessage(messageContent, "user");
+			// IMMEDIATE UI UPDATE: Add user message to local state first
+			const userMessage = {
+				id: `temp-user-${Date.now()}`,
+				type: "user" as const,
+				content: messageContent,
+				createdAt: new Date(),
+			};
+			setConversationMessages(prev => [...prev, userMessage]);
+			scrollToBottom();
 
-			// Handle funnel navigation if current block has options
-			const currentBlock = funnelFlow.blocks[currentBlockId || ""];
-			if (currentBlock?.options) {
-				const selectedOption = currentBlock.options.find((opt: any) => 
-					opt.text.toLowerCase() === messageContent.toLowerCase()
-				);
+			// Process message through funnel system
+			try {
+				const response = await apiPost('/api/userchat/process-message', {
+					conversationId,
+					messageContent,
+					messageType: "user",
+				}, experienceId);
 
-				if (selectedOption) {
-					await handleConversationOptionSelection(selectedOption);
+				if (response.ok) {
+					const result = await response.json();
+					console.log("Message processed through funnel:", result);
+					
+					// If there's a bot response, add it immediately to UI
+					if (result.funnelResponse?.botMessage) {
+						const botMessage = {
+							id: `temp-bot-${Date.now()}`,
+							type: "bot" as const,
+							content: result.funnelResponse.botMessage,
+							createdAt: new Date(),
+						};
+						setConversationMessages(prev => [...prev, botMessage]);
+						scrollToBottom();
+					}
+
+					// IMMEDIATE UI UPDATE: Update local current block ID if next block is provided
+					if (result.funnelResponse?.nextBlockId) {
+						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
+						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
+						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
+					}
+
+					// Send via WebSocket for real-time sync (optional)
+					await sendMessage(messageContent, "user");
 				} else {
-					// Handle invalid response
-					await handleInvalidResponse(messageContent);
+					console.error("Failed to process message through funnel:", response.statusText);
+					// Still send via WebSocket as fallback
+					await sendMessage(messageContent, "user");
 				}
+			} catch (apiError) {
+				console.error("Error calling message processing API:", apiError);
+				// Fallback to WebSocket only
+				await sendMessage(messageContent, "user");
 			}
 		} else {
 			// Handle preview mode (existing functionality)
@@ -187,7 +242,6 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 
 		onMessageSent?.(messageContent, conversationId);
-		scrollToBottom();
 	};
 
 	// Handle conversation option selection
@@ -195,21 +249,50 @@ const UserChat: React.FC<UserChatProps> = ({
 		try {
 			if (!conversationId) return;
 
-		// Navigate funnel via API route
-		const response = await apiPost('/api/userchat/navigate-funnel', {
-			conversationId,
-			navigationData: {
-				text: option.text,
-				value: option.text,
-				blockId: option.nextBlockId || currentBlockId || "",
-			},
-		}, experienceId);
+			// IMMEDIATE UI UPDATE: Add user message to local state first
+			const userMessage = {
+				id: `temp-user-${Date.now()}`,
+				type: "user" as const,
+				content: option.text,
+				createdAt: new Date(),
+			};
+			setConversationMessages(prev => [...prev, userMessage]);
+			scrollToBottom();
 
-		const result = await response.json();
+			// Navigate funnel via API route
+			const response = await apiPost('/api/userchat/navigate-funnel', {
+				conversationId,
+				navigationData: {
+					text: option.text,
+					value: option.text,
+					blockId: currentBlockId || "", // Use current block ID, not next block ID
+				},
+			}, experienceId);
+
+			const result = await response.json();
 
 			if (result.success && result.conversation) {
-				// The conversation will be refreshed via WebSocket
-				// No need to add messages locally
+				// IMMEDIATE UI UPDATE: Add bot response if available
+				if (result.conversation.currentBlockId) {
+					const nextBlock = funnelFlow.blocks[result.conversation.currentBlockId];
+					if (nextBlock?.message) {
+						const botMessage = {
+							id: `temp-bot-${Date.now()}`,
+							type: "bot" as const,
+							content: nextBlock.message,
+							createdAt: new Date(),
+						};
+						setConversationMessages(prev => [...prev, botMessage]);
+						scrollToBottom();
+					}
+				}
+				
+				// IMMEDIATE UI UPDATE: Update local current block ID to show new options immediately
+				if (result.conversation.currentBlockId) {
+					setLocalCurrentBlockId(result.conversation.currentBlockId);
+					console.log("UserChat: Updated local current block ID to:", result.conversation.currentBlockId);
+					console.log("UserChat: New options will be:", funnelFlow.blocks[result.conversation.currentBlockId]?.options?.map(opt => opt.text));
+				}
 				
 				// Check for funnel completion
 				if (option.nextBlockId === "COMPLETED" || result.conversation.status === "completed") {
@@ -223,7 +306,17 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Handle invalid response
 	const handleInvalidResponse = useCallback(async (userInput: string) => {
-		// Send error message via WebSocket (this will trigger a conversation refresh)
+		// IMMEDIATE UI UPDATE: Add error message to local state first
+		const errorMessage = {
+			id: `temp-error-${Date.now()}`,
+			type: "bot" as const,
+			content: "Please choose from the provided options above.",
+			createdAt: new Date(),
+		};
+		setConversationMessages(prev => [...prev, errorMessage]);
+		scrollToBottom();
+
+		// Send via WebSocket for real-time sync (optional)
 		await sendMessage("Please choose from the provided options above.", "bot");
 	}, [sendMessage]);
 

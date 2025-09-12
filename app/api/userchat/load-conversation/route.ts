@@ -95,39 +95,51 @@ export async function POST(request: NextRequest) {
       if (experienceQualificationStage && experienceQualificationStage.blockIds.length > 0) {
         const firstExperienceBlockId = experienceQualificationStage.blockIds[0];
         
-        // Update conversation to EXPERIENCE_QUALIFICATION stage
-        await db
-          .update(conversations)
-          .set({
-            currentBlockId: firstExperienceBlockId,
-            userPath: [...(conversation.userPath || []), firstExperienceBlockId],
-            updatedAt: new Date(),
-          })
-          .where(eq(conversations.id, conversationId));
-
-        // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
-        const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
-        if (experienceBlock?.message) {
-          // Check if this message already exists to prevent duplicates
-          const existingMessage = await db.query.messages.findFirst({
-            where: and(
-              eq(messages.conversationId, conversationId),
-              eq(messages.type, "bot"),
-              eq(messages.content, experienceBlock.message)
-            ),
+        // Use a transaction to prevent race conditions
+        await db.transaction(async (tx: any) => {
+          // First, check if conversation is still in TRANSITION stage (double-check)
+          const currentConversation = await tx.query.conversations.findFirst({
+            where: eq(conversations.id, conversationId),
           });
           
-          if (!existingMessage) {
-            await db.insert(messages).values({
-              conversationId: conversationId,
-              type: "bot",
-              content: experienceBlock.message,
-            });
-            console.log(`Added EXPERIENCE_QUALIFICATION message for conversation ${conversationId}`);
+          if (currentConversation?.currentBlockId === currentBlockId) {
+            // Update conversation to EXPERIENCE_QUALIFICATION stage
+            await tx
+              .update(conversations)
+              .set({
+                currentBlockId: firstExperienceBlockId,
+                userPath: [...(conversation.userPath || []), firstExperienceBlockId],
+                updatedAt: new Date(),
+              })
+              .where(eq(conversations.id, conversationId));
+
+            // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
+            const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
+            if (experienceBlock?.message) {
+              // Check if this message already exists to prevent duplicates
+              const existingMessage = await tx.query.messages.findFirst({
+                where: and(
+                  eq(messages.conversationId, conversationId),
+                  eq(messages.type, "bot"),
+                  eq(messages.content, experienceBlock.message)
+                ),
+              });
+              
+              if (!existingMessage) {
+                await tx.insert(messages).values({
+                  conversationId: conversationId,
+                  type: "bot",
+                  content: experienceBlock.message,
+                });
+                console.log(`Added EXPERIENCE_QUALIFICATION message for conversation ${conversationId}`);
+              } else {
+                console.log(`EXPERIENCE_QUALIFICATION message already exists for conversation ${conversationId}`);
+              }
+            }
           } else {
-            console.log(`EXPERIENCE_QUALIFICATION message already exists for conversation ${conversationId}`);
+            console.log(`Conversation ${conversationId} is no longer in TRANSITION stage, skipping transition`);
           }
-        }
+        });
 
         // Reload the updated conversation
         const updatedConversation = await getConversationById(conversationId, conversation.experienceId);
