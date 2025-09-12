@@ -45,11 +45,23 @@ export async function POST(request: NextRequest) {
 
     // Determine conversation stage and status
     const currentBlockId = conversation.currentBlockId;
+    
+    // Debug logging
+    console.log(`Load-conversation API - Conversation ${conversationId}:`);
+    console.log(`  Current blockId: ${currentBlockId}`);
+    console.log(`  Available stages:`, funnelFlow.stages.map(s => ({ name: s.name, blockIds: s.blockIds })));
+    
     const isTransitionStage = currentBlockId && funnelFlow.stages.some(
       stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlockId)
     );
     const isExperienceQualificationStage = currentBlockId && funnelFlow.stages.some(
       stage => stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
+    );
+    const isPainPointQualificationStage = currentBlockId && funnelFlow.stages.some(
+      stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
+    );
+    const isOfferStage = currentBlockId && funnelFlow.stages.some(
+      stage => stage.name === "OFFER" && stage.blockIds.includes(currentBlockId)
     );
     const isWelcomeStage = currentBlockId && funnelFlow.stages.some(
       stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlockId)
@@ -57,6 +69,16 @@ export async function POST(request: NextRequest) {
     const isValueDeliveryStage = currentBlockId && funnelFlow.stages.some(
       stage => stage.name === "VALUE_DELIVERY" && stage.blockIds.includes(currentBlockId)
     );
+    
+    // Debug logging
+    console.log(`  Stage detection results:`, {
+      isTransitionStage,
+      isExperienceQualificationStage,
+      isPainPointQualificationStage,
+      isOfferStage,
+      isWelcomeStage,
+      isValueDeliveryStage
+    });
 
     // Check if conversation is in DM funnel phase (between WELCOME and VALUE_DELIVERY)
     const isDMFunnelActive = (isWelcomeStage || isValueDeliveryStage) && !isTransitionStage && !isExperienceQualificationStage;
@@ -83,14 +105,28 @@ export async function POST(request: NextRequest) {
           })
           .where(eq(conversations.id, conversationId));
 
-        // Add the EXPERIENCE_QUALIFICATION agent message
+        // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
         const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
         if (experienceBlock?.message) {
-          await db.insert(messages).values({
-            conversationId: conversationId,
-            type: "bot",
-            content: experienceBlock.message,
+          // Check if this message already exists to prevent duplicates
+          const existingMessage = await db.query.messages.findFirst({
+            where: and(
+              eq(messages.conversationId, conversationId),
+              eq(messages.type, "bot"),
+              eq(messages.content, experienceBlock.message)
+            ),
           });
+          
+          if (!existingMessage) {
+            await db.insert(messages).values({
+              conversationId: conversationId,
+              type: "bot",
+              content: experienceBlock.message,
+            });
+            console.log(`Added EXPERIENCE_QUALIFICATION message for conversation ${conversationId}`);
+          } else {
+            console.log(`EXPERIENCE_QUALIFICATION message already exists for conversation ${conversationId}`);
+          }
         }
 
         // Reload the updated conversation
@@ -115,6 +151,25 @@ export async function POST(request: NextRequest) {
     const conversationData = await getConversationById(conversationId, conversation.experienceId);
 
     if (conversationData) {
+      const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
+      
+      console.log(`Load-conversation final stage info being returned:`, {
+        currentStage: isTransitionStage ? "TRANSITION" : 
+                    isExperienceQualificationStage ? "EXPERIENCE_QUALIFICATION" :
+                    isPainPointQualificationStage ? "PAIN_POINT_QUALIFICATION" :
+                    isOfferStage ? "OFFER" :
+                    isWelcomeStage ? "WELCOME" :
+                    isValueDeliveryStage ? "VALUE_DELIVERY" : "UNKNOWN",
+        isDMFunnelActive,
+        isTransitionStage,
+        isExperienceQualificationStage: finalIsExperienceQualificationStage,
+        breakdown: {
+          isExperienceQualificationStage,
+          isPainPointQualificationStage,
+          isOfferStage
+        }
+      });
+
       return NextResponse.json({
         success: true,
         conversation: conversationData,
@@ -122,11 +177,13 @@ export async function POST(request: NextRequest) {
         stageInfo: {
           currentStage: isTransitionStage ? "TRANSITION" : 
                       isExperienceQualificationStage ? "EXPERIENCE_QUALIFICATION" :
+                      isPainPointQualificationStage ? "PAIN_POINT_QUALIFICATION" :
+                      isOfferStage ? "OFFER" :
                       isWelcomeStage ? "WELCOME" :
                       isValueDeliveryStage ? "VALUE_DELIVERY" : "UNKNOWN",
           isDMFunnelActive: isDMFunnelActive,
           isTransitionStage: isTransitionStage,
-          isExperienceQualificationStage: isExperienceQualificationStage,
+          isExperienceQualificationStage: finalIsExperienceQualificationStage,
         }
       });
     } else {

@@ -60,43 +60,78 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setIsLoading(true);
 			setError(null);
 
-			// Step 1: Load conversation and funnel data via API
-			const response = await apiPost('/api/userchat/load-conversation', {
-				conversationId: conversationId,
+			// Step 1: Check if there's an active conversation
+			const checkResponse = await apiPost('/api/userchat/check-conversation', {
 				experienceId,
 				whopUserId: whopUserId,
 			}, experienceId);
 
-			const result = await response.json();
+			const checkResult = await checkResponse.json();
 
-			if (result.success) {
+			if (checkResult.success) {
 				// Set funnel flow from API response
-				if (result.funnelFlow) {
-					setFunnelFlow(result.funnelFlow);
-				}
-
-				// Set conversation data
-				if (result.conversation) {
-					setConversation(result.conversation);
-					setConversationId(result.conversation.id);
-				} else if (result.conversationId) {
-					// If we only got a conversation ID, we'll use it
-					setConversationId(result.conversationId);
+				if (checkResult.funnelFlow) {
+					setFunnelFlow(checkResult.funnelFlow);
 				}
 
 				// Set stage information
-				if (result.stageInfo) {
-					setStageInfo(result.stageInfo);
+				if (checkResult.stageInfo) {
+					setStageInfo(checkResult.stageInfo);
 				}
 
-				console.log("CustomerView loaded real data:", {
-					experienceId,
-					conversationId: result.conversationId,
-					hasFunnelFlow: !!result.funnelFlow,
-					hasConversation: !!result.conversation,
-				});
+				// If there's an active conversation, load it
+				if (checkResult.hasActiveConversation && checkResult.conversation) {
+					setConversationId(checkResult.conversation.id);
+					
+					// Set stage info from check result first
+					if (checkResult.stageInfo) {
+						setStageInfo(checkResult.stageInfo);
+					}
+					
+					// Try to load the full conversation data
+					try {
+						const loadResponse = await apiPost('/api/userchat/load-conversation', {
+							conversationId: checkResult.conversation.id,
+							experienceId,
+							whopUserId: whopUserId,
+						}, experienceId);
+
+						const loadResult = await loadResponse.json();
+
+						if (loadResult.success) {
+							// Set conversation data
+							if (loadResult.conversation) {
+								setConversation(loadResult.conversation);
+							}
+
+							// Update stage information with latest data
+							if (loadResult.stageInfo) {
+								setStageInfo(loadResult.stageInfo);
+							}
+
+							console.log("CustomerView loaded conversation:", {
+								experienceId,
+								conversationId: checkResult.conversation.id,
+								hasFunnelFlow: !!checkResult.funnelFlow,
+								hasConversation: !!loadResult.conversation,
+								stageInfo: loadResult.stageInfo,
+							});
+						} else {
+							console.error("Failed to load conversation details:", loadResult.error);
+							// Don't clear the conversation - we still have basic info from check
+						}
+					} catch (loadError) {
+						console.error("Error loading conversation details:", loadError);
+						// Don't clear the conversation - we still have basic info from check
+					}
+				} else {
+					// No active conversation
+					setConversationId(null);
+					setConversation(null);
+					console.log("CustomerView: No active conversation found");
+				}
 			} else {
-				throw new Error(result.error || "Failed to load conversation");
+				throw new Error(checkResult.error || "Failed to check conversation status");
 			}
 		} catch (err) {
 			console.error("Error loading funnel and conversation:", err);
@@ -104,7 +139,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [experienceId, userName, conversationId, whopUserId]);
+	}, [experienceId, userName, whopUserId]);
 
 	// Admin functions
 	const checkConversationStatus = async () => {
@@ -271,17 +306,125 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// Show no funnel available state
 	if (!funnelFlow) {
+		// If user is admin, show admin controls even without funnel
+		if (userType === "admin") {
+			return (
+				<div className="h-screen w-full flex flex-col">
+					{/* Admin Controls - Show even without funnel */}
+					<div className="flex-shrink-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+						<div className="max-w-4xl mx-auto">
+							<div className="flex items-center justify-between mb-4">
+								<div className="flex items-center gap-2">
+									<Settings size={20} className="text-gray-600 dark:text-gray-400" />
+									<Text size="3" weight="semi-bold" className="text-gray-900 dark:text-gray-100">
+										Admin Controls
+									</Text>
+								</div>
+								<button
+									onClick={() => setAdminMode(!adminMode)}
+									className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+								>
+									{adminMode ? "Hide" : "Show"} Admin Panel
+								</button>
+							</div>
+
+							{adminMode && (
+								<div className="space-y-4">
+									{/* Status Display */}
+									<div className="p-3 bg-white dark:bg-gray-700 rounded-lg border">
+										<div className="flex items-center gap-2 mb-2">
+											<div className="w-2 h-2 rounded-full bg-gray-400"></div>
+											<Text size="2" className="text-gray-900 dark:text-gray-100">
+											No Active Conversation
+											</Text>
+										</div>
+										<div className="text-sm text-gray-600 dark:text-gray-400">
+											No conversation found. Use the trigger DM button to start a conversation.
+										</div>
+									</div>
+
+									{/* Action Buttons */}
+									<div className="flex gap-2">
+										<button
+											onClick={checkConversationStatus}
+											disabled={adminLoading}
+											className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+										>
+											<MessageSquare size={16} />
+											Refresh Status
+										</button>
+										
+										<button
+											onClick={triggerDMForAdmin}
+											disabled={adminLoading}
+											className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+										>
+											<Play size={16} />
+											Trigger DM (Admin)
+										</button>
+										
+										<button
+											onClick={resetConversations}
+											disabled={adminLoading}
+											className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+										>
+											<RotateCcw size={16} />
+											Reset All
+										</button>
+									</div>
+
+									{/* Admin Messages */}
+									{adminError && (
+										<div className="p-2 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
+											{adminError}
+										</div>
+									)}
+									{adminSuccess && (
+										<div className="p-2 bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300">
+											{adminSuccess}
+										</div>
+									)}
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* Main Content - No Conversation Message */}
+					<div className="flex-1 flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
+						<div className="text-center max-w-md mx-auto p-6">
+							<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+								<svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+								</svg>
+							</div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Conversation</h3>
+							<p className="text-gray-600 dark:text-gray-400 mb-4">
+								You don't have an active conversation yet.
+							</p>
+							<button
+								onClick={loadFunnelAndConversation}
+								className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+							>
+								Refresh
+							</button>
+						</div>
+					</div>
+				</div>
+			);
+		}
+
+		// For customers, show simple no conversation message
 		return (
 			<div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
 				<div className="text-center max-w-md mx-auto p-6">
-					<div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-						<svg className="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+					<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+						<svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
 						</svg>
 					</div>
-					<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Funnel Available</h3>
+					<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Conversation</h3>
 					<p className="text-gray-600 dark:text-gray-400 mb-4">
-						No active funnel found for this experience. Please contact the administrator.
+						You don't have an active conversation yet.
 					</p>
 					<button
 						onClick={loadFunnelAndConversation}
@@ -293,6 +436,23 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			</div>
 		);
 	}
+
+	// Check if we should show UserChat (for EXPERIENCE_QUALIFICATION stage or TRANSITION stage)
+	const shouldShowUserChat = stageInfo?.isExperienceQualificationStage || 
+		(stageInfo?.isTransitionStage && conversationId) || 
+		(stageInfo?.currentStage === "TRANSITION" && conversationId);
+	
+	// Debug logging
+	console.log("CustomerView render state:", {
+		hasConversation: !!conversation,
+		conversationId,
+		stageInfo,
+		shouldShowUserChat,
+		funnelFlow: !!funnelFlow,
+		userType,
+		adminMode,
+		shouldShowAdminPanel: userType === "admin"
+	});
 
 	// Render UserChat with real data
 	return (
@@ -389,16 +549,60 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				</div>
 			)}
 
-			{/* Main Chat Interface */}
+			{/* Main Content Area */}
 			<div className="flex-1 min-h-0">
-				<UserChat
-					funnelFlow={funnelFlow}
-					conversationId={conversationId || undefined}
-					conversation={conversation || undefined}
-					experienceId={experienceId}
-					onMessageSent={handleMessageSentInternal}
-					stageInfo={stageInfo || undefined}
-				/>
+				{shouldShowUserChat ? (
+					/* Show UserChat only when in EXPERIENCE_QUALIFICATION stage */
+					<UserChat
+						funnelFlow={funnelFlow}
+						conversationId={conversationId || undefined}
+						conversation={conversation || undefined}
+						experienceId={experienceId}
+						onMessageSent={handleMessageSentInternal}
+						stageInfo={stageInfo || undefined}
+					/>
+				) : (
+					/* Show appropriate message based on conversation stage */
+					<div className="h-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
+						<div className="text-center max-w-md mx-auto p-6">
+							<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+								<svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+								</svg>
+							</div>
+							
+							{stageInfo?.isDMFunnelActive ? (
+								<>
+									<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">DM Funnel Active</h3>
+									<p className="text-gray-600 dark:text-gray-400 mb-4">
+										Please check your DMs to continue the conversation.
+									</p>
+								</>
+							) : stageInfo?.isTransitionStage ? (
+								<>
+									<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Transitioning to Chat</h3>
+									<p className="text-gray-600 dark:text-gray-400 mb-4">
+										Please wait while we prepare your personalized strategy session.
+									</p>
+								</>
+							) : (
+								<>
+									<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Conversation</h3>
+									<p className="text-gray-600 dark:text-gray-400 mb-4">
+										You don't have an active conversation yet.
+									</p>
+								</>
+							)}
+							
+							<button
+								onClick={loadFunnelAndConversation}
+								className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+							>
+								Refresh
+							</button>
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);

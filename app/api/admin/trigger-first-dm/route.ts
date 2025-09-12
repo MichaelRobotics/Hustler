@@ -48,69 +48,72 @@ export async function POST(request: NextRequest) {
       throw new Error(`Experience not found for whopExperienceId: ${experienceId}`);
     }
 
-    // Step 2: Find a live funnel for this experience
+    // Step 2: Verify user has access to this Whop experience
+    try {
+      const userAccess = await whopSdk.access.checkIfUserHasAccessToExperience({
+        userId: whopUserId,
+        experienceId: experienceId,
+      });
+      
+      if (!userAccess.hasAccess || userAccess.accessLevel !== 'admin') {
+        return NextResponse.json(
+          { error: "Admin access required for this experience" },
+          { status: 403 }
+        );
+      }
+      
+      console.log(`Verified admin access for user ${whopUserId} in experience ${experienceId}`);
+    } catch (accessError) {
+      console.error(`Failed to verify user access:`, accessError);
+      return NextResponse.json(
+        { error: "Failed to verify user access to experience" },
+        { status: 403 }
+      );
+    }
+
+    // Step 3: Find a live (deployed) funnel for this experience - REQUIRED
     const liveFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.experienceId, experience.id),
-        eq(funnels.isDeployed, true) // Only use deployed funnels for real DM sending
+        eq(funnels.isDeployed, true) // Only use deployed funnels for admin DM triggering
       ),
     });
 
     if (!liveFunnel) {
-      // If no deployed funnel, try to find any funnel for admin testing
-      const anyFunnel = await db.query.funnels.findFirst({
-        where: eq(funnels.experienceId, experience.id),
-      });
-
-      if (!anyFunnel) {
-        throw new Error(`No funnels found for experience ${experienceId}. Please create a funnel first.`);
-      }
-
-      if (!anyFunnel.flow) {
-        throw new Error(`Funnel ${anyFunnel.id} has no flow. Please create a funnel flow first.`);
-      }
-
-      console.log(`Using non-deployed funnel ${anyFunnel.id} for admin testing`);
-      
-      // For admin testing with non-deployed funnel, create conversation but don't send DM
-      const [newConversation] = await db
-        .insert(conversations)
-        .values({
-          experienceId: experience.id,
-          funnelId: anyFunnel.id,
-          status: "active",
-          currentBlockId: anyFunnel.flow.startBlockId,
-          userPath: [anyFunnel.flow.startBlockId],
-          metadata: {
-            type: "admin_triggered",
-            phase: "welcome",
-            adminUserId: whopUserId,
-            whopExperienceId: experienceId,
-            createdAt: new Date().toISOString(),
-          },
-        })
-        .returning();
-
-      return NextResponse.json({
-        success: true,
-        message: "Admin conversation created (no DM sent - funnel not deployed)",
-        conversationId: newConversation.id,
-        whopUserId,
-        experienceId,
-        adminMode: true,
-        dmSent: false
-      });
+      return NextResponse.json(
+        { 
+          error: "No live funnel found",
+          details: `No deployed funnel found for experience ${experienceId}. Please deploy a funnel first.`
+        },
+        { status: 400 }
+      );
     }
 
-    // Step 3: Extract welcome message from funnel flow
+    if (!liveFunnel.flow) {
+      return NextResponse.json(
+        { 
+          error: "Invalid funnel configuration",
+          details: `Funnel ${liveFunnel.id} has no flow. Please create a funnel flow first.`
+        },
+        { status: 400 }
+      );
+    }
+
+    // Step 4: Extract welcome message from funnel flow
     const funnelFlow = liveFunnel.flow as FunnelFlow;
     const welcomeMessage = getWelcomeMessage(funnelFlow);
     
     if (!welcomeMessage) {
-      throw new Error(`No welcome message found in funnel ${liveFunnel.id}`);
+      return NextResponse.json(
+        { 
+          error: "Invalid funnel configuration",
+          details: `No welcome message found in funnel ${liveFunnel.id}. Please check your funnel flow.`
+        },
+        { status: 400 }
+      );
     }
 
-    // Step 4: Send real DM using Whop SDK (EXACT SAME as real customers)
+    // Step 5: Send real DM using Whop SDK - REQUIRED for admin
     console.log(`Sending real DM to admin user ${whopUserId}: ${welcomeMessage}`);
     
     let dmSent = false;
@@ -124,41 +127,47 @@ export async function POST(request: NextRequest) {
       dmSent = true;
     } catch (dmError) {
       console.error(`Failed to send DM to admin user ${whopUserId}:`, dmError);
-      console.log(`DM sending failed for admin user - this is expected for admin testing`);
+      return NextResponse.json(
+        { 
+          error: "Failed to send DM",
+          details: `Could not send DM to user ${whopUserId}. Please check your Whop configuration and try again.`,
+          whopError: dmError instanceof Error ? dmError.message : "Unknown Whop error"
+        },
+        { status: 500 }
+      );
     }
 
-    // Step 5: Get the member ID from the DM conversation
+    // Step 6: Get the member ID from the DM conversation
     let memberId = null;
-    if (dmSent) {
-      try {
-        // Wait a moment for the DM conversation to be created
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Get the DM conversations to find the new one
-        const dmConversations = await whopSdk.messages.listDirectMessageConversations();
-        const newConversation = dmConversations.find(conv => 
-          conv.feedMembers.some(member => 
-            // Look for a conversation where one member is the agent and the other is our user
-            member.username === 'tests-agentb2' // Agent username
-          ) && conv.lastMessage?.content?.includes('Welcome, [Username]!')
+    try {
+      // Wait a moment for the DM conversation to be created
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Get the DM conversations to find the new one
+      const dmConversations = await whopSdk.messages.listDirectMessageConversations();
+      const newConversation = dmConversations.find(conv => 
+        conv.feedMembers.some(member => 
+          // Look for a conversation where one member is the agent and the other is our user
+          member.username === 'tests-agentb2' // Agent username
+        ) && conv.lastMessage?.content?.includes('Welcome, [Username]!')
+      );
+      
+      if (newConversation) {
+        // Find the member ID for our user (not the agent)
+        const userMember = newConversation.feedMembers.find(member => 
+          member.username !== 'tests-agentb2'
         );
-        
-        if (newConversation) {
-          // Find the member ID for our user (not the agent)
-          const userMember = newConversation.feedMembers.find(member => 
-            member.username !== 'tests-agentb2'
-          );
-          if (userMember) {
-            memberId = userMember.id;
-            console.log(`Found member ID for user ${whopUserId}: ${memberId}`);
-          }
+        if (userMember) {
+          memberId = userMember.id;
+          console.log(`Found member ID for user ${whopUserId}: ${memberId}`);
         }
-      } catch (error) {
-        console.error('Error getting member ID:', error);
       }
+    } catch (error) {
+      console.error('Error getting member ID:', error);
+      // Continue without member ID - not critical for conversation creation
     }
 
-    // Step 6: Find or create user for conversation binding
+    // Step 7: Find or create user for conversation binding
     const userId = await findOrCreateUserForConversation(
       whopUserId,
       experience.id,
@@ -168,55 +177,36 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Step 7: Close any existing active conversations for this admin user
+    // Step 8: Close any existing active conversations for this admin user
     await closeExistingActiveConversationsByWhopUserId(whopUserId, experience.id);
 
-    // Step 8: Create DM conversation record (EXACT SAME as real customers)
+    // Step 9: Create DM conversation record (EXACT SAME as real customers)
     const [newConversation] = await db
       .insert(conversations)
       .values({
         experienceId: experience.id,
         funnelId: liveFunnel.id,
-        userId: userId, // Direct user reference
         whopUserId: whopUserId, // Direct Whop user ID for faster lookups
         status: "active",
         currentBlockId: funnelFlow.startBlockId,
         userPath: [funnelFlow.startBlockId],
-        metadata: {
-          type: "dm", // Use "dm" type like real customers, not "admin_triggered"
-          phase: "welcome",
-          whopUserId: whopUserId, // Store as whopUserId like real customers
-          whopMemberId: memberId, // Store member ID for DM monitoring
-          whopProductId: experienceId,
-          adminTriggered: true, // Add flag to identify admin-triggered conversations
-          createdAt: new Date().toISOString(),
-        },
       })
       .returning();
 
     const conversationId = newConversation.id;
 
-    // Step 9: Record welcome message in database
-    if (dmSent) {
-      await db.insert(messages).values({
-        conversationId: conversationId,
-        type: "bot",
-        content: welcomeMessage,
-        metadata: {
-          blockId: funnelFlow.startBlockId,
-          timestamp: new Date().toISOString(),
-          dmPhase: true,
-          welcomeMessage: true,
-          adminTriggered: true,
-        },
-      });
+    // Step 10: Record welcome message in database (DM was sent successfully)
+    await db.insert(messages).values({
+      conversationId: conversationId,
+      type: "bot",
+      content: welcomeMessage,
+    });
 
-      console.log(`Recorded welcome message in admin conversation ${conversationId}`);
-    }
+    console.log(`Recorded welcome message in admin conversation ${conversationId}`);
 
     console.log(`Successfully created DM conversation for admin. Conversation ID: ${conversationId}, Member ID: ${memberId}`);
 
-    // Step 6: Start DM monitoring (EXACT SAME as customer flow)
+    // Step 11: Start DM monitoring (EXACT SAME as customer flow)
     // Admin will experience the same DM response flow as customers
     const dmMonitoringService = new DMMonitoringService();
     await dmMonitoringService.startMonitoring(conversationId, whopUserId);
@@ -225,14 +215,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: dmSent 
-        ? "First DM sent successfully and conversation created (EXACT SAME as customer flow)" 
-        : "Conversation created (DM sending failed - admin can still test DM responses)",
+      message: "Admin DM sent successfully and conversation created",
       conversationId: conversationId,
       whopUserId,
       experienceId,
       adminMode: true,
-      dmSent: dmSent,
+      dmSent: true, // Always true now since we require DM sending
       welcomeMessage: welcomeMessage,
       monitoringStarted: true
     });

@@ -126,20 +126,8 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 								target: "everyone",
 							});
 							
-							// Also trigger the onMessage callback directly to ensure it's received
-							const chatMessage: UserChatMessage = {
-								id: `bot-${Date.now()}`,
-								type: "bot",
-								content: result.funnelResponse.botMessage,
-								metadata: {
-									blockId: result.funnelResponse.nextBlockId,
-									timestamp: new Date().toISOString(),
-								},
-								createdAt: new Date(),
-								timestamp: new Date(),
-							};
-							
-							config.onMessage?.(chatMessage);
+							// Don't call onMessage here - let the WebSocket message handler do it
+							// This prevents duplicate messages
 						}
 					} else {
 						console.error("Failed to process message through funnel:", response.statusText);

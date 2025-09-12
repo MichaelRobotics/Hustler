@@ -185,6 +185,7 @@ export class DMMonitoringService {
 			console.log(`DM monitoring for conversation ${conversationId}:`);
 			console.log(`  Found ${dmConversations.length} DM conversations`);
 			console.log(`  Looking for conversation with user: ${whopUserId}`);
+			console.log(`  Conversation whopUserId: ${conversation.whopUserId}`);
 			
 			// Log all conversations and their members for debugging
 			dmConversations.forEach((conv, index) => {
@@ -193,17 +194,24 @@ export class DMMonitoringService {
 				console.log(`    Last message:`, conv.lastMessage);
 			});
 			
-			// Get the member ID from conversation metadata
-			const conversationRecord = await db.query.conversations.findFirst({
-				where: eq(conversations.id, conversationId),
+			// Find conversation by looking for the user in feedMembers
+			// We need to find a conversation where one member is the agent and the other is our user
+			const userConversation = dmConversations.find(conv => {
+				// Look for conversations with the agent (tests-agentb2) and our user
+				const hasAgent = conv.feedMembers.some(member => member.username === 'tests-agentb2');
+				
+				// Check if any member matches our user (by username or ID)
+				const hasUser = conv.feedMembers.some(member => 
+					member.username === whopUserId || 
+					member.id === whopUserId
+				);
+				
+				// Also check if the last message is from our user (by user ID)
+				const lastMessageFromUser = conv.lastMessage && conv.lastMessage.userId === whopUserId;
+				
+				// Return true if we have agent + (user member OR last message from user)
+				return hasAgent && (hasUser || lastMessageFromUser);
 			});
-			
-			const memberId = conversationRecord?.metadata?.whopMemberId;
-			
-			// Find conversation with this member ID
-			const userConversation = memberId ? dmConversations.find(conv => 
-				conv.feedMembers.some(p => p.id === memberId)
-			) : null;
 
 			if (!userConversation) {
 				console.log(`No DM conversation found with user ${whopUserId}`);
@@ -214,15 +222,35 @@ export class DMMonitoringService {
 			console.log(`  Last message:`, userConversation.lastMessage);
 
 			// Check if there's a new message from the user
-			if (userConversation.lastMessage && userConversation.lastMessage.userId === whopUserId && userConversation.lastMessage.content) {
-				console.log(`  New message from user ${whopUserId}: "${userConversation.lastMessage.content}"`);
+			// We need to check if the last message is from our user
+			// The whopUserId might be a username, but lastMessage.userId is the actual user ID
+			const lastMessage = userConversation.lastMessage;
+			const isMessageFromUser = lastMessage && lastMessage.userId === whopUserId;
+			
+			// Also check if any member has the whopUserId as their ID (in case whopUserId is actually a user ID)
+			const userMember = userConversation.feedMembers.find(member => 
+				member.id === whopUserId || member.username === whopUserId
+			);
+			const isMessageFromUserMember = lastMessage && userMember && lastMessage.userId === userMember.id;
+			
+			console.log(`  Debug - whopUserId: ${whopUserId}`);
+			console.log(`  Debug - userMember: ${userMember ? `${userMember.username} (${userMember.id})` : 'not found'}`);
+			console.log(`  Debug - lastMessage.userId: ${lastMessage?.userId}`);
+			console.log(`  Debug - isMessageFromUser: ${isMessageFromUser}`);
+			console.log(`  Debug - isMessageFromUserMember: ${isMessageFromUserMember}`);
+			
+			if (lastMessage && (isMessageFromUser || isMessageFromUserMember) && lastMessage.content) {
+				console.log(`  New message from user ${whopUserId}: "${lastMessage.content}"`);
+				console.log(`  Message user ID: ${lastMessage.userId}`);
+				console.log(`  User member ID: ${userMember?.id}`);
 				
 				// Process the new message
-				await this.handleDMResponse(conversationId, userConversation.lastMessage.content, whopUserId);
+				await this.handleDMResponse(conversationId, lastMessage.content, whopUserId);
 			} else {
 				console.log(`  No new messages from user ${whopUserId}`);
-				console.log(`  Last message user ID: ${userConversation.lastMessage?.userId}`);
+				console.log(`  Last message user ID: ${lastMessage?.userId}`);
 				console.log(`  Looking for user ID: ${whopUserId}`);
+				console.log(`  User member found: ${!!userMember}`);
 			}
 
 		} catch (error) {
@@ -313,24 +341,34 @@ export class DMMonitoringService {
 			// Validate user response
 			const validationResult = this.validateUserResponse(userMessage, currentBlock);
 
-			if (!validationResult.isValid) {
-				// Handle invalid response with progressive error handling
-				const metadata = conversation.metadata as any || {};
-				const currentInvalidCount = metadata.invalidResponseCount || 0;
-				const newInvalidCount = currentInvalidCount + 1;
-
-				await this.handleInvalidResponse(conversationId, newInvalidCount);
-				return;
-			}
+		if (!validationResult.isValid) {
+			// Handle invalid response with progressive error handling
+			// For now, we'll use a simple approach without metadata tracking
+			await this.handleInvalidResponse(conversationId, 1);
+			return;
+		}
 
 			// Reset invalid response count on valid response
 			await this.resetInvalidResponseCount(conversationId);
 
 			// Navigate to next block
 			if (validationResult.selectedOption) {
+				const nextBlockId = validationResult.selectedOption.nextBlockId;
+				
+				// Check if the next block is a TRANSITION block - if so, stop monitoring immediately
+				if (nextBlockId) {
+					const funnelFlow = conversation.funnel.flow as FunnelFlow;
+					const nextBlock = funnelFlow.blocks[nextBlockId];
+					
+					if (nextBlock && this.isTransitionBlock(nextBlock, funnelFlow)) {
+						console.log(`Next block is TRANSITION stage - stopping DM monitoring for conversation ${conversationId}`);
+						await this.stopMonitoring(conversationId);
+					}
+				}
+				
 				await this.navigateToNextBlock(
 					conversationId,
-					validationResult.selectedOption.nextBlockId,
+					nextBlockId,
 					validationResult.selectedOption.text
 				);
 			}
@@ -450,14 +488,25 @@ export class DMMonitoringService {
 			await updateConversationBlock(conversationId, nextBlockId, updatedUserPath);
 		}
 
-			// Handle end of funnel or send next message
-			if (!nextBlockId) {
-				// End of funnel
-				await this.handleEndOfFunnel(conversation);
-			} else {
-				// Send next message
-				await this.sendNextMessage(conversation, nextBlockId);
+		// Check if we've reached a TRANSITION block - if so, stop monitoring immediately
+		if (nextBlockId) {
+			const funnelFlow = conversation.funnel.flow as FunnelFlow;
+			const nextBlock = funnelFlow.blocks[nextBlockId];
+			
+			if (nextBlock && this.isTransitionBlock(nextBlock, funnelFlow)) {
+				console.log(`Reached TRANSITION stage - stopping DM monitoring for conversation ${conversationId}`);
+				await this.stopMonitoring(conversationId);
 			}
+		}
+
+		// Handle end of funnel or send next message
+		if (!nextBlockId) {
+			// End of funnel
+			await this.handleEndOfFunnel(conversation);
+		} else {
+			// Send next message
+			await this.sendNextMessage(conversation, nextBlockId);
+		}
 
 		} catch (error) {
 			console.error(`Error navigating to next block for conversation ${conversationId}:`, error);
@@ -480,23 +529,35 @@ export class DMMonitoringService {
 				return;
 			}
 
-			// Get user ID from metadata
-			const whopUserId = conversation.metadata?.whopUserId;
+			// Get user ID from conversation record
+			const whopUserId = conversation.whopUserId;
 			if (!whopUserId) {
-				console.error("Whop user ID not found in conversation metadata");
+				console.error("Whop user ID not found in conversation");
 				return;
+			}
+
+			// Get the message content from the block
+			const messageContent = nextBlock.message || "Please select an option:";
+			
+			// Add options to the message if they exist
+			let fullMessage = messageContent;
+			if (nextBlock.options && nextBlock.options.length > 0) {
+				fullMessage += "\n\nPlease choose one of the following options:\n";
+				nextBlock.options.forEach((option, index) => {
+					fullMessage += `${index + 1}. ${option.text}\n`;
+				});
 			}
 
 			// Send message to user
 			await whopSdk.messages.sendDirectMessageToUser({
 				toUserIdOrUsername: whopUserId,
-				message: nextBlock.message,
+				message: fullMessage,
 			});
 
 			// Record bot message in database
-			await addMessage(conversation.id, "bot", nextBlock.message);
+			await addMessage(conversation.id, "bot", fullMessage);
 
-			console.log(`Sent and recorded next message to user ${whopUserId} for block ${nextBlockId}`);
+			console.log(`Sent and recorded next message to user ${whopUserId} for block ${nextBlockId}: ${fullMessage}`);
 
 		} catch (error) {
 			console.error(`Error sending next message for conversation ${conversation.id}:`, error);
@@ -636,9 +697,9 @@ export class DMMonitoringService {
 	 */
 	private async sendErrorMessage(conversation: any, errorMessage: string): Promise<void> {
 		try {
-			const whopUserId = conversation.metadata?.whopUserId;
+			const whopUserId = conversation.whopUserId;
 			if (!whopUserId) {
-				console.error("Whop user ID not found in conversation metadata");
+				console.error("Whop user ID not found in conversation");
 				return;
 			}
 
@@ -676,11 +737,6 @@ export class DMMonitoringService {
 				return;
 			}
 
-			// Update invalid response count in metadata
-			const metadata = conversation.metadata as any || {};
-			metadata.invalidResponseCount = attemptCount;
-			metadata.lastInvalidResponseAt = new Date().toISOString();
-
 			// Determine error message based on attempt count
 			let errorMessage: string;
 			if (attemptCount === 1) {
@@ -694,10 +750,9 @@ export class DMMonitoringService {
 				return;
 			}
 
-			// Update conversation metadata
+			// Update conversation timestamp
 			await db.update(conversations)
 				.set({
-					metadata: metadata,
 					updatedAt: new Date(),
 				})
 				.where(eq(conversations.id, conversationId));
@@ -730,15 +785,10 @@ export class DMMonitoringService {
 				return;
 			}
 
-			// Update conversation status and metadata
-			const metadata = conversation.metadata as any || {};
-			metadata.abandonmentReason = reason;
-			metadata.abandonedAt = new Date().toISOString();
-
+			// Update conversation status
 			await db.update(conversations)
 				.set({
 					status: "abandoned",
-					metadata: metadata,
 					updatedAt: new Date(),
 				})
 				.where(eq(conversations.id, conversationId));
@@ -747,7 +797,7 @@ export class DMMonitoringService {
 			await this.stopMonitoring(conversationId);
 
 			// Send final message to user if they haven't been abandoned due to timeout
-			if (reason !== "timeout" && conversation.metadata?.whopUserId) {
+			if (reason !== "timeout" && conversation.whopUserId) {
 				await this.sendErrorMessage(conversation, ERROR_MESSAGES.THIRD_ATTEMPT);
 			}
 
@@ -765,28 +815,14 @@ export class DMMonitoringService {
 	 */
 	async resetInvalidResponseCount(conversationId: string): Promise<void> {
 		try {
-			const conversation = await db.query.conversations.findFirst({
-				where: eq(conversations.id, conversationId),
-			});
+			// Update conversation timestamp to reset timeout
+			await db.update(conversations)
+				.set({
+					updatedAt: new Date(),
+				})
+				.where(eq(conversations.id, conversationId));
 
-			if (!conversation) {
-				return;
-			}
-
-			const metadata = conversation.metadata as any || {};
-			if (metadata.invalidResponseCount > 0) {
-				metadata.invalidResponseCount = 0;
-				metadata.lastValidResponseAt = new Date().toISOString();
-
-				await db.update(conversations)
-					.set({
-						metadata: metadata,
-						updatedAt: new Date(),
-					})
-					.where(eq(conversations.id, conversationId));
-
-				console.log(`Reset invalid response count for conversation ${conversationId}`);
-			}
+			console.log(`Reset invalid response count for conversation ${conversationId}`);
 		} catch (error) {
 			console.error(`Error resetting invalid response count for conversation ${conversationId}:`, error);
 		}

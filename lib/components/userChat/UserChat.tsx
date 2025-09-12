@@ -73,13 +73,10 @@ const UserChat: React.FC<UserChatProps> = ({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
-			setConversationMessages(prev => [...prev, {
-				id: newMessage.id,
-				type: newMessage.type,
-				content: newMessage.content,
-				metadata: newMessage.metadata,
-				createdAt: newMessage.createdAt,
-			}]);
+			console.log("UserChat: Received WebSocket message:", newMessage);
+			// Instead of adding to local state, refresh the entire conversation
+			// This ensures we get the latest state from the database
+			refreshConversation();
 			scrollToBottom();
 		},
 		onTyping: (isTyping, userId) => {
@@ -103,8 +100,39 @@ const UserChat: React.FC<UserChatProps> = ({
 				createdAt: msg.createdAt,
 			}));
 			setConversationMessages(formattedMessages);
+			console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
 		}
 	}, [conversation?.messages]);
+
+	// Refresh conversation data when WebSocket receives new messages
+	const refreshConversation = useCallback(async () => {
+		if (!conversationId || !experienceId) return;
+		
+		try {
+			console.log("UserChat: Refreshing conversation data...");
+			const response = await apiPost('/api/userchat/load-conversation', {
+				conversationId,
+				experienceId,
+			}, experienceId);
+			
+			if (response.ok) {
+				const result = await response.json();
+				if (result.success && result.conversation?.messages) {
+					const formattedMessages = result.conversation.messages.map((msg: any) => ({
+						id: msg.id,
+						type: msg.type,
+						content: msg.content,
+						metadata: msg.metadata,
+						createdAt: msg.createdAt,
+					}));
+					setConversationMessages(formattedMessages);
+					console.log("UserChat: Refreshed conversation messages:", formattedMessages.length);
+				}
+			}
+		} catch (error) {
+			console.error("UserChat: Error refreshing conversation:", error);
+		}
+	}, [conversationId, experienceId]);
 
 	// Get current block ID from conversation state (not from preview hook)
 	const currentBlockId = conversation?.currentBlockId || null;
@@ -136,16 +164,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
 		// Handle conversation-based chat
 		if (conversationId && experienceId && isConnected) {
-			// Add user message to local state immediately
-			const userMessage = {
-				id: `temp-${Date.now()}`,
-				type: "user" as const,
-				content: messageContent,
-				createdAt: new Date(),
-			};
-			setConversationMessages(prev => [...prev, userMessage]);
-
-			// Send via WebSocket
+			// Send via WebSocket (this will trigger a conversation refresh)
 			await sendMessage(messageContent, "user");
 
 			// Handle funnel navigation if current block has options
@@ -189,19 +208,9 @@ const UserChat: React.FC<UserChatProps> = ({
 		const result = await response.json();
 
 			if (result.success && result.conversation) {
-				// Add bot response
-				const nextBlock = option.nextBlockId ? funnelFlow.blocks[option.nextBlockId] : null;
-				if (nextBlock) {
-					const botMessage = {
-						id: `bot-${Date.now()}`,
-						type: "bot" as const,
-						content: nextBlock.message || "Thank you for your response.",
-						createdAt: new Date(),
-					};
-					setConversationMessages(prev => [...prev, botMessage]);
-					await sendMessage(botMessage.content, "bot");
-				}
-
+				// The conversation will be refreshed via WebSocket
+				// No need to add messages locally
+				
 				// Check for funnel completion
 				if (option.nextBlockId === "COMPLETED" || result.conversation.status === "completed") {
 					await handleFunnelCompletion();
@@ -214,14 +223,8 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Handle invalid response
 	const handleInvalidResponse = useCallback(async (userInput: string) => {
-		const errorMessage = {
-			id: `error-${Date.now()}`,
-			type: "bot" as const,
-			content: "Please choose from the provided options above.",
-			createdAt: new Date(),
-		};
-		setConversationMessages(prev => [...prev, errorMessage]);
-		await sendMessage(errorMessage.content, "bot");
+		// Send error message via WebSocket (this will trigger a conversation refresh)
+		await sendMessage("Please choose from the provided options above.", "bot");
 	}, [sendMessage]);
 
 	// Handle funnel completion
