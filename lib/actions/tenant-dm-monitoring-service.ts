@@ -383,22 +383,20 @@ class TenantDMMonitoringService {
         return;
       }
 
-      // Check if this is a TRANSITION block - stop monitoring if so
-      if (currentBlock.type === 'TRANSITION') {
-        console.log(`[Tenant ${this.tenantId}] Conversation reached TRANSITION stage, stopping DM monitoring`);
+      // Check if this is a TRANSITION block - send transition message and stop monitoring
+      if (this.isTransitionBlock(currentBlock, funnelFlow)) {
+        console.log(`[Tenant ${this.tenantId}] Conversation reached TRANSITION stage, sending transition message`);
+        await this.sendTransitionMessage(conversationId, currentBlock);
         await this.stopMonitoring(conversationId);
         return;
       }
 
-      // Find matching option
-      const matchingOption = currentBlock.options?.find(option => 
-        option.text.toLowerCase().trim() === messageContent.toLowerCase().trim() ||
-        option.value.toLowerCase().trim() === messageContent.toLowerCase().trim()
-      );
+      // Validate user response using proper validation logic
+      const validationResult = this.validateUserResponse(messageContent, currentBlock);
 
-      if (matchingOption) {
+      if (validationResult.isValid && validationResult.selectedOption) {
         // Valid response - navigate to next block
-        await this.navigateToNextBlock(conversationId, matchingOption, funnelFlow);
+        await this.navigateToNextBlock(conversationId, validationResult.selectedOption, funnelFlow);
       } else {
         // Invalid response - handle progressively
         await this.handleInvalidResponse(conversationId, messageContent);
@@ -430,8 +428,22 @@ class TenantDMMonitoringService {
         return;
       }
 
+      // Get current conversation state
+      const conversation = await db.query.conversations.findFirst({
+        where: and(
+          eq(conversations.id, conversationId),
+          eq(conversations.experienceId, this.experienceId)
+        ),
+      });
+
+      if (!conversation) {
+        console.error(`[Tenant ${this.tenantId}] Conversation ${conversationId} not found`);
+        return;
+      }
+
       // Update conversation block
-      await updateConversationBlock(conversationId, nextBlockId);
+      const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
+      await updateConversationBlock(conversationId, nextBlockId, updatedUserPath);
 
       // Add user message
       await addMessage(conversationId, "user", selectedOption.text);
@@ -439,9 +451,10 @@ class TenantDMMonitoringService {
       // Add bot response
       await addMessage(conversationId, "bot", nextBlock.message);
 
-      // Check if this is a TRANSITION block - stop monitoring if so
-      if (nextBlock.type === 'TRANSITION') {
-        console.log(`[Tenant ${this.tenantId}] Conversation reached TRANSITION stage, stopping DM monitoring`);
+      // Check if this is a TRANSITION block - send transition message and stop monitoring
+      if (this.isTransitionBlock(nextBlock, funnelFlow)) {
+        console.log(`[Tenant ${this.tenantId}] Conversation reached TRANSITION stage, sending transition message`);
+        await this.sendTransitionMessage(conversationId, nextBlock);
         await this.stopMonitoring(conversationId);
         return;
       }
@@ -468,6 +481,25 @@ class TenantDMMonitoringService {
       // Record the request
       this.rateLimiter.recordRequest(this.tenantId);
 
+      // Get conversation to get whopUserId
+      const conversation = await db.query.conversations.findFirst({
+        where: and(
+          eq(conversations.id, conversationId),
+          eq(conversations.experienceId, this.experienceId)
+        ),
+      });
+
+      if (!conversation) {
+        console.error(`[Tenant ${this.tenantId}] Conversation ${conversationId} not found`);
+        return;
+      }
+
+      const whopUserId = conversation.whopUserId;
+      if (!whopUserId) {
+        console.error(`[Tenant ${this.tenantId}] Whop user ID not found in conversation`);
+        return;
+      }
+
       // Format message with options
       let message = nextBlock.message;
       if (nextBlock.options && nextBlock.options.length > 0) {
@@ -478,8 +510,15 @@ class TenantDMMonitoringService {
       }
 
       // Send DM to user
-      // Note: This would need to be implemented based on your DM sending mechanism
-      console.log(`[Tenant ${this.tenantId}] Would send DM: ${message}`);
+      await whopSdk.messages.sendDirectMessageToUser({
+        toUserIdOrUsername: whopUserId,
+        message: message,
+      });
+
+      // Record bot message in database
+      await addMessage(conversationId, "bot", message);
+
+      console.log(`[Tenant ${this.tenantId}] Sent and recorded DM to user ${whopUserId}: ${message}`);
 
     } catch (error) {
       console.error(`[Tenant ${this.tenantId}] Error sending next message:`, error);
@@ -494,11 +533,36 @@ class TenantDMMonitoringService {
       // Add user message
       await addMessage(conversationId, "user", messageContent);
 
-      // Add error message
-      await addMessage(conversationId, "bot", "Please choose from the provided options above.");
+      // Get conversation to get whopUserId
+      const conversation = await db.query.conversations.findFirst({
+        where: and(
+          eq(conversations.id, conversationId),
+          eq(conversations.experienceId, this.experienceId)
+        ),
+      });
+
+      if (!conversation) {
+        console.error(`[Tenant ${this.tenantId}] Conversation ${conversationId} not found`);
+        return;
+      }
+
+      const whopUserId = conversation.whopUserId;
+      if (!whopUserId) {
+        console.error(`[Tenant ${this.tenantId}] Whop user ID not found in conversation`);
+        return;
+      }
 
       // Send error message to user via DM
-      console.log(`[Tenant ${this.tenantId}] Would send error DM for invalid response: ${messageContent}`);
+      const errorMessage = "Please choose from the provided options above.";
+      await whopSdk.messages.sendDirectMessageToUser({
+        toUserIdOrUsername: whopUserId,
+        message: errorMessage,
+      });
+
+      // Add error message to database
+      await addMessage(conversationId, "bot", errorMessage);
+
+      console.log(`[Tenant ${this.tenantId}] Sent error DM to user ${whopUserId}: ${errorMessage}`);
 
     } catch (error) {
       console.error(`[Tenant ${this.tenantId}] Error handling invalid response:`, error);
@@ -510,6 +574,152 @@ class TenantDMMonitoringService {
    */
   getMonitoringStatus(): Map<string, boolean> {
     return new Map(this.pollingStatus);
+  }
+
+  /**
+   * Check if a block is a TRANSITION block (end of Funnel 1)
+   * 
+   * @param block - Funnel block to check
+   * @param funnelFlow - Complete funnel flow
+   * @returns True if this is a TRANSITION block
+   */
+  private isTransitionBlock(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
+    // Check if the block is in a TRANSITION stage
+    return funnelFlow.stages.some(stage => 
+      stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+    );
+  }
+
+  /**
+   * Validate user response against current block options
+   * 
+   * @param userMessage - User's message
+   * @param currentBlock - Current funnel block
+   * @returns Validation result with selected option
+   */
+  private validateUserResponse(
+    userMessage: string, 
+    currentBlock: FunnelBlock
+  ): {
+    isValid: boolean;
+    selectedOption?: FunnelBlockOption;
+    errorMessage?: string;
+  } {
+    try {
+      // Normalize user input
+      const normalizedInput = this.normalizeInput(userMessage);
+
+      // Check for exact text matches (case-insensitive)
+      for (const option of currentBlock.options) {
+        if (this.normalizeInput(option.text) === normalizedInput) {
+          return {
+            isValid: true,
+            selectedOption: option,
+          };
+        }
+      }
+
+      // Check for number selection (1, 2, 3...)
+      const numberMatch = normalizedInput.match(/^(\d+)$/);
+      if (numberMatch) {
+        const optionIndex = parseInt(numberMatch[1]) - 1;
+        if (optionIndex >= 0 && optionIndex < currentBlock.options.length) {
+          return {
+            isValid: true,
+            selectedOption: currentBlock.options[optionIndex],
+          };
+        }
+      }
+
+      // Invalid response
+      return {
+        isValid: false,
+        errorMessage: `Please select one of the following options:\n${currentBlock.options.map((opt, i) => `${i + 1}. ${opt.text}`).join('\n')}`,
+      };
+
+    } catch (error) {
+      console.error(`[Tenant ${this.tenantId}] Error validating user response:`, error);
+      return {
+        isValid: false,
+        errorMessage: "Invalid response. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Normalize input for comparison
+   * 
+   * @param input - Input string to normalize
+   * @returns Normalized input
+   */
+  private normalizeInput(input: string): string {
+    return input
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .replace(/[^\w\s]/g, ''); // Remove special characters
+  }
+
+  /**
+   * Send transition message to user via DM
+   * 
+   * @param conversationId - Conversation ID
+   * @param transitionBlock - The transition block containing the message
+   */
+  private async sendTransitionMessage(conversationId: string, transitionBlock: FunnelBlock): Promise<void> {
+    try {
+      // Get conversation to get whopUserId
+      const conversation = await db.query.conversations.findFirst({
+        where: and(
+          eq(conversations.id, conversationId),
+          eq(conversations.experienceId, this.experienceId)
+        ),
+      });
+
+      if (!conversation) {
+        console.error(`[Tenant ${this.tenantId}] Conversation ${conversationId} not found for transition message`);
+        return;
+      }
+
+      const whopUserId = conversation.whopUserId;
+      if (!whopUserId) {
+        console.error(`[Tenant ${this.tenantId}] Whop user ID not found in conversation for transition message`);
+        return;
+      }
+
+      // Generate chat link for the transition
+      const chatLink = await this.generateChatLink(conversationId, this.experienceId);
+      const personalizedMessage = transitionBlock.message.replace(
+        /\[LINK_TO_PRIVATE_CHAT\]/g,
+        chatLink
+      );
+
+      // Send transition message via DM
+      await whopSdk.messages.sendDirectMessageToUser({
+        toUserIdOrUsername: whopUserId,
+        message: personalizedMessage,
+      });
+
+      // Record transition message in database
+      await addMessage(conversationId, "bot", personalizedMessage);
+
+      console.log(`[Tenant ${this.tenantId}] Sent transition DM to user ${whopUserId}: ${personalizedMessage}`);
+
+    } catch (error) {
+      console.error(`[Tenant ${this.tenantId}] Error sending transition message:`, error);
+    }
+  }
+
+  /**
+   * Generate chat link for conversation
+   * 
+   * @param conversationId - Conversation ID
+   * @param experienceId - Experience ID
+   * @returns Chat link URL
+   */
+  private async generateChatLink(conversationId: string, experienceId: string): Promise<string> {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000";
+    return `${baseUrl}/experiences/${experienceId}/chat/${conversationId}`;
   }
 
   /**

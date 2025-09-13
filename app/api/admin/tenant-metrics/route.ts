@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateToken } from "@/lib/whop-sdk";
+import { validateToken } from "@whop-apps/sdk";
 import { tenantMetricsCollector } from "@/lib/monitoring/tenant-metrics";
 
 /**
