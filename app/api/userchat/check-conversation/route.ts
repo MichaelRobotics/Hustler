@@ -8,7 +8,9 @@ import type { FunnelFlow } from "@/lib/types/funnel";
 
 export async function POST(request: NextRequest) {
   try {
-    const { experienceId, whopUserId } = await request.json();
+    // Get experienceId from query parameters (following same pattern as /api/user/context)
+    const { searchParams } = new URL(request.url);
+    const experienceId = searchParams.get("experienceId");
 
     if (!experienceId) {
       return NextResponse.json(
@@ -28,12 +30,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use the provided whopUserId or fall back to authenticated user
-    const targetWhopUserId = whopUserId || authenticatedWhopUserId;
+    // Validate user access to the experience (following Whop SDK pattern)
+    const experienceAccess = await whopSdk.access.checkIfUserHasAccessToExperience({
+      userId: authenticatedWhopUserId,
+      experienceId: experienceId,
+    });
+
+    if (!experienceAccess.hasAccess) {
+      return NextResponse.json(
+        { error: "Access denied to experience" },
+        { status: 403 }
+      );
+    }
+
+    // Use the authenticated user ID
+    const targetWhopUserId = authenticatedWhopUserId;
+    
+    // Debug logging for authentication
+    console.log(`[check-conversation] Debug - experienceId from query: ${experienceId}`);
+    console.log(`[check-conversation] Debug - authenticatedWhopUserId from session: ${authenticatedWhopUserId}`);
+    console.log(`[check-conversation] Debug - accessLevel: ${experienceAccess.accessLevel}`);
 
     // Get the experience record
     const experience = await db.query.experiences.findFirst({
       where: eq(experiences.whopExperienceId, experienceId),
+    });
+    
+    console.log(`[check-conversation] Debug - Found experience:`, {
+      id: experience?.id,
+      whopExperienceId: experience?.whopExperienceId,
+      name: experience?.name
     });
 
     if (!experience) {
@@ -44,7 +70,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for active conversation for this user in this experience
-    const activeConversation = await db.query.conversations.findFirst({
+    // Try multiple lookup strategies to handle different Whop User ID formats
+    console.log(`[check-conversation] Debug - Looking for conversation with:`);
+    console.log(`[check-conversation] Debug - whopUserId: ${targetWhopUserId}`);
+    console.log(`[check-conversation] Debug - experience.id (database): ${experience.id}`);
+    console.log(`[check-conversation] Debug - experience.whopExperienceId: ${experience.whopExperienceId}`);
+    
+    let activeConversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.whopUserId, targetWhopUserId),
         eq(conversations.experienceId, experience.id),
@@ -54,6 +86,39 @@ export async function POST(request: NextRequest) {
         funnel: true,
       },
     });
+    
+    console.log(`[check-conversation] Debug - Primary lookup result:`, {
+      found: !!activeConversation,
+      conversationId: activeConversation?.id,
+      conversationWhopUserId: activeConversation?.whopUserId,
+      conversationExperienceId: activeConversation?.experienceId
+    });
+
+    // Debug: Check what conversations exist for this user
+    const allUserConversations = await db.query.conversations.findMany({
+      where: eq(conversations.whopUserId, targetWhopUserId),
+      with: {
+        experience: true,
+      },
+    });
+    
+    console.log(`[check-conversation] Debug - All conversations for user ${targetWhopUserId}:`, 
+      allUserConversations.map((conv: any) => ({
+        id: conv.id,
+        whopUserId: conv.whopUserId,
+        experienceId: conv.experienceId,
+        experienceWhopId: conv.experience?.whopExperienceId,
+        status: conv.status,
+        currentBlockId: conv.currentBlockId
+      }))
+    );
+
+    // Log the result
+    if (!activeConversation) {
+      console.log(`[check-conversation] Debug - No conversation found for user ${targetWhopUserId} in experience ${experience.id}`);
+    } else {
+      console.log(`[check-conversation] Debug - Found conversation ${activeConversation.id} for user ${targetWhopUserId}`);
+    }
 
     // Get the live funnel for this experience (needed even when no conversation exists)
     const liveFunnel = await db.query.funnels.findFirst({

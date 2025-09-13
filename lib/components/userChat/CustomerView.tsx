@@ -60,9 +60,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setIsLoading(true);
 			setError(null);
 
+			// Debug logging for CustomerView
+			console.log(`[CustomerView] Debug - Loading conversation for experienceId: ${experienceId}, whopUserId: ${whopUserId}`);
+
 			// Step 1: Check if there's an active conversation
-			const checkResponse = await apiPost('/api/userchat/check-conversation', {
-				experienceId,
+			const checkResponse = await apiPost(`/api/userchat/check-conversation?experienceId=${encodeURIComponent(experienceId)}`, {
 				whopUserId: whopUserId,
 			}, experienceId);
 
@@ -129,6 +131,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					setConversationId(null);
 					setConversation(null);
 					console.log("CustomerView: No active conversation found");
+					console.log("CustomerView: checkResult details:", {
+						success: checkResult.success,
+						hasActiveConversation: checkResult.hasActiveConversation,
+						conversation: checkResult.conversation,
+						error: checkResult.error
+					});
 				}
 			} else {
 				throw new Error(checkResult.error || "Failed to check conversation status");

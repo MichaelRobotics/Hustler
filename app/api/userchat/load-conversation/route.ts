@@ -34,6 +34,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Debug logging for conversation details
+    console.log(`[load-conversation] Debug - Conversation ${conversationId} found:`);
+    console.log(`[load-conversation] Debug - whopUserId: ${conversation.whopUserId}`);
+    console.log(`[load-conversation] Debug - currentBlockId: ${conversation.currentBlockId}`);
+    console.log(`[load-conversation] Debug - experienceId: ${conversation.experienceId}`);
+
     // Get the funnel flow to check stages
     const funnelFlow = conversation.funnel?.flow as FunnelFlow;
     if (!funnelFlow) {

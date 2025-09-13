@@ -104,7 +104,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Process user message through simplified funnel system
-    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent);
+    // TODO: Get experienceId from conversation or request for multi-tenancy
+    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, "placeholder-experience-id");
 
     // Cache the result for future requests
     if (result.success) {

@@ -7,7 +7,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { experiences, funnels, conversations, messages } from "../supabase/schema";
+import { experiences, funnels, conversations, messages, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { dmMonitoringService } from "./dm-monitoring-actions";
 import { createConversation, addMessage } from "./simplified-conversation-actions";
@@ -33,10 +33,10 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Get live funnel for this product/experience
-		const liveFunnel = await getLiveFunnel(productId);
+		// Get live funnel for this user's experience
+		const liveFunnel = await getLiveFunnel(userId);
 		if (!liveFunnel) {
-			console.log(`No live funnel found for product ${productId}`);
+			console.log(`No live funnel found for user ${userId}`);
 			return;
 		}
 
@@ -51,6 +51,7 @@ export async function handleUserJoinEvent(
 		}
 
 		console.log(`Using experience ${experience.whopExperienceId} for product ${productId}`);
+		console.log(`[user-join] Debug - Creating conversation with whopUserId: ${userId}`);
 
 		// Extract welcome message from funnel flow
 		const welcomeMessage = getWelcomeMessage(liveFunnel.flow);
@@ -127,43 +128,55 @@ export async function handleUserJoinEvent(
 }
 
 /**
- * Get live funnel for product/experience
+ * Get live funnel for user's experience
  * 
- * @param productId - Whop product ID (from membership webhook)
+ * @param whopUserId - Whop user ID (from membership webhook)
  * @returns Live funnel or null
  */
-export async function getLiveFunnel(productId: string): Promise<{
+export async function getLiveFunnel(whopUserId: string): Promise<{
 	id: string;
 	flow: FunnelFlow;
 	experienceId: string;
 } | null> {
 	try {
-		// For webhook events, we need to find ANY experience that has a deployed funnel
-		// The product_id doesn't matter - we just need to find a live funnel
-		// This allows the webhook to work for any product in your app
-		
-		// Find ANY deployed funnel (since all products in your app use the same funnel)
-		const liveFunnel = await db.query.funnels.findFirst({
-			where: eq(funnels.isDeployed, true),
-			columns: {
-				id: true,
-				flow: true,
-				experienceId: true,
+		// Find the experience that has a user record with this whopUserId
+		// This ensures we use the correct experience for this user
+		const user = await db.query.users.findFirst({
+			where: eq(users.whopUserId, whopUserId),
+			with: {
+				experience: true,
 			},
 		});
 
-		if (!liveFunnel || !liveFunnel.flow) {
-			console.log(`No live funnel found for any experience`);
-			return null;
+		if (user && user.experience) {
+			// Found user with experience, now find its deployed funnel
+			const liveFunnel = await db.query.funnels.findFirst({
+				where: and(
+					eq(funnels.experienceId, user.experience.id),
+					eq(funnels.isDeployed, true)
+				),
+				columns: {
+					id: true,
+					flow: true,
+					experienceId: true,
+				},
+			});
+
+			if (liveFunnel && liveFunnel.flow) {
+				console.log(`Found live funnel ${liveFunnel.id} for experience ${user.experience.id} (user: ${whopUserId})`);
+				return {
+					id: liveFunnel.id,
+					flow: liveFunnel.flow as FunnelFlow,
+					experienceId: liveFunnel.experienceId,
+				};
+			}
 		}
 
-		console.log(`Found live funnel ${liveFunnel.id} for experience ${liveFunnel.experienceId} (product: ${productId})`);
-
-		return {
-			id: liveFunnel.id,
-			flow: liveFunnel.flow as FunnelFlow,
-			experienceId: liveFunnel.experienceId,
-		};
+		// Fallback: If no user found, we cannot determine the correct experience
+		// This should not happen in normal flow - user should exist before webhook
+		console.log(`No user found for whopUserId ${whopUserId} - cannot determine correct experience`);
+		console.log(`This indicates the user was not properly created before webhook processing`);
+		return null;
 	} catch (error) {
 		console.error("Error getting live funnel:", error);
 		return null;

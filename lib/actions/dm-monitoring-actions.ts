@@ -502,7 +502,8 @@ export class DMMonitoringService {
 		// Update conversation
 		const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
 		if (nextBlockId) {
-			await updateConversationBlock(conversationId, nextBlockId, updatedUserPath);
+			// TODO: Add experienceId parameter for multi-tenancy
+			await updateConversationBlock(conversationId, nextBlockId, updatedUserPath, conversation.experienceId);
 		}
 
 		// Check if we've reached a TRANSITION block - if so, stop monitoring immediately
@@ -1009,7 +1010,7 @@ export class DMMonitoringService {
 
 			// Update conversation to EXPERIENCE_QUALIFICATION stage
 			const updatedUserPath = [...(conversation.userPath || []), firstExperienceQualBlockId];
-			await updateConversationBlock(conversationId, firstExperienceQualBlockId, updatedUserPath);
+			await updateConversationBlock(conversationId, firstExperienceQualBlockId, updatedUserPath, conversation.experienceId);
 
 			// Generate and send transition message
 			const chatLink = await this.generateChatLink(conversationId, experienceId);

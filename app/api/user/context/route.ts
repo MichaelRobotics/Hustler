@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
 		// Verify user token directly with WHOP SDK
 		const { userId } = await whopSdk.verifyUserToken(headersList);
 		
+		// Debug logging for user context
+		console.log(`[user-context] Debug - Session userId from whopSdk.verifyUserToken: ${userId}`);
+		
 		// Get company ID from experience data
 		const experience = await whopSdk.experiences.getExperience({
 			experienceId,

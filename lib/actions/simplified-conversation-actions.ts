@@ -217,6 +217,7 @@ export async function updateConversationBlock(
 	conversationId: string,
 	blockId: string,
 	userPath: string[],
+	experienceId: string,
 ): Promise<void> {
 	try {
 		await db.update(conversations)
@@ -255,6 +256,7 @@ export async function completeConversation(conversationId: string): Promise<void
 export async function processUserMessage(
 	conversationId: string,
 	messageContent: string,
+	experienceId: string,
 ): Promise<{
 	success: boolean;
 	botMessage?: string;
@@ -262,9 +264,12 @@ export async function processUserMessage(
 	error?: string;
 }> {
 	try {
-		// Get conversation with funnel
+		// Get conversation with funnel (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
-			where: eq(conversations.id, conversationId),
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
 			with: {
 				funnel: true,
 			},
@@ -300,7 +305,7 @@ export async function processUserMessage(
 			
 			// Update conversation
 			const newUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
-			await updateConversationBlock(conversationId, nextBlockId, newUserPath);
+			await updateConversationBlock(conversationId, nextBlockId, newUserPath, conversation.experienceId);
 
 			// Record interaction
 			await db.insert(funnelInteractions).values({
@@ -428,7 +433,7 @@ export async function transitionToInternalChat(
 		const firstExperienceQualBlockId = experienceQualStage.blockIds[0];
 
 		// Update conversation to EXPERIENCE_QUALIFICATION stage
-		await updateConversationBlock(conversationId, firstExperienceQualBlockId, [...(conversation.userPath || []), firstExperienceQualBlockId]);
+		await updateConversationBlock(conversationId, firstExperienceQualBlockId, [...(conversation.userPath || []), firstExperienceQualBlockId], conversation.experienceId);
 
 		console.log(`Successfully transitioned conversation ${conversationId} to EXPERIENCE_QUALIFICATION stage`);
 
@@ -511,6 +516,7 @@ export async function generateChatLink(conversationId: string, experienceId: str
 export async function sendTransitionMessage(
 	whopUserId: string,
 	message: string,
+	experienceId: string,
 ): Promise<boolean> {
 	try {
 		console.log(`Sending transition message to user ${whopUserId}`);
@@ -556,15 +562,19 @@ export async function completeDMToInternalTransition(
 			experienceId,
 		);
 
-		// Get user ID from conversation
+		// Get user ID from conversation (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
-			where: eq(conversations.id, conversationId),
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
 		});
 
 		if (conversation?.whopUserId) {
 			await sendTransitionMessage(
 				conversation.whopUserId,
 				personalizedMessage,
+				experienceId,
 			);
 		}
 
@@ -659,9 +669,12 @@ export async function updateConversation(
 			})
 			.where(eq(conversations.id, conversationId));
 
-		// Get the updated conversation
+		// Get the updated conversation (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
-			where: eq(conversations.id, conversationId),
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
 			with: {
 				funnel: true,
 				messages: {
