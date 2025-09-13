@@ -11,6 +11,7 @@ import { experiences, funnels, conversations, messages } from "../supabase/schem
 import { whopSdk } from "../whop-sdk";
 import { dmMonitoringService } from "./dm-monitoring-actions";
 import { createConversation, addMessage } from "./simplified-conversation-actions";
+import { closeExistingActiveConversationsByWhopUserId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";
 
 /**
@@ -57,6 +58,9 @@ export async function handleUserJoinEvent(
 			console.error(`No welcome message found in funnel ${liveFunnel.id}`);
 			return;
 		}
+
+		// Close any existing active conversations for this user
+		await closeExistingActiveConversationsByWhopUserId(userId, experience.id);
 
 		// Create conversation record
 		const conversationId = await createConversation(
