@@ -3,7 +3,7 @@ import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions, experiences } from "@/lib/supabase/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
-import { DMMonitoringService } from "@/lib/actions/dm-monitoring-actions";
+import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service";
 import { validateToken } from "@whop-apps/sdk";
 import { headers } from "next/headers";
 
@@ -59,10 +59,9 @@ export async function POST(request: NextRequest) {
     console.log(`Found ${activeConversations.length} active conversations to reset`);
 
     // Step 3: Stop DM monitoring for all active conversations
-    const dmMonitoringService = new DMMonitoringService();
     for (const conversation of activeConversations) {
-      console.log(`🛑 Stopping DM monitoring for conversation ${conversation.id}`);
-      await dmMonitoringService.stopMonitoring(conversation.id);
+      console.log(`🛑 Stopping DM monitoring for conversation ${conversation.id} in experience ${experience.id}`);
+      await multiTenantDMMonitoringManager.stopMonitoring(conversation.id, experience.id);
     }
 
     // Step 4: Close all active conversations
