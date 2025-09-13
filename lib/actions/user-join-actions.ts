@@ -33,37 +33,71 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Get live funnel for this user's experience
-		const liveFunnel = await getLiveFunnel(userId);
-		if (!liveFunnel) {
-			console.log(`No live funnel found for user ${userId}`);
-			return;
-		}
-
-		// Get experience record from the funnel (we already found it in getLiveFunnel)
+		// Step 1: Find the experience by product_id (the app installation)
 		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.id, liveFunnel.experienceId),
+			where: eq(experiences.whopExperienceId, productId),
 		});
 
 		if (!experience) {
-			console.error(`Experience not found for funnel ${liveFunnel.id}`);
+			console.error(`No experience found for product ${productId}`);
 			return;
 		}
 
-		console.log(`Using experience ${experience.whopExperienceId} for product ${productId}`);
-		console.log(`[user-join] Debug - Creating conversation with whopUserId: ${userId}`);
+		console.log(`Found experience ${experience.whopExperienceId} for product ${productId}`);
 
-		// Extract welcome message from funnel flow
+		// Step 2: Create user record (if not exists)
+		const existingUser = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, userId),
+				eq(users.experienceId, experience.id)
+			),
+		});
+
+		if (!existingUser) {
+			// Create user record
+			await db.insert(users).values({
+				whopUserId: userId,
+				experienceId: experience.id,
+				accessLevel: "customer",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+			console.log(`Created user record for ${userId} in experience ${experience.id}`);
+		} else {
+			console.log(`User ${userId} already exists in experience ${experience.id}`);
+		}
+
+		// Step 3: Find deployed funnel for this experience
+		const liveFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.experienceId, experience.id),
+				eq(funnels.isDeployed, true)
+			),
+			columns: {
+				id: true,
+				flow: true,
+				experienceId: true,
+			},
+		});
+
+		if (!liveFunnel || !liveFunnel.flow) {
+			console.error(`No deployed funnel found for experience ${experience.id}`);
+			return;
+		}
+
+		console.log(`Found live funnel ${liveFunnel.id} for experience ${experience.id}`);
+
+		// Step 4: Extract welcome message from funnel flow
 		const welcomeMessage = getWelcomeMessage(liveFunnel.flow);
 		if (!welcomeMessage) {
 			console.error(`No welcome message found in funnel ${liveFunnel.id}`);
 			return;
 		}
 
-		// Close any existing active conversations for this user
+		// Step 5: Close any existing active conversations for this user
 		await closeExistingActiveConversationsByWhopUserId(userId, experience.id);
 
-		// Check if conversation already exists (race condition protection)
+		// Step 6: Check if conversation already exists (race condition protection)
 		const existingConversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.whopUserId, userId),
@@ -77,7 +111,7 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Create conversation record
+		// Step 7: Create conversation record
 		const conversationId = await createConversation(
 			experience.id,
 			liveFunnel.id,
@@ -141,61 +175,6 @@ export async function handleUserJoinEvent(
 	}
 }
 
-/**
- * Get live funnel for user's experience
- * 
- * @param whopUserId - Whop user ID (from membership webhook)
- * @returns Live funnel or null
- */
-export async function getLiveFunnel(whopUserId: string): Promise<{
-	id: string;
-	flow: FunnelFlow;
-	experienceId: string;
-} | null> {
-	try {
-		// Find the experience that has a user record with this whopUserId
-		// This ensures we use the correct experience for this user
-		const user = await db.query.users.findFirst({
-			where: eq(users.whopUserId, whopUserId),
-			with: {
-				experience: true,
-			},
-		});
-
-		if (user && user.experience) {
-			// Found user with experience, now find its deployed funnel
-			const liveFunnel = await db.query.funnels.findFirst({
-				where: and(
-					eq(funnels.experienceId, user.experience.id),
-					eq(funnels.isDeployed, true)
-				),
-				columns: {
-					id: true,
-					flow: true,
-					experienceId: true,
-				},
-			});
-
-			if (liveFunnel && liveFunnel.flow) {
-				console.log(`Found live funnel ${liveFunnel.id} for experience ${user.experience.id} (user: ${whopUserId})`);
-				return {
-					id: liveFunnel.id,
-					flow: liveFunnel.flow as FunnelFlow,
-					experienceId: liveFunnel.experienceId,
-				};
-			}
-		}
-
-		// Fallback: If no user found, we cannot determine the correct experience
-		// This should not happen in normal flow - user should exist before webhook
-		console.log(`No user found for whopUserId ${whopUserId} - cannot determine correct experience`);
-		console.log(`This indicates the user was not properly created before webhook processing`);
-		return null;
-	} catch (error) {
-		console.error("Error getting live funnel:", error);
-		return null;
-	}
-}
 
 /**
  * Extract welcome message from funnel flow
