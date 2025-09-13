@@ -174,7 +174,6 @@ export async function POST(request: NextRequest) {
         id: activeConversation.id,
         currentBlockId: activeConversation.currentBlockId,
         status: activeConversation.status,
-        funnelId: activeConversation.funnelId,
         createdAt: activeConversation.createdAt,
         updatedAt: activeConversation.updatedAt,
       },
