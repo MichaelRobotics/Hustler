@@ -88,6 +88,38 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						setStageInfo(checkResult.stageInfo);
 					}
 					
+					// Check if conversation is in TRANSITION stage and complete transition
+					if (checkResult.stageInfo?.isTransitionStage) {
+						console.log("CustomerView: Conversation is in TRANSITION stage, completing transition");
+						
+						try {
+							// Get funnel ID from the conversation data
+							const funnelId = checkResult.conversation.funnelId || checkResult.funnelFlow?.id;
+							
+							if (!funnelId) {
+								console.error("CustomerView: No funnel ID found for transition");
+							} else {
+								// Call complete-transition endpoint to transition to EXPERIENCE_QUALIFICATION
+								const transitionResponse = await apiPost('/api/userchat/complete-transition', {
+									dmConversationId: checkResult.conversation.id,
+									funnelId: funnelId,
+									whopUserId: whopUserId,
+									transitionMessage: "Ready for your Personal Strategy Session!"
+								}, experienceId);
+
+								const transitionResult = await transitionResponse.json();
+								
+								if (transitionResult.success) {
+									console.log("CustomerView: Successfully completed transition to EXPERIENCE_QUALIFICATION");
+								} else {
+									console.error("CustomerView: Failed to complete transition:", transitionResult.error);
+								}
+							}
+						} catch (transitionError) {
+							console.error("CustomerView: Error completing transition:", transitionError);
+						}
+					}
+
 					// Try to load the full conversation data
 					try {
 						const loadResponse = await apiPost('/api/userchat/load-conversation', {
@@ -115,6 +147,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 								hasFunnelFlow: !!checkResult.funnelFlow,
 								hasConversation: !!loadResult.conversation,
 								stageInfo: loadResult.stageInfo,
+								wasTransitionStage: checkResult.stageInfo?.isTransitionStage,
+								isNowTransitionStage: loadResult.stageInfo?.isTransitionStage,
+								isNowExperienceQualification: loadResult.stageInfo?.isExperienceQualificationStage,
+								currentStage: loadResult.stageInfo?.currentStage,
 							});
 						} else {
 							console.error("Failed to load conversation details:", loadResult.error);
@@ -140,6 +176,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setIsLoading(false);
 		}
 	}, [experienceId, userName, whopUserId]);
+
 
 	// Admin functions
 	const checkConversationStatus = async () => {
