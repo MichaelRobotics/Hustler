@@ -23,6 +23,7 @@ import type { FunnelFlow } from "../types/funnel";
 export async function handleUserJoinEvent(
 	userId: string,
 	productId: string,
+	webhookData?: any,
 ): Promise<void> {
 	try {
 		console.log(`Processing user join event: ${userId} for product ${productId}`);
@@ -33,13 +34,17 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Step 1: Find the experience by product_id (the app installation)
+		// Step 1: Find the experience by page_id (company ID)
+		// This is the most reliable way since page_id is the company that owns the app
 		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, productId),
+			where: eq(experiences.whopCompanyId, webhookData.data.page_id),
 		});
 
 		if (!experience) {
-			console.error(`No experience found for product ${productId}`);
+			console.error(`No experience found for page_id ${webhookData.data.page_id}`);
+			console.error(`Available experiences:`, await db.query.experiences.findMany({
+				columns: { whopCompanyId: true, whopExperienceId: true, name: true }
+			}));
 			return;
 		}
 

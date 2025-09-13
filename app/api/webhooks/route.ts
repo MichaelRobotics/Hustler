@@ -92,7 +92,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 		// Note: We need to map product_id to experience_id
 		if (user_id && product_id) {
 			waitUntil(
-				handleUserJoinEvent(user_id, product_id),
+				handleUserJoinEvent(user_id, product_id, webhookData),
 			);
 		} else {
 			console.error("Missing user_id or product_id in membership webhook");
