@@ -1,7 +1,7 @@
 "use client";
 
 import { Text } from "frosted-ui";
-import { Circle, MessageSquare, Clock, Archive, AlertCircle, CheckCircle } from "lucide-react";
+import { MessageSquare, Archive, AlertCircle, CheckCircle } from "lucide-react";
 import React from "react";
 import type { ConversationCardProps } from "../../types/liveChat";
 
@@ -11,18 +11,7 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 		if (!conversation || !conversation.user) {
 			return null;
 		}
-		const formatTime = (date: Date) => {
-			const now = new Date();
-			const diff = now.getTime() - date.getTime();
-			const minutes = Math.floor(diff / (1000 * 60));
-			const hours = Math.floor(diff / (1000 * 60 * 60));
-			const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-			if (minutes < 1) return "Just now";
-			if (minutes < 60) return `${minutes}m ago`;
-			if (hours < 24) return `${hours}h ago`;
-			return `${days}d ago`;
-		};
 
 		const getStatusColor = (status: string) => {
 			switch (status) {
@@ -38,7 +27,7 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 		const getStatusIcon = (status: string) => {
 			switch (status) {
 				case "open":
-					return <Circle size={12} className="text-green-500 fill-current" />;
+					return null; // No indicator for open status
 				case "closed":
 					return <CheckCircle size={12} className="text-gray-500" />;
 				default:
@@ -83,11 +72,19 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 					<div className="flex items-center justify-between gap-3">
 						<div className="flex items-center gap-3 flex-1 min-w-0">
 							<div className="flex-shrink-0">
-								<div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
-									<Text size="2" weight="bold" className="text-white">
-										{conversation.user.name.charAt(0).toUpperCase()}
-									</Text>
-								</div>
+								{conversation.user.avatar ? (
+									<img
+										src={conversation.user.avatar}
+										alt={conversation.user.name}
+										className="w-10 h-10 rounded-lg object-cover border-2 border-violet-200 dark:border-violet-400"
+									/>
+								) : (
+									<div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
+										<Text size="2" weight="bold" className="text-white">
+											{conversation.user.name.charAt(0).toUpperCase()}
+										</Text>
+									</div>
+								)}
 							</div>
 
 							<div className="flex-1 min-w-0">
@@ -99,9 +96,6 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 									>
 										{conversation.user.name}
 									</Text>
-									{conversation.user.isOnline && (
-										<Circle size={6} className="text-green-500 fill-current" />
-									)}
 									{getStatusIcon(conversation.status)}
 									{getPriorityIndicator(conversation)}
 								</div>
@@ -116,17 +110,12 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 							</div>
 						</div>
 
-						{/* Time and message count */}
-						<div className="flex-shrink-0 flex flex-col items-end gap-1">
+						{/* Message count */}
+						<div className="flex-shrink-0 flex items-center gap-1">
+							<MessageSquare size={10} className="text-gray-400" />
 							<Text size="1" color="gray" className="text-muted-foreground">
-								{formatTime(conversation.lastMessageAt)}
+								{conversation.messageCount}
 							</Text>
-							<div className="flex items-center gap-1">
-								<MessageSquare size={10} className="text-gray-400" />
-								<Text size="1" color="gray" className="text-muted-foreground">
-									{conversation.messageCount}
-								</Text>
-							</div>
 						</div>
 					</div>
 				</div>
@@ -164,22 +153,7 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 					{/* Additional Metadata */}
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-2">
-							{conversation.autoCloseAt && (
-								<div className="flex items-center gap-1">
-									<Clock size={10} className="text-gray-400" />
-									<Text size="1" color="gray" className="text-muted-foreground">
-										Auto-close: {formatTime(conversation.autoCloseAt)}
-									</Text>
-								</div>
-							)}
-						</div>
-						
-						{/* Conversation Duration */}
-						<div className="flex items-center gap-1">
-							<Clock size={10} className="text-gray-400" />
-							<Text size="1" color="gray" className="text-muted-foreground">
-								{Math.round((Date.now() - conversation.startedAt.getTime()) / (1000 * 60 * 60))}h
-							</Text>
+							{/* Reserved for future metadata */}
 						</div>
 					</div>
 				</div>

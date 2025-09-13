@@ -6,7 +6,7 @@ export interface LiveChatUser {
 	email?: string;
 	avatar?: string;
 	isOnline: boolean;
-	lastSeen?: Date;
+	lastSeen?: string;
 	timezone?: string;
 }
 
@@ -15,7 +15,7 @@ export interface LiveChatMessage {
 	conversationId: string;
 	type: "user" | "bot" | "system" | "agent"; // Added 'agent' type for agent messages
 	text: string;
-	timestamp: Date;
+	timestamp: string;
 	isRead: boolean;
 	metadata?: {
 		blockId?: string;
@@ -32,27 +32,44 @@ export interface LiveChatConversation {
 	funnelId: string;
 	funnelName: string;
 	status: "open" | "closed";
-	startedAt: Date;
-	lastMessageAt: Date;
+	startedAt: string;
+	lastMessageAt: string;
 	lastMessage: string;
 	messageCount: number;
 	messages: LiveChatMessage[];
 	// Backend-specific fields
-	autoCloseAt?: Date; // When conversation will auto-close
+	autoCloseAt?: string; // When conversation will auto-close
 	isArchived?: boolean; // If conversation is archived
-	createdAt: Date; // When conversation was created
-	updatedAt: Date; // Last update timestamp
+	createdAt: string; // When conversation was created
+	updatedAt: string; // Last update timestamp
 	metadata?: {
 		completedSteps?: number;
 		totalSteps?: number;
 		[key: string]: any;
 	};
+	// LiveChat integration fields
+	currentStage?: string; // Current funnel stage (WELCOME, TRANSITION, etc.)
+	whopUserId?: string; // Whop user ID for WebSocket integration
+	experienceId?: string; // Experience ID for multi-tenancy
 }
 
 export interface LiveChatFilters {
 	status?: "all" | "open" | "closed";
 	sortBy?: "newest" | "oldest" | "most_messages" | "least_messages";
 	searchQuery?: string;
+}
+
+export interface LiveChatPagination {
+	page: number;
+	limit: number;
+}
+
+export interface LiveChatConversationResponse {
+	conversations: LiveChatConversation[];
+	total: number;
+	page: number;
+	limit: number;
+	hasMore: boolean;
 }
 
 // Backend API Types
@@ -93,6 +110,7 @@ export interface LiveChatPageProps {
 	onBack: () => void;
 	onTypingChange?: (isTyping: boolean) => void;
 	onChatStateChange?: (isInChat: boolean) => void;
+	experienceId: string; // Add experienceId prop for multi-tenant isolation
 }
 
 export interface ConversationListProps {

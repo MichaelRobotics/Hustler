@@ -128,7 +128,7 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 									lastMessage: newMessage.text,
 									lastMessageAt: newMessage.timestamp,
 									messageCount: conv.messageCount + 1,
-									updatedAt: new Date(),
+									updatedAt: new Date().toISOString(),
 								}
 							: conv,
 					),
@@ -170,7 +170,7 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 				setConversations((prev) =>
 					prev.map((conv) =>
 						conv.id === conversationId
-							? { ...updatedConversation, updatedAt: new Date() }
+							? { ...updatedConversation, updatedAt: new Date().toISOString() }
 							: conv,
 					),
 				);
@@ -217,7 +217,7 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 									messages: reset
 										? data.messages
 										: [...conv.messages, ...data.messages],
-									updatedAt: new Date(),
+									updatedAt: new Date().toISOString(),
 								}
 							: conv,
 					),

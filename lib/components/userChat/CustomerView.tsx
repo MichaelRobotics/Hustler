@@ -151,19 +151,19 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// Admin functions
 	const checkConversationStatus = async () => {
-		if (!experienceId) return;
+		console.log(`[AdminNavbar] checkConversationStatus called with experienceId: ${experienceId}`);
+		if (!experienceId) {
+			setAdminError("Experience ID is required");
+			return;
+		}
 		
 		try {
 			setAdminLoading(true);
 			setAdminError(null);
 			
-			const response = await fetch('/api/userchat/check-conversation', {
+			const response = await fetch(`/api/userchat/check-conversation?experienceId=${encodeURIComponent(experienceId)}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					experienceId,
-					whopUserId: whopUserId,
-				}),
 			});
 
 			const result = await response.json();

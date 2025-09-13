@@ -588,6 +588,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						onBack={handleBackToDashboard}
 						onTypingChange={setIsUserTyping}
 						onChatStateChange={setIsInChat}
+						experienceId={user?.experienceId || ""}
 					/>
 				</div>
 			</div>

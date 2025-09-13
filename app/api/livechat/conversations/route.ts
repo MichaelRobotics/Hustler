@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getConversationList } from "@/lib/actions/livechat-actions";
+import { getLiveChatConversations } from "@/lib/actions/livechat-integration-actions";
+import { whopSdk } from "@/lib/whop-sdk";
+import { headers } from "next/headers";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,22 +20,45 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Mock user for now - in production this would come from authentication
-    const mockUser = {
-      id: "550e8400-e29b-41d4-a716-446655440000",
-      whopUserId: "550e8400-e29b-41d4-a716-446655440001",
-      experienceId: experienceId, // Use the experienceId from URL parameters
-      email: "owner@example.com",
-      name: "Test Owner",
-      credits: 1000,
-      accessLevel: "admin" as const,
-      experience: {
-        id: experienceId, // Use the experienceId from URL parameters
-        whopExperienceId: "550e8400-e29b-41d4-a716-446655440003",
-        whopCompanyId: "550e8400-e29b-41d4-a716-446655440004",
-        name: "Mock Experience",
-      },
-    };
+    // For LiveChat, we need to get the user from the request headers since it's called from admin panel
+    // The user context should already be available from the frontend
+    const headersList = await headers();
+    const whopUserId = headersList.get("x-on-behalf-of");
+    const whopCompanyId = headersList.get("x-company-id");
+    
+    if (!whopUserId) {
+      return NextResponse.json(
+        { error: "User ID required" },
+        { status: 401 }
+      );
+    }
+
+    // Get user context for the authenticated user
+    const { getUserContext } = await import("@/lib/context/user-context");
+    const userContext = await getUserContext(
+      whopUserId,
+      whopCompanyId || "", // Use company ID from header
+      experienceId,
+      false,
+      "admin", // Assume admin access for LiveChat
+    );
+
+    if (!userContext?.isAuthenticated || !userContext.user) {
+      return NextResponse.json(
+        { error: "Failed to get user context" },
+        { status: 401 }
+      );
+    }
+
+    const user = userContext.user;
+
+    // Verify the user has access to the requested experience
+    if (user.experienceId !== experienceId) {
+      return NextResponse.json(
+        { error: "Access denied to experience" },
+        { status: 403 }
+      );
+    }
 
     const filters = {
       status: status as "all" | "open" | "closed",
@@ -46,7 +71,7 @@ export async function GET(request: NextRequest) {
       limit,
     };
 
-    const result = await getConversationList(mockUser, experienceId, filters, pagination);
+    const result = await getLiveChatConversations(user, experienceId, filters, pagination);
 
     return NextResponse.json({
       success: true,

@@ -45,11 +45,11 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(
 				);
 			}
 
-			// Sort by last message time (optimized with cached timestamps)
+			// Sort by last message time (using string comparison)
 			return filtered.sort((a, b) => {
-				const timeA = a.lastMessageAt.getTime();
-				const timeB = b.lastMessageAt.getTime();
-				return filters.sortBy === "oldest" ? timeA - timeB : timeB - timeA;
+				const timeA = a.lastMessageAt;
+				const timeB = b.lastMessageAt;
+				return filters.sortBy === "oldest" ? timeA.localeCompare(timeB) : timeB.localeCompare(timeA);
 			});
 		}, [conversations, filters.status, searchQuery, filters.sortBy]);
 

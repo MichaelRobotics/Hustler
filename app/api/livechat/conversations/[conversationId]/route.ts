@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadConversationDetails, sendOwnerMessage, manageConversation } from "@/lib/actions/livechat-actions";
+import { getLiveChatConversationDetails, sendLiveChatMessage } from "@/lib/actions/livechat-integration-actions";
+import { whopSdk } from "@/lib/whop-sdk";
+import { headers } from "next/headers";
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +9,8 @@ export async function GET(
 ) {
   try {
     const { conversationId } = await params;
+    const { searchParams } = new URL(request.url);
+    const experienceId = searchParams.get("experienceId");
 
     if (!conversationId) {
       return NextResponse.json(
@@ -15,24 +19,61 @@ export async function GET(
       );
     }
 
-    // Mock user for now - in production this would come from authentication
-    const mockUser = {
-      id: "550e8400-e29b-41d4-a716-446655440000",
-      whopUserId: "550e8400-e29b-41d4-a716-446655440001",
-      experienceId: "550e8400-e29b-41d4-a716-446655440002",
-      email: "owner@example.com",
-      name: "Test Owner",
-      credits: 1000,
-      accessLevel: "admin" as const,
-      experience: {
-        id: "550e8400-e29b-41d4-a716-446655440002",
-        whopExperienceId: "550e8400-e29b-41d4-a716-446655440003",
-        whopCompanyId: "550e8400-e29b-41d4-a716-446655440004",
-        name: "Mock Experience",
-      },
-    };
+    if (!experienceId) {
+      return NextResponse.json(
+        { error: "Experience ID is required" },
+        { status: 400 }
+      );
+    }
 
-    const conversation = await loadConversationDetails(mockUser, conversationId);
+    // For LiveChat, we need to get the user from the request headers since it's called from admin panel
+    // The user context should already be available from the frontend
+    const headersList = await headers();
+    const whopUserId = headersList.get("x-on-behalf-of");
+    const whopCompanyId = headersList.get("x-company-id");
+    
+    if (!whopUserId) {
+      return NextResponse.json(
+        { error: "User ID required" },
+        { status: 401 }
+      );
+    }
+
+    // Get user context for the authenticated user
+    const { getUserContext } = await import("@/lib/context/user-context");
+    const userContext = await getUserContext(
+      whopUserId,
+      whopCompanyId || "", // Use company ID from header
+      experienceId,
+      false,
+      "admin", // Assume admin access for LiveChat
+    );
+
+    if (!userContext?.isAuthenticated || !userContext.user) {
+      return NextResponse.json(
+        { error: "Failed to get user context" },
+        { status: 401 }
+      );
+    }
+
+    const user = userContext.user;
+
+    // Verify the user has access to the requested experience
+    if (user.experienceId !== experienceId) {
+      return NextResponse.json(
+        { error: "Access denied to experience" },
+        { status: 403 }
+      );
+    }
+
+    const conversation = await getLiveChatConversationDetails(user, conversationId, experienceId);
+
+    if (!conversation) {
+      return NextResponse.json(
+        { error: "Conversation not found" },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -54,7 +95,7 @@ export async function POST(
   try {
     const { conversationId } = await params;
     const body = await request.json();
-    const { action, message, messageType } = body;
+    const { action, message, messageType, experienceId } = body;
 
     if (!conversationId) {
       return NextResponse.json(
@@ -63,22 +104,52 @@ export async function POST(
       );
     }
 
-    // Mock user for now - in production this would come from authentication
-    const mockUser = {
-      id: "550e8400-e29b-41d4-a716-446655440000",
-      whopUserId: "550e8400-e29b-41d4-a716-446655440001",
-      experienceId: "550e8400-e29b-41d4-a716-446655440002",
-      email: "owner@example.com",
-      name: "Test Owner",
-      credits: 1000,
-      accessLevel: "admin" as const,
-      experience: {
-        id: "550e8400-e29b-41d4-a716-446655440002",
-        whopExperienceId: "550e8400-e29b-41d4-a716-446655440003",
-        whopCompanyId: "550e8400-e29b-41d4-a716-446655440004",
-        name: "Mock Experience",
-      },
-    };
+    if (!experienceId) {
+      return NextResponse.json(
+        { error: "Experience ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // For LiveChat, we need to get the user from the request headers since it's called from admin panel
+    // The user context should already be available from the frontend
+    const headersList = await headers();
+    const whopUserId = headersList.get("x-on-behalf-of");
+    const whopCompanyId = headersList.get("x-company-id");
+    
+    if (!whopUserId) {
+      return NextResponse.json(
+        { error: "User ID required" },
+        { status: 401 }
+      );
+    }
+
+    // Get user context for the authenticated user
+    const { getUserContext } = await import("@/lib/context/user-context");
+    const userContext = await getUserContext(
+      whopUserId,
+      whopCompanyId || "", // Use company ID from header
+      experienceId,
+      false,
+      "admin", // Assume admin access for LiveChat
+    );
+
+    if (!userContext?.isAuthenticated || !userContext.user) {
+      return NextResponse.json(
+        { error: "Failed to get user context" },
+        { status: 401 }
+      );
+    }
+
+    const user = userContext.user;
+
+    // Verify the user has access to the requested experience
+    if (user.experienceId !== experienceId) {
+      return NextResponse.json(
+        { error: "Access denied to experience" },
+        { status: 403 }
+      );
+    }
 
     if (action === "send_message") {
       if (!message) {
@@ -88,7 +159,7 @@ export async function POST(
         );
       }
 
-      const result = await sendOwnerMessage(mockUser, conversationId, message, mockUser.id);
+      const result = await sendLiveChatMessage(user, conversationId, message, experienceId);
 
       if (result.success) {
         return NextResponse.json({
@@ -101,27 +172,9 @@ export async function POST(
           { status: 500 }
         );
       }
-    } else if (action === "manage") {
-      const { status, notes } = body;
-      const result = await manageConversation(mockUser, conversationId, {
-        status,
-        notes,
-      });
-
-      if (result.success) {
-        return NextResponse.json({
-          success: true,
-          conversation: result.conversation,
-        });
-      } else {
-        return NextResponse.json(
-          { error: result.error || "Failed to manage conversation" },
-          { status: 500 }
-        );
-      }
     } else {
       return NextResponse.json(
-        { error: "Invalid action. Use 'send_message' or 'manage'" },
+        { error: "Invalid action. Use 'send_message'" },
         { status: 400 }
       );
     }

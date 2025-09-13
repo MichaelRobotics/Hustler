@@ -38,10 +38,12 @@ export async function apiRequest(
 /**
  * Make a GET request with experience ID
  */
-export async function apiGet(url: string, experienceId?: string): Promise<Response> {
+export async function apiGet(url: string, experienceId?: string, customHeaders?: Record<string, string>): Promise<Response> {
+	const headers = customHeaders ? new Headers(customHeaders) : undefined;
 	return apiRequest(url, {
 		method: 'GET',
 		experienceId,
+		headers,
 	});
 }
 

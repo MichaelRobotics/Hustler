@@ -187,7 +187,7 @@ export async function loadRealConversations(
 						metadata: msg.metadata,
 					})),
 					// Backend-ready fields
-					autoCloseAt: conv.metadata?.autoCloseAt ? new Date(conv.metadata.autoCloseAt) : undefined,
+					autoCloseAt: conv.metadata?.autoCloseAt || undefined,
 					isArchived: conv.metadata?.isArchived || false,
 					createdAt: conv.createdAt,
 					updatedAt: conv.updatedAt,
@@ -356,7 +356,7 @@ export async function getConversationList(
 					metadata: msg.metadata,
 				})),
 				// Backend-ready fields
-				autoCloseAt: conv.metadata?.autoCloseAt ? new Date(conv.metadata.autoCloseAt) : undefined,
+				autoCloseAt: conv.metadata?.autoCloseAt || undefined,
 				isArchived: conv.metadata?.isArchived || false,
 				createdAt: conv.createdAt,
 				updatedAt: conv.updatedAt,
@@ -461,7 +461,7 @@ export async function loadConversationDetails(
 				metadata: msg.metadata,
 			})),
 			// Backend-ready fields
-			autoCloseAt: conversation.metadata?.autoCloseAt ? new Date(conversation.metadata.autoCloseAt) : undefined,
+			autoCloseAt: conversation.metadata?.autoCloseAt || undefined,
 			isArchived: conversation.metadata?.isArchived || false,
 			createdAt: conversation.createdAt,
 			updatedAt: conversation.updatedAt,

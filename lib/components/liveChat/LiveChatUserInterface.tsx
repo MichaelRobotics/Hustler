@@ -32,6 +32,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 		const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 		const lastMessageCountRef = useRef<number>(0);
 
+
 		// Memoized message count to prevent unnecessary re-renders
 		const messageCount = useMemo(
 			() => conversation.messages.length,
@@ -151,14 +152,6 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 			[],
 		);
 
-		// Memoized time formatter to prevent recreation on every render
-		const formatTime = useCallback((date: Date) => {
-			return new Intl.DateTimeFormat("en-US", {
-				hour: "2-digit",
-				minute: "2-digit",
-				hour12: true,
-			}).format(date);
-		}, []);
 
 		// Memoized message renderer to prevent unnecessary re-renders
 		const renderMessage = useCallback(
@@ -183,18 +176,11 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 							}`}
 						>
 							<div className="text-sm leading-relaxed">{message.text}</div>
-							<div
-								className={`text-xs mt-1 ${
-									isAgent ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
-								}`}
-							>
-								{formatTime(message.timestamp)}
-							</div>
 						</div>
 					</div>
 				);
 			},
-			[formatTime],
+			[],
 		);
 
 		// Memoized messages list to prevent unnecessary re-renders
@@ -241,16 +227,21 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 								</button>
 							)}
 							<div className="flex items-center gap-3">
-								<div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-									<User size={16} className="text-white" />
-								</div>
+								{conversation.user.avatar ? (
+									<img
+										src={conversation.user.avatar}
+										alt={conversation.user.name}
+										className="w-8 h-8 rounded-lg object-cover border-2 border-blue-200 dark:border-blue-400"
+									/>
+								) : (
+									<div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+										<User size={16} className="text-white" />
+									</div>
+								)}
 								<div>
 									<h1 className="text-lg font-semibold text-foreground">
 										{conversation.user.name}
 									</h1>
-									<p className="text-sm text-muted-foreground">
-										{conversation.user.isOnline ? "Online" : "Offline"}
-									</p>
 								</div>
 							</div>
 						</div>

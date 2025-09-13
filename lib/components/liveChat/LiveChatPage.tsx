@@ -39,7 +39,7 @@ import { ThemeToggle } from "../common/ThemeToggle";
 import ConversationList from "./ConversationList";
 import LiveChatHeader from "./LiveChatHeader";
 import LiveChatView from "./LiveChatView";
-import { useLiveChatWebSocket } from "../../hooks/useLiveChatWebSocket";
+import { useLiveChatIntegration } from "../../hooks/useLiveChatIntegration";
 import type { AuthenticatedUser } from "../../types/user";
 import { apiGet, apiPost } from "../../utils/api-client";
 // Database actions moved to API routes to avoid client-side imports
@@ -53,11 +53,11 @@ const simulateAutoClose = (
 	const now = new Date();
 	return conversations.map((conv) => {
 		// Auto-close conversations that have passed their autoCloseAt time
-		if (conv.autoCloseAt && now > conv.autoCloseAt && conv.status === "open") {
+		if (conv.autoCloseAt && now > new Date(conv.autoCloseAt) && conv.status === "open") {
 			return {
 				...conv,
 				status: "closed" as const,
-				updatedAt: now,
+				updatedAt: now.toISOString(),
 			};
 		}
 		return conv;
@@ -81,23 +81,13 @@ const useDebounce = (value: string, delay: number) => {
 	return debouncedValue;
 };
 
-const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
-	// Mock user for now - in production this would come from context
-	const user: AuthenticatedUser = {
-		id: "550e8400-e29b-41d4-a716-446655440000",
-		whopUserId: "550e8400-e29b-41d4-a716-446655440001",
-		experienceId: "550e8400-e29b-41d4-a716-446655440002",
-		email: "owner@example.com",
-		name: "Owner User",
-		credits: 100,
-		accessLevel: "admin",
-		experience: {
-			id: "550e8400-e29b-41d4-a716-446655440002",
-			whopExperienceId: "550e8400-e29b-41d4-a716-446655440003",
-			whopCompanyId: "550e8400-e29b-41d4-a716-446655440004",
-			name: "Mock Experience",
-		},
-	};
+const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experienceId }) => {
+	// Get user context from authentication (same pattern as UserChat)
+	const [user, setUser] = useState<AuthenticatedUser | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [authError, setAuthError] = useState<string | null>(null);
+	
+	// All other state hooks must be declared before any conditional returns
 	const [selectedConversationId, setSelectedConversationId] = useState<
 		string | null
 	>(null);
@@ -108,20 +98,53 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
-
-	// Real data state
 	const [isLoading, setIsLoading] = useState(false);
-	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [hasMore, setHasMore] = useState(true);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [totalConversations, setTotalConversations] = useState(0);
+	const [isUserTyping, setIsUserTyping] = useState(false);
+	const [isInChat, setIsInChat] = useState(false);
 
 	// Performance optimizations
 	const debouncedSearchQuery = useDebounce(searchQuery, 300);
 	const intervalRef = useRef<NodeJS.Timeout | null>(null);
 	const lastUpdateRef = useRef<number>(0);
 
-	// WebSocket integration
+	// Fetch user context on component mount (same pattern as ExperiencePage)
+	useEffect(() => {
+		const fetchUserContext = async () => {
+			try {
+				setLoading(true);
+				const response = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
+				
+				if (!response.ok) {
+					if (response.status === 403) {
+						setAuthError("Access denied");
+					} else if (response.status === 401) {
+						setAuthError("Authentication required");
+					} else {
+						setAuthError("Failed to load user context");
+					}
+					return;
+				}
+
+				const data = await response.json();
+				if (data.user) {
+					setUser(data.user);
+				}
+			} catch (err) {
+				console.error("Error fetching user context:", err);
+				setAuthError("Failed to load user context");
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchUserContext();
+	}, [experienceId]);
+
+	// WebSocket integration with UserChat system
 	const {
 		isConnected,
 		connectionStatus,
@@ -129,9 +152,23 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 		sendTyping,
 		error: wsError,
 		reconnect,
-	} = useLiveChatWebSocket({
-		user,
-		experienceId: user.experienceId,
+	} = useLiveChatIntegration({
+		user: user || {
+			id: "",
+			whopUserId: "",
+			experienceId: experienceId,
+			email: "",
+			name: "",
+			credits: 0,
+			accessLevel: "no_access" as const,
+			experience: {
+				id: "",
+				whopExperienceId: experienceId,
+				whopCompanyId: "",
+				name: "",
+			},
+		}, // Provide default user when null
+		experienceId: experienceId, // Use the prop instead of user.experienceId
 		conversationId: selectedConversationId || undefined,
 		onMessage: (message) => {
 			if (message.type === "message" && message.message) {
@@ -153,7 +190,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 								lastMessage: message.message!.content,
 								lastMessageAt: message.message!.timestamp,
 								messageCount: conv.messageCount + 1,
-								updatedAt: new Date(),
+								updatedAt: message.message!.timestamp,
 							}
 							: conv
 					)
@@ -168,8 +205,14 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 				)
 			);
 		},
+		onStageTransition: (stageInfo) => {
+			// Handle stage transitions (TRANSITION -> EXPERIENCE_QUALIFICATION)
+			console.log("LiveChat: Stage transition detected:", stageInfo);
+			// Refresh conversations to get updated stage information
+			loadConversations(1, true, "");
+		},
 		onConnectionChange: (status) => {
-			console.log("LiveChat WebSocket status:", status);
+			console.log("LiveChat Integration status:", status);
 		},
 	});
 
@@ -187,7 +230,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 		try {
 			// Call API route for conversation list
 			const params = new URLSearchParams({
-				experienceId: user.experienceId,
+				experienceId: experienceId, // Use the prop instead of user.experienceId
 				status: filters.status || "all",
 				sortBy: filters.sortBy || "newest",
 				search: searchQuery || "",
@@ -195,7 +238,10 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 				limit: "20",
 			});
 
-			const response = await apiGet(`/api/livechat/conversations?${params}`, user.experienceId);
+			const response = await apiGet(`/api/livechat/conversations?${params}`, experienceId, {
+				'x-on-behalf-of': user.whopUserId,
+				'x-company-id': user.experience.whopCompanyId
+			});
 			const result = await response.json();
 
 			if (!result.success) {
@@ -217,7 +263,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [user, filters.status, filters.sortBy]);
+	}, [user, experienceId, filters.status, filters.sortBy]);
 
 	// Load conversation details
 	const loadConversationDetailsCallback = useCallback(async (conversationId: string) => {
@@ -225,7 +271,10 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 
 		try {
 			// Call API route for conversation details
-			const response = await apiGet(`/api/livechat/conversations/${conversationId}`, user.experienceId);
+			const response = await apiGet(`/api/livechat/conversations/${conversationId}?experienceId=${encodeURIComponent(experienceId)}`, experienceId, {
+				'x-on-behalf-of': user.whopUserId,
+				'x-company-id': user.experience.whopCompanyId
+			});
 			const result = await response.json();
 
 			if (!result.success) {
@@ -244,7 +293,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 			console.error("Error loading conversation details:", err);
 			setError("Failed to load conversation details");
 		}
-	}, [user]);
+	}, [user, experienceId]);
 
 	// Optimized backend auto-closing behavior with throttling
 	useEffect(() => {
@@ -263,8 +312,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 				const hasChanges = updatedConversations.some(
 					(conv, index) =>
 						conv.status !== prevConversations[index]?.status ||
-						conv.updatedAt.getTime() !==
-							prevConversations[index]?.updatedAt.getTime(),
+						conv.updatedAt !== prevConversations[index]?.updatedAt,
 				);
 
 				return hasChanges ? updatedConversations : prevConversations;
@@ -298,6 +346,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 					action: 'send_message',
 					message,
 					messageType: 'text',
+					experienceId: user.experienceId,
 				}, user.experienceId);
 
 				const result = await response.json();
@@ -314,14 +363,14 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 										conversationId: result.message!.conversationId,
 										type: result.message!.type as "user" | "bot" | "system",
 										text: result.message!.content,
-										timestamp: result.message!.createdAt,
-										isRead: true,
-										metadata: result.message!.metadata,
-									}],
-									lastMessage: message,
-									lastMessageAt: result.message!.createdAt,
-									messageCount: conv.messageCount + 1,
-									updatedAt: new Date(),
+									timestamp: result.message!.createdAt,
+									isRead: true,
+									metadata: result.message!.metadata,
+								}],
+								lastMessage: message,
+								lastMessageAt: result.message!.createdAt,
+								messageCount: conv.messageCount + 1,
+								updatedAt: new Date().toISOString(),
 								}
 								: conv
 						)
@@ -370,6 +419,36 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack }) => {
 			loadConversationDetailsCallback(selectedConversationId);
 		}
 	}, [selectedConversationId, loadConversationDetailsCallback]);
+
+	// Show loading state
+	if (loading) {
+		return (
+			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
+				<div className="text-center">
+					<h1 className="text-2xl font-bold text-white mb-4">Loading LiveChat...</h1>
+					<p className="text-gray-300">
+						Please wait while we prepare your live chat experience.
+					</p>
+				</div>
+			</div>
+		);
+	}
+
+	// Show error state
+	if (authError || !user) {
+		return (
+			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
+				<div className="text-center">
+					<h1 className="text-2xl font-bold text-white mb-4">Error</h1>
+					<p className="text-gray-300 mb-4">{authError || "Failed to load user context"}</p>
+					<Button onClick={onBack} variant="ghost">
+						<ArrowLeft className="w-4 h-4 mr-2" />
+						Go Back
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div
