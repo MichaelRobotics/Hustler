@@ -4,14 +4,17 @@
  * Handles polling-based message monitoring for Phase 2 and Phase 3 of the Two-Phase Chat Initiation System.
  * This service monitors Whop DMs for user responses and processes them through the funnel system.
  * Phase 3 adds progressive error handling and timeout management.
+ * 
+ * UPDATED: Now uses multi-tenant architecture for proper tenant isolation.
  */
 
 import { and, eq, lt } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, funnels, funnelInteractions, messages } from "../supabase/schema";
+import { conversations, funnels, funnelInteractions, messages, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelBlock, FunnelBlockOption, FunnelFlow } from "../types/funnel";
 import { updateConversationBlock, addMessage } from "./simplified-conversation-actions";
+import { multiTenantDMMonitoringManager } from "./tenant-dm-monitoring-service";
 
 /**
  * Error message templates for progressive error handling
@@ -31,14 +34,15 @@ const TIMEOUT_CONFIG = {
 } as const;
 
 /**
- * DM Monitoring Service Class
+ * Legacy DM Monitoring Service Class (DEPRECATED)
  * 
- * Manages polling intervals and lifecycle for monitoring user DM responses.
- * Uses 5s polling for first minute, then 10s intervals.
+ * This class is kept for backward compatibility but now delegates to the
+ * multi-tenant architecture. Use multiTenantDMMonitoringManager directly
+ * for new implementations.
+ * 
+ * @deprecated Use multiTenantDMMonitoringManager instead
  */
 export class DMMonitoringService {
-	private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
-	private pollingStatus: Map<string, boolean> = new Map();
 	private readonly INITIAL_POLLING_INTERVAL = 5000; // 5 seconds
 	private readonly REGULAR_POLLING_INTERVAL = 10000; // 10 seconds
 	private readonly INITIAL_POLLING_DURATION = 60000; // 1 minute
@@ -54,49 +58,33 @@ export class DMMonitoringService {
 	 * 
 	 * @param conversationId - Internal conversation ID
 	 * @param whopUserId - Whop user ID
+	 * @deprecated Use multiTenantDMMonitoringManager.startMonitoring() instead
 	 */
 	async startMonitoring(conversationId: string, whopUserId: string): Promise<void> {
 		try {
-			console.log(`Starting DM monitoring for conversation ${conversationId}, user ${whopUserId}`);
+			console.log(`[DEPRECATED] Starting DM monitoring for conversation ${conversationId}, user ${whopUserId}`);
 
-			// Stop any existing monitoring for this conversation
-			await this.stopMonitoring(conversationId);
+			// Get conversation to find experienceId for tenant isolation
+			const conversation = await db.query.conversations.findFirst({
+				where: eq(conversations.id, conversationId),
+				with: {
+					experience: true,
+				},
+			});
 
-			// Mark as active
-			this.pollingStatus.set(conversationId, true);
+			if (!conversation || !conversation.experience) {
+				console.error(`Conversation ${conversationId} not found or has no experience`);
+				return;
+			}
 
-			// Start with initial polling interval (5s for first minute)
-			const startTime = Date.now();
-			
-			const poll = async () => {
-				if (!this.pollingStatus.get(conversationId)) {
-					return; // Stop polling if disabled
-				}
-
-				try {
-					await this.pollForMessages(conversationId, whopUserId);
-				} catch (error) {
-					console.error(`Error polling messages for conversation ${conversationId}:`, error);
-					// Continue polling even if one poll fails
-				}
-
-				// Schedule next poll
-				if (this.pollingStatus.get(conversationId)) {
-					const elapsed = Date.now() - startTime;
-					const interval = elapsed < this.INITIAL_POLLING_DURATION 
-						? this.INITIAL_POLLING_INTERVAL 
-						: this.REGULAR_POLLING_INTERVAL;
-
-					const timeoutId = setTimeout(poll, interval);
-					this.pollingIntervals.set(conversationId, timeoutId);
-				}
-			};
-
-			// Start first poll immediately
-			await poll();
+			// Delegate to multi-tenant manager
+			await multiTenantDMMonitoringManager.startMonitoring(
+				conversationId,
+				whopUserId,
+				conversation.experience.id
+			);
 		} catch (error) {
 			console.error(`Error starting DM monitoring for conversation ${conversationId}:`, error);
-			this.pollingStatus.set(conversationId, false);
 		}
 	}
 
@@ -104,20 +92,30 @@ export class DMMonitoringService {
 	 * Stop monitoring a user's DM conversation
 	 * 
 	 * @param conversationId - Internal conversation ID
+	 * @deprecated Use multiTenantDMMonitoringManager.stopMonitoring() instead
 	 */
 	async stopMonitoring(conversationId: string): Promise<void> {
 		try {
-			console.log(`Stopping DM monitoring for conversation ${conversationId}`);
+			console.log(`[DEPRECATED] Stopping DM monitoring for conversation ${conversationId}`);
 
-			// Clear polling status
-			this.pollingStatus.set(conversationId, false);
+			// Get conversation to find experienceId for tenant isolation
+			const conversation = await db.query.conversations.findFirst({
+				where: eq(conversations.id, conversationId),
+				with: {
+					experience: true,
+				},
+			});
 
-			// Clear existing interval
-			const existingInterval = this.pollingIntervals.get(conversationId);
-			if (existingInterval) {
-				clearTimeout(existingInterval);
-				this.pollingIntervals.delete(conversationId);
+			if (!conversation || !conversation.experience) {
+				console.error(`Conversation ${conversationId} not found or has no experience`);
+				return;
 			}
+
+			// Delegate to multi-tenant manager
+			await multiTenantDMMonitoringManager.stopMonitoring(
+				conversationId,
+				conversation.experience.id
+			);
 		} catch (error) {
 			console.error(`Error stopping DM monitoring for conversation ${conversationId}:`, error);
 		}
@@ -128,18 +126,36 @@ export class DMMonitoringService {
 	 * 
 	 * @param conversationId - Internal conversation ID
 	 * @returns True if monitoring is active
+	 * @deprecated Use multiTenantDMMonitoringManager.getMonitoringStatus() instead
 	 */
 	isMonitoring(conversationId: string): boolean {
-		return this.pollingStatus.get(conversationId) || false;
+		// This is a simplified check - for full status, use the multi-tenant manager
+		const allStatus = multiTenantDMMonitoringManager.getMonitoringStatus();
+		for (const tenantStatus of Object.values(allStatus)) {
+			if (tenantStatus.has(conversationId)) {
+				return tenantStatus.get(conversationId) || false;
+			}
+		}
+		return false;
 	}
 
 	/**
 	 * Get monitoring status for all conversations
 	 * 
 	 * @returns Map of conversation IDs to monitoring status
+	 * @deprecated Use multiTenantDMMonitoringManager.getMonitoringStatus() instead
 	 */
 	getMonitoringStatus(): Map<string, boolean> {
-		return new Map(this.pollingStatus);
+		const allStatus = multiTenantDMMonitoringManager.getMonitoringStatus();
+		const combinedStatus = new Map<string, boolean>();
+		
+		for (const tenantStatus of Object.values(allStatus)) {
+			for (const [conversationId, isActive] of tenantStatus.entries()) {
+				combinedStatus.set(conversationId, isActive);
+			}
+		}
+		
+		return combinedStatus;
 	}
 
 	/**
@@ -147,6 +163,7 @@ export class DMMonitoringService {
 	 * 
 	 * @param conversationId - Internal conversation ID
 	 * @param whopUserId - Whop user ID
+	 * @deprecated This method is now handled by TenantDMMonitoringService
 	 */
 	private async pollForMessages(conversationId: string, whopUserId: string): Promise<void> {
 		try {
@@ -1023,5 +1040,8 @@ export class DMMonitoringService {
 	}
 }
 
-// Export singleton instance
+// Export singleton instance (DEPRECATED - use multiTenantDMMonitoringManager instead)
 export const dmMonitoringService = new DMMonitoringService();
+
+// Export the new multi-tenant manager
+export { multiTenantDMMonitoringManager } from "./tenant-dm-monitoring-service";

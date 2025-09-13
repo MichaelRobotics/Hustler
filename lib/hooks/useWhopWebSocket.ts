@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
 import { apiPost } from "../utils/api-client";
+import { cache, CacheKeys, CACHE_TTL } from "../middleware/cache";
 
 export interface UserChatMessage {
 	id: string;
@@ -29,6 +30,13 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 	const [isConnected, setIsConnected] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+	const [reconnectAttempts, setReconnectAttempts] = useState(0);
+	const [lastMessageTime, setLastMessageTime] = useState<number>(0);
+	
+	// Refs for cleanup and performance
+	const messageQueue = useRef<UserChatMessage[]>([]);
+	const isProcessing = useRef(false);
+	const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	
 	// Use Whop React hooks
 	const websocketContext = useWebsocket();
@@ -38,28 +46,55 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 	// Get the actual websocket client from context
 	const websocket = websocketContext.status === "initializing" ? null : websocketContext.websocket;
 
-	// Update connection status
+	// Update connection status with reconnection logic
 	useEffect(() => {
 		const connected = connectionStatus === "connected";
 		setIsConnected(connected);
+		
 		if (connected) {
 			setError(null);
+			setReconnectAttempts(0);
+			// Process any queued messages
+			processMessageQueue();
+		} else if (connectionStatus === "disconnected" && reconnectAttempts < 5) {
+			// Exponential backoff reconnection
+			const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+			reconnectTimeoutRef.current = setTimeout(() => {
+				setReconnectAttempts(prev => prev + 1);
+				// The WebSocket will automatically reconnect
+			}, delay);
 		}
-	}, [connectionStatus]);
+		
+		return () => {
+			if (reconnectTimeoutRef.current) {
+				clearTimeout(reconnectTimeoutRef.current);
+			}
+		};
+	}, [connectionStatus, reconnectAttempts]);
+
+	// Process queued messages
+	const processMessageQueue = useCallback(() => {
+		if (isProcessing.current || messageQueue.current.length === 0) return;
+		
+		isProcessing.current = true;
+		const messages = [...messageQueue.current];
+		messageQueue.current = [];
+		
+		messages.forEach(message => {
+			config.onMessage?.(message);
+		});
+		
+		isProcessing.current = false;
+	}, [config]);
 
 	// Handle incoming messages using the proper React hook
 	useOnWebsocketMessage((message) => {
 		try {
-			console.log("Received WebSocket message:", message);
-			
 			// Parse the message
 			const parsedMessage = JSON.parse(message.json);
-			console.log("Parsed message:", parsedMessage);
 			
 			// Check if it's a conversation message
 			if (parsedMessage.conversationId === config.conversationId) {
-				console.log("Message is for current conversation, processing...");
-				
 				const chatMessage: UserChatMessage = {
 					id: parsedMessage.id || `ws-${Date.now()}`,
 					type: parsedMessage.messageType || parsedMessage.type || "bot",
@@ -69,10 +104,15 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 					timestamp: new Date(),
 				};
 
-				console.log("Calling onMessage with:", chatMessage);
-				config.onMessage?.(chatMessage);
-			} else {
-				console.log("Message is not for current conversation:", parsedMessage.conversationId, "vs", config.conversationId);
+				// Update last message time for connection health
+				setLastMessageTime(Date.now());
+				
+				// If connected, process immediately; otherwise queue
+				if (isConnected) {
+					config.onMessage?.(chatMessage);
+				} else {
+					messageQueue.current.push(chatMessage);
+				}
 			}
 		} catch (err) {
 			console.error("Error handling WebSocket message:", err);
@@ -80,7 +120,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 		}
 	});
 
-	// Send message
+	// Send message with caching and optimization
 	const sendMessage = useCallback(async (
 		content: string, 
 		type: "user" | "bot" | "system" = "user", 
@@ -88,12 +128,24 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 	): Promise<boolean> => {
 		try {
 			if (!isConnected) {
-				throw new Error("WebSocket not connected");
+				// Queue message for when connection is restored
+				messageQueue.current.push({
+					id: `queued-${Date.now()}`,
+					type,
+					content,
+					metadata,
+					createdAt: new Date(),
+				});
+				return false;
 			}
 
 			// For user messages, also process through funnel system
 			if (type === "user") {
 				try {
+					// Check cache first for recent conversation data
+					const cacheKey = CacheKeys.conversation(config.conversationId);
+					const cachedData = cache.get(cacheKey);
+					
 					const response = await apiPost('/api/userchat/process-message', {
 						conversationId: config.conversationId,
 						messageContent: content,
@@ -102,7 +154,11 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 
 					if (response.ok) {
 						const result = await response.json();
-						console.log("Message processed through funnel:", result);
+						
+						// Cache the result
+						if (result.success) {
+							cache.set(cacheKey, result, CACHE_TTL.CONVERSATION);
+						}
 						
 						// If there's a bot response, send it via WebSocket
 						if (result.funnelResponse?.botMessage) {
@@ -114,20 +170,16 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 								metadata: {
 									blockId: result.funnelResponse.nextBlockId,
 									timestamp: new Date().toISOString(),
+									cached: !!cachedData,
 								},
 								userId: "system",
 								timestamp: new Date().toISOString(),
 							};
-
-							console.log("Broadcasting bot message:", botMessage);
 							
 							await broadcast({
 								message: JSON.stringify(botMessage),
 								target: "everyone",
 							});
-							
-							// Don't call onMessage here - let the WebSocket message handler do it
-							// This prevents duplicate messages
 						}
 					} else {
 						console.error("Failed to process message through funnel:", response.statusText);
@@ -188,11 +240,23 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 		}
 	}, [isConnected, config, broadcast]);
 
+	// Cleanup on unmount
+	useEffect(() => {
+		return () => {
+			if (reconnectTimeoutRef.current) {
+				clearTimeout(reconnectTimeoutRef.current);
+			}
+		};
+	}, []);
+
 	return {
 		isConnected,
 		isConnecting: connectionStatus === "connecting",
 		error,
 		typingUsers: Array.from(typingUsers),
+		reconnectAttempts,
+		lastMessageTime,
+		queuedMessages: messageQueue.current.length,
 		connect: () => {}, // Connection is handled by WhopWebsocketProvider
 		disconnect: () => {}, // Disconnection is handled by WhopWebsocketProvider
 		sendMessage,
