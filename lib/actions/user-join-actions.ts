@@ -63,6 +63,20 @@ export async function handleUserJoinEvent(
 		// Close any existing active conversations for this user
 		await closeExistingActiveConversationsByWhopUserId(userId, experience.id);
 
+		// Check if conversation already exists (race condition protection)
+		const existingConversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.whopUserId, userId),
+				eq(conversations.experienceId, experience.id),
+				eq(conversations.status, "active")
+			),
+		});
+
+		if (existingConversation) {
+			console.log(`Conversation already exists for user ${userId} in experience ${experience.id}, skipping creation`);
+			return;
+		}
+
 		// Create conversation record
 		const conversationId = await createConversation(
 			experience.id,
