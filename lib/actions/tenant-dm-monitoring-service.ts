@@ -443,7 +443,7 @@ class TenantDMMonitoringService {
 
       // Update conversation block
       const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
-      await updateConversationBlock(conversationId, nextBlockId, updatedUserPath);
+      await updateConversationBlock(conversationId, nextBlockId, updatedUserPath, this.tenantId);
 
       // Add user message
       await addMessage(conversationId, "user", selectedOption.text);

@@ -654,6 +654,7 @@ export async function abandonConversation(
  */
 export async function updateConversation(
 	conversationId: string,
+	experienceId: string,
 	updates: {
 		status?: "active" | "completed" | "abandoned";
 		currentBlockId?: string;
