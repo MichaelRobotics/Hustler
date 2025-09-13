@@ -39,15 +39,17 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Get experience record for the conversation
+		// Get experience record from the funnel (we already found it in getLiveFunnel)
 		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, productId),
+			where: eq(experiences.id, liveFunnel.experienceId),
 		});
 
 		if (!experience) {
-			console.error(`Experience not found for product ${productId}`);
+			console.error(`Experience not found for funnel ${liveFunnel.id}`);
 			return;
 		}
+
+		console.log(`Using experience ${experience.whopExperienceId} for product ${productId}`);
 
 		// Extract welcome message from funnel flow
 		const welcomeMessage = getWelcomeMessage(liveFunnel.flow);
@@ -129,38 +131,34 @@ export async function handleUserJoinEvent(
 export async function getLiveFunnel(productId: string): Promise<{
 	id: string;
 	flow: FunnelFlow;
+	experienceId: string;
 } | null> {
 	try {
-		// First, get the experience record to get our internal experience ID
-		// Note: In Whop, product_id maps to experience_id in our system
-		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, productId),
-		});
-
-		if (!experience) {
-			console.log(`Experience not found for whopExperienceId: ${productId}`);
-			return null;
-		}
-
-		// Find deployed funnel for this experience
+		// For webhook events, we need to find ANY experience that has a deployed funnel
+		// The product_id doesn't matter - we just need to find a live funnel
+		// This allows the webhook to work for any product in your app
+		
+		// Find ANY deployed funnel (since all products in your app use the same funnel)
 		const liveFunnel = await db.query.funnels.findFirst({
-			where: and(
-				eq(funnels.experienceId, experience.id),
-				eq(funnels.isDeployed, true),
-			),
+			where: eq(funnels.isDeployed, true),
 			columns: {
 				id: true,
 				flow: true,
+				experienceId: true,
 			},
 		});
 
 		if (!liveFunnel || !liveFunnel.flow) {
+			console.log(`No live funnel found for any experience`);
 			return null;
 		}
+
+		console.log(`Found live funnel ${liveFunnel.id} for experience ${liveFunnel.experienceId} (product: ${productId})`);
 
 		return {
 			id: liveFunnel.id,
 			flow: liveFunnel.flow as FunnelFlow,
+			experienceId: liveFunnel.experienceId,
 		};
 	} catch (error) {
 		console.error("Error getting live funnel:", error);
