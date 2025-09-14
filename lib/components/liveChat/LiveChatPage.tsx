@@ -34,6 +34,7 @@ import type {
 	LiveChatConversation,
 	LiveChatFilters,
 	LiveChatPageProps,
+	LiveChatMessage,
 } from "../../types/liveChat";
 import { ThemeToggle } from "../common/ThemeToggle";
 import ConversationList from "./ConversationList";
@@ -355,9 +356,45 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		async (message: string) => {
 			if (!selectedConversationId || !user) return;
 
+			// IMMEDIATE UI UPDATE: Add message to conversation immediately
+			const tempMessage: LiveChatMessage = {
+				id: `temp-${Date.now()}`,
+				conversationId: selectedConversationId,
+				type: "bot" as const,
+				text: message,
+				timestamp: new Date().toISOString(),
+				isRead: true,
+				metadata: {
+					funnelStage: "LIVECHAT",
+				},
+			};
+
+			setConversations(prev => 
+				prev.map(conv => 
+					conv.id === selectedConversationId
+						? {
+							...conv,
+							messages: [...conv.messages, tempMessage],
+							lastMessage: message,
+							lastMessageAt: new Date().toISOString(),
+							messageCount: (conv.messageCount || 0) + 1,
+							updatedAt: new Date().toISOString(),
+						}
+						: conv
+				)
+			);
+
 			try {
-				// Send message via WebSocket
+				console.log("LiveChat: Starting to send message:", {
+					message,
+					selectedConversationId,
+					experienceId: user.experienceId,
+					user: user
+				});
+
+				// Send message via WebSocket (non-blocking)
 				await sendWebSocketMessage(message, "bot");
+				console.log("LiveChat: WebSocket message sent (or skipped if not connected)");
 
 				// Also send via API for persistence
 				const response = await apiPost(`/api/livechat/conversations/${selectedConversationId}`, {
@@ -367,37 +404,94 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 					experienceId: user.experienceId,
 				}, user.experienceId);
 
-				const result = await response.json();
+				console.log("LiveChat: API response status:", response.status);
+				console.log("LiveChat: API response headers:", Object.fromEntries(response.headers.entries()));
 
-				if (result.success && result.message) {
-					// Update conversation with new message
+				if (!response.ok) {
+					console.error("LiveChat: API request failed with status:", response.status);
+					const errorText = await response.text();
+					console.error("LiveChat: API error response:", errorText);
+					console.error("LiveChat: Setting error state from HTTP error");
+					setError(`API request failed: ${response.status} ${response.statusText}`);
+					return;
+				}
+
+				const result = await response.json();
+				console.log("LiveChat send message response:", result);
+
+				if (result.success && result.data?.message) {
+					// Replace temporary message with real message from database
 					setConversations(prev => 
 						prev.map(conv => 
 							conv.id === selectedConversationId
 								? {
 									...conv,
-									messages: [...conv.messages, {
-										id: result.message!.id,
-										conversationId: result.message!.conversationId,
-										type: result.message!.type as "user" | "bot" | "system",
-										text: result.message!.content,
-									timestamp: result.message!.createdAt,
-									isRead: true,
-									metadata: result.message!.metadata,
-								}],
-								lastMessage: message,
-								lastMessageAt: result.message!.createdAt,
-								messageCount: conv.messageCount + 1,
-								updatedAt: new Date().toISOString(),
+									messages: conv.messages.map(msg => 
+										msg.id === tempMessage.id 
+											? {
+												id: result.data.message.id,
+												conversationId: result.data.message.conversationId,
+												type: result.data.message.type as "user" | "bot" | "system",
+												text: result.data.message.content,
+												timestamp: result.data.message.createdAt,
+												isRead: true,
+												metadata: result.data.message.metadata,
+											}
+											: msg
+									),
+									lastMessage: message,
+									lastMessageAt: result.data.message.createdAt,
+									updatedAt: new Date().toISOString(),
 								}
 								: conv
 						)
 					);
 				} else {
+					console.error("LiveChat: API returned error:", {
+						success: result.success,
+						error: result.error,
+						data: result.data,
+						fullResult: result
+					});
+					console.error("LiveChat: Setting error state from API response");
+					
+					// Remove temporary message on error
+					setConversations(prev => 
+						prev.map(conv => 
+							conv.id === selectedConversationId
+								? {
+									...conv,
+									messages: conv.messages.filter(msg => msg.id !== tempMessage.id),
+									messageCount: Math.max((conv.messageCount || 0) - 1, 0),
+								}
+								: conv
+						)
+					);
+					
 					setError(result.error || "Failed to send message");
 				}
 			} catch (err) {
-				console.error("Error sending message:", err);
+				console.error("LiveChat: Exception during message send:", err);
+				console.error("LiveChat: Error details:", {
+					name: err instanceof Error ? err.name : 'Unknown',
+					message: err instanceof Error ? err.message : String(err),
+					stack: err instanceof Error ? err.stack : undefined
+				});
+				console.error("LiveChat: This error is being set in the error state");
+				
+				// Remove temporary message on exception
+				setConversations(prev => 
+					prev.map(conv => 
+						conv.id === selectedConversationId
+							? {
+								...conv,
+								messages: conv.messages.filter(msg => msg.id !== tempMessage.id),
+								messageCount: Math.max((conv.messageCount || 0) - 1, 0),
+							}
+							: conv
+					)
+				);
+				
 				setError("Failed to send message");
 			}
 		},

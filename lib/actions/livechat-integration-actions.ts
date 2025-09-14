@@ -336,21 +336,44 @@ export async function sendLiveChatMessage(
 	experienceId: string,
 ): Promise<{ success: boolean; message?: any; error?: string }> {
 	try {
+		console.log("sendLiveChatMessage: Starting with params:", {
+			userId: user.id,
+			userExperienceId: user.experienceId,
+			requestedExperienceId: experienceId,
+			conversationId,
+			message
+		});
+
 		// Verify user has access to this experience
 		if (user.experienceId !== experienceId) {
+			console.error("sendLiveChatMessage: Experience ID mismatch:", {
+				userExperienceId: user.experienceId,
+				requestedExperienceId: experienceId
+			});
 			throw new Error("Access denied: Invalid experience ID");
 		}
 
 		// First, find the database UUID for this Whop experience ID
+		console.log("sendLiveChatMessage: Looking up experience:", experienceId);
 		const experience = await db.query.experiences.findFirst({
 			where: eq(experiences.whopExperienceId, experienceId),
 		});
 
 		if (!experience) {
+			console.error("sendLiveChatMessage: Experience not found for:", experienceId);
 			throw new Error("Experience not found");
 		}
 
+		console.log("sendLiveChatMessage: Found experience:", {
+			id: experience.id,
+			whopExperienceId: experience.whopExperienceId
+		});
+
 		// Get conversation to verify it exists and get whopUserId
+		console.log("sendLiveChatMessage: Looking up conversation:", {
+			conversationId,
+			experienceId: experience.id
+		});
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
@@ -360,10 +383,21 @@ export async function sendLiveChatMessage(
 		});
 
 		if (!conversation) {
+			console.error("sendLiveChatMessage: Conversation not found:", {
+				conversationId,
+				experienceId: experience.id
+			});
 			throw new Error("Conversation not found");
 		}
 
+		console.log("sendLiveChatMessage: Found conversation:", {
+			id: conversation.id,
+			whopUserId: conversation.whopUserId,
+			status: conversation.status
+		});
+
 		// Add message to conversation
+		console.log("sendLiveChatMessage: Inserting message to database");
 		const [newMessage] = await db.insert(messages).values({
 			conversationId,
 			type: "bot", // Admin messages are treated as bot messages
@@ -374,6 +408,11 @@ export async function sendLiveChatMessage(
 				timestamp: new Date().toISOString(),
 			},
 		}).returning();
+
+		console.log("sendLiveChatMessage: Message inserted successfully:", {
+			messageId: newMessage.id,
+			conversationId: newMessage.conversationId
+		});
 
 		// Update conversation timestamp
 		await db

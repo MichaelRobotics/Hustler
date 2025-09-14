@@ -114,7 +114,7 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 						<div className="flex-shrink-0 flex items-center gap-1">
 							<MessageSquare size={10} className="text-gray-400" />
 							<Text size="1" color="gray" className="text-muted-foreground">
-								{conversation.messageCount}
+								{conversation.messageCount || 0}
 							</Text>
 						</div>
 					</div>

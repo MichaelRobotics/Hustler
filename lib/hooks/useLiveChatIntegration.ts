@@ -174,29 +174,37 @@ export function useLiveChatIntegration({
 
 	// Send message to a specific conversation
 	const sendMessage = useCallback(async (message: string, type: "bot" | "system") => {
+		// Don't throw errors - just log and return silently
 		if (!isConnected) {
-			throw new Error("WebSocket not connected");
+			console.warn("WebSocket not connected, skipping message send");
+			return;
 		}
 
 		if (!conversationId) {
-			throw new Error("No conversation selected");
+			console.warn("No conversation selected, skipping message send");
+			return;
 		}
 
-		const messageData = {
-			type: "livechat_message",
-			conversationId,
-			message,
-			messageType: type,
-			userId: user.id,
-			experienceId,
-			timestamp: new Date().toISOString(),
-		};
+		try {
+			const messageData = {
+				type: "livechat_message",
+				conversationId,
+				message,
+				messageType: type,
+				userId: user.id,
+				experienceId,
+				timestamp: new Date().toISOString(),
+			};
 
-		// Use Whop's broadcast hook to send messages
-		broadcast({
-			message: JSON.stringify(messageData),
-			target: { customId: `conversation:${conversationId}` },
-		});
+			// Use Whop's broadcast hook to send messages
+			broadcast({
+				message: JSON.stringify(messageData),
+				target: { customId: `conversation:${conversationId}` },
+			});
+		} catch (error) {
+			console.warn("Failed to send WebSocket message:", error);
+			// Don't throw - just log the error
+		}
 	}, [conversationId, user.id, experienceId, isConnected, broadcast]);
 
 	// Send typing indicator

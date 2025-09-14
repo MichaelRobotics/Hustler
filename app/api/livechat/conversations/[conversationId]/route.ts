@@ -127,7 +127,19 @@ async function postConversationHandler(
     const authenticatedUser = userContext.user;
 
     if (action === "send_message") {
+      console.log("LiveChat API: Received send_message request:", {
+        conversationId,
+        message,
+        experienceId,
+        authenticatedUser: {
+          id: authenticatedUser.id,
+          experienceId: authenticatedUser.experienceId,
+          accessLevel: authenticatedUser.accessLevel
+        }
+      });
+
       if (!message) {
+        console.error("LiveChat API: Missing message");
         return createErrorResponse(
           "MISSING_MESSAGE",
           "Message is required"
@@ -135,12 +147,15 @@ async function postConversationHandler(
       }
 
       const result = await sendLiveChatMessage(authenticatedUser, conversationId, message, experienceId);
+      console.log("LiveChat API: sendLiveChatMessage result:", result);
 
       if (result.success) {
+        console.log("LiveChat API: Message sent successfully");
         return createSuccessResponse({
           message: result.message,
         });
       } else {
+        console.error("LiveChat API: Failed to send message:", result.error);
         return createErrorResponse(
           "SEND_MESSAGE_FAILED",
           result.error || "Failed to send message"

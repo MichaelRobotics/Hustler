@@ -14,6 +14,7 @@ import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
 import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
+import { ChatRestartButton } from "../funnelBuilder/components/ChatRestartButton";
 
 interface PreviewChatProps {
 	funnelFlow: FunnelFlow;
@@ -371,6 +372,11 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							</button>
 						</div>
 					</div>
+				)}
+
+				{/* Start Over Button - Show when conversation has ended (no more options) */}
+				{history.length > 0 && options.length === 0 && !currentBlockId && (
+					<ChatRestartButton onRestart={startConversation} />
 				)}
 
 			</div>
