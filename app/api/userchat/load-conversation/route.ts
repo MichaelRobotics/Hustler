@@ -36,12 +36,6 @@ async function loadConversationHandler(
       );
     }
 
-    // Get user context to determine access level
-    const userContext = await getUserContext(user.userId, "", experienceId);
-    const userAccessLevel = userContext?.user?.accessLevel || "customer";
-    
-    console.log(`[load-conversation] User access level: ${userAccessLevel} - will use ${userAccessLevel === "customer" ? "customer-filtered" : "full"} message loading`);
-
     // Get the conversation to find the correct experience ID
     const conversation = await db.query.conversations.findFirst({
       where: eq(conversations.id, conversationId),
@@ -174,9 +168,23 @@ async function loadConversationHandler(
         // Reload the updated conversation
         const updatedConversation = await getConversationById(conversationId, conversation.experienceId);
         if (updatedConversation) {
-          // Load unified messages for the updated conversation
-          // Use customer-filtered messages for customers, full messages for admins
-          const unifiedMessages = userAccessLevel === "customer" 
+          // Get user context to determine access level for TRANSITION stage
+          let userContext = null;
+          try {
+            userContext = await getUserContext(
+              conversation.whopUserId,
+              conversation.experience?.whopCompanyId || "",
+              experienceId
+            );
+          } catch (error) {
+            console.error("Error getting user context for TRANSITION stage:", error);
+          }
+
+          // Determine if user has customer access level
+          const isCustomer = userContext?.user?.accessLevel === "customer";
+          
+          // Load messages - use customer-filtered messages for customers
+          const unifiedMessages = isCustomer 
             ? await getConversationMessagesForCustomer(
                 conversationId,
                 conversation.experienceId,
@@ -210,9 +218,25 @@ async function loadConversationHandler(
     const conversationData = await getConversationById(conversationId, conversation.experienceId);
 
     if (conversationData) {
-      // Load unified messages using the single source of truth
-      // Use customer-filtered messages for customers, full messages for admins
-      const unifiedMessages = userAccessLevel === "customer" 
+      // Get user context to determine access level
+      let userContext = null;
+      try {
+        userContext = await getUserContext(
+          conversation.whopUserId,
+          conversation.experience?.whopCompanyId || "",
+          experienceId
+        );
+      } catch (error) {
+        console.error("Error getting user context:", error);
+      }
+
+      // Determine if user has customer access level
+      const isCustomer = userContext?.user?.accessLevel === "customer";
+      
+      console.log(`[load-conversation] User access level: ${userContext?.user?.accessLevel}, isCustomer: ${isCustomer}`);
+
+      // Load messages - use customer-filtered messages for customers
+      const unifiedMessages = isCustomer 
         ? await getConversationMessagesForCustomer(
             conversationId,
             conversation.experienceId,
