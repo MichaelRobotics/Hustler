@@ -111,6 +111,78 @@ export async function getConversationMessagesWithVersion(
 }
 
 /**
+ * Filter messages to show only those from EXPERIENCE_QUALIFICATION stage onwards
+ * This is used for customer access level to hide DM funnel messages
+ * 
+ * @param messages - Array of unified messages
+ * @param funnelFlow - Funnel flow to determine stage boundaries
+ * @returns Filtered messages starting from EXPERIENCE_QUALIFICATION
+ */
+export function filterMessagesFromExperienceQualification(
+  messages: UnifiedMessage[],
+  funnelFlow: any
+): UnifiedMessage[] {
+  if (!funnelFlow || !funnelFlow.stages) {
+    console.log("[UNIFIED-MESSAGES] No funnel flow provided, returning all messages");
+    return messages;
+  }
+
+  // Find the EXPERIENCE_QUALIFICATION stage
+  const experienceQualificationStage = funnelFlow.stages.find(
+    (stage: any) => stage.name === "EXPERIENCE_QUALIFICATION"
+  );
+
+  if (!experienceQualificationStage || !experienceQualificationStage.blockIds) {
+    console.log("[UNIFIED-MESSAGES] No EXPERIENCE_QUALIFICATION stage found, returning all messages");
+    return messages;
+  }
+
+  // Find the first bot message that belongs to EXPERIENCE_QUALIFICATION stage
+  let experienceQualificationStartIndex = -1;
+  
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+    
+    // Look for bot messages that might be from EXPERIENCE_QUALIFICATION stage
+    if (message.type === "bot") {
+      // Check if this message's metadata indicates it's from EXPERIENCE_QUALIFICATION
+      if (message.metadata?.blockId && 
+          experienceQualificationStage.blockIds.includes(message.metadata.blockId)) {
+        experienceQualificationStartIndex = i;
+        console.log(`[UNIFIED-MESSAGES] Found EXPERIENCE_QUALIFICATION start at message index ${i}, blockId: ${message.metadata.blockId}`);
+        break;
+      }
+      
+      // Also check if the message content matches the EXPERIENCE_QUALIFICATION block message
+      // This is a fallback for messages that might not have metadata
+      const experienceBlocks = experienceQualificationStage.blockIds.map((blockId: string) => 
+        funnelFlow.blocks?.[blockId]
+      ).filter(Boolean);
+      
+      for (const block of experienceBlocks) {
+        if (block.message && message.text.includes(block.message.substring(0, 50))) {
+          experienceQualificationStartIndex = i;
+          console.log(`[UNIFIED-MESSAGES] Found EXPERIENCE_QUALIFICATION start at message index ${i} by content match`);
+          break;
+        }
+      }
+      
+      if (experienceQualificationStartIndex !== -1) break;
+    }
+  }
+
+  if (experienceQualificationStartIndex === -1) {
+    console.log("[UNIFIED-MESSAGES] No EXPERIENCE_QUALIFICATION messages found, returning all messages");
+    return messages;
+  }
+
+  const filteredMessages = messages.slice(experienceQualificationStartIndex);
+  console.log(`[UNIFIED-MESSAGES] Filtered messages: ${messages.length} -> ${filteredMessages.length} (starting from EXPERIENCE_QUALIFICATION)`);
+  
+  return filteredMessages;
+}
+
+/**
  * Update conversation timestamp (simplified versioning)
  * 
  * @param conversationId - ID of the conversation

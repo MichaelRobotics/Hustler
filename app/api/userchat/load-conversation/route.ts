@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
-import { getConversationMessages } from "@/lib/actions/unified-message-actions";
+import { getConversationMessages, filterMessagesFromExperienceQualification } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels, messages } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
@@ -18,7 +18,7 @@ async function loadConversationHandler(
 ) {
   try {
     const { user } = context;
-    const { conversationId } = await request.json();
+    const { conversationId, userType } = await request.json();
 
     if (!conversationId) {
       return createErrorResponse(
@@ -34,6 +34,10 @@ async function loadConversationHandler(
         "Experience ID is required"
       );
     }
+
+    // Determine if this is a customer request (for message filtering)
+    const isCustomerRequest = userType === "customer";
+    console.log(`[load-conversation] Request type: ${userType}, isCustomerRequest: ${isCustomerRequest}`);
 
     // Get the conversation to find the correct experience ID
     const conversation = await db.query.conversations.findFirst({
@@ -174,11 +178,18 @@ async function loadConversationHandler(
             conversation.whopUserId
           );
 
+          // Apply customer filtering if this is a customer request
+          const finalMessages = isCustomerRequest 
+            ? filterMessagesFromExperienceQualification(unifiedMessages, funnelFlow)
+            : unifiedMessages;
+
+          console.log(`[load-conversation] Message filtering: ${unifiedMessages.length} -> ${finalMessages.length} (customer: ${isCustomerRequest})`);
+
           return NextResponse.json({
             success: true,
             conversation: {
               ...updatedConversation,
-              messages: unifiedMessages, // Use unified message format
+              messages: finalMessages, // Use filtered messages
             },
             funnelFlow: funnelFlow,
             stageInfo: {
@@ -203,6 +214,13 @@ async function loadConversationHandler(
         conversation.whopUserId
       );
 
+      // Apply customer filtering if this is a customer request
+      const finalMessages = isCustomerRequest 
+        ? filterMessagesFromExperienceQualification(unifiedMessages, funnelFlow)
+        : unifiedMessages;
+
+      console.log(`[load-conversation] Message filtering: ${unifiedMessages.length} -> ${finalMessages.length} (customer: ${isCustomerRequest})`);
+
       const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
       
       console.log(`Load-conversation final stage info being returned:`, {
@@ -226,7 +244,7 @@ async function loadConversationHandler(
         success: true,
         conversation: {
           ...conversationData,
-          messages: unifiedMessages, // Use unified message format
+          messages: finalMessages, // Use filtered messages
         },
         funnelFlow: funnelFlow,
         stageInfo: {

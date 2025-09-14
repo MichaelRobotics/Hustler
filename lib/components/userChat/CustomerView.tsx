@@ -95,6 +95,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						const loadResponse = await apiPost('/api/userchat/load-conversation', {
 							conversationId: checkResult.conversation.id,
 							whopUserId: whopUserId,
+							userType: userType, // Pass userType for message filtering
 						}, experienceId);
 
 						const loadResult = await loadResponse.json();
