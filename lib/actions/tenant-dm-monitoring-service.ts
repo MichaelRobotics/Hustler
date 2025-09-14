@@ -448,18 +448,16 @@ class TenantDMMonitoringService {
       // Add user message
       await addMessage(conversationId, "user", selectedOption.text);
 
-      // Add bot response
-      await addMessage(conversationId, "bot", nextBlock.message);
-
       // Check if this is a TRANSITION block - send transition message and stop monitoring
       if (this.isTransitionBlock(nextBlock, funnelFlow)) {
         console.log(`[Tenant ${this.tenantId}] Conversation reached TRANSITION stage, sending transition message`);
+        // Don't add bot message here - sendTransitionMessage will add it with personalized link
         await this.sendTransitionMessage(conversationId, nextBlock);
         await this.stopMonitoring(conversationId);
         return;
       }
 
-      // Send next message to user via DM
+      // Send next message to user via DM (this will also add the bot message to database)
       await this.sendNextMessage(conversationId, nextBlock);
 
     } catch (error) {

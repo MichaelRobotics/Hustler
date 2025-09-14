@@ -1,20 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
+import { getConversationMessages } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels, messages } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
-import { whopSdk } from "@/lib/whop-sdk";
-import { headers } from "next/headers";
+import {
+  type AuthContext,
+  createErrorResponse,
+  createSuccessResponse,
+  withWhopAuth,
+} from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
 
-export async function POST(request: NextRequest) {
+async function loadConversationHandler(
+  request: NextRequest,
+  context: AuthContext,
+) {
   try {
-    const { conversationId, experienceId, whopUserId } = await request.json();
+    const { user } = context;
+    const { conversationId } = await request.json();
 
     if (!conversationId) {
-      return NextResponse.json(
-        { error: "Conversation ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_CONVERSATION_ID",
+        "Conversation ID is required"
+      );
+    }
+
+    const experienceId = user.experienceId;
+    if (!experienceId) {
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
       );
     }
 
@@ -150,9 +167,19 @@ export async function POST(request: NextRequest) {
         // Reload the updated conversation
         const updatedConversation = await getConversationById(conversationId, conversation.experienceId);
         if (updatedConversation) {
+          // Load unified messages for the updated conversation
+          const unifiedMessages = await getConversationMessages(
+            conversationId,
+            conversation.experienceId,
+            conversation.whopUserId
+          );
+
           return NextResponse.json({
             success: true,
-            conversation: updatedConversation,
+            conversation: {
+              ...updatedConversation,
+              messages: unifiedMessages, // Use unified message format
+            },
             funnelFlow: funnelFlow,
             stageInfo: {
               currentStage: "EXPERIENCE_QUALIFICATION",
@@ -169,6 +196,13 @@ export async function POST(request: NextRequest) {
     const conversationData = await getConversationById(conversationId, conversation.experienceId);
 
     if (conversationData) {
+      // Load unified messages using the single source of truth
+      const unifiedMessages = await getConversationMessages(
+        conversationId,
+        conversation.experienceId,
+        conversation.whopUserId
+      );
+
       const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
       
       console.log(`Load-conversation final stage info being returned:`, {
@@ -190,7 +224,10 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        conversation: conversationData,
+        conversation: {
+          ...conversationData,
+          messages: unifiedMessages, // Use unified message format
+        },
         funnelFlow: funnelFlow,
         stageInfo: {
           currentStage: isTransitionStage ? "TRANSITION" : 
@@ -205,16 +242,16 @@ export async function POST(request: NextRequest) {
         }
       });
     } else {
-      return NextResponse.json(
-        { success: false, error: "Failed to load conversation" },
-        { status: 404 }
+      return createErrorResponse(
+        "CONVERSATION_NOT_FOUND",
+        "Failed to load conversation"
       );
     }
   } catch (error) {
     console.error("Error loading conversation:", error);
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 }
-    );
+    return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
+
+// Export the protected route handler
+export const POST = withWhopAuth(loadConversationHandler);

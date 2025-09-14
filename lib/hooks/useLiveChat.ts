@@ -184,13 +184,20 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 		[user?.experienceId],
 	);
 
-	// Fetch messages for a specific conversation
+	// Fetch messages for a specific conversation (optimized - only when needed)
 	const fetchMessages = useCallback(
 		async (conversationId: string, reset = false) => {
 		try {
 			// Check if user context is available
 			if (!user?.experienceId) {
 				throw new Error("Experience ID is required");
+			}
+
+			// Check if conversation already has messages loaded
+			const existingConversation = conversations.find(conv => conv.id === conversationId);
+			if (existingConversation?.messages && existingConversation.messages.length > 0 && !reset) {
+				console.log("LiveChat: Messages already loaded for conversation", conversationId);
+				return existingConversation.messages;
 			}
 
 			const params = new URLSearchParams({
@@ -229,7 +236,7 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 				throw error;
 			}
 		},
-		[user?.experienceId],
+		[user?.experienceId, conversations],
 	);
 
 	// Auto-refresh conversations

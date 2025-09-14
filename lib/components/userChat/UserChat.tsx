@@ -69,14 +69,31 @@ const UserChat: React.FC<UserChatProps> = ({
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
 
-	// WebSocket integration for conversation-based chat
+	// Initialize conversation messages from backend data IMMEDIATELY
+	useEffect(() => {
+		if (conversation?.messages) {
+			const formattedMessages = conversation.messages.map((msg: any) => ({
+				id: msg.id,
+				type: msg.type,
+				content: msg.text || msg.content, // Use text property from unified messages, fallback to content
+				metadata: msg.metadata,
+				createdAt: msg.timestamp || msg.createdAt, // Use timestamp from unified messages, fallback to createdAt
+			}));
+			setConversationMessages(formattedMessages);
+			console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
+			console.log("UserChat: Sample message:", formattedMessages[0]);
+			// Scroll to bottom after loading messages
+			setTimeout(() => scrollToBottom(), 100);
+		}
+	}, [conversation?.messages]);
+
+	// WebSocket integration for REAL-TIME updates only (background initialization)
 	const { isConnected, sendMessage, sendTypingIndicator, typingUsers } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
 			console.log("UserChat: Received WebSocket message:", newMessage);
-			// Only refresh if it's a message we don't already have locally
-			// This prevents unnecessary refreshes when we already have the message
+			// Check if message already exists locally
 			const messageExists = conversationMessages.some(msg => 
 				msg.content === newMessage.content && 
 				msg.type === newMessage.type &&
@@ -84,10 +101,17 @@ const UserChat: React.FC<UserChatProps> = ({
 			);
 			
 			if (!messageExists) {
-				console.log("UserChat: New message detected, refreshing conversation...");
-				refreshConversation();
+				console.log("UserChat: New message detected, adding directly...");
+				// Add new message directly instead of reloading all messages
+				setConversationMessages(prev => [...prev, {
+					id: newMessage.id,
+					type: newMessage.type,
+					content: newMessage.content,
+					metadata: newMessage.metadata,
+					createdAt: newMessage.createdAt,
+				}]);
 			} else {
-				console.log("UserChat: Message already exists locally, skipping refresh");
+				console.log("UserChat: Message already exists locally, skipping");
 			}
 			scrollToBottom();
 		},
@@ -101,22 +125,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		},
 	});
 
-	// Initialize conversation messages from backend data
-	useEffect(() => {
-		if (conversation?.messages) {
-			const formattedMessages = conversation.messages.map(msg => ({
-				id: msg.id,
-				type: msg.type,
-				content: msg.content,
-				metadata: msg.metadata,
-				createdAt: msg.createdAt,
-			}));
-			setConversationMessages(formattedMessages);
-			console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
-		}
-	}, [conversation?.messages]);
-
-	// Refresh conversation data when WebSocket receives new messages
+	// Refresh conversation data when WebSocket receives new messages (optimized)
 	const refreshConversation = useCallback(async () => {
 		if (!conversationId || !experienceId) return;
 		
@@ -139,6 +148,8 @@ const UserChat: React.FC<UserChatProps> = ({
 					}));
 					setConversationMessages(formattedMessages);
 					console.log("UserChat: Refreshed conversation messages:", formattedMessages.length);
+					// Scroll to bottom after refreshing
+					setTimeout(() => scrollToBottom(), 50);
 				}
 			}
 		} catch (error) {
@@ -572,7 +583,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const messageList = useMemo(() => {
 		const messagesToShow = conversationMessages.map(msg => ({
 			type: msg.type,
-			text: msg.content,
+			text: msg.content, // Use content property
 			timestamp: msg.createdAt,
 		}));
 

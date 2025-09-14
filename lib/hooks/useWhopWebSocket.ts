@@ -46,7 +46,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 	// Get the actual websocket client from context
 	const websocket = websocketContext.status === "initializing" ? null : websocketContext.websocket;
 
-	// Update connection status with reconnection logic
+	// Update connection status with reconnection logic (background initialization)
 	useEffect(() => {
 		const connected = connectionStatus === "connected";
 		setIsConnected(connected);
@@ -56,11 +56,13 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 			setReconnectAttempts(0);
 			// Process any queued messages
 			processMessageQueue();
+			console.log("UserChat WebSocket: Connected for real-time updates");
 		} else if (connectionStatus === "disconnected" && reconnectAttempts < 5) {
-			// Exponential backoff reconnection
+			// Exponential backoff reconnection (background only)
 			const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
 			reconnectTimeoutRef.current = setTimeout(() => {
 				setReconnectAttempts(prev => prev + 1);
+				console.log("UserChat WebSocket: Attempting reconnection...");
 				// The WebSocket will automatically reconnect
 			}, delay);
 		}

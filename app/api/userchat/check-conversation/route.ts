@@ -2,54 +2,51 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
-import { whopSdk } from "@/lib/whop-sdk";
-import { headers } from "next/headers";
+import { getUserContext } from "@/lib/context/user-context";
+import {
+  type AuthContext,
+  createErrorResponse,
+  createSuccessResponse,
+  withWhopAuth,
+} from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
 
-export async function POST(request: NextRequest) {
+async function checkConversationHandler(
+  request: NextRequest,
+  context: AuthContext,
+) {
   try {
-    // Get experienceId from query parameters (following same pattern as /api/user/context)
-    const { searchParams } = new URL(request.url);
-    const experienceId = searchParams.get("experienceId");
+    const { user } = context;
+    const experienceId = user.experienceId;
 
     if (!experienceId) {
-      return NextResponse.json(
-        { error: "Experience ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
       );
     }
 
-    // Get the current user's Whop ID using proper authentication
-    const headersList = await headers();
-    const { userId: authenticatedWhopUserId } = await whopSdk.verifyUserToken(headersList);
-    
-    if (!authenticatedWhopUserId) {
-      return NextResponse.json(
-        { error: "User authentication required" },
-        { status: 401 }
+    // Get the full user context
+    const userContext = await getUserContext(
+      user.userId,
+      "", // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+    );
+
+    if (!userContext) {
+      return createErrorResponse(
+        "USER_CONTEXT_NOT_FOUND",
+        "User context not found"
       );
     }
 
-    // Validate user access to the experience (following Whop SDK pattern)
-    const experienceAccess = await whopSdk.access.checkIfUserHasAccessToExperience({
-      userId: authenticatedWhopUserId,
-      experienceId: experienceId,
-    });
-
-    if (!experienceAccess.hasAccess) {
-      return NextResponse.json(
-        { error: "Access denied to experience" },
-        { status: 403 }
-      );
-    }
-
-    // Use the authenticated user ID
-    const targetWhopUserId = authenticatedWhopUserId;
+    const targetWhopUserId = user.userId;
     
     // Debug logging for authentication
-    console.log(`[check-conversation] Debug - experienceId from query: ${experienceId}`);
-    console.log(`[check-conversation] Debug - authenticatedWhopUserId from session: ${authenticatedWhopUserId}`);
-    console.log(`[check-conversation] Debug - accessLevel: ${experienceAccess.accessLevel}`);
+    console.log(`[check-conversation] Debug - experienceId from user context: ${experienceId}`);
+    console.log(`[check-conversation] Debug - authenticatedWhopUserId from session: ${targetWhopUserId}`);
+    console.log(`[check-conversation] Debug - accessLevel: ${userContext.user.accessLevel}`);
 
     // Get the experience record
     const experience = await db.query.experiences.findFirst({
@@ -253,9 +250,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("Error checking conversation:", error);
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 }
-    );
+    return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
+
+// Export the protected route handler
+export const POST = withWhopAuth(checkConversationHandler);

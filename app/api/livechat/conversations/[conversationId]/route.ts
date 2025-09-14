@@ -1,188 +1,161 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLiveChatConversationDetails, sendLiveChatMessage } from "@/lib/actions/livechat-integration-actions";
-import { whopSdk } from "@/lib/whop-sdk";
-import { headers } from "next/headers";
+import { getConversationMessages } from "@/lib/actions/unified-message-actions";
+import { getUserContext } from "@/lib/context/user-context";
+import {
+  type AuthContext,
+  createErrorResponse,
+  createSuccessResponse,
+  withWhopAuth,
+} from "@/lib/middleware/whop-auth";
 
-export async function GET(
+async function getConversationHandler(
   request: NextRequest,
-  { params }: { params: Promise<{ conversationId: string }> }
+  context: AuthContext
 ) {
   try {
-    const { conversationId } = await params;
-    const { searchParams } = new URL(request.url);
-    const experienceId = searchParams.get("experienceId");
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const conversationId = pathParts[pathParts.length - 1];
+    const { user } = context;
 
     if (!conversationId) {
-      return NextResponse.json(
-        { error: "Conversation ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_CONVERSATION_ID",
+        "Conversation ID is required"
       );
     }
 
+    const experienceId = user.experienceId;
     if (!experienceId) {
-      return NextResponse.json(
-        { error: "Experience ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
       );
     }
 
-    // For LiveChat, we need to get the user from the request headers since it's called from admin panel
-    // The user context should already be available from the frontend
-    const headersList = await headers();
-    const whopUserId = headersList.get("x-on-behalf-of");
-    const whopCompanyId = headersList.get("x-company-id");
-    
-    if (!whopUserId) {
-      return NextResponse.json(
-        { error: "User ID required" },
-        { status: 401 }
-      );
-    }
-
-    // Get user context for the authenticated user
-    const { getUserContext } = await import("@/lib/context/user-context");
+    // Get full user context for LiveChat
     const userContext = await getUserContext(
-      whopUserId,
-      whopCompanyId || "", // Use company ID from header
+      user.userId,
+      "", // whopCompanyId is optional for experience-based isolation
       experienceId,
-      false,
-      "admin", // Assume admin access for LiveChat
+      false, // forceRefresh
+      "admin", // accessLevel for LiveChat
     );
 
     if (!userContext?.isAuthenticated || !userContext.user) {
-      return NextResponse.json(
-        { error: "Failed to get user context" },
-        { status: 401 }
+      return createErrorResponse(
+        "USER_CONTEXT_NOT_FOUND",
+        "User context not found"
       );
     }
 
-    const user = userContext.user;
-
-    // Verify the user has access to the requested experience
-    if (user.experienceId !== experienceId) {
-      return NextResponse.json(
-        { error: "Access denied to experience" },
-        { status: 403 }
-      );
-    }
-
-    const conversation = await getLiveChatConversationDetails(user, conversationId, experienceId);
+    const authenticatedUser = userContext.user;
+    const conversation = await getLiveChatConversationDetails(authenticatedUser, conversationId, experienceId);
 
     if (!conversation) {
-      return NextResponse.json(
-        { error: "Conversation not found" },
-        { status: 404 }
+      return createErrorResponse(
+        "CONVERSATION_NOT_FOUND",
+        "Conversation not found"
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      conversation: conversation,
+    // Load unified messages using the single source of truth
+    const unifiedMessages = await getConversationMessages(
+      conversationId,
+      conversation.experienceId || experienceId,
+      conversation.whopUserId
+    );
+
+    return createSuccessResponse({
+      conversation: {
+        ...conversation,
+        messages: unifiedMessages, // Use unified message format
+      },
     });
   } catch (error) {
     console.error("Error loading conversation details:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
 
-export async function POST(
+export const GET = withWhopAuth(getConversationHandler);
+
+async function postConversationHandler(
   request: NextRequest,
-  { params }: { params: Promise<{ conversationId: string }> }
+  context: AuthContext
 ) {
   try {
-    const { conversationId } = await params;
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const conversationId = pathParts[pathParts.length - 1];
+    const { user } = context;
     const body = await request.json();
-    const { action, message, messageType, experienceId } = body;
+    const { action, message, messageType } = body;
 
     if (!conversationId) {
-      return NextResponse.json(
-        { error: "Conversation ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_CONVERSATION_ID",
+        "Conversation ID is required"
       );
     }
 
+    const experienceId = user.experienceId;
     if (!experienceId) {
-      return NextResponse.json(
-        { error: "Experience ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
       );
     }
 
-    // For LiveChat, we need to get the user from the request headers since it's called from admin panel
-    // The user context should already be available from the frontend
-    const headersList = await headers();
-    const whopUserId = headersList.get("x-on-behalf-of");
-    const whopCompanyId = headersList.get("x-company-id");
-    
-    if (!whopUserId) {
-      return NextResponse.json(
-        { error: "User ID required" },
-        { status: 401 }
-      );
-    }
-
-    // Get user context for the authenticated user
-    const { getUserContext } = await import("@/lib/context/user-context");
+    // Get full user context for LiveChat
     const userContext = await getUserContext(
-      whopUserId,
-      whopCompanyId || "", // Use company ID from header
+      user.userId,
+      "", // whopCompanyId is optional for experience-based isolation
       experienceId,
-      false,
-      "admin", // Assume admin access for LiveChat
+      false, // forceRefresh
+      "admin", // accessLevel for LiveChat
     );
 
     if (!userContext?.isAuthenticated || !userContext.user) {
-      return NextResponse.json(
-        { error: "Failed to get user context" },
-        { status: 401 }
+      return createErrorResponse(
+        "USER_CONTEXT_NOT_FOUND",
+        "User context not found"
       );
     }
 
-    const user = userContext.user;
-
-    // Verify the user has access to the requested experience
-    if (user.experienceId !== experienceId) {
-      return NextResponse.json(
-        { error: "Access denied to experience" },
-        { status: 403 }
-      );
-    }
+    const authenticatedUser = userContext.user;
 
     if (action === "send_message") {
       if (!message) {
-        return NextResponse.json(
-          { error: "Message is required" },
-          { status: 400 }
+        return createErrorResponse(
+          "MISSING_MESSAGE",
+          "Message is required"
         );
       }
 
-      const result = await sendLiveChatMessage(user, conversationId, message, experienceId);
+      const result = await sendLiveChatMessage(authenticatedUser, conversationId, message, experienceId);
 
       if (result.success) {
-        return NextResponse.json({
-          success: true,
+        return createSuccessResponse({
           message: result.message,
         });
       } else {
-        return NextResponse.json(
-          { error: result.error || "Failed to send message" },
-          { status: 500 }
+        return createErrorResponse(
+          "SEND_MESSAGE_FAILED",
+          result.error || "Failed to send message"
         );
       }
     } else {
-      return NextResponse.json(
-        { error: "Invalid action. Use 'send_message'" },
-        { status: 400 }
+      return createErrorResponse(
+        "INVALID_ACTION",
+        "Invalid action. Use 'send_message'"
       );
     }
   } catch (error) {
     console.error("Error handling conversation action:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
+
+export const POST = withWhopAuth(postConversationHandler);

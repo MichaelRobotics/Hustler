@@ -102,7 +102,7 @@ export async function getLiveChatConversations(
 				funnel: true,
 				messages: {
 					orderBy: [asc(messages.createdAt)],
-					limit: 5, // Limit messages for list view
+					// Load ALL messages for accurate last message display
 				},
 			},
 			orderBy,
@@ -141,12 +141,22 @@ export async function getLiveChatConversations(
 					lastSeen: lastActivity,
 				};
 
-				// Get last message
-				const lastMessage = conv.messages[conv.messages.length - 1];
+				// Get last message - ensure we have messages and they're properly ordered
+				const messages = conv.messages || [];
+				console.log(`[CONV-LIST] Conversation ${conv.id}: ${messages.length} messages loaded`);
+				
+				// Sort messages by createdAt to ensure proper order (safety check)
+				const sortedMessages = messages.sort((a: any, b: any) => 
+					new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+				);
+				
+				const lastMessage = sortedMessages[sortedMessages.length - 1];
 				const lastMessageText = lastMessage?.content || "No messages yet";
+				
+				console.log(`[CONV-LIST] Conversation ${conv.id}: Last message = "${lastMessageText}"`);
 
 				// Calculate message count
-				const messageCount = conv.messages.length;
+				const messageCount = sortedMessages.length;
 
 				// Determine conversation stage based on current block
 				const currentStage = determineConversationStage(conv.currentBlockId, conv.funnel?.flow as FunnelFlow);
@@ -161,7 +171,7 @@ export async function getLiveChatConversations(
 					startedAt: conv.createdAt,
 					lastMessageAt: lastMessage?.createdAt || conv.updatedAt,
 					lastMessage: lastMessageText,
-					messages: conv.messages.map((msg: any) => ({
+					messages: sortedMessages.map((msg: any) => ({
 						id: msg.id,
 						conversationId: msg.conversationId,
 						type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
@@ -271,7 +281,9 @@ export async function getLiveChatConversationDetails(
 		};
 
 		// Get last message
-		const lastMessage = conversation.messages[conversation.messages.length - 1];
+		const lastMessage = conversation.messages && conversation.messages.length > 0 
+			? conversation.messages[conversation.messages.length - 1] 
+			: null;
 		const lastMessageText = lastMessage?.content || "No messages yet";
 
 		// Determine conversation stage
@@ -287,8 +299,8 @@ export async function getLiveChatConversationDetails(
 			startedAt: conversation.createdAt,
 			lastMessageAt: lastMessage?.createdAt || conversation.updatedAt,
 			lastMessage: lastMessageText,
-			messageCount: conversation.messages.length,
-			messages: conversation.messages.map((msg: any) => ({
+			messageCount: conversation.messages?.length || 0,
+			messages: (conversation.messages || []).map((msg: any) => ({
 				id: msg.id,
 				conversationId: msg.conversationId,
 				type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
@@ -329,11 +341,20 @@ export async function sendLiveChatMessage(
 			throw new Error("Access denied: Invalid experience ID");
 		}
 
+		// First, find the database UUID for this Whop experience ID
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.whopExperienceId, experienceId),
+		});
+
+		if (!experience) {
+			throw new Error("Experience not found");
+		}
+
 		// Get conversation to verify it exists and get whopUserId
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experienceId),
+				eq(conversations.experienceId, experience.id), // Use database UUID, not Whop ID
 				eq(conversations.status, "active")
 			),
 		});

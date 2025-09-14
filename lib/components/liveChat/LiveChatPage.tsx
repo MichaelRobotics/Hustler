@@ -208,8 +208,17 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		onStageTransition: (stageInfo) => {
 			// Handle stage transitions (TRANSITION -> EXPERIENCE_QUALIFICATION)
 			console.log("LiveChat: Stage transition detected:", stageInfo);
-			// Refresh conversations to get updated stage information
-			loadConversations(1, true, "");
+			// Update only the specific conversation instead of reloading all
+			if (stageInfo.conversationId) {
+				console.log(`[LIVECHAT] Updating conversation ${stageInfo.conversationId} with stage transition`);
+				setConversations(prev => 
+					prev.map(conv => 
+						conv.id === stageInfo.conversationId 
+							? { ...conv, ...stageInfo.conversation }
+							: conv
+					)
+				);
+			}
 		},
 		onConnectionChange: (status) => {
 			console.log("LiveChat Integration status:", status);
@@ -217,7 +226,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	});
 
 	const selectedConversation = useMemo(() => {
-		return conversations.find((c) => c.id === selectedConversationId) || null;
+		return conversations?.find((c) => c.id === selectedConversationId) || null;
 	}, [selectedConversationId, conversations]);
 
 	// Load conversations from database
@@ -249,13 +258,13 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			}
 
 			if (reset) {
-				setConversations(result.conversations);
+				setConversations(result.data?.conversations || result.conversations || []);
 			} else {
-				setConversations(prev => [...prev, ...result.conversations]);
+				setConversations(prev => [...prev, ...(result.data?.conversations || result.conversations || [])]);
 			}
 
-			setTotalConversations(result.total);
-			setHasMore(result.hasMore);
+			setTotalConversations(result.data?.total || result.total || 0);
+			setHasMore(result.data?.hasMore || result.hasMore || false);
 			setCurrentPage(page);
 		} catch (err) {
 			console.error("Error loading conversations:", err);
@@ -265,12 +274,13 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		}
 	}, [user, experienceId, filters.status, filters.sortBy]);
 
-	// Load conversation details
+	// Load conversation details (optimized - messages included)
 	const loadConversationDetailsCallback = useCallback(async (conversationId: string) => {
 		if (!user) return;
 
 		try {
-			// Call API route for conversation details
+			console.log(`[LIVECHAT] Loading conversation details for: ${conversationId}`);
+			// Call API route for conversation details (includes messages)
 			const response = await apiGet(`/api/livechat/conversations/${conversationId}?experienceId=${encodeURIComponent(experienceId)}`, experienceId, {
 				'x-on-behalf-of': user.whopUserId,
 				'x-company-id': user.experience.whopCompanyId
@@ -281,14 +291,17 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				throw new Error(result.error || "Failed to load conversation details");
 			}
 
-			const conversation = result.conversation;
+			const conversation = result.data?.conversation || result.conversation;
+			console.log(`[LIVECHAT] Loaded conversation details - stage: ${conversation?.currentStage}, messages: ${conversation?.messages?.length || 0}`);
 			
-			// Update conversation in list
+			// Update conversation in list (messages are already included)
 			setConversations(prev => 
 				prev.map(conv => 
 					conv.id === conversationId ? conversation : conv
 				)
 			);
+			
+			console.log("LiveChat: Loaded conversation details with messages:", conversation.messages?.length || 0);
 		} catch (err) {
 			console.error("Error loading conversation details:", err);
 			setError("Failed to load conversation details");
@@ -330,8 +343,13 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	}, []);
 
 	const handleSelectConversation = useCallback((conversationId: string) => {
+		console.log(`[LIVECHAT] Selecting conversation: ${conversationId}`);
 		setSelectedConversationId(conversationId);
-	}, []);
+		// Load fresh conversation details when selecting (only if different conversation)
+		if (conversationId !== selectedConversationId) {
+			loadConversationDetailsCallback(conversationId);
+		}
+	}, [loadConversationDetailsCallback, selectedConversationId]);
 
 	const handleSendMessage = useCallback(
 		async (message: string) => {
@@ -345,7 +363,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				const response = await apiPost(`/api/livechat/conversations/${selectedConversationId}`, {
 					action: 'send_message',
 					message,
-					messageType: 'text',
+					messageType: 'bot',
 					experienceId: user.experienceId,
 				}, user.experienceId);
 

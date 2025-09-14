@@ -77,6 +77,13 @@ export function useLiveChatIntegration({
 		connectionStatus === "connected" ? "connected" :
 		connectionStatus === "connecting" ? "connecting" : "disconnected";
 
+	// Log WebSocket status for debugging
+	useEffect(() => {
+		if (isConnected) {
+			console.log("LiveChat WebSocket: Connected for real-time updates (background)");
+		}
+	}, [isConnected]);
+
 	// Handle WebSocket messages from UserChat system
 	const handleWebSocketMessage = useCallback((data: any) => {
 		try {

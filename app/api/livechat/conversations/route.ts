@@ -1,64 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLiveChatConversations } from "@/lib/actions/livechat-integration-actions";
-import { whopSdk } from "@/lib/whop-sdk";
-import { headers } from "next/headers";
+import { getUserContext } from "@/lib/context/user-context";
+import {
+  type AuthContext,
+  createErrorResponse,
+  createSuccessResponse,
+  withWhopAuth,
+} from "@/lib/middleware/whop-auth";
 
-export async function GET(request: NextRequest) {
+async function getConversationsHandler(
+  request: NextRequest,
+  context: AuthContext
+) {
   try {
     const { searchParams } = new URL(request.url);
-    const experienceId = searchParams.get("experienceId");
     const status = searchParams.get("status") || "all";
     const sortBy = searchParams.get("sortBy") || "newest";
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
+    const { user } = context;
 
+    const experienceId = user.experienceId;
     if (!experienceId) {
-      return NextResponse.json(
-        { error: "Experience ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
       );
     }
 
-    // For LiveChat, we need to get the user from the request headers since it's called from admin panel
-    // The user context should already be available from the frontend
-    const headersList = await headers();
-    const whopUserId = headersList.get("x-on-behalf-of");
-    const whopCompanyId = headersList.get("x-company-id");
-    
-    if (!whopUserId) {
-      return NextResponse.json(
-        { error: "User ID required" },
-        { status: 401 }
-      );
-    }
-
-    // Get user context for the authenticated user
-    const { getUserContext } = await import("@/lib/context/user-context");
+    // Get full user context for LiveChat
     const userContext = await getUserContext(
-      whopUserId,
-      whopCompanyId || "", // Use company ID from header
+      user.userId,
+      "", // whopCompanyId is optional for experience-based isolation
       experienceId,
-      false,
-      "admin", // Assume admin access for LiveChat
+      false, // forceRefresh
+      "admin", // accessLevel for LiveChat
     );
 
     if (!userContext?.isAuthenticated || !userContext.user) {
-      return NextResponse.json(
-        { error: "Failed to get user context" },
-        { status: 401 }
+      return createErrorResponse(
+        "USER_CONTEXT_NOT_FOUND",
+        "User context not found"
       );
     }
 
-    const user = userContext.user;
-
-    // Verify the user has access to the requested experience
-    if (user.experienceId !== experienceId) {
-      return NextResponse.json(
-        { error: "Access denied to experience" },
-        { status: 403 }
-      );
-    }
+    const authenticatedUser = userContext.user;
 
     const filters = {
       status: status as "all" | "open" | "closed",
@@ -71,10 +58,9 @@ export async function GET(request: NextRequest) {
       limit,
     };
 
-    const result = await getLiveChatConversations(user, experienceId, filters, pagination);
+    const result = await getLiveChatConversations(authenticatedUser, experienceId, filters, pagination);
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       conversations: result.conversations,
       total: result.total,
       hasMore: result.hasMore,
@@ -83,9 +69,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error loading conversations:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
+
+export const GET = withWhopAuth(getConversationsHandler);

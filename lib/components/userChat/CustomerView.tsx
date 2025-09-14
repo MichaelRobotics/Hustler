@@ -64,7 +64,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			console.log(`[CustomerView] Debug - Loading conversation for experienceId: ${experienceId}, whopUserId: ${whopUserId}`);
 
 			// Step 1: Check if there's an active conversation
-			const checkResponse = await apiPost(`/api/userchat/check-conversation?experienceId=${encodeURIComponent(experienceId)}`, {
+			const checkResponse = await apiPost('/api/userchat/check-conversation', {
 				whopUserId: whopUserId,
 			}, experienceId);
 
@@ -90,18 +90,17 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						setStageInfo(checkResult.stageInfo);
 					}
 					
-					// Try to load the full conversation data
+					// Try to load the full conversation data (optimized)
 					try {
 						const loadResponse = await apiPost('/api/userchat/load-conversation', {
 							conversationId: checkResult.conversation.id,
-							experienceId,
 							whopUserId: whopUserId,
 						}, experienceId);
 
 						const loadResult = await loadResponse.json();
 
 						if (loadResult.success) {
-							// Set conversation data
+							// Set conversation data (messages included)
 							if (loadResult.conversation) {
 								setConversation(loadResult.conversation);
 							}
@@ -111,11 +110,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 								setStageInfo(loadResult.stageInfo);
 							}
 
-							console.log("CustomerView loaded conversation:", {
+							console.log("CustomerView loaded conversation with messages:", {
 								experienceId,
 								conversationId: checkResult.conversation.id,
 								hasFunnelFlow: !!checkResult.funnelFlow,
 								hasConversation: !!loadResult.conversation,
+								messageCount: loadResult.conversation?.messages?.length || 0,
 								stageInfo: loadResult.stageInfo,
 							});
 						} else {
@@ -161,11 +161,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setAdminLoading(true);
 			setAdminError(null);
 			
-			const response = await fetch(`/api/userchat/check-conversation?experienceId=${encodeURIComponent(experienceId)}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-			});
-
+			const response = await apiPost('/api/userchat/check-conversation', {}, experienceId);
 			const result = await response.json();
 			
 			if (result.success) {

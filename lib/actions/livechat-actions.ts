@@ -300,7 +300,7 @@ export async function getConversationList(
 				funnel: true,
 				messages: {
 					orderBy: [asc(messages.createdAt)],
-					limit: 5, // Limit messages for list view
+					// Load ALL messages for accurate last message display
 				},
 			},
 		});
@@ -316,12 +316,22 @@ export async function getConversationList(
 				lastSeen: conv.updatedAt,
 			};
 
-			// Get last message
-			const lastMessage = conv.messages[conv.messages.length - 1];
+			// Get last message - ensure we have messages and they're properly ordered
+			const messages = conv.messages || [];
+			console.log(`[CONV-LIST-ALT] Conversation ${conv.id}: ${messages.length} messages loaded`);
+			
+			// Sort messages by createdAt to ensure proper order (safety check)
+			const sortedMessages = messages.sort((a: any, b: any) => 
+				new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+			);
+			
+			const lastMessage = sortedMessages[sortedMessages.length - 1];
 			const lastMessageText = lastMessage?.content || "No messages yet";
+			
+			console.log(`[CONV-LIST-ALT] Conversation ${conv.id}: Last message = "${lastMessageText}"`);
 
 			// Calculate message count
-			const messageCount = conv.messages.length;
+			const messageCount = sortedMessages.length;
 
 			// Map conversation status
 			const statusMap = {
@@ -346,7 +356,7 @@ export async function getConversationList(
 				startedAt: conv.createdAt,
 				lastMessageAt: lastMessage?.createdAt || conv.updatedAt,
 				lastMessage: lastMessageText,
-				messages: conv.messages.map((msg: any) => ({
+				messages: sortedMessages.map((msg: any) => ({
 					id: msg.id,
 					conversationId: msg.conversationId,
 					type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",

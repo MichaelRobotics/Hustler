@@ -50,6 +50,13 @@ export async function authenticateWhopUser(
 						: undefined;
 				console.log("🔍 Middleware - URL experience ID:", experienceId);
 			}
+			
+			// If still no experienceId, try to get from URL query parameters
+			if (!experienceId) {
+				const url = new URL(request.url);
+				experienceId = url.searchParams.get("experienceId") || undefined;
+				console.log("🔍 Middleware - Query experience ID:", experienceId);
+			}
 		}
 		console.log("🔍 Middleware - Final experienceId:", experienceId);
 

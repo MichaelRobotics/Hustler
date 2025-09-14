@@ -13,7 +13,6 @@ import type {
 	LiveChatMessage,
 } from "../../types/liveChat";
 import { ThemeToggle } from "../common/ThemeToggle";
-import TypingIndicator from "../common/TypingIndicator";
 
 interface LiveChatUserInterfaceProps {
 	conversation: LiveChatConversation;
@@ -26,11 +25,9 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 	({ conversation, onSendMessage, onBack, isLoading = false }) => {
 		const [newMessage, setNewMessage] = useState("");
 		const [isSendingMessage, setIsSendingMessage] = useState(false);
-		const [isTyping, setIsTyping] = useState(false);
-		const chatEndRef = useRef<HTMLDivElement>(null);
-		const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-		const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-		const lastMessageCountRef = useRef<number>(0);
+	const chatEndRef = useRef<HTMLDivElement>(null);
+	const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const lastMessageCountRef = useRef<number>(0);
 
 
 		// Memoized message count to prevent unnecessary re-renders
@@ -74,25 +71,10 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 			if (newMessage.trim() && !isSendingMessage) {
 				setIsSendingMessage(true);
 
-				// Clear any existing timeout
-				if (typingTimeoutRef.current) {
-					clearTimeout(typingTimeoutRef.current);
-				}
-
-				// Show typing indicator FIRST
-				setIsTyping(true);
-
 				try {
+					// Send message as bot type
 					await onSendMessage(newMessage.trim());
 					setNewMessage("");
-
-					// Hide typing indicator after a delay (simulating response time)
-					typingTimeoutRef.current = setTimeout(
-						() => {
-							setIsTyping(false);
-						},
-						2000 + Math.random() * 2000,
-					); // Random delay between 2-4 seconds
 
 					// Optimized scroll with requestAnimationFrame
 					requestAnimationFrame(() => {
@@ -100,8 +82,6 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 					});
 				} catch (error) {
 					console.error("Failed to send message:", error);
-					// Hide typing indicator on error
-					setIsTyping(false);
 				} finally {
 					setIsSendingMessage(false);
 				}
@@ -118,27 +98,15 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 			[handleSendMessage],
 		);
 
-		// Cleanup timeouts on unmount
-		useEffect(() => {
-			return () => {
-				if (typingTimeoutRef.current) {
-					clearTimeout(typingTimeoutRef.current);
-				}
-				if (scrollTimeoutRef.current) {
-					clearTimeout(scrollTimeoutRef.current);
-				}
-			};
-		}, []);
-
-		// Auto-scroll when typing indicator appears
-		useEffect(() => {
-			if (isTyping) {
-				// Scroll when typing indicator appears
-				requestAnimationFrame(() => {
-					scrollToBottom();
-				});
+	// Cleanup timeouts on unmount
+	useEffect(() => {
+		return () => {
+			if (scrollTimeoutRef.current) {
+				clearTimeout(scrollTimeoutRef.current);
 			}
-		}, [isTyping, scrollToBottom]);
+		};
+	}, []);
+
 
 		const handleTextareaInput = useCallback(
 			(e: React.FormEvent<HTMLTextAreaElement>) => {
@@ -283,16 +251,6 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 							<>
 								{messagesList}
 
-								{/* Typing Indicator - User is typing (appears on left) */}
-								{isTyping && (
-									<div className="flex justify-start mb-4">
-										<div className="max-w-[80%] px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm">
-											<TypingIndicator
-												text={`${conversation.user.name} is typing...`}
-											/>
-										</div>
-									</div>
-								)}
 
 								<div ref={chatEndRef} />
 							</>
