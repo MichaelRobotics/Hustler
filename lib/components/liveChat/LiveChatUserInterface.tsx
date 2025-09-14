@@ -121,40 +121,129 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 		);
 
 
-		// Memoized message renderer to prevent unnecessary re-renders
-		const renderMessage = useCallback(
-			(message: LiveChatMessage) => {
-				// Agent perspective: agent messages on right, user messages on left
-				const isAgent =
-					message.type === "bot" ||
-					message.type === "system" ||
-					message.type === "agent";
-				const isUser = message.type === "user";
-
+	// Memoized message renderer to prevent unnecessary re-renders
+	const renderMessage = useCallback(
+		(message: LiveChatMessage, index: number, allMessages: LiveChatMessage[]) => {
+			// Special handling for system messages (separation line between TRANSITION and EXPERIENCE_QUALIFICATION)
+			if (message.type === "system") {
+				if (message.text === "redirect_to_live_chat") {
+					return (
+						<div key={message.id} className="relative my-6 flex items-center">
+							{/* Left line */}
+							<div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-600 to-transparent"></div>
+							
+							{/* Center text on line */}
+							<div className="px-4 py-1 bg-gradient-to-r from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40 border border-violet-300 dark:border-violet-700/50 rounded-full shadow-sm backdrop-blur-sm mx-2">
+								<div className="flex items-center gap-2">
+									<div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+									<span className="text-xs font-medium text-violet-700 dark:text-violet-300 whitespace-nowrap">
+										Redirecting to Live Chat
+									</span>
+									<div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+								</div>
+							</div>
+							
+							{/* Right line */}
+							<div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-600 to-transparent"></div>
+						</div>
+					);
+				}
+				
+				// Default system message styling
 				return (
-					<div
-						key={message.id}
-						className={`flex ${isAgent ? "justify-end" : "justify-start"} mb-4`}
-					>
-						<div
-							className={`max-w-[80%] px-4 py-3 rounded-xl ${
-								isAgent
-									? "bg-blue-500 text-white" // Agent messages: blue on right
-									: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm" // User messages: white on left
-							}`}
-						>
-							<div className="text-sm leading-relaxed">{message.text}</div>
+					<div key={message.id} className="flex justify-center my-4">
+						<div className="px-4 py-2 bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-300 dark:border-amber-700/50 rounded-full shadow-sm">
+							<span className="text-xs font-medium text-amber-700 dark:text-amber-300 text-center">
+								{message.text}
+							</span>
 						</div>
 					</div>
 				);
-			},
-			[],
-		);
+			}
+
+			// Agent perspective: agent messages on right, user messages on left
+			const isAgent =
+				message.type === "bot" ||
+				message.type === "agent";
+			const isUser = message.type === "user";
+
+			return (
+				<div
+					key={message.id}
+					className={`flex ${isAgent ? "justify-end" : "justify-start"} mb-4`}
+				>
+					<div
+						className={`max-w-[80%] px-4 py-3 rounded-xl ${
+							isAgent
+								? "bg-blue-500 text-white" // Agent messages: blue on right
+								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm" // User messages: white on left
+						}`}
+					>
+						<div className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</div>
+					</div>
+				</div>
+			);
+		},
+		[],
+	);
+
+		// Function to detect transition from TRANSITION to EXPERIENCE_QUALIFICATION and add separation line
+		const processMessagesWithTransitionLine = useCallback((messages: LiveChatMessage[]) => {
+			const processedMessages: LiveChatMessage[] = [];
+			
+			for (let i = 0; i < messages.length; i++) {
+				const message = messages[i];
+				const nextMessage = messages[i + 1];
+				
+				// Add current message
+				processedMessages.push(message);
+				
+				// Check if we need to add a transition line between consecutive bot messages
+				if (nextMessage && 
+					message.type === "bot" && 
+					nextMessage.type === "bot") {
+					
+					// Check for transition using content patterns
+					// Look for patterns that indicate TRANSITION stage (completion messages)
+					const isTransition = message.text.includes("completed step") || 
+										message.text.includes("✅") ||
+										message.text.includes("Excellent! You've completed") ||
+										message.text.includes("step one");
+					
+					// Look for patterns that indicate EXPERIENCE_QUALIFICATION stage (assessment questions)
+					const isExperienceQualification = nextMessage.text.includes("assess your current level") ||
+													nextMessage.text.includes("What's the biggest challenge") ||
+													nextMessage.text.includes("current level with the topic") ||
+													nextMessage.text.includes("assessment");
+					
+					if (isTransition && isExperienceQualification) {
+						// Add the transition separation line
+						const transitionLine: LiveChatMessage = {
+							id: `transition-${message.id}-${nextMessage.id}`,
+							conversationId: message.conversationId,
+							type: "system",
+							text: "redirect_to_live_chat",
+							timestamp: message.timestamp,
+							isRead: true,
+							metadata: {
+								funnelStage: "TRANSITION_LINE"
+							}
+						};
+						processedMessages.push(transitionLine);
+					}
+				}
+			}
+			
+			return processedMessages;
+		}, []);
 
 		// Memoized messages list to prevent unnecessary re-renders
 		const messagesList = useMemo(() => {
-			return conversation.messages.map(renderMessage);
-		}, [conversation.messages, renderMessage]);
+			const processedMessages = processMessagesWithTransitionLine(conversation.messages);
+			return processedMessages.map((message, index) => 
+				renderMessage(message, index, processedMessages)
+			);
+		}, [conversation.messages, renderMessage, processMessagesWithTransitionLine]);
 
 		return (
 			<div
