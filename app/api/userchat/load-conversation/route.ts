@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
-import { getConversationMessages, getConversationMessagesForCustomer } from "@/lib/actions/unified-message-actions";
-import { getUserContext } from "@/lib/context/user-context";
+import { getConversationMessages } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels, messages } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
@@ -168,33 +167,12 @@ async function loadConversationHandler(
         // Reload the updated conversation
         const updatedConversation = await getConversationById(conversationId, conversation.experienceId);
         if (updatedConversation) {
-          // Get user context to determine access level for TRANSITION stage
-          let userContext = null;
-          try {
-            userContext = await getUserContext(
-              conversation.whopUserId,
-              conversation.experience?.whopCompanyId || "",
-              experienceId
-            );
-          } catch (error) {
-            console.error("Error getting user context for TRANSITION stage:", error);
-          }
-
-          // Determine if user has customer access level
-          const isCustomer = userContext?.user?.accessLevel === "customer";
-          
-          // Load messages - use customer-filtered messages for customers
-          const unifiedMessages = isCustomer 
-            ? await getConversationMessagesForCustomer(
-                conversationId,
-                conversation.experienceId,
-                conversation.whopUserId
-              )
-            : await getConversationMessages(
-                conversationId,
-                conversation.experienceId,
-                conversation.whopUserId
-              );
+          // Load unified messages for the updated conversation
+          const unifiedMessages = await getConversationMessages(
+            conversationId,
+            conversation.experienceId,
+            conversation.whopUserId
+          );
 
           return NextResponse.json({
             success: true,
@@ -218,35 +196,12 @@ async function loadConversationHandler(
     const conversationData = await getConversationById(conversationId, conversation.experienceId);
 
     if (conversationData) {
-      // Get user context to determine access level
-      let userContext = null;
-      try {
-        userContext = await getUserContext(
-          conversation.whopUserId,
-          conversation.experience?.whopCompanyId || "",
-          experienceId
-        );
-      } catch (error) {
-        console.error("Error getting user context:", error);
-      }
-
-      // Determine if user has customer access level
-      const isCustomer = userContext?.user?.accessLevel === "customer";
-      
-      console.log(`[load-conversation] User access level: ${userContext?.user?.accessLevel}, isCustomer: ${isCustomer}`);
-
-      // Load messages - use customer-filtered messages for customers
-      const unifiedMessages = isCustomer 
-        ? await getConversationMessagesForCustomer(
-            conversationId,
-            conversation.experienceId,
-            conversation.whopUserId
-          )
-        : await getConversationMessages(
-            conversationId,
-            conversation.experienceId,
-            conversation.whopUserId
-          );
+      // Load unified messages using the single source of truth
+      const unifiedMessages = await getConversationMessages(
+        conversationId,
+        conversation.experienceId,
+        conversation.whopUserId
+      );
 
       const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
       

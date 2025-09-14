@@ -7,16 +7,14 @@
 
 import { and, eq, desc, asc } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { messages, conversations, experiences } from "../supabase/schema";
+import { messages, conversations } from "../supabase/schema";
 
 export interface UnifiedMessage {
   id: string;
   conversationId: string;
   type: "user" | "bot" | "system";
-  content: string;
-  text: string; // Alias for content
-  timestamp: string; // Alias for createdAt
-  createdAt: Date;
+  text: string;
+  timestamp: string;
   isRead: boolean;
   metadata?: any;
 }
@@ -59,10 +57,8 @@ export async function getConversationMessages(
       id: msg.id,
       conversationId: msg.conversationId,
       type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
-      content: msg.content,
-      text: msg.content, // Alias for content
-      timestamp: msg.createdAt, // Alias for createdAt
-      createdAt: msg.createdAt,
+      text: msg.content,
+      timestamp: msg.createdAt,
       isRead: true, // For now, assume all messages are read
       metadata: msg.metadata,
     }));
@@ -111,108 +107,6 @@ export async function getConversationMessagesWithVersion(
       version: 0,
       hasUpdates: false
     };
-  }
-}
-
-/**
- * Get conversation messages filtered for customer view
- * Only shows messages starting from the first bot message in EXPERIENCE_QUALIFICATION stage
- * 
- * @param conversationId - ID of the conversation
- * @param experienceId - Experience ID for multi-tenant isolation
- * @param whopUserId - Whop user ID for multi-tenant isolation
- * @returns Filtered messages starting from EXPERIENCE_QUALIFICATION
- */
-export async function getConversationMessagesForCustomer(
-  conversationId: string,
-  experienceId: string,
-  whopUserId?: string
-): Promise<UnifiedMessage[]> {
-  try {
-    console.log(`[UNIFIED-MESSAGES] Getting customer-filtered messages for conversation ${conversationId}`);
-
-    // Get experience
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.whopExperienceId, experienceId),
-    });
-
-    if (!experience) {
-      throw new Error(`Experience not found: ${experienceId}`);
-    }
-
-    // Get conversation with funnel
-    const conversation = await db.query.conversations.findFirst({
-      where: and(
-        eq(conversations.id, conversationId),
-        eq(conversations.experienceId, experience.id)
-      ),
-      with: {
-        funnel: true,
-      },
-    });
-
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
-    }
-
-    if (!conversation.funnel?.flow) {
-      throw new Error(`Funnel not found for conversation: ${conversationId}`);
-    }
-
-    const funnelFlow = conversation.funnel.flow as any;
-
-    // Find EXPERIENCE_QUALIFICATION stage
-    const experienceQualStage = funnelFlow.stages?.find(
-      (stage: any) => stage.name === "EXPERIENCE_QUALIFICATION"
-    );
-
-    if (!experienceQualStage || !experienceQualStage.blockIds?.length) {
-      console.log(`[UNIFIED-MESSAGES] No EXPERIENCE_QUALIFICATION stage found, returning all messages`);
-      // If no EXPERIENCE_QUALIFICATION stage, return all messages
-      return getConversationMessages(conversationId, experienceId, whopUserId);
-    }
-
-    // Get the first EXPERIENCE_QUALIFICATION block ID
-    const firstExperienceQualBlockId = experienceQualStage.blockIds[0];
-
-    // Get all messages for the conversation
-    const allMessages = await db.query.messages.findMany({
-      where: eq(messages.conversationId, conversationId),
-      orderBy: [asc(messages.createdAt)],
-    });
-
-    // For now, let's be more permissive and show all messages for customers
-    // This ensures customers can see their conversation while we debug the filtering
-    console.log(`[UNIFIED-MESSAGES] Customer filtering temporarily disabled - showing all messages`);
-    console.log(`[UNIFIED-MESSAGES] Total messages available: ${allMessages.length}`);
-    
-    // TODO: Implement proper EXPERIENCE_QUALIFICATION filtering once we understand the message structure
-    // For now, return all messages to ensure customers can see their conversation
-    const experienceQualStartIndex = 0; // Start from the beginning
-
-    // Filter messages starting from EXPERIENCE_QUALIFICATION
-    const filteredMessages = allMessages.slice(experienceQualStartIndex);
-    
-    console.log(`[UNIFIED-MESSAGES] Filtered ${filteredMessages.length} messages from EXPERIENCE_QUALIFICATION stage`);
-
-    // Convert to unified format
-    const unifiedMessages: UnifiedMessage[] = filteredMessages.map((msg: any) => ({
-      id: msg.id,
-      conversationId: msg.conversationId,
-      type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
-      content: msg.content,
-      text: msg.content, // Alias for content
-      timestamp: msg.createdAt, // Alias for createdAt
-      isRead: true,
-      metadata: msg.metadata,
-      createdAt: msg.createdAt,
-    }));
-
-    return unifiedMessages;
-
-  } catch (error) {
-    console.error(`[UNIFIED-MESSAGES] Error getting customer-filtered messages for conversation ${conversationId}:`, error);
-    throw error;
   }
 }
 
