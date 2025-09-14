@@ -43,11 +43,23 @@ export async function getLiveChatConversations(
 		const { page, limit } = pagination;
 		const offset = (page - 1) * limit;
 
-		// Build where conditions - get ALL active conversations in this experience
+		// Build where conditions based on status filter
 		let whereConditions = and(
-			eq(conversations.experienceId, experience.id), // Use database UUID, not Whop ID
-			eq(conversations.status, "active")
+			eq(conversations.experienceId, experience.id) // Use database UUID, not Whop ID
 		);
+
+		// Apply status filter - simplified logic
+		if (filters.status === "open") {
+			// Show only active conversations
+			whereConditions = and(whereConditions, eq(conversations.status, "active"));
+		} else if (filters.status === "closed") {
+			// Show only non-active conversations (completed or abandoned)
+			whereConditions = and(whereConditions, or(
+				eq(conversations.status, "completed"),
+				eq(conversations.status, "abandoned")
+			));
+		}
+		// If status is "all", show all conversations (no additional filter)
 
 		// Add search filter
 		if (filters.searchQuery) {
@@ -161,13 +173,16 @@ export async function getLiveChatConversations(
 				// Determine conversation stage based on current block
 				const currentStage = determineConversationStage(conv.currentBlockId, conv.funnel?.flow as FunnelFlow);
 
+				// Simplified status mapping: active = open, everything else = closed
+				const displayStatus = conv.status === "active" ? "open" : "closed";
+
 				return {
 					id: conv.id,
 					userId: userInfo.id,
 					user: userInfo,
 					funnelId: conv.funnelId,
 					funnelName: conv.funnel.name,
-					status: "open" as const, // All active conversations are "open" for livechat
+					status: displayStatus as "open" | "closed",
 					startedAt: conv.createdAt,
 					lastMessageAt: lastMessage?.createdAt || conv.updatedAt,
 					lastMessage: lastMessageText,
@@ -230,12 +245,12 @@ export async function getLiveChatConversationDetails(
 			throw new Error("Experience not found");
 		}
 
-		// Get conversation with all related data
+		// Get conversation with all related data (any status)
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experience.id), // Use database UUID, not Whop ID
-				eq(conversations.status, "active")
+				eq(conversations.experienceId, experience.id) // Use database UUID, not Whop ID
+				// Removed status filter to allow viewing closed conversations
 			),
 			with: {
 				funnel: true,
@@ -289,13 +304,16 @@ export async function getLiveChatConversationDetails(
 		// Determine conversation stage
 		const currentStage = determineConversationStage(conversation.currentBlockId, conversation.funnel?.flow as FunnelFlow);
 
+		// Simplified status mapping: active = open, everything else = closed
+		const displayStatus = conversation.status === "active" ? "open" : "closed";
+
 		return {
 			id: conversation.id,
 			userId: userInfo.id,
 			user: userInfo,
 			funnelId: conversation.funnelId,
 			funnelName: conversation.funnel.name,
-			status: "open" as const,
+			status: displayStatus as "open" | "closed",
 			startedAt: conversation.createdAt,
 			lastMessageAt: lastMessage?.createdAt || conversation.updatedAt,
 			lastMessage: lastMessageText,
@@ -377,17 +395,18 @@ export async function sendLiveChatMessage(
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experience.id), // Use database UUID, not Whop ID
-				eq(conversations.status, "active")
+				eq(conversations.experienceId, experience.id) // Use database UUID, not Whop ID
 			),
 		});
 
-		if (!conversation) {
-			console.error("sendLiveChatMessage: Conversation not found:", {
+		// Check if conversation is active (only allow sending messages to active conversations)
+		if (!conversation || conversation.status !== "active") {
+			console.error("sendLiveChatMessage: Conversation not found or not active:", {
 				conversationId,
+				status: conversation?.status,
 				experienceId: experience.id
 			});
-			throw new Error("Conversation not found");
+			throw new Error("Conversation not found or not active");
 		}
 
 		console.log("sendLiveChatMessage: Found conversation:", {
