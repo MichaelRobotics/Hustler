@@ -181,26 +181,14 @@ export async function getConversationMessagesForCustomer(
       orderBy: [asc(messages.createdAt)],
     });
 
-    // Find the first bot message from EXPERIENCE_QUALIFICATION stage
-    let experienceQualStartIndex = -1;
+    // For now, let's be more permissive and show all messages for customers
+    // This ensures customers can see their conversation while we debug the filtering
+    console.log(`[UNIFIED-MESSAGES] Customer filtering temporarily disabled - showing all messages`);
+    console.log(`[UNIFIED-MESSAGES] Total messages available: ${allMessages.length}`);
     
-    for (let i = 0; i < allMessages.length; i++) {
-      const msg = allMessages[i];
-      
-      // Check if this is a bot message with the EXPERIENCE_QUALIFICATION block ID
-      if (msg.type === "bot" && 
-          msg.metadata?.blockId === firstExperienceQualBlockId) {
-        experienceQualStartIndex = i;
-        console.log(`[UNIFIED-MESSAGES] Found EXPERIENCE_QUALIFICATION start at message index ${i}`);
-        break;
-      }
-    }
-
-    // If no EXPERIENCE_QUALIFICATION bot message found, return all messages
-    if (experienceQualStartIndex === -1) {
-      console.log(`[UNIFIED-MESSAGES] No EXPERIENCE_QUALIFICATION bot message found, returning all messages`);
-      return getConversationMessages(conversationId, experienceId, whopUserId);
-    }
+    // TODO: Implement proper EXPERIENCE_QUALIFICATION filtering once we understand the message structure
+    // For now, return all messages to ensure customers can see their conversation
+    const experienceQualStartIndex = 0; // Start from the beginning
 
     // Filter messages starting from EXPERIENCE_QUALIFICATION
     const filteredMessages = allMessages.slice(experienceQualStartIndex);
