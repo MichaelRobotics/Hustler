@@ -244,13 +244,36 @@ async function processConversationWithDM(
         const dmConversations = await whopSdk.messages.listDirectMessageConversations();
         console.log(`[Cron DM] Found ${dmConversations.length} DM conversations`);
 
-        // Find conversation with this user
-        const userDM = dmConversations.find((dm: any) => 
-          dm.feedMembers?.some((member: any) => member.id === conversation.whopUserId)
-        );
+        // Debug: Log all DM conversations and their members
+        console.log(`[Cron DM] Debugging DM conversations:`);
+        dmConversations.forEach((dm: any, index: number) => {
+          console.log(`  DM ${index + 1}: ${dm.id}`);
+          console.log(`    Members:`, dm.feedMembers?.map((member: any) => `${member.username} (${member.id})`) || 'No members');
+          console.log(`    Last message:`, dm.lastMessage?.content || 'No last message');
+        });
+
+        // Find conversation with this user using the same logic as old monitoring
+        const userDM = dmConversations.find((conv: any) => {
+          // Look for conversations with the agent (tests-agentb2) and our user
+          const hasAgent = conv.feedMembers?.some((member: any) => member.username === 'tests-agentb2');
+          
+          // Check if any member matches our user (by username or ID)
+          const hasUser = conv.feedMembers?.some((member: any) => 
+            member.username === conversation.whopUserId || 
+            member.id === conversation.whopUserId
+          );
+          
+          // Also check if the last message is from our user (by user ID)
+          const lastMessageFromUser = conv.lastMessage && conv.lastMessage.userId === conversation.whopUserId;
+          
+          // Return true if we have agent + (user member OR last message from user)
+          return hasAgent && (hasUser || lastMessageFromUser);
+        });
 
         if (!userDM) {
           console.log(`[Cron DM] No DM conversation found for user ${conversation.whopUserId}`);
+          console.log(`[Cron DM] Available user IDs:`, dmConversations.flatMap(dm => dm.feedMembers?.map((m: any) => m.id) || []));
+          console.log(`[Cron DM] Available usernames:`, dmConversations.flatMap(dm => dm.feedMembers?.map((m: any) => m.username) || []));
           throw new Error("No DM conversation found");
         }
 
