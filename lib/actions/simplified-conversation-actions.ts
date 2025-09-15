@@ -10,6 +10,13 @@ import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions, funnels } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelFlow } from "../types/funnel";
+import { 
+  getProgressiveErrorMessage, 
+  parseUserPath, 
+  createUpdatedUserPath, 
+  createResetUserPath,
+  type StandardizedUserPath 
+} from "../constants/error-messages";
 
 export interface Conversation {
 	id: string;
@@ -212,6 +219,7 @@ export async function addMessage(
 
 /**
  * Update conversation current block and user path
+ * Preserves existing metadata in userPath
  */
 export async function updateConversationBlock(
 	conversationId: string,
@@ -220,10 +228,31 @@ export async function updateConversationBlock(
 	experienceId: string,
 ): Promise<void> {
 	try {
+		// Get current conversation to preserve metadata
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
+		});
+
+		if (!conversation) {
+			throw new Error("Conversation not found");
+		}
+
+		// Parse existing userPath to preserve metadata
+		const currentUserPath = parseUserPath(conversation.userPath);
+		
+		// Create updated userPath with new path but preserved metadata
+		const updatedUserPath = {
+			path: userPath,
+			metadata: currentUserPath.metadata
+		};
+
 		await db.update(conversations)
 			.set({
 				currentBlockId: blockId,
-				userPath,
+				userPath: updatedUserPath,
 				updatedAt: new Date(),
 			})
 			.where(eq(conversations.id, conversationId));
@@ -293,11 +322,16 @@ export async function processUserMessage(
 		const validationResult = validateUserResponse(messageContent, currentBlock);
 
 		if (!validationResult.isValid) {
+			// Handle invalid response with progressive error handling
+			const progressiveErrorMessage = await handleInvalidUserResponse(conversationId, messageContent, experienceId);
 			return {
 				success: true,
-				botMessage: validationResult.errorMessage || "Please select a valid option.",
+				botMessage: progressiveErrorMessage,
 			};
 		}
+
+		// Reset invalid response count on valid response
+		await resetInvalidResponseCount(conversationId, experienceId);
 
 		// Navigate to next block
 		if (validationResult.selectedOption) {
@@ -383,6 +417,101 @@ function validateUserResponse(
 			isValid: false,
 			errorMessage: "Invalid response. Please try again.",
 		};
+	}
+}
+
+/**
+ * Handle invalid user response with progressive error handling for UserChat
+ */
+async function handleInvalidUserResponse(
+	conversationId: string,
+	messageContent: string,
+	experienceId: string
+): Promise<string> {
+	try {
+		// Get conversation to get current invalid response count
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
+		});
+
+		if (!conversation) {
+			return "Please select a valid option.";
+		}
+
+		// Parse userPath using standardized approach
+		const currentUserPath = parseUserPath(conversation.userPath);
+		const newInvalidResponseCount = currentUserPath.metadata.invalidResponseCount + 1;
+
+		console.log(`[UserChat] Current userPath:`, JSON.stringify(conversation.userPath));
+		console.log(`[UserChat] Current invalidResponseCount: ${currentUserPath.metadata.invalidResponseCount}, new: ${newInvalidResponseCount}`);
+
+		// Create updated userPath with new invalid response count
+		const updatedUserPath = createUpdatedUserPath(currentUserPath, newInvalidResponseCount);
+
+		// Update conversation with new invalid response count in userPath
+		await db.update(conversations)
+			.set({
+				userPath: updatedUserPath,
+				updatedAt: new Date(),
+			})
+			.where(eq(conversations.id, conversationId));
+
+		console.log(`[UserChat] Updated userPath with invalidResponseCount: ${newInvalidResponseCount}`);
+
+		// Determine error message based on attempt count
+		const errorMessage = getProgressiveErrorMessage(newInvalidResponseCount);
+
+		// Add error message to database
+		await addMessage(conversationId, "bot", errorMessage);
+
+		console.log(`[UserChat] Invalid response attempt ${newInvalidResponseCount} for conversation ${conversationId}: ${messageContent}`);
+
+		return errorMessage;
+
+	} catch (error) {
+		console.error(`[UserChat] Error handling invalid response:`, error);
+		return "Please select a valid option.";
+	}
+}
+
+
+/**
+ * Reset invalid response count when user gives valid response
+ */
+async function resetInvalidResponseCount(conversationId: string, experienceId: string): Promise<void> {
+	try {
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
+		});
+
+		if (!conversation) {
+			return;
+		}
+
+		// Parse userPath using standardized approach
+		const currentUserPath = parseUserPath(conversation.userPath);
+		
+		if (currentUserPath.metadata.invalidResponseCount > 0) {
+			// Create userPath with reset invalid response count
+			const resetUserPath = createResetUserPath(currentUserPath);
+
+			await db.update(conversations)
+				.set({
+					userPath: resetUserPath,
+					updatedAt: new Date(),
+				})
+				.where(eq(conversations.id, conversationId));
+
+			console.log(`[UserChat] Reset invalid response count for conversation ${conversationId}`);
+		}
+	} catch (error) {
+		console.error(`[UserChat] Error resetting invalid response count:`, error);
 	}
 }
 

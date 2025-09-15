@@ -151,7 +151,6 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 					const response = await apiPost('/api/userchat/process-message', {
 						conversationId: config.conversationId,
 						messageContent: content,
-						messageType: type,
 					}, config.experienceId);
 
 					if (response.ok) {

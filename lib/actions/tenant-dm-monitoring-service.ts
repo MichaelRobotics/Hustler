@@ -16,6 +16,13 @@ import type { FunnelBlock, FunnelBlockOption, FunnelFlow } from "../types/funnel
 import { updateConversationBlock, addMessage } from "./simplified-conversation-actions";
 import { tenantMetricsCollector } from "../monitoring/tenant-metrics";
 import { rateLimiter } from "../middleware/rate-limiter";
+import { 
+  getProgressiveErrorMessage, 
+  parseUserPath, 
+  createUpdatedUserPath, 
+  createResetUserPath,
+  type StandardizedUserPath 
+} from "../constants/error-messages";
 
 /**
  * Rate limiting configuration per tenant
@@ -421,9 +428,15 @@ class TenantDMMonitoringService {
         return;
       }
 
-      // Update conversation block
-      const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
-      await updateConversationBlock(conversationId, nextBlockId, updatedUserPath, this.tenantId);
+      // Update conversation block - handle both array and object formats
+      // Parse userPath using standardized approach
+      const currentUserPath = parseUserPath(conversation.userPath);
+      const pathArray = [...currentUserPath.path, nextBlockId].filter(Boolean);
+      
+      await updateConversationBlock(conversationId, nextBlockId, pathArray, this.tenantId);
+
+      // Reset invalid response count on valid response
+      await this.resetInvalidResponseCount(conversationId);
 
       // Add user message
       await addMessage(conversationId, "user", selectedOption.text);
@@ -504,14 +517,14 @@ class TenantDMMonitoringService {
   }
 
   /**
-   * Handle invalid user response
+   * Handle invalid user response with progressive error handling
    */
   private async handleInvalidResponse(conversationId: string, messageContent: string): Promise<void> {
     try {
       // Add user message
       await addMessage(conversationId, "user", messageContent);
 
-      // Get conversation to get whopUserId
+      // Get conversation to get whopUserId and current invalid response count
       const conversation = await db.query.conversations.findFirst({
         where: and(
           eq(conversations.id, conversationId),
@@ -530,8 +543,29 @@ class TenantDMMonitoringService {
         return;
       }
 
+      // Parse userPath using standardized approach
+      const currentUserPath = parseUserPath(conversation.userPath);
+      const newInvalidResponseCount = currentUserPath.metadata.invalidResponseCount + 1;
+
+      console.log(`[Tenant ${this.tenantId}] Current userPath:`, JSON.stringify(conversation.userPath));
+      console.log(`[Tenant ${this.tenantId}] Current invalidResponseCount: ${currentUserPath.metadata.invalidResponseCount}, new: ${newInvalidResponseCount}`);
+
+      // Create updated userPath with new invalid response count
+      const updatedUserPath = createUpdatedUserPath(currentUserPath, newInvalidResponseCount);
+
+      await db.update(conversations)
+        .set({
+          userPath: updatedUserPath,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, conversationId));
+
+      console.log(`[Tenant ${this.tenantId}] Updated userPath with invalidResponseCount: ${newInvalidResponseCount}`);
+
+      // Determine error message based on attempt count
+      const errorMessage = getProgressiveErrorMessage(newInvalidResponseCount);
+      
       // Send error message to user via DM
-      const errorMessage = "Please choose from the provided options above.";
       await whopSdk.messages.sendDirectMessageToUser({
         toUserIdOrUsername: whopUserId,
         message: errorMessage,
@@ -540,10 +574,54 @@ class TenantDMMonitoringService {
       // Add error message to database
       await addMessage(conversationId, "bot", errorMessage);
 
-      console.log(`[Tenant ${this.tenantId}] Sent error DM to user ${whopUserId}: ${errorMessage}`);
+      console.log(`[Tenant ${this.tenantId}] Sent error DM to user ${whopUserId} (attempt ${newInvalidResponseCount}): ${errorMessage}`);
+
+      // If this is the third attempt, stop monitoring this conversation
+      if (newInvalidResponseCount >= 3) {
+        console.log(`[Tenant ${this.tenantId}] User ${whopUserId} has reached maximum invalid responses, stopping monitoring`);
+        await this.stopMonitoring(conversationId);
+      }
 
     } catch (error) {
       console.error(`[Tenant ${this.tenantId}] Error handling invalid response:`, error);
+    }
+  }
+
+
+  /**
+   * Reset invalid response count when user gives valid response
+   */
+  private async resetInvalidResponseCount(conversationId: string): Promise<void> {
+    try {
+      const conversation = await db.query.conversations.findFirst({
+        where: and(
+          eq(conversations.id, conversationId),
+          eq(conversations.experienceId, this.experienceId)
+        ),
+      });
+
+      if (!conversation) {
+        return;
+      }
+
+      // Parse userPath using standardized approach
+      const currentUserPath = parseUserPath(conversation.userPath);
+      
+      if (currentUserPath.metadata.invalidResponseCount > 0) {
+        // Create userPath with reset invalid response count
+        const resetUserPath = createResetUserPath(currentUserPath);
+
+        await db.update(conversations)
+          .set({
+            userPath: resetUserPath,
+            updatedAt: new Date(),
+          })
+          .where(eq(conversations.id, conversationId));
+
+        console.log(`[Tenant ${this.tenantId}] Reset invalid response count for conversation ${conversationId}`);
+      }
+    } catch (error) {
+      console.error(`[Tenant ${this.tenantId}] Error resetting invalid response count:`, error);
     }
   }
 

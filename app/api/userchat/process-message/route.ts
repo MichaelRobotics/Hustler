@@ -4,10 +4,18 @@ import { legacyRateLimiter, RATE_LIMITS } from "@/lib/middleware/rate-limiter";
 import { 
   validateConversationId, 
   validateMessageContent, 
-  validateApiRequest,
-  extractUserIdFromHeaders 
+  validateRequestBody,
 } from "@/lib/middleware/request-validator";
 import { cache, CacheKeys, CACHE_TTL } from "@/lib/middleware/cache";
+import {
+  type AuthContext,
+  createErrorResponse,
+  createSuccessResponse,
+  withWhopAuth,
+} from "@/lib/middleware/whop-auth";
+import { db } from "@/lib/supabase/db-server";
+import { conversations, experiences } from "@/lib/supabase/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Process user message in UserChat and trigger funnel navigation
@@ -19,21 +27,22 @@ import { cache, CacheKeys, CACHE_TTL } from "@/lib/middleware/cache";
  * - Caching for conversation data
  * - Structured error handling
  */
-export async function POST(request: NextRequest) {
+async function processMessageHandler(request: NextRequest, context: AuthContext) {
   const startTime = Date.now();
   
   try {
-    // Extract user ID for rate limiting
-    const userValidation = await extractUserIdFromHeaders(request);
-    if (!userValidation.isValid) {
-      return NextResponse.json(
-        { error: "Authentication required", details: userValidation.errors },
-        { status: 401 }
+    const { user } = context;
+    const experienceId = user.experienceId;
+
+    if (!experienceId) {
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
       );
     }
 
-    // Rate limiting per user (using a fallback key if no user ID)
-    const rateLimitKey = `user_${Date.now()}`; // Fallback for MVP
+    // Rate limiting per user
+    const rateLimitKey = `user_${user.userId}`;
     const isRateLimited = !legacyRateLimiter.isAllowed(
       rateLimitKey,
       RATE_LIMITS.MESSAGE_PROCESSING.limit,
@@ -61,8 +70,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Read request body once
+    let requestBody;
+    try {
+      requestBody = await request.json();
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+
     // Validate request format
-    const requestValidation = await validateApiRequest(request, ['conversationId', 'messageContent']);
+    const requestValidation = validateRequestBody(requestBody, ['conversationId', 'messageContent']);
     if (!requestValidation.isValid) {
       return NextResponse.json(
         { error: "Invalid request format", details: requestValidation.errors },
@@ -70,7 +90,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { conversationId, messageContent } = await request.json();
+    const { conversationId, messageContent } = requestBody;
 
     // Validate conversation ID
     const conversationValidation = validateConversationId(conversationId);
@@ -95,6 +115,18 @@ export async function POST(request: NextRequest) {
 
     console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
 
+    // Get the internal experience ID from the database
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, experienceId),
+    });
+
+    if (!experience) {
+      return createErrorResponse(
+        "EXPERIENCE_NOT_FOUND",
+        "Experience not found"
+      );
+    }
+
     // Check cache for recent conversation data
     const cacheKey = CacheKeys.conversation(sanitizedConversationId);
     const cachedConversation = cache.get(cacheKey);
@@ -103,9 +135,8 @@ export async function POST(request: NextRequest) {
       console.log("Using cached conversation data");
     }
 
-    // Process user message through simplified funnel system
-    // TODO: Get experienceId from conversation or request for multi-tenancy
-    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, "placeholder-experience-id");
+    // Process user message through simplified funnel system with real experience ID
+    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experience.id);
 
     // Cache the result for future requests
     if (result.success) {
@@ -115,7 +146,7 @@ export async function POST(request: NextRequest) {
     const processingTime = Date.now() - startTime;
     console.log(`Message processed in ${processingTime}ms`);
 
-    return NextResponse.json({
+    return createSuccessResponse({
       success: result.success,
       funnelResponse: result,
       processingTime,
@@ -125,19 +156,20 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const processingTime = Date.now() - startTime;
     console.error("Error processing message in UserChat:", {
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
-      processingTime,
+      processingTime
     });
-    
+
     return NextResponse.json(
       { 
-        error: "Failed to process message",
-        processingTime,
-        timestamp: new Date().toISOString(),
+        error: "Failed to process message", 
+        details: error instanceof Error ? error.message : "Unknown error",
+        processingTime 
       },
       { status: 500 }
     );
   }
 }
 
+export const POST = withWhopAuth(processMessageHandler);

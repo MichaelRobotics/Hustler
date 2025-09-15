@@ -93,6 +93,13 @@ const UserChat: React.FC<UserChatProps> = ({
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
 			console.log("UserChat: Received WebSocket message:", newMessage);
+			
+			// Filter out empty messages and typing indicators
+			if (!newMessage.content || newMessage.content.trim() === '') {
+				console.log("UserChat: Skipping empty message");
+				return;
+			}
+			
 			// Check if message already exists locally
 			const messageExists = conversationMessages.some(msg => 
 				msg.content === newMessage.content && 
@@ -110,10 +117,10 @@ const UserChat: React.FC<UserChatProps> = ({
 					metadata: newMessage.metadata,
 					createdAt: newMessage.createdAt,
 				}]);
+				scrollToBottom();
 			} else {
 				console.log("UserChat: Message already exists locally, skipping");
 			}
-			scrollToBottom();
 		},
 		onTyping: (isTyping, userId) => {
 			if (userId !== "system") {
@@ -205,7 +212,6 @@ const UserChat: React.FC<UserChatProps> = ({
 				const response = await apiPost('/api/userchat/process-message', {
 					conversationId,
 					messageContent,
-					messageType: "user",
 				}, experienceId);
 
 				if (response.ok) {
@@ -213,22 +219,28 @@ const UserChat: React.FC<UserChatProps> = ({
 					console.log("Message processed through funnel:", result);
 					
 					// If there's a bot response, add it immediately to UI
-					if (result.funnelResponse?.botMessage) {
+					// Note: API response is wrapped in createSuccessResponse, so we need to access data.funnelResponse
+					const funnelResponse = result.data?.funnelResponse || result.funnelResponse;
+					if (funnelResponse?.botMessage) {
 						const botMessage = {
 							id: `temp-bot-${Date.now()}`,
 							type: "bot" as const,
-							content: result.funnelResponse.botMessage,
+							content: funnelResponse.botMessage,
 							createdAt: new Date(),
 						};
 						setConversationMessages(prev => [...prev, botMessage]);
 						scrollToBottom();
+					} else {
+						// If no bot message in response, refresh conversation to get latest messages
+						// This handles cases where messages were added to database but not returned in response
+						await refreshConversation();
 					}
 
 					// IMMEDIATE UI UPDATE: Update local current block ID if next block is provided
-					if (result.funnelResponse?.nextBlockId) {
-						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
-						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
-						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
+					if (funnelResponse?.nextBlockId) {
+						setLocalCurrentBlockId(funnelResponse.nextBlockId);
+						console.log("UserChat: Updated local current block ID to:", funnelResponse.nextBlockId);
+						console.log("UserChat: New options will be:", funnelFlow.blocks[funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
 					}
 
 					// Send via WebSocket for real-time sync (optional)
@@ -545,7 +557,7 @@ const UserChat: React.FC<UserChatProps> = ({
 							size="2"
 							className="whitespace-pre-wrap leading-relaxed text-base"
 						>
-							{msg.text}
+							{msg.text || msg.content}
 						</Text>
 					</div>
 				</div>
