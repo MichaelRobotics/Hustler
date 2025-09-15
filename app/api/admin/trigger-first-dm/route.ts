@@ -4,7 +4,7 @@ import { conversations, experiences, funnels, messages } from "@/lib/supabase/sc
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { getWelcomeMessage } from "@/lib/actions/user-join-actions";
-import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service";
+// import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service"; // DEPRECATED - using cron jobs now
 import { findOrCreateUserForConversation, closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 import { headers } from "next/headers";
 import type { FunnelFlow } from "@/lib/types/funnel";
@@ -208,7 +208,9 @@ export async function POST(request: NextRequest) {
 
     // Step 11: Start DM monitoring (EXACT SAME as customer flow)
     // Admin will experience the same DM response flow as customers
-    await multiTenantDMMonitoringManager.startMonitoring(conversationId, whopUserId, experience.id);
+    // DM monitoring is now handled by cron jobs - no need to start monitoring service
+    // The cron jobs will automatically detect and process this conversation
+    console.log(`Conversation ${conversationId} created - cron jobs will handle DM monitoring`);
     
     console.log(`DM monitoring started for admin conversation ${conversationId} with user ${whopUserId} in experience ${experience.id}`);
 

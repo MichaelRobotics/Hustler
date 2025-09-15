@@ -9,7 +9,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { experiences, funnels, conversations, messages, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
-import { dmMonitoringService } from "./dm-monitoring-actions";
+// import { dmMonitoringService } from "./dm-monitoring-actions"; // DEPRECATED - using cron jobs now
 import { createConversation, addMessage } from "./simplified-conversation-actions";
 import { closeExistingActiveConversationsByWhopUserId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";
@@ -170,8 +170,9 @@ export async function handleUserJoinEvent(
 		console.error('Error getting member ID for customer:', error);
 	}
 
-	// Start DM monitoring for this conversation (Phase 2)
-	await dmMonitoringService.startMonitoring(conversationId, userId);
+	// DM monitoring is now handled by cron jobs - no need to start monitoring service
+	// The cron jobs will automatically detect and process this conversation
+	console.log(`Conversation ${conversationId} created - cron jobs will handle DM monitoring`);
 
 		console.log(`Successfully processed user join for ${userId} with funnel ${liveFunnel.id}`);
 	} catch (error) {

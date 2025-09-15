@@ -230,6 +230,7 @@ export const conversations = pgTable(
 		status: conversationStatusEnum("status").default("active").notNull(),
 		currentBlockId: text("current_block_id"),
 		userPath: jsonb("user_path"), // Track user's path through funnel
+		phase2StartTime: timestamp("phase2_start_time"), // When Phase 2 (VALUE_DELIVERY) begins
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

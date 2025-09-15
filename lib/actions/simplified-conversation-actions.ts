@@ -9,14 +9,7 @@ import { and, eq, desc, asc } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions, funnels } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
-import type { FunnelFlow } from "../types/funnel";
-import { 
-  getProgressiveErrorMessage, 
-  parseUserPath, 
-  createUpdatedUserPath, 
-  createResetUserPath,
-  type StandardizedUserPath 
-} from "../constants/error-messages";
+import type { FunnelFlow, FunnelBlock } from "../types/funnel";
 
 export interface Conversation {
 	id: string;
@@ -45,6 +38,74 @@ export interface ConversationWithMessages extends Conversation {
 		name: string;
 		isDeployed: boolean;
 	};
+}
+
+/**
+ * Phase detection types
+ */
+export type ConversationPhase = 'PHASE1' | 'PHASE2' | 'TRANSITION' | 'COMPLETED';
+
+/**
+ * Detect conversation phase based on current block ID and funnel flow
+ */
+export function detectConversationPhase(currentBlockId: string | null, funnelFlow: FunnelFlow): ConversationPhase {
+	if (!currentBlockId || !funnelFlow) {
+		return 'COMPLETED';
+	}
+
+	// Find which stage this block belongs to
+	for (const stage of funnelFlow.stages) {
+		if (stage.blockIds.includes(currentBlockId)) {
+			switch (stage.name) {
+				case 'WELCOME':
+					return 'PHASE1';
+				case 'VALUE_DELIVERY':
+				case 'EXPERIENCE_QUALIFICATION':
+				case 'PAIN_POINT_QUALIFICATION':
+				case 'OFFER':
+					return 'PHASE2';
+				case 'TRANSITION':
+					return 'TRANSITION';
+				default:
+					return 'COMPLETED';
+			}
+		}
+	}
+
+	return 'COMPLETED';
+}
+
+/**
+ * Check if a block is a transition block
+ */
+export function isTransitionBlock(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
+	if (!block || !funnelFlow) return false;
+	
+	const transitionStage = funnelFlow.stages.find(stage => stage.name === 'TRANSITION');
+	return transitionStage ? transitionStage.blockIds.includes(block.id) : false;
+}
+
+/**
+ * Check if a block is a Phase 1 block (WELCOME stage)
+ */
+export function isPhase1Block(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
+	if (!block || !funnelFlow) return false;
+	
+	const welcomeStage = funnelFlow.stages.find(stage => stage.name === 'WELCOME');
+	return welcomeStage ? welcomeStage.blockIds.includes(block.id) : false;
+}
+
+/**
+ * Check if a block is a Phase 2 block (VALUE_DELIVERY, EXPERIENCE_QUALIFICATION, etc.)
+ */
+export function isPhase2Block(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
+	if (!block || !funnelFlow) return false;
+	
+	const phase2Stages = ['VALUE_DELIVERY', 'EXPERIENCE_QUALIFICATION', 'PAIN_POINT_QUALIFICATION', 'OFFER'];
+	return phase2Stages.some(stageName => {
+		const stage = funnelFlow.stages.find(s => s.name === stageName);
+		return stage ? stage.blockIds.includes(block.id) : false;
+	});
 }
 
 /**
@@ -218,8 +279,7 @@ export async function addMessage(
 }
 
 /**
- * Update conversation current block and user path
- * Preserves existing metadata in userPath
+ * Update conversation current block and user path with phase detection
  */
 export async function updateConversationBlock(
 	conversationId: string,
@@ -228,34 +288,51 @@ export async function updateConversationBlock(
 	experienceId: string,
 ): Promise<void> {
 	try {
-		// Get current conversation to preserve metadata
+		// Get conversation with funnel data for phase detection
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
 				eq(conversations.experienceId, experienceId)
 			),
+			with: {
+				funnel: true,
+			},
 		});
 
 		if (!conversation) {
-			throw new Error("Conversation not found");
+			throw new Error(`Conversation ${conversationId} not found`);
 		}
 
-		// Parse existing userPath to preserve metadata
-		const currentUserPath = parseUserPath(conversation.userPath);
-		
-		// Create updated userPath with new path but preserved metadata
-		const updatedUserPath = {
-			path: userPath,
-			metadata: currentUserPath.metadata
+		const funnelFlow = conversation.funnel?.flow as FunnelFlow;
+		if (!funnelFlow) {
+			throw new Error(`Funnel flow not found for conversation ${conversationId}`);
+		}
+
+		// Detect current and new phases
+		const currentPhase = detectConversationPhase(conversation.currentBlockId, funnelFlow);
+		const newPhase = detectConversationPhase(blockId, funnelFlow);
+
+		console.log(`[Phase Detection] Conversation ${conversationId}: ${currentPhase} → ${newPhase}`);
+
+		// Prepare update data
+		const updateData: any = {
+			currentBlockId: blockId,
+			userPath,
+			updatedAt: new Date(),
 		};
 
+		// Handle Phase 2 start time tracking
+		if (currentPhase === 'PHASE1' && newPhase === 'PHASE2') {
+			console.log(`[Phase Transition] Phase 1 → Phase 2 detected for conversation ${conversationId}`);
+			updateData.phase2StartTime = new Date();
+		}
+
+		// Update conversation
 		await db.update(conversations)
-			.set({
-				currentBlockId: blockId,
-				userPath: updatedUserPath,
-				updatedAt: new Date(),
-			})
+			.set(updateData)
 			.where(eq(conversations.id, conversationId));
+
+		console.log(`[Phase Detection] Updated conversation ${conversationId} to phase ${newPhase}`);
 	} catch (error) {
 		console.error("Error updating conversation block:", error);
 		throw error;
@@ -280,6 +357,82 @@ export async function completeConversation(conversationId: string): Promise<void
 }
 
 /**
+ * Navigate to next block with immediate phase detection
+ * This is the core function that triggers phase transitions
+ */
+export async function navigateToNextBlock(
+	conversationId: string,
+	nextBlockId: string,
+	experienceId: string,
+	selectedOptionText?: string,
+): Promise<{
+	success: boolean;
+	phaseTransition?: ConversationPhase;
+	error?: string;
+}> {
+	try {
+		console.log(`[Navigate] Moving conversation ${conversationId} to block ${nextBlockId}`);
+
+		// Get conversation with funnel data for phase detection
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId)
+			),
+			with: {
+				funnel: true,
+			},
+		});
+
+		if (!conversation) {
+			return { success: false, error: "Conversation not found" };
+		}
+
+		const funnelFlow = conversation.funnel?.flow as FunnelFlow;
+		if (!funnelFlow) {
+			return { success: false, error: "Funnel flow not found" };
+		}
+
+		// Detect current and new phases
+		const currentPhase = detectConversationPhase(conversation.currentBlockId, funnelFlow);
+		const newPhase = detectConversationPhase(nextBlockId, funnelFlow);
+
+		console.log(`[Navigate] Phase transition: ${currentPhase} → ${newPhase}`);
+
+		// Update conversation with phase detection
+		const newUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
+		await updateConversationBlock(conversationId, nextBlockId, newUserPath, experienceId);
+
+		// Record interaction if option text provided
+		if (selectedOptionText) {
+			await db.insert(funnelInteractions).values({
+				conversationId,
+				blockId: conversation.currentBlockId!,
+				optionText: selectedOptionText,
+				nextBlockId,
+			});
+		}
+
+		// Check if this is a phase transition
+		if (currentPhase !== newPhase) {
+			console.log(`[Navigate] Phase transition detected: ${currentPhase} → ${newPhase}`);
+			return {
+				success: true,
+				phaseTransition: newPhase,
+			};
+		}
+
+		return { success: true };
+	} catch (error) {
+		console.error("Error navigating to next block:", error);
+		return { 
+			success: false, 
+			error: error instanceof Error ? error.message : 'Unknown error' 
+		};
+	}
+}
+
+/**
  * Process user message through funnel system
  */
 export async function processUserMessage(
@@ -290,6 +443,7 @@ export async function processUserMessage(
 	success: boolean;
 	botMessage?: string;
 	nextBlockId?: string;
+	phaseTransition?: ConversationPhase;
 	error?: string;
 }> {
 	try {
@@ -322,32 +476,26 @@ export async function processUserMessage(
 		const validationResult = validateUserResponse(messageContent, currentBlock);
 
 		if (!validationResult.isValid) {
-			// Handle invalid response with progressive error handling
-			const progressiveErrorMessage = await handleInvalidUserResponse(conversationId, messageContent, experienceId);
 			return {
 				success: true,
-				botMessage: progressiveErrorMessage,
+				botMessage: validationResult.errorMessage || "Please select a valid option.",
 			};
 		}
 
-		// Reset invalid response count on valid response
-		await resetInvalidResponseCount(conversationId, experienceId);
-
-		// Navigate to next block
+		// Navigate to next block with phase detection
 		if (validationResult.selectedOption) {
 			const nextBlockId = validationResult.selectedOption.nextBlockId;
 			
-			// Update conversation
-			const newUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
-			await updateConversationBlock(conversationId, nextBlockId, newUserPath, conversation.experienceId);
+			const navigateResult = await navigateToNextBlock(
+				conversationId, 
+				nextBlockId, 
+				experienceId, 
+				validationResult.selectedOption.text
+			);
 
-			// Record interaction
-			await db.insert(funnelInteractions).values({
-				conversationId,
-				blockId: conversation.currentBlockId!,
-				optionText: validationResult.selectedOption.text,
-				nextBlockId,
-			});
+			if (!navigateResult.success) {
+				return { success: false, error: navigateResult.error };
+			}
 
 			// Get next block message
 			const nextBlock = nextBlockId ? funnelFlow.blocks[nextBlockId] : null;
@@ -360,6 +508,7 @@ export async function processUserMessage(
 				success: true,
 				botMessage,
 				nextBlockId,
+				phaseTransition: navigateResult.phaseTransition,
 			};
 		}
 
@@ -417,101 +566,6 @@ function validateUserResponse(
 			isValid: false,
 			errorMessage: "Invalid response. Please try again.",
 		};
-	}
-}
-
-/**
- * Handle invalid user response with progressive error handling for UserChat
- */
-async function handleInvalidUserResponse(
-	conversationId: string,
-	messageContent: string,
-	experienceId: string
-): Promise<string> {
-	try {
-		// Get conversation to get current invalid response count
-		const conversation = await db.query.conversations.findFirst({
-			where: and(
-				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experienceId)
-			),
-		});
-
-		if (!conversation) {
-			return "Please select a valid option.";
-		}
-
-		// Parse userPath using standardized approach
-		const currentUserPath = parseUserPath(conversation.userPath);
-		const newInvalidResponseCount = currentUserPath.metadata.invalidResponseCount + 1;
-
-		console.log(`[UserChat] Current userPath:`, JSON.stringify(conversation.userPath));
-		console.log(`[UserChat] Current invalidResponseCount: ${currentUserPath.metadata.invalidResponseCount}, new: ${newInvalidResponseCount}`);
-
-		// Create updated userPath with new invalid response count
-		const updatedUserPath = createUpdatedUserPath(currentUserPath, newInvalidResponseCount);
-
-		// Update conversation with new invalid response count in userPath
-		await db.update(conversations)
-			.set({
-				userPath: updatedUserPath,
-				updatedAt: new Date(),
-			})
-			.where(eq(conversations.id, conversationId));
-
-		console.log(`[UserChat] Updated userPath with invalidResponseCount: ${newInvalidResponseCount}`);
-
-		// Determine error message based on attempt count
-		const errorMessage = getProgressiveErrorMessage(newInvalidResponseCount);
-
-		// Add error message to database
-		await addMessage(conversationId, "bot", errorMessage);
-
-		console.log(`[UserChat] Invalid response attempt ${newInvalidResponseCount} for conversation ${conversationId}: ${messageContent}`);
-
-		return errorMessage;
-
-	} catch (error) {
-		console.error(`[UserChat] Error handling invalid response:`, error);
-		return "Please select a valid option.";
-	}
-}
-
-
-/**
- * Reset invalid response count when user gives valid response
- */
-async function resetInvalidResponseCount(conversationId: string, experienceId: string): Promise<void> {
-	try {
-		const conversation = await db.query.conversations.findFirst({
-			where: and(
-				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experienceId)
-			),
-		});
-
-		if (!conversation) {
-			return;
-		}
-
-		// Parse userPath using standardized approach
-		const currentUserPath = parseUserPath(conversation.userPath);
-		
-		if (currentUserPath.metadata.invalidResponseCount > 0) {
-			// Create userPath with reset invalid response count
-			const resetUserPath = createResetUserPath(currentUserPath);
-
-			await db.update(conversations)
-				.set({
-					userPath: resetUserPath,
-					updatedAt: new Date(),
-				})
-				.where(eq(conversations.id, conversationId));
-
-			console.log(`[UserChat] Reset invalid response count for conversation ${conversationId}`);
-		}
-	} catch (error) {
-		console.error(`[UserChat] Error resetting invalid response count:`, error);
 	}
 }
 

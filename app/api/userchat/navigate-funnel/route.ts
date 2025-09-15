@@ -3,7 +3,6 @@ import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import type { FunnelFlow, FunnelBlock } from "@/lib/types/funnel";
-import { parseUserPath, createUpdatedUserPath } from "@/lib/constants/error-messages";
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
@@ -146,18 +145,11 @@ async function processFunnelNavigation(
     });
 
     // Update conversation state
-    // Parse existing userPath to preserve metadata
-    const currentUserPath = parseUserPath(conversation.userPath);
-    const updatedUserPath = createUpdatedUserPath(currentUserPath, 0); // Reset invalid response count
-    if (nextBlockId) {
-      updatedUserPath.path.push(nextBlockId); // Add new block to path
-    }
-    
     const updatedConversation = await db
       .update(conversations)
       .set({
         currentBlockId: nextBlockId,
-        userPath: updatedUserPath,
+        userPath: [...(conversation.userPath || []), nextBlockId].filter(Boolean),
         updatedAt: new Date(),
       })
       .where(eq(conversations.id, conversationId))

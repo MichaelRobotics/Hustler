@@ -11,7 +11,6 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
-import { parseUserPath, createUpdatedUserPath } from "@/lib/constants/error-messages";
 
 async function loadConversationHandler(
   request: NextRequest,
@@ -132,16 +131,11 @@ async function loadConversationHandler(
           
           if (currentConversation?.currentBlockId === currentBlockId) {
             // Update conversation to EXPERIENCE_QUALIFICATION stage
-            // Parse existing userPath to preserve metadata
-            const currentUserPath = parseUserPath(conversation.userPath);
-            const updatedUserPath = createUpdatedUserPath(currentUserPath, 0); // Reset invalid response count
-            updatedUserPath.path.push(firstExperienceBlockId); // Add new block to path
-            
             await tx
               .update(conversations)
               .set({
                 currentBlockId: firstExperienceBlockId,
-                userPath: updatedUserPath,
+                userPath: [...(conversation.userPath || []), firstExperienceBlockId],
                 updatedAt: new Date(),
               })
               .where(eq(conversations.id, conversationId));

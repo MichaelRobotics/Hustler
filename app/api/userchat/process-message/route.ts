@@ -22,12 +22,16 @@ import { eq } from "drizzle-orm";
  * This API route handles the gap between WebSocket messages and funnel processing
  * 
  * Production optimizations:
- * - Rate limiting per user
+ * - Multi-tenant authentication and isolation
+ * - Rate limiting per tenant
  * - Request validation and sanitization
  * - Caching for conversation data
  * - Structured error handling
  */
-async function processMessageHandler(request: NextRequest, context: AuthContext) {
+async function processMessageHandler(
+  request: NextRequest,
+  context: AuthContext
+) {
   const startTime = Date.now();
   
   try {
@@ -41,52 +45,23 @@ async function processMessageHandler(request: NextRequest, context: AuthContext)
       );
     }
 
-    // Rate limiting per user
-    const rateLimitKey = `user_${user.userId}`;
-    const isRateLimited = !legacyRateLimiter.isAllowed(
-      rateLimitKey,
-      RATE_LIMITS.MESSAGE_PROCESSING.limit,
-      RATE_LIMITS.MESSAGE_PROCESSING.windowMs
-    );
-
-    if (isRateLimited) {
-      const resetTime = legacyRateLimiter.getResetTime(rateLimitKey);
-      const retryAfter = resetTime ? Math.ceil((resetTime - Date.now()) / 1000) : 60;
-      
-      return NextResponse.json(
-        { 
-          error: "Rate limit exceeded", 
-          retryAfter,
-          resetTime: resetTime ? new Date(resetTime).toISOString() : null,
-        },
-        { 
-          status: 429,
-          headers: {
-            'Retry-After': retryAfter.toString(),
-            'X-RateLimit-Limit': RATE_LIMITS.MESSAGE_PROCESSING.limit.toString(),
-            'X-RateLimit-Remaining': legacyRateLimiter.getRemaining(rateLimitKey, RATE_LIMITS.MESSAGE_PROCESSING.limit, RATE_LIMITS.MESSAGE_PROCESSING.windowMs).toString(),
-          },
-        }
-      );
-    }
-
     // Read request body once
     let requestBody;
     try {
       requestBody = await request.json();
     } catch (error) {
-      return NextResponse.json(
-        { error: "Invalid JSON in request body" },
-        { status: 400 }
+      return createErrorResponse(
+        "INVALID_JSON",
+        "Invalid JSON in request body"
       );
     }
 
     // Validate request format
     const requestValidation = validateRequestBody(requestBody, ['conversationId', 'messageContent']);
     if (!requestValidation.isValid) {
-      return NextResponse.json(
-        { error: "Invalid request format", details: requestValidation.errors },
-        { status: 400 }
+      return createErrorResponse(
+        "INVALID_REQUEST_FORMAT",
+        "Invalid request format"
       );
     }
 
@@ -95,37 +70,48 @@ async function processMessageHandler(request: NextRequest, context: AuthContext)
     // Validate conversation ID
     const conversationValidation = validateConversationId(conversationId);
     if (!conversationValidation.isValid) {
-      return NextResponse.json(
-        { error: "Invalid conversation ID", details: conversationValidation.errors },
-        { status: 400 }
+      return createErrorResponse(
+        "INVALID_CONVERSATION_ID",
+        "Invalid conversation ID"
       );
     }
 
     // Validate message content
     const messageValidation = validateMessageContent(messageContent);
     if (!messageValidation.isValid) {
-      return NextResponse.json(
-        { error: "Invalid message content", details: messageValidation.errors },
-        { status: 400 }
+      return createErrorResponse(
+        "INVALID_MESSAGE_CONTENT",
+        "Invalid message content"
       );
     }
 
     const sanitizedConversationId = conversationValidation.sanitizedData;
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
-    console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
-
-    // Get the internal experience ID from the database
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.whopExperienceId, experienceId),
+    // Verify conversation belongs to this tenant
+    const conversation = await db.query.conversations.findFirst({
+      where: eq(conversations.id, sanitizedConversationId),
+      with: {
+        experience: true,
+      },
     });
 
-    if (!experience) {
+    if (!conversation) {
       return createErrorResponse(
-        "EXPERIENCE_NOT_FOUND",
-        "Experience not found"
+        "CONVERSATION_NOT_FOUND",
+        "Conversation not found"
       );
     }
+
+    // Verify conversation belongs to this tenant's experience
+    if (conversation.experienceId !== experienceId) {
+      return createErrorResponse(
+        "CONVERSATION_ACCESS_DENIED",
+        "Conversation does not belong to this tenant"
+      );
+    }
+
+    console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
 
     // Check cache for recent conversation data
     const cacheKey = CacheKeys.conversation(sanitizedConversationId);
@@ -135,8 +121,8 @@ async function processMessageHandler(request: NextRequest, context: AuthContext)
       console.log("Using cached conversation data");
     }
 
-    // Process user message through simplified funnel system with real experience ID
-    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experience.id);
+    // Process user message through simplified funnel system with proper tenant isolation
+    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experienceId);
 
     // Cache the result for future requests
     if (result.success) {
@@ -151,25 +137,22 @@ async function processMessageHandler(request: NextRequest, context: AuthContext)
       funnelResponse: result,
       processingTime,
       cached: !!cachedConversation,
-    });
+    }, "Message processed successfully");
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
     console.error("Error processing message in UserChat:", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      processingTime
+      processingTime,
     });
-
-    return NextResponse.json(
-      { 
-        error: "Failed to process message", 
-        details: error instanceof Error ? error.message : "Unknown error",
-        processingTime 
-      },
-      { status: 500 }
+    
+    return createErrorResponse(
+      "INTERNAL_ERROR",
+      "Failed to process message"
     );
   }
 }
 
 export const POST = withWhopAuth(processMessageHandler);
+

@@ -3,7 +3,7 @@ import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions, experiences } from "@/lib/supabase/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
-import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service";
+// import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service"; // DEPRECATED - using cron jobs now
 import { validateToken } from "@whop-apps/sdk";
 import { headers } from "next/headers";
 
@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
     // Step 3: Stop DM monitoring for all active conversations
     for (const conversation of activeConversations) {
       console.log(`🛑 Stopping DM monitoring for conversation ${conversation.id} in experience ${experience.id}`);
-      await multiTenantDMMonitoringManager.stopMonitoring(conversation.id, experience.id);
+      // DM monitoring is now handled by cron jobs - no need to stop monitoring service
+      console.log(`Conversation ${conversation.id} reset - cron jobs will handle DM monitoring`);
     }
 
     // Step 4: Close all active conversations

@@ -5,6 +5,51 @@
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "app/api/cron/**/*.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/poll-phase1-critical",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase1-high",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase1-low",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase1-extended",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase1-cleanup",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase2-critical",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase2-high",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase2-low",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase2-extended",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-phase2-cleanup",
+      "schedule": "0 0 * * *"
+    }
+  ]
 }
