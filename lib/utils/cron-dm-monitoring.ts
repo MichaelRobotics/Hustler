@@ -398,7 +398,7 @@ export async function handlePhase1Cleanup(experienceId?: string): Promise<{
           results.push({
             conversationId: conversation.id,
             action: 'transitioned_to_phase2',
-            result: result.message
+            result: result.success ? 'Success' : result.error || 'Unknown error'
           });
           processed++;
         }
@@ -466,7 +466,9 @@ export async function handlePhase2Cleanup(experienceId?: string): Promise<{
 
         // Send TRANSITION message with personalized chat link
         const transitionBlock = Object.values(funnelFlow.blocks).find(block => 
-          block.type === 'TRANSITION'
+          funnelFlow.stages.some(stage => 
+            stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+          )
         );
 
         if (transitionBlock) {
@@ -488,7 +490,7 @@ export async function handlePhase2Cleanup(experienceId?: string): Promise<{
             results.push({
               conversationId: conversation.id,
               action: 'completed_conversation',
-              result: result.message
+              result: result.success ? 'Success' : result.error || 'Unknown error'
             });
             processed++;
           }
