@@ -282,6 +282,8 @@ async function processConversationWithDM(
         // Use the lastMessage from the DM conversation (same as old monitoring system)
         const lastMessage = userDM.lastMessage;
         console.log(`[Cron DM] Last message:`, lastMessage?.content || 'No last message');
+        console.log(`[Cron DM] Last message userId:`, lastMessage?.userId);
+        console.log(`[Cron DM] Looking for whopUserId:`, conversation.whopUserId);
         console.log(`[Cron DM] Last message from user:`, lastMessage?.userId === conversation.whopUserId ? 'Yes' : 'No');
 
         // Return the DM conversation and last message (no need to call listMessagesFromChat)

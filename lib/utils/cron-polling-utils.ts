@@ -383,6 +383,8 @@ export async function processConversationPolling(
         // Use the lastMessage from the DM conversation (same as old monitoring system)
         const lastMessage = userDM.lastMessage;
         console.log(`[Cron Polling] Last message:`, lastMessage?.content || 'No last message');
+        console.log(`[Cron Polling] Last message userId:`, lastMessage?.userId);
+        console.log(`[Cron Polling] Looking for whopUserId:`, conversation.whopUserId);
         console.log(`[Cron Polling] Last message from user:`, lastMessage?.userId === conversation.whopUserId ? 'Yes' : 'No');
 
         // Return the DM conversation and last message (no need to call listMessagesFromChat)
