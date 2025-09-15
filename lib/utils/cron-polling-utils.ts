@@ -339,11 +339,11 @@ export async function processConversationPolling(
     const dmPollingResult = await errorRecoveryManager.executeWithRetry(
       tenantId,
       async () => {
+        console.log(`[Cron Polling] Polling DMs for conversation ${conversation.id}, user ${conversation.whopUserId}`);
+        
         // Get recent messages from Whop DM
-        const dmConversations = await whopSdk.messages.listDirectMessageConversations({
-          limit: 10,
-          status: "accepted",
-        });
+        const dmConversations = await whopSdk.messages.listDirectMessageConversations();
+        console.log(`[Cron Polling] Found ${dmConversations.length} DM conversations`);
 
         // Find conversation with this user
         const userDM = dmConversations.find((dm: any) => 
@@ -351,14 +351,18 @@ export async function processConversationPolling(
         );
 
         if (!userDM) {
+          console.log(`[Cron Polling] No DM conversation found for user ${conversation.whopUserId}`);
           throw new Error("No DM conversation found");
         }
+
+        console.log(`[Cron Polling] Found DM conversation ${userDM.id} for user ${conversation.whopUserId}`);
 
         // Get messages from the DM feed
         const dmMessages = await whopSdk.messages.listMessagesFromChat({
           chatExperienceId: conversation.experience.whopExperienceId,
         });
 
+        console.log(`[Cron Polling] Retrieved ${dmMessages?.posts?.length || 0} messages from DM feed`);
         return { userDM, dmMessages };
       },
       'poll_dm_messages'
