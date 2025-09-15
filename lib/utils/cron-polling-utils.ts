@@ -380,13 +380,13 @@ export async function processConversationPolling(
 
         console.log(`[Cron Polling] Found DM conversation ${userDM.id} for user ${conversation.whopUserId}`);
 
-        // Get messages from the DM feed
-        const dmMessages = await whopSdk.messages.listMessagesFromChat({
-          chatExperienceId: conversation.experience.whopExperienceId,
-        });
+        // Use the lastMessage from the DM conversation (same as old monitoring system)
+        const lastMessage = userDM.lastMessage;
+        console.log(`[Cron Polling] Last message:`, lastMessage?.content || 'No last message');
+        console.log(`[Cron Polling] Last message from user:`, lastMessage?.userId === conversation.whopUserId ? 'Yes' : 'No');
 
-        console.log(`[Cron Polling] Retrieved ${dmMessages?.posts?.length || 0} messages from DM feed`);
-        return { userDM, dmMessages };
+        // Return the DM conversation and last message (no need to call listMessagesFromChat)
+        return { userDM, lastMessage };
       },
       'poll_dm_messages'
     );
@@ -396,36 +396,27 @@ export async function processConversationPolling(
       return `DM polling failed: ${dmPollingResult.error} (${dmPollingResult.retryCount} retries)`;
     }
 
-    const { userDM, dmMessages } = dmPollingResult.result!;
+    const { userDM, lastMessage } = dmPollingResult.result!;
 
-    // Check for new user messages since last check
-    const lastBotMessage = conversation.messages
-      ?.filter((msg: any) => msg.type === 'bot')
-      ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-
-    const newUserMessages = dmMessages?.posts
-      ?.filter((msg: any) => 
-        msg.user?.id === conversation.whopUserId &&
-        (!lastBotMessage || new Date(msg.createdAt) > new Date(lastBotMessage.createdAt))
-      )
-      ?.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-    if (newUserMessages && newUserMessages.length > 0) {
-      // Process the latest user message
-      const latestMessage = newUserMessages[newUserMessages.length - 1];
-      const messageContent = (latestMessage as any)?.content || 'No content';
-      
-      console.log(`[Cron Polling] Processing user message: "${messageContent}"`);
+    // Check if there's a new message from the user (same logic as old monitoring)
+    const isMessageFromUser = lastMessage && lastMessage.userId === conversation.whopUserId;
+    const userMember = userDM.feedMembers?.find((member: any) => 
+      member.id === conversation.whopUserId || member.username === conversation.whopUserId
+    );
+    const isMessageFromUserMember = lastMessage && userMember && lastMessage.userId === userMember.id;
+    
+    if (lastMessage && (isMessageFromUser || isMessageFromUserMember) && lastMessage.content) {
+      console.log(`[Cron Polling] New message from user ${conversation.whopUserId}: "${lastMessage.content}"`);
       
       // Use error recovery for user response processing
       const processResult = await errorRecoveryManager.executeWithRetry(
         tenantId,
-        () => processUserResponse(conversation.id, messageContent, funnelFlow, conversation.experienceId),
+        () => processUserResponse(conversation.id, lastMessage.content!, funnelFlow, conversation.experienceId),
         'process_user_response'
       );
       
       if (processResult.success) {
-        return `Processed user message: "${messageContent}" -> Next block: ${processResult.result?.nextBlockId || 'Completed'} (${processResult.retryCount} retries)`;
+        return `Processed user message: "${lastMessage.content}" -> Next block: ${processResult.result?.nextBlockId || 'Completed'} (${processResult.retryCount} retries)`;
       } else {
         tenantMetricsCollector.recordError(tenantId, tenantId, new Error(processResult.error || 'Unknown processing error'));
         return `Failed to process user message: ${processResult.error} (${processResult.retryCount} retries)`;
