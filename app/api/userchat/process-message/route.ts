@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processUserMessage } from "@/lib/actions/simplified-conversation-actions";
-import { rateLimiter, RATE_LIMITS } from "@/lib/middleware/rate-limiter";
+import { legacyRateLimiter, RATE_LIMITS } from "@/lib/middleware/rate-limiter";
 import { 
   validateConversationId, 
   validateMessageContent, 
@@ -34,14 +34,14 @@ export async function POST(request: NextRequest) {
 
     // Rate limiting per user (using a fallback key if no user ID)
     const rateLimitKey = `user_${Date.now()}`; // Fallback for MVP
-    const isRateLimited = !rateLimiter.isAllowed(
+    const isRateLimited = !legacyRateLimiter.isAllowed(
       rateLimitKey,
       RATE_LIMITS.MESSAGE_PROCESSING.limit,
       RATE_LIMITS.MESSAGE_PROCESSING.windowMs
     );
 
     if (isRateLimited) {
-      const resetTime = rateLimiter.getResetTime(rateLimitKey);
+      const resetTime = legacyRateLimiter.getResetTime(rateLimitKey);
       const retryAfter = resetTime ? Math.ceil((resetTime - Date.now()) / 1000) : 60;
       
       return NextResponse.json(
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
           headers: {
             'Retry-After': retryAfter.toString(),
             'X-RateLimit-Limit': RATE_LIMITS.MESSAGE_PROCESSING.limit.toString(),
-            'X-RateLimit-Remaining': rateLimiter.getRemaining(rateLimitKey, RATE_LIMITS.MESSAGE_PROCESSING.limit, RATE_LIMITS.MESSAGE_PROCESSING.windowMs).toString(),
+            'X-RateLimit-Remaining': legacyRateLimiter.getRemaining(rateLimitKey, RATE_LIMITS.MESSAGE_PROCESSING.limit, RATE_LIMITS.MESSAGE_PROCESSING.windowMs).toString(),
           },
         }
       );

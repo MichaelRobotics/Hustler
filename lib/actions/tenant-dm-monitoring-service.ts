@@ -15,6 +15,7 @@ import { whopSdk } from "../whop-sdk";
 import type { FunnelBlock, FunnelBlockOption, FunnelFlow } from "../types/funnel";
 import { updateConversationBlock, addMessage } from "./simplified-conversation-actions";
 import { tenantMetricsCollector } from "../monitoring/tenant-metrics";
+import { rateLimiter } from "../middleware/rate-limiter";
 
 /**
  * Rate limiting configuration per tenant
@@ -35,10 +36,9 @@ const MEMORY_CONFIG = {
 } as const;
 
 /**
- * Tenant-specific rate limiter
+ * Tenant-specific rate limiter (now using global multi-tenant rate limiter)
  */
 class TenantRateLimiter {
-  private requests: Map<string, number[]> = new Map();
   private readonly limit: number;
   private readonly windowMs: number;
 
@@ -51,52 +51,32 @@ class TenantRateLimiter {
    * Check if tenant can make a request
    */
   canMakeRequest(tenantId: string): boolean {
-    const now = Date.now();
-    const tenantRequests = this.requests.get(tenantId) || [];
-    
-    // Remove old requests outside the window
-    const validRequests = tenantRequests.filter(time => now - time < this.windowMs);
-    
-    // Update the map
-    this.requests.set(tenantId, validRequests);
-    
-    return validRequests.length < this.limit;
+    return rateLimiter.isAllowed(tenantId, 'dm_polling', this.limit, this.windowMs);
   }
 
   /**
    * Record a request for a tenant
    */
   recordRequest(tenantId: string): void {
-    const now = Date.now();
-    const tenantRequests = this.requests.get(tenantId) || [];
-    tenantRequests.push(now);
-    this.requests.set(tenantId, tenantRequests);
+    // The global rate limiter handles recording automatically
+    // This method is kept for backward compatibility
   }
 
   /**
    * Get time until next request is allowed
    */
   getTimeUntilReset(tenantId: string): number {
-    const tenantRequests = this.requests.get(tenantId) || [];
-    if (tenantRequests.length < this.limit) return 0;
+    const resetTime = rateLimiter.getResetTime(tenantId, 'dm_polling');
+    if (!resetTime) return 0;
     
-    const oldestRequest = Math.min(...tenantRequests);
-    return Math.max(0, this.windowMs - (Date.now() - oldestRequest));
+    return Math.max(0, resetTime - Date.now());
   }
 
   /**
-   * Clean up old data
+   * Clean up old data (handled by global rate limiter)
    */
   cleanup(): void {
-    const now = Date.now();
-    for (const [tenantId, requests] of this.requests.entries()) {
-      const validRequests = requests.filter(time => now - time < this.windowMs);
-      if (validRequests.length === 0) {
-        this.requests.delete(tenantId);
-      } else {
-        this.requests.set(tenantId, validRequests);
-      }
-    }
+    // Cleanup is handled by the global rate limiter
   }
 }
 

@@ -79,9 +79,9 @@ const createPostgresClient = () => {
 	}
 
 	return postgres(connectionString, {
-		max: 20, // Maximum number of connections
-		idle_timeout: 20, // Close idle connections after 20 seconds
-		connect_timeout: 10, // Connection timeout
+		max: 100, // Maximum number of connections (upgraded for MVP scaling)
+		idle_timeout: 30, // Close idle connections after 30 seconds (increased)
+		connect_timeout: 15, // Connection timeout (increased for reliability)
 		prepare: true, // Enable prepared statements for better performance
 		onnotice: (notice) => {
 			console.log("PostgreSQL Notice:", notice);
@@ -117,6 +117,64 @@ export async function checkDatabaseConnection(): Promise<boolean> {
 	} catch (error) {
 		console.error("❌ Database connection failed:", error);
 		return false;
+	}
+}
+
+// Database connection statistics for monitoring
+export async function getConnectionStats(): Promise<{
+	active: number;
+	idle: number;
+	total: number;
+	max: number;
+	usage: string;
+	health: "healthy" | "warning" | "critical";
+}> {
+	try {
+		if (!client) {
+			return {
+				active: 0,
+				idle: 0,
+				total: 0,
+				max: 100,
+				usage: "0/100",
+				health: "critical"
+			};
+		}
+
+		// Get connection pool stats
+		const pool = (client as any).pool;
+		const active = pool?.totalCount || 0;
+		const idle = pool?.idleCount || 0;
+		const total = active;
+		const max = 100;
+		const usage = `${total}/${max}`;
+		
+		// Determine health status
+		let health: "healthy" | "warning" | "critical" = "healthy";
+		if (total > max * 0.8) {
+			health = "critical";
+		} else if (total > max * 0.6) {
+			health = "warning";
+		}
+
+		return {
+			active,
+			idle,
+			total,
+			max,
+			usage,
+			health
+		};
+	} catch (error) {
+		console.error("❌ Error getting connection stats:", error);
+		return {
+			active: 0,
+			idle: 0,
+			total: 0,
+			max: 100,
+			usage: "0/100",
+			health: "critical"
+		};
 	}
 }
 
