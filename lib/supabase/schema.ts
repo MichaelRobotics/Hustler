@@ -80,6 +80,7 @@ export const users = pgTable(
 		avatar: text("avatar"),
 		credits: integer("credits").default(0).notNull(),
 		accessLevel: text("access_level").notNull().default("customer"), // WHOP access level: admin/customer/no_access
+		productsSynced: boolean("products_synced").default(false).notNull(), // Track if products have been synced for this user
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

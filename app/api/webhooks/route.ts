@@ -4,10 +4,6 @@ import { waitUntil } from "@vercel/functions";
 import { makeWebhookValidator } from "@whop/api";
 import type { NextRequest } from "next/server";
 import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
-import { getWhopApiClient } from "@/lib/whop-api-client";
-import { db } from "@/lib/supabase/db-server";
-import { resources, experiences } from "@/lib/supabase/schema";
-import { eq, and, isNotNull } from "drizzle-orm";
 
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
@@ -101,21 +97,6 @@ export async function POST(request: NextRequest): Promise<Response> {
 		} else {
 			console.error("Missing user_id or product_id in membership webhook");
 		}
-	} else if (webhookData.action === "app_membership_went_valid") {
-		const { company_id, app_id, user_id } = webhookData.data;
-
-		console.log(
-			`App membership went valid: User ${user_id} got access to app ${app_id} for company ${company_id}`,
-		);
-
-		// Handle app membership - sync apps to resources when user gets access
-		if (company_id) {
-			waitUntil(
-				handleAppMembershipValid(company_id, app_id, user_id),
-			);
-		} else {
-			console.error("Missing company_id in app membership webhook");
-		}
 	}
 
 	// Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
@@ -178,76 +159,4 @@ async function potentiallyLongRunningHandler(
 	// In a real scenario, you might need to fetch user data, update a database, etc.
 }
 
-async function handleAppMembershipValid(companyId: string, appId: string, userId: string) {
-	try {
-		console.log(`Handling app membership valid for company ${companyId}, app ${appId}, user ${userId}`);
-		
-		// Check if the user is the company owner/admin
-		const whopClient = getWhopApiClient();
-		const userAccess = await whopClient.checkIfUserHasAccessToCompany(companyId, userId);
-		
-		// Only proceed if user is admin/owner of the company
-		if (!userAccess.hasAccess || userAccess.accessLevel !== "admin") {
-			console.log(`User ${userId} is not an admin of company ${companyId}, skipping app sync`);
-			return;
-		}
-		
-		console.log(`User ${userId} is admin of company ${companyId}, proceeding with app sync`);
-		
-		// Get experience ID from company ID
-		const experience = await db.select()
-			.from(experiences)
-			.where(eq(experiences.whopCompanyId, companyId))
-			.limit(1);
-		
-		if (experience.length === 0) {
-			console.error(`No experience found for company ${companyId}`);
-			return;
-		}
-		
-		const experienceId = experience[0].id;
-		
-		// Check if this experience has already been synced for apps
-		const existingAppResources = await db.select()
-			.from(resources)
-			.where(
-				and(
-					eq(resources.experienceId, experienceId),
-					eq(resources.type, "MY_PRODUCTS"),
-					eq(resources.category, "FREE_VALUE"),
-					isNotNull(resources.whopAppId)
-				)
-			)
-			.limit(1);
-		
-		if (existingAppResources.length > 0) {
-			console.log(`Apps already synced for experience ${experienceId}`);
-			return;
-		}
-		
-		// Sync all apps when company owner gets access to any app (one-time only)
-		const apps = await whopClient.getInstalledApps(companyId);
-		
-		for (const app of apps) {
-			const resourceData = {
-				experienceId,
-				userId: "system",
-				name: app.name || app.description || `App ${app.id}`,
-				type: "MY_PRODUCTS" as const,
-				category: "FREE_VALUE" as const,
-				link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-				description: app.description,
-				whopAppId: app.id,
-				whopProductId: null,
-				whopMembershipId: null
-			};
-			
-			await db.insert(resources).values(resourceData);
-		}
-		
-		console.log(`Synced ${apps.length} apps for experience ${experienceId} when company owner ${userId} got access to app ${appId}`);
-	} catch (error) {
-		console.error("Error handling app membership valid:", error);
-	}
-}
 

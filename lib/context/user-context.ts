@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
+import { triggerProductSyncForNewAdmin } from "../sync/trigger-product-sync";
 import type { AuthenticatedUser, UserContext } from "../types/user";
 
 // Re-export types for backward compatibility
@@ -195,6 +196,27 @@ async function createUserContext(
 						experience: true,
 					},
 				});
+
+				// Trigger product sync for new admin users
+				if (initialAccessLevel === "admin") {
+					console.log(`🚀 New admin user created, triggering product sync for experience ${experience.id}`);
+					try {
+						// Run sync in background to avoid blocking user creation
+						setTimeout(async () => {
+							try {
+								await triggerProductSyncForNewAdmin(
+									newUser.id,
+									experience.id,
+									experience.whopCompanyId
+								);
+							} catch (error) {
+								console.error("Background product sync failed:", error);
+							}
+						}, 1000); // 1 second delay to ensure user creation is complete
+					} catch (error) {
+						console.error("Error scheduling product sync:", error);
+					}
+				}
 			}
 		} else {
 		// Sync user data with WHOP (only for the same experience)
