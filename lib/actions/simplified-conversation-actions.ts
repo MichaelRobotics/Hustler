@@ -444,7 +444,6 @@ export async function processUserMessage(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
-	escalated?: boolean;
 	error?: string;
 }> {
 	try {
@@ -482,7 +481,6 @@ export async function processUserMessage(
 			return {
 				success: true,
 				botMessage: escalationResult.botMessage,
-				escalated: escalationResult.escalated,
 			};
 		}
 

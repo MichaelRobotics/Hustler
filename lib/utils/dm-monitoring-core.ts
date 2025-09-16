@@ -253,7 +253,7 @@ export async function processUserResponse(
   messageContent: string,
   funnelFlow: FunnelFlow,
   experienceId: string
-): Promise<{ success: boolean; nextBlockId?: string; botMessage?: string; escalated?: boolean; error?: string }> {
+): Promise<{ success: boolean; nextBlockId?: string; botMessage?: string; error?: string }> {
   try {
     // Get current conversation
     const conversation = await db.query.conversations.findFirst({
@@ -295,7 +295,6 @@ export async function processUserResponse(
       return {
         success: true,
         botMessage: escalationResult.botMessage,
-        escalated: escalationResult.escalated,
       };
     }
 

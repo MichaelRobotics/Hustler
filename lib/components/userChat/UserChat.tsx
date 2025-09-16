@@ -173,9 +173,6 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Handle different conversation states (simplified to match preview)
 	const isExperienceQualificationStage = stageInfo?.isExperienceQualificationStage || false;
-	
-	// Check if conversation is abandoned
-	const isConversationAbandoned = conversation?.status === "abandoned";
 
 	// Get funnel navigation functions (only for option handling)
 	const {
@@ -187,12 +184,6 @@ const UserChat: React.FC<UserChatProps> = ({
 	const handleSubmit = async (e?: React.FormEvent) => {
 		e?.preventDefault();
 		if (!message.trim()) return;
-		
-		// Check if conversation is abandoned
-		if (isConversationAbandoned) {
-			console.log("UserChat: Cannot send message - conversation is abandoned");
-			return;
-		}
 
 		const messageContent = message.trim();
 		setMessage("");
@@ -238,40 +229,6 @@ const UserChat: React.FC<UserChatProps> = ({
 						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
 						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
 						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
-					}
-
-					// Handle escalation case - if escalated, conversation might be abandoned
-					if (result.funnelResponse?.escalated) {
-						console.log("UserChat: Conversation escalated, checking if abandoned");
-						// The escalation logic will handle conversation status updates
-						// For now, we'll keep showing the current block options
-						
-						// Check if conversation was abandoned (3rd attempt)
-						// We need to reload the conversation to get the updated status
-						try {
-							const conversationResponse = await apiPost('/api/userchat/load-conversation', {
-								conversationId,
-								userType: "customer"
-							}, experienceId);
-							
-							if (conversationResponse.ok) {
-								const conversationData = await conversationResponse.json();
-								if (conversationData.conversation?.status === "abandoned") {
-									console.log("UserChat: Conversation abandoned due to escalation");
-									// Show a message that the conversation has been abandoned
-									const abandonedMessage = {
-										id: `temp-abandoned-${Date.now()}`,
-										type: "system" as const,
-										content: "This conversation has been closed due to repeated invalid responses. Please contact the Whop owner directly for assistance.",
-										createdAt: new Date(),
-									};
-									setConversationMessages(prev => [...prev, abandonedMessage]);
-									scrollToBottom();
-								}
-							}
-						} catch (error) {
-							console.error("Error checking conversation status after escalation:", error);
-						}
 					}
 
 					// Send via WebSocket for real-time sync (optional)
@@ -347,20 +304,6 @@ const UserChat: React.FC<UserChatProps> = ({
 				// Check for funnel completion
 				if (option.nextBlockId === "COMPLETED" || result.conversation.status === "closed") {
 					await handleFunnelCompletion();
-				}
-				
-				// Check for conversation abandonment
-				if (result.conversation.status === "abandoned") {
-					console.log("UserChat: Conversation abandoned due to escalation");
-					// Show a message that the conversation has been abandoned
-					const abandonedMessage = {
-						id: `temp-abandoned-${Date.now()}`,
-						type: "system" as const,
-						content: "This conversation has been closed due to repeated invalid responses. Please contact the Whop owner directly for assistance.",
-						createdAt: new Date(),
-					};
-					setConversationMessages(prev => [...prev, abandonedMessage]);
-					scrollToBottom();
 				}
 			}
 		} catch (error) {
@@ -820,20 +763,8 @@ const UserChat: React.FC<UserChatProps> = ({
 					<div ref={chatEndRef} />
 				</div>
 
-				{/* Abandoned conversation message */}
-				{isConversationAbandoned && (
-					<div className="flex-shrink-0 chat-input-container safe-area-bottom">
-						<div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-							<p className="text-red-700 text-sm">
-								This conversation has been closed due to repeated invalid responses. 
-								Please contact the Whop owner directly for assistance.
-							</p>
-						</div>
-					</div>
-				)}
-
 				{/* Input Area - Now below the overflow container */}
-				{options.length > 0 && currentBlockId && !isConversationAbandoned && (
+				{options.length > 0 && currentBlockId && (
 					<div className="flex-shrink-0 chat-input-container safe-area-bottom">
 						<div className="flex items-end gap-3">
 							<div className="flex-1">
