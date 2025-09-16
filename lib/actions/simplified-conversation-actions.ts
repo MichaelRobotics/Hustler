@@ -7,7 +7,7 @@
 
 import { and, eq, desc, asc } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
 
@@ -453,11 +453,26 @@ export async function processUserMessage(
 			experienceId
 		});
 
+		// Convert Whop experience ID to internal UUID
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.whopExperienceId, experienceId),
+		});
+
+		if (!experience) {
+			console.error(`❌ ProcessUserMessage: Experience not found for whopExperienceId: ${experienceId}`);
+			return { success: false, error: "Experience not found" };
+		}
+
+		console.log(`🔍 ProcessUserMessage: Found experience:`, {
+			whopExperienceId: experienceId,
+			internalId: experience.id
+		});
+
 		// Get conversation with funnel (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experienceId)
+				eq(conversations.experienceId, experience.id)
 			),
 			with: {
 				funnel: true,
@@ -467,7 +482,8 @@ export async function processUserMessage(
 		if (!conversation || !conversation.funnel?.flow) {
 			console.error(`❌ ProcessUserMessage: Conversation or funnel not found:`, {
 				conversationId,
-				experienceId,
+				whopExperienceId: experienceId,
+				internalExperienceId: experience.id,
 				conversationExists: !!conversation,
 				funnelExists: !!conversation?.funnel,
 				flowExists: !!conversation?.funnel?.flow
@@ -497,7 +513,7 @@ export async function processUserMessage(
 
 		if (!validationResult.isValid) {
 			// Handle invalid response with escalation
-			const escalationResult = await handleInvalidResponseWithEscalation(conversationId, experienceId);
+			const escalationResult = await handleInvalidResponseWithEscalation(conversationId, experience.id);
 			return {
 				success: true,
 				botMessage: escalationResult.botMessage,
@@ -511,7 +527,7 @@ export async function processUserMessage(
 			const navigateResult = await navigateToNextBlock(
 				conversationId, 
 				nextBlockId, 
-				experienceId, 
+				experience.id, 
 				validationResult.selectedOption.text
 			);
 
