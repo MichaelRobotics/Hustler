@@ -55,11 +55,26 @@ export async function apiPost(
 	body?: any,
 	experienceId?: string
 ): Promise<Response> {
-	return apiRequest(url, {
+	console.log("🔍 API Client - Making POST request:", {
+		url,
+		body,
+		experienceId
+	});
+	
+	const response = await apiRequest(url, {
 		method: 'POST',
 		body: body ? JSON.stringify(body) : undefined,
 		experienceId,
 	});
+	
+	console.log("🔍 API Client - Response received:", {
+		url,
+		status: response.status,
+		statusText: response.statusText,
+		ok: response.ok
+	});
+	
+	return response;
 }
 
 /**
