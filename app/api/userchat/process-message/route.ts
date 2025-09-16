@@ -41,8 +41,7 @@ async function processMessageHandler(
     
     console.log("🔍 ProcessMessage: User context:", {
       userId: user.userId,
-      experienceId: user.experienceId,
-      accessLevel: user.accessLevel
+      experienceId: user.experienceId
     });
 
     if (!experienceId) {
