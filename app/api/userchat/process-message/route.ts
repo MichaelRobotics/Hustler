@@ -56,12 +56,18 @@ async function processMessageHandler(
       );
     }
 
-    // Validate request format
-    const requestValidation = validateRequestBody(requestBody, ['conversationId', 'messageContent']);
-    if (!requestValidation.isValid) {
+    // Validate required fields only (allow additional optional fields)
+    if (!requestBody.conversationId) {
       return createErrorResponse(
-        "INVALID_REQUEST_FORMAT",
-        "Invalid request format"
+        "MISSING_CONVERSATION_ID",
+        "Conversation ID is required"
+      );
+    }
+    
+    if (!requestBody.messageContent) {
+      return createErrorResponse(
+        "MISSING_MESSAGE_CONTENT",
+        "Message content is required"
       );
     }
 
