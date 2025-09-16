@@ -333,6 +333,114 @@ async function processConversationWithDM(
 // Remove duplicate shouldSendRePrompt function - use the one from dm-monitoring-core.ts
 
 /**
+ * Handle WELCOME -> VALUE_DELIVERY transition (2 hours)
+ */
+export async function handleWelcomeToValueDeliveryTransition(experienceId?: string): Promise<{
+  success: boolean;
+  processed: number;
+  results: any[];
+}> {
+  try {
+    console.log(`[Cron DM] Starting WELCOME -> VALUE_DELIVERY transition`);
+
+    // Validate experienceId if provided
+    if (experienceId && !experienceId.startsWith('exp_')) {
+      console.error(`[Cron DM] Invalid experienceId format: ${experienceId}`);
+      return {
+        success: false,
+        processed: 0,
+        results: [{ error: "Invalid experienceId format" }]
+      };
+    }
+
+    // Find WELCOME conversations older than 2 hours
+    const cutoffTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    
+    const conditions = [
+      eq(conversations.status, "active"),
+      lt(conversations.createdAt, cutoffTime)
+    ];
+
+    if (experienceId) {
+      conditions.push(eq(conversations.experienceId, experienceId));
+    }
+
+    const welcomeConversations = await db.query.conversations.findMany({
+      where: and(...conditions),
+      with: {
+        funnel: true,
+        experience: true,
+      },
+    });
+
+    const results = [];
+    let processed = 0;
+
+    for (const conversation of welcomeConversations) {
+      try {
+        const funnelFlow = conversation.funnel?.flow as FunnelFlow;
+        if (!funnelFlow) continue;
+
+        // Check if conversation is still in WELCOME stage
+        const currentPhase = detectConversationPhase(conversation.currentBlockId, funnelFlow);
+        if (currentPhase !== 'PHASE1') continue;
+
+        // Find a VALUE_DELIVERY block to send
+        const valueDeliveryStage = funnelFlow.stages.find(stage => stage.name === 'VALUE_DELIVERY');
+        if (!valueDeliveryStage || valueDeliveryStage.blockIds.length === 0) {
+          console.error(`[Cron DM] No VALUE_DELIVERY blocks found for conversation ${conversation.id}`);
+          continue;
+        }
+        
+        // Use the first VALUE_DELIVERY block
+        const valueDeliveryBlockId = valueDeliveryStage.blockIds[0];
+        const result = await sendNextBlockMessage(
+          conversation.id,
+          valueDeliveryBlockId,
+          funnelFlow,
+          conversation.experienceId
+        );
+
+        if (result.success) {
+          // Update conversation to VALUE_DELIVERY block
+          await db.update(conversations)
+            .set({
+              currentBlockId: valueDeliveryBlockId,
+              updatedAt: new Date(),
+            })
+            .where(eq(conversations.id, conversation.id));
+
+          results.push({
+            conversationId: conversation.id,
+            action: 'welcome_to_value_delivery',
+            result: result.success ? 'Success' : result.error || 'Unknown error'
+          });
+          processed++;
+        }
+      } catch (error) {
+        console.error(`[Cron DM] Error in WELCOME -> VALUE_DELIVERY transition for conversation ${conversation.id}:`, error);
+      }
+    }
+
+    console.log(`[Cron DM] WELCOME -> VALUE_DELIVERY transition completed: ${processed} conversations processed`);
+
+    return {
+      success: true,
+      processed,
+      results
+    };
+
+  } catch (error) {
+    console.error(`[Cron DM] Error in WELCOME -> VALUE_DELIVERY transition:`, error);
+    return {
+      success: false,
+      processed: 0,
+      results: [{ error: error instanceof Error ? error.message : 'Unknown error' }]
+    };
+  }
+}
+
+/**
  * Handle Phase 1 cleanup (24 hours)
  */
 export async function handlePhase1Cleanup(experienceId?: string): Promise<{
@@ -398,10 +506,10 @@ export async function handlePhase1Cleanup(experienceId?: string): Promise<{
         );
 
         if (result.success) {
-          // Update conversation to Phase 2
+          // Update conversation to Phase 2 with correct block ID
           await db.update(conversations)
             .set({
-              currentBlockId: funnelFlow.startBlockId,
+              currentBlockId: valueDeliveryBlockId, // Use the VALUE_DELIVERY block, not startBlockId
               phase2StartTime: new Date(),
               updatedAt: new Date(),
             })

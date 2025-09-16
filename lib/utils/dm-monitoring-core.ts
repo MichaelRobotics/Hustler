@@ -504,13 +504,15 @@ export function shouldSendRePrompt(conversation: any, phase: 'PHASE1' | 'PHASE2'
   const age = getConversationAge(conversation, phase);
   
   if (phase === 'PHASE1') {
-    if (age === 10 || age === 60 || age === 720) {
-      return { shouldSend: true, timing: age };
-    }
+    // Use time windows instead of exact equality
+    if (age >= 10 && age < 11) return { shouldSend: true, timing: 10 };
+    if (age >= 60 && age < 61) return { shouldSend: true, timing: 60 };
+    if (age >= 720 && age < 721) return { shouldSend: true, timing: 720 };
   } else if (phase === 'PHASE2') {
-    if (age === 15 || age === 60 || age === 720) {
-      return { shouldSend: true, timing: age };
-    }
+    // Use time windows instead of exact equality
+    if (age >= 15 && age < 16) return { shouldSend: true, timing: 15 };
+    if (age >= 60 && age < 61) return { shouldSend: true, timing: 60 };
+    if (age >= 720 && age < 721) return { shouldSend: true, timing: 720 };
   }
   
   return { shouldSend: false };

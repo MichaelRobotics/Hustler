@@ -3,26 +3,45 @@ import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import type { FunnelFlow, FunnelBlock } from "@/lib/types/funnel";
+import {
+  type AuthContext,
+  createErrorResponse,
+  createSuccessResponse,
+  withWhopAuth,
+} from "@/lib/middleware/whop-auth";
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
  * This API route processes user interactions and updates conversation state
  */
-export async function POST(request: NextRequest) {
+async function navigateFunnelHandler(
+  request: NextRequest,
+  context: AuthContext
+) {
   try {
+    const { user } = context;
+    const experienceId = user.experienceId;
+
+    if (!experienceId) {
+      return createErrorResponse(
+        "MISSING_EXPERIENCE_ID",
+        "Experience ID is required"
+      );
+    }
+
     const { conversationId, navigationData } = await request.json();
 
     if (!conversationId) {
-      return NextResponse.json(
-        { error: "Conversation ID is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_CONVERSATION_ID",
+        "Conversation ID is required"
       );
     }
 
     if (!navigationData) {
-      return NextResponse.json(
-        { error: "Navigation data is required" },
-        { status: 400 }
+      return createErrorResponse(
+        "MISSING_NAVIGATION_DATA",
+        "Navigation data is required"
       );
     }
 
@@ -40,16 +59,16 @@ export async function POST(request: NextRequest) {
     });
 
     if (!conversation) {
-      return NextResponse.json(
-        { error: "Conversation not found" },
-        { status: 404 }
+      return createErrorResponse(
+        "CONVERSATION_NOT_FOUND",
+        "Conversation not found"
       );
     }
 
     if (!conversation.funnel?.flow) {
-      return NextResponse.json(
-        { error: "Funnel flow not found" },
-        { status: 404 }
+      return createErrorResponse(
+        "FUNNEL_FLOW_NOT_FOUND",
+        "Funnel flow not found"
       );
     }
 
@@ -63,21 +82,22 @@ export async function POST(request: NextRequest) {
       conversation
     );
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       conversation: result.conversation,
       nextBlockId: result.nextBlockId,
       botMessage: result.botMessage,
-    });
+    }, "Funnel navigation successful");
 
   } catch (error) {
     console.error("Error navigating funnel:", error);
-    return NextResponse.json(
-      { error: "Failed to navigate funnel" },
-      { status: 500 }
+    return createErrorResponse(
+      "INTERNAL_ERROR",
+      error instanceof Error ? error.message : "Failed to navigate funnel"
     );
   }
 }
+
+export const POST = withWhopAuth(navigateFunnelHandler);
 
 /**
  * Process funnel navigation and update conversation state
