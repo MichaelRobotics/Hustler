@@ -21,9 +21,9 @@ async function navigateFunnelHandler(
     const experienceId = user.experienceId;
 
     if (!experienceId) {
-      return createErrorResponse(
-        "MISSING_EXPERIENCE_ID",
-        "Experience ID is required"
+      return NextResponse.json(
+        { error: "Experience ID is required" },
+        { status: 400 }
       );
     }
 
