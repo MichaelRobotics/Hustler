@@ -58,8 +58,8 @@ export function detectConversationPhase(currentBlockId: string | null, funnelFlo
 		if (stage.blockIds.includes(currentBlockId)) {
 			switch (stage.name) {
 				case 'WELCOME':
-					return 'PHASE1';
 				case 'VALUE_DELIVERY':
+					return 'PHASE1';
 				case 'EXPERIENCE_QUALIFICATION':
 				case 'PAIN_POINT_QUALIFICATION':
 				case 'OFFER':
@@ -86,22 +86,25 @@ export function isTransitionBlock(block: FunnelBlock, funnelFlow: FunnelFlow): b
 }
 
 /**
- * Check if a block is a Phase 1 block (WELCOME stage)
+ * Check if a block is a Phase 1 block (WELCOME and VALUE_DELIVERY stages)
  */
 export function isPhase1Block(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
 	if (!block || !funnelFlow) return false;
 	
-	const welcomeStage = funnelFlow.stages.find(stage => stage.name === 'WELCOME');
-	return welcomeStage ? welcomeStage.blockIds.includes(block.id) : false;
+	const phase1Stages = ['WELCOME', 'VALUE_DELIVERY'];
+	return phase1Stages.some(stageName => {
+		const stage = funnelFlow.stages.find(s => s.name === stageName);
+		return stage ? stage.blockIds.includes(block.id) : false;
+	});
 }
 
 /**
- * Check if a block is a Phase 2 block (VALUE_DELIVERY, EXPERIENCE_QUALIFICATION, etc.)
+ * Check if a block is a Phase 2 block (EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION, OFFER)
  */
 export function isPhase2Block(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
 	if (!block || !funnelFlow) return false;
 	
-	const phase2Stages = ['VALUE_DELIVERY', 'EXPERIENCE_QUALIFICATION', 'PAIN_POINT_QUALIFICATION', 'OFFER'];
+	const phase2Stages = ['EXPERIENCE_QUALIFICATION', 'PAIN_POINT_QUALIFICATION', 'OFFER'];
 	return phase2Stages.some(stageName => {
 		const stage = funnelFlow.stages.find(s => s.name === stageName);
 		return stage ? stage.blockIds.includes(block.id) : false;

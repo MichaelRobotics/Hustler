@@ -10,7 +10,7 @@ import { and, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, funnels, experiences } from "@/lib/supabase/schema";
 import { whopSdk } from "@/lib/whop-sdk";
-import { processUserResponse, sendNextBlockMessage, sendRePromptMessage, sendTransitionMessage } from "@/lib/utils/dm-monitoring-core";
+import { processUserResponse, sendNextBlockMessage, sendRePromptMessage, sendTransitionMessage, shouldSendRePrompt } from "@/lib/utils/dm-monitoring-core";
 import { detectConversationPhase } from "@/lib/actions/simplified-conversation-actions";
 import { rateLimiter } from "@/lib/middleware/rate-limiter";
 import { tenantMetricsCollector } from "@/lib/monitoring/tenant-metrics";
@@ -330,33 +330,7 @@ async function processConversationWithDM(
   }
 }
 
-/**
- * Check if re-prompt should be sent based on conversation age and phase
- */
-function shouldSendRePrompt(conversation: any, phase: 'PHASE1' | 'PHASE2'): {
-  shouldSend: boolean;
-  timing?: number;
-} {
-  const now = new Date();
-  const conversationAge = now.getTime() - new Date(conversation.createdAt).getTime();
-  const ageMinutes = Math.floor(conversationAge / (1000 * 60));
-
-  // Phase 1 re-prompt schedule
-  if (phase === 'PHASE1') {
-    if (ageMinutes >= 2 && ageMinutes < 3) return { shouldSend: true, timing: 2 };
-    if (ageMinutes >= 5 && ageMinutes < 6) return { shouldSend: true, timing: 5 };
-    if (ageMinutes >= 10 && ageMinutes < 11) return { shouldSend: true, timing: 10 };
-  }
-
-  // Phase 2 re-prompt schedule
-  if (phase === 'PHASE2') {
-    if (ageMinutes >= 5 && ageMinutes < 6) return { shouldSend: true, timing: 5 };
-    if (ageMinutes >= 15 && ageMinutes < 16) return { shouldSend: true, timing: 15 };
-    if (ageMinutes >= 30 && ageMinutes < 31) return { shouldSend: true, timing: 30 };
-  }
-
-  return { shouldSend: false };
-}
+// Remove duplicate shouldSendRePrompt function - use the one from dm-monitoring-core.ts
 
 /**
  * Handle Phase 1 cleanup (24 hours)
@@ -368,6 +342,16 @@ export async function handlePhase1Cleanup(experienceId?: string): Promise<{
 }> {
   try {
     console.log(`[Cron DM] Starting Phase 1 cleanup`);
+
+    // Validate experienceId if provided
+    if (experienceId && !experienceId.startsWith('exp_')) {
+      console.error(`[Cron DM] Invalid experienceId format: ${experienceId}`);
+      return {
+        success: false,
+        processed: 0,
+        results: [{ error: "Invalid experienceId format" }]
+      };
+    }
 
     // Find Phase 1 conversations older than 24 hours
     const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -397,10 +381,18 @@ export async function handlePhase1Cleanup(experienceId?: string): Promise<{
         const funnelFlow = conversation.funnel?.flow as FunnelFlow;
         if (!funnelFlow) continue;
 
-        // Send random VALUE_DELIVERY message and transition to Phase 2
+        // Find a VALUE_DELIVERY block to send
+        const valueDeliveryStage = funnelFlow.stages.find(stage => stage.name === 'VALUE_DELIVERY');
+        if (!valueDeliveryStage || valueDeliveryStage.blockIds.length === 0) {
+          console.error(`[Cron DM] No VALUE_DELIVERY blocks found for conversation ${conversation.id}`);
+          continue;
+        }
+        
+        // Use the first VALUE_DELIVERY block
+        const valueDeliveryBlockId = valueDeliveryStage.blockIds[0];
         const result = await sendNextBlockMessage(
           conversation.id,
-          funnelFlow.startBlockId, // This should be the VALUE_DELIVERY block
+          valueDeliveryBlockId,
           funnelFlow,
           conversation.experienceId
         );
@@ -455,6 +447,16 @@ export async function handlePhase2Cleanup(experienceId?: string): Promise<{
 }> {
   try {
     console.log(`[Cron DM] Starting Phase 2 cleanup`);
+
+    // Validate experienceId if provided
+    if (experienceId && !experienceId.startsWith('exp_')) {
+      console.error(`[Cron DM] Invalid experienceId format: ${experienceId}`);
+      return {
+        success: false,
+        processed: 0,
+        results: [{ error: "Invalid experienceId format" }]
+      };
+    }
 
     // Find Phase 2 conversations older than 24 hours
     const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);

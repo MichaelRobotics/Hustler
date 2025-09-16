@@ -10,42 +10,39 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { handlePhase2Cleanup } from "@/lib/utils/cron-dm-monitoring";
+import { createSuccessResponse, createErrorResponse } from "@/lib/middleware/whop-auth";
+import { authenticateAndValidateCron } from "@/lib/middleware/cron-auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Authenticate and validate cron request
+    const authError = authenticateAndValidateCron(request);
+    if (authError) return authError;
+
     console.log(`[Phase2-Cleanup] Starting Phase 2 cleanup`);
 
     // Process cleanup using the new cron-based DM monitoring
     const result = await handlePhase2Cleanup();
 
     if (result.success) {
-      return NextResponse.json({
-        success: true,
-        message: `Phase 2 cleanup completed: ${result.processed} conversations processed`,
+      return createSuccessResponse({
         processed: result.processed,
         results: result.results,
-      });
+      }, `Phase 2 cleanup completed: ${result.processed} conversations processed`);
     } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to process Phase 2 cleanup",
-          processed: 0,
-          results: result.results,
-        },
-        { status: 500 }
+      return createErrorResponse(
+        "CLEANUP_FAILED",
+        "Failed to process Phase 2 cleanup",
+        500
       );
     }
 
   } catch (error) {
     console.error("[Phase2-Cleanup] Cron job error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        processed: 0,
-      },
-      { status: 500 }
+    return createErrorResponse(
+      "INTERNAL_ERROR",
+      error instanceof Error ? error.message : 'Unknown error',
+      500
     );
   }
 }
