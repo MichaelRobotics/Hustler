@@ -446,6 +446,7 @@ export async function navigateToNextBlock(
 
 /**
  * Process user message through funnel system
+ * This function handles both valid funnel navigation and escalation logic
  */
 export async function processUserMessage(
 	conversationId: string,
@@ -460,9 +461,9 @@ export async function processUserMessage(
 	error?: string;
 }> {
 	try {
-		console.log(`[processUserMessage] Looking for conversation ${conversationId} in experience ${experienceId}`);
+		console.log(`[processUserMessage] Processing message for conversation ${conversationId}:`, messageContent);
 		
-		// Get conversation with funnel (filtered by experience for multi-tenancy)
+		// Get conversation with funnel data (same as navigate-funnel)
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
@@ -470,86 +471,95 @@ export async function processUserMessage(
 			),
 			with: {
 				funnel: true,
+				messages: {
+					orderBy: (messages: any, { asc }: any) => [asc(messages.createdAt)],
+				},
 			},
 		});
 
-		console.log(`[processUserMessage] Found conversation:`, {
-			conversationId: conversation?.id,
-			experienceId: conversation?.experienceId,
-			hasFunnel: !!conversation?.funnel,
-			hasFlow: !!conversation?.funnel?.flow
-		});
+		if (!conversation) {
+			console.error(`[processUserMessage] Conversation not found for ${conversationId}`);
+			return { success: false, error: "Conversation not found" };
+		}
 
-		if (!conversation || !conversation.funnel?.flow) {
-			console.error(`[processUserMessage] Conversation or funnel not found for ${conversationId}`);
-			return { success: false, error: "Conversation or funnel not found" };
+		if (!conversation.funnel?.flow) {
+			console.error(`[processUserMessage] Funnel flow not found for conversation ${conversationId}`);
+			return { success: false, error: "Funnel flow not found" };
 		}
 
 		const funnelFlow = conversation.funnel.flow as FunnelFlow;
-		const currentBlock = funnelFlow.blocks[conversation.currentBlockId || ""];
+		const currentBlockId = conversation.currentBlockId;
 
+		if (!currentBlockId) {
+			console.error(`[processUserMessage] No current block ID for conversation ${conversationId}`);
+			return { success: false, error: "No current block ID" };
+		}
+
+		// Find the current block
+		const currentBlock = funnelFlow.blocks[currentBlockId];
 		if (!currentBlock) {
+			console.error(`[processUserMessage] Current block ${currentBlockId} not found`);
 			return { success: false, error: "Current block not found" };
 		}
 
-		// Add user message
+		console.log(`[processUserMessage] Current block: ${currentBlockId}`, {
+			message: currentBlock.message?.substring(0, 100),
+			optionsCount: currentBlock.options?.length || 0
+		});
+
+		// First, add the user message to the database
 		console.log(`[processUserMessage] Adding user message to conversation ${conversationId}:`, messageContent);
 		const userMessageId = await addMessage(conversationId, "user", messageContent);
 		console.log(`[processUserMessage] User message added with ID: ${userMessageId}`);
 
-		// Validate user response
-		console.log(`[processUserMessage] Validating user response: "${messageContent}"`);
-		const validationResult = validateUserResponse(messageContent, currentBlock, conversationId);
-		console.log(`[processUserMessage] Validation result:`, validationResult);
-
-		if (!validationResult.isValid) {
-			console.log(`[processUserMessage] Invalid response, adding escalation message: ${validationResult.errorMessage}`);
-			// Add bot message for invalid response
-			const botMessageId = await addMessage(conversationId, "bot", validationResult.errorMessage || "Please select a valid option.");
-			console.log(`[processUserMessage] Bot escalation message added with ID: ${botMessageId}`);
+		// Try to find a matching option (same logic as navigate-funnel)
+		const selectedOption = currentBlock.options?.find(opt => {
+			const optionText = opt.text.toLowerCase().trim();
+			const searchText = messageContent.toLowerCase().trim();
 			
-			return {
-				success: true,
-				botMessage: validationResult.errorMessage || "Please select a valid option.",
-				escalationLevel: validationResult.escalationLevel,
-			};
-		}
+			return optionText === searchText || 
+				   optionText.includes(searchText) ||
+				   searchText.includes(optionText);
+		});
 
-		// Navigate to next block with phase detection
-		if (validationResult.selectedOption) {
-			// Reset escalation level on valid response
-			resetEscalationLevel(conversationId);
-			
-			const nextBlockId = validationResult.selectedOption.nextBlockId;
-			
-			const navigateResult = await navigateToNextBlock(
-				conversationId, 
-				nextBlockId, 
-				experienceId, 
-				validationResult.selectedOption.text
-			);
-
-			if (!navigateResult.success) {
-				return { success: false, error: navigateResult.error };
+		// Check for number selection (1, 2, 3...)
+		if (!selectedOption) {
+			const numberMatch = messageContent.trim().match(/^(\d+)$/);
+			if (numberMatch) {
+				const optionIndex = parseInt(numberMatch[1]) - 1;
+				if (optionIndex >= 0 && optionIndex < (currentBlock.options || []).length) {
+					const foundOption = currentBlock.options[optionIndex];
+					console.log(`[processUserMessage] Found option by number: ${optionIndex + 1} -> "${foundOption.text}"`);
+					
+					// Process the valid option selection
+					return await processValidOptionSelection(
+						conversationId,
+						messageContent,
+						foundOption,
+						currentBlockId,
+						funnelFlow,
+						experienceId
+					);
+				}
 			}
-
-			// Get next block message
-			const nextBlock = nextBlockId ? funnelFlow.blocks[nextBlockId] : null;
-			const botMessage = nextBlock?.message || "Thank you for your response!";
-
-			// Add bot message
-			const botMessageId = await addMessage(conversationId, "bot", botMessage);
-			console.log(`[processUserMessage] Bot response message added with ID: ${botMessageId}`);
-
-			return {
-				success: true,
-				botMessage,
-				nextBlockId,
-				phaseTransition: navigateResult.phaseTransition,
-			};
+		} else {
+			console.log(`[processUserMessage] Found matching option: "${selectedOption.text}"`);
+			
+			// Process the valid option selection
+			return await processValidOptionSelection(
+				conversationId,
+				messageContent,
+				selectedOption,
+				currentBlockId,
+				funnelFlow,
+				experienceId
+			);
 		}
 
-		return { success: false, error: "No valid option selected" };
+		// No valid option found - handle escalation
+		console.log(`[processUserMessage] No valid option found, handling escalation for: "${messageContent}"`);
+		return await handleEscalation(conversationId, messageContent, currentBlock);
+
 	} catch (error) {
 		console.error("Error processing user message:", {
 			error: error instanceof Error ? error.message : String(error),
@@ -563,43 +573,102 @@ export async function processUserMessage(
 }
 
 /**
- * Validate user response against current block options with escalation
+ * Process valid option selection (same logic as navigate-funnel)
  */
-function validateUserResponse(
-	userMessage: string,
-	currentBlock: any,
+async function processValidOptionSelection(
 	conversationId: string,
-): {
-	isValid: boolean;
-	selectedOption?: any;
-	errorMessage?: string;
-	escalationLevel?: number;
-} {
+	messageContent: string,
+	selectedOption: any,
+	currentBlockId: string,
+	funnelFlow: FunnelFlow,
+	experienceId: string
+): Promise<{
+	success: boolean;
+	botMessage?: string;
+	nextBlockId?: string;
+	phaseTransition?: ConversationPhase;
+	error?: string;
+}> {
 	try {
-		const normalizedInput = userMessage.trim().toLowerCase();
+		const nextBlockId = selectedOption.nextBlockId;
+		const nextBlock = nextBlockId ? funnelFlow.blocks[nextBlockId] : null;
 
-		// Check for exact text matches
-		for (const option of currentBlock.options || []) {
-			if (option.text.toLowerCase() === normalizedInput) {
-				return {
-					isValid: true,
-					selectedOption: option,
-				};
+		console.log(`[processValidOptionSelection] Navigating from ${currentBlockId} to ${nextBlockId}`);
+
+		// Record the funnel interaction (same as navigate-funnel)
+		await db.insert(funnelInteractions).values({
+			conversationId: conversationId,
+			blockId: currentBlockId,
+			optionText: messageContent,
+			optionValue: messageContent,
+			nextBlockId: nextBlockId,
+			metadata: {
+				timestamp: new Date().toISOString(),
+				userChoice: true,
+			},
+		});
+
+		// Update conversation state (same as navigate-funnel)
+		const updatedConversation = await db
+			.update(conversations)
+			.set({
+				currentBlockId: nextBlockId,
+				userPath: [...(await getCurrentUserPath(conversationId)), nextBlockId].filter(Boolean),
+				updatedAt: new Date(),
+			})
+			.where(eq(conversations.id, conversationId))
+			.returning();
+
+		// Generate bot response (same as navigate-funnel)
+		let botMessage = null;
+		if (nextBlock) {
+			// Format bot message with options if available
+			let formattedMessage = nextBlock.message || "Thank you for your response.";
+			
+			if (nextBlock.options && nextBlock.options.length > 0) {
+				const numberedOptions = nextBlock.options
+					.map((opt: any, index: number) => `${index + 1}. ${opt.text}`)
+					.join("\n");
+				formattedMessage = `${formattedMessage}\n\n${numberedOptions}`;
 			}
+
+			botMessage = formattedMessage;
+
+			// Record bot message (same as navigate-funnel)
+			await addMessage(conversationId, "bot", formattedMessage);
 		}
 
-		// Check for number selection (1, 2, 3...)
-		const numberMatch = normalizedInput.match(/^(\d+)$/);
-		if (numberMatch) {
-			const optionIndex = parseInt(numberMatch[1]) - 1;
-			if (optionIndex >= 0 && optionIndex < (currentBlock.options || []).length) {
-				return {
-					isValid: true,
-					selectedOption: currentBlock.options[optionIndex],
-				};
-			}
-		}
+		// Reset escalation level on valid response
+		resetEscalationLevel(conversationId);
 
+		console.log(`[processValidOptionSelection] Successfully processed option selection`);
+
+		return {
+			success: true,
+			botMessage: botMessage || undefined,
+			nextBlockId: nextBlockId || undefined,
+		};
+
+	} catch (error) {
+		console.error("Error processing valid option selection:", error);
+		return { success: false, error: "Failed to process option selection" };
+	}
+}
+
+/**
+ * Handle escalation for invalid responses
+ */
+async function handleEscalation(
+	conversationId: string,
+	messageContent: string,
+	currentBlock: any
+): Promise<{
+	success: boolean;
+	botMessage?: string;
+	escalationLevel?: number;
+	error?: string;
+}> {
+	try {
 		// Get escalation level for this conversation
 		const escalationLevel = getEscalationLevel(conversationId);
 		
@@ -622,19 +691,37 @@ function validateUserResponse(
 		// Increment escalation level
 		incrementEscalationLevel(conversationId);
 
+		// Add bot escalation message
+		const botMessageId = await addMessage(conversationId, "bot", errorMessage);
+		console.log(`[handleEscalation] Bot escalation message added with ID: ${botMessageId}, level: ${escalationLevel + 1}`);
+
 		return {
-			isValid: false,
-			errorMessage,
-			escalationLevel,
+			success: true,
+			botMessage: errorMessage,
+			escalationLevel: escalationLevel + 1,
 		};
+
 	} catch (error) {
-		console.error("Error validating user response:", error);
-		return {
-			isValid: false,
-			errorMessage: "Invalid response. Please try again.",
-		};
+		console.error("Error handling escalation:", error);
+		return { success: false, error: "Failed to handle escalation" };
 	}
 }
+
+/**
+ * Get current user path for conversation
+ */
+async function getCurrentUserPath(conversationId: string): Promise<string[]> {
+	try {
+		const conversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+		});
+		return (conversation?.userPath as string[]) || [];
+	} catch (error) {
+		console.error("Error getting current user path:", error);
+		return [];
+	}
+}
+
 
 // In-memory escalation tracking (in production, use Redis or database)
 const escalationLevels = new Map<string, number>();
