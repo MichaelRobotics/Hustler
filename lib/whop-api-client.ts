@@ -141,6 +141,23 @@ export class WhopApiClient {
       return null;
     }
   }
+
+  /**
+   * Check if user has access to company and their access level
+   */
+  async checkIfUserHasAccessToCompany(companyId: string, userId: string): Promise<{ hasAccess: boolean; accessLevel: 'admin' | 'customer' | 'no_access' }> {
+    try {
+      const result = await (this.whopSdk as any).access.checkIfUserHasAccessToCompany({
+        companyId: companyId,
+        userId: userId
+      });
+      
+      return result || { hasAccess: false, accessLevel: 'no_access' };
+    } catch (error) {
+      console.error("Error checking user access to company:", error);
+      return { hasAccess: false, accessLevel: 'no_access' };
+    }
+  }
 }
 
 // Singleton instance
