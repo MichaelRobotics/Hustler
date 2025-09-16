@@ -205,7 +205,6 @@ const UserChat: React.FC<UserChatProps> = ({
 				const response = await apiPost('/api/userchat/process-message', {
 					conversationId,
 					messageContent,
-					messageType: "user",
 				}, experienceId);
 
 				if (response.ok) {
