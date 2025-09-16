@@ -172,13 +172,14 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 						}
 						
 						// If there's a bot response, send it via WebSocket
-						// Check both direct botMessage (escalation) and funnelResponse.botMessage (normal flow)
-						const botResponse = result.botMessage || result.funnelResponse?.botMessage;
+						// The API wraps the result in funnelResponse, so check there first
+						const botResponse = result.funnelResponse?.botMessage;
 						console.log("WebSocket: Processing bot response:", {
 							hasDirectBotMessage: !!result.botMessage,
 							hasFunnelResponseBotMessage: !!result.funnelResponse?.botMessage,
 							botResponse,
-							escalationLevel: result.escalationLevel
+							escalationLevel: result.funnelResponse?.escalationLevel,
+							fullResult: result
 						});
 						
 						if (botResponse) {
@@ -192,7 +193,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 									blockId: result.funnelResponse?.nextBlockId,
 									timestamp: new Date().toISOString(),
 									cached: !!cachedData,
-									escalationLevel: result.escalationLevel,
+									escalationLevel: result.funnelResponse?.escalationLevel,
 								},
 								userId: "system",
 								timestamp: new Date().toISOString(),
