@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { getUserContext } from "@/lib/context/user-context";
 import {
   type AuthContext,

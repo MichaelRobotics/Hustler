@@ -59,13 +59,15 @@ export async function loadRealConversations(
 
 		// Add status filter
 		if (filters.status && filters.status !== "all") {
-			const statusMap = {
-				open: "active",
-				closed: "completed",
-			};
-			whereConditions = and(
-				eq(conversations.status, statusMap[filters.status] as any),
-			)!;
+			if (filters.status === "open") {
+				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
+			} else if (filters.status === "closed") {
+				whereConditions = and(whereConditions, or(
+					eq(conversations.status, "completed"),
+					eq(conversations.status, "closed"),
+					eq(conversations.status, "abandoned")
+				))!;
+			}
 		}
 
 		// Add search filter
@@ -158,6 +160,7 @@ export async function loadRealConversations(
 				const statusMap = {
 					active: "open",
 					completed: "closed",
+					closed: "closed",
 					abandoned: "closed",
 				};
 
@@ -232,13 +235,15 @@ export async function getConversationList(
 
 		// Add status filter
 		if (filters.status && filters.status !== "all") {
-			const statusMap = {
-				open: "active",
-				closed: "completed",
-			};
-			whereConditions = and(
-				eq(conversations.status, statusMap[filters.status] as any),
-			)!;
+			if (filters.status === "open") {
+				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
+			} else if (filters.status === "closed") {
+				whereConditions = and(whereConditions, or(
+					eq(conversations.status, "completed"),
+					eq(conversations.status, "closed"),
+					eq(conversations.status, "abandoned")
+				))!;
+			}
 		}
 
 		// Add search filter

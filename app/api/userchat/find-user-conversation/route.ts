@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, users, experiences } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,12 +33,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`Found experience ${experience.id} for whopExperienceId ${experienceId}`);
 
-    // Find active conversation directly using whopUserId (faster lookup)
+    // Find active or closed conversation directly using whopUserId (faster lookup)
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.whopUserId, whopUserId),
         eq(conversations.experienceId, experience.id),
-        eq(conversations.status, "active")
+        or(
+          eq(conversations.status, "active"),
+          eq(conversations.status, "closed")
+        )
       ),
       with: {
         funnel: true,

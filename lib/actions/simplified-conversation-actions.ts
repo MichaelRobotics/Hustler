@@ -781,11 +781,11 @@ export async function handleFunnelCompletionInUserChat(
 	conversationId: string,
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		// Update conversation status to completed
+		// Update conversation status to closed
 		await db
 			.update(conversations)
 			.set({
-				status: "completed",
+				status: "closed",
 				updatedAt: new Date(),
 			})
 			.where(eq(conversations.id, conversationId));
