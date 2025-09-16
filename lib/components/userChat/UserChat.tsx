@@ -211,7 +211,14 @@ const UserChat: React.FC<UserChatProps> = ({
 					const result = await response.json();
 					console.log("Message processed through funnel:", result);
 					
-					// If there's a bot response, add it to UI
+					// Send user message via WebSocket for real-time updates (after API success)
+					try {
+						await sendMessage(messageContent, "user");
+					} catch (wsError) {
+						console.warn("WebSocket send failed, but API succeeded:", wsError);
+					}
+					
+					// If there's a bot response, add it to UI and send via WebSocket
 					if (result.funnelResponse?.botMessage) {
 						const botMessage = {
 							id: `bot-${Date.now()}`,
@@ -220,6 +227,13 @@ const UserChat: React.FC<UserChatProps> = ({
 							createdAt: new Date(),
 						};
 						setConversationMessages(prev => [...prev, botMessage]);
+						
+						// Send bot message via WebSocket for real-time updates
+						try {
+							await sendMessage(result.funnelResponse.botMessage, "bot");
+						} catch (wsError) {
+							console.warn("WebSocket send failed for bot message:", wsError);
+						}
 					}
 
 					// Update local current block ID if next block is provided

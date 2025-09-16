@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
-import { apiPost } from "../utils/api-client";
-import { cache, CacheKeys, CACHE_TTL } from "../middleware/cache";
 
 export interface UserChatMessage {
 	id: string;
@@ -150,56 +148,8 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 				return false;
 			}
 
-			// For user messages, also process through funnel system
-			if (type === "user") {
-				try {
-					// Check cache first for recent conversation data
-					const cacheKey = CacheKeys.conversation(config.conversationId);
-					const cachedData = cache.get(cacheKey);
-					
-					const response = await apiPost('/api/userchat/process-message', {
-						conversationId: config.conversationId,
-						messageContent: content,
-						messageType: type,
-					}, config.experienceId);
-
-					if (response.ok) {
-						const result = await response.json();
-						
-						// Cache the result
-						if (result.success) {
-							cache.set(cacheKey, result, CACHE_TTL.CONVERSATION);
-						}
-						
-						// If there's a bot response, send it via WebSocket
-						if (result.funnelResponse?.botMessage) {
-							const botMessage = {
-								type: "message",
-								conversationId: config.conversationId,
-								messageType: "bot",
-								content: result.funnelResponse.botMessage,
-								metadata: {
-									blockId: result.funnelResponse.nextBlockId,
-									timestamp: new Date().toISOString(),
-									cached: !!cachedData,
-								},
-								userId: "system",
-								timestamp: new Date().toISOString(),
-							};
-							
-							await broadcast({
-								message: JSON.stringify(botMessage),
-								target: "everyone",
-							});
-						}
-					} else {
-						console.error("Failed to process message through funnel:", response.statusText);
-					}
-				} catch (apiError) {
-					console.error("Error calling message processing API:", apiError);
-					// Continue with WebSocket message even if API fails
-				}
-			}
+			// Note: User messages are now processed via API in UserChat component
+			// WebSocket only handles real-time broadcasting, not database operations
 
 			// Send the original message via WebSocket
 			const message = {
