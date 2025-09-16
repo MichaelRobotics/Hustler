@@ -93,6 +93,8 @@ const UserChat: React.FC<UserChatProps> = ({
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
 			console.log("UserChat: Received WebSocket message:", newMessage);
+			console.log("UserChat: Current conversation messages count:", conversationMessages.length);
+			
 			// Check if message already exists locally
 			const messageExists = conversationMessages.some(msg => 
 				msg.content === newMessage.content && 

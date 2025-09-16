@@ -172,30 +172,37 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 						}
 						
 						// If there's a bot response, send it via WebSocket
-						if (result.funnelResponse?.botMessage) {
-							console.log("WebSocket: Sending bot response via WebSocket:", result.funnelResponse.botMessage);
+						// Check both direct botMessage (escalation) and funnelResponse.botMessage (normal flow)
+						const botResponse = result.botMessage || result.funnelResponse?.botMessage;
+						console.log("WebSocket: Processing bot response:", {
+							hasDirectBotMessage: !!result.botMessage,
+							hasFunnelResponseBotMessage: !!result.funnelResponse?.botMessage,
+							botResponse,
+							escalationLevel: result.escalationLevel
+						});
+						
+						if (botResponse) {
 							const botMessage = {
+								id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
 								type: "message",
 								conversationId: config.conversationId,
 								messageType: "bot",
-								content: result.funnelResponse.botMessage,
+								content: botResponse,
 								metadata: {
-									blockId: result.funnelResponse.nextBlockId,
+									blockId: result.funnelResponse?.nextBlockId,
 									timestamp: new Date().toISOString(),
 									cached: !!cachedData,
-									escalationLevel: result.funnelResponse.escalationLevel,
+									escalationLevel: result.escalationLevel,
 								},
 								userId: "system",
 								timestamp: new Date().toISOString(),
+								createdAt: new Date().toISOString(),
 							};
 							
 							await broadcast({
 								message: JSON.stringify(botMessage),
 								target: "everyone",
 							});
-							console.log("WebSocket: Bot response broadcasted successfully");
-						} else {
-							console.log("WebSocket: No bot response found in result:", result);
 						}
 
 						// Notify about conversation updates (next block ID, phase transition)
