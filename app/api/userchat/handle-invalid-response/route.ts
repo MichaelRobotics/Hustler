@@ -2,51 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, messages } from "@/lib/supabase/schema";
 import { eq, and, desc } from "drizzle-orm";
-import {
-  type AuthContext,
-  createErrorResponse,
-  createSuccessResponse,
-  withWhopAuth,
-} from "@/lib/middleware/whop-auth";
 
 /**
  * Handle invalid user responses with progressive escalation
  */
-async function handleInvalidResponseHandler(
-  request: NextRequest,
-  context: AuthContext
-) {
+export async function POST(request: NextRequest) {
   try {
-    const { user } = context;
     const { conversationId, userInput } = await request.json();
 
     if (!conversationId) {
-      return createErrorResponse(
-        "MISSING_CONVERSATION_ID",
-        "Conversation ID is required"
+      return NextResponse.json(
+        { success: false, error: "Conversation ID is required" },
+        { status: 400 }
       );
     }
 
-    const experienceId = user.experienceId;
-    if (!experienceId) {
-      return createErrorResponse(
-        "MISSING_EXPERIENCE_ID",
-        "Experience ID is required"
-      );
-    }
-
-    // Get conversation to verify access
+    // Get experience ID from conversation
     const conversation = await db.query.conversations.findFirst({
-      where: and(
-        eq(conversations.id, conversationId),
-        eq(conversations.experienceId, experienceId)
-      ),
+      where: eq(conversations.id, conversationId),
+      with: {
+        experience: true,
+      },
     });
 
     if (!conversation) {
-      return createErrorResponse(
-        "CONVERSATION_NOT_FOUND",
-        "Conversation not found"
+      return NextResponse.json(
+        { success: false, error: "Conversation not found" },
+        { status: 404 }
+      );
+    }
+
+    const experienceId = conversation.experienceId;
+    if (!experienceId) {
+      return NextResponse.json(
+        { success: false, error: "Experience ID is required" },
+        { status: 400 }
       );
     }
 
@@ -95,20 +85,18 @@ async function handleInvalidResponseHandler(
         .where(eq(conversations.id, conversationId));
     }
 
-    return createSuccessResponse({
+    return NextResponse.json({
       success: true,
       botMessage,
       attemptCount,
       escalated: attemptCount >= 3,
-    }, "Invalid response handled with escalation");
+    });
 
   } catch (error) {
     console.error("Error handling invalid response:", error);
-    return createErrorResponse(
-      "INTERNAL_ERROR",
-      "Failed to handle invalid response"
+    return NextResponse.json(
+      { success: false, error: "Failed to handle invalid response" },
+      { status: 500 }
     );
   }
 }
-
-export const POST = withWhopAuth(handleInvalidResponseHandler);
