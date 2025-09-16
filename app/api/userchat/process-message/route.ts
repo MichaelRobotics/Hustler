@@ -98,16 +98,38 @@ async function processMessageHandler(
     const sanitizedConversationId = conversationValidation.sanitizedData;
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
+    // Get the experience record to convert Whop experience ID to internal ID
+    console.log("🔍 ProcessMessage: Looking up experience:", {
+      whopExperienceId: experienceId
+    });
+
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, experienceId),
+    });
+
+    console.log("🔍 ProcessMessage: Experience lookup result:", {
+      found: !!experience,
+      internalId: experience?.id,
+      whopExperienceId: experience?.whopExperienceId
+    });
+
+    if (!experience) {
+      return createErrorResponse(
+        "EXPERIENCE_NOT_FOUND",
+        `Experience ${experienceId} not found`
+      );
+    }
+
     // Verify conversation belongs to this tenant
     console.log("🔍 ProcessMessage: Looking for conversation with:", {
       conversationId: sanitizedConversationId,
-      experienceId: experienceId
+      internalExperienceId: experience.id
     });
 
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, sanitizedConversationId),
-        eq(conversations.experienceId, experienceId)
+        eq(conversations.experienceId, experience.id)
       ),
       with: {
         experience: true,
@@ -135,7 +157,7 @@ async function processMessageHandler(
 
       return createErrorResponse(
         "CONVERSATION_NOT_FOUND",
-        `Conversation not found for experience ${experienceId}. ${anyConversation ? `Found with experience ${anyConversation.experienceId}` : 'Conversation does not exist'}`
+        `Conversation not found for experience ${experienceId} (internal: ${experience.id}). ${anyConversation ? `Found with experience ${anyConversation.experienceId}` : 'Conversation does not exist'}`
       );
     }
 
