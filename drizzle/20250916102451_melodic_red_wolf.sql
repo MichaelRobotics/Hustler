@@ -1,0 +1,1 @@
+ALTER TYPE "public"."conversation_status" ADD VALUE 'closed' BEFORE 'abandoned';
