@@ -144,8 +144,10 @@ const UserChat: React.FC<UserChatProps> = ({
 			
 			if (response.ok) {
 				const result = await response.json();
-				if (result.success && result.conversation?.messages) {
-					const formattedMessages = result.conversation.messages.map((msg: any) => ({
+				// Note: result.data because load-conversation uses createSuccessResponse
+				const conversationData = result.data || result;
+				if (conversationData.success && conversationData.conversation?.messages) {
+					const formattedMessages = conversationData.conversation.messages.map((msg: any) => ({
 						id: msg.id,
 						type: msg.type,
 						content: msg.content,
@@ -219,11 +221,13 @@ const UserChat: React.FC<UserChatProps> = ({
 					console.log("UserChat: Added user message to UI:", userMessage);
 					
 					// If there's a bot response, add it to UI
-					if (result.funnelResponse?.botMessage) {
+					// Note: result.data.funnelResponse because createSuccessResponse wraps data
+					const funnelResponse = result.data?.funnelResponse || result.funnelResponse;
+					if (funnelResponse?.botMessage) {
 						const botMessage = {
 							id: `bot-${Date.now()}`,
 							type: "bot" as const,
-							content: result.funnelResponse.botMessage,
+							content: funnelResponse.botMessage,
 							createdAt: new Date(),
 						};
 						setConversationMessages(prev => [...prev, botMessage]);
@@ -231,10 +235,10 @@ const UserChat: React.FC<UserChatProps> = ({
 					}
 
 					// Update local current block ID if next block is provided
-					if (result.funnelResponse?.nextBlockId) {
-						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
-						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
-						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
+					if (funnelResponse?.nextBlockId) {
+						setLocalCurrentBlockId(funnelResponse.nextBlockId);
+						console.log("UserChat: Updated local current block ID to:", funnelResponse.nextBlockId);
+						console.log("UserChat: New options will be:", funnelFlow.blocks[funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
 					}
 
 					// Scroll to bottom after adding messages
