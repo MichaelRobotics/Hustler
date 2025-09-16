@@ -14,7 +14,7 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences } from "@/lib/supabase/schema";
+import { conversations } from "@/lib/supabase/schema";
 import { eq } from "drizzle-orm";
 
 /**
@@ -88,26 +88,12 @@ async function processMessageHandler(
     const sanitizedConversationId = conversationValidation.sanitizedData;
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
-    // Get the experience record to get our internal experience ID
-    console.log(`[process-message] Looking for experience with whopExperienceId: ${experienceId}`);
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.whopExperienceId, experienceId),
-    });
-
-    if (!experience) {
-      console.log(`[process-message] Experience not found for whopExperienceId: ${experienceId}`);
-      return createErrorResponse(
-        "EXPERIENCE_NOT_FOUND",
-        "Experience not found"
-      );
-    }
-    console.log(`[process-message] Found experience: ${experience.id} for whopExperienceId: ${experienceId}`);
-
-    // Verify conversation belongs to this tenant
+    // Get conversation with funnel data (like the working navigate-funnel API)
     console.log(`[process-message] Looking for conversation: ${sanitizedConversationId}`);
     const conversation = await db.query.conversations.findFirst({
       where: eq(conversations.id, sanitizedConversationId),
       with: {
+        funnel: true,
         experience: true,
       },
     });
@@ -119,16 +105,16 @@ async function processMessageHandler(
         "Conversation not found"
       );
     }
-    console.log(`[process-message] Found conversation: ${conversation.id}, experienceId: ${conversation.experienceId}, expected: ${experience.id}`);
 
-    // Verify conversation belongs to this tenant's experience (compare database UUIDs)
-    if (conversation.experienceId !== experience.id) {
-      console.log(`[process-message] Conversation access denied - conversation experienceId: ${conversation.experienceId}, expected: ${experience.id}`);
+    if (!conversation.funnel?.flow) {
+      console.log(`[process-message] Funnel flow not found for conversation: ${sanitizedConversationId}`);
       return createErrorResponse(
-        "CONVERSATION_ACCESS_DENIED",
-        "Conversation does not belong to this tenant"
+        "FUNNEL_NOT_FOUND",
+        "Funnel flow not found"
       );
     }
+
+    console.log(`[process-message] Found conversation: ${conversation.id}, experienceId: ${conversation.experienceId}`);
 
     console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
 
@@ -140,9 +126,9 @@ async function processMessageHandler(
       console.log("Using cached conversation data");
     }
 
-    // Process user message through simplified funnel system with proper tenant isolation
-    console.log(`[process-message] Calling processUserMessage with conversationId: ${sanitizedConversationId}, message: ${sanitizedMessageContent}, experienceId: ${experience.id}`);
-    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experience.id);
+    // Process user message through simplified funnel system (use conversation's experienceId)
+    console.log(`[process-message] Calling processUserMessage with conversationId: ${sanitizedConversationId}, message: ${sanitizedMessageContent}, experienceId: ${conversation.experienceId}`);
+    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, conversation.experienceId);
     console.log(`[process-message] processUserMessage result:`, result);
 
     // Cache the result for future requests
