@@ -15,7 +15,7 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences } from "@/lib/supabase/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 /**
  * Process user message in UserChat and trigger funnel navigation
@@ -99,25 +99,43 @@ async function processMessageHandler(
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
     // Verify conversation belongs to this tenant
+    console.log("🔍 ProcessMessage: Looking for conversation with:", {
+      conversationId: sanitizedConversationId,
+      experienceId: experienceId
+    });
+
     const conversation = await db.query.conversations.findFirst({
-      where: eq(conversations.id, sanitizedConversationId),
+      where: and(
+        eq(conversations.id, sanitizedConversationId),
+        eq(conversations.experienceId, experienceId)
+      ),
       with: {
         experience: true,
       },
     });
 
+    console.log("🔍 ProcessMessage: Database query result:", {
+      conversationFound: !!conversation,
+      conversationId: conversation?.id,
+      conversationExperienceId: conversation?.experienceId,
+      requestedExperienceId: experienceId
+    });
+
     if (!conversation) {
+      // Let's also check if the conversation exists at all (without experience filter)
+      const anyConversation = await db.query.conversations.findFirst({
+        where: eq(conversations.id, sanitizedConversationId),
+      });
+      
+      console.log("🔍 ProcessMessage: Conversation exists without experience filter:", {
+        exists: !!anyConversation,
+        actualExperienceId: anyConversation?.experienceId,
+        requestedExperienceId: experienceId
+      });
+
       return createErrorResponse(
         "CONVERSATION_NOT_FOUND",
-        "Conversation not found"
-      );
-    }
-
-    // Verify conversation belongs to this tenant's experience
-    if (conversation.experienceId !== experienceId) {
-      return createErrorResponse(
-        "CONVERSATION_ACCESS_DENIED",
-        "Conversation does not belong to this tenant"
+        `Conversation not found for experience ${experienceId}. ${anyConversation ? `Found with experience ${anyConversation.experienceId}` : 'Conversation does not exist'}`
       );
     }
 
