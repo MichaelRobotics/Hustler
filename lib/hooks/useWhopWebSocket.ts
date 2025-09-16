@@ -97,23 +97,32 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 			
 			// Check if it's a conversation message
 			if (parsedMessage.conversationId === config.conversationId) {
-				const chatMessage: UserChatMessage = {
-					id: parsedMessage.id || `ws-${Date.now()}`,
-					type: parsedMessage.messageType || parsedMessage.type || "bot",
-					content: parsedMessage.content || "",
-					metadata: parsedMessage.metadata,
-					createdAt: parsedMessage.timestamp ? new Date(parsedMessage.timestamp) : new Date(),
-					timestamp: new Date(),
-				};
-
-				// Update last message time for connection health
-				setLastMessageTime(Date.now());
+				// Handle typing indicators separately
+				if (parsedMessage.type === "typing") {
+					config.onTyping?.(parsedMessage.isTyping, parsedMessage.userId);
+					return;
+				}
 				
-				// If connected, process immediately; otherwise queue
-				if (isConnected) {
-					config.onMessage?.(chatMessage);
-				} else {
-					messageQueue.current.push(chatMessage);
+				// Only process actual chat messages (not typing indicators)
+				if (parsedMessage.type === "message" || parsedMessage.messageType) {
+					const chatMessage: UserChatMessage = {
+						id: parsedMessage.id || `ws-${Date.now()}`,
+						type: parsedMessage.messageType || parsedMessage.type || "bot",
+						content: parsedMessage.content || "",
+						metadata: parsedMessage.metadata,
+						createdAt: parsedMessage.timestamp ? new Date(parsedMessage.timestamp) : new Date(),
+						timestamp: new Date(),
+					};
+
+					// Update last message time for connection health
+					setLastMessageTime(Date.now());
+					
+					// If connected, process immediately; otherwise queue
+					if (isConnected) {
+						config.onMessage?.(chatMessage);
+					} else {
+						messageQueue.current.push(chatMessage);
+					}
 				}
 			}
 		} catch (err) {
