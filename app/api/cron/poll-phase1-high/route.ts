@@ -11,13 +11,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processConversationsForPhase } from "@/lib/utils/cron-dm-monitoring";
 import { createSuccessResponse, createErrorResponse } from "@/lib/middleware/whop-auth";
-import { authenticateAndValidateCron } from "@/lib/middleware/cron-auth";
 
 export async function GET(request: NextRequest) {
   try {
-    // Authenticate and validate cron request
-    const authError = authenticateAndValidateCron(request);
-    if (authError) return authError;
 
     console.log(`[Phase1-High] Starting high priority polling for Phase 1 conversations`);
 

@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { processConversationsForPhase } from "@/lib/utils/cron-dm-monitoring";
+import { createSuccessResponse, createErrorResponse } from "@/lib/middleware/whop-auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,35 +20,26 @@ export async function GET(request: NextRequest) {
     const result = await processConversationsForPhase('PHASE2', 'PHASE2_HIGH');
 
     if (result.success) {
-      return NextResponse.json({
-        success: true,
-        message: `Processed ${result.processed} Phase 2 conversations in high priority window`,
+      return createSuccessResponse({
         processed: result.processed,
         total: result.total,
         results: result.results,
         errors: result.errors,
-      });
+      }, `Processed ${result.processed} Phase 2 conversations in high priority window`);
     } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to process conversations",
-          processed: 0,
-          errors: result.errors,
-        },
-        { status: 500 }
+      return createErrorResponse(
+        "PROCESSING_FAILED",
+        "Failed to process conversations",
+        500
       );
     }
 
   } catch (error) {
     console.error("[Phase2-High] Cron job error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        processed: 0,
-      },
-      { status: 500 }
+    return createErrorResponse(
+      "INTERNAL_ERROR",
+      error instanceof Error ? error.message : 'Unknown error',
+      500
     );
   }
 }
