@@ -190,6 +190,16 @@ const UserChat: React.FC<UserChatProps> = ({
 
 		// Handle conversation-based chat
 		if (conversationId && experienceId && isConnected) {
+			// IMMEDIATE UI UPDATE: Add user message to local state first
+			const userMessage = {
+				id: `user-${Date.now()}`,
+				type: "user" as const,
+				content: messageContent,
+				createdAt: new Date(),
+			};
+			setConversationMessages(prev => [...prev, userMessage]);
+			scrollToBottom();
+
 			// Process message through funnel system (API handles database save)
 			try {
 				const response = await apiPost('/api/userchat/process-message', {
@@ -201,15 +211,6 @@ const UserChat: React.FC<UserChatProps> = ({
 				if (response.ok) {
 					const result = await response.json();
 					console.log("Message processed through funnel:", result);
-					
-					// Add user message to UI (API already saved to database)
-					const userMessage = {
-						id: `user-${Date.now()}`,
-						type: "user" as const,
-						content: messageContent,
-						createdAt: new Date(),
-					};
-					setConversationMessages(prev => [...prev, userMessage]);
 					
 					// If there's a bot response, add it to UI
 					if (result.funnelResponse?.botMessage) {
