@@ -63,9 +63,7 @@ export async function loadRealConversations(
 				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
 			} else if (filters.status === "closed") {
 				whereConditions = and(whereConditions, or(
-					eq(conversations.status, "completed"),
-					eq(conversations.status, "closed"),
-					eq(conversations.status, "abandoned")
+					eq(conversations.status, "closed")
 				))!;
 			}
 		}
@@ -159,7 +157,7 @@ export async function loadRealConversations(
 				// Map conversation status
 				const statusMap = {
 					active: "open",
-					completed: "closed",
+					completed: "open",
 					closed: "closed",
 					abandoned: "closed",
 				};
@@ -236,13 +234,12 @@ export async function getConversationList(
 		// Add status filter
 		if (filters.status && filters.status !== "all") {
 			if (filters.status === "open") {
-				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
-			} else if (filters.status === "closed") {
 				whereConditions = and(whereConditions, or(
-					eq(conversations.status, "completed"),
-					eq(conversations.status, "closed"),
-					eq(conversations.status, "abandoned")
+					eq(conversations.status, "active"),
+					eq(conversations.status, "completed")
 				))!;
+			} else if (filters.status === "closed") {
+				whereConditions = and(whereConditions, eq(conversations.status, "closed"))!;
 			}
 		}
 
@@ -341,7 +338,8 @@ export async function getConversationList(
 			// Map conversation status
 			const statusMap = {
 				active: "open",
-				completed: "closed",
+				completed: "open",
+				closed: "closed",
 				abandoned: "closed",
 			};
 
@@ -445,7 +443,8 @@ export async function loadConversationDetails(
 		// Map conversation status
 		const statusMap = {
 			active: "open",
-			completed: "closed",
+			completed: "open",
+			closed: "closed",
 			abandoned: "closed",
 		};
 
@@ -638,7 +637,7 @@ export async function manageConversation(
 		if (action.status) {
 			const statusMap = {
 				open: "active",
-				closed: "completed",
+				closed: "closed",
 			};
 			updateData.status = statusMap[action.status];
 		}

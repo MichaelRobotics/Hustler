@@ -16,7 +16,7 @@ export interface Conversation {
 	experienceId: string;
 	funnelId: string;
 	whopUserId: string;
-	status: "active" | "completed" | "abandoned";
+	status: "active" | "completed" | "closed" | "abandoned";
 	currentBlockId?: string;
 	userPath?: string[];
 	createdAt: Date;
@@ -839,7 +839,7 @@ export async function updateConversation(
 	conversationId: string,
 	experienceId: string,
 	updates: {
-		status?: "active" | "completed" | "abandoned";
+		status?: "active" | "completed" | "closed" | "abandoned";
 		currentBlockId?: string;
 		userPath?: string[];
 	},

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions, experiences } from "@/lib/supabase/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, or } from "drizzle-orm";
 import { closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 // import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service"; // DEPRECATED - using cron jobs now
 import { validateToken } from "@whop-apps/sdk";
@@ -47,16 +47,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: Get all active conversations for this user
+    // Step 2: Get all active and completed conversations for this user
     const activeConversations = await db.query.conversations.findMany({
       where: and(
         eq(conversations.whopUserId, whopUserId),
         eq(conversations.experienceId, experience.id),
-        eq(conversations.status, "active")
+        or(
+          eq(conversations.status, "active"),
+          eq(conversations.status, "completed")
+        )
       ),
     });
 
-    console.log(`Found ${activeConversations.length} active conversations to reset`);
+    console.log(`Found ${activeConversations.length} active/completed conversations to reset`);
 
     // Step 3: Stop DM monitoring for all active conversations
     for (const conversation of activeConversations) {

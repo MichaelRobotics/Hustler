@@ -50,15 +50,14 @@ export async function getLiveChatConversations(
 
 		// Apply status filter - simplified logic
 		if (filters.status === "open") {
-			// Show only active conversations
-			whereConditions = and(whereConditions, eq(conversations.status, "active"));
-		} else if (filters.status === "closed") {
-			// Show only non-active conversations (completed, closed, or abandoned)
+			// Show active and completed conversations (both are "open" for admin)
 			whereConditions = and(whereConditions, or(
-				eq(conversations.status, "completed"),
-				eq(conversations.status, "closed"),
-				eq(conversations.status, "abandoned")
+				eq(conversations.status, "active"),
+				eq(conversations.status, "completed")
 			));
+		} else if (filters.status === "closed") {
+			// Show only closed conversations
+			whereConditions = and(whereConditions, eq(conversations.status, "closed"));
 		}
 		// If status is "all", show all conversations (no additional filter)
 
@@ -174,8 +173,8 @@ export async function getLiveChatConversations(
 				// Determine conversation stage based on current block
 				const currentStage = determineConversationStage(conv.currentBlockId, conv.funnel?.flow as FunnelFlow);
 
-				// Status mapping: active = open, closed/completed/abandoned = closed
-				const displayStatus = conv.status === "active" ? "open" : "closed";
+				// Status mapping: active/completed = open, closed/abandoned = closed
+				const displayStatus = (conv.status === "active" || conv.status === "completed") ? "open" : "closed";
 
 				return {
 					id: conv.id,

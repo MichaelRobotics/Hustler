@@ -33,14 +33,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`Found experience ${experience.id} for whopExperienceId ${experienceId}`);
 
-    // Find active or closed conversation directly using whopUserId (faster lookup)
+    // Find active or completed conversation directly using whopUserId (faster lookup)
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.whopUserId, whopUserId),
         eq(conversations.experienceId, experience.id),
         or(
           eq(conversations.status, "active"),
-          eq(conversations.status, "closed")
+          eq(conversations.status, "completed")
         )
       ),
       with: {
