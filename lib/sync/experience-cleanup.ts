@@ -70,8 +70,11 @@ export async function cleanupAbandonedExperiences(companyId: string): Promise<{
 
 		// Actually delete the abandoned experiences
 		if (cleaned.length > 0) {
+			console.log(`🗑️ Deleting ${cleaned.length} abandoned experiences...`);
 			await deleteAbandonedExperiences(cleaned);
 			console.log(`🎉 Cleaned up ${cleaned.length} abandoned experiences`);
+		} else {
+			console.log(`🤷 No abandoned experiences found for cleanup.`);
 		}
 
 		return { cleaned, kept };

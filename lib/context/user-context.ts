@@ -92,6 +92,8 @@ async function createUserContext(
 				const needsCleanup = await checkIfCleanupNeeded(companyId);
 				isReinstallScenario = needsCleanup; // This indicates there are existing experiences (reinstall)
 				
+				console.log(`🔍 Company ${companyId} - needsCleanup: ${needsCleanup}, isReinstallScenario: ${isReinstallScenario}`);
+				
 				if (needsCleanup) {
 					console.log(`🧹 Company ${companyId} has multiple experiences, cleaning up abandoned ones...`);
 					try {
@@ -100,6 +102,8 @@ async function createUserContext(
 					} catch (error) {
 						console.error("❌ Error during cleanup, continuing with new experience creation:", error);
 					}
+				} else {
+					console.log(`🆕 Company ${companyId} has no existing experiences - this is a fresh install`);
 				}
 			}
 			
@@ -201,14 +205,18 @@ async function createUserContext(
 				// Check if this is a reinstall scenario (stored during experience creation)
 				const isReinstallScenario = (experience as any).isReinstallScenario || false;
 				
+				console.log(`💰 Credits logic - isReinstallScenario: ${isReinstallScenario}, initialAccessLevel: ${initialAccessLevel}`);
+				
 				// Only give credits to admin users on fresh installs, not reinstalls
 				const shouldGiveCredits = initialAccessLevel === "admin" && !isReinstallScenario;
 				const initialCredits = shouldGiveCredits ? 2 : 0;
 				
 				if (isReinstallScenario && initialAccessLevel === "admin") {
-					console.log(`🔄 Reinstall scenario detected for admin user, not giving credits`);
+					console.log(`🔄 Reinstall scenario detected for admin user, giving 0 credits`);
 				} else if (initialAccessLevel === "admin") {
 					console.log(`🎉 Fresh install for admin user, giving 2 credits`);
+				} else {
+					console.log(`👤 Non-admin user, giving 0 credits`);
 				}
 
 				// Create user in our database

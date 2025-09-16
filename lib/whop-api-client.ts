@@ -127,12 +127,13 @@ export class WhopApiClient {
         if (!exp) continue; // Skip null/undefined experiences
         
         try {
+          console.log(`🔍 Checking access passes for experience: ${exp.name} (${exp.id})`);
           const accessPassesResult = await this.whopSdk.experiences.listAccessPassesForExperience({
             experienceId: exp.id
           });
           
           const accessPasses = accessPassesResult?.accessPasses || [];
-          console.log(`Experience ${exp.name} has ${accessPasses.length} access passes`);
+          console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes`);
           
           // Map access passes to memberships
           const expMemberships = accessPasses.map((pass: any) => ({
@@ -145,7 +146,8 @@ export class WhopApiClient {
           
           memberships.push(...expMemberships);
         } catch (expError) {
-          console.warn(`Failed to get access passes for experience ${exp?.id}:`, expError);
+          console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
+          // This is expected for many experiences - not all have access passes
           // Continue with other experiences
         }
       }
