@@ -82,6 +82,12 @@ const UserChat: React.FC<UserChatProps> = ({
 			setConversationMessages(formattedMessages);
 			console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
 			console.log("UserChat: Sample message:", formattedMessages[0]);
+			console.log("UserChat: All messages:", formattedMessages.map(m => ({
+				id: m.id,
+				type: m.type,
+				content: m.content.substring(0, 50) + (m.content.length > 50 ? '...' : ''),
+				createdAt: m.createdAt
+			})));
 			// Scroll to bottom after loading messages
 			setTimeout(() => scrollToBottom(), 100);
 		}
@@ -93,8 +99,6 @@ const UserChat: React.FC<UserChatProps> = ({
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
 			console.log("UserChat: Received WebSocket message:", newMessage);
-			console.log("UserChat: Current conversation messages count:", conversationMessages.length);
-			
 			// Check if message already exists locally
 			const messageExists = conversationMessages.some(msg => 
 				msg.content === newMessage.content && 
@@ -105,17 +109,13 @@ const UserChat: React.FC<UserChatProps> = ({
 			if (!messageExists) {
 				console.log("UserChat: New message detected, adding directly...");
 				// Add new message directly instead of reloading all messages
-				setConversationMessages(prev => {
-					const newMessages = [...prev, {
-						id: newMessage.id,
-						type: newMessage.type,
-						content: newMessage.content,
-						metadata: newMessage.metadata,
-						createdAt: newMessage.createdAt,
-					}];
-					console.log("UserChat: Updated conversation messages, total count:", newMessages.length);
-					return newMessages;
-				});
+				setConversationMessages(prev => [...prev, {
+					id: newMessage.id,
+					type: newMessage.type,
+					content: newMessage.content,
+					metadata: newMessage.metadata,
+					createdAt: newMessage.createdAt,
+				}]);
 			} else {
 				console.log("UserChat: Message already exists locally, skipping");
 			}
@@ -128,15 +128,6 @@ const UserChat: React.FC<UserChatProps> = ({
 		},
 		onError: (error) => {
 			console.error("WebSocket error:", error);
-		},
-		onConversationUpdate: (update) => {
-			console.log("UserChat: Conversation update received:", update);
-			// Update local current block ID if next block is provided
-			if (update.nextBlockId) {
-				setLocalCurrentBlockId(update.nextBlockId);
-				console.log("UserChat: Updated local current block ID to:", update.nextBlockId);
-				console.log("UserChat: New options will be:", funnelFlow.blocks[update.nextBlockId]?.options?.map(opt => opt.text));
-			}
 		},
 	});
 
@@ -205,24 +196,69 @@ const UserChat: React.FC<UserChatProps> = ({
 
 		// Handle conversation-based chat
 		if (conversationId && experienceId && isConnected) {
-			// IMMEDIATE UI UPDATE: Add user message to local state first
-			const userMessage = {
-				id: `user-${Date.now()}`,
-				type: "user" as const,
-				content: messageContent,
-				createdAt: new Date(),
-			};
-			setConversationMessages(prev => [...prev, userMessage]);
-			scrollToBottom();
-
-			// Send message via WebSocket (handles API call and database save)
+			// Process message through funnel system (API handles database save)
 			try {
-				const success = await sendMessage(messageContent, "user");
-				if (!success) {
-					console.warn("WebSocket message send failed, but message is in UI");
+				const response = await apiPost('/api/userchat/process-message', {
+					conversationId,
+					messageContent,
+					messageType: "user",
+				}, experienceId);
+
+				if (response.ok) {
+					const result = await response.json();
+					console.log("Message processed through funnel:", result);
+					
+					// Add user message to UI (API already saved to database)
+					const userMessage = {
+						id: `user-${Date.now()}`,
+						type: "user" as const,
+						content: messageContent,
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, userMessage]);
+					console.log("UserChat: Added user message to UI:", userMessage);
+					
+					// If there's a bot response, add it to UI
+					if (result.funnelResponse?.botMessage) {
+						const botMessage = {
+							id: `bot-${Date.now()}`,
+							type: "bot" as const,
+							content: result.funnelResponse.botMessage,
+							createdAt: new Date(),
+						};
+						setConversationMessages(prev => [...prev, botMessage]);
+						console.log("UserChat: Added bot message to UI:", botMessage);
+					}
+
+					// Update local current block ID if next block is provided
+					if (result.funnelResponse?.nextBlockId) {
+						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
+						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
+						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
+					}
+
+					// Scroll to bottom after adding messages
+					scrollToBottom();
+				} else {
+					const errorText = await response.text();
+					console.error("Failed to process message through funnel:", {
+						status: response.status,
+						statusText: response.statusText,
+						errorText: errorText,
+					});
+					
+					// Show error message to user
+					const errorMessage = {
+						id: `error-${Date.now()}`,
+						type: "bot" as const,
+						content: "Sorry, there was an error processing your message. Please try again.",
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, errorMessage]);
+					scrollToBottom();
 				}
-			} catch (error) {
-				console.error("Error sending message via WebSocket:", error);
+			} catch (apiError) {
+				console.error("Error calling message processing API:", apiError);
 				// Show error message to user
 				const errorMessage = {
 					id: `error-${Date.now()}`,
@@ -576,6 +612,13 @@ const UserChat: React.FC<UserChatProps> = ({
 			text: msg.content, // Use content property
 			timestamp: msg.createdAt,
 		}));
+
+		console.log("UserChat: Rendering message list:", messagesToShow.length, "messages");
+		console.log("UserChat: Message list sample:", messagesToShow.slice(0, 2).map(m => ({
+			type: m.type,
+			text: m.text.substring(0, 30) + (m.text.length > 30 ? '...' : ''),
+			timestamp: m.timestamp
+		})));
 
 		return messagesToShow.map((msg: any, index: number) => (
 			<MessageComponent

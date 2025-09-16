@@ -64,6 +64,12 @@ export async function getConversationMessages(
     }));
 
     console.log(`[UNIFIED-MESSAGES] Loaded ${unifiedMessages.length} messages for conversation ${conversationId}`);
+    console.log(`[UNIFIED-MESSAGES] Sample messages:`, unifiedMessages.slice(0, 3).map(m => ({
+      id: m.id,
+      type: m.type,
+      text: m.text.substring(0, 50) + (m.text.length > 50 ? '...' : ''),
+      timestamp: m.timestamp
+    })));
     return unifiedMessages;
 
   } catch (error) {

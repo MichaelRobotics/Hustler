@@ -19,7 +19,6 @@ export interface WhopWebSocketConfig {
 	onMessage?: (message: UserChatMessage) => void;
 	onTyping?: (isTyping: boolean, userId?: string) => void;
 	onError?: (error: string) => void;
-	onConversationUpdate?: (update: { nextBlockId?: string; phaseTransition?: string }) => void;
 }
 
 /**
@@ -96,36 +95,40 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 			// Parse the message
 			const parsedMessage = JSON.parse(message.json);
 			
-			// Check if it's a conversation message
-			if (parsedMessage.conversationId === config.conversationId) {
-				// Handle typing indicators separately
-				if (parsedMessage.type === "typing") {
-					config.onTyping?.(parsedMessage.isTyping, parsedMessage.userId);
-					return;
-				}
-				
-				// Only process actual chat messages (not typing indicators)
-				if (parsedMessage.type === "message" || parsedMessage.messageType) {
-					const chatMessage: UserChatMessage = {
-						id: parsedMessage.id || `ws-${Date.now()}`,
-						type: parsedMessage.messageType || parsedMessage.type || "bot",
-						content: parsedMessage.content || "",
-						metadata: parsedMessage.metadata,
-						createdAt: parsedMessage.timestamp ? new Date(parsedMessage.timestamp) : new Date(),
-						timestamp: new Date(),
-					};
+		// Check if it's a conversation message
+		if (parsedMessage.conversationId === config.conversationId) {
+			console.log("UserChat WebSocket: Received message for conversation:", parsedMessage);
+			
+			// Handle typing indicators separately
+			if (parsedMessage.type === "typing") {
+				config.onTyping?.(parsedMessage.isTyping, parsedMessage.userId);
+				return;
+			}
+			
+			// Only process actual chat messages (not typing indicators)
+			if (parsedMessage.type === "message" || parsedMessage.messageType) {
+				const chatMessage: UserChatMessage = {
+					id: parsedMessage.id || `ws-${Date.now()}`,
+					type: parsedMessage.messageType || parsedMessage.type || "bot",
+					content: parsedMessage.content || "",
+					metadata: parsedMessage.metadata,
+					createdAt: parsedMessage.timestamp ? new Date(parsedMessage.timestamp) : new Date(),
+					timestamp: new Date(),
+				};
 
-					// Update last message time for connection health
-					setLastMessageTime(Date.now());
-					
-					// If connected, process immediately; otherwise queue
-					if (isConnected) {
-						config.onMessage?.(chatMessage);
-					} else {
-						messageQueue.current.push(chatMessage);
-					}
+				console.log("UserChat WebSocket: Processed chat message:", chatMessage);
+
+				// Update last message time for connection health
+				setLastMessageTime(Date.now());
+				
+				// If connected, process immediately; otherwise queue
+				if (isConnected) {
+					config.onMessage?.(chatMessage);
+				} else {
+					messageQueue.current.push(chatMessage);
 				}
 			}
+		}
 		} catch (err) {
 			console.error("Error handling WebSocket message:", err);
 			config.onError?.("Failed to process message");
@@ -151,9 +154,11 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 				return false;
 			}
 
-			// For user messages, process through funnel system and save to database
+			// For user messages, also process through funnel system
 			if (type === "user") {
 				try {
+					console.log("UserChat WebSocket: Processing user message through funnel:", content);
+					
 					// Check cache first for recent conversation data
 					const cacheKey = CacheKeys.conversation(config.conversationId);
 					const cachedData = cache.get(cacheKey);
@@ -161,10 +166,12 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 					const response = await apiPost('/api/userchat/process-message', {
 						conversationId: config.conversationId,
 						messageContent: content,
+						messageType: type,
 					}, config.experienceId);
 
 					if (response.ok) {
 						const result = await response.json();
+						console.log("UserChat WebSocket: Funnel processing result:", result);
 						
 						// Cache the result
 						if (result.success) {
@@ -172,49 +179,34 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 						}
 						
 						// If there's a bot response, send it via WebSocket
-						// The API wraps the result in funnelResponse, so check there first
-						const botResponse = result.funnelResponse?.botMessage;
-						console.log("WebSocket: Processing bot response:", {
-							hasDirectBotMessage: !!result.botMessage,
-							hasFunnelResponseBotMessage: !!result.funnelResponse?.botMessage,
-							botResponse,
-							escalationLevel: result.funnelResponse?.escalationLevel,
-							fullResult: result
-						});
-						
-						if (botResponse) {
+						if (result.funnelResponse?.botMessage) {
 							const botMessage = {
-								id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
 								type: "message",
 								conversationId: config.conversationId,
 								messageType: "bot",
-								content: botResponse,
+								content: result.funnelResponse.botMessage,
 								metadata: {
-									blockId: result.funnelResponse?.nextBlockId,
+									blockId: result.funnelResponse.nextBlockId,
 									timestamp: new Date().toISOString(),
 									cached: !!cachedData,
-									escalationLevel: result.funnelResponse?.escalationLevel,
 								},
 								userId: "system",
 								timestamp: new Date().toISOString(),
-								createdAt: new Date().toISOString(),
 							};
 							
+							console.log("UserChat WebSocket: Broadcasting bot message:", botMessage);
 							await broadcast({
 								message: JSON.stringify(botMessage),
 								target: "everyone",
 							});
 						}
-
-						// Notify about conversation updates (next block ID, phase transition)
-						if (result.funnelResponse?.nextBlockId || result.funnelResponse?.phaseTransition) {
-							config.onConversationUpdate?.({
-								nextBlockId: result.funnelResponse.nextBlockId,
-								phaseTransition: result.funnelResponse.phaseTransition,
-							});
-						}
 					} else {
-						console.error("Failed to process message through funnel:", response.statusText);
+						const errorText = await response.text();
+						console.error("Failed to process message through funnel:", {
+							status: response.status,
+							statusText: response.statusText,
+							errorText: errorText,
+						});
 					}
 				} catch (apiError) {
 					console.error("Error calling message processing API:", apiError);

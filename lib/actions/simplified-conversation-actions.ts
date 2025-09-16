@@ -265,15 +265,27 @@ export async function addMessage(
 	content: string,
 ): Promise<string> {
 	try {
+		console.log(`[addMessage] Inserting message for conversation ${conversationId}:`, {
+			type,
+			content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+		});
+
 		const [newMessage] = await db.insert(messages).values({
 			conversationId,
 			type,
 			content,
 		}).returning();
 
+		console.log(`[addMessage] Message inserted successfully with ID: ${newMessage.id}`);
 		return newMessage.id;
 	} catch (error) {
-		console.error("Error adding message:", error);
+		console.error("Error adding message:", {
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+			conversationId,
+			type,
+			content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+		});
 		throw error;
 	}
 }
@@ -448,6 +460,8 @@ export async function processUserMessage(
 	error?: string;
 }> {
 	try {
+		console.log(`[processUserMessage] Looking for conversation ${conversationId} in experience ${experienceId}`);
+		
 		// Get conversation with funnel (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
@@ -459,7 +473,15 @@ export async function processUserMessage(
 			},
 		});
 
+		console.log(`[processUserMessage] Found conversation:`, {
+			conversationId: conversation?.id,
+			experienceId: conversation?.experienceId,
+			hasFunnel: !!conversation?.funnel,
+			hasFlow: !!conversation?.funnel?.flow
+		});
+
 		if (!conversation || !conversation.funnel?.flow) {
+			console.error(`[processUserMessage] Conversation or funnel not found for ${conversationId}`);
 			return { success: false, error: "Conversation or funnel not found" };
 		}
 
@@ -471,14 +493,20 @@ export async function processUserMessage(
 		}
 
 		// Add user message
-		await addMessage(conversationId, "user", messageContent);
+		console.log(`[processUserMessage] Adding user message to conversation ${conversationId}:`, messageContent);
+		const userMessageId = await addMessage(conversationId, "user", messageContent);
+		console.log(`[processUserMessage] User message added with ID: ${userMessageId}`);
 
 		// Validate user response
+		console.log(`[processUserMessage] Validating user response: "${messageContent}"`);
 		const validationResult = validateUserResponse(messageContent, currentBlock, conversationId);
+		console.log(`[processUserMessage] Validation result:`, validationResult);
 
 		if (!validationResult.isValid) {
+			console.log(`[processUserMessage] Invalid response, adding escalation message: ${validationResult.errorMessage}`);
 			// Add bot message for invalid response
-			await addMessage(conversationId, "bot", validationResult.errorMessage || "Please select a valid option.");
+			const botMessageId = await addMessage(conversationId, "bot", validationResult.errorMessage || "Please select a valid option.");
+			console.log(`[processUserMessage] Bot escalation message added with ID: ${botMessageId}`);
 			
 			return {
 				success: true,
@@ -510,7 +538,8 @@ export async function processUserMessage(
 			const botMessage = nextBlock?.message || "Thank you for your response!";
 
 			// Add bot message
-			await addMessage(conversationId, "bot", botMessage);
+			const botMessageId = await addMessage(conversationId, "bot", botMessage);
+			console.log(`[processUserMessage] Bot response message added with ID: ${botMessageId}`);
 
 			return {
 				success: true,
@@ -522,7 +551,13 @@ export async function processUserMessage(
 
 		return { success: false, error: "No valid option selected" };
 	} catch (error) {
-		console.error("Error processing user message:", error);
+		console.error("Error processing user message:", {
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+			conversationId,
+			messageContent,
+			experienceId,
+		});
 		return { success: false, error: "Failed to process message" };
 	}
 }
