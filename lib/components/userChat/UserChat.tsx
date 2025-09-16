@@ -103,13 +103,17 @@ const UserChat: React.FC<UserChatProps> = ({
 			if (!messageExists) {
 				console.log("UserChat: New message detected, adding directly...");
 				// Add new message directly instead of reloading all messages
-				setConversationMessages(prev => [...prev, {
-					id: newMessage.id,
-					type: newMessage.type,
-					content: newMessage.content,
-					metadata: newMessage.metadata,
-					createdAt: newMessage.createdAt,
-				}]);
+				setConversationMessages(prev => {
+					const newMessages = [...prev, {
+						id: newMessage.id,
+						type: newMessage.type,
+						content: newMessage.content,
+						metadata: newMessage.metadata,
+						createdAt: newMessage.createdAt,
+					}];
+					console.log("UserChat: Updated conversation messages, total count:", newMessages.length);
+					return newMessages;
+				});
 			} else {
 				console.log("UserChat: Message already exists locally, skipping");
 			}

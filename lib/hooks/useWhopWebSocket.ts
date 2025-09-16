@@ -173,6 +173,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 						
 						// If there's a bot response, send it via WebSocket
 						if (result.funnelResponse?.botMessage) {
+							console.log("WebSocket: Sending bot response via WebSocket:", result.funnelResponse.botMessage);
 							const botMessage = {
 								type: "message",
 								conversationId: config.conversationId,
@@ -182,6 +183,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 									blockId: result.funnelResponse.nextBlockId,
 									timestamp: new Date().toISOString(),
 									cached: !!cachedData,
+									escalationLevel: result.funnelResponse.escalationLevel,
 								},
 								userId: "system",
 								timestamp: new Date().toISOString(),
@@ -191,6 +193,9 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 								message: JSON.stringify(botMessage),
 								target: "everyone",
 							});
+							console.log("WebSocket: Bot response broadcasted successfully");
+						} else {
+							console.log("WebSocket: No bot response found in result:", result);
 						}
 
 						// Notify about conversation updates (next block ID, phase transition)
