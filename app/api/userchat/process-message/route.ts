@@ -35,8 +35,15 @@ async function processMessageHandler(
   const startTime = Date.now();
   
   try {
+    console.log("🔍 ProcessMessage: Starting request processing");
     const { user } = context;
     const experienceId = user.experienceId;
+    
+    console.log("🔍 ProcessMessage: User context:", {
+      userId: user.userId,
+      experienceId: user.experienceId,
+      accessLevel: user.accessLevel
+    });
 
     if (!experienceId) {
       return createErrorResponse(
@@ -49,7 +56,9 @@ async function processMessageHandler(
     let requestBody;
     try {
       requestBody = await request.json();
+      console.log("🔍 ProcessMessage: Request body received:", requestBody);
     } catch (error) {
+      console.error("❌ ProcessMessage: Invalid JSON in request body:", error);
       return createErrorResponse(
         "INVALID_JSON",
         "Invalid JSON in request body"
@@ -58,7 +67,9 @@ async function processMessageHandler(
 
     // Validate request format
     const requestValidation = validateRequestBody(requestBody, ['conversationId', 'messageContent']);
+    console.log("🔍 ProcessMessage: Request validation result:", requestValidation);
     if (!requestValidation.isValid) {
+      console.error("❌ ProcessMessage: Request validation failed:", requestValidation.errors);
       return createErrorResponse(
         "INVALID_REQUEST_FORMAT",
         `Invalid request format: ${requestValidation.errors.join(", ")}`
@@ -111,18 +122,26 @@ async function processMessageHandler(
       );
     }
 
-    console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
+    console.log(`🔍 ProcessMessage: Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
 
     // Check cache for recent conversation data
     const cacheKey = CacheKeys.conversation(sanitizedConversationId);
     const cachedConversation = cache.get(cacheKey);
     
     if (cachedConversation) {
-      console.log("Using cached conversation data");
+      console.log("🔍 ProcessMessage: Using cached conversation data");
     }
+
+    console.log("🔍 ProcessMessage: About to call processUserMessage with:", {
+      conversationId: sanitizedConversationId,
+      messageContent: sanitizedMessageContent,
+      experienceId
+    });
 
     // Process user message through simplified funnel system with proper tenant isolation
     const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experienceId);
+    
+    console.log("🔍 ProcessMessage: processUserMessage result:", result);
 
     // Cache the result for future requests
     if (result.success) {

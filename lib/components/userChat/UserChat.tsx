@@ -202,15 +202,25 @@ const UserChat: React.FC<UserChatProps> = ({
 
 			// Process message through funnel system
 			try {
+				console.log("🔍 UserChat: Sending message to API:", {
+					conversationId,
+					messageContent,
+					messageType: "user",
+					experienceId
+				});
+
 				const response = await apiPost('/api/userchat/process-message', {
 					conversationId,
 					messageContent,
 					messageType: "user",
 				}, experienceId);
 
+				console.log("🔍 UserChat: API Response status:", response.status);
+				console.log("🔍 UserChat: API Response headers:", Object.fromEntries(response.headers.entries()));
+
 				if (response.ok) {
 					const result = await response.json();
-					console.log("Message processed through funnel:", result);
+					console.log("✅ UserChat: Message processed through funnel:", result);
 					
 					// If there's a bot response, add it immediately to UI
 					if (result.funnelResponse?.botMessage) {
@@ -234,12 +244,29 @@ const UserChat: React.FC<UserChatProps> = ({
 					// Send via WebSocket for real-time sync (optional)
 					await sendMessage(messageContent, "user");
 				} else {
-					console.error("Failed to process message through funnel:", response.statusText);
+					console.error("❌ UserChat: Failed to process message through funnel:", {
+						status: response.status,
+						statusText: response.statusText,
+						url: response.url
+					});
+					
+					// Try to get error details
+					try {
+						const errorResult = await response.json();
+						console.error("❌ UserChat: Error details:", errorResult);
+					} catch (e) {
+						console.error("❌ UserChat: Could not parse error response");
+					}
+					
 					// Still send via WebSocket as fallback
 					await sendMessage(messageContent, "user");
 				}
 			} catch (apiError) {
-				console.error("Error calling message processing API:", apiError);
+				console.error("❌ UserChat: Error calling message processing API:", {
+					error: apiError,
+					message: apiError instanceof Error ? apiError.message : 'Unknown error',
+					stack: apiError instanceof Error ? apiError.stack : undefined
+				});
 				// Fallback to WebSocket only
 				await sendMessage(messageContent, "user");
 			}

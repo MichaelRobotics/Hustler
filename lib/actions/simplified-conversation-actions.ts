@@ -447,6 +447,12 @@ export async function processUserMessage(
 	error?: string;
 }> {
 	try {
+		console.log(`🔍 ProcessUserMessage: Starting with params:`, {
+			conversationId,
+			messageContent,
+			experienceId
+		});
+
 		// Get conversation with funnel (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
@@ -459,8 +465,22 @@ export async function processUserMessage(
 		});
 
 		if (!conversation || !conversation.funnel?.flow) {
+			console.error(`❌ ProcessUserMessage: Conversation or funnel not found:`, {
+				conversationId,
+				experienceId,
+				conversationExists: !!conversation,
+				funnelExists: !!conversation?.funnel,
+				flowExists: !!conversation?.funnel?.flow
+			});
 			return { success: false, error: "Conversation or funnel not found" };
 		}
+
+		console.log(`🔍 ProcessUserMessage: Found conversation:`, {
+			id: conversation.id,
+			status: conversation.status,
+			currentBlockId: conversation.currentBlockId,
+			funnelId: conversation.funnelId
+		});
 
 		const funnelFlow = conversation.funnel.flow as FunnelFlow;
 		const currentBlock = funnelFlow.blocks[conversation.currentBlockId || ""];
@@ -532,6 +552,8 @@ async function handleInvalidResponseWithEscalation(
 	escalated: boolean;
 }> {
 	try {
+		console.log(`🔍 Escalation: Starting escalation for conversation ${conversationId}`);
+		
 		// Count recent invalid attempts by looking at bot error messages
 		const recentMessages = await db.query.messages.findMany({
 			where: eq(messages.conversationId, conversationId),
