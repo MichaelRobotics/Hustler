@@ -168,6 +168,8 @@ export const resources = pgTable(
 		code: text("code"), // Promo code
 		description: text("description"),
 		whopProductId: text("whop_product_id"), // For MY_PRODUCTS sync
+		whopAppId: text("whop_app_id"), // For app-based products
+		whopMembershipId: text("whop_membership_id"), // For membership-based products
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -180,6 +182,8 @@ export const resources = pgTable(
 		whopProductIdIdx: index("resources_whop_product_id_idx").on(
 			table.whopProductId,
 		),
+		whopAppIdIdx: index("resources_whop_app_id_idx").on(table.whopAppId),
+		whopMembershipIdIdx: index("resources_whop_membership_id_idx").on(table.whopMembershipId),
 		experienceUserUpdatedIdx: index("resources_experience_user_updated_idx").on(
 			table.experienceId,
 			table.userId,
@@ -302,11 +306,20 @@ export const funnelAnalytics = pgTable(
 			.notNull()
 			.references(() => funnels.id, { onDelete: "cascade" }),
 		date: timestamp("date").notNull(),
-		views: integer("views").default(0).notNull(),
 		starts: integer("starts").default(0).notNull(),
 		completions: integer("completions").default(0).notNull(),
 		conversions: integer("conversions").default(0).notNull(),
-		revenue: decimal("revenue", { precision: 10, scale: 2 })
+		affiliateRevenue: decimal("affiliate_revenue", { precision: 10, scale: 2 })
+			.default("0")
+			.notNull(),
+		productRevenue: decimal("product_revenue", { precision: 10, scale: 2 })
+			.default("0")
+			.notNull(),
+		freeClicks: integer("free_clicks").default(0).notNull(),
+		resourceId: uuid("resource_id").references(() => resources.id, { onDelete: "cascade" }),
+		resourceClicks: integer("resource_clicks").default(0).notNull(),
+		resourceConversions: integer("resource_conversions").default(0).notNull(),
+		resourceRevenue: decimal("resource_revenue", { precision: 10, scale: 2 })
 			.default("0")
 			.notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -317,6 +330,9 @@ export const funnelAnalytics = pgTable(
 		),
 		funnelIdIdx: index("funnel_analytics_funnel_id_idx").on(table.funnelId),
 		dateIdx: index("funnel_analytics_date_idx").on(table.date),
+		resourceIdIdx: index("funnel_analytics_resource_id_idx").on(table.resourceId),
+		affiliateRevenueIdx: index("funnel_analytics_affiliate_revenue_idx").on(table.affiliateRevenue),
+		productRevenueIdx: index("funnel_analytics_product_revenue_idx").on(table.productRevenue),
 		uniqueFunnelDate: unique("unique_funnel_date").on(
 			table.funnelId,
 			table.date,

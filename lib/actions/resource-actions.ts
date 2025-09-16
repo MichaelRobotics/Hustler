@@ -448,27 +448,27 @@ export async function syncWhopProducts(
 	errors: string[];
 }> {
 	try {
-		// For now, return empty result since WHOP SDK products API is not available
-		// In a real implementation, you would:
-		// 1. Get all WHOP products for the company
-		// 2. Create/update resources based on the products
-		// 3. Handle errors appropriately
-
-		console.log(
-			"WHOP products sync not implemented - SDK products API not available",
-		);
-
+		// Import the WhopProductSync class
+		const { WhopProductSync } = await import("../sync/whop-product-sync");
+		const sync = new WhopProductSync();
+		
+		// Perform the sync
+		const result = await sync.syncCompanyProducts(user);
+		
+		return {
+			synced: result.synced,
+			created: result.created,
+			updated: result.updated,
+			errors: result.errors.map(err => err.error),
+		};
+	} catch (error) {
+		console.error("Error syncing WHOP products:", error);
 		return {
 			synced: 0,
 			created: 0,
 			updated: 0,
-			errors: [
-				"WHOP products sync not implemented - SDK products API not available",
-			],
+			errors: [error instanceof Error ? error.message : 'Unknown error'],
 		};
-	} catch (error) {
-		console.error("Error syncing WHOP products:", error);
-		throw new Error("Failed to sync WHOP products");
 	}
 }
 

@@ -9,8 +9,7 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
 import { experiences, resources, users } from "../supabase/schema";
-// WebSocket functionality moved to React hooks
-import { whopSdk } from "../whop-sdk";
+import { getWhopApiClient, type WhopProduct as ApiWhopProduct } from "../whop-api-client";
 
 export interface WhopProduct {
 	id: string;
@@ -45,7 +44,7 @@ export interface SyncOptions {
 	onProgress?: (progress: number, message: string) => void;
 }
 
-class WhopProductSync {
+export class WhopProductSync {
 	private syncInProgress: Map<string, boolean> = new Map();
 	private lastSyncTime: Map<string, Date> = new Map();
 
@@ -220,24 +219,25 @@ class WhopProductSync {
 		options: SyncOptions,
 	): Promise<WhopProduct[]> {
 		try {
-			// Use WHOP SDK to fetch experience products
-			const products = await (whopSdk as any).products.list({
-				companyId: user.experience.whopCompanyId,
-			});
+			// Use new WhopApiClient to fetch company products
+			const whopClient = getWhopApiClient();
+			const apiProducts = await whopClient.getCompanyProducts(
+				user.experience.whopCompanyId
+			);
 
-			// Transform WHOP products to our format
-			const whopProducts: WhopProduct[] = products.map((product: any) => ({
+			// Transform API products to our format
+			const whopProducts: WhopProduct[] = apiProducts.map((product: ApiWhopProduct) => ({
 				id: product.id,
 				name: product.name || "Unnamed Product",
 				description: product.description,
 				price: product.price,
 				currency: product.currency,
-				status: product.status || "active",
+				status: (product.status as "active" | "inactive" | "draft") || "active",
 				category: product.category,
 				tags: product.tags || [],
-				imageUrl: product.image_url,
-				createdAt: new Date(product.created_at),
-				updatedAt: new Date(product.updated_at),
+				imageUrl: product.imageUrl,
+				createdAt: product.createdAt ? new Date(product.createdAt) : new Date(),
+				updatedAt: product.updatedAt ? new Date(product.updatedAt) : new Date(),
 			}));
 
 			// Filter by status if needed
@@ -397,9 +397,8 @@ class WhopProductSync {
 		// Count total products from WHOP
 		let totalProducts = 0;
 		try {
-			const products = await (whopSdk as any).products.list({
-				companyId: companyId,
-			});
+			const whopClient = getWhopApiClient();
+			const products = await whopClient.getCompanyProducts(companyId);
 			totalProducts = products.length;
 		} catch (error) {
 			console.error("Error counting WHOP products:", error);
