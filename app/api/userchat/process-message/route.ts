@@ -89,18 +89,22 @@ async function processMessageHandler(
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
     // Get the experience record to get our internal experience ID
+    console.log(`[process-message] Looking for experience with whopExperienceId: ${experienceId}`);
     const experience = await db.query.experiences.findFirst({
       where: eq(experiences.whopExperienceId, experienceId),
     });
 
     if (!experience) {
+      console.log(`[process-message] Experience not found for whopExperienceId: ${experienceId}`);
       return createErrorResponse(
         "EXPERIENCE_NOT_FOUND",
         "Experience not found"
       );
     }
+    console.log(`[process-message] Found experience: ${experience.id} for whopExperienceId: ${experienceId}`);
 
     // Verify conversation belongs to this tenant
+    console.log(`[process-message] Looking for conversation: ${sanitizedConversationId}`);
     const conversation = await db.query.conversations.findFirst({
       where: eq(conversations.id, sanitizedConversationId),
       with: {
@@ -109,14 +113,17 @@ async function processMessageHandler(
     });
 
     if (!conversation) {
+      console.log(`[process-message] Conversation not found: ${sanitizedConversationId}`);
       return createErrorResponse(
         "CONVERSATION_NOT_FOUND",
         "Conversation not found"
       );
     }
+    console.log(`[process-message] Found conversation: ${conversation.id}, experienceId: ${conversation.experienceId}, expected: ${experience.id}`);
 
     // Verify conversation belongs to this tenant's experience (compare database UUIDs)
     if (conversation.experienceId !== experience.id) {
+      console.log(`[process-message] Conversation access denied - conversation experienceId: ${conversation.experienceId}, expected: ${experience.id}`);
       return createErrorResponse(
         "CONVERSATION_ACCESS_DENIED",
         "Conversation does not belong to this tenant"
@@ -134,7 +141,9 @@ async function processMessageHandler(
     }
 
     // Process user message through simplified funnel system with proper tenant isolation
+    console.log(`[process-message] Calling processUserMessage with conversationId: ${sanitizedConversationId}, message: ${sanitizedMessageContent}, experienceId: ${experience.id}`);
     const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experience.id);
+    console.log(`[process-message] processUserMessage result:`, result);
 
     // Cache the result for future requests
     if (result.success) {
