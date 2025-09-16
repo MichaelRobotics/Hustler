@@ -7,7 +7,7 @@
 
 import { and, eq, desc, asc } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels, experiences } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
 
@@ -444,35 +444,15 @@ export async function processUserMessage(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
+	escalationLevel?: number;
 	error?: string;
 }> {
 	try {
-		console.log(`🔍 ProcessUserMessage: Starting with params:`, {
-			conversationId,
-			messageContent,
-			experienceId
-		});
-
-		// Convert Whop experience ID to internal UUID
-		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, experienceId),
-		});
-
-		if (!experience) {
-			console.error(`❌ ProcessUserMessage: Experience not found for whopExperienceId: ${experienceId}`);
-			return { success: false, error: "Experience not found" };
-		}
-
-		console.log(`🔍 ProcessUserMessage: Found experience:`, {
-			whopExperienceId: experienceId,
-			internalId: experience.id
-		});
-
 		// Get conversation with funnel (filtered by experience for multi-tenancy)
 		const conversation = await db.query.conversations.findFirst({
 			where: and(
 				eq(conversations.id, conversationId),
-				eq(conversations.experienceId, experience.id)
+				eq(conversations.experienceId, experienceId)
 			),
 			with: {
 				funnel: true,
@@ -480,23 +460,8 @@ export async function processUserMessage(
 		});
 
 		if (!conversation || !conversation.funnel?.flow) {
-			console.error(`❌ ProcessUserMessage: Conversation or funnel not found:`, {
-				conversationId,
-				whopExperienceId: experienceId,
-				internalExperienceId: experience.id,
-				conversationExists: !!conversation,
-				funnelExists: !!conversation?.funnel,
-				flowExists: !!conversation?.funnel?.flow
-			});
 			return { success: false, error: "Conversation or funnel not found" };
 		}
-
-		console.log(`🔍 ProcessUserMessage: Found conversation:`, {
-			id: conversation.id,
-			status: conversation.status,
-			currentBlockId: conversation.currentBlockId,
-			funnelId: conversation.funnelId
-		});
 
 		const funnelFlow = conversation.funnel.flow as FunnelFlow;
 		const currentBlock = funnelFlow.blocks[conversation.currentBlockId || ""];
@@ -505,26 +470,34 @@ export async function processUserMessage(
 			return { success: false, error: "Current block not found" };
 		}
 
+		// Add user message
+		await addMessage(conversationId, "user", messageContent);
+
 		// Validate user response
-		const validationResult = validateUserResponse(messageContent, currentBlock);
+		const validationResult = validateUserResponse(messageContent, currentBlock, conversationId);
 
 		if (!validationResult.isValid) {
-			// Handle invalid response with escalation
-			const escalationResult = await handleInvalidResponseWithEscalation(conversationId, experience.id);
+			// Add bot message for invalid response
+			await addMessage(conversationId, "bot", validationResult.errorMessage || "Please select a valid option.");
+			
 			return {
 				success: true,
-				botMessage: escalationResult.botMessage,
+				botMessage: validationResult.errorMessage || "Please select a valid option.",
+				escalationLevel: validationResult.escalationLevel,
 			};
 		}
 
 		// Navigate to next block with phase detection
 		if (validationResult.selectedOption) {
+			// Reset escalation level on valid response
+			resetEscalationLevel(conversationId);
+			
 			const nextBlockId = validationResult.selectedOption.nextBlockId;
 			
 			const navigateResult = await navigateToNextBlock(
 				conversationId, 
 				nextBlockId, 
-				experience.id, 
+				experienceId, 
 				validationResult.selectedOption.text
 			);
 
@@ -555,84 +528,17 @@ export async function processUserMessage(
 }
 
 /**
- * Handle invalid response with progressive escalation
- */
-async function handleInvalidResponseWithEscalation(
-	conversationId: string,
-	experienceId: string,
-): Promise<{
-	botMessage: string;
-	escalated: boolean;
-}> {
-	try {
-		console.log(`🔍 Escalation: Starting escalation for conversation ${conversationId}`);
-		
-		// Count recent invalid attempts by looking at bot error messages
-		const recentMessages = await db.query.messages.findMany({
-			where: eq(messages.conversationId, conversationId),
-			orderBy: [desc(messages.createdAt)],
-			limit: 10,
-		});
-
-		// Count recent error messages (bot messages with error content)
-		const invalidAttempts = recentMessages.filter((msg: any) => 
-			msg.type === 'bot' && 
-			(msg.content.includes('Please choose') || 
-			 msg.content.includes('I\'ll inform') || 
-			 msg.content.includes('unable to help'))
-		).length;
-
-		// Determine escalation level
-		const attemptCount = invalidAttempts + 1;
-		let botMessage: string;
-		let escalated = false;
-
-		if (attemptCount === 1) {
-			botMessage = "Please choose from the provided options above.";
-		} else if (attemptCount === 2) {
-			botMessage = "I'll inform the Whop owner about your request. Please wait for assistance.";
-		} else {
-			botMessage = "I'm unable to help you further. Please contact the Whop owner directly.";
-			escalated = true;
-		}
-
-		// Add the error message to the conversation
-		await addMessage(conversationId, "bot", botMessage);
-
-		// If this is the 3rd attempt, mark conversation as abandoned
-		if (attemptCount >= 3) {
-			await db
-				.update(conversations)
-				.set({
-					status: "abandoned",
-					updatedAt: new Date(),
-				})
-				.where(eq(conversations.id, conversationId));
-		}
-
-		return {
-			botMessage,
-			escalated,
-		};
-	} catch (error) {
-		console.error("Error handling invalid response with escalation:", error);
-		return {
-			botMessage: "Please choose from the provided options above.",
-			escalated: false,
-		};
-	}
-}
-
-/**
- * Validate user response against current block options
+ * Validate user response against current block options with escalation
  */
 function validateUserResponse(
 	userMessage: string,
 	currentBlock: any,
+	conversationId: string,
 ): {
 	isValid: boolean;
 	selectedOption?: any;
 	errorMessage?: string;
+	escalationLevel?: number;
 } {
 	try {
 		const normalizedInput = userMessage.trim().toLowerCase();
@@ -659,10 +565,32 @@ function validateUserResponse(
 			}
 		}
 
-		// Invalid response
+		// Get escalation level for this conversation
+		const escalationLevel = getEscalationLevel(conversationId);
+		
+		// Progressive error messages based on escalation level
+		let errorMessage: string;
+		switch (escalationLevel) {
+			case 1:
+				errorMessage = `Please choose from the provided options above:\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				break;
+			case 2:
+				errorMessage = `I'll inform the Whop owner about your request. Please wait for assistance.`;
+				break;
+			case 3:
+				errorMessage = `I'm unable to help you further. Please contact the Whop owner directly.`;
+				break;
+			default:
+				errorMessage = `Please select one of the following options:\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+		}
+
+		// Increment escalation level
+		incrementEscalationLevel(conversationId);
+
 		return {
 			isValid: false,
-			errorMessage: `Please select one of the following options:\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
+			errorMessage,
+			escalationLevel,
 		};
 	} catch (error) {
 		console.error("Error validating user response:", error);
@@ -671,6 +599,22 @@ function validateUserResponse(
 			errorMessage: "Invalid response. Please try again.",
 		};
 	}
+}
+
+// In-memory escalation tracking (in production, use Redis or database)
+const escalationLevels = new Map<string, number>();
+
+function getEscalationLevel(conversationId: string): number {
+	return escalationLevels.get(conversationId) || 0;
+}
+
+function incrementEscalationLevel(conversationId: string): void {
+	const current = escalationLevels.get(conversationId) || 0;
+	escalationLevels.set(conversationId, Math.min(current + 1, 3));
+}
+
+function resetEscalationLevel(conversationId: string): void {
+	escalationLevels.delete(conversationId);
 }
 
 /**

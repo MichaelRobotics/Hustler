@@ -9,7 +9,7 @@
  * - Funnel navigation
  */
 
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
@@ -150,73 +150,6 @@ export async function sendRePromptMessage(
 }
 
 /**
- * Handle invalid response with progressive escalation
- */
-async function handleInvalidResponseWithEscalation(
-  conversationId: string,
-  experienceId: string,
-): Promise<{
-  botMessage: string;
-  escalated: boolean;
-}> {
-  try {
-    // Count recent invalid attempts by looking at bot error messages
-    const recentMessages = await db.query.messages.findMany({
-      where: eq(messages.conversationId, conversationId),
-      orderBy: [desc(messages.createdAt)],
-      limit: 10,
-    });
-
-    // Count recent error messages (bot messages with error content)
-    const invalidAttempts = recentMessages.filter((msg: any) => 
-      msg.type === 'bot' && 
-      (msg.content.includes('Please choose') || 
-       msg.content.includes('I\'ll inform') || 
-       msg.content.includes('unable to help'))
-    ).length;
-
-    // Determine escalation level
-    const attemptCount = invalidAttempts + 1;
-    let botMessage: string;
-    let escalated = false;
-
-    if (attemptCount === 1) {
-      botMessage = ERROR_MESSAGES.FIRST_ATTEMPT;
-    } else if (attemptCount === 2) {
-      botMessage = ERROR_MESSAGES.SECOND_ATTEMPT;
-    } else {
-      botMessage = ERROR_MESSAGES.THIRD_ATTEMPT;
-      escalated = true;
-    }
-
-    // Add the error message to the conversation
-    await addMessage(conversationId, "bot", botMessage);
-
-    // If this is the 3rd attempt, mark conversation as abandoned
-    if (attemptCount >= 3) {
-      await db
-        .update(conversations)
-        .set({
-          status: "abandoned",
-          updatedAt: new Date(),
-        })
-        .where(eq(conversations.id, conversationId));
-    }
-
-    return {
-      botMessage,
-      escalated,
-    };
-  } catch (error) {
-    console.error("Error handling invalid response with escalation:", error);
-    return {
-      botMessage: ERROR_MESSAGES.FIRST_ATTEMPT,
-      escalated: false,
-    };
-  }
-}
-
-/**
  * Send error message with progressive handling
  */
 export async function sendErrorMessage(
@@ -253,7 +186,7 @@ export async function processUserResponse(
   messageContent: string,
   funnelFlow: FunnelFlow,
   experienceId: string
-): Promise<{ success: boolean; nextBlockId?: string; botMessage?: string; error?: string }> {
+): Promise<{ success: boolean; nextBlockId?: string; error?: string }> {
   try {
     // Get current conversation
     const conversation = await db.query.conversations.findFirst({
@@ -291,11 +224,7 @@ export async function processUserResponse(
     const validationResult = validateUserResponse(messageContent, currentBlock);
     if (!validationResult.isValid) {
       // Handle invalid response with progressive error handling
-      const escalationResult = await handleInvalidResponseWithEscalation(conversationId, experienceId);
-      return {
-        success: true,
-        botMessage: escalationResult.botMessage,
-      };
+      return await handleInvalidResponse(conversationId, experienceId);
     }
 
     const selectedOption = validationResult.selectedOption;

@@ -190,85 +190,70 @@ const UserChat: React.FC<UserChatProps> = ({
 
 		// Handle conversation-based chat
 		if (conversationId && experienceId && isConnected) {
-			// IMMEDIATE UI UPDATE: Add user message to local state first
-			const userMessage = {
-				id: `temp-user-${Date.now()}`,
-				type: "user" as const,
-				content: messageContent,
-				createdAt: new Date(),
-			};
-			setConversationMessages(prev => [...prev, userMessage]);
-			scrollToBottom();
-
-			// Process message through funnel system
+			// Process message through funnel system (API handles database save)
 			try {
-				console.log("🔍 UserChat: Sending message to API:", {
-					conversationId,
-					messageContent,
-					messageType: "user",
-					experienceId
-				});
-
 				const response = await apiPost('/api/userchat/process-message', {
 					conversationId,
 					messageContent,
 					messageType: "user",
 				}, experienceId);
 
-				console.log("🔍 UserChat: API Response status:", response.status);
-				console.log("🔍 UserChat: API Response headers:", Object.fromEntries(response.headers.entries()));
-
 				if (response.ok) {
 					const result = await response.json();
-					console.log("✅ UserChat: Message processed through funnel:", result);
+					console.log("Message processed through funnel:", result);
 					
-					// If there's a bot response, add it immediately to UI
+					// Add user message to UI (API already saved to database)
+					const userMessage = {
+						id: `user-${Date.now()}`,
+						type: "user" as const,
+						content: messageContent,
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, userMessage]);
+					
+					// If there's a bot response, add it to UI
 					if (result.funnelResponse?.botMessage) {
 						const botMessage = {
-							id: `temp-bot-${Date.now()}`,
+							id: `bot-${Date.now()}`,
 							type: "bot" as const,
 							content: result.funnelResponse.botMessage,
 							createdAt: new Date(),
 						};
 						setConversationMessages(prev => [...prev, botMessage]);
-						scrollToBottom();
 					}
 
-					// IMMEDIATE UI UPDATE: Update local current block ID if next block is provided
+					// Update local current block ID if next block is provided
 					if (result.funnelResponse?.nextBlockId) {
 						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
 						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
 						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
 					}
 
-					// Send via WebSocket for real-time sync (optional)
-					await sendMessage(messageContent, "user");
+					// Scroll to bottom after adding messages
+					scrollToBottom();
 				} else {
-					console.error("❌ UserChat: Failed to process message through funnel:", {
-						status: response.status,
-						statusText: response.statusText,
-						url: response.url
-					});
-					
-					// Try to get error details
-					try {
-						const errorResult = await response.json();
-						console.error("❌ UserChat: Error details:", errorResult);
-					} catch (e) {
-						console.error("❌ UserChat: Could not parse error response");
-					}
-					
-					// Still send via WebSocket as fallback
-					await sendMessage(messageContent, "user");
+					console.error("Failed to process message through funnel:", response.statusText);
+					// Show error message to user
+					const errorMessage = {
+						id: `error-${Date.now()}`,
+						type: "bot" as const,
+						content: "Sorry, there was an error processing your message. Please try again.",
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, errorMessage]);
+					scrollToBottom();
 				}
 			} catch (apiError) {
-				console.error("❌ UserChat: Error calling message processing API:", {
-					error: apiError,
-					message: apiError instanceof Error ? apiError.message : 'Unknown error',
-					stack: apiError instanceof Error ? apiError.stack : undefined
-				});
-				// Fallback to WebSocket only
-				await sendMessage(messageContent, "user");
+				console.error("Error calling message processing API:", apiError);
+				// Show error message to user
+				const errorMessage = {
+					id: `error-${Date.now()}`,
+					type: "bot" as const,
+					content: "Sorry, there was an error processing your message. Please try again.",
+					createdAt: new Date(),
+				};
+				setConversationMessages(prev => [...prev, errorMessage]);
+				scrollToBottom();
 			}
 		} else {
 			// Handle preview mode (existing functionality)
@@ -338,57 +323,21 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversationId, currentBlockId, funnelFlow, sendMessage]);
 
-	// Handle invalid response with escalation
+	// Handle invalid response
 	const handleInvalidResponse = useCallback(async (userInput: string) => {
-		try {
-			// Call API to handle escalation logic
-			const response = await apiPost('/api/userchat/handle-invalid-response', {
-				conversationId,
-				userInput,
-			}, experienceId);
+		// IMMEDIATE UI UPDATE: Add error message to local state first
+		const errorMessage = {
+			id: `temp-error-${Date.now()}`,
+			type: "bot" as const,
+			content: "Please choose from the provided options above.",
+			createdAt: new Date(),
+		};
+		setConversationMessages(prev => [...prev, errorMessage]);
+		scrollToBottom();
 
-			if (response.ok) {
-				const result = await response.json();
-				if (result.success && result.botMessage) {
-					// IMMEDIATE UI UPDATE: Add escalated error message to local state
-					const errorMessage = {
-						id: `temp-error-${Date.now()}`,
-						type: "bot" as const,
-						content: result.botMessage,
-						createdAt: new Date(),
-					};
-					setConversationMessages(prev => [...prev, errorMessage]);
-					scrollToBottom();
-
-					// Send via WebSocket for real-time sync
-					await sendMessage(result.botMessage, "bot");
-				}
-			} else {
-				// Fallback to basic error message
-				const errorMessage = {
-					id: `temp-error-${Date.now()}`,
-					type: "bot" as const,
-					content: "Please choose from the provided options above.",
-					createdAt: new Date(),
-				};
-				setConversationMessages(prev => [...prev, errorMessage]);
-				scrollToBottom();
-				await sendMessage("Please choose from the provided options above.", "bot");
-			}
-		} catch (error) {
-			console.error("Error handling invalid response:", error);
-			// Fallback to basic error message
-			const errorMessage = {
-				id: `temp-error-${Date.now()}`,
-				type: "bot" as const,
-				content: "Please choose from the provided options above.",
-				createdAt: new Date(),
-			};
-			setConversationMessages(prev => [...prev, errorMessage]);
-			scrollToBottom();
-			await sendMessage("Please choose from the provided options above.", "bot");
-		}
-	}, [conversationId, experienceId, sendMessage]);
+		// Send via WebSocket for real-time sync (optional)
+		await sendMessage("Please choose from the provided options above.", "bot");
+	}, [sendMessage]);
 
 	// Handle funnel completion
 	const handleFunnelCompletion = useCallback(async () => {

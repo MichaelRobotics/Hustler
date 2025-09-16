@@ -14,8 +14,8 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, messages } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { conversations, experiences } from "@/lib/supabase/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Process user message in UserChat and trigger funnel navigation
@@ -35,14 +35,8 @@ async function processMessageHandler(
   const startTime = Date.now();
   
   try {
-    console.log("🔍 ProcessMessage: Starting request processing");
     const { user } = context;
     const experienceId = user.experienceId;
-    
-    console.log("🔍 ProcessMessage: User context:", {
-      userId: user.userId,
-      experienceId: user.experienceId
-    });
 
     if (!experienceId) {
       return createErrorResponse(
@@ -55,9 +49,7 @@ async function processMessageHandler(
     let requestBody;
     try {
       requestBody = await request.json();
-      console.log("🔍 ProcessMessage: Request body received:", requestBody);
     } catch (error) {
-      console.error("❌ ProcessMessage: Invalid JSON in request body:", error);
       return createErrorResponse(
         "INVALID_JSON",
         "Invalid JSON in request body"
@@ -66,12 +58,10 @@ async function processMessageHandler(
 
     // Validate request format
     const requestValidation = validateRequestBody(requestBody, ['conversationId', 'messageContent']);
-    console.log("🔍 ProcessMessage: Request validation result:", requestValidation);
     if (!requestValidation.isValid) {
-      console.error("❌ ProcessMessage: Request validation failed:", requestValidation.errors);
       return createErrorResponse(
         "INVALID_REQUEST_FORMAT",
-        `Invalid request format: ${requestValidation.errors.join(", ")}`
+        "Invalid request format"
       );
     }
 
@@ -98,97 +88,53 @@ async function processMessageHandler(
     const sanitizedConversationId = conversationValidation.sanitizedData;
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
-    // Get the experience record to convert Whop experience ID to internal ID
-    console.log("🔍 ProcessMessage: Looking up experience:", {
-      whopExperienceId: experienceId
-    });
-
+    // Get the experience record to get our internal experience ID
     const experience = await db.query.experiences.findFirst({
       where: eq(experiences.whopExperienceId, experienceId),
-    });
-
-    console.log("🔍 ProcessMessage: Experience lookup result:", {
-      found: !!experience,
-      internalId: experience?.id,
-      whopExperienceId: experience?.whopExperienceId
     });
 
     if (!experience) {
       return createErrorResponse(
         "EXPERIENCE_NOT_FOUND",
-        `Experience ${experienceId} not found`
+        "Experience not found"
       );
     }
 
     // Verify conversation belongs to this tenant
-    console.log("🔍 ProcessMessage: Looking for conversation with:", {
-      conversationId: sanitizedConversationId,
-      internalExperienceId: experience.id
-    });
-
     const conversation = await db.query.conversations.findFirst({
-      where: and(
-        eq(conversations.id, sanitizedConversationId),
-        eq(conversations.experienceId, experience.id)
-      ),
+      where: eq(conversations.id, sanitizedConversationId),
       with: {
         experience: true,
       },
     });
 
-    console.log("🔍 ProcessMessage: Database query result:", {
-      conversationFound: !!conversation,
-      conversationId: conversation?.id,
-      conversationExperienceId: conversation?.experienceId,
-      requestedExperienceId: experienceId
-    });
-
     if (!conversation) {
-      // Let's also check if the conversation exists at all (without experience filter)
-      const anyConversation = await db.query.conversations.findFirst({
-        where: eq(conversations.id, sanitizedConversationId),
-      });
-      
-      console.log("🔍 ProcessMessage: Conversation exists without experience filter:", {
-        exists: !!anyConversation,
-        actualExperienceId: anyConversation?.experienceId,
-        requestedExperienceId: experienceId
-      });
-
       return createErrorResponse(
         "CONVERSATION_NOT_FOUND",
-        `Conversation not found for experience ${experienceId} (internal: ${experience.id}). ${anyConversation ? `Found with experience ${anyConversation.experienceId}` : 'Conversation does not exist'}`
+        "Conversation not found"
       );
     }
 
-    console.log(`🔍 ProcessMessage: Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
+    // Verify conversation belongs to this tenant's experience (compare database UUIDs)
+    if (conversation.experienceId !== experience.id) {
+      return createErrorResponse(
+        "CONVERSATION_ACCESS_DENIED",
+        "Conversation does not belong to this tenant"
+      );
+    }
+
+    console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
 
     // Check cache for recent conversation data
     const cacheKey = CacheKeys.conversation(sanitizedConversationId);
     const cachedConversation = cache.get(cacheKey);
     
     if (cachedConversation) {
-      console.log("🔍 ProcessMessage: Using cached conversation data");
+      console.log("Using cached conversation data");
     }
 
-    console.log("🔍 ProcessMessage: About to call processUserMessage with:", {
-      conversationId: sanitizedConversationId,
-      messageContent: sanitizedMessageContent,
-      experienceId
-    });
-
-    // Add user message to database
-    await db.insert(messages).values({
-      conversationId: sanitizedConversationId,
-      type: "user",
-      content: sanitizedMessageContent,
-      createdAt: new Date(),
-    });
-
     // Process user message through simplified funnel system with proper tenant isolation
-    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experienceId);
-    
-    console.log("🔍 ProcessMessage: processUserMessage result:", result);
+    const result = await processUserMessage(sanitizedConversationId, sanitizedMessageContent, experience.id);
 
     // Cache the result for future requests
     if (result.success) {
@@ -200,13 +146,7 @@ async function processMessageHandler(
 
     return createSuccessResponse({
       success: result.success,
-      funnelResponse: {
-        success: result.success,
-        nextBlockId: result.nextBlockId,
-        phaseTransition: result.phaseTransition,
-        botMessage: result.botMessage,
-        error: result.error,
-      },
+      funnelResponse: result,
       processingTime,
       cached: !!cachedConversation,
     }, "Message processed successfully");
