@@ -505,9 +505,6 @@ export async function processUserMessage(
 			return { success: false, error: "Current block not found" };
 		}
 
-		// Add user message
-		await addMessage(conversationId, "user", messageContent);
-
 		// Validate user response
 		const validationResult = validateUserResponse(messageContent, currentBlock);
 

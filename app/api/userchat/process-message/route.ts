@@ -14,7 +14,7 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences } from "@/lib/supabase/schema";
+import { conversations, experiences, messages } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 
 /**
@@ -175,6 +175,14 @@ async function processMessageHandler(
       conversationId: sanitizedConversationId,
       messageContent: sanitizedMessageContent,
       experienceId
+    });
+
+    // Add user message to database
+    await db.insert(messages).values({
+      conversationId: sanitizedConversationId,
+      type: "user",
+      content: sanitizedMessageContent,
+      createdAt: new Date(),
     });
 
     // Process user message through simplified funnel system with proper tenant isolation
