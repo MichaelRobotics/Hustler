@@ -5,8 +5,6 @@ import { eq, and } from "drizzle-orm";
 import type { FunnelFlow, FunnelBlock } from "@/lib/types/funnel";
 import {
   type AuthContext,
-  createErrorResponse,
-  createSuccessResponse,
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 
@@ -32,16 +30,16 @@ async function navigateFunnelHandler(
     const { conversationId, navigationData } = await request.json();
 
     if (!conversationId) {
-      return createErrorResponse(
-        "MISSING_CONVERSATION_ID",
-        "Conversation ID is required"
+      return NextResponse.json(
+        { error: "Conversation ID is required" },
+        { status: 400 }
       );
     }
 
     if (!navigationData) {
-      return createErrorResponse(
-        "MISSING_NAVIGATION_DATA",
-        "Navigation data is required"
+      return NextResponse.json(
+        { error: "Navigation data is required" },
+        { status: 400 }
       );
     }
 
@@ -59,16 +57,16 @@ async function navigateFunnelHandler(
     });
 
     if (!conversation) {
-      return createErrorResponse(
-        "CONVERSATION_NOT_FOUND",
-        "Conversation not found"
+      return NextResponse.json(
+        { error: "Conversation not found" },
+        { status: 404 }
       );
     }
 
     if (!conversation.funnel?.flow) {
-      return createErrorResponse(
-        "FUNNEL_FLOW_NOT_FOUND",
-        "Funnel flow not found"
+      return NextResponse.json(
+        { error: "Funnel flow not found" },
+        { status: 404 }
       );
     }
 
@@ -82,17 +80,18 @@ async function navigateFunnelHandler(
       conversation
     );
 
-    return createSuccessResponse({
+    return NextResponse.json({
+      success: true,
       conversation: result.conversation,
       nextBlockId: result.nextBlockId,
       botMessage: result.botMessage,
-    }, "Funnel navigation successful");
+    });
 
   } catch (error) {
     console.error("Error navigating funnel:", error);
-    return createErrorResponse(
-      "INTERNAL_ERROR",
-      error instanceof Error ? error.message : "Failed to navigate funnel"
+    return NextResponse.json(
+      { error: "Failed to navigate funnel" },
+      { status: 500 }
     );
   }
 }
