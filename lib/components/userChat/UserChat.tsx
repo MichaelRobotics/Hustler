@@ -123,6 +123,15 @@ const UserChat: React.FC<UserChatProps> = ({
 		onError: (error) => {
 			console.error("WebSocket error:", error);
 		},
+		onConversationUpdate: (update) => {
+			console.log("UserChat: Conversation update received:", update);
+			// Update local current block ID if next block is provided
+			if (update.nextBlockId) {
+				setLocalCurrentBlockId(update.nextBlockId);
+				console.log("UserChat: Updated local current block ID to:", update.nextBlockId);
+				console.log("UserChat: New options will be:", funnelFlow.blocks[update.nextBlockId]?.options?.map(opt => opt.text));
+			}
+		},
 	});
 
 	// Refresh conversation data when WebSocket receives new messages (optimized)
@@ -200,65 +209,14 @@ const UserChat: React.FC<UserChatProps> = ({
 			setConversationMessages(prev => [...prev, userMessage]);
 			scrollToBottom();
 
-			// Process message through funnel system (API handles database save)
+			// Send message via WebSocket (handles API call and database save)
 			try {
-				const response = await apiPost('/api/userchat/process-message', {
-					conversationId,
-					messageContent,
-				}, experienceId);
-
-				if (response.ok) {
-					const result = await response.json();
-					console.log("Message processed through funnel:", result);
-					
-					// Send user message via WebSocket for real-time updates (after API success)
-					try {
-						await sendMessage(messageContent, "user");
-					} catch (wsError) {
-						console.warn("WebSocket send failed, but API succeeded:", wsError);
-					}
-					
-					// If there's a bot response, add it to UI and send via WebSocket
-					if (result.funnelResponse?.botMessage) {
-						const botMessage = {
-							id: `bot-${Date.now()}`,
-							type: "bot" as const,
-							content: result.funnelResponse.botMessage,
-							createdAt: new Date(),
-						};
-						setConversationMessages(prev => [...prev, botMessage]);
-						
-						// Send bot message via WebSocket for real-time updates
-						try {
-							await sendMessage(result.funnelResponse.botMessage, "bot");
-						} catch (wsError) {
-							console.warn("WebSocket send failed for bot message:", wsError);
-						}
-					}
-
-					// Update local current block ID if next block is provided
-					if (result.funnelResponse?.nextBlockId) {
-						setLocalCurrentBlockId(result.funnelResponse.nextBlockId);
-						console.log("UserChat: Updated local current block ID to:", result.funnelResponse.nextBlockId);
-						console.log("UserChat: New options will be:", funnelFlow.blocks[result.funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
-					}
-
-					// Scroll to bottom after adding messages
-					scrollToBottom();
-				} else {
-					console.error("Failed to process message through funnel:", response.statusText);
-					// Show error message to user
-					const errorMessage = {
-						id: `error-${Date.now()}`,
-						type: "bot" as const,
-						content: "Sorry, there was an error processing your message. Please try again.",
-						createdAt: new Date(),
-					};
-					setConversationMessages(prev => [...prev, errorMessage]);
-					scrollToBottom();
+				const success = await sendMessage(messageContent, "user");
+				if (!success) {
+					console.warn("WebSocket message send failed, but message is in UI");
 				}
-			} catch (apiError) {
-				console.error("Error calling message processing API:", apiError);
+			} catch (error) {
+				console.error("Error sending message via WebSocket:", error);
 				// Show error message to user
 				const errorMessage = {
 					id: `error-${Date.now()}`,
