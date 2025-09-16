@@ -61,7 +61,7 @@ async function processMessageHandler(
     if (!requestValidation.isValid) {
       return createErrorResponse(
         "INVALID_REQUEST_FORMAT",
-        "Invalid request format"
+        `Invalid request format: ${requestValidation.errors.join(", ")}`
       );
     }
 

@@ -125,9 +125,12 @@ export function validateRequestBody(body: any, requiredFields: string[]): Valida
     }
   }
   
-  // Check for unexpected fields
+  // Check for unexpected fields (only if they're not optional fields)
   const allowedFields = new Set(requiredFields);
-  const unexpectedFields = Object.keys(body).filter(key => !allowedFields.has(key));
+  const optionalFields = new Set(['messageType', 'userType', 'timestamp', 'userName', 'accessLevel']);
+  const unexpectedFields = Object.keys(body).filter(key => 
+    !allowedFields.has(key) && !optionalFields.has(key)
+  );
   if (unexpectedFields.length > 0) {
     errors.push(`Unexpected fields: ${unexpectedFields.join(", ")}`);
   }
