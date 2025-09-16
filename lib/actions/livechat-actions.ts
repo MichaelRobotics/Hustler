@@ -60,11 +60,12 @@ export async function loadRealConversations(
 		// Add status filter
 		if (filters.status && filters.status !== "all") {
 			if (filters.status === "open") {
-				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
-			} else if (filters.status === "closed") {
 				whereConditions = and(whereConditions, or(
-					eq(conversations.status, "closed")
+					eq(conversations.status, "active"),
+					eq(conversations.status, "completed")
 				))!;
+			} else if (filters.status === "closed") {
+				whereConditions = and(whereConditions, eq(conversations.status, "closed"))!;
 			}
 		}
 

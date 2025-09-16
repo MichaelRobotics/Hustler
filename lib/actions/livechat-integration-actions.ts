@@ -304,8 +304,8 @@ export async function getLiveChatConversationDetails(
 		// Determine conversation stage
 		const currentStage = determineConversationStage(conversation.currentBlockId, conversation.funnel?.flow as FunnelFlow);
 
-		// Simplified status mapping: active = open, everything else = closed
-		const displayStatus = conversation.status === "active" ? "open" : "closed";
+		// Status mapping: active and completed = open, closed and abandoned = closed
+		const displayStatus = (conversation.status === "active" || conversation.status === "completed") ? "open" : "closed";
 
 		return {
 			id: conversation.id,
