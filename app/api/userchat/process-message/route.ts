@@ -7,12 +7,6 @@ import {
   validateRequestBody,
 } from "@/lib/middleware/request-validator";
 import { cache, CacheKeys, CACHE_TTL } from "@/lib/middleware/cache";
-import {
-  type AuthContext,
-  createErrorResponse,
-  createSuccessResponse,
-  withWhopAuth,
-} from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences } from "@/lib/supabase/schema";
 import { eq } from "drizzle-orm";
@@ -28,40 +22,28 @@ import { eq } from "drizzle-orm";
  * - Caching for conversation data
  * - Structured error handling
  */
-async function processMessageHandler(
-  request: NextRequest,
-  context: AuthContext
-) {
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    const { user } = context;
-    const experienceId = user.experienceId;
-
-    if (!experienceId) {
-      return createErrorResponse(
-        "MISSING_EXPERIENCE_ID",
-        "Experience ID is required"
-      );
-    }
 
     // Read request body once
     let requestBody;
     try {
       requestBody = await request.json();
     } catch (error) {
-      return createErrorResponse(
-        "INVALID_JSON",
-        "Invalid JSON in request body"
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON in request body" },
+        { status: 400 }
       );
     }
 
     // Validate request format
     const requestValidation = validateRequestBody(requestBody, ['conversationId', 'messageContent']);
     if (!requestValidation.isValid) {
-      return createErrorResponse(
-        "INVALID_REQUEST_FORMAT",
-        "Invalid request format"
+      return NextResponse.json(
+        { success: false, error: "Invalid request format" },
+        { status: 400 }
       );
     }
 
@@ -70,25 +52,25 @@ async function processMessageHandler(
     // Validate conversation ID
     const conversationValidation = validateConversationId(conversationId);
     if (!conversationValidation.isValid) {
-      return createErrorResponse(
-        "INVALID_CONVERSATION_ID",
-        "Invalid conversation ID"
+      return NextResponse.json(
+        { success: false, error: "Invalid conversation ID" },
+        { status: 400 }
       );
     }
 
     // Validate message content
     const messageValidation = validateMessageContent(messageContent);
     if (!messageValidation.isValid) {
-      return createErrorResponse(
-        "INVALID_MESSAGE_CONTENT",
-        "Invalid message content"
+      return NextResponse.json(
+        { success: false, error: "Invalid message content" },
+        { status: 400 }
       );
     }
 
     const sanitizedConversationId = conversationValidation.sanitizedData;
     const sanitizedMessageContent = messageValidation.sanitizedData;
 
-    // Verify conversation belongs to this tenant
+    // Get conversation with experience data to determine tenant
     const conversation = await db.query.conversations.findFirst({
       where: eq(conversations.id, sanitizedConversationId),
       with: {
@@ -97,19 +79,13 @@ async function processMessageHandler(
     });
 
     if (!conversation) {
-      return createErrorResponse(
-        "CONVERSATION_NOT_FOUND",
-        "Conversation not found"
+      return NextResponse.json(
+        { success: false, error: "Conversation not found" },
+        { status: 404 }
       );
     }
 
-    // Verify conversation belongs to this tenant's experience
-    if (conversation.experienceId !== experienceId) {
-      return createErrorResponse(
-        "CONVERSATION_ACCESS_DENIED",
-        "Conversation does not belong to this tenant"
-      );
-    }
+    const experienceId = conversation.experienceId;
 
     console.log(`Processing message in UserChat for conversation ${sanitizedConversationId}:`, sanitizedMessageContent);
 
@@ -132,12 +108,12 @@ async function processMessageHandler(
     const processingTime = Date.now() - startTime;
     console.log(`Message processed in ${processingTime}ms`);
 
-    return createSuccessResponse({
+    return NextResponse.json({
       success: result.success,
       funnelResponse: result,
       processingTime,
       cached: !!cachedConversation,
-    }, "Message processed successfully");
+    });
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
@@ -147,12 +123,10 @@ async function processMessageHandler(
       processingTime,
     });
     
-    return createErrorResponse(
-      "INTERNAL_ERROR",
-      "Failed to process message"
+    return NextResponse.json(
+      { success: false, error: "Failed to process message" },
+      { status: 500 }
     );
   }
 }
-
-export const POST = withWhopAuth(processMessageHandler);
 
