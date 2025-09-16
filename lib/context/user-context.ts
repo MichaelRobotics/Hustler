@@ -3,6 +3,7 @@ import { db } from "../supabase/db-server";
 import { experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { triggerProductSyncForNewAdmin } from "../sync/trigger-product-sync";
+import { cleanupAbandonedExperiences, checkIfCleanupNeeded } from "../sync/experience-cleanup";
 import type { AuthenticatedUser, UserContext } from "../types/user";
 
 // Re-export types for backward compatibility
@@ -82,12 +83,31 @@ async function createUserContext(
 
 		if (!experience) {
 			console.log("Experience not found, creating new experience...");
+			
+			// Before creating new experience, check if we need to cleanup abandoned ones
+			const companyId = whopCompanyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "";
+			let isReinstallScenario = false;
+			
+			if (companyId) {
+				const needsCleanup = await checkIfCleanupNeeded(companyId);
+				isReinstallScenario = needsCleanup; // This indicates there are existing experiences (reinstall)
+				
+				if (needsCleanup) {
+					console.log(`🧹 Company ${companyId} has multiple experiences, cleaning up abandoned ones...`);
+					try {
+						const { cleaned, kept } = await cleanupAbandonedExperiences(companyId);
+						console.log(`✅ Cleanup completed: cleaned ${cleaned.length}, kept ${kept.length} experiences`);
+					} catch (error) {
+						console.error("❌ Error during cleanup, continuing with new experience creation:", error);
+					}
+				}
+			}
+			
 			const [newExperience] = await db
 				.insert(experiences)
 				.values({
 					whopExperienceId: whopExperienceId,
-					whopCompanyId:
-						whopCompanyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "", // App creator's company (metadata only)
+					whopCompanyId: companyId,
 					name: "App Installation",
 					description: "Experience for app installation",
 					logo: null,
@@ -96,6 +116,9 @@ async function createUserContext(
 
 			console.log("New experience created:", newExperience);
 			experience = newExperience;
+			
+			// Store reinstall flag for later use in user creation
+			(experience as any).isReinstallScenario = isReinstallScenario;
 		} else {
 			console.log("Existing experience found:", experience);
 		}
@@ -175,6 +198,19 @@ async function createUserContext(
 					}
 				}
 
+				// Check if this is a reinstall scenario (stored during experience creation)
+				const isReinstallScenario = (experience as any).isReinstallScenario || false;
+				
+				// Only give credits to admin users on fresh installs, not reinstalls
+				const shouldGiveCredits = initialAccessLevel === "admin" && !isReinstallScenario;
+				const initialCredits = shouldGiveCredits ? 2 : 0;
+				
+				if (isReinstallScenario && initialAccessLevel === "admin") {
+					console.log(`🔄 Reinstall scenario detected for admin user, not giving credits`);
+				} else if (initialAccessLevel === "admin") {
+					console.log(`🎉 Fresh install for admin user, giving 2 credits`);
+				}
+
 				// Create user in our database
 				const [newUser] = await db
 					.insert(users)
@@ -184,7 +220,7 @@ async function createUserContext(
 						email: "", // Email is not available in public profile
 						name: whopUser.name || whopUser.username || "Unknown User",
 						avatar: whopUser.profilePicture?.sourceUrl || null,
-						credits: initialAccessLevel === "admin" ? 2 : 0, // Admins get 2 credits, customers get 0
+						credits: initialCredits,
 						accessLevel: initialAccessLevel,
 					})
 					.returning();
