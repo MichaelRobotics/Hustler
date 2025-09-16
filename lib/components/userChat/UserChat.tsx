@@ -311,21 +311,57 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversationId, currentBlockId, funnelFlow, sendMessage]);
 
-	// Handle invalid response
+	// Handle invalid response with escalation
 	const handleInvalidResponse = useCallback(async (userInput: string) => {
-		// IMMEDIATE UI UPDATE: Add error message to local state first
-		const errorMessage = {
-			id: `temp-error-${Date.now()}`,
-			type: "bot" as const,
-			content: "Please choose from the provided options above.",
-			createdAt: new Date(),
-		};
-		setConversationMessages(prev => [...prev, errorMessage]);
-		scrollToBottom();
+		try {
+			// Call API to handle escalation logic
+			const response = await apiPost('/api/userchat/handle-invalid-response', {
+				conversationId,
+				userInput,
+			}, experienceId);
 
-		// Send via WebSocket for real-time sync (optional)
-		await sendMessage("Please choose from the provided options above.", "bot");
-	}, [sendMessage]);
+			if (response.ok) {
+				const result = await response.json();
+				if (result.success && result.botMessage) {
+					// IMMEDIATE UI UPDATE: Add escalated error message to local state
+					const errorMessage = {
+						id: `temp-error-${Date.now()}`,
+						type: "bot" as const,
+						content: result.botMessage,
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, errorMessage]);
+					scrollToBottom();
+
+					// Send via WebSocket for real-time sync
+					await sendMessage(result.botMessage, "bot");
+				}
+			} else {
+				// Fallback to basic error message
+				const errorMessage = {
+					id: `temp-error-${Date.now()}`,
+					type: "bot" as const,
+					content: "Please choose from the provided options above.",
+					createdAt: new Date(),
+				};
+				setConversationMessages(prev => [...prev, errorMessage]);
+				scrollToBottom();
+				await sendMessage("Please choose from the provided options above.", "bot");
+			}
+		} catch (error) {
+			console.error("Error handling invalid response:", error);
+			// Fallback to basic error message
+			const errorMessage = {
+				id: `temp-error-${Date.now()}`,
+				type: "bot" as const,
+				content: "Please choose from the provided options above.",
+				createdAt: new Date(),
+			};
+			setConversationMessages(prev => [...prev, errorMessage]);
+			scrollToBottom();
+			await sendMessage("Please choose from the provided options above.", "bot");
+		}
+	}, [conversationId, experienceId, sendMessage]);
 
 	// Handle funnel completion
 	const handleFunnelCompletion = useCallback(async () => {

@@ -444,6 +444,7 @@ export async function processUserMessage(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
+	escalated?: boolean;
 	error?: string;
 }> {
 	try {
@@ -476,9 +477,12 @@ export async function processUserMessage(
 		const validationResult = validateUserResponse(messageContent, currentBlock);
 
 		if (!validationResult.isValid) {
+			// Handle invalid response with escalation
+			const escalationResult = await handleInvalidResponseWithEscalation(conversationId, experienceId);
 			return {
 				success: true,
-				botMessage: validationResult.errorMessage || "Please select a valid option.",
+				botMessage: escalationResult.botMessage,
+				escalated: escalationResult.escalated,
 			};
 		}
 
@@ -516,6 +520,73 @@ export async function processUserMessage(
 	} catch (error) {
 		console.error("Error processing user message:", error);
 		return { success: false, error: "Failed to process message" };
+	}
+}
+
+/**
+ * Handle invalid response with progressive escalation
+ */
+async function handleInvalidResponseWithEscalation(
+	conversationId: string,
+	experienceId: string,
+): Promise<{
+	botMessage: string;
+	escalated: boolean;
+}> {
+	try {
+		// Count recent invalid attempts by looking at bot error messages
+		const recentMessages = await db.query.messages.findMany({
+			where: eq(messages.conversationId, conversationId),
+			orderBy: [desc(messages.createdAt)],
+			limit: 10,
+		});
+
+		// Count recent error messages (bot messages with error content)
+		const invalidAttempts = recentMessages.filter((msg: any) => 
+			msg.type === 'bot' && 
+			(msg.content.includes('Please choose') || 
+			 msg.content.includes('I\'ll inform') || 
+			 msg.content.includes('unable to help'))
+		).length;
+
+		// Determine escalation level
+		const attemptCount = invalidAttempts + 1;
+		let botMessage: string;
+		let escalated = false;
+
+		if (attemptCount === 1) {
+			botMessage = "Please choose from the provided options above.";
+		} else if (attemptCount === 2) {
+			botMessage = "I'll inform the Whop owner about your request. Please wait for assistance.";
+		} else {
+			botMessage = "I'm unable to help you further. Please contact the Whop owner directly.";
+			escalated = true;
+		}
+
+		// Add the error message to the conversation
+		await addMessage(conversationId, "bot", botMessage);
+
+		// If this is the 3rd attempt, mark conversation as abandoned
+		if (attemptCount >= 3) {
+			await db
+				.update(conversations)
+				.set({
+					status: "abandoned",
+					updatedAt: new Date(),
+				})
+				.where(eq(conversations.id, conversationId));
+		}
+
+		return {
+			botMessage,
+			escalated,
+		};
+	} catch (error) {
+		console.error("Error handling invalid response with escalation:", error);
+		return {
+			botMessage: "Please choose from the provided options above.",
+			escalated: false,
+		};
 	}
 }
 
