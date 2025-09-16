@@ -399,11 +399,20 @@ export async function sendLiveChatMessage(
 			),
 		});
 
-		// Check if conversation is active (only allow sending messages to active conversations)
-		if (!conversation || conversation.status !== "active") {
-			console.error("sendLiveChatMessage: Conversation not found or not active:", {
+		// Check if conversation exists and is in a valid state for messaging
+		if (!conversation) {
+			console.error("sendLiveChatMessage: Conversation not found:", {
 				conversationId,
-				status: conversation?.status,
+				experienceId: experience.id
+			});
+			throw new Error("Conversation not found");
+		}
+
+		// Allow sending messages to active and completed conversations
+		if (conversation.status !== "active" && conversation.status !== "completed") {
+			console.error("sendLiveChatMessage: Conversation not in valid state for messaging:", {
+				conversationId,
+				status: conversation.status,
 				experienceId: experience.id
 			});
 			throw new Error("Conversation not found or not active");
