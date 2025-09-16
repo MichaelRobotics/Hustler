@@ -45,15 +45,30 @@ export class WhopApiClient {
   
   /**
    * Get installed apps for a company
+   * Uses experiences.listExperiences() since experiences represent installed apps
    */
   async getInstalledApps(companyId: string): Promise<WhopApp[]> {
     try {
-      // Use the existing SDK pattern - this might need to be adjusted based on actual SDK methods
-      const apps = await (this.whopSdk as any).apps.listAppConnections({
-        companyId: companyId
+      console.log(`Fetching experiences for company ${companyId}...`);
+      
+      // Use the correct SDK method to get company experiences (which includes installed apps)
+      const result = await this.whopSdk.experiences.listExperiences({
+        companyId: companyId,
+        first: 100 // Get up to 100 experiences
       });
       
-      return apps || [];
+      console.log(`Found ${result?.experiencesV2?.nodes?.length || 0} experiences`);
+      
+      // Extract apps from experiences
+      const apps = result?.experiencesV2?.nodes?.map((exp: any) => ({
+        id: exp.app?.id || exp.id,
+        name: exp.app?.name || exp.name,
+        description: exp.description,
+        icon: exp.app?.icon?.sourceUrl || exp.logo?.sourceUrl
+      })) || [];
+      
+      console.log(`Mapped to ${apps.length} apps`);
+      return apps;
     } catch (error) {
       console.error("Error fetching installed apps:", error);
       throw new Error(`Failed to fetch installed apps: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -62,15 +77,26 @@ export class WhopApiClient {
   
   /**
    * Get company products
+   * Uses the same approach as memberships since products are access passes
    */
   async getCompanyProducts(companyId: string): Promise<WhopProduct[]> {
     try {
-      // Use the existing SDK pattern - this might need to be adjusted based on actual SDK methods
-      const products = await (this.whopSdk as any).products.list({
-        companyId: companyId
-      });
+      console.log(`Fetching products for company ${companyId}...`);
       
-      return products || [];
+      // Use the same logic as memberships since products are access passes
+      const memberships = await this.getCompanyMemberships(companyId);
+      
+      // Map memberships to products (they're essentially the same thing)
+      const products = memberships.map((membership: any) => ({
+        id: membership.id,
+        name: membership.name,
+        description: membership.description,
+        price: membership.price,
+        currency: membership.currency
+      }));
+      
+      console.log(`Mapped to ${products.length} products`);
+      return products;
     } catch (error) {
       console.error("Error fetching company products:", error);
       throw new Error(`Failed to fetch company products: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -78,19 +104,59 @@ export class WhopApiClient {
   }
   
   /**
-   * Get company memberships
+   * Get company memberships/products
+   * Uses access passes from experiences since these represent purchasable items
    */
   async getCompanyMemberships(companyId: string): Promise<WhopMembership[]> {
     try {
-      // Use the existing SDK pattern - this might need to be adjusted based on actual SDK methods
-      const memberships = await (this.whopSdk as any).memberships.list({
-        companyId: companyId
+      console.log(`Fetching memberships for company ${companyId}...`);
+      
+      // First get all experiences for the company
+      const experiencesResult = await this.whopSdk.experiences.listExperiences({
+        companyId: companyId,
+        first: 100
       });
       
-      return memberships || [];
+      const experiences = experiencesResult?.experiencesV2?.nodes || [];
+      console.log(`Found ${experiences.length} experiences to check for access passes`);
+      
+      const memberships = [];
+      
+      // Get access passes for each experience
+      for (const exp of experiences) {
+        if (!exp) continue; // Skip null/undefined experiences
+        
+        try {
+          const accessPassesResult = await this.whopSdk.experiences.listAccessPassesForExperience({
+            experienceId: exp.id
+          });
+          
+          const accessPasses = accessPassesResult?.accessPasses || [];
+          console.log(`Experience ${exp.name} has ${accessPasses.length} access passes`);
+          
+          // Map access passes to memberships
+          const expMemberships = accessPasses.map((pass: any) => ({
+            id: pass.id,
+            name: pass.title,
+            description: pass.shortenedDescription,
+            price: pass.rawInitialPrice || 0,
+            currency: pass.baseCurrency || 'usd'
+          }));
+          
+          memberships.push(...expMemberships);
+        } catch (expError) {
+          console.warn(`Failed to get access passes for experience ${exp?.id}:`, expError);
+          // Continue with other experiences
+        }
+      }
+      
+      console.log(`Total memberships found: ${memberships.length}`);
+      return memberships;
     } catch (error) {
       console.error("Error fetching company memberships:", error);
-      throw new Error(`Failed to fetch company memberships: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Return empty array for now since memberships might not be available
+      console.log("Returning empty memberships array due to API error");
+      return [];
     }
   }
   
