@@ -96,8 +96,8 @@ export class WhopApiClient {
     try {
       console.log(`Fetching owner's business products for company ${this.companyId}...`);
       
-      // Use direct HTTP API call to get company products from discovery page
-      const url = `https://api.whop.com/v5/app/products?company_id=${this.companyId}&first=100`;
+      // Use Company API to get company products from discovery page
+      const url = `https://api.whop.com/v5/company/products?first=100`;
       console.log(`🌐 Making request to: ${url}`);
       
       const response = await fetch(url, {
@@ -105,6 +105,7 @@ export class WhopApiClient {
         headers: {
           'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
           'Content-Type': 'application/json',
+          'x-company-id': this.companyId,
         },
       });
       
