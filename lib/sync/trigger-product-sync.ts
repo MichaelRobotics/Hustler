@@ -140,20 +140,33 @@ export async function triggerProductSyncForNewAdmin(
 					const batchPromises = batch.map(async (app) => {
 						try {
 							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
+							console.log(`🔍 Resource data:`, {
+								name: app.name,
+								type: "MY_PRODUCTS",
+								category: "FREE_VALUE",
+								link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+								description: app.description || `Free access to ${app.name}`,
+								whopProductId: app.id
+							});
 							
 							const resource = await retryDatabaseOperation(
-								() => createResource({ id: userId, experience: { id: experienceId } } as any, {
-									name: app.name,
-									type: "MY_PRODUCTS",
-									category: "FREE_VALUE",
-									link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-									description: app.description || `Free access to ${app.name}`,
-									whopProductId: app.id
-								}),
-								`createResource-FREE-${app.name}`
+								() => {
+									console.log(`🔍 Executing createResource for ${app.name}...`);
+									return createResource({ id: userId, experience: { id: experienceId } } as any, {
+										name: app.name,
+										type: "MY_PRODUCTS",
+										category: "FREE_VALUE",
+										link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+										description: app.description || `Free access to ${app.name}`,
+										whopProductId: app.id
+									});
+								},
+								`createResource-FREE-${app.name}`,
+								3, // maxRetries
+								15000 // 15 second timeout
 							);
 							
-							console.log(`✅ Created FREE resource for app: ${app.name}`);
+							console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
 							successCount++;
 							return resource.id;
 						} catch (error) {
@@ -163,8 +176,23 @@ export async function triggerProductSyncForNewAdmin(
 						}
 					});
 					
-					const batchResults = await Promise.all(batchPromises);
-					resourceIds.push(...batchResults.filter(id => id !== null));
+					console.log(`🔍 Waiting for ${batch.length} FREE resource creations to complete...`);
+					
+					// Add timeout to entire batch processing
+					const batchTimeout = 60000; // 60 seconds for entire batch
+					const batchResults = await Promise.race([
+						Promise.all(batchPromises),
+						new Promise<null[]>((_, reject) => 
+							setTimeout(() => reject(new Error(`FREE resources batch timeout after ${batchTimeout}ms`)), batchTimeout)
+						)
+					]).catch((error) => {
+						console.error(`❌ FREE resources batch failed:`, error);
+						return new Array(batch.length).fill(null); // Return nulls for failed batch
+					});
+					
+					const successfulResults = batchResults.filter(id => id !== null);
+					resourceIds.push(...successfulResults);
+					console.log(`✅ Completed FREE resources batch: ${successfulResults.length}/${batch.length} successful`);
 					
 					// Small delay between batches to prevent overwhelming the system
 					if (i + batchSize < installedApps.length) {
@@ -301,19 +329,28 @@ export async function triggerProductSyncForNewAdmin(
 }
 
 /**
- * Retry database operation with exponential backoff
+ * Retry database operation with exponential backoff and timeout
  */
 async function retryDatabaseOperation<T>(
 	operation: () => Promise<T>,
 	operationName: string,
-	maxRetries: number = 3
+	maxRetries: number = 3,
+	timeoutMs: number = 20000 // 20 second timeout per attempt
 ): Promise<T> {
 	let lastError: Error | null = null;
 	
 	for (let attempt = 1; attempt <= maxRetries; attempt++) {
 		try {
-			console.log(`🔄 ${operationName} attempt ${attempt}/${maxRetries}`);
-			const result = await operation();
+			console.log(`🔄 ${operationName} attempt ${attempt}/${maxRetries} (timeout: ${timeoutMs}ms)`);
+			
+			// Add timeout to prevent hanging
+			const result = await Promise.race([
+				operation(),
+				new Promise<never>((_, reject) => 
+					setTimeout(() => reject(new Error(`${operationName} timeout after ${timeoutMs}ms`)), timeoutMs)
+				)
+			]);
+			
 			console.log(`✅ ${operationName} succeeded on attempt ${attempt}`);
 			return result;
 		} catch (error) {
