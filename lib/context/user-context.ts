@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
-import { triggerProductSyncForNewAdmin } from "../sync/trigger-product-sync";
+// Removed direct import - now using API route with proper middleware authentication
 import { cleanupAbandonedExperiences, checkIfCleanupNeeded } from "../sync/experience-cleanup";
 import type { AuthenticatedUser, UserContext } from "../types/user";
 
@@ -241,32 +241,40 @@ async function createUserContext(
 					},
 				});
 
-				// Trigger product sync for new admin users
+				// Trigger product sync for new admin users via API route
 				if (initialAccessLevel === "admin") {
 					console.log(`🚀 New admin user created, triggering product sync for experience ${experience.id}`);
 					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
 					
 					try {
-						// Run sync in background to avoid blocking user creation
+						// Run sync in background via API route to use proper middleware authentication
 						setTimeout(async () => {
 							try {
-								console.log(`🔄 Starting background product sync for user ${newUser.id}...`);
-								console.log(`🔧 Environment check - WHOP_API_KEY: ${process.env.WHOP_API_KEY ? 'Present' : 'Missing'}`);
-								console.log(`🔧 Environment check - NEXT_PUBLIC_WHOP_COMPANY_ID: ${process.env.NEXT_PUBLIC_WHOP_COMPANY_ID ? 'Present' : 'Missing'}`);
+								console.log(`🔄 Starting background product sync via API for user ${newUser.id}...`);
 								
-								await triggerProductSyncForNewAdmin(
-									newUser.id,
-									experience.id,
-									experience.whopCompanyId
-								);
-								console.log(`✅ Background product sync completed for user ${newUser.id}`);
+								// Call the API route that uses proper WhopAuth middleware
+								const response = await fetch('/api/admin/sync-products', {
+									method: 'POST',
+									headers: {
+										'Content-Type': 'application/json',
+										'X-Experience-ID': experience.whopExperienceId, // Pass experience ID in header
+									},
+									});
+								
+								if (response.ok) {
+									const result = await response.json();
+									console.log(`✅ Background product sync completed via API:`, result);
+								} else {
+									const error = await response.json();
+									console.error(`❌ Background product sync failed via API:`, error);
+								}
 							} catch (error) {
-								console.error("❌ Background product sync failed:", error);
+								console.error("❌ Background product sync failed via API:", error);
 								console.error("❌ Error details:", error instanceof Error ? error.stack : error);
 							}
 						}, 1000); // 1 second delay to ensure user creation is complete
 						
-						console.log(`⏰ Product sync scheduled for 1 second delay`);
+						console.log(`⏰ Product sync scheduled for 1 second delay via API route`);
 					} catch (error) {
 						console.error("❌ Error scheduling product sync:", error);
 					}

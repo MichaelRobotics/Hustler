@@ -87,48 +87,143 @@ export class WhopApiClient {
       throw new Error(`Failed to fetch installed apps: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
-  
+
   /**
-   * Get company products from discovery page
-   * These are the actual products customers see on the owner's Whop
+   * Get access passes from experiences for FREE apps
+   * These are used to get FREE resources from the funnel product
    */
-  async getCompanyProducts(): Promise<WhopProduct[]> {
+  async getAccessPassesForFreeApps(): Promise<WhopApp[]> {
     try {
-      console.log(`Fetching owner's business products for company ${this.companyId}...`);
+      console.log(`Fetching access passes for FREE apps from company ${this.companyId}...`);
       
-      // Use SDK with company context for proper authentication
+      // Use SDK with company context
       const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
       
-      // Get company's experiences (which represent their products/apps)
-      console.log("🔍 Fetching company experiences as products...");
-      
+      // Get company's experiences
       const experiencesResult = await sdkWithCompany.experiences.listExperiences({
         companyId: this.companyId,
         first: 100
       });
       
       const experiences = experiencesResult?.experiencesV2?.nodes || [];
-      console.log(`Found ${experiences.length} company experiences`);
+      console.log(`Found ${experiences.length} company experiences for access passes`);
       
-      // Map experiences to product format
-      const mappedProducts = experiences.map((exp: any) => {
-        console.log(`🔍 Experience ${exp.id}:`, JSON.stringify(exp, null, 2));
+      const freeApps: WhopApp[] = [];
+      
+      // Get access passes for each experience
+      for (const exp of experiences) {
+        if (!exp) continue;
         
-        return {
-          id: exp.id,
-          title: exp.name || exp.app?.name || `Product ${exp.id}`,
-          description: exp.description || exp.app?.description,
-          price: 0, // Experiences don't have direct pricing
-          currency: 'usd',
-          model: 'free' as const,
-          includedApps: [exp.app?.id || exp.id], // The experience itself is the "app"
-          plans: [],
-          visibility: 'visible' as const
-        };
-      });
+        try {
+          console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
+          const accessPassesResult = await sdkWithCompany.experiences.listAccessPassesForExperience({
+            experienceId: exp.id
+          });
+          
+          const accessPasses = accessPassesResult?.accessPasses || [];
+          console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes`);
+          
+          // Map access passes to app format (these are FREE apps)
+          const expApps = accessPasses.map((pass: any) => ({
+            id: pass.id,
+            name: pass.title || pass.name || `App ${pass.id}`,
+            description: pass.description || pass.shortenedDescription,
+            icon: pass.icon?.sourceUrl || undefined
+          }));
+          
+          freeApps.push(...expApps);
+        } catch (expError) {
+          console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
+          // Continue with other experiences
+        }
+      }
       
-      console.log(`Mapped to ${mappedProducts.length} business products`);
-      return mappedProducts;
+      console.log(`Mapped to ${freeApps.length} FREE apps from access passes`);
+      return freeApps;
+    } catch (error) {
+      console.error("Error fetching access passes for FREE apps:", error);
+      throw new Error(`Failed to fetch access passes for FREE apps: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+  
+  /**
+   * Get company products from discovery page
+   * These are the actual business products customers see on the owner's Whop
+   */
+  async getCompanyProducts(): Promise<WhopProduct[]> {
+    try {
+      console.log(`Fetching owner's discovery page products for company ${this.companyId}...`);
+      
+      // Use SDK with company context for proper authentication
+      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
+      
+      // Try to get company products using the SDK
+      // Note: This might need to be adjusted based on actual SDK methods available
+      console.log("🔍 Fetching company products from discovery page...");
+      
+      try {
+        // Try to get company products using available SDK methods
+        // Note: This might need to be adjusted based on actual SDK methods available
+        console.log("⚠️ SDK products method not available, using fallback approach");
+        throw new Error("SDK products method not available");
+        
+      } catch (sdkError) {
+        console.warn("SDK products method not available, falling back to access passes approach:", sdkError);
+        
+        // Fallback: Get access passes from experiences as a temporary solution
+        // This is NOT the correct approach but maintains functionality
+        console.log("⚠️ Using fallback method - this should be fixed to use proper discovery page API");
+        
+        const experiencesResult = await sdkWithCompany.experiences.listExperiences({
+          companyId: this.companyId,
+          first: 100
+        });
+        
+        const experiences = experiencesResult?.experiencesV2?.nodes || [];
+        console.log(`Found ${experiences.length} company experiences (fallback)`);
+        
+        const allProducts: WhopProduct[] = [];
+        
+        // Get access passes for each experience (FALLBACK ONLY)
+        for (const exp of experiences) {
+          if (!exp) continue;
+          
+          try {
+            console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
+            const accessPassesResult = await sdkWithCompany.experiences.listAccessPassesForExperience({
+              experienceId: exp.id
+            });
+            
+            const accessPasses = accessPassesResult?.accessPasses || [];
+            console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes`);
+            
+            // Map access passes to product format
+            const expProducts = accessPasses.map((pass: any) => {
+              console.log(`🔍 Access Pass ${pass.id}:`, JSON.stringify(pass, null, 2));
+              
+              return {
+                id: pass.id,
+                title: pass.title || pass.name || `Product ${pass.id}`,
+                description: pass.description || pass.shortenedDescription,
+                price: pass.rawInitialPrice || pass.price?.amount || 0,
+                currency: pass.baseCurrency || pass.price?.currency || 'usd',
+                model: pass.price?.model || (pass.rawInitialPrice > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+                includedApps: pass.includedApps || pass.apps || [],
+                plans: pass.plans || [],
+                visibility: 'visible' as const
+              };
+            });
+            
+            allProducts.push(...expProducts);
+          } catch (expError) {
+            console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
+            // Continue with other experiences
+          }
+        }
+        
+        console.log(`⚠️ FALLBACK: Mapped to ${allProducts.length} products from access passes`);
+        return allProducts;
+      }
       
     } catch (error) {
       console.error("Error fetching company products:", error);

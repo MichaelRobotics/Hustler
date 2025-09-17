@@ -47,19 +47,19 @@ export async function triggerProductSyncForNewAdmin(
 		console.log("✅ Whop API client created");
 
 		// Step 1: Get owner's business products from discovery page
-		console.log("🏪 Fetching owner's business products...");
-		let businessProducts;
+		console.log("🏪 Fetching owner's discovery page products...");
+		let discoveryProducts;
 		try {
-			businessProducts = await whopClient.getCompanyProducts();
-			console.log(`✅ Found ${businessProducts.length} business products`);
+			discoveryProducts = await whopClient.getCompanyProducts();
+			console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
 		} catch (error) {
-			console.error("❌ Error fetching business products:", error);
-			throw new Error(`Failed to fetch business products: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			console.error("❌ Error fetching discovery page products:", error);
+			throw new Error(`Failed to fetch discovery page products: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 
-		// Step 2: Determine funnel name and get funnel product
-		const funnelName = whopClient.determineFunnelName(businessProducts);
-		const funnelProduct = whopClient.getFunnelProduct(businessProducts);
+		// Step 2: Determine funnel name and get funnel product from discovery page
+		const funnelName = whopClient.determineFunnelName(discoveryProducts);
+		const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
 		
 		console.log(`🎯 Funnel will be named: "${funnelName}"`);
 		if (funnelProduct) {
@@ -87,19 +87,24 @@ export async function triggerProductSyncForNewAdmin(
 		// Step 4: Create resources and collect their IDs
 		const resourceIds: string[] = [];
 		
-		// Create FREE apps from funnel product only
-		console.log("📱 Creating FREE apps from funnel product...");
+		// Create FREE apps from funnel product's included apps
+		// Note: The funnel product itself is excluded from FREE resources to avoid duplication
+		console.log("📱 Creating FREE apps from funnel product's included apps...");
 		if (funnelProduct && funnelProduct.includedApps.length > 0) {
 			try {
-				// Get app details for each included app
-				const allApps = await whopClient.getInstalledApps();
-				console.log(`🔍 All installed apps:`, allApps.map(app => ({ id: app.id, name: app.name })));
+				// Get access passes for FREE apps (these are the included apps)
+				const freeApps = await whopClient.getAccessPassesForFreeApps();
+				console.log(`🔍 All FREE apps from access passes:`, freeApps.map(app => ({ id: app.id, name: app.name })));
 				console.log(`🔍 Looking for apps with IDs:`, funnelProduct.includedApps);
 				
-				const funnelApps = allApps.filter(app => funnelProduct.includedApps.includes(app.id));
+				// Filter to only include apps that are in the funnel product
+				// IMPORTANT: The funnel product itself is NEVER included in FREE resources
+				// We only include the apps that are included IN the funnel product
+				const funnelApps = freeApps.filter(app => funnelProduct.includedApps.includes(app.id));
 				
 				console.log(`Found ${funnelApps.length} apps included in funnel product`);
 				console.log(`🔍 Matched funnel apps:`, funnelApps.map(app => ({ id: app.id, name: app.name })));
+				console.log(`⚠️ Funnel product itself (${funnelProduct.id}) is excluded from FREE resources`);
 				
 				for (const app of funnelApps) {
 					try {
@@ -119,7 +124,7 @@ export async function triggerProductSyncForNewAdmin(
 					}
 				}
 			} catch (error) {
-				console.error("❌ Error fetching installed apps:", error);
+				console.error("❌ Error fetching FREE apps from access passes:", error);
 			}
 		} else {
 			console.log(`⚠️ No apps found in funnel product or no funnel product`);
@@ -127,7 +132,7 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Create PAID products as upsells (excluding funnel product)
 		console.log("💳 Creating PAID products for upselling...");
-		const upsellProducts = whopClient.getUpsellProducts(businessProducts, funnelProduct?.id || '');
+		const upsellProducts = whopClient.getUpsellProducts(discoveryProducts, funnelProduct?.id || '');
 		console.log(`Found ${upsellProducts.length} upsell products`);
 		
 		for (const product of upsellProducts) {
