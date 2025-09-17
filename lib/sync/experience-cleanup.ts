@@ -8,21 +8,18 @@ import { eq, and, lt } from "drizzle-orm";
  */
 
 /**
- * Find and clean up abandoned experiences for a company
- * An experience is considered abandoned if:
- * 1. It's not the most recent experience for the company
- * 2. There is a newer experience for the same whop_company_id
- * 3. It has no recent user activity (no users created in last 7 days)
- * 4. It has no active funnels or conversations
+ * Clean up ALL existing experiences for a company before creating a new one
+ * This is called when we're about to create a new experience (reinstall scenario)
+ * We delete all existing experiences since the admin is creating a fresh one
  */
 export async function cleanupAbandonedExperiences(companyId: string): Promise<{
 	cleaned: string[];
 	kept: string[];
 }> {
 	try {
-		console.log(`🧹 Starting cleanup for company ${companyId}`);
+		console.log(`🧹 Starting cleanup for company ${companyId} (reinstall scenario)`);
 
-		// Get all experiences for this company, ordered by creation date
+		// Get all existing experiences for this company
 		const companyExperiences = await db.query.experiences.findMany({
 			where: eq(experiences.whopCompanyId, companyId),
 			orderBy: (experiences: any, { desc }: any) => [desc(experiences.createdAt)],
@@ -33,51 +30,22 @@ export async function cleanupAbandonedExperiences(companyId: string): Promise<{
 			}
 		});
 
-		if (companyExperiences.length <= 1) {
-			console.log(`✅ Only ${companyExperiences.length} experience(s) found, no cleanup needed`);
-			return { cleaned: [], kept: companyExperiences.map((exp: any) => exp.id) };
+		if (companyExperiences.length === 0) {
+			console.log(`✅ No existing experiences found, no cleanup needed`);
+			return { cleaned: [], kept: [] };
 		}
 
-		console.log(`📊 Found ${companyExperiences.length} experiences for company ${companyId}`);
+		console.log(`📊 Found ${companyExperiences.length} existing experiences for company ${companyId}`);
 
-		// The most recent experience is always kept
-		const [latestExperience, ...olderExperiences] = companyExperiences;
-		console.log(`✅ Keeping latest experience: ${latestExperience.id} (${latestExperience.name})`);
+		// In a reinstall scenario, we delete ALL existing experiences
+		// The admin is creating a new one, so old ones should be removed
+		const allExperienceIds = companyExperiences.map((exp: any) => exp.id);
+		
+		console.log(`🗑️ Deleting ALL ${allExperienceIds.length} existing experiences (reinstall scenario)...`);
+		await deleteAbandonedExperiences(allExperienceIds);
+		console.log(`🎉 Cleaned up ${allExperienceIds.length} existing experiences`);
 
-		const cleaned: string[] = [];
-		const kept: string[] = [latestExperience.id];
-
-		// Only cleanup older experiences if there's a newer one (which there is, since we have latestExperience)
-		// This ensures we only delete when there's actually a newer experience
-		if (olderExperiences.length > 0) {
-			console.log(`🔄 Found ${olderExperiences.length} older experiences, evaluating for cleanup...`);
-			
-			// Check each older experience to see if it should be cleaned up
-			for (const experience of olderExperiences) {
-				const shouldCleanup = await shouldCleanupExperience(experience as any);
-				
-				if (shouldCleanup) {
-					console.log(`🗑️ Marking experience ${experience.id} for cleanup (abandoned - newer experience exists)`);
-					cleaned.push(experience.id);
-				} else {
-					console.log(`✅ Keeping experience ${experience.id} (has active data despite newer experience)`);
-					kept.push(experience.id);
-				}
-			}
-		} else {
-			console.log(`✅ No older experiences found to evaluate`);
-		}
-
-		// Actually delete the abandoned experiences
-		if (cleaned.length > 0) {
-			console.log(`🗑️ Deleting ${cleaned.length} abandoned experiences...`);
-			await deleteAbandonedExperiences(cleaned);
-			console.log(`🎉 Cleaned up ${cleaned.length} abandoned experiences`);
-		} else {
-			console.log(`🤷 No abandoned experiences found for cleanup.`);
-		}
-
-		return { cleaned, kept };
+		return { cleaned: allExperienceIds, kept: [] };
 
 	} catch (error) {
 		console.error("❌ Error during experience cleanup:", error);
@@ -85,42 +53,6 @@ export async function cleanupAbandonedExperiences(companyId: string): Promise<{
 	}
 }
 
-/**
- * Determine if an experience should be cleaned up
- * In a reinstall scenario, clean up ALL old experiences
- * The admin is creating a new experience, so old ones should be removed
- */
-async function shouldCleanupExperience(experience: any): Promise<boolean> {
-	// Check if experience has any recent activity (users created in last 7 days)
-	const sevenDaysAgo = new Date();
-	sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-	const recentUsers = experience.users.filter((user: any) => 
-		new Date(user.createdAt) > sevenDaysAgo
-	);
-
-	// Check if experience has active funnels
-	const activeFunnels = experience.funnels.filter((funnel: any) => 
-		funnel.isDeployed || funnel.wasEverDeployed
-	);
-
-	// Check if experience has recent conversations
-	const recentConversations = experience.conversations.filter((conv: any) => 
-		new Date(conv.createdAt) > sevenDaysAgo
-	);
-
-	// In a reinstall scenario, clean up ALL old experiences
-	// The admin is creating a new experience, so old ones should be removed
-	const shouldCleanup = true;
-
-	console.log(`  Experience ${experience.id}:`);
-	console.log(`    - Recent users: ${recentUsers.length}`);
-	console.log(`    - Active funnels: ${activeFunnels.length}`);
-	console.log(`    - Recent conversations: ${recentConversations.length}`);
-	console.log(`    - Should cleanup: ${shouldCleanup}`);
-
-	return shouldCleanup;
-}
 
 /**
  * Delete abandoned experiences and all their related data
