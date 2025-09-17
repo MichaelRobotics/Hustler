@@ -179,8 +179,13 @@ export async function triggerProductSyncForNewAdmin(
 		
 		for (const product of upsellProducts) {
 			try {
+				console.log(`🔍 Processing PAID product: ${product.title} (${product.id})`);
+				
 				const cheapestPlan = whopClient.getCheapestPlan(product);
+				console.log(`🔍 Cheapest plan for ${product.title}:`, cheapestPlan);
+				
 				const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
+				console.log(`🔍 Plan param: ${planParam}`);
 				
 				console.log(`🔍 Creating PAID resource for product: ${product.title} (${product.id})`);
 				
@@ -199,6 +204,10 @@ export async function triggerProductSyncForNewAdmin(
 			} catch (error) {
 				paidFailedCount++;
 				console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
+				console.error(`❌ Error details:`, {
+					message: error instanceof Error ? error.message : 'Unknown error',
+					stack: error instanceof Error ? error.stack : undefined
+				});
 			}
 		}
 		
