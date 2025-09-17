@@ -247,10 +247,13 @@ async function createUserContext(
 					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
 					
 					try {
-						// Run sync in background to avoid blocking user creation
-						setTimeout(async () => {
+						// Run sync immediately but don't await it to avoid blocking user creation
+						console.log(`🔄 Starting immediate product sync for user ${newUser.id}...`);
+						
+						// Use setImmediate for better error handling in Node.js
+						setImmediate(async () => {
 							try {
-								console.log(`🔄 Starting background product sync for user ${newUser.id}...`);
+								console.log(`🔄 Executing product sync for user ${newUser.id}...`);
 								console.log(`🔧 Environment check - WHOP_API_KEY: ${process.env.WHOP_API_KEY ? 'Present' : 'Missing'}`);
 								console.log(`🔧 Environment check - NEXT_PUBLIC_WHOP_COMPANY_ID: ${process.env.NEXT_PUBLIC_WHOP_COMPANY_ID ? 'Present' : 'Missing'}`);
 								
@@ -259,16 +262,18 @@ async function createUserContext(
 									experience.id,
 									experience.whopCompanyId
 								);
-								console.log(`✅ Background product sync completed for user ${newUser.id}`);
+								console.log(`✅ Product sync completed for user ${newUser.id}`);
 							} catch (error) {
-								console.error("❌ Background product sync failed:", error);
+								console.error("❌ Product sync failed:", error);
 								console.error("❌ Error details:", error instanceof Error ? error.stack : error);
+								console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
+								console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
 							}
-						}, 1000); // 1 second delay to ensure user creation is complete
+						});
 						
-						console.log(`⏰ Product sync scheduled for 1 second delay`);
+						console.log(`⏰ Product sync queued for immediate execution`);
 					} catch (error) {
-						console.error("❌ Error scheduling product sync:", error);
+						console.error("❌ Error queuing product sync:", error);
 					}
 				}
 			}
