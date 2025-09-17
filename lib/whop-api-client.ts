@@ -92,12 +92,20 @@ export class WhopApiClient {
     try {
       console.log(`Fetching owner's business products for company ${companyId}...`);
       
-      // Get products from the company's discovery page
-      const result = await (this.whopSdk as any).company.products.list({
-        companyId: companyId,
-        first: 100
+      // Use direct HTTP API call since SDK doesn't have this method
+      const response = await fetch(`https://api.whop.com/v5/company/products?companyId=${companyId}&first=100`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
       });
-      
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
       const products = result?.products?.nodes || [];
       console.log(`Found ${products.length} business products`);
       

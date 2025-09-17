@@ -77,7 +77,7 @@ async function deleteAbandonedExperiences(experienceIds: string[]): Promise<void
 }
 
 /**
- * Check if a company has multiple experiences and needs cleanup
+ * Check if a company has existing experiences (reinstall scenario)
  */
 export async function checkIfCleanupNeeded(companyId: string): Promise<boolean> {
 	try {
@@ -86,7 +86,7 @@ export async function checkIfCleanupNeeded(companyId: string): Promise<boolean> 
 			columns: { id: true }
 		});
 
-		return experienceCount.length > 1;
+		return experienceCount.length > 0;
 	} catch (error) {
 		console.error("Error checking if cleanup needed:", error);
 		return false;
