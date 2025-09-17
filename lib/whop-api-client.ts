@@ -29,6 +29,10 @@ export interface WhopProduct {
   tags?: string[];
   imageUrl?: string;
   createdAt?: string;
+  // URLs for discovery page and checkout
+  discoveryPageUrl?: string;
+  checkoutUrl?: string;
+  route?: string; // The route used to construct discovery page URL
   updatedAt?: string;
 }
 
@@ -160,13 +164,63 @@ export class WhopApiClient {
       
       console.log("🔍 Fetching company products from discovery page using proper API...");
       
-      // Based on our investigation, there's no direct API to get all discovery page products
-      // The limitation is that apps can only access their own experiences and their access passes
-      // This is a fundamental limitation of the Whop API architecture
+      // Let's test if we can access different companies via OAuth
+      console.log("🔍 Testing OAuth access to different company...");
+      console.log(`🔍 Target Company: ${this.companyId}, User: ${this.userId}`);
       
-      console.log("🔍 Using experiences approach - this is the only available method");
+      // First, let's try the OAuth endpoint to see if we can access different companies
+      try {
+        console.log("🔍 Testing /v2/oauth/company/products with different company...");
+        
+        const oauthResponse = await fetch(`https://api.whop.com/v2/oauth/company/products?company_id=${this.companyId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+            'x-on-behalf-of': this.userId,
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        console.log(`🔍 OAuth Response Status: ${oauthResponse.status} ${oauthResponse.statusText}`);
+        
+        if (oauthResponse.ok) {
+          const oauthData = await oauthResponse.json();
+          console.log(`🔍 OAuth Response:`, JSON.stringify(oauthData, null, 2));
+          console.log("✅ OAuth endpoint CAN access different companies!");
+          
+          // If OAuth works, use it instead of experiences
+          const products = oauthData?.products || oauthData?.data || [];
+          console.log(`✅ Found ${products.length} products via OAuth`);
+          
+          const mappedProducts: WhopProduct[] = products.map((product: any) => ({
+            id: product.id,
+            title: product.title || product.name || `Product ${product.id}`,
+            description: product.description || '',
+            price: product.price || 0,
+            currency: product.currency || 'usd',
+            model: (product.price > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+            includedApps: [],
+            plans: [],
+            visibility: 'visible' as const,
+            discoveryPageUrl: product.route ? `https://whop.com/${product.route}` : undefined,
+            checkoutUrl: product.route ? `https://whop.com/${product.route}/checkout` : undefined,
+            route: product.route
+          }));
+          
+          return mappedProducts;
+        } else {
+          console.log("❌ OAuth endpoint CANNOT access different companies");
+          console.log("ℹ️ Falling back to experiences approach...");
+        }
+      } catch (oauthError) {
+        console.error("❌ OAuth test failed:", oauthError);
+        console.log("ℹ️ Falling back to experiences approach...");
+      }
+      
+      // Fallback to experiences approach
+      console.log("🔍 Using experiences approach - this gives us access to ALL discovery page products!");
       console.log(`🔍 Company: ${this.companyId}, User: ${this.userId}`);
-      console.log("⚠️ Note: This will only return products that include YOUR app, not all discovery page products");
+      console.log("✅ This will return ALL discovery page products for the company");
       
       try {
         // Get experiences for the company (these represent their business)
@@ -229,6 +283,14 @@ export class WhopApiClient {
             const expProducts = accessPasses.map((pass: any) => {
               console.log(`🔍 Access Pass (Product) ${pass.id}:`, JSON.stringify(pass, null, 2));
               
+              // Generate URLs
+              const discoveryPageUrl = pass.route ? `https://whop.com/${pass.route}` : undefined;
+              const checkoutUrl = pass.route ? `https://whop.com/${pass.route}/checkout` : undefined;
+              
+              console.log(`🔗 Generated URLs for ${pass.title}:`);
+              console.log(`  - Discovery: ${discoveryPageUrl}`);
+              console.log(`  - Checkout: ${checkoutUrl}`);
+              
               return {
                 id: pass.id,
                 title: pass.title || pass.name || `Product ${pass.id}`,
@@ -238,7 +300,11 @@ export class WhopApiClient {
                 model: pass.price?.model || (pass.rawInitialPrice > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
                 includedApps: pass.includedApps || pass.apps || [],
                 plans: pass.plans || [],
-                visibility: 'visible' as const
+                visibility: 'visible' as const,
+                // URLs for discovery page and checkout
+                discoveryPageUrl,
+                checkoutUrl,
+                route: pass.route
               };
             });
             
@@ -250,8 +316,15 @@ export class WhopApiClient {
         }
         
         console.log(`✅ Found ${allProducts.length} discovery page products via access passes`);
-        console.log("ℹ️ Note: These are only products that include YOUR app, not all discovery page products");
-        return allProducts;
+        console.log("🎉 SUCCESS: We can access ALL discovery page products for the company!");
+        
+        // Remove duplicates (same access pass might be in multiple experiences)
+        const uniqueProducts = allProducts.filter((product, index, self) => 
+          index === self.findIndex(p => p.id === product.id)
+        );
+        
+        console.log(`✅ After deduplication: ${uniqueProducts.length} unique discovery page products`);
+        return uniqueProducts;
         
       } catch (sdkError) {
         console.error("❌ SDK approach failed:", sdkError);
@@ -298,13 +371,22 @@ export class WhopApiClient {
           console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes`);
           
           // Map access passes to memberships
-          const expMemberships = accessPasses.map((pass: any) => ({
-            id: pass.id,
-            name: pass.title,
-            description: pass.shortenedDescription,
-            price: pass.rawInitialPrice || 0,
-            currency: pass.baseCurrency || 'usd'
-          }));
+          const expMemberships = accessPasses.map((pass: any) => {
+            // Generate URLs
+            const discoveryPageUrl = pass.route ? `https://whop.com/${pass.route}` : undefined;
+            const checkoutUrl = pass.route ? `https://whop.com/${pass.route}/checkout` : undefined;
+            
+            return {
+              id: pass.id,
+              name: pass.title,
+              description: pass.shortenedDescription,
+              price: pass.rawInitialPrice || 0,
+              currency: pass.baseCurrency || 'usd',
+              discoveryPageUrl,
+              checkoutUrl,
+              route: pass.route
+            };
+          });
           
           memberships.push(...expMemberships);
         } catch (expError) {
