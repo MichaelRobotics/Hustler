@@ -72,18 +72,8 @@ export async function triggerProductSyncForNewAdmin(
 		}
 
 		// Step 2: Determine funnel name and get funnel product from discovery page
-		console.log("🎯 Determining funnel name and product...");
-		let funnelName;
-		let funnelProduct;
-		
-		try {
-			funnelName = whopClient.determineFunnelName(discoveryProducts);
-			funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
-			console.log(`✅ Funnel name determined: "${funnelName}"`);
-		} catch (error) {
-			console.error("❌ Error determining funnel name/product:", error);
-			throw new Error(`Failed to determine funnel name/product: ${error instanceof Error ? error.message : 'Unknown error'}`);
-		}
+		const funnelName = whopClient.determineFunnelName(discoveryProducts);
+		const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
 		
 		console.log(`🎯 Funnel will be named: "${funnelName}"`);
 		if (funnelProduct) {
@@ -96,33 +86,16 @@ export async function triggerProductSyncForNewAdmin(
 		// Step 3: Create funnel with smart naming using proper action
 		console.log("📊 Creating funnel...");
 		let funnel;
-		const maxRetries = 3;
-		let retryCount = 0;
-		
-		while (retryCount < maxRetries) {
-			try {
-				console.log(`🔄 Attempt ${retryCount + 1}/${maxRetries} to create funnel...`);
-				funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-					name: funnelName,
-					description: `Funnel for ${funnelName}`,
-					resources: [] // Will assign resources after creation
-				});
-				console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
-				break; // Success, exit retry loop
-			} catch (error) {
-				retryCount++;
-				console.error(`❌ Error creating funnel (attempt ${retryCount}/${maxRetries}):`, error);
-				
-				if (retryCount >= maxRetries) {
-					console.error("❌ Max retries reached for funnel creation");
-					throw new Error(`Failed to create funnel after ${maxRetries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
-				}
-				
-				// Wait before retry (exponential backoff)
-				const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-				console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-				await new Promise(resolve => setTimeout(resolve, waitTime));
-			}
+		try {
+			funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
+				name: funnelName,
+				description: `Funnel for ${funnelName}`,
+				resources: [] // Will assign resources after creation
+			});
+			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+		} catch (error) {
+			console.error("❌ Error creating funnel:", error);
+			throw new Error(`Failed to create funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 
 		// Step 4: Create resources and collect their IDs
@@ -135,33 +108,44 @@ export async function triggerProductSyncForNewAdmin(
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
 			if (installedApps.length > 0) {
-				let freeCreatedCount = 0;
-				let freeFailedCount = 0;
-				
-				// Create FREE resources for each installed app
-				for (const app of installedApps) {
-					try {
-						console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
-						
-						const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-							name: app.name,
-							type: "MY_PRODUCTS",
-							category: "FREE_VALUE",
-							link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-							description: app.description || `Free access to ${app.name}`,
-							whopProductId: app.id
-						});
-						
-						resourceIds.push(resource.id);
-						freeCreatedCount++;
-						console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
-					} catch (error) {
-						freeFailedCount++;
-						console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
+				// Create FREE resources for each installed app (with batching for performance)
+				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
+				for (let i = 0; i < installedApps.length; i += batchSize) {
+					const batch = installedApps.slice(i, i + batchSize);
+					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(installedApps.length/batchSize)} (${batch.length} apps)`);
+					
+					// Process batch in parallel
+					const batchPromises = batch.map(async (app) => {
+						try {
+							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
+							
+							const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
+								name: app.name,
+								type: "MY_PRODUCTS",
+								category: "FREE_VALUE",
+								link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+								description: app.description || `Free access to ${app.name}`,
+								whopProductId: app.id
+							});
+							
+							console.log(`✅ Created FREE resource for app: ${app.name}`);
+							return resource.id;
+						} catch (error) {
+							console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
+							return null;
+						}
+					});
+					
+					const batchResults = await Promise.all(batchPromises);
+					resourceIds.push(...batchResults.filter(id => id !== null));
+					
+					// Small delay between batches to prevent overwhelming the system
+					if (i + batchSize < installedApps.length) {
+						await new Promise(resolve => setTimeout(resolve, 100));
 					}
 				}
 				
-				console.log(`📊 FREE resources summary: ${freeCreatedCount} created, ${freeFailedCount} failed out of ${installedApps.length} apps`);
+				console.log(`✅ Created ${resourceIds.length} FREE resources from installed apps`);
 			} else {
 				console.log(`⚠️ No installed apps found for company`);
 			}
@@ -174,85 +158,82 @@ export async function triggerProductSyncForNewAdmin(
 		const upsellProducts = whopClient.getUpsellProducts(discoveryProducts, funnelProduct?.id || '');
 		console.log(`Found ${upsellProducts.length} upsell products`);
 		
-		let paidCreatedCount = 0;
-		let paidFailedCount = 0;
-		
-		for (const product of upsellProducts) {
-			try {
-				console.log(`🔍 Processing PAID product: ${product.title} (${product.id})`);
+		if (upsellProducts.length > 0) {
+			// Create PAID resources with batching for performance
+			const batchSize = 10; // Process 10 products at a time (increased for better performance)
+			for (let i = 0; i < upsellProducts.length; i += batchSize) {
+				const batch = upsellProducts.slice(i, i + batchSize);
+				console.log(`🔍 Processing PAID products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(upsellProducts.length/batchSize)} (${batch.length} products)`);
 				
-				const cheapestPlan = whopClient.getCheapestPlan(product);
-				console.log(`🔍 Cheapest plan for ${product.title}:`, cheapestPlan);
-				
-				const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
-				console.log(`🔍 Plan param: ${planParam}`);
-				
-				console.log(`🔍 Creating PAID resource for product: ${product.title} (${product.id})`);
-				
-				const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-					name: product.title,
-					type: "MY_PRODUCTS",
-					category: "PAID",
-					link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
-					description: product.description,
-					whopProductId: product.id
-				});
-				
-				resourceIds.push(resource.id);
-				paidCreatedCount++;
-				console.log(`✅ Created PAID resource for product: ${product.title} (ID: ${resource.id})`);
-			} catch (error) {
-				paidFailedCount++;
-				console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
-				console.error(`❌ Error details:`, {
-					message: error instanceof Error ? error.message : 'Unknown error',
-					stack: error instanceof Error ? error.stack : undefined
-				});
-			}
-		}
-		
-		console.log(`📊 PAID resources summary: ${paidCreatedCount} created, ${paidFailedCount} failed out of ${upsellProducts.length} products`);
-
-		// Step 5: Assign all resources to the funnel
-		if (resourceIds.length > 0 && funnel) {
-			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel ${funnel.id}...`);
-			console.log(`📋 Resource IDs to assign:`, resourceIds);
-			
-			let assignedCount = 0;
-			let failedCount = 0;
-			
-			for (const resourceId of resourceIds) {
-				const maxRetries = 3;
-				let retryCount = 0;
-				let assigned = false;
-				
-				while (retryCount < maxRetries && !assigned) {
+				// Process batch in parallel
+				const batchPromises = batch.map(async (product) => {
 					try {
-						console.log(`🔗 Assigning resource ${resourceId} to funnel (attempt ${retryCount + 1}/${maxRetries})...`);
-						await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
-						assignedCount++;
-						assigned = true;
-						console.log(`✅ Successfully assigned resource ${resourceId} to funnel`);
-					} catch (error) {
-						retryCount++;
-						console.error(`❌ Error assigning resource ${resourceId} to funnel (attempt ${retryCount}/${maxRetries}):`, error);
+						const cheapestPlan = whopClient.getCheapestPlan(product);
+						const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
 						
-						if (retryCount >= maxRetries) {
-							failedCount++;
-							console.error(`❌ Max retries reached for resource ${resourceId} assignment`);
-						} else {
-							// Wait before retry (exponential backoff)
-							const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-							console.log(`⏳ Waiting ${waitTime}ms before retry for resource ${resourceId}...`);
-							await new Promise(resolve => setTimeout(resolve, waitTime));
-						}
+						const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
+							name: product.title,
+							type: "MY_PRODUCTS",
+							category: "PAID",
+							link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
+							description: product.description,
+							whopProductId: product.id
+						});
+						
+						console.log(`✅ Created PAID resource for product: ${product.title}`);
+						return resource.id;
+					} catch (error) {
+						console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
+						return null;
 					}
+				});
+				
+				const batchResults = await Promise.all(batchPromises);
+				resourceIds.push(...batchResults.filter(id => id !== null));
+				
+				// Small delay between batches to prevent overwhelming the system
+				if (i + batchSize < upsellProducts.length) {
+					await new Promise(resolve => setTimeout(resolve, 100));
 				}
 			}
-			
-			console.log(`📊 Assignment summary: ${assignedCount} successful, ${failedCount} failed out of ${resourceIds.length} total`);
-		} else {
-			console.log(`⚠️ No resources to assign to funnel`);
+		}
+
+		// Step 5: Assign all resources to the funnel
+		if (resourceIds.length > 0) {
+			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel...`);
+			try {
+				// Assign resources in batches for better performance
+				const assignmentBatchSize = 20; // Increased batch size for better performance
+				let assignedCount = 0;
+				
+				for (let i = 0; i < resourceIds.length; i += assignmentBatchSize) {
+					const batch = resourceIds.slice(i, i + assignmentBatchSize);
+					console.log(`🔗 Assigning batch ${Math.floor(i/assignmentBatchSize) + 1}/${Math.ceil(resourceIds.length/assignmentBatchSize)} (${batch.length} resources)`);
+					
+					// Process assignments in parallel
+					const assignmentPromises = batch.map(async (resourceId) => {
+						try {
+							await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
+							return true;
+						} catch (error) {
+							console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
+							return false;
+						}
+					});
+					
+					const batchResults = await Promise.all(assignmentPromises);
+					assignedCount += batchResults.filter(success => success).length;
+					
+					// Small delay between batches
+					if (i + assignmentBatchSize < resourceIds.length) {
+						await new Promise(resolve => setTimeout(resolve, 50));
+					}
+				}
+				
+				console.log(`✅ Assigned ${assignedCount}/${resourceIds.length} resources to funnel`);
+			} catch (error) {
+				console.error("❌ Error assigning resources to funnel:", error);
+			}
 		}
 
 		// Step 6: Mark user as synced

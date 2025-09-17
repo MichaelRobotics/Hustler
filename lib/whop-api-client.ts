@@ -61,33 +61,14 @@ export class WhopApiClient {
       
       console.log("🔍 Getting installed apps using listExperiences...");
       
-      // Check if listExperiences method exists
-      if (typeof (sdkWithContext.experiences as any).listExperiences !== 'function') {
-        console.log("⚠️ listExperiences method not available in this SDK version");
-        console.log("⚠️ Available methods on experiences:", Object.keys(sdkWithContext.experiences || {}));
-        return [];
-      }
-      
       // Get experiences for the company (these represent installed apps)
-      let experiencesResult;
-      try {
-        experiencesResult = await (sdkWithContext.experiences as any).listExperiences({
-          companyId: this.companyId,
-          first: 100
-        });
-        console.log("✅ Successfully called listExperiences");
-      } catch (error) {
-        console.error("❌ Error calling listExperiences:", error);
-        throw new Error(`Failed to fetch experiences: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+      const experiencesResult = await (sdkWithContext.experiences as any).listExperiences({
+        companyId: this.companyId,
+        first: 100
+      });
       
       const experiences = experiencesResult?.experiencesV2?.nodes || [];
       console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
-      console.log("🔍 Experiences result structure:", {
-        hasExperiencesV2: !!experiencesResult?.experiencesV2,
-        hasNodes: !!experiencesResult?.experiencesV2?.nodes,
-        nodesLength: experiencesResult?.experiencesV2?.nodes?.length || 0
-      });
       
       if (experiences.length === 0) {
         console.log("⚠️ No installed apps found for company");
@@ -144,22 +125,11 @@ export class WhopApiClient {
       
       const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
       console.log(`🔍 Found ${accessPasses.length} access passes for company ${this.companyId}`);
-      console.log(`🔍 Access passes result structure:`, {
-        hasAccessPasses: !!accessPassesResult?.accessPasses,
-        hasNodes: !!accessPassesResult?.accessPasses?.nodes,
-        nodesLength: accessPassesResult?.accessPasses?.nodes?.length || 0
-      });
       
       if (accessPasses.length === 0) {
         console.log("⚠️ No discovery page products found - this means no products to upsell");
         return [];
       }
-      
-      console.log(`🔍 First access pass sample:`, accessPasses[0] ? {
-        id: accessPasses[0].id,
-        title: accessPasses[0].title,
-        visibility: accessPasses[0].visibility
-      } : 'No access passes');
       
       // Get plans for pricing information
       const plansResult = await (whopSdk.companies as any).listPlans({
