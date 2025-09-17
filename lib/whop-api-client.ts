@@ -48,6 +48,19 @@ export class WhopApiClient {
   constructor(companyId: string, userId: string) {
     this.companyId = companyId;
     this.userId = userId;
+    
+    // Validate required parameters
+    if (!companyId || !userId) {
+      throw new Error("WhopApiClient requires both companyId and userId");
+    }
+    
+    // Validate environment variables
+    if (!process.env.WHOP_API_KEY) {
+      console.warn("⚠️ WHOP_API_KEY not found in environment variables");
+    }
+    if (!process.env.NEXT_PUBLIC_WHOP_APP_ID) {
+      console.warn("⚠️ NEXT_PUBLIC_WHOP_APP_ID not found in environment variables");
+    }
   }
 
   /**
@@ -79,78 +92,62 @@ export class WhopApiClient {
     try {
       console.log(`Fetching installed apps for company ${this.companyId}...`);
       
-      // Use global SDK with proper context (same pattern as other APIs)
-      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
+      // MULTIPLE RETRY STRATEGY: Try different approaches
+      const strategies = [
+        { name: "Ultra-fast", timeout: 2000, first: 5 },
+        { name: "Fast", timeout: 5000, first: 10 },
+        { name: "Standard", timeout: 10000, first: 20 }
+      ];
       
-      console.log("🔍 Getting installed apps using listExperiences...");
-      
-      // Ultra-fast API call with minimal data
-      const operationTimeout = 15000; // 15 seconds total
-      const startTime = Date.now();
-      
-      console.log(`🚀 Starting ultra-fast listExperiences API call with ${operationTimeout}ms timeout...`);
-      
-      const experiencesResult = await Promise.race([
-        this.getCachedOrFetch(
-          `experiences-${this.companyId}`,
-          () => this.retryApiCall(
-            () => (sdkWithContext.experiences as any).listExperiences({
-              companyId: this.companyId,
-              first: 10, // Ultra-minimal data: only 10 experiences
-              // Add specific filters to reduce query complexity
-              onAccessPass: false, // Only get experiences not tied to access passes
-              accessPassId: undefined // Don't filter by access pass
+      for (const strategy of strategies) {
+        try {
+          console.log(`🚀 Trying ${strategy.name} strategy for experiences (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
+          
+          // Use proper SDK context with required companyId parameter
+          const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
+          
+          const experiencesResult = await Promise.race([
+            sdkWithContext.experiences.listExperiences({
+              companyId: this.companyId, // Required by the API
+              first: strategy.first,
+              onAccessPass: false
             }),
-            "listExperiences",
-            1, // Only 1 retry for faster failure
-            8000 // Ultra-fast timeout: 8s per attempt
-          )
-        ),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error(`Installed apps fetch timeout after ${operationTimeout}ms`)), operationTimeout)
-        )
-      ]);
-      
-      const elapsed = Date.now() - startTime;
-      console.log(`✅ listExperiences API call completed in ${elapsed}ms`);
-      
-      const experiences = (experiencesResult as any)?.experiencesV2?.nodes || [];
-      console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
-      
-      if (experiences.length === 0) {
-        console.log("⚠️ No installed apps found for company");
-        return [];
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error("API timeout")), strategy.timeout)
+            )
+          ]);
+          
+          const experiences = experiencesResult?.experiencesV2?.nodes || [];
+          console.log(`✅ ${strategy.name} strategy succeeded! Found ${experiences.length} experiences`);
+          
+          if (experiences.length > 0) {
+            const apps: WhopApp[] = experiences.map((exp: any) => ({
+              id: exp.app?.id || exp.id,
+              name: exp.app?.name || exp.name,
+              description: exp.description,
+              price: 0,
+              currency: 'usd',
+              discoveryPageUrl: undefined,
+              checkoutUrl: undefined,
+              route: undefined
+            }));
+            
+            console.log(`✅ Mapped to ${apps.length} installed apps from API`);
+            return apps;
+          }
+          
+        } catch (strategyError) {
+          console.log(`❌ ${strategy.name} strategy failed:`, strategyError instanceof Error ? strategyError.message : String(strategyError));
+          continue; // Try next strategy
+        }
       }
       
-      // Map experiences to app format
-      const apps: WhopApp[] = experiences.map((exp: any) => {
-        console.log(`🔍 Mapping experience:`, {
-          id: exp.id,
-          name: exp.name,
-          appId: exp.app?.id,
-          appName: exp.app?.name,
-          description: exp.description
-        });
-        
-        return {
-          id: exp.app?.id || exp.id,
-          name: exp.app?.name || exp.name,
-          description: exp.description,
-          price: 0, // Apps are free
-          currency: 'usd',
-          discoveryPageUrl: undefined, // Apps don't have discovery pages
-          checkoutUrl: undefined, // Apps don't have checkout
-          route: undefined
-        };
-      });
-      
-      console.log(`✅ Mapped to ${apps.length} installed apps`);
-      return apps;
+      // If all strategies failed, throw error
+      throw new Error("All API strategies failed");
       
     } catch (error) {
       console.error("❌ Error fetching installed apps:", error);
-      console.log("⚠️ Falling back to empty array - no FREE apps will be created");
-      // Return empty array instead of throwing to allow sync to continue
+      console.log("⚠️ No FREE apps will be created");
       return [];
     }
   }
@@ -165,176 +162,141 @@ export class WhopApiClient {
     try {
       console.log("🔍 Getting discovery page products using SDK methods...");
       
-      // ULTRA-FAST API CALLS with circuit breaker pattern
-      const operationTimeout = 20000; // Reduced to 20 seconds total
-      const startTime = Date.now();
+      // MULTIPLE RETRY STRATEGY: Try different approaches
+      const strategies = [
+        { name: "Ultra-fast", timeout: 2000, first: 5 },
+        { name: "Fast", timeout: 5000, first: 10 },
+        { name: "Standard", timeout: 10000, first: 20 }
+      ];
       
-      console.log(`🚀 Starting ultra-fast API calls with ${operationTimeout}ms timeout...`);
-      
-      // Create both API calls with minimal data and ultra-fast timeouts
-      const accessPassesPromise = this.getCachedOrFetch(
-        `accessPasses-${this.companyId}`,
-        () => this.retryApiCall(
-          () => (whopSdk.companies as any).listAccessPasses({
-            companyId: this.companyId,
-            visibility: "visible",
-            first: 10 // Ultra-minimal data: only 10 products
-          }),
-          "listAccessPasses",
-          1, // Only 1 retry
-          5000 // Ultra-fast timeout: 5s per attempt
-        )
-      );
-      
-      const plansPromise = this.getCachedOrFetch(
-        `plans-${this.companyId}`,
-        () => this.retryApiCall(
-          () => (whopSdk.companies as any).listPlans({
-            companyId: this.companyId,
-            visibility: "visible",
-            first: 10 // Ultra-minimal data: only 10 plans
-          }),
-          "listPlans",
-          1, // Only 1 retry
-          5000 // Ultra-fast timeout: 5s per attempt
-        )
-      );
-      
-      // Execute with circuit breaker - if one fails, continue with the other
-      let accessPassesResult: any = null;
-      let plansResult: any = null;
-      
-      try {
-        console.log("🔄 Attempting parallel API calls...");
-        const results = await Promise.race([
-          Promise.allSettled([accessPassesPromise, plansPromise]),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error(`Discovery products fetch timeout after ${operationTimeout}ms`)), operationTimeout)
-          )
-        ]);
-        
-        // Process results even if one failed
-        if (results[0].status === 'fulfilled') {
-          accessPassesResult = results[0].value;
-          console.log("✅ listAccessPasses succeeded");
-        } else {
-          console.log("❌ listAccessPasses failed:", results[0].reason?.message);
-        }
-        
-        if (results[1].status === 'fulfilled') {
-          plansResult = results[1].value;
-          console.log("✅ listPlans succeeded");
-        } else {
-          console.log("❌ listPlans failed:", results[1].reason?.message);
-        }
-        
-        // If both failed, throw error
-        if (!accessPassesResult && !plansResult) {
-          throw new Error("Both API calls failed");
-        }
-        
-      } catch (error) {
-        console.error("❌ Parallel API calls failed:", error);
-        // Continue with null results - we'll handle this gracefully
-      }
-      
-      const elapsed = Date.now() - startTime;
-      console.log(`✅ API calls completed in ${elapsed}ms`);
-      
-      const accessPasses = (accessPassesResult as any)?.accessPasses?.nodes || [];
-      const plans = (plansResult as any)?.plans?.nodes || [];
-      
-      console.log(`🔍 Found ${accessPasses.length} access passes and ${plans.length} plans for company ${this.companyId}`);
-      
-      // Graceful fallback: if no data, return empty array but don't fail
-      if (accessPasses.length === 0 && plans.length === 0) {
-        console.log("⚠️ No discovery page products found - continuing with empty products");
-        return [];
-      }
-      
-      // If we have access passes but no plans, continue with empty plans
-      if (accessPasses.length === 0) {
-        console.log("⚠️ No access passes found, but continuing with plans only");
-        return [];
-      }
-      
-      // Group plans by access pass ID
-      const plansByAccessPass = new Map<string, any[]>();
-      plans.forEach((plan: any) => {
-        if (plan.accessPass?.id) {
-          if (!plansByAccessPass.has(plan.accessPass.id)) {
-            plansByAccessPass.set(plan.accessPass.id, []);
-          }
-          plansByAccessPass.get(plan.accessPass.id)!.push(plan);
-        }
-      });
-      
-      console.log("🔍 Mapping access passes to products...");
-      
-      const mappedProducts: WhopProduct[] = accessPasses.map((accessPass: any) => {
-        // Get plans for this access pass
-        const accessPassPlans = plansByAccessPass.get(accessPass.id) || [];
-        
-        // Find the cheapest plan to determine if it's free
-        let minPrice = Infinity;
-        let currency = 'usd';
-        
-        if (accessPassPlans.length > 0) {
-          accessPassPlans.forEach(plan => {
-            const price = plan.rawInitialPrice || 0;
-            if (price < minPrice) {
-              minPrice = price;
-              currency = plan.baseCurrency || 'usd';
+      for (const strategy of strategies) {
+        try {
+          console.log(`🚀 Trying ${strategy.name} strategy (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
+          
+          // Use global SDK for access passes with type assertion (SDK types may be incomplete)
+          const accessPassesResult = await Promise.race([
+            (whopSdk.companies as any).listAccessPasses({
+              companyId: this.companyId,
+              visibility: "visible",
+              first: strategy.first
+            }),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error("API timeout")), strategy.timeout)
+            )
+          ]);
+          
+          const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
+          console.log(`✅ ${strategy.name} strategy succeeded! Found ${accessPasses.length} access passes`);
+          
+          if (accessPasses.length > 0) {
+            // Try to get plans (optional - don't fail if this times out)
+            let plans: any[] = [];
+            try {
+              const plansResult = await Promise.race([
+                (whopSdk.companies as any).listPlans({
+                  companyId: this.companyId,
+                  visibility: "visible",
+                  first: strategy.first
+                }),
+                new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error("Plans timeout")), strategy.timeout)
+                )
+              ]);
+              plans = plansResult?.plans?.nodes || [];
+              console.log(`✅ Found ${plans.length} plans`);
+            } catch (planError) {
+              console.log("⚠️ Plans API failed, continuing with access passes only");
             }
-          });
+            
+            // Map to products
+            const products = this.mapAccessPassesToProducts(accessPasses, plans);
+            console.log(`✅ Mapped to ${products.length} DISCOVERY PAGE PRODUCTS`);
+            return products;
+          }
+          
+        } catch (strategyError) {
+          console.log(`❌ ${strategy.name} strategy failed:`, strategyError instanceof Error ? strategyError.message : String(strategyError));
+          continue; // Try next strategy
         }
-        
-        const isFree = minPrice === 0 || minPrice === Infinity;
-        const price = isFree ? 0 : minPrice;
-        
-        // Generate URLs
-        const discoveryPageUrl = accessPass.route ? `https://whop.com/${accessPass.route}` : undefined;
-        const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
-        
-        console.log(`🔍 DISCOVERY PAGE PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price})`);
-        
-        return {
-          id: accessPass.id,
-          title: accessPass.title || accessPass.headline || `Product ${accessPass.id}`,
-          description: accessPass.shortenedDescription || accessPass.creatorPitch || '',
-          price: price,
-          currency: currency,
-          model: isFree ? 'free' : (accessPassPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
-          includedApps: [], // Access passes don't have included apps
-          plans: accessPassPlans.map(plan => ({
-            id: plan.id,
-            price: plan.rawInitialPrice || 0,
-            currency: plan.baseCurrency || 'usd',
-            title: plan.paymentLinkDescription || `Plan ${plan.id}`
-          })),
-          visibility: accessPass.visibility || 'visible' as const,
-          discoveryPageUrl,
-          checkoutUrl,
-          route: accessPass.route,
-          // Additional fields
-          verified: accessPass.verified,
-          activeUsersCount: accessPass.activeUsersCount,
-          reviewsAverage: accessPass.reviewsAverage,
-          logo: accessPass.logo?.sourceUrl,
-          bannerImage: accessPass.bannerImage?.source?.url,
-          isFree
-        };
-      });
+      }
       
-      console.log(`✅ Mapped to ${mappedProducts.length} DISCOVERY PAGE PRODUCTS`);
-      console.log("🎉 SUCCESS: SDK methods work perfectly!");
-      return mappedProducts;
+      // If all strategies failed, throw error
+      throw new Error("All API strategies failed");
       
     } catch (error) {
       console.error("❌ Failed to get discovery page products:", error);
-      console.log("⚠️ Falling back to empty array - smart upselling won't work");
+      console.log("⚠️ No PAID upsell products will be created");
       return [];
     }
+  }
+
+  /**
+   * Map access passes and plans to WhopProduct format
+   */
+  private mapAccessPassesToProducts(accessPasses: any[], plans: any[]): WhopProduct[] {
+    // Group plans by access pass ID
+    const plansByAccessPass = new Map<string, any[]>();
+    plans.forEach((plan: any) => {
+      if (plan.accessPass?.id) {
+        if (!plansByAccessPass.has(plan.accessPass.id)) {
+          plansByAccessPass.set(plan.accessPass.id, []);
+        }
+        plansByAccessPass.get(plan.accessPass.id)!.push(plan);
+      }
+    });
+    
+    return accessPasses.map((accessPass: any) => {
+      const accessPassPlans = plansByAccessPass.get(accessPass.id) || [];
+      
+      // Find the cheapest plan to determine if it's free
+      let minPrice = Infinity;
+      let currency = 'usd';
+      
+      if (accessPassPlans.length > 0) {
+        accessPassPlans.forEach(plan => {
+          const price = plan.rawInitialPrice || 0;
+          if (price < minPrice) {
+            minPrice = price;
+            currency = plan.baseCurrency || 'usd';
+          }
+        });
+      }
+      
+      const isFree = minPrice === 0 || minPrice === Infinity;
+      const price = isFree ? 0 : minPrice;
+      
+      // Generate URLs
+      const discoveryPageUrl = accessPass.route ? `https://whop.com/${accessPass.route}` : undefined;
+      const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
+      
+      console.log(`🔍 DISCOVERY PAGE PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price})`);
+      
+      return {
+        id: accessPass.id,
+        title: accessPass.title || accessPass.headline || `Product ${accessPass.id}`,
+        description: accessPass.shortenedDescription || accessPass.creatorPitch || '',
+        price: price,
+        currency: currency,
+        model: isFree ? 'free' : (accessPassPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
+        includedApps: [],
+        plans: accessPassPlans.map(plan => ({
+          id: plan.id,
+          price: plan.rawInitialPrice || 0,
+          currency: plan.baseCurrency || 'usd',
+          title: plan.paymentLinkDescription || `Plan ${plan.id}`
+        })),
+        visibility: accessPass.visibility || 'visible' as const,
+        discoveryPageUrl,
+        checkoutUrl,
+        route: accessPass.route,
+        verified: accessPass.verified,
+        activeUsersCount: accessPass.activeUsersCount,
+        reviewsAverage: accessPass.reviewsAverage,
+        logo: accessPass.logo?.sourceUrl,
+        bannerImage: accessPass.bannerImage?.source?.url,
+        isFree
+      };
+    });
   }
 
   /**
