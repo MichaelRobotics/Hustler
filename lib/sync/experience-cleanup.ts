@@ -87,6 +87,8 @@ export async function cleanupAbandonedExperiences(companyId: string): Promise<{
 
 /**
  * Determine if an experience should be cleaned up
+ * In a reinstall scenario, clean up ALL old experiences
+ * The admin is creating a new experience, so old ones should be removed
  */
 async function shouldCleanupExperience(experience: any): Promise<boolean> {
 	// Check if experience has any recent activity (users created in last 7 days)
@@ -107,14 +109,9 @@ async function shouldCleanupExperience(experience: any): Promise<boolean> {
 		new Date(conv.createdAt) > sevenDaysAgo
 	);
 
-	// Experience should be cleaned up if:
-	// 1. No recent users (no activity in last 7 days)
-	// 2. No active funnels
-	// 3. No recent conversations
-	const shouldCleanup = 
-		recentUsers.length === 0 && 
-		activeFunnels.length === 0 && 
-		recentConversations.length === 0;
+	// In a reinstall scenario, clean up ALL old experiences
+	// The admin is creating a new experience, so old ones should be removed
+	const shouldCleanup = true;
 
 	console.log(`  Experience ${experience.id}:`);
 	console.log(`    - Recent users: ${recentUsers.length}`);
