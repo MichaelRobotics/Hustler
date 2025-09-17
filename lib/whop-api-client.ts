@@ -1,13 +1,4 @@
-import { whopSdk } from "./whop-sdk";
-
-export interface WhopApp {
-  id: string;
-  name: string;
-  description?: string;
-  icon?: {
-    sourceUrl: string;
-  };
-}
+import { whopSdk } from './whop-sdk';
 
 export interface WhopProduct {
   id: string;
@@ -34,59 +25,71 @@ export interface WhopProduct {
   checkoutUrl?: string;
   route?: string; // The route used to construct discovery page URL
   updatedAt?: string;
+  isFree?: boolean; // Helper field for FREE/PAID detection
 }
 
-export interface WhopMembership {
+export interface WhopApp {
   id: string;
   name: string;
   description?: string;
-  price?: number;
-  currency?: string;
-  status?: string;
-  startDate?: string;
-  endDate?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  price: number;
+  currency: string;
+  discoveryPageUrl?: string;
+  checkoutUrl?: string;
+  route?: string;
 }
 
 export class WhopApiClient {
   private companyId: string;
   private userId: string;
-  
+
   constructor(companyId: string, userId: string) {
     this.companyId = companyId;
     this.userId = userId;
   }
-  
+
   /**
-   * Get installed apps for a company
-   * Uses experiences.listExperiences() since experiences represent installed apps
+   * Get installed apps (experiences) in the company
+   * These are used for FREE resources
    */
   async getInstalledApps(): Promise<WhopApp[]> {
     try {
-      console.log(`Fetching experiences for company ${this.companyId} with user ${this.userId}...`);
+      console.log(`Fetching installed apps for company ${this.companyId}...`);
       
       // Use global SDK with proper context (same pattern as other APIs)
       const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
       
-      // Use the correct SDK method to get company experiences (which includes installed apps)
-      const result = await sdkWithContext.experiences.listExperiences({
+      console.log("🔍 Getting installed apps using listExperiences...");
+      
+      // Get experiences for the company (these represent installed apps)
+      const experiencesResult = await sdkWithContext.experiences.listExperiences({
         companyId: this.companyId,
-        first: 100 // Get up to 100 experiences
+        first: 100
       });
       
-      console.log(`Found ${result?.experiencesV2?.nodes?.length || 0} experiences`);
+      const experiences = experiencesResult?.experiencesV2?.nodes || [];
+      console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
       
-      // Extract apps from experiences
-      const apps = result?.experiencesV2?.nodes?.map((exp: any) => ({
+      if (experiences.length === 0) {
+        console.log("⚠️ No installed apps found for company");
+        return [];
+      }
+      
+      // Map experiences to app format
+      const apps: WhopApp[] = experiences.map((exp: any) => ({
         id: exp.app?.id || exp.id,
         name: exp.app?.name || exp.name,
         description: exp.description,
-        icon: exp.app?.icon?.sourceUrl || exp.logo?.sourceUrl
-      })) || [];
+        price: 0, // Apps are free
+        currency: 'usd',
+        discoveryPageUrl: undefined, // Apps don't have discovery pages
+        checkoutUrl: undefined, // Apps don't have checkout
+        route: undefined
+      }));
       
-      console.log(`Mapped to ${apps.length} apps`);
+      console.log(`✅ Mapped to ${apps.length} installed apps`);
       return apps;
+      
     } catch (error) {
       console.error("Error fetching installed apps:", error);
       throw new Error(`Failed to fetch installed apps: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -94,451 +97,208 @@ export class WhopApiClient {
   }
 
   /**
-   * Get access passes from experiences for FREE apps
-   * These are used to get FREE resources from the funnel product
+   * Get DISCOVERY PAGE PRODUCTS (not apps) using SDK methods
+   * These are the actual products customers can buy for PAID upsells
    */
-  async getAccessPassesForFreeApps(): Promise<WhopApp[]> {
+  async getCompanyProducts(): Promise<WhopProduct[]> {
+    console.log(`🔍 Getting DISCOVERY PAGE PRODUCTS for company ${this.companyId}...`);
+    
     try {
-      console.log(`Fetching access passes for FREE apps from company ${this.companyId} with user ${this.userId}...`);
-      
-      // Use global SDK with proper context (same pattern as other APIs)
+      // Use global SDK with proper context
       const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
       
-      // Get company's experiences
-      const experiencesResult = await sdkWithContext.experiences.listExperiences({
+      console.log("🔍 Getting discovery page products using SDK methods...");
+      
+      // Get access passes (discovery page products)
+      const accessPassesResult = await (sdkWithContext.companies as any).listAccessPasses({
         companyId: this.companyId,
+        visibility: "all",
         first: 100
       });
       
-      const experiences = experiencesResult?.experiencesV2?.nodes || [];
-      console.log(`Found ${experiences.length} company experiences for access passes`);
+      const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
+      console.log(`🔍 Found ${accessPasses.length} access passes for company ${this.companyId}`);
       
-      const freeApps: WhopApp[] = [];
-      
-      // Get access passes for each experience
-      for (const exp of experiences) {
-        if (!exp) continue;
-        
-        try {
-          console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
-          const accessPassesResult = await sdkWithContext.experiences.listAccessPassesForExperience({
-            experienceId: exp.id
-          });
-          
-          const accessPasses = accessPassesResult?.accessPasses || [];
-          console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes`);
-          
-          // Map access passes to app format (these are FREE apps)
-          const expApps = accessPasses.map((pass: any) => ({
-            id: pass.id,
-            name: pass.title || pass.name || `App ${pass.id}`,
-            description: pass.description || pass.shortenedDescription,
-            icon: pass.icon?.sourceUrl || undefined
-          }));
-          
-          freeApps.push(...expApps);
-        } catch (expError) {
-          console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
-          // Continue with other experiences
-        }
-      }
-      
-      console.log(`Mapped to ${freeApps.length} FREE apps from access passes`);
-      return freeApps;
-    } catch (error) {
-      console.error("Error fetching access passes for FREE apps:", error);
-      throw new Error(`Failed to fetch access passes for FREE apps: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-  
-  /**
-   * Get company products from discovery page
-   * These are the actual business products customers see on the owner's Whop
-   */
-  async getCompanyProducts(): Promise<WhopProduct[]> {
-    try {
-      console.log(`Fetching owner's discovery page products for company ${this.companyId}...`);
-      
-      // Use global SDK with proper context (same pattern as other APIs)
-      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
-      
-      console.log("🔍 Fetching company products from discovery page using proper API...");
-      
-      // SUCCESS: We can access ALL discovery page products through experiences!
-      // The listExperiences API with companyId returns ALL apps installed in the company
-      // And we can get access passes (discovery page products) from ALL those experiences
-      
-      console.log("🔍 Using experiences approach - this gives us access to ALL discovery page products!");
-      console.log(`🔍 Company: ${this.companyId}, User: ${this.userId}`);
-      console.log("✅ This will return ALL discovery page products for the company");
-      
-      // Let's try to get the user's actual OAuth token from the request headers
-      console.log("🔍 Attempting to extract user's OAuth token from headers...");
-      
-      try {
-        // Try to get the raw token from headers
-        const headersList = await import('next/headers').then(m => m.headers());
-        const authHeader = headersList.get('authorization');
-        console.log("🔍 Authorization header:", authHeader ? "Present" : "Not found");
-        
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          const userToken = authHeader.substring(7); // Remove 'Bearer ' prefix
-          console.log("🔍 Extracted user token:", userToken.substring(0, 20) + "...");
-          
-          // Now try the OAuth endpoint with the user's token
-          console.log("🔍 Testing OAuth endpoint with user's token...");
-          
-          const oauthResponse = await fetch(`https://api.whop.com/v2/oauth/company/products?company_id=${this.companyId}`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${userToken}`,
-              'Content-Type': 'application/json',
-            }
-          });
-          
-          console.log(`🔍 OAuth Response Status: ${oauthResponse.status} ${oauthResponse.statusText}`);
-          
-          if (oauthResponse.ok) {
-            const oauthData = await oauthResponse.json();
-            console.log(`🔍 OAuth Response:`, JSON.stringify(oauthData, null, 2));
-            console.log("🎉 SUCCESS: OAuth endpoint works with user's token!");
-            
-            // If OAuth works, use it instead of experiences
-            const products = oauthData?.products || oauthData?.data || [];
-            console.log(`✅ Found ${products.length} products via OAuth`);
-            
-            const mappedProducts: WhopProduct[] = products.map((product: any) => ({
-              id: product.id,
-              title: product.title || product.name || `Product ${product.id}`,
-              description: product.description || '',
-              price: product.price || 0,
-              currency: product.currency || 'usd',
-              model: (product.price > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
-              includedApps: [],
-              plans: [],
-              visibility: 'visible' as const,
-              discoveryPageUrl: product.route ? `https://whop.com/${product.route}` : undefined,
-              checkoutUrl: product.route ? `https://whop.com/${product.route}/checkout` : undefined,
-              route: product.route
-            }));
-            
-            return mappedProducts;
-          } else {
-            console.log("❌ OAuth endpoint still failed with user's token");
-            console.log("ℹ️ Falling back to experiences approach...");
-          }
-        } else {
-          console.log("❌ No user token found in headers");
-          console.log("ℹ️ Falling back to experiences approach...");
-        }
-      } catch (tokenError) {
-        console.error("❌ Failed to extract user token:", tokenError);
-        console.log("ℹ️ Falling back to experiences approach...");
-      }
-      
-      // Fallback to experiences approach
-      console.log("🔍 Using experiences approach - this gives us access to ALL discovery page products!");
-      console.log(`🔍 Company: ${this.companyId}, User: ${this.userId}`);
-      console.log("✅ This will return ALL discovery page products for the company");
-      
-      try {
-        // Get experiences for the company (these represent their business)
-        const experiencesResult = await sdkWithContext.experiences.listExperiences({
-          companyId: this.companyId,
-          first: 100
-        });
-        
-        const experiences = experiencesResult?.experiencesV2?.nodes || [];
-        console.log(`Found ${experiences.length} experiences for company ${this.companyId}`);
-        
-        if (experiences.length === 0) {
-          console.log("⚠️ No experiences found for company - this means no products");
-          return [];
-        }
-        
-        // Debug: Log all experiences to see what apps are included
-        console.log(`🔍 DETAILED ANALYSIS: Found ${experiences.length} experiences for company ${this.companyId}`);
-        console.log(`🔍 Our App ID: ${process.env.NEXT_PUBLIC_WHOP_APP_ID}`);
-        
-        experiences.forEach((exp: any, index: number) => {
-          const isOurApp = exp.app?.id === process.env.NEXT_PUBLIC_WHOP_APP_ID;
-          console.log(`🔍 Experience ${index + 1}:`, {
-            id: exp.id,
-            name: exp.name,
-            appId: exp.app?.id,
-            appName: exp.app?.name,
-            isOurApp: isOurApp,
-            description: exp.description
-          });
-        });
-        
-        // Count how many are our app vs other apps
-        const ourAppCount = experiences.filter((exp: any) => exp.app?.id === process.env.NEXT_PUBLIC_WHOP_APP_ID).length;
-        const otherAppCount = experiences.length - ourAppCount;
-        console.log(`📊 BREAKDOWN: ${ourAppCount} experiences with OUR app, ${otherAppCount} experiences with OTHER apps`);
-        
-        if (otherAppCount > 0) {
-          console.log("🎉 SUCCESS: We CAN see other apps installed in the company!");
-        } else {
-          console.log("⚠️ LIMITATION: We can only see experiences with our own app");
-        }
-        
-        // Get access passes from experiences - these ARE the discovery page products
-        const allProducts: WhopProduct[] = [];
-        
-        for (const exp of experiences) {
-          if (!exp) continue;
-          
-          try {
-            console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
-            const accessPassesResult = await sdkWithContext.experiences.listAccessPassesForExperience({
-              experienceId: exp.id
-            });
-            
-            const accessPasses = accessPassesResult?.accessPasses || [];
-            console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes (products)`);
-            
-            // Map access passes to product format
-            const expProducts = accessPasses.map((pass: any) => {
-              console.log(`🔍 Access Pass (Product) ${pass.id}:`, JSON.stringify(pass, null, 2));
-              
-              // Generate URLs
-              const discoveryPageUrl = pass.route ? `https://whop.com/${pass.route}` : undefined;
-              const checkoutUrl = pass.route ? `https://whop.com/${pass.route}/checkout` : undefined;
-              
-              console.log(`🔗 Generated URLs for ${pass.title}:`);
-              console.log(`  - Discovery: ${discoveryPageUrl}`);
-              console.log(`  - Checkout: ${checkoutUrl}`);
-              
-              return {
-                id: pass.id,
-                title: pass.title || pass.name || `Product ${pass.id}`,
-                description: pass.description || pass.shortenedDescription,
-                price: pass.rawInitialPrice || pass.price?.amount || 0,
-                currency: pass.baseCurrency || pass.price?.currency || 'usd',
-                model: pass.price?.model || (pass.rawInitialPrice > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
-                includedApps: pass.includedApps || pass.apps || [],
-                plans: pass.plans || [],
-                visibility: 'visible' as const,
-                // URLs for discovery page and checkout
-                discoveryPageUrl,
-                checkoutUrl,
-                route: pass.route
-              };
-            });
-            
-            allProducts.push(...expProducts);
-          } catch (expError) {
-            console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
-            // Continue with other experiences
-          }
-        }
-        
-        console.log(`✅ Found ${allProducts.length} discovery page products via access passes`);
-        console.log("🎉 SUCCESS: We can access ALL discovery page products for the company!");
-        
-        // Remove duplicates (same access pass might be in multiple experiences)
-        const uniqueProducts = allProducts.filter((product, index, self) => 
-          index === self.findIndex(p => p.id === product.id)
-        );
-        
-        console.log(`✅ After deduplication: ${uniqueProducts.length} unique discovery page products`);
-        return uniqueProducts;
-        
-      } catch (sdkError) {
-        console.error("❌ SDK approach failed:", sdkError);
-        console.log("⚠️ Falling back to empty array - smart upselling won't work");
+      if (accessPasses.length === 0) {
+        console.log("⚠️ No discovery page products found - this means no products to upsell");
         return [];
       }
       
-    } catch (error) {
-      console.error("Error fetching company products:", error);
-      throw new Error(`Failed to fetch company products: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-  
-  /**
-   * Get company memberships/products
-   * Uses access passes from experiences since these represent purchasable items
-   */
-  async getCompanyMemberships(companyId: string): Promise<WhopMembership[]> {
-    try {
-      console.log(`Fetching memberships for company ${companyId}...`);
-      
-      // First get all experiences for the company
-      const experiencesResult = await whopSdk.experiences.listExperiences({
-        companyId: companyId,
+      // Get plans for pricing information
+      const plansResult = await (sdkWithContext.companies as any).listPlans({
+        companyId: this.companyId,
+        visibility: "all",
         first: 100
       });
       
-      const experiences = experiencesResult?.experiencesV2?.nodes || [];
-      console.log(`Found ${experiences.length} experiences to check for access passes`);
+      const plans = plansResult?.plans?.nodes || [];
+      console.log(`🔍 Found ${plans.length} plans for company ${this.companyId}`);
       
-      const memberships = [];
-      
-      // Get access passes for each experience
-      for (const exp of experiences) {
-        if (!exp) continue; // Skip null/undefined experiences
-        
-        try {
-          console.log(`🔍 Checking access passes for experience: ${exp.name} (${exp.id})`);
-          const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
-            experienceId: exp.id
-          });
-          
-          const accessPasses = accessPassesResult?.accessPasses || [];
-          console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes`);
-          
-          // Map access passes to memberships
-          const expMemberships = accessPasses.map((pass: any) => {
-            // Generate URLs
-            const discoveryPageUrl = pass.route ? `https://whop.com/${pass.route}` : undefined;
-            const checkoutUrl = pass.route ? `https://whop.com/${pass.route}/checkout` : undefined;
-            
-            return {
-              id: pass.id,
-              name: pass.title,
-              description: pass.shortenedDescription,
-              price: pass.rawInitialPrice || 0,
-              currency: pass.baseCurrency || 'usd',
-              discoveryPageUrl,
-              checkoutUrl,
-              route: pass.route
-            };
-          });
-          
-          memberships.push(...expMemberships);
-        } catch (expError) {
-          console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
-          // This is expected for many experiences - not all have access passes
-          // Continue with other experiences
+      // Group plans by access pass ID
+      const plansByAccessPass = new Map<string, any[]>();
+      plans.forEach((plan: any) => {
+        if (plan.accessPass?.id) {
+          if (!plansByAccessPass.has(plan.accessPass.id)) {
+            plansByAccessPass.set(plan.accessPass.id, []);
+          }
+          plansByAccessPass.get(plan.accessPass.id)!.push(plan);
         }
-      }
+      });
       
-      console.log(`Total memberships found: ${memberships.length}`);
-      return memberships;
+      console.log("🔍 Mapping access passes to products...");
+      
+      const mappedProducts: WhopProduct[] = accessPasses.map((accessPass: any) => {
+        // Get plans for this access pass
+        const accessPassPlans = plansByAccessPass.get(accessPass.id) || [];
+        
+        // Find the cheapest plan to determine if it's free
+        let minPrice = Infinity;
+        let currency = 'usd';
+        
+        if (accessPassPlans.length > 0) {
+          accessPassPlans.forEach(plan => {
+            const price = plan.rawInitialPrice || 0;
+            if (price < minPrice) {
+              minPrice = price;
+              currency = plan.baseCurrency || 'usd';
+            }
+          });
+        }
+        
+        const isFree = minPrice === 0 || minPrice === Infinity;
+        const price = isFree ? 0 : minPrice;
+        
+        // Generate URLs
+        const discoveryPageUrl = accessPass.route ? `https://whop.com/${accessPass.route}` : undefined;
+        const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
+        
+        console.log(`🔍 DISCOVERY PAGE PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price})`);
+        
+        return {
+          id: accessPass.id,
+          title: accessPass.title || accessPass.headline || `Product ${accessPass.id}`,
+          description: accessPass.shortenedDescription || accessPass.creatorPitch || '',
+          price: price,
+          currency: currency,
+          model: isFree ? 'free' : (accessPassPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
+          includedApps: [], // Access passes don't have included apps
+          plans: accessPassPlans.map(plan => ({
+            id: plan.id,
+            price: plan.rawInitialPrice || 0,
+            currency: plan.baseCurrency || 'usd',
+            title: plan.paymentLinkDescription || `Plan ${plan.id}`
+          })),
+          visibility: accessPass.visibility || 'visible' as const,
+          discoveryPageUrl,
+          checkoutUrl,
+          route: accessPass.route,
+          // Additional fields
+          verified: accessPass.verified,
+          activeUsersCount: accessPass.activeUsersCount,
+          reviewsAverage: accessPass.reviewsAverage,
+          logo: accessPass.logo?.sourceUrl,
+          bannerImage: accessPass.bannerImage?.source?.url,
+          isFree
+        };
+      });
+      
+      console.log(`✅ Mapped to ${mappedProducts.length} DISCOVERY PAGE PRODUCTS`);
+      console.log("🎉 SUCCESS: SDK methods work perfectly!");
+      return mappedProducts;
+      
     } catch (error) {
-      console.error("Error fetching company memberships:", error);
-      // Return empty array for now since memberships might not be available
-      console.log("Returning empty memberships array due to API error");
+      console.error("❌ Failed to get discovery page products:", error);
+      console.log("⚠️ Falling back to empty array - smart upselling won't work");
       return [];
     }
   }
-  
-  /**
-   * Get app information by ID
-   */
-  async getAppById(appId: string): Promise<WhopApp | null> {
-    try {
-      const app = await (whopSdk as any).apps.getAppConnection({
-        appConnectionId: appId
-      });
-      
-      return app || null;
-    } catch (error) {
-      console.error("Error fetching app by ID:", error);
-      return null;
-    }
-  }
-  
-  /**
-   * Get product information by ID
-   */
-  async getProductById(productId: string): Promise<WhopProduct | null> {
-    try {
-      const product = await (whopSdk as any).products.get({
-        productId: productId
-      });
-      
-      return product || null;
-    } catch (error) {
-      console.error("Error fetching product by ID:", error);
-      return null;
-    }
-  }
-  
-  /**
-   * Get membership information by ID
-   */
-  async getMembershipById(membershipId: string): Promise<WhopMembership | null> {
-    try {
-      const membership = await (whopSdk as any).memberships.get({
-        membershipId: membershipId
-      });
-      
-      return membership || null;
-    } catch (error) {
-      console.error("Error fetching membership by ID:", error);
-      return null;
-    }
-  }
 
   /**
-   * Check if user has access to company and their access level
-   */
-  async checkIfUserHasAccessToCompany(companyId: string, userId: string): Promise<{ hasAccess: boolean; accessLevel: 'admin' | 'customer' | 'no_access' }> {
-    try {
-      const result = await (whopSdk as any).access.checkIfUserHasAccessToCompany({
-        companyId: companyId,
-        userId: userId
-      });
-      
-      return result || { hasAccess: false, accessLevel: 'no_access' };
-    } catch (error) {
-      console.error("Error checking user access to company:", error);
-      return { hasAccess: false, accessLevel: 'no_access' };
-    }
-  }
-
-  /**
-   * Determine funnel name based on products
-   * Priority: FREE product > Cheapest product > Fallback
+   * Determine funnel name from discovery page products
+   * Uses FREE product if available, otherwise cheapest PAID product
    */
   determineFunnelName(products: WhopProduct[]): string {
-    const freeProducts = products.filter(p => p.price === 0 || p.model === 'free');
-    const paidProducts = products.filter(p => p.price > 0 && p.model !== 'free');
-    const cheapestProduct = paidProducts.sort((a, b) => a.price - b.price)[0];
-    
-    if (freeProducts.length > 0) {
-      console.log(`🎯 Using FREE product for funnel name: ${freeProducts[0].title}`);
-      return freeProducts[0].title;
-    } else if (cheapestProduct) {
-      console.log(`🎯 Using cheapest product for funnel name: ${cheapestProduct.title}`);
-      return cheapestProduct.title;
-    } else {
-      console.log(`🎯 No products found, using fallback name`);
+    if (products.length === 0) {
       return "App Installation";
     }
+
+    // First, try to find a FREE product
+    const freeProduct = products.find(p => p.isFree);
+    if (freeProduct) {
+      console.log(`🎯 Using FREE product for funnel name: ${freeProduct.title}`);
+      return freeProduct.title;
+    }
+
+    // If no FREE product, use the cheapest PAID product
+    const paidProducts = products.filter(p => !p.isFree && p.price > 0);
+    if (paidProducts.length > 0) {
+      const cheapestProduct = paidProducts.reduce((cheapest, current) => 
+        current.price < cheapest.price ? current : cheapest
+      );
+      console.log(`🎯 Using cheapest PAID product for funnel name: ${cheapestProduct.title} ($${cheapestProduct.price})`);
+      return cheapestProduct.title;
+    }
+
+    // Fallback
+    console.log("⚠️ No suitable product found for funnel naming, using fallback");
+    return "App Installation";
   }
 
   /**
-   * Get the product that the funnel should be named after
+   * Get the funnel product from discovery page products
+   * This is the product that will be used to name the funnel
    */
   getFunnelProduct(products: WhopProduct[]): WhopProduct | null {
-    const freeProducts = products.filter(p => p.price === 0 || p.model === 'free');
-    const paidProducts = products.filter(p => p.price > 0 && p.model !== 'free');
-    const cheapestProduct = paidProducts.sort((a, b) => a.price - b.price)[0];
-    
-    return freeProducts.length > 0 ? freeProducts[0] : cheapestProduct || null;
+    if (products.length === 0) {
+      return null;
+    }
+
+    // First, try to find a FREE product
+    const freeProduct = products.find(p => p.isFree);
+    if (freeProduct) {
+      console.log(`🎯 Funnel product: ${freeProduct.title} (${freeProduct.includedApps.length} apps included)`);
+      return freeProduct;
+    }
+
+    // If no FREE product, use the cheapest PAID product
+    const paidProducts = products.filter(p => !p.isFree && p.price > 0);
+    if (paidProducts.length > 0) {
+      const cheapestProduct = paidProducts.reduce((cheapest, current) => 
+        current.price < cheapest.price ? current : cheapest
+      );
+      console.log(`🎯 Funnel product: ${cheapestProduct.title} ($${cheapestProduct.price})`);
+      return cheapestProduct;
+    }
+
+    return null;
   }
 
   /**
-   * Get upsell products (all PAID products except the funnel product)
+   * Get upsell products (exclude the funnel product)
    */
   getUpsellProducts(products: WhopProduct[], funnelProductId: string): WhopProduct[] {
-    return products.filter(p => p.id !== funnelProductId && p.price > 0 && p.model !== 'free');
+    const upsellProducts = products.filter(p => p.id !== funnelProductId);
+    console.log(`🎯 Found ${upsellProducts.length} upsell products (excluding funnel product)`);
+    return upsellProducts;
   }
 
   /**
-   * Get cheapest plan for a product
+   * Get the cheapest plan for a product
    */
-  getCheapestPlan(product: WhopProduct) {
-    if (!product.plans || product.plans.length === 0) return null;
-    return product.plans.sort((a, b) => a.price - b.price)[0];
+  getCheapestPlan(product: WhopProduct): { id: string; price: number; currency: string; title?: string } | null {
+    if (!product.plans || product.plans.length === 0) {
+      return null;
+    }
+
+    const cheapestPlan = product.plans.reduce((cheapest, current) => 
+      current.price < cheapest.price ? current : cheapest
+    );
+
+    return cheapestPlan;
   }
 }
 
-// Cache instances by company ID + user ID combination for proper multi-tenancy
+// Cache for API clients to avoid recreating them
 const whopApiClientCache = new Map<string, WhopApiClient>();
 
 export function getWhopApiClient(companyId: string, userId: string): WhopApiClient {

@@ -105,41 +105,31 @@ export async function triggerProductSyncForNewAdmin(
 		// Note: The funnel product itself is excluded from FREE resources to avoid duplication
 		console.log("📱 Creating FREE apps from funnel product's included apps...");
 		if (funnelProduct && funnelProduct.includedApps.length > 0) {
-			try {
-				// Get access passes for FREE apps (these are the included apps)
-				const freeApps = await whopClient.getAccessPassesForFreeApps();
-				console.log(`🔍 All FREE apps from access passes:`, freeApps.map(app => ({ id: app.id, name: app.name })));
-				console.log(`🔍 Looking for apps with IDs:`, funnelProduct.includedApps);
-				
-				// Filter to only include apps that are in the funnel product
-				// IMPORTANT: The funnel product itself is NEVER included in FREE resources
-				// We only include the apps that are included IN the funnel product
-				const funnelApps = freeApps.filter(app => funnelProduct.includedApps.includes(app.id));
-				
-				console.log(`Found ${funnelApps.length} apps included in funnel product`);
-				console.log(`🔍 Matched funnel apps:`, funnelApps.map(app => ({ id: app.id, name: app.name })));
-				console.log(`⚠️ Funnel product itself (${funnelProduct.id}) is excluded from FREE resources`);
-				
-				for (const app of funnelApps) {
-					try {
-						const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-							name: app.name || app.description || `App ${app.id}`,
-							type: "MY_PRODUCTS",
-							category: "FREE_VALUE",
-							link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-							description: app.description,
-							whopProductId: app.id
-						});
-						
-						resourceIds.push(resource.id);
-						console.log(`✅ Created FREE resource for app: ${app.name || app.id}`);
-					} catch (error) {
-						console.error(`❌ Error creating FREE resource for app ${app.id}:`, error);
-					}
+			console.log(`🔍 Funnel product has ${funnelProduct.includedApps.length} included apps:`, funnelProduct.includedApps);
+			console.log(`⚠️ Funnel product itself (${funnelProduct.id}) is excluded from FREE resources`);
+			
+			// Create FREE resources for each included app
+			for (const appId of funnelProduct.includedApps) {
+				try {
+					console.log(`🔍 Creating FREE resource for app ID: ${appId}`);
+					
+					const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
+						name: `App ${appId}`,
+						type: "MY_PRODUCTS",
+						category: "FREE_VALUE",
+						link: `https://whop.com/hub/${companyId}/${appId}?ref=${experienceId}`,
+						description: `Free access to app ${appId}`,
+						whopProductId: appId
+					});
+					
+					resourceIds.push(resource.id);
+					console.log(`✅ Created FREE resource for app: ${appId}`);
+				} catch (error) {
+					console.error(`❌ Error creating FREE resource for app ${appId}:`, error);
 				}
-			} catch (error) {
-				console.error("❌ Error fetching FREE apps from access passes:", error);
 			}
+			
+			console.log(`✅ Created ${funnelProduct.includedApps.length} FREE resources from funnel product's included apps`);
 		} else {
 			console.log(`⚠️ No apps found in funnel product or no funnel product`);
 		}
