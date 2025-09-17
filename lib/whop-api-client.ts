@@ -76,16 +76,26 @@ export class WhopApiClient {
       }
       
       // Map experiences to app format
-      const apps: WhopApp[] = experiences.map((exp: any) => ({
-        id: exp.app?.id || exp.id,
-        name: exp.app?.name || exp.name,
-        description: exp.description,
-        price: 0, // Apps are free
-        currency: 'usd',
-        discoveryPageUrl: undefined, // Apps don't have discovery pages
-        checkoutUrl: undefined, // Apps don't have checkout
-        route: undefined
-      }));
+      const apps: WhopApp[] = experiences.map((exp: any) => {
+        console.log(`🔍 Mapping experience:`, {
+          id: exp.id,
+          name: exp.name,
+          appId: exp.app?.id,
+          appName: exp.app?.name,
+          description: exp.description
+        });
+        
+        return {
+          id: exp.app?.id || exp.id,
+          name: exp.app?.name || exp.name,
+          description: exp.description,
+          price: 0, // Apps are free
+          currency: 'usd',
+          discoveryPageUrl: undefined, // Apps don't have discovery pages
+          checkoutUrl: undefined, // Apps don't have checkout
+          route: undefined
+        };
+      });
       
       console.log(`✅ Mapped to ${apps.length} installed apps`);
       return apps;
