@@ -84,11 +84,11 @@ export class WhopApiClient {
       
       console.log("🔍 Getting installed apps using listExperiences...");
       
-      // Single API call with optimized timeout
-      const operationTimeout = 30000; // 30 seconds total
+      // Ultra-fast API call with minimal data
+      const operationTimeout = 15000; // 15 seconds total
       const startTime = Date.now();
       
-      console.log(`🚀 Starting listExperiences API call with ${operationTimeout}ms timeout...`);
+      console.log(`🚀 Starting ultra-fast listExperiences API call with ${operationTimeout}ms timeout...`);
       
       const experiencesResult = await Promise.race([
         this.getCachedOrFetch(
@@ -96,14 +96,14 @@ export class WhopApiClient {
           () => this.retryApiCall(
             () => (sdkWithContext.experiences as any).listExperiences({
               companyId: this.companyId,
-              first: 25, // Further reduced to 25 for much faster response
+              first: 10, // Ultra-minimal data: only 10 experiences
               // Add specific filters to reduce query complexity
               onAccessPass: false, // Only get experiences not tied to access passes
               accessPassId: undefined // Don't filter by access pass
             }),
             "listExperiences",
-            2, // Reduced retries to 2 for faster failure
-            15000 // Reduced timeout to 15s per attempt
+            1, // Only 1 retry for faster failure
+            8000 // Ultra-fast timeout: 8s per attempt
           )
         ),
         new Promise<never>((_, reject) => 
@@ -165,24 +165,24 @@ export class WhopApiClient {
     try {
       console.log("🔍 Getting discovery page products using SDK methods...");
       
-      // PARALLEL API CALLS with single timeout for entire operation
-      const operationTimeout = 45000; // 45 seconds total for both calls
+      // ULTRA-FAST API CALLS with circuit breaker pattern
+      const operationTimeout = 20000; // Reduced to 20 seconds total
       const startTime = Date.now();
       
-      console.log(`🚀 Starting parallel API calls with ${operationTimeout}ms timeout...`);
+      console.log(`🚀 Starting ultra-fast API calls with ${operationTimeout}ms timeout...`);
       
-      // Create both API calls as promises with caching and optimized parameters
+      // Create both API calls with minimal data and ultra-fast timeouts
       const accessPassesPromise = this.getCachedOrFetch(
         `accessPasses-${this.companyId}`,
         () => this.retryApiCall(
           () => (whopSdk.companies as any).listAccessPasses({
             companyId: this.companyId,
-            visibility: "visible", // Only visible products (faster than "all")
-            first: 50 // Reduced from 100 to 50 for faster response
+            visibility: "visible",
+            first: 10 // Ultra-minimal data: only 10 products
           }),
           "listAccessPasses",
-          2, // Reduced retries
-          12000 // Reduced timeout to 12s per attempt
+          1, // Only 1 retry
+          5000 // Ultra-fast timeout: 5s per attempt
         )
       );
       
@@ -191,36 +191,72 @@ export class WhopApiClient {
         () => this.retryApiCall(
           () => (whopSdk.companies as any).listPlans({
             companyId: this.companyId,
-            visibility: "visible", // Only visible plans (faster than "all")
-            first: 50 // Reduced from 100 to 50 for faster response
+            visibility: "visible",
+            first: 10 // Ultra-minimal data: only 10 plans
           }),
           "listPlans",
-          2, // Reduced retries
-          12000 // Reduced timeout to 12s per attempt
+          1, // Only 1 retry
+          5000 // Ultra-fast timeout: 5s per attempt
         )
       );
       
-      // Execute both calls in parallel with overall timeout
-      const [accessPassesResult, plansResult] = await Promise.race([
-        Promise.all([accessPassesPromise, plansPromise]),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error(`Discovery products fetch timeout after ${operationTimeout}ms`)), operationTimeout)
-        )
-      ]);
+      // Execute with circuit breaker - if one fails, continue with the other
+      let accessPassesResult: any = null;
+      let plansResult: any = null;
+      
+      try {
+        console.log("🔄 Attempting parallel API calls...");
+        const results = await Promise.race([
+          Promise.allSettled([accessPassesPromise, plansPromise]),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`Discovery products fetch timeout after ${operationTimeout}ms`)), operationTimeout)
+          )
+        ]);
+        
+        // Process results even if one failed
+        if (results[0].status === 'fulfilled') {
+          accessPassesResult = results[0].value;
+          console.log("✅ listAccessPasses succeeded");
+        } else {
+          console.log("❌ listAccessPasses failed:", results[0].reason?.message);
+        }
+        
+        if (results[1].status === 'fulfilled') {
+          plansResult = results[1].value;
+          console.log("✅ listPlans succeeded");
+        } else {
+          console.log("❌ listPlans failed:", results[1].reason?.message);
+        }
+        
+        // If both failed, throw error
+        if (!accessPassesResult && !plansResult) {
+          throw new Error("Both API calls failed");
+        }
+        
+      } catch (error) {
+        console.error("❌ Parallel API calls failed:", error);
+        // Continue with null results - we'll handle this gracefully
+      }
       
       const elapsed = Date.now() - startTime;
-      console.log(`✅ Parallel API calls completed in ${elapsed}ms`);
+      console.log(`✅ API calls completed in ${elapsed}ms`);
       
       const accessPasses = (accessPassesResult as any)?.accessPasses?.nodes || [];
-      console.log(`🔍 Found ${accessPasses.length} access passes for company ${this.companyId}`);
+      const plans = (plansResult as any)?.plans?.nodes || [];
       
-      if (accessPasses.length === 0) {
-        console.log("⚠️ No discovery page products found - this means no products to upsell");
+      console.log(`🔍 Found ${accessPasses.length} access passes and ${plans.length} plans for company ${this.companyId}`);
+      
+      // Graceful fallback: if no data, return empty array but don't fail
+      if (accessPasses.length === 0 && plans.length === 0) {
+        console.log("⚠️ No discovery page products found - continuing with empty products");
         return [];
       }
       
-      const plans = (plansResult as any)?.plans?.nodes || [];
-      console.log(`🔍 Found ${plans.length} plans for company ${this.companyId}`);
+      // If we have access passes but no plans, continue with empty plans
+      if (accessPasses.length === 0) {
+        console.log("⚠️ No access passes found, but continuing with plans only");
+        return [];
+      }
       
       // Group plans by access pass ID
       const plansByAccessPass = new Map<string, any[]>();
