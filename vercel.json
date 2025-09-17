@@ -4,15 +4,15 @@
   "framework": "nextjs",
   "functions": {
     "app/api/**/*.ts": {
-      "maxDuration": 300,
+      "maxDuration": 800,
       "memory": 2048
     },
     "app/api/cron/**/*.ts": {
-      "maxDuration": 300,
+      "maxDuration": 800,
       "memory": 2048
     },
     "app/api/admin/sync-products/route.ts": {
-      "maxDuration": 300,
+      "maxDuration": 800,
       "memory": 2048
     }
   },
