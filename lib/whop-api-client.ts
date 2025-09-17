@@ -11,10 +11,19 @@ export interface WhopApp {
 
 export interface WhopProduct {
   id: string;
-  name: string;
+  title: string;
   description?: string;
-  price?: number;
-  currency?: string;
+  price: number;
+  currency: string;
+  model: 'free' | 'one-time' | 'recurring';
+  includedApps: string[];
+  plans: Array<{
+    id: string;
+    price: number;
+    currency: string;
+    title?: string;
+  }>;
+  visibility: 'archived' | 'hidden' | 'quick_link' | 'visible';
   status?: string;
   category?: string;
   tags?: string[];
@@ -76,27 +85,37 @@ export class WhopApiClient {
   }
   
   /**
-   * Get company products
-   * Uses the same approach as memberships since products are access passes
+   * Get company products from discovery page
+   * These are the actual products customers see on the owner's Whop
    */
   async getCompanyProducts(companyId: string): Promise<WhopProduct[]> {
     try {
-      console.log(`Fetching products for company ${companyId}...`);
+      console.log(`Fetching owner's business products for company ${companyId}...`);
       
-      // Use the same logic as memberships since products are access passes
-      const memberships = await this.getCompanyMemberships(companyId);
+      // Get products from the company's discovery page
+      const result = await (this.whopSdk as any).company.products.list({
+        companyId: companyId,
+        first: 100
+      });
       
-      // Map memberships to products (they're essentially the same thing)
-      const products = memberships.map((membership: any) => ({
-        id: membership.id,
-        name: membership.name,
-        description: membership.description,
-        price: membership.price,
-        currency: membership.currency
+      const products = result?.products?.nodes || [];
+      console.log(`Found ${products.length} business products`);
+      
+      // Map to our product format
+      const mappedProducts = products.map((product: any) => ({
+        id: product.id,
+        title: product.title,
+        description: product.description,
+        price: product.price?.amount || 0,
+        currency: product.price?.currency || 'usd',
+        model: product.price?.model || 'free',
+        includedApps: product.includedApps || [],
+        plans: product.plans || [],
+        visibility: product.visibility || 'visible'
       }));
       
-      console.log(`Mapped to ${products.length} products`);
-      return products;
+      console.log(`Mapped to ${mappedProducts.length} business products`);
+      return mappedProducts;
     } catch (error) {
       console.error("Error fetching company products:", error);
       throw new Error(`Failed to fetch company products: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -225,6 +244,53 @@ export class WhopApiClient {
       console.error("Error checking user access to company:", error);
       return { hasAccess: false, accessLevel: 'no_access' };
     }
+  }
+
+  /**
+   * Determine funnel name based on products
+   * Priority: FREE product > Cheapest product > Fallback
+   */
+  determineFunnelName(products: WhopProduct[]): string {
+    const freeProducts = products.filter(p => p.price === 0 || p.model === 'free');
+    const paidProducts = products.filter(p => p.price > 0 && p.model !== 'free');
+    const cheapestProduct = paidProducts.sort((a, b) => a.price - b.price)[0];
+    
+    if (freeProducts.length > 0) {
+      console.log(`🎯 Using FREE product for funnel name: ${freeProducts[0].title}`);
+      return freeProducts[0].title;
+    } else if (cheapestProduct) {
+      console.log(`🎯 Using cheapest product for funnel name: ${cheapestProduct.title}`);
+      return cheapestProduct.title;
+    } else {
+      console.log(`🎯 No products found, using fallback name`);
+      return "App Installation";
+    }
+  }
+
+  /**
+   * Get the product that the funnel should be named after
+   */
+  getFunnelProduct(products: WhopProduct[]): WhopProduct | null {
+    const freeProducts = products.filter(p => p.price === 0 || p.model === 'free');
+    const paidProducts = products.filter(p => p.price > 0 && p.model !== 'free');
+    const cheapestProduct = paidProducts.sort((a, b) => a.price - b.price)[0];
+    
+    return freeProducts.length > 0 ? freeProducts[0] : cheapestProduct || null;
+  }
+
+  /**
+   * Get upsell products (all PAID products except the funnel product)
+   */
+  getUpsellProducts(products: WhopProduct[], funnelProductId: string): WhopProduct[] {
+    return products.filter(p => p.id !== funnelProductId && p.price > 0 && p.model !== 'free');
+  }
+
+  /**
+   * Get cheapest plan for a product
+   */
+  getCheapestPlan(product: WhopProduct) {
+    if (!product.plans || product.plans.length === 0) return null;
+    return product.plans.sort((a, b) => a.price - b.price)[0];
   }
 }
 

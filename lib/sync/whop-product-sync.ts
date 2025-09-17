@@ -13,10 +13,19 @@ import { getWhopApiClient, type WhopProduct as ApiWhopProduct } from "../whop-ap
 
 export interface WhopProduct {
 	id: string;
-	name: string;
+	title: string;
 	description?: string;
-	price?: number;
-	currency?: string;
+	price: number;
+	currency: string;
+	model: 'free' | 'one-time' | 'recurring';
+	includedApps: string[];
+	plans: Array<{
+		id: string;
+		price: number;
+		currency: string;
+		title?: string;
+	}>;
+	visibility: 'archived' | 'hidden' | 'quick_link' | 'visible';
 	status: "active" | "inactive" | "draft";
 	category?: string;
 	tags?: string[];
@@ -167,7 +176,7 @@ export class WhopProductSync {
 			});
 
 			const resourceData = {
-				name: whopProduct.name,
+				name: whopProduct.title,
 				type: "MY_PRODUCTS" as const,
 				category: this.determineCategory(whopProduct),
 				link: this.generateProductLink(whopProduct.id),
@@ -180,7 +189,7 @@ export class WhopProductSync {
 				// Check if update is needed
 				const needsUpdate =
 					forceUpdate ||
-					existingResource.name !== whopProduct.name ||
+					existingResource.name !== whopProduct.title ||
 					existingResource.description !== (whopProduct.description || null) ||
 					existingResource.category !== this.determineCategory(whopProduct);
 
@@ -228,10 +237,14 @@ export class WhopProductSync {
 			// Transform API products to our format
 			const whopProducts: WhopProduct[] = apiProducts.map((product: ApiWhopProduct) => ({
 				id: product.id,
-				name: product.name || "Unnamed Product",
+				title: product.title || "Unnamed Product",
 				description: product.description,
-				price: product.price,
-				currency: product.currency,
+				price: product.price || 0,
+				currency: product.currency || 'usd',
+				model: product.model || 'free',
+				includedApps: product.includedApps || [],
+				plans: product.plans || [],
+				visibility: product.visibility || 'visible',
 				status: (product.status as "active" | "inactive" | "draft") || "active",
 				category: product.category,
 				tags: product.tags || [],
@@ -328,10 +341,14 @@ export class WhopProductSync {
 
 			const whopProduct: WhopProduct = {
 				id: productData.id,
-				name: productData.name || "Unnamed Product",
+				title: productData.title || "Unnamed Product",
 				description: productData.description,
-				price: productData.price,
-				currency: productData.currency,
+				price: productData.price || 0,
+				currency: productData.currency || 'usd',
+				model: productData.model || 'free',
+				includedApps: productData.includedApps || [],
+				plans: productData.plans || [],
+				visibility: productData.visibility || 'visible',
 				status: productData.status || "active",
 				category: productData.category,
 				tags: productData.tags || [],

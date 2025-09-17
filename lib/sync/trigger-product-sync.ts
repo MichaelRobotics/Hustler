@@ -1,5 +1,5 @@
 import { db } from "@/lib/supabase/db-server";
-import { resources, users, experiences } from "@/lib/supabase/schema";
+import { resources, users, experiences, funnels } from "@/lib/supabase/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { getWhopApiClient } from "@/lib/whop-api-client";
 
@@ -13,22 +13,20 @@ export async function triggerProductSyncForNewAdmin(
 	companyId: string
 ): Promise<void> {
 	try {
-		console.log(`🔄 Triggering product sync for new admin user ${userId} in experience ${experienceId}`);
+		console.log(`🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
 
 		// Check if products have already been synced for this experience
-		const existingAppResources = await db.select()
+		const existingResources = await db.select()
 			.from(resources)
 			.where(
 				and(
 					eq(resources.experienceId, experienceId),
-					eq(resources.type, "MY_PRODUCTS"),
-					eq(resources.category, "FREE_VALUE"),
-					isNotNull(resources.whopAppId)
+					eq(resources.type, "MY_PRODUCTS")
 				)
 			)
 			.limit(1);
 
-		if (existingAppResources.length > 0) {
+		if (existingResources.length > 0) {
 			console.log(`✅ Products already synced for experience ${experienceId}, skipping sync`);
 			// Mark user as synced even though we didn't sync (already done)
 			await db.update(users)
@@ -37,64 +35,110 @@ export async function triggerProductSyncForNewAdmin(
 			return;
 		}
 
-		console.log(`🚀 Starting product sync for experience ${experienceId}`);
+		console.log(`🚀 Starting smart upselling sync for experience ${experienceId}`);
 
 		// Get Whop API client
 		const whopClient = getWhopApiClient();
 
-		// Step 1: Sync installed apps as FREE products
-		console.log("📱 Syncing installed apps...");
-		const apps = await whopClient.getInstalledApps(companyId);
+		// Step 1: Get owner's business products from discovery page
+		console.log("🏪 Fetching owner's business products...");
+		const businessProducts = await whopClient.getCompanyProducts(companyId);
+		console.log(`Found ${businessProducts.length} business products`);
+
+		// Step 2: Determine funnel name and get funnel product
+		const funnelName = whopClient.determineFunnelName(businessProducts);
+		const funnelProduct = whopClient.getFunnelProduct(businessProducts);
 		
-		for (const app of apps) {
+		console.log(`🎯 Funnel will be named: "${funnelName}"`);
+		if (funnelProduct) {
+			console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
+		}
+
+		// Step 3: Create funnel with smart naming
+		console.log("📊 Creating funnel...");
+		const [funnel] = await db.insert(funnels).values({
+			name: funnelName,
+			experienceId: experienceId,
+			description: `Funnel for ${funnelName}`,
+			isDeployed: false,
+			wasEverDeployed: false,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		}).returning();
+
+		console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+
+		// Step 4: Sync FREE apps from funnel product only
+		console.log("📱 Syncing FREE apps from funnel product...");
+		if (funnelProduct && funnelProduct.includedApps.length > 0) {
+			// Get app details for each included app
+			const allApps = await whopClient.getInstalledApps(companyId);
+			const funnelApps = allApps.filter(app => funnelProduct.includedApps.includes(app.id));
+			
+			console.log(`Found ${funnelApps.length} apps included in funnel product`);
+			
+			for (const app of funnelApps) {
+				const resourceData = {
+					experienceId,
+					funnelId: funnel.id,
+					userId,
+					name: app.name || app.description || `App ${app.id}`,
+					type: "MY_PRODUCTS" as const,
+					category: "FREE_VALUE" as const,
+					link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+					description: app.description,
+					whopAppId: app.id,
+					whopProductId: null,
+					whopMembershipId: null
+				};
+				
+				await db.insert(resources).values(resourceData);
+				console.log(`✅ Created FREE resource for app: ${app.name || app.id}`);
+			}
+		} else {
+			console.log(`⚠️ No apps found in funnel product or no funnel product`);
+		}
+
+		// Step 5: Sync PAID products as upsells (excluding funnel product)
+		console.log("💳 Syncing PAID products for upselling...");
+		const upsellProducts = whopClient.getUpsellProducts(businessProducts, funnelProduct?.id || '');
+		console.log(`Found ${upsellProducts.length} upsell products`);
+		
+		for (const product of upsellProducts) {
+			const cheapestPlan = whopClient.getCheapestPlan(product);
+			const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
+			
 			const resourceData = {
 				experienceId,
+				funnelId: funnel.id,
 				userId,
-				name: app.name || app.description || `App ${app.id}`,
+				name: product.title,
 				type: "MY_PRODUCTS" as const,
-				category: "FREE_VALUE" as const,
-				link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-				description: app.description,
-				whopAppId: app.id,
-				whopProductId: null,
+				category: "PAID" as const,
+				link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
+				description: product.description,
+				whopAppId: null,
+				whopProductId: product.id,
 				whopMembershipId: null
 			};
 			
 			await db.insert(resources).values(resourceData);
-			console.log(`✅ Created FREE product for app: ${app.name || app.id}`);
+			console.log(`✅ Created PAID resource for product: ${product.title}`);
 		}
 
-		// Step 2: Sync memberships as PAID products
-		console.log("💳 Syncing memberships...");
-		const memberships = await whopClient.getCompanyMemberships(companyId);
-		
-		for (const membership of memberships) {
-			const resourceData = {
-				experienceId,
-				userId,
-				name: membership.name || `Membership ${membership.id}`,
-				type: "MY_PRODUCTS" as const,
-				category: "PAID" as const,
-				link: `https://whop.com/hub/${companyId}/memberships/${membership.id}?ref=${experienceId}`,
-				description: membership.description,
-				whopAppId: null,
-				whopProductId: null,
-				whopMembershipId: membership.id
-			};
-			
-			await db.insert(resources).values(resourceData);
-			console.log(`✅ Created PAID product for membership: ${membership.name || membership.id}`);
-		}
-
-		// Step 3: Mark user as synced
+		// Step 6: Mark user as synced
 		await db.update(users)
 			.set({ productsSynced: true })
 			.where(eq(users.id, userId));
 
-		console.log(`🎉 Product sync completed for experience ${experienceId}: ${apps.length} apps, ${memberships.length} memberships`);
+		const freeCount = funnelProduct?.includedApps.length || 0;
+		console.log(`🎉 Smart upselling sync completed for experience ${experienceId}:`);
+		console.log(`   - Funnel: "${funnelName}"`);
+		console.log(`   - FREE apps: ${freeCount}`);
+		console.log(`   - PAID upsells: ${upsellProducts.length}`);
 
 	} catch (error) {
-		console.error("❌ Error during product sync:", error);
+		console.error("❌ Error during smart upselling sync:", error);
 		// Don't mark as synced if there was an error
 		throw error;
 	}
