@@ -17,6 +17,7 @@ export async function triggerProductSyncForNewAdmin(
 	try {
 		console.log(`🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
 		console.log(`📊 Company ID: ${companyId}`);
+		console.log(`🔧 Function called at: ${new Date().toISOString()}`);
 
 		// Check if products have already been synced for this experience
 		const existingResources = await db.select()

@@ -244,11 +244,16 @@ async function createUserContext(
 				// Trigger product sync for new admin users
 				if (initialAccessLevel === "admin") {
 					console.log(`🚀 New admin user created, triggering product sync for experience ${experience.id}`);
+					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
+					
 					try {
 						// Run sync in background to avoid blocking user creation
 						setTimeout(async () => {
 							try {
 								console.log(`🔄 Starting background product sync for user ${newUser.id}...`);
+								console.log(`🔧 Environment check - WHOP_API_KEY: ${process.env.WHOP_API_KEY ? 'Present' : 'Missing'}`);
+								console.log(`🔧 Environment check - NEXT_PUBLIC_WHOP_COMPANY_ID: ${process.env.NEXT_PUBLIC_WHOP_COMPANY_ID ? 'Present' : 'Missing'}`);
+								
 								await triggerProductSyncForNewAdmin(
 									newUser.id,
 									experience.id,
@@ -257,10 +262,13 @@ async function createUserContext(
 								console.log(`✅ Background product sync completed for user ${newUser.id}`);
 							} catch (error) {
 								console.error("❌ Background product sync failed:", error);
+								console.error("❌ Error details:", error instanceof Error ? error.stack : error);
 							}
 						}, 1000); // 1 second delay to ensure user creation is complete
+						
+						console.log(`⏰ Product sync scheduled for 1 second delay`);
 					} catch (error) {
-						console.error("Error scheduling product sync:", error);
+						console.error("❌ Error scheduling product sync:", error);
 					}
 				}
 			}
