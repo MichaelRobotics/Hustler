@@ -62,7 +62,7 @@ export class WhopApiClient {
       console.log("🔍 Getting installed apps using listExperiences...");
       
       // Get experiences for the company (these represent installed apps)
-      const experiencesResult = await sdkWithContext.experiences.listExperiences({
+      const experiencesResult = await (sdkWithContext.experiences as any).listExperiences({
         companyId: this.companyId,
         first: 100
       });
