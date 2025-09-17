@@ -46,11 +46,12 @@ export interface WhopMembership {
 }
 
 export class WhopApiClient {
-  private whopSdk = whopSdk;
   private companyId: string;
+  private userId: string;
   
-  constructor(companyId: string) {
+  constructor(companyId: string, userId: string) {
     this.companyId = companyId;
+    this.userId = userId;
   }
   
   /**
@@ -59,13 +60,13 @@ export class WhopApiClient {
    */
   async getInstalledApps(): Promise<WhopApp[]> {
     try {
-      console.log(`Fetching experiences for company ${this.companyId}...`);
+      console.log(`Fetching experiences for company ${this.companyId} with user ${this.userId}...`);
       
-      // Use SDK with company context
-      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
+      // Use global SDK with proper context (same pattern as other APIs)
+      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
       
       // Use the correct SDK method to get company experiences (which includes installed apps)
-      const result = await sdkWithCompany.experiences.listExperiences({
+      const result = await sdkWithContext.experiences.listExperiences({
         companyId: this.companyId,
         first: 100 // Get up to 100 experiences
       });
@@ -94,13 +95,13 @@ export class WhopApiClient {
    */
   async getAccessPassesForFreeApps(): Promise<WhopApp[]> {
     try {
-      console.log(`Fetching access passes for FREE apps from company ${this.companyId}...`);
+      console.log(`Fetching access passes for FREE apps from company ${this.companyId} with user ${this.userId}...`);
       
-      // Use SDK with company context
-      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
+      // Use global SDK with proper context (same pattern as other APIs)
+      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
       
       // Get company's experiences
-      const experiencesResult = await sdkWithCompany.experiences.listExperiences({
+      const experiencesResult = await sdkWithContext.experiences.listExperiences({
         companyId: this.companyId,
         first: 100
       });
@@ -116,7 +117,7 @@ export class WhopApiClient {
         
         try {
           console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
-          const accessPassesResult = await sdkWithCompany.experiences.listAccessPassesForExperience({
+          const accessPassesResult = await sdkWithContext.experiences.listAccessPassesForExperience({
             experienceId: exp.id
           });
           
@@ -154,8 +155,8 @@ export class WhopApiClient {
     try {
       console.log(`Fetching owner's discovery page products for company ${this.companyId}...`);
       
-      // Use SDK with company context for proper authentication
-      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
+      // Use global SDK with proper context (same pattern as other APIs)
+      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
       
       // Try to get company products using the SDK
       // Note: This might need to be adjusted based on actual SDK methods available
@@ -174,7 +175,7 @@ export class WhopApiClient {
         // This is NOT the correct approach but maintains functionality
         console.log("⚠️ Using fallback method - this should be fixed to use proper discovery page API");
         
-        const experiencesResult = await sdkWithCompany.experiences.listExperiences({
+        const experiencesResult = await sdkWithContext.experiences.listExperiences({
           companyId: this.companyId,
           first: 100
         });
@@ -190,7 +191,7 @@ export class WhopApiClient {
           
           try {
             console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
-            const accessPassesResult = await sdkWithCompany.experiences.listAccessPassesForExperience({
+            const accessPassesResult = await sdkWithContext.experiences.listAccessPassesForExperience({
               experienceId: exp.id
             });
             
@@ -240,7 +241,7 @@ export class WhopApiClient {
       console.log(`Fetching memberships for company ${companyId}...`);
       
       // First get all experiences for the company
-      const experiencesResult = await this.whopSdk.experiences.listExperiences({
+      const experiencesResult = await whopSdk.experiences.listExperiences({
         companyId: companyId,
         first: 100
       });
@@ -256,7 +257,7 @@ export class WhopApiClient {
         
         try {
           console.log(`🔍 Checking access passes for experience: ${exp.name} (${exp.id})`);
-          const accessPassesResult = await this.whopSdk.experiences.listAccessPassesForExperience({
+          const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
             experienceId: exp.id
           });
           
@@ -295,7 +296,7 @@ export class WhopApiClient {
    */
   async getAppById(appId: string): Promise<WhopApp | null> {
     try {
-      const app = await (this.whopSdk as any).apps.getAppConnection({
+      const app = await (whopSdk as any).apps.getAppConnection({
         appConnectionId: appId
       });
       
@@ -311,7 +312,7 @@ export class WhopApiClient {
    */
   async getProductById(productId: string): Promise<WhopProduct | null> {
     try {
-      const product = await (this.whopSdk as any).products.get({
+      const product = await (whopSdk as any).products.get({
         productId: productId
       });
       
@@ -327,7 +328,7 @@ export class WhopApiClient {
    */
   async getMembershipById(membershipId: string): Promise<WhopMembership | null> {
     try {
-      const membership = await (this.whopSdk as any).memberships.get({
+      const membership = await (whopSdk as any).memberships.get({
         membershipId: membershipId
       });
       
@@ -343,7 +344,7 @@ export class WhopApiClient {
    */
   async checkIfUserHasAccessToCompany(companyId: string, userId: string): Promise<{ hasAccess: boolean; accessLevel: 'admin' | 'customer' | 'no_access' }> {
     try {
-      const result = await (this.whopSdk as any).access.checkIfUserHasAccessToCompany({
+      const result = await (whopSdk as any).access.checkIfUserHasAccessToCompany({
         companyId: companyId,
         userId: userId
       });
@@ -403,13 +404,15 @@ export class WhopApiClient {
   }
 }
 
-// Cache instances by company ID
+// Cache instances by company ID + user ID combination for proper multi-tenancy
 const whopApiClientCache = new Map<string, WhopApiClient>();
 
-export function getWhopApiClient(companyId: string): WhopApiClient {
-  if (!whopApiClientCache.has(companyId)) {
-    whopApiClientCache.set(companyId, new WhopApiClient(companyId));
+export function getWhopApiClient(companyId: string, userId: string): WhopApiClient {
+  const cacheKey = `${companyId}:${userId}`;
+  
+  if (!whopApiClientCache.has(cacheKey)) {
+    whopApiClientCache.set(cacheKey, new WhopApiClient(companyId, userId));
   }
   
-  return whopApiClientCache.get(companyId)!;
+  return whopApiClientCache.get(cacheKey)!;
 }

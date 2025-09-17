@@ -229,7 +229,7 @@ export class WhopProductSync {
 	): Promise<WhopProduct[]> {
 		try {
 				// Use new WhopApiClient to fetch company products
-				const whopClient = getWhopApiClient(user.experience.whopCompanyId);
+				const whopClient = getWhopApiClient(user.experience.whopCompanyId, user.whopUserId);
 				const apiProducts = await whopClient.getCompanyProducts();
 
 			// Transform API products to our format
@@ -412,9 +412,10 @@ export class WhopProductSync {
 		// Count total products from WHOP
 		let totalProducts = 0;
 		try {
-				const whopClient = getWhopApiClient(companyId);
-				const products = await whopClient.getCompanyProducts();
-			totalProducts = products.length;
+			// Note: This function doesn't have user context, so we can't make API calls
+			// For now, we'll skip the API call and return 0
+			console.warn("getSyncStatus called without user context - skipping API call");
+			totalProducts = 0;
 		} catch (error) {
 			console.error("Error counting WHOP products:", error);
 		}

@@ -12,6 +12,7 @@ export interface AuthenticatedUser {
 	avatar?: string;
 	credits: number;
 	accessLevel: "admin" | "customer" | "no_access";
+	productsSynced: boolean;
 	experience: {
 		id: string;
 		whopExperienceId: string;

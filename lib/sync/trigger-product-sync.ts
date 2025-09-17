@@ -41,10 +41,24 @@ export async function triggerProductSyncForNewAdmin(
 
 		console.log(`🚀 Starting smart upselling sync for experience ${experienceId}`);
 
-		// Get Whop API client
+		// Get user's Whop user ID from database
+		console.log("🔧 Getting user's Whop user ID...");
+		const userRecord = await db.query.users.findFirst({
+			where: eq(users.id, userId),
+			columns: { whopUserId: true }
+		});
+
+		if (!userRecord) {
+			throw new Error(`User not found: ${userId}`);
+		}
+
+		const whopUserId = userRecord.whopUserId;
+		console.log(`✅ Found Whop user ID: ${whopUserId}`);
+
+		// Get Whop API client with proper multi-tenant context
 		console.log("🔧 Getting Whop API client...");
-		const whopClient = getWhopApiClient(companyId);
-		console.log("✅ Whop API client created");
+		const whopClient = getWhopApiClient(companyId, whopUserId);
+		console.log("✅ Whop API client created with proper multi-tenant context");
 
 		// Step 1: Get owner's business products from discovery page
 		console.log("🏪 Fetching owner's discovery page products...");

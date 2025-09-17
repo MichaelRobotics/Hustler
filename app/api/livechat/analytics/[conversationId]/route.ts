@@ -24,6 +24,7 @@ export async function GET(
       name: "Test Owner",
       credits: 1000,
       accessLevel: "admin" as const,
+      productsSynced: false,
       experience: {
         id: "550e8400-e29b-41d4-a716-446655440002",
         whopExperienceId: "550e8400-e29b-41d4-a716-446655440003",

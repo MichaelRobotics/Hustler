@@ -162,6 +162,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			name: "",
 			credits: 0,
 			accessLevel: "no_access" as const,
+			productsSynced: false,
 			experience: {
 				id: "",
 				whopExperienceId: experienceId,

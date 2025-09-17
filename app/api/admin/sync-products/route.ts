@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { triggerProductSyncForNewAdmin } from "@/lib/sync/trigger-product-sync";
-import { db } from "@/lib/supabase/db-server";
-import { users, experiences } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { getUserContext } from "@/lib/context/user-context";
 
 /**
  * POST /api/admin/sync-products - Trigger product sync for admin users
@@ -26,26 +24,24 @@ async function syncProductsHandler(
 			);
 		}
 
-		// Get user from database to check access level
-		const userRecord = await db.query.users.findFirst({
-			where: and(
-				eq(users.whopUserId, user.userId),
-				eq(users.experienceId, experienceId)
-			),
-			with: {
-				experience: true
-			}
-		});
+		// Get the full user context (same pattern as other APIs)
+		const userContext = await getUserContext(
+			user.userId,
+			"", // whopCompanyId is optional for experience-based isolation
+			experienceId,
+			false, // forceRefresh
+			// Don't pass access level - let it be determined from Whop API
+		);
 
-		if (!userRecord) {
+		if (!userContext) {
 			return NextResponse.json(
-				{ error: "User not found" },
-				{ status: 404 }
+				{ error: "User context not found" },
+				{ status: 401 }
 			);
 		}
 
 		// Only allow admin users to trigger sync
-		if (userRecord.accessLevel !== "admin") {
+		if (userContext.user.accessLevel !== "admin") {
 			return NextResponse.json(
 				{ error: "Admin access required" },
 				{ status: 403 }
@@ -53,7 +49,7 @@ async function syncProductsHandler(
 		}
 
 		// Check if products have already been synced
-		if (userRecord.productsSynced) {
+		if (userContext.user.productsSynced) {
 			return NextResponse.json({
 				success: true,
 				message: "Products already synced",
@@ -62,7 +58,7 @@ async function syncProductsHandler(
 		}
 
 		// Get company ID from experience
-		const companyId = userRecord.experience?.whopCompanyId;
+		const companyId = userContext.user.experience?.whopCompanyId;
 		if (!companyId) {
 			return NextResponse.json(
 				{ error: "Company ID not found in experience" },
@@ -70,12 +66,12 @@ async function syncProductsHandler(
 			);
 		}
 
-		console.log(`🔄 API: Triggering product sync for admin user ${userRecord.id} in experience ${experienceId}`);
+		console.log(`🔄 API: Triggering product sync for admin user ${userContext.user.id} in experience ${experienceId}`);
 		console.log(`📊 Company ID: ${companyId}`);
 
 		// Trigger the sync
 		await triggerProductSyncForNewAdmin(
-			userRecord.id,
+			userContext.user.id,
 			experienceId,
 			companyId
 		);
@@ -83,7 +79,7 @@ async function syncProductsHandler(
 		return NextResponse.json({
 			success: true,
 			message: "Product sync completed successfully",
-			userId: userRecord.id,
+			userId: userContext.user.id,
 			experienceId: experienceId,
 			companyId: companyId
 		});
