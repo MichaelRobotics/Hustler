@@ -14,10 +14,70 @@ export async function triggerProductSyncForNewAdmin(
 	experienceId: string,
 	companyId: string
 ): Promise<void> {
-	// Global keepalive mechanism to prevent serverless function idle timeout
+	// Enhanced progress tracking
+	const syncState = {
+		startTime: Date.now(),
+		phase: 'initializing',
+		progress: 0,
+		totalSteps: 6,
+		completedSteps: 0,
+		errors: [] as string[],
+		successCounts: {
+			freeResources: 0,
+			paidResources: 0,
+			assignments: 0
+		}
+	};
+
+	// Enhanced keepalive with progress reporting
 	const globalKeepAlive = setInterval(() => {
-		console.log("💓 Global Keepalive: Product sync in progress...");
-	}, 10000); // Every 10 seconds
+		const elapsed = Math.round((Date.now() - syncState.startTime) / 1000);
+		console.log(`💓 Global Keepalive: Product sync in progress... Phase: ${syncState.phase}, Progress: ${syncState.progress}%, Elapsed: ${elapsed}s`);
+	}, 5000); // Every 5 seconds for more frequent updates
+
+	// Progress update helper
+	const updateProgress = (phase: string, stepCompleted: boolean = false) => {
+		syncState.phase = phase;
+		if (stepCompleted) {
+			syncState.completedSteps++;
+			syncState.progress = Math.round((syncState.completedSteps / syncState.totalSteps) * 100);
+		}
+		console.log(`📊 Progress Update: ${phase} - ${syncState.progress}% (${syncState.completedSteps}/${syncState.totalSteps})`);
+	};
+
+	// Circuit breaker for external API calls
+	const circuitBreaker = {
+		failures: 0,
+		lastFailureTime: 0,
+		state: 'closed' as 'closed' | 'open' | 'half-open',
+		threshold: 3,
+		timeout: 60000, // 1 minute
+
+		canExecute(): boolean {
+			if (this.state === 'closed') return true;
+			if (this.state === 'open') {
+				if (Date.now() - this.lastFailureTime > this.timeout) {
+					this.state = 'half-open';
+					return true;
+				}
+				return false;
+			}
+			return true; // half-open
+		},
+
+		onSuccess(): void {
+			this.failures = 0;
+			this.state = 'closed';
+		},
+
+		onFailure(): void {
+			this.failures++;
+			this.lastFailureTime = Date.now();
+			if (this.failures >= this.threshold) {
+				this.state = 'open';
+			}
+		}
+	};
 	
 	try {
 		console.log(`🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
@@ -25,12 +85,14 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`🔧 Function called at: ${new Date().toISOString()}`);
 
 		// Check database connection health before starting
+		updateProgress("checking_database_health");
 		console.log("🔍 Checking database connection health...");
 		try {
 			await db.select().from(users).limit(1);
 			console.log("✅ Database connection healthy");
 		} catch (dbError) {
 			console.error("❌ Database connection failed:", dbError);
+			syncState.errors.push("Database connection failed");
 			throw new Error("Database connection failed - cannot proceed with sync");
 		}
 
@@ -77,14 +139,25 @@ export async function triggerProductSyncForNewAdmin(
 		console.log("✅ Whop API client created with proper multi-tenant context");
 
 		// Step 1: Get owner's business products from discovery page
+		updateProgress("fetching_discovery_products");
 		console.log("🏪 Fetching owner's discovery page products...");
-		let discoveryProducts;
+		let discoveryProducts: any[] = [];
 		try {
-			discoveryProducts = await whopClient.getCompanyProducts();
-			console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
+			if (!circuitBreaker.canExecute()) {
+				console.log("⚠️ Circuit breaker is open, skipping discovery products fetch");
+				discoveryProducts = [];
+				syncState.errors.push("Circuit breaker open - discovery products fetch skipped");
+			} else {
+				discoveryProducts = await whopClient.getCompanyProducts();
+				circuitBreaker.onSuccess();
+				console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
+			}
 		} catch (error) {
+			circuitBreaker.onFailure();
 			console.error("❌ Error fetching discovery page products:", error);
-			throw new Error(`Failed to fetch discovery page products: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			syncState.errors.push(`Discovery products fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			console.log("⚠️ Continuing sync with empty discovery products...");
+			discoveryProducts = []; // Fallback to empty array
 		}
 
 		// Step 2: Determine funnel name and get funnel product from discovery page
@@ -100,6 +173,7 @@ export async function triggerProductSyncForNewAdmin(
 		}
 
 		// Step 3: Create funnel with smart naming using proper action
+		updateProgress("creating_funnel");
 		console.log("📊 Creating funnel...");
 		let funnel;
 		try {
@@ -112,8 +186,10 @@ export async function triggerProductSyncForNewAdmin(
 				"createFunnel"
 			);
 			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+			updateProgress("funnel_created", true);
 		} catch (error) {
 			console.error("❌ Error creating funnel:", error);
+			syncState.errors.push(`Funnel creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			throw new Error(`Failed to create funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 
@@ -121,6 +197,7 @@ export async function triggerProductSyncForNewAdmin(
 		const resourceIds: string[] = [];
 		
 		// Create FREE apps from installed apps
+		updateProgress("creating_free_resources");
 		console.log("📱 Creating FREE apps from installed apps...");
 		try {
 			const installedApps = await whopClient.getInstalledApps();
@@ -168,6 +245,7 @@ export async function triggerProductSyncForNewAdmin(
 							
 							console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
 							successCount++;
+							syncState.successCounts.freeResources++;
 							return resource.id;
 						} catch (error) {
 							console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
@@ -201,13 +279,17 @@ export async function triggerProductSyncForNewAdmin(
 				}
 				
 				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
+				updateProgress("free_resources_completed", true);
 			} else {
 				console.log(`⚠️ No installed apps found for company`);
+				updateProgress("free_resources_skipped", true);
 			}
 		} catch (error) {
 			console.error(`❌ Error fetching installed apps:`, error);
+			syncState.errors.push(`Installed apps fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			// Continue with sync even if installed apps fail
 			console.log("⚠️ Continuing sync without installed apps...");
+			updateProgress("free_resources_failed", true);
 		}
 
 		// Create PAID products as upsells (excluding funnel product)
@@ -311,15 +393,38 @@ export async function triggerProductSyncForNewAdmin(
 			.set({ productsSynced: true })
 			.where(eq(users.id, userId));
 
+		// Final progress update
+		updateProgress("sync_completed", true);
+		
+		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
 		const freeCount = funnelProduct?.includedApps.length || 0;
+		
 		console.log(`🎉 Smart upselling sync completed for experience ${experienceId}:`);
+		console.log(`   - Total time: ${totalElapsed}s`);
+		console.log(`   - Progress: ${syncState.progress}%`);
 		console.log(`   - Funnel: "${funnelName}"`);
-		console.log(`   - FREE apps: ${freeCount}`);
-		console.log(`   - PAID upsells: ${upsellProducts.length}`);
+		console.log(`   - FREE apps: ${syncState.successCounts.freeResources}`);
+		console.log(`   - PAID upsells: ${syncState.successCounts.paidResources}`);
+		console.log(`   - Assignments: ${syncState.successCounts.assignments}`);
+		
+		if (syncState.errors.length > 0) {
+			console.log(`⚠️ Errors encountered (${syncState.errors.length}):`);
+			syncState.errors.forEach((error, index) => {
+				console.log(`   ${index + 1}. ${error}`);
+			});
+		}
 
 	} catch (error) {
 		console.error("❌ Error during smart upselling sync:", error);
-		// Don't mark as synced if there was an error
+		syncState.errors.push(`Critical error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		
+		// Log final state even on error
+		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
+		console.log(`💥 Sync failed after ${totalElapsed}s at ${syncState.progress}% progress`);
+		console.log(`   - Errors: ${syncState.errors.length}`);
+		console.log(`   - Success counts:`, syncState.successCounts);
+		
+		// Don't mark as synced if there was a critical error
 		throw error;
 	} finally {
 		// Always clear the global keepalive interval
