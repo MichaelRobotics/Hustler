@@ -96,46 +96,34 @@ export class WhopApiClient {
     try {
       console.log(`Fetching owner's business products for company ${this.companyId}...`);
       
-      // Use Company API to get company products from discovery page
-      const url = `https://api.whop.com/v5/company/products?first=100`;
-      console.log(`🌐 Making request to: ${url}`);
+      // Use SDK with company context for proper authentication
+      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-          'Content-Type': 'application/json',
-          'x-company-id': this.companyId,
-        },
+      // Get company's experiences (which represent their products/apps)
+      console.log("🔍 Fetching company experiences as products...");
+      
+      const experiencesResult = await sdkWithCompany.experiences.listExperiences({
+        companyId: this.companyId,
+        first: 100
       });
       
-      console.log(`📡 API Response status: ${response.status} ${response.statusText}`);
+      const experiences = experiencesResult?.experiencesV2?.nodes || [];
+      console.log(`Found ${experiences.length} company experiences`);
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log(`🔍 API Response:`, JSON.stringify(result, null, 2));
-      
-      // Parse the response - v5 app/products returns products array
-      const products = result?.products || [];
-      console.log(`Found ${products.length} business products from discovery page`);
-      
-      // Map to our product format
-      const mappedProducts = products.map((product: any) => {
-        console.log(`🔍 Product ${product.id}:`, JSON.stringify(product, null, 2));
+      // Map experiences to product format
+      const mappedProducts = experiences.map((exp: any) => {
+        console.log(`🔍 Experience ${exp.id}:`, JSON.stringify(exp, null, 2));
         
         return {
-          id: product.id,
-          title: product.name || product.title || `Product ${product.id}`,
-          description: product.description,
-          price: product.price?.amount || product.price || 0,
-          currency: product.price?.currency || 'usd',
-          model: product.price?.model || (product.price?.amount > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
-          includedApps: product.includedApps || product.included_apps || product.apps || [],
-          plans: product.plans || [],
-          visibility: product.visibility || 'visible' as const
+          id: exp.id,
+          title: exp.name || exp.app?.name || `Product ${exp.id}`,
+          description: exp.description || exp.app?.description,
+          price: 0, // Experiences don't have direct pricing
+          currency: 'usd',
+          model: 'free' as const,
+          includedApps: [exp.app?.id || exp.id], // The experience itself is the "app"
+          plans: [],
+          visibility: 'visible' as const
         };
       });
       
