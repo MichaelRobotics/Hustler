@@ -228,11 +228,9 @@ export class WhopProductSync {
 		options: SyncOptions,
 	): Promise<WhopProduct[]> {
 		try {
-			// Use new WhopApiClient to fetch company products
-			const whopClient = getWhopApiClient();
-			const apiProducts = await whopClient.getCompanyProducts(
-				user.experience.whopCompanyId
-			);
+				// Use new WhopApiClient to fetch company products
+				const whopClient = getWhopApiClient(user.experience.whopCompanyId);
+				const apiProducts = await whopClient.getCompanyProducts();
 
 			// Transform API products to our format
 			const whopProducts: WhopProduct[] = apiProducts.map((product: ApiWhopProduct) => ({
@@ -414,8 +412,8 @@ export class WhopProductSync {
 		// Count total products from WHOP
 		let totalProducts = 0;
 		try {
-			const whopClient = getWhopApiClient();
-			const products = await whopClient.getCompanyProducts(companyId);
+				const whopClient = getWhopApiClient(companyId);
+				const products = await whopClient.getCompanyProducts();
 			totalProducts = products.length;
 		} catch (error) {
 			console.error("Error counting WHOP products:", error);

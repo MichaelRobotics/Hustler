@@ -18,7 +18,7 @@ async function testSmartUpsellingSync() {
 
         // Get Whop API client
         console.log('🔧 Getting Whop API client...');
-        const whopClient = getWhopApiClient();
+        const whopClient = getWhopApiClient(companyId);
         console.log('✅ Whop API client created\n');
 
         // Test 1: Get business products

@@ -47,22 +47,26 @@ export interface WhopMembership {
 
 export class WhopApiClient {
   private whopSdk = whopSdk;
+  private companyId: string;
   
-  constructor() {
-    // Use the existing whopSdk instance
+  constructor(companyId: string) {
+    this.companyId = companyId;
   }
   
   /**
    * Get installed apps for a company
    * Uses experiences.listExperiences() since experiences represent installed apps
    */
-  async getInstalledApps(companyId: string): Promise<WhopApp[]> {
+  async getInstalledApps(): Promise<WhopApp[]> {
     try {
-      console.log(`Fetching experiences for company ${companyId}...`);
+      console.log(`Fetching experiences for company ${this.companyId}...`);
+      
+      // Use SDK with company context
+      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
       
       // Use the correct SDK method to get company experiences (which includes installed apps)
-      const result = await this.whopSdk.experiences.listExperiences({
-        companyId: companyId,
+      const result = await sdkWithCompany.experiences.listExperiences({
+        companyId: this.companyId,
         first: 100 // Get up to 100 experiences
       });
       
@@ -88,115 +92,40 @@ export class WhopApiClient {
    * Get company products from discovery page
    * These are the actual products customers see on the owner's Whop
    */
-  async getCompanyProducts(companyId: string): Promise<WhopProduct[]> {
+  async getCompanyProducts(): Promise<WhopProduct[]> {
     try {
-      console.log(`Fetching owner's business products for company ${companyId}...`);
-      console.log(`🔑 Using API key: ${process.env.WHOP_API_KEY ? 'Present' : 'Missing'}`);
+      console.log(`Fetching owner's business products for company ${this.companyId}...`);
       
-      // Use direct HTTP API call since SDK doesn't have this method
-      // Try v2 OAuth endpoint first
-      const url = `https://api.whop.com/v2/oauth/company/products?companyId=${companyId}&first=100`;
-      console.log(`🌐 Making request to: ${url}`);
+      // Use SDK with company context
+      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+      // Get products from experiences (installed apps)
+      console.log("🔍 Fetching products from experiences...");
+      
+      const experiencesResult = await sdkWithCompany.experiences.listExperiences({
+        companyId: this.companyId,
+        first: 100
       });
       
-      console.log(`📡 API Response status: ${response.status} ${response.statusText}`);
-
-      if (!response.ok) {
-        console.log(`❌ v2 OAuth endpoint failed with status ${response.status}, trying v5 endpoint...`);
-        
-        // Try v5 endpoint as fallback
-        const v5Response = await fetch(`https://api.whop.com/v5/company/products?companyId=${companyId}&first=100`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        console.log(`📡 v5 API Response status: ${v5Response.status} ${v5Response.statusText}`);
-        
-        if (!v5Response.ok) {
-          throw new Error(`Both v2 and v5 endpoints failed. v2: ${response.status}, v5: ${v5Response.status}`);
-        }
-        
-        // Use v5 response
-        const result = await v5Response.json();
-        console.log(`🔍 v5 API Response:`, JSON.stringify(result, null, 2));
-        
-        // Try different response structures for v5
-        let products = [];
-        if (result?.products?.nodes) {
-          products = result.products.nodes;
-        } else if (result?.products) {
-          products = result.products;
-        } else if (result?.data?.products) {
-          products = result.data.products;
-        } else if (Array.isArray(result)) {
-          products = result;
-        } else {
-          console.log(`⚠️ Unexpected v5 API response structure:`, Object.keys(result || {}));
-        }
-        
-        console.log(`Found ${products.length} business products from v5`);
-        
-        // Map to our product format
-        const mappedProducts = products.map((product: any) => ({
-          id: product.id,
-          title: product.title || product.name,
-          description: product.description,
-          price: product.price?.amount || product.price || 0,
-          currency: product.price?.currency || 'usd',
-          model: product.price?.model || product.model || 'free',
-          includedApps: product.includedApps || [],
-          plans: product.plans || [],
-          visibility: product.visibility || 'visible'
-        }));
-        
-        console.log(`Mapped to ${mappedProducts.length} business products from v5`);
-        return mappedProducts;
-      }
-
-      const result = await response.json();
-      console.log(`🔍 API Response:`, JSON.stringify(result, null, 2));
+      const experiences = experiencesResult?.experiencesV2?.nodes || [];
+      console.log(`Found ${experiences.length} experiences`);
       
-      // Try different response structures
-      let products = [];
-      if (result?.products?.nodes) {
-        products = result.products.nodes;
-      } else if (result?.products) {
-        products = result.products;
-      } else if (result?.data?.products) {
-        products = result.data.products;
-      } else if (Array.isArray(result)) {
-        products = result;
-      } else {
-        console.log(`⚠️ Unexpected API response structure:`, Object.keys(result || {}));
-      }
-      
-      console.log(`Found ${products.length} business products`);
-      
-      // Map to our product format
-      const mappedProducts = products.map((product: any) => ({
-        id: product.id,
-        title: product.title,
-        description: product.description,
-        price: product.price?.amount || 0,
-        currency: product.price?.currency || 'usd',
-        model: product.price?.model || 'free',
-        includedApps: product.includedApps || [],
-        plans: product.plans || [],
-        visibility: product.visibility || 'visible'
+      // Map experiences to product format
+      const products = experiences.map((exp: any) => ({
+        id: exp.id,
+        title: exp.name || `Experience ${exp.id}`,
+        description: exp.description,
+        price: 0, // Experiences might not have pricing
+        currency: 'usd',
+        model: 'free' as const,
+        includedApps: [exp.id], // The experience itself is the "app"
+        plans: [],
+        visibility: 'visible' as const
       }));
       
-      console.log(`Mapped to ${mappedProducts.length} business products`);
-      return mappedProducts;
+      console.log(`Mapped to ${products.length} products from experiences`);
+      return products;
+      
     } catch (error) {
       console.error("Error fetching company products:", error);
       throw new Error(`Failed to fetch company products: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -375,13 +304,13 @@ export class WhopApiClient {
   }
 }
 
-// Singleton instance
-let whopApiClient: WhopApiClient | null = null;
+// Cache instances by company ID
+const whopApiClientCache = new Map<string, WhopApiClient>();
 
-export function getWhopApiClient(): WhopApiClient {
-  if (!whopApiClient) {
-    whopApiClient = new WhopApiClient();
+export function getWhopApiClient(companyId: string): WhopApiClient {
+  if (!whopApiClientCache.has(companyId)) {
+    whopApiClientCache.set(companyId, new WhopApiClient(companyId));
   }
   
-  return whopApiClient;
+  return whopApiClientCache.get(companyId)!;
 }

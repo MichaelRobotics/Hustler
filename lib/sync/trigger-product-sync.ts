@@ -42,14 +42,14 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Get Whop API client
 		console.log("🔧 Getting Whop API client...");
-		const whopClient = getWhopApiClient();
+		const whopClient = getWhopApiClient(companyId);
 		console.log("✅ Whop API client created");
 
 		// Step 1: Get owner's business products from discovery page
 		console.log("🏪 Fetching owner's business products...");
 		let businessProducts;
 		try {
-			businessProducts = await whopClient.getCompanyProducts(companyId);
+			businessProducts = await whopClient.getCompanyProducts();
 			console.log(`✅ Found ${businessProducts.length} business products`);
 		} catch (error) {
 			console.error("❌ Error fetching business products:", error);
@@ -88,7 +88,7 @@ export async function triggerProductSyncForNewAdmin(
 		if (funnelProduct && funnelProduct.includedApps.length > 0) {
 			try {
 				// Get app details for each included app
-				const allApps = await whopClient.getInstalledApps(companyId);
+				const allApps = await whopClient.getInstalledApps();
 				const funnelApps = allApps.filter(app => funnelProduct.includedApps.includes(app.id));
 				
 				console.log(`Found ${funnelApps.length} apps included in funnel product`);
