@@ -108,6 +108,9 @@ export async function triggerProductSyncForNewAdmin(
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
 			if (installedApps.length > 0) {
+				let freeCreatedCount = 0;
+				let freeFailedCount = 0;
+				
 				// Create FREE resources for each installed app
 				for (const app of installedApps) {
 					try {
@@ -123,13 +126,15 @@ export async function triggerProductSyncForNewAdmin(
 						});
 						
 						resourceIds.push(resource.id);
-						console.log(`✅ Created FREE resource for app: ${app.name}`);
+						freeCreatedCount++;
+						console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
 					} catch (error) {
+						freeFailedCount++;
 						console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
 					}
 				}
 				
-				console.log(`✅ Created ${installedApps.length} FREE resources from installed apps`);
+				console.log(`📊 FREE resources summary: ${freeCreatedCount} created, ${freeFailedCount} failed out of ${installedApps.length} apps`);
 			} else {
 				console.log(`⚠️ No installed apps found for company`);
 			}
@@ -142,10 +147,15 @@ export async function triggerProductSyncForNewAdmin(
 		const upsellProducts = whopClient.getUpsellProducts(discoveryProducts, funnelProduct?.id || '');
 		console.log(`Found ${upsellProducts.length} upsell products`);
 		
+		let paidCreatedCount = 0;
+		let paidFailedCount = 0;
+		
 		for (const product of upsellProducts) {
 			try {
 				const cheapestPlan = whopClient.getCheapestPlan(product);
 				const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
+				
+				console.log(`🔍 Creating PAID resource for product: ${product.title} (${product.id})`);
 				
 				const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
 					name: product.title,
@@ -157,27 +167,39 @@ export async function triggerProductSyncForNewAdmin(
 				});
 				
 				resourceIds.push(resource.id);
-				console.log(`✅ Created PAID resource for product: ${product.title}`);
+				paidCreatedCount++;
+				console.log(`✅ Created PAID resource for product: ${product.title} (ID: ${resource.id})`);
 			} catch (error) {
+				paidFailedCount++;
 				console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
 			}
 		}
+		
+		console.log(`📊 PAID resources summary: ${paidCreatedCount} created, ${paidFailedCount} failed out of ${upsellProducts.length} products`);
 
 		// Step 5: Assign all resources to the funnel
 		if (resourceIds.length > 0) {
-			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel...`);
-			try {
-				for (const resourceId of resourceIds) {
-					try {
-						await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
-					} catch (error) {
-						console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
-					}
+			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel ${funnel.id}...`);
+			console.log(`📋 Resource IDs to assign:`, resourceIds);
+			
+			let assignedCount = 0;
+			let failedCount = 0;
+			
+			for (const resourceId of resourceIds) {
+				try {
+					console.log(`🔗 Assigning resource ${resourceId} to funnel...`);
+					await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
+					assignedCount++;
+					console.log(`✅ Successfully assigned resource ${resourceId} to funnel`);
+				} catch (error) {
+					failedCount++;
+					console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
 				}
-				console.log(`✅ Assigned ${resourceIds.length} resources to funnel`);
-			} catch (error) {
-				console.error("❌ Error assigning resources to funnel:", error);
 			}
+			
+			console.log(`📊 Assignment summary: ${assignedCount} successful, ${failedCount} failed out of ${resourceIds.length} total`);
+		} else {
+			console.log(`⚠️ No resources to assign to funnel`);
 		}
 
 		// Step 6: Mark user as synced
