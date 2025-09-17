@@ -86,16 +86,33 @@ export async function triggerProductSyncForNewAdmin(
 		// Step 3: Create funnel with smart naming using proper action
 		console.log("📊 Creating funnel...");
 		let funnel;
-		try {
-			funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-				name: funnelName,
-				description: `Funnel for ${funnelName}`,
-				resources: [] // Will assign resources after creation
-			});
-			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
-		} catch (error) {
-			console.error("❌ Error creating funnel:", error);
-			throw new Error(`Failed to create funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		const maxRetries = 3;
+		let retryCount = 0;
+		
+		while (retryCount < maxRetries) {
+			try {
+				console.log(`🔄 Attempt ${retryCount + 1}/${maxRetries} to create funnel...`);
+				funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
+					name: funnelName,
+					description: `Funnel for ${funnelName}`,
+					resources: [] // Will assign resources after creation
+				});
+				console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+				break; // Success, exit retry loop
+			} catch (error) {
+				retryCount++;
+				console.error(`❌ Error creating funnel (attempt ${retryCount}/${maxRetries}):`, error);
+				
+				if (retryCount >= maxRetries) {
+					console.error("❌ Max retries reached for funnel creation");
+					throw new Error(`Failed to create funnel after ${maxRetries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+				}
+				
+				// Wait before retry (exponential backoff)
+				const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+				console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+				await new Promise(resolve => setTimeout(resolve, waitTime));
+			}
 		}
 
 		// Step 4: Create resources and collect their IDs
@@ -178,7 +195,7 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`📊 PAID resources summary: ${paidCreatedCount} created, ${paidFailedCount} failed out of ${upsellProducts.length} products`);
 
 		// Step 5: Assign all resources to the funnel
-		if (resourceIds.length > 0) {
+		if (resourceIds.length > 0 && funnel) {
 			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel ${funnel.id}...`);
 			console.log(`📋 Resource IDs to assign:`, resourceIds);
 			
@@ -186,14 +203,31 @@ export async function triggerProductSyncForNewAdmin(
 			let failedCount = 0;
 			
 			for (const resourceId of resourceIds) {
-				try {
-					console.log(`🔗 Assigning resource ${resourceId} to funnel...`);
-					await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
-					assignedCount++;
-					console.log(`✅ Successfully assigned resource ${resourceId} to funnel`);
-				} catch (error) {
-					failedCount++;
-					console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
+				const maxRetries = 3;
+				let retryCount = 0;
+				let assigned = false;
+				
+				while (retryCount < maxRetries && !assigned) {
+					try {
+						console.log(`🔗 Assigning resource ${resourceId} to funnel (attempt ${retryCount + 1}/${maxRetries})...`);
+						await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
+						assignedCount++;
+						assigned = true;
+						console.log(`✅ Successfully assigned resource ${resourceId} to funnel`);
+					} catch (error) {
+						retryCount++;
+						console.error(`❌ Error assigning resource ${resourceId} to funnel (attempt ${retryCount}/${maxRetries}):`, error);
+						
+						if (retryCount >= maxRetries) {
+							failedCount++;
+							console.error(`❌ Max retries reached for resource ${resourceId} assignment`);
+						} else {
+							// Wait before retry (exponential backoff)
+							const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+							console.log(`⏳ Waiting ${waitTime}ms before retry for resource ${resourceId}...`);
+							await new Promise(resolve => setTimeout(resolve, waitTime));
+						}
+					}
 				}
 			}
 			
