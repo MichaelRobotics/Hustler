@@ -160,103 +160,101 @@ export class WhopApiClient {
       
       console.log("🔍 Fetching company products from discovery page using proper API...");
       
-      // Use GraphQL API to get discovery page products
-      // This is the correct way to access discovery page products that users can see
-      console.log("🔍 Using GraphQL discoverySearch to get discovery page products");
+      // Based on our investigation, there's no direct API to get all discovery page products
+      // The limitation is that apps can only access their own experiences and their access passes
+      // This is a fundamental limitation of the Whop API architecture
+      
+      console.log("🔍 Using experiences approach - this is the only available method");
       console.log(`🔍 Company: ${this.companyId}, User: ${this.userId}`);
+      console.log("⚠️ Note: This will only return products that include YOUR app, not all discovery page products");
       
       try {
-        const apiKey = process.env.WHOP_API_KEY;
-        if (!apiKey) {
-          throw new Error("WHOP_API_KEY not found in environment variables");
-        }
-        
-        // GraphQL query to get discovery page products
-        const discoveryQuery = `
-          query DiscoverySearch($query: String!) {
-            discoverySearch(query: $query) {
-              accessPasses {
-                id
-                title
-                route
-                headline
-                description
-                logo {
-                  sourceUrl
-                }
-                price {
-                  amount
-                  currency
-                  model
-                }
-                includedApps {
-                  id
-                  name
-                }
-              }
-            }
-          }
-        `;
-        
-        // Make GraphQL request to get discovery page products
-        const response = await fetch('https://api.whop.com/public-graphql', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'x-on-behalf-of': this.userId,
-            'x-company-id': this.companyId,
-          },
-          body: JSON.stringify({
-            query: discoveryQuery,
-            variables: {
-              query: '' // Empty query to get all products
-            }
-          })
+        // Get experiences for the company (these represent their business)
+        const experiencesResult = await sdkWithContext.experiences.listExperiences({
+          companyId: this.companyId,
+          first: 100
         });
         
-        if (!response.ok) {
-          throw new Error(`GraphQL request failed with status ${response.status}: ${response.statusText}`);
-        }
+        const experiences = experiencesResult?.experiencesV2?.nodes || [];
+        console.log(`Found ${experiences.length} experiences for company ${this.companyId}`);
         
-        const data = await response.json();
-        console.log(`🔍 GraphQL Response:`, JSON.stringify(data, null, 2));
-        
-        if (data.errors) {
-          console.error("❌ GraphQL errors:", data.errors);
-          throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-        }
-        
-        const accessPasses = data.data?.discoverySearch?.accessPasses || [];
-        console.log(`Found ${accessPasses.length} discovery page products via GraphQL`);
-        
-        if (accessPasses.length === 0) {
-          console.log("⚠️ No discovery page products found");
+        if (experiences.length === 0) {
+          console.log("⚠️ No experiences found for company - this means no products");
           return [];
         }
         
-        // Map discovery page products to our format
-        const mappedProducts: WhopProduct[] = accessPasses.map((pass: any) => {
-          console.log(`🔍 Discovery Product ${pass.id}:`, JSON.stringify(pass, null, 2));
-          
-          return {
-            id: pass.id,
-            title: pass.title || pass.headline || `Product ${pass.id}`,
-            description: pass.description || '',
-            price: pass.price?.amount || 0,
-            currency: pass.price?.currency || 'usd',
-            model: pass.price?.model || (pass.price?.amount > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
-            includedApps: pass.includedApps || [],
-            plans: [],
-            visibility: 'visible' as const
-          };
+        // Debug: Log all experiences to see what apps are included
+        console.log(`🔍 DETAILED ANALYSIS: Found ${experiences.length} experiences for company ${this.companyId}`);
+        console.log(`🔍 Our App ID: ${process.env.NEXT_PUBLIC_WHOP_APP_ID}`);
+        
+        experiences.forEach((exp: any, index: number) => {
+          const isOurApp = exp.app?.id === process.env.NEXT_PUBLIC_WHOP_APP_ID;
+          console.log(`🔍 Experience ${index + 1}:`, {
+            id: exp.id,
+            name: exp.name,
+            appId: exp.app?.id,
+            appName: exp.app?.name,
+            isOurApp: isOurApp,
+            description: exp.description
+          });
         });
         
-        console.log(`✅ Mapped to ${mappedProducts.length} discovery page products`);
-        return mappedProducts;
+        // Count how many are our app vs other apps
+        const ourAppCount = experiences.filter((exp: any) => exp.app?.id === process.env.NEXT_PUBLIC_WHOP_APP_ID).length;
+        const otherAppCount = experiences.length - ourAppCount;
+        console.log(`📊 BREAKDOWN: ${ourAppCount} experiences with OUR app, ${otherAppCount} experiences with OTHER apps`);
         
-      } catch (graphqlError) {
-        console.error("❌ GraphQL discovery search failed:", graphqlError);
+        if (otherAppCount > 0) {
+          console.log("🎉 SUCCESS: We CAN see other apps installed in the company!");
+        } else {
+          console.log("⚠️ LIMITATION: We can only see experiences with our own app");
+        }
+        
+        // Get access passes from experiences - these ARE the discovery page products
+        const allProducts: WhopProduct[] = [];
+        
+        for (const exp of experiences) {
+          if (!exp) continue;
+          
+          try {
+            console.log(`🔍 Getting access passes for experience: ${exp.name} (${exp.id})`);
+            const accessPassesResult = await sdkWithContext.experiences.listAccessPassesForExperience({
+              experienceId: exp.id
+            });
+            
+            const accessPasses = accessPassesResult?.accessPasses || [];
+            console.log(`✅ Experience ${exp.name} has ${accessPasses.length} access passes (products)`);
+            
+            // Map access passes to product format
+            const expProducts = accessPasses.map((pass: any) => {
+              console.log(`🔍 Access Pass (Product) ${pass.id}:`, JSON.stringify(pass, null, 2));
+              
+              return {
+                id: pass.id,
+                title: pass.title || pass.name || `Product ${pass.id}`,
+                description: pass.description || pass.shortenedDescription,
+                price: pass.rawInitialPrice || pass.price?.amount || 0,
+                currency: pass.baseCurrency || pass.price?.currency || 'usd',
+                model: pass.price?.model || (pass.rawInitialPrice > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+                includedApps: pass.includedApps || pass.apps || [],
+                plans: pass.plans || [],
+                visibility: 'visible' as const
+              };
+            });
+            
+            allProducts.push(...expProducts);
+          } catch (expError) {
+            console.warn(`⚠️ Failed to get access passes for experience ${exp?.name} (${exp?.id}):`, expError);
+            // Continue with other experiences
+          }
+        }
+        
+        console.log(`✅ Found ${allProducts.length} discovery page products via access passes`);
+        console.log("ℹ️ Note: These are only products that include YOUR app, not all discovery page products");
+        return allProducts;
+        
+      } catch (sdkError) {
+        console.error("❌ SDK approach failed:", sdkError);
         console.log("⚠️ Falling back to empty array - smart upselling won't work");
         return [];
       }
