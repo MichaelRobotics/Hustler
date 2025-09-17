@@ -148,7 +148,14 @@ export async function triggerProductSyncForNewAdmin(
 				discoveryProducts = [];
 				syncState.errors.push("Circuit breaker open - discovery products fetch skipped");
 			} else {
-				discoveryProducts = await whopClient.getCompanyProducts();
+				// Add timeout to entire discovery products fetch
+				const discoveryTimeout = 60000; // 60 seconds total
+				discoveryProducts = await Promise.race([
+					whopClient.getCompanyProducts(),
+					new Promise<never>((_, reject) => 
+						setTimeout(() => reject(new Error(`Discovery products fetch timeout after ${discoveryTimeout}ms`)), discoveryTimeout)
+					)
+				]);
 				circuitBreaker.onSuccess();
 				console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
 			}
@@ -200,7 +207,14 @@ export async function triggerProductSyncForNewAdmin(
 		updateProgress("creating_free_resources");
 		console.log("📱 Creating FREE apps from installed apps...");
 		try {
-			const installedApps = await whopClient.getInstalledApps();
+			// Add timeout to installed apps fetch
+			const installedAppsTimeout = 45000; // 45 seconds total
+			const installedApps = await Promise.race([
+				whopClient.getInstalledApps(),
+				new Promise<never>((_, reject) => 
+					setTimeout(() => reject(new Error(`Installed apps fetch timeout after ${installedAppsTimeout}ms`)), installedAppsTimeout)
+				)
+			]);
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
 			if (installedApps.length > 0) {

@@ -56,70 +56,67 @@ export class WhopApiClient {
     try {
       console.log(`Fetching installed apps for company ${this.companyId}...`);
       
-      // Add keepalive mechanism to prevent serverless function idle timeout
-      const keepAlive = setInterval(() => {
-        console.log("💓 Keepalive: Processing installed apps...");
-      }, 5000); // Every 5 seconds
+      // Use global SDK with proper context (same pattern as other APIs)
+      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
       
-      try {
-        // Use global SDK with proper context (same pattern as other APIs)
-        const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
-        
-        console.log("🔍 Getting installed apps using listExperiences...");
-        
-        // Get experiences for the company (these represent installed apps) with retry logic
-        console.log(`🔍 Calling listExperiences with companyId: ${this.companyId}`);
-        const experiencesResult = await this.retryApiCall(
-          () => {
-            console.log(`🔍 Executing listExperiences API call...`);
-            return (sdkWithContext.experiences as any).listExperiences({
-              companyId: this.companyId,
-              first: 100
-            });
-          },
+      console.log("🔍 Getting installed apps using listExperiences...");
+      
+      // Single API call with optimized timeout
+      const operationTimeout = 30000; // 30 seconds total
+      const startTime = Date.now();
+      
+      console.log(`🚀 Starting listExperiences API call with ${operationTimeout}ms timeout...`);
+      
+      const experiencesResult = await Promise.race([
+        this.retryApiCall(
+          () => (sdkWithContext.experiences as any).listExperiences({
+            companyId: this.companyId,
+            first: 100
+          }),
           "listExperiences",
-          3, // maxRetries
-          15000 // 15 second timeout per attempt
-        );
-        console.log(`🔍 listExperiences API call completed, processing result...`);
-        
-        const experiences = (experiencesResult as any)?.experiencesV2?.nodes || [];
-        console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
-        
-        if (experiences.length === 0) {
-          console.log("⚠️ No installed apps found for company");
-          return [];
-        }
-        
-        // Map experiences to app format
-        const apps: WhopApp[] = experiences.map((exp: any) => {
-          console.log(`🔍 Mapping experience:`, {
-            id: exp.id,
-            name: exp.name,
-            appId: exp.app?.id,
-            appName: exp.app?.name,
-            description: exp.description
-          });
-          
-          return {
-            id: exp.app?.id || exp.id,
-            name: exp.app?.name || exp.name,
-            description: exp.description,
-            price: 0, // Apps are free
-            currency: 'usd',
-            discoveryPageUrl: undefined, // Apps don't have discovery pages
-            checkoutUrl: undefined, // Apps don't have checkout
-            route: undefined
-          };
+          2, // Reduced retries
+          10000 // 10 second timeout per attempt
+        ),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error(`Installed apps fetch timeout after ${operationTimeout}ms`)), operationTimeout)
+        )
+      ]);
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`✅ listExperiences API call completed in ${elapsed}ms`);
+      
+      const experiences = (experiencesResult as any)?.experiencesV2?.nodes || [];
+      console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
+      
+      if (experiences.length === 0) {
+        console.log("⚠️ No installed apps found for company");
+        return [];
+      }
+      
+      // Map experiences to app format
+      const apps: WhopApp[] = experiences.map((exp: any) => {
+        console.log(`🔍 Mapping experience:`, {
+          id: exp.id,
+          name: exp.name,
+          appId: exp.app?.id,
+          appName: exp.app?.name,
+          description: exp.description
         });
         
-        console.log(`✅ Mapped to ${apps.length} installed apps`);
-        return apps;
-        
-      } finally {
-        // Clear keepalive interval
-        clearInterval(keepAlive);
-      }
+        return {
+          id: exp.app?.id || exp.id,
+          name: exp.app?.name || exp.name,
+          description: exp.description,
+          price: 0, // Apps are free
+          currency: 'usd',
+          discoveryPageUrl: undefined, // Apps don't have discovery pages
+          checkoutUrl: undefined, // Apps don't have checkout
+          route: undefined
+        };
+      });
+      
+      console.log(`✅ Mapped to ${apps.length} installed apps`);
+      return apps;
       
     } catch (error) {
       console.error("❌ Error fetching installed apps:", error);
@@ -139,42 +136,56 @@ export class WhopApiClient {
     try {
       console.log("🔍 Getting discovery page products using SDK methods...");
       
-      // Add keepalive mechanism to prevent serverless function idle timeout
-      const keepAlive = setInterval(() => {
-        console.log("💓 Keepalive: Processing discovery page products...");
-      }, 5000); // Every 5 seconds
+      // PARALLEL API CALLS with single timeout for entire operation
+      const operationTimeout = 45000; // 45 seconds total for both calls
+      const startTime = Date.now();
       
-      try {
-        // Get access passes (discovery page products) - use global SDK with retry logic
-        const accessPassesResult = await this.retryApiCall(
-          () => (whopSdk.companies as any).listAccessPasses({
-            companyId: this.companyId,
-            visibility: "all",
-            first: 100
-          }),
-          "listAccessPasses"
-        );
-        
-        const accessPasses = (accessPassesResult as any)?.accessPasses?.nodes || [];
-        console.log(`🔍 Found ${accessPasses.length} access passes for company ${this.companyId}`);
-        
-        if (accessPasses.length === 0) {
-          console.log("⚠️ No discovery page products found - this means no products to upsell");
-          return [];
-        }
-        
-        // Get plans for pricing information with retry logic
-        const plansResult = await this.retryApiCall(
-          () => (whopSdk.companies as any).listPlans({
-            companyId: this.companyId,
-            visibility: "all",
-            first: 100
-          }),
-          "listPlans"
-        );
-        
-        const plans = (plansResult as any)?.plans?.nodes || [];
-        console.log(`🔍 Found ${plans.length} plans for company ${this.companyId}`);
+      console.log(`🚀 Starting parallel API calls with ${operationTimeout}ms timeout...`);
+      
+      // Create both API calls as promises
+      const accessPassesPromise = this.retryApiCall(
+        () => (whopSdk.companies as any).listAccessPasses({
+          companyId: this.companyId,
+          visibility: "all",
+          first: 100
+        }),
+        "listAccessPasses",
+        2, // Reduced retries
+        15000 // Reduced timeout per attempt
+      );
+      
+      const plansPromise = this.retryApiCall(
+        () => (whopSdk.companies as any).listPlans({
+          companyId: this.companyId,
+          visibility: "all",
+          first: 100
+        }),
+        "listPlans",
+        2, // Reduced retries
+        15000 // Reduced timeout per attempt
+      );
+      
+      // Execute both calls in parallel with overall timeout
+      const [accessPassesResult, plansResult] = await Promise.race([
+        Promise.all([accessPassesPromise, plansPromise]),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error(`Discovery products fetch timeout after ${operationTimeout}ms`)), operationTimeout)
+        )
+      ]);
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`✅ Parallel API calls completed in ${elapsed}ms`);
+      
+      const accessPasses = (accessPassesResult as any)?.accessPasses?.nodes || [];
+      console.log(`🔍 Found ${accessPasses.length} access passes for company ${this.companyId}`);
+      
+      if (accessPasses.length === 0) {
+        console.log("⚠️ No discovery page products found - this means no products to upsell");
+        return [];
+      }
+      
+      const plans = (plansResult as any)?.plans?.nodes || [];
+      console.log(`🔍 Found ${plans.length} plans for company ${this.companyId}`);
       
       // Group plans by access pass ID
       const plansByAccessPass = new Map<string, any[]>();
@@ -244,14 +255,9 @@ export class WhopApiClient {
         };
       });
       
-        console.log(`✅ Mapped to ${mappedProducts.length} DISCOVERY PAGE PRODUCTS`);
-        console.log("🎉 SUCCESS: SDK methods work perfectly!");
-        return mappedProducts;
-        
-      } finally {
-        // Clear keepalive interval
-        clearInterval(keepAlive);
-      }
+      console.log(`✅ Mapped to ${mappedProducts.length} DISCOVERY PAGE PRODUCTS`);
+      console.log("🎉 SUCCESS: SDK methods work perfectly!");
+      return mappedProducts;
       
     } catch (error) {
       console.error("❌ Failed to get discovery page products:", error);
