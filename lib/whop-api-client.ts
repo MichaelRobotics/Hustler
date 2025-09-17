@@ -172,8 +172,14 @@ export class WhopApiClient {
         }
         
         console.log(`🔍 Making API call for company: ${this.companyId} with user: ${this.userId}`);
+        console.log(`🔍 API Headers being sent:`);
+        console.log(`  - Authorization: Bearer ${apiKey.substring(0, 10)}...`);
+        console.log(`  - x-company-id: ${this.companyId}`);
+        console.log(`  - x-user-id: ${this.userId}`);
         
-        const response = await fetch(`https://api.whop.com/v5/company/products?first=100`, {
+        // Try different API endpoints to get company products
+        // First try v2/oauth/company/products with company ID as query parameter
+        const response = await fetch(`https://api.whop.com/v2/oauth/company/products?company_id=${this.companyId}&first=100`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
