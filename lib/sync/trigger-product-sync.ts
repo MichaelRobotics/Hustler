@@ -97,7 +97,10 @@ export async function triggerProductSyncForNewAdmin(
 		}
 
 		// Check if products have already been synced for this experience
-		console.log("🔍 Checking for existing resources...");
+		// Use a more comprehensive check to prevent race conditions
+		console.log("🔍 Checking for existing sync state...");
+		
+		// Check for existing resources
 		const existingResources = await db.select()
 			.from(resources)
 			.where(
@@ -108,14 +111,33 @@ export async function triggerProductSyncForNewAdmin(
 			)
 			.limit(1);
 
-		if (existingResources.length > 0) {
+		// Check for existing funnels
+		const existingFunnels = await db.select()
+			.from(funnels)
+			.where(eq(funnels.experienceId, experienceId))
+			.limit(1);
+
+		// Check if user is already synced
+		const existingUserRecord = await db.query.users.findFirst({
+			where: eq(users.id, userId),
+			columns: { productsSynced: true }
+		});
+
+		if (existingResources.length > 0 || existingFunnels.length > 0 || existingUserRecord?.productsSynced) {
 			console.log(`✅ Products already synced for experience ${experienceId}, skipping sync`);
+			console.log(`   - Resources: ${existingResources.length}`);
+			console.log(`   - Funnels: ${existingFunnels.length}`);
+			console.log(`   - User synced: ${existingUserRecord?.productsSynced}`);
+			
 			// Mark user as synced even though we didn't sync (already done)
 			await db.update(users)
 				.set({ productsSynced: true })
 				.where(eq(users.id, userId));
 			return;
 		}
+
+		// Add a small delay to prevent race conditions
+		await new Promise(resolve => setTimeout(resolve, 100));
 
 		console.log(`🚀 Starting smart upselling sync for experience ${experienceId}`);
 
@@ -184,15 +206,26 @@ export async function triggerProductSyncForNewAdmin(
 		console.log("📊 Creating funnel...");
 		let funnel;
 		try {
-			funnel = await retryDatabaseOperation(
-				() => createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-					name: funnelName,
-					description: `Funnel for ${funnelName}`,
-					resources: [] // Will assign resources after creation
-				}),
-				"createFunnel"
-			);
-			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+			// Double-check for existing funnel before creating (prevent race condition)
+			const existingFunnel = await db.select()
+				.from(funnels)
+				.where(eq(funnels.experienceId, experienceId))
+				.limit(1);
+			
+			if (existingFunnel.length > 0) {
+				console.log(`✅ Funnel already exists for experience ${experienceId}, using existing funnel`);
+				funnel = existingFunnel[0];
+			} else {
+				funnel = await retryDatabaseOperation(
+					() => createFunnel({ id: userId, experience: { id: experienceId } } as any, {
+						name: funnelName,
+						description: `Funnel for ${funnelName}`,
+						resources: [] // Will assign resources after creation
+					}),
+					"createFunnel"
+				);
+				console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+			}
 			updateProgress("funnel_created", true);
 		} catch (error) {
 			console.error("❌ Error creating funnel:", error);
