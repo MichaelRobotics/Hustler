@@ -63,6 +63,9 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`🎯 Funnel will be named: "${funnelName}"`);
 		if (funnelProduct) {
 			console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
+			console.log(`🔍 Funnel product includedApps:`, funnelProduct.includedApps);
+		} else {
+			console.log(`⚠️ No funnel product found!`);
 		}
 
 		// Step 3: Create funnel with smart naming using proper action
@@ -89,9 +92,13 @@ export async function triggerProductSyncForNewAdmin(
 			try {
 				// Get app details for each included app
 				const allApps = await whopClient.getInstalledApps();
+				console.log(`🔍 All installed apps:`, allApps.map(app => ({ id: app.id, name: app.name })));
+				console.log(`🔍 Looking for apps with IDs:`, funnelProduct.includedApps);
+				
 				const funnelApps = allApps.filter(app => funnelProduct.includedApps.includes(app.id));
 				
 				console.log(`Found ${funnelApps.length} apps included in funnel product`);
+				console.log(`🔍 Matched funnel apps:`, funnelApps.map(app => ({ id: app.id, name: app.name })));
 				
 				for (const app of funnelApps) {
 					try {

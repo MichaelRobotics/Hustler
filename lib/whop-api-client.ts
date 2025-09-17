@@ -96,35 +96,50 @@ export class WhopApiClient {
     try {
       console.log(`Fetching owner's business products for company ${this.companyId}...`);
       
-      // Use SDK with company context
-      const sdkWithCompany = this.whopSdk.withCompany(this.companyId);
+      // Use direct HTTP API call to get company products from discovery page
+      const url = `https://api.whop.com/v5/app/products?company_id=${this.companyId}&first=100`;
+      console.log(`🌐 Making request to: ${url}`);
       
-      // Get products from experiences (installed apps)
-      console.log("🔍 Fetching products from experiences...");
-      
-      const experiencesResult = await sdkWithCompany.experiences.listExperiences({
-        companyId: this.companyId,
-        first: 100
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
       });
       
-      const experiences = experiencesResult?.experiencesV2?.nodes || [];
-      console.log(`Found ${experiences.length} experiences`);
+      console.log(`📡 API Response status: ${response.status} ${response.statusText}`);
       
-      // Map experiences to product format
-      const products = experiences.map((exp: any) => ({
-        id: exp.id,
-        title: exp.name || `Experience ${exp.id}`,
-        description: exp.description,
-        price: 0, // Experiences might not have pricing
-        currency: 'usd',
-        model: 'free' as const,
-        includedApps: [exp.id], // The experience itself is the "app"
-        plans: [],
-        visibility: 'visible' as const
-      }));
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
-      console.log(`Mapped to ${products.length} products from experiences`);
-      return products;
+      const result = await response.json();
+      console.log(`🔍 API Response:`, JSON.stringify(result, null, 2));
+      
+      // Parse the response - v5 app/products returns products array
+      const products = result?.products || [];
+      console.log(`Found ${products.length} business products from discovery page`);
+      
+      // Map to our product format
+      const mappedProducts = products.map((product: any) => {
+        console.log(`🔍 Product ${product.id}:`, JSON.stringify(product, null, 2));
+        
+        return {
+          id: product.id,
+          title: product.name || product.title || `Product ${product.id}`,
+          description: product.description,
+          price: product.price?.amount || product.price || 0,
+          currency: product.price?.currency || 'usd',
+          model: product.price?.model || (product.price?.amount > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+          includedApps: product.includedApps || product.included_apps || product.apps || [],
+          plans: product.plans || [],
+          visibility: product.visibility || 'visible' as const
+        };
+      });
+      
+      console.log(`Mapped to ${mappedProducts.length} business products`);
+      return mappedProducts;
       
     } catch (error) {
       console.error("Error fetching company products:", error);
