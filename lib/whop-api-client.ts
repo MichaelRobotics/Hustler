@@ -104,9 +104,6 @@ export class WhopApiClient {
     console.log(`🔍 Getting DISCOVERY PAGE PRODUCTS for company ${this.companyId}...`);
     
     try {
-      // Use global SDK with proper context
-      const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
-      
       console.log("🔍 Getting discovery page products using SDK methods...");
       
       // Get access passes (discovery page products) - use global SDK

@@ -108,8 +108,8 @@ importers:
         specifier: 0.0.1-canary.117
         version: 0.0.1-canary.117(react@19.1.0)
       '@whop/api':
-        specifier: ^0.0.42
-        version: 0.0.42(@auth/core@0.40.0)
+        specifier: ^0.0.50
+        version: 0.0.50(@auth/core@0.40.0)
       '@whop/react':
         specifier: 0.2.36
         version: 0.2.36(@auth/core@0.40.0)(@types/react-dom@19.1.5(@types/react@19.1.4))(@types/react@19.1.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -2619,6 +2619,12 @@ packages:
     peerDependencies:
       '@auth/core': ^0.40.0
 
+  '@whop/api@0.0.50':
+    resolution: {integrity: sha512-jX4VMQAOeWqWTOsbzaF9AD8BzDcUgj9LZOauxlPgWdDv6wJVDG5udCzSRtk/0p7i298X3liw9RJL/hpadleMcA==}
+    engines: {node: 22.x, pnpm: 9.15.9}
+    peerDependencies:
+      '@auth/core': ^0.40.0
+
   '@whop/checkout@0.0.38':
     resolution: {integrity: sha512-cNj6xXquP7+H0I4laKmubWXLkxSwSxEQDjPDh+ETUqXzuXXAFPRfSGj6LbT4PLc4P/918rnBzA3BSMrT38rHFA==}
     engines: {node: 22.x, pnpm: 9.15.9}
@@ -2983,6 +2989,9 @@ packages:
   jose@6.0.11:
     resolution: {integrity: sha512-QxG7EaliDARm1O1S8BGakqncGT9s25bKL1WSf6/oa17Tkqwi8D2ZNglqCF+DsYF88/rV66Q/Q2mFAy697E1DUg==}
 
+  jose@6.1.0:
+    resolution: {integrity: sha512-TTQJyoEoKcC1lscpVDCSsVgYzUDg/0Bt3WE//WiTPK6uOCQC2KZS4MpugbMWt/zyjkopgZoXhZuCi00gLudfUA==}
+
   js-md5@0.8.3:
     resolution: {integrity: sha512-qR0HB5uP6wCuRMrWPTrkMaev7MJZwJuuw4fnwAzRgP4J4/F8RwtodOKpGp4XpqsLBFzzgqIO42efFAyz2Et6KQ==}
 
@@ -3121,8 +3130,8 @@ packages:
       encoding:
         optional: true
 
-  oauth4webapi@3.7.0:
-    resolution: {integrity: sha512-Q52wTPUWPsVLVVmTViXPQFMW2h2xv2jnDGxypjpelCFKaOjLsm7AxYuOk1oQgFm95VNDbuggasu9htXrz6XwKw==}
+  oauth4webapi@3.8.1:
+    resolution: {integrity: sha512-olkZDELNycOWQf9LrsELFq8n05LwJgV8UkrS0cburk6FOwf8GvLam+YB+Uj5Qvryee+vwWOfQVeI5Vm0MVg7SA==}
 
   openapi-typescript-helpers@0.0.2:
     resolution: {integrity: sha512-r5Z4tlGa2l6jYO1ENT9Giqo/ZWzWPmsYUR41O01kjYr7vg4iBFaMh0W0g8Ef72SpeU2F+TY6CAdKxTv7aq+WXA==}
@@ -3397,8 +3406,8 @@ snapshots:
   '@auth/core@0.40.0':
     dependencies:
       '@panva/hkdf': 1.2.1
-      jose: 6.0.11
-      oauth4webapi: 3.7.0
+      jose: 6.1.0
+      oauth4webapi: 3.8.1
       preact: 10.24.3
       preact-render-to-string: 6.5.11(preact@10.24.3)
 
@@ -6269,6 +6278,16 @@ snapshots:
       js-md5: 0.8.3
       tiny-typed-emitter: 2.1.0
 
+  '@whop/api@0.0.50(@auth/core@0.40.0)':
+    dependencies:
+      '@auth/core': 0.40.0
+      graphql: 16.11.0
+      graphql-request: 7.2.0(graphql@16.11.0)
+      graphql-tag: 2.12.6(graphql@16.11.0)
+      jose: 6.0.11
+      js-md5: 0.8.3
+      tiny-typed-emitter: 2.1.0
+
   '@whop/checkout@0.0.38(react@19.1.0)':
     optionalDependencies:
       react: 19.1.0
@@ -6627,6 +6646,8 @@ snapshots:
 
   jose@6.0.11: {}
 
+  jose@6.1.0: {}
+
   js-md5@0.8.3: {}
 
   json-bigint@1.0.0:
@@ -6740,7 +6761,7 @@ snapshots:
     dependencies:
       whatwg-url: 5.0.0
 
-  oauth4webapi@3.7.0: {}
+  oauth4webapi@3.8.1: {}
 
   openapi-typescript-helpers@0.0.2: {}
 
