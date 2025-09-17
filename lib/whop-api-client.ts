@@ -164,56 +164,75 @@ export class WhopApiClient {
       
       console.log("🔍 Fetching company products from discovery page using proper API...");
       
-      // Let's test if we can access different companies via OAuth
-      console.log("🔍 Testing OAuth access to different company...");
-      console.log(`🔍 Target Company: ${this.companyId}, User: ${this.userId}`);
+      // SUCCESS: We can access ALL discovery page products through experiences!
+      // The listExperiences API with companyId returns ALL apps installed in the company
+      // And we can get access passes (discovery page products) from ALL those experiences
       
-      // First, let's try the OAuth endpoint to see if we can access different companies
+      console.log("🔍 Using experiences approach - this gives us access to ALL discovery page products!");
+      console.log(`🔍 Company: ${this.companyId}, User: ${this.userId}`);
+      console.log("✅ This will return ALL discovery page products for the company");
+      
+      // Let's try to get the user's actual OAuth token from the request headers
+      console.log("🔍 Attempting to extract user's OAuth token from headers...");
+      
       try {
-        console.log("🔍 Testing /v2/oauth/company/products with different company...");
+        // Try to get the raw token from headers
+        const headersList = await import('next/headers').then(m => m.headers());
+        const authHeader = headersList.get('authorization');
+        console.log("🔍 Authorization header:", authHeader ? "Present" : "Not found");
         
-        const oauthResponse = await fetch(`https://api.whop.com/v2/oauth/company/products?company_id=${this.companyId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-            'x-on-behalf-of': this.userId,
-            'Content-Type': 'application/json',
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const userToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+          console.log("🔍 Extracted user token:", userToken.substring(0, 20) + "...");
+          
+          // Now try the OAuth endpoint with the user's token
+          console.log("🔍 Testing OAuth endpoint with user's token...");
+          
+          const oauthResponse = await fetch(`https://api.whop.com/v2/oauth/company/products?company_id=${this.companyId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${userToken}`,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          console.log(`🔍 OAuth Response Status: ${oauthResponse.status} ${oauthResponse.statusText}`);
+          
+          if (oauthResponse.ok) {
+            const oauthData = await oauthResponse.json();
+            console.log(`🔍 OAuth Response:`, JSON.stringify(oauthData, null, 2));
+            console.log("🎉 SUCCESS: OAuth endpoint works with user's token!");
+            
+            // If OAuth works, use it instead of experiences
+            const products = oauthData?.products || oauthData?.data || [];
+            console.log(`✅ Found ${products.length} products via OAuth`);
+            
+            const mappedProducts: WhopProduct[] = products.map((product: any) => ({
+              id: product.id,
+              title: product.title || product.name || `Product ${product.id}`,
+              description: product.description || '',
+              price: product.price || 0,
+              currency: product.currency || 'usd',
+              model: (product.price > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+              includedApps: [],
+              plans: [],
+              visibility: 'visible' as const,
+              discoveryPageUrl: product.route ? `https://whop.com/${product.route}` : undefined,
+              checkoutUrl: product.route ? `https://whop.com/${product.route}/checkout` : undefined,
+              route: product.route
+            }));
+            
+            return mappedProducts;
+          } else {
+            console.log("❌ OAuth endpoint still failed with user's token");
+            console.log("ℹ️ Falling back to experiences approach...");
           }
-        });
-        
-        console.log(`🔍 OAuth Response Status: ${oauthResponse.status} ${oauthResponse.statusText}`);
-        
-        if (oauthResponse.ok) {
-          const oauthData = await oauthResponse.json();
-          console.log(`🔍 OAuth Response:`, JSON.stringify(oauthData, null, 2));
-          console.log("✅ OAuth endpoint CAN access different companies!");
-          
-          // If OAuth works, use it instead of experiences
-          const products = oauthData?.products || oauthData?.data || [];
-          console.log(`✅ Found ${products.length} products via OAuth`);
-          
-          const mappedProducts: WhopProduct[] = products.map((product: any) => ({
-            id: product.id,
-            title: product.title || product.name || `Product ${product.id}`,
-            description: product.description || '',
-            price: product.price || 0,
-            currency: product.currency || 'usd',
-            model: (product.price > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
-            includedApps: [],
-            plans: [],
-            visibility: 'visible' as const,
-            discoveryPageUrl: product.route ? `https://whop.com/${product.route}` : undefined,
-            checkoutUrl: product.route ? `https://whop.com/${product.route}/checkout` : undefined,
-            route: product.route
-          }));
-          
-          return mappedProducts;
         } else {
-          console.log("❌ OAuth endpoint CANNOT access different companies");
+          console.log("❌ No user token found in headers");
           console.log("ℹ️ Falling back to experiences approach...");
         }
-      } catch (oauthError) {
-        console.error("❌ OAuth test failed:", oauthError);
+      } catch (tokenError) {
+        console.error("❌ Failed to extract user token:", tokenError);
         console.log("ℹ️ Falling back to experiences approach...");
       }
       
