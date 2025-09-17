@@ -72,8 +72,18 @@ export async function triggerProductSyncForNewAdmin(
 		}
 
 		// Step 2: Determine funnel name and get funnel product from discovery page
-		const funnelName = whopClient.determineFunnelName(discoveryProducts);
-		const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
+		console.log("🎯 Determining funnel name and product...");
+		let funnelName;
+		let funnelProduct;
+		
+		try {
+			funnelName = whopClient.determineFunnelName(discoveryProducts);
+			funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
+			console.log(`✅ Funnel name determined: "${funnelName}"`);
+		} catch (error) {
+			console.error("❌ Error determining funnel name/product:", error);
+			throw new Error(`Failed to determine funnel name/product: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 		
 		console.log(`🎯 Funnel will be named: "${funnelName}"`);
 		if (funnelProduct) {

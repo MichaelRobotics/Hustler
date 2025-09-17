@@ -125,11 +125,22 @@ export class WhopApiClient {
       
       const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
       console.log(`🔍 Found ${accessPasses.length} access passes for company ${this.companyId}`);
+      console.log(`🔍 Access passes result structure:`, {
+        hasAccessPasses: !!accessPassesResult?.accessPasses,
+        hasNodes: !!accessPassesResult?.accessPasses?.nodes,
+        nodesLength: accessPassesResult?.accessPasses?.nodes?.length || 0
+      });
       
       if (accessPasses.length === 0) {
         console.log("⚠️ No discovery page products found - this means no products to upsell");
         return [];
       }
+      
+      console.log(`🔍 First access pass sample:`, accessPasses[0] ? {
+        id: accessPasses[0].id,
+        title: accessPasses[0].title,
+        visibility: accessPasses[0].visibility
+      } : 'No access passes');
       
       // Get plans for pricing information
       const plansResult = await (whopSdk.companies as any).listPlans({
