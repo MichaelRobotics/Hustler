@@ -61,14 +61,33 @@ export class WhopApiClient {
       
       console.log("🔍 Getting installed apps using listExperiences...");
       
+      // Check if listExperiences method exists
+      if (typeof (sdkWithContext.experiences as any).listExperiences !== 'function') {
+        console.log("⚠️ listExperiences method not available in this SDK version");
+        console.log("⚠️ Available methods on experiences:", Object.keys(sdkWithContext.experiences || {}));
+        return [];
+      }
+      
       // Get experiences for the company (these represent installed apps)
-      const experiencesResult = await (sdkWithContext.experiences as any).listExperiences({
-        companyId: this.companyId,
-        first: 100
-      });
+      let experiencesResult;
+      try {
+        experiencesResult = await (sdkWithContext.experiences as any).listExperiences({
+          companyId: this.companyId,
+          first: 100
+        });
+        console.log("✅ Successfully called listExperiences");
+      } catch (error) {
+        console.error("❌ Error calling listExperiences:", error);
+        throw new Error(`Failed to fetch experiences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
       
       const experiences = experiencesResult?.experiencesV2?.nodes || [];
       console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
+      console.log("🔍 Experiences result structure:", {
+        hasExperiencesV2: !!experiencesResult?.experiencesV2,
+        hasNodes: !!experiencesResult?.experiencesV2?.nodes,
+        nodesLength: experiencesResult?.experiencesV2?.nodes?.length || 0
+      });
       
       if (experiences.length === 0) {
         console.log("⚠️ No installed apps found for company");
