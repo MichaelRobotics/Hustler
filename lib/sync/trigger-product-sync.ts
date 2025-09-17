@@ -14,12 +14,28 @@ export async function triggerProductSyncForNewAdmin(
 	experienceId: string,
 	companyId: string
 ): Promise<void> {
+	// Global keepalive mechanism to prevent serverless function idle timeout
+	const globalKeepAlive = setInterval(() => {
+		console.log("💓 Global Keepalive: Product sync in progress...");
+	}, 10000); // Every 10 seconds
+	
 	try {
 		console.log(`🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
 		console.log(`📊 Company ID: ${companyId}`);
 		console.log(`🔧 Function called at: ${new Date().toISOString()}`);
 
+		// Check database connection health before starting
+		console.log("🔍 Checking database connection health...");
+		try {
+			await db.select().from(users).limit(1);
+			console.log("✅ Database connection healthy");
+		} catch (dbError) {
+			console.error("❌ Database connection failed:", dbError);
+			throw new Error("Database connection failed - cannot proceed with sync");
+		}
+
 		// Check if products have already been synced for this experience
+		console.log("🔍 Checking for existing resources...");
 		const existingResources = await db.select()
 			.from(resources)
 			.where(
@@ -87,11 +103,14 @@ export async function triggerProductSyncForNewAdmin(
 		console.log("📊 Creating funnel...");
 		let funnel;
 		try {
-			funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-				name: funnelName,
-				description: `Funnel for ${funnelName}`,
-				resources: [] // Will assign resources after creation
-			});
+			funnel = await retryDatabaseOperation(
+				() => createFunnel({ id: userId, experience: { id: experienceId } } as any, {
+					name: funnelName,
+					description: `Funnel for ${funnelName}`,
+					resources: [] // Will assign resources after creation
+				}),
+				"createFunnel"
+			);
 			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
 		} catch (error) {
 			console.error("❌ Error creating funnel:", error);
@@ -110,28 +129,36 @@ export async function triggerProductSyncForNewAdmin(
 			if (installedApps.length > 0) {
 				// Create FREE resources for each installed app (with batching for performance)
 				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
+				let successCount = 0;
+				let errorCount = 0;
+				
 				for (let i = 0; i < installedApps.length; i += batchSize) {
 					const batch = installedApps.slice(i, i + batchSize);
 					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(installedApps.length/batchSize)} (${batch.length} apps)`);
 					
-					// Process batch in parallel
+					// Process batch in parallel with individual error handling and retry logic
 					const batchPromises = batch.map(async (app) => {
 						try {
 							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
 							
-							const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-								name: app.name,
-								type: "MY_PRODUCTS",
-								category: "FREE_VALUE",
-								link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-								description: app.description || `Free access to ${app.name}`,
-								whopProductId: app.id
-							});
+							const resource = await retryDatabaseOperation(
+								() => createResource({ id: userId, experience: { id: experienceId } } as any, {
+									name: app.name,
+									type: "MY_PRODUCTS",
+									category: "FREE_VALUE",
+									link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+									description: app.description || `Free access to ${app.name}`,
+									whopProductId: app.id
+								}),
+								`createResource-FREE-${app.name}`
+							);
 							
 							console.log(`✅ Created FREE resource for app: ${app.name}`);
+							successCount++;
 							return resource.id;
 						} catch (error) {
 							console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
+							errorCount++;
 							return null;
 						}
 					});
@@ -145,12 +172,14 @@ export async function triggerProductSyncForNewAdmin(
 					}
 				}
 				
-				console.log(`✅ Created ${resourceIds.length} FREE resources from installed apps`);
+				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
 			} else {
 				console.log(`⚠️ No installed apps found for company`);
 			}
 		} catch (error) {
 			console.error(`❌ Error fetching installed apps:`, error);
+			// Continue with sync even if installed apps fail
+			console.log("⚠️ Continuing sync without installed apps...");
 		}
 
 		// Create PAID products as upsells (excluding funnel product)
@@ -161,29 +190,37 @@ export async function triggerProductSyncForNewAdmin(
 		if (upsellProducts.length > 0) {
 			// Create PAID resources with batching for performance
 			const batchSize = 10; // Process 10 products at a time (increased for better performance)
+			let successCount = 0;
+			let errorCount = 0;
+			
 			for (let i = 0; i < upsellProducts.length; i += batchSize) {
 				const batch = upsellProducts.slice(i, i + batchSize);
 				console.log(`🔍 Processing PAID products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(upsellProducts.length/batchSize)} (${batch.length} products)`);
 				
-				// Process batch in parallel
+				// Process batch in parallel with individual error handling and retry logic
 				const batchPromises = batch.map(async (product) => {
 					try {
 						const cheapestPlan = whopClient.getCheapestPlan(product);
 						const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
 						
-						const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-							name: product.title,
-							type: "MY_PRODUCTS",
-							category: "PAID",
-							link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
-							description: product.description,
-							whopProductId: product.id
-						});
+						const resource = await retryDatabaseOperation(
+							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
+								name: product.title,
+								type: "MY_PRODUCTS",
+								category: "PAID",
+								link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
+								description: product.description,
+								whopProductId: product.id
+							}),
+							`createResource-PAID-${product.title}`
+						);
 						
 						console.log(`✅ Created PAID resource for product: ${product.title}`);
+						successCount++;
 						return resource.id;
 					} catch (error) {
 						console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
+						errorCount++;
 						return null;
 					}
 				});
@@ -196,6 +233,8 @@ export async function triggerProductSyncForNewAdmin(
 					await new Promise(resolve => setTimeout(resolve, 100));
 				}
 			}
+			
+			console.log(`✅ Created ${successCount} PAID resources from upsell products (${errorCount} errors)`);
 		}
 
 		// Step 5: Assign all resources to the funnel
@@ -210,10 +249,13 @@ export async function triggerProductSyncForNewAdmin(
 					const batch = resourceIds.slice(i, i + assignmentBatchSize);
 					console.log(`🔗 Assigning batch ${Math.floor(i/assignmentBatchSize) + 1}/${Math.ceil(resourceIds.length/assignmentBatchSize)} (${batch.length} resources)`);
 					
-					// Process assignments in parallel
+					// Process assignments in parallel with retry logic
 					const assignmentPromises = batch.map(async (resourceId) => {
 						try {
-							await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
+							await retryDatabaseOperation(
+								() => addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId),
+								`addResourceToFunnel-${resourceId}`
+							);
 							return true;
 						} catch (error) {
 							console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
@@ -251,7 +293,42 @@ export async function triggerProductSyncForNewAdmin(
 		console.error("❌ Error during smart upselling sync:", error);
 		// Don't mark as synced if there was an error
 		throw error;
+	} finally {
+		// Always clear the global keepalive interval
+		clearInterval(globalKeepAlive);
+		console.log("🧹 Cleaned up global keepalive mechanism");
 	}
+}
+
+/**
+ * Retry database operation with exponential backoff
+ */
+async function retryDatabaseOperation<T>(
+	operation: () => Promise<T>,
+	operationName: string,
+	maxRetries: number = 3
+): Promise<T> {
+	let lastError: Error | null = null;
+	
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			console.log(`🔄 ${operationName} attempt ${attempt}/${maxRetries}`);
+			const result = await operation();
+			console.log(`✅ ${operationName} succeeded on attempt ${attempt}`);
+			return result;
+		} catch (error) {
+			lastError = error instanceof Error ? error : new Error(String(error));
+			console.error(`❌ ${operationName} failed on attempt ${attempt}:`, lastError.message);
+			
+			if (attempt < maxRetries) {
+				const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+				console.log(`⏳ Retrying ${operationName} in ${delay}ms...`);
+				await new Promise(resolve => setTimeout(resolve, delay));
+			}
+		}
+	}
+	
+	throw new Error(`${operationName} failed after ${maxRetries} attempts. Last error: ${lastError?.message}`);
 }
 
 /**
