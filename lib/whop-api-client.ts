@@ -160,87 +160,103 @@ export class WhopApiClient {
       
       console.log("🔍 Fetching company products from discovery page using proper API...");
       
-      // Since the SDK doesn't have a direct company products method,
-      // we need to use the direct API approach to get discovery page products
-      console.log("🔍 Using direct API call to fetch discovery page products...");
+      // Use GraphQL API to get discovery page products
+      // This is the correct way to access discovery page products that users can see
+      console.log("🔍 Using GraphQL discoverySearch to get discovery page products");
+      console.log(`🔍 Company: ${this.companyId}, User: ${this.userId}`);
       
       try {
-        // Use direct fetch API call to get discovery page products
         const apiKey = process.env.WHOP_API_KEY;
         if (!apiKey) {
           throw new Error("WHOP_API_KEY not found in environment variables");
         }
         
-        console.log(`🔍 Making API call for company: ${this.companyId} with user: ${this.userId}`);
-        console.log(`🔍 API Headers being sent:`);
-        console.log(`  - Authorization: Bearer ${apiKey.substring(0, 10)}...`);
-        console.log(`  - x-company-id: ${this.companyId}`);
-        console.log(`  - x-user-id: ${this.userId}`);
-        
-        // Try different API endpoints to get company products
-        // First try v5/company/products (non-OAuth endpoint)
-        const response = await fetch(`https://api.whop.com/v5/company/products?first=100`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'x-company-id': this.companyId,
-            'x-user-id': this.userId,
-            'Content-Type': 'application/json'
+        // GraphQL query to get discovery page products
+        const discoveryQuery = `
+          query DiscoverySearch($query: String!) {
+            discoverySearch(query: $query) {
+              accessPasses {
+                id
+                title
+                route
+                headline
+                description
+                logo {
+                  sourceUrl
+                }
+                price {
+                  amount
+                  currency
+                  model
+                }
+                includedApps {
+                  id
+                  name
+                }
+              }
+            }
           }
+        `;
+        
+        // Make GraphQL request to get discovery page products
+        const response = await fetch('https://api.whop.com/public-graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'x-on-behalf-of': this.userId,
+            'x-company-id': this.companyId,
+          },
+          body: JSON.stringify({
+            query: discoveryQuery,
+            variables: {
+              query: '' // Empty query to get all products
+            }
+          })
         });
         
-        console.log(`🔍 API Response Status: ${response.status} ${response.statusText}`);
-        console.log(`🔍 API Response Headers:`, Object.fromEntries(response.headers.entries()));
-        
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`❌ API Error Response:`, errorText);
-          throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
+          throw new Error(`GraphQL request failed with status ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
-        console.log(`🔍 Raw API Response:`, JSON.stringify(data, null, 2));
+        console.log(`🔍 GraphQL Response:`, JSON.stringify(data, null, 2));
         
-        const products = data?.data || [];
-        console.log(`Found ${products.length} discovery page products via direct API`);
+        if (data.errors) {
+          console.error("❌ GraphQL errors:", data.errors);
+          throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+        }
         
-        // Check if products belong to the correct company
-        const correctCompanyProducts = products.filter((product: any) => {
-          const productCompanyId = product.company_id || product.page_id;
-          const isCorrectCompany = productCompanyId === this.companyId;
-          console.log(`🔍 Product ${product.id} company: ${productCompanyId}, expected: ${this.companyId}, match: ${isCorrectCompany}`);
-          return isCorrectCompany;
-        });
+        const accessPasses = data.data?.discoverySearch?.accessPasses || [];
+        console.log(`Found ${accessPasses.length} discovery page products via GraphQL`);
         
-        console.log(`✅ Found ${correctCompanyProducts.length} products for correct company ${this.companyId}`);
-        
-        if (correctCompanyProducts.length === 0) {
-          console.log("⚠️ No discovery page products found for the correct company");
+        if (accessPasses.length === 0) {
+          console.log("⚠️ No discovery page products found");
           return [];
         }
         
         // Map discovery page products to our format
-        const mappedProducts: WhopProduct[] = correctCompanyProducts.map((product: any) => {
-          console.log(`🔍 Discovery Product ${product.id}:`, JSON.stringify(product, null, 2));
+        const mappedProducts: WhopProduct[] = accessPasses.map((pass: any) => {
+          console.log(`🔍 Discovery Product ${pass.id}:`, JSON.stringify(pass, null, 2));
           
           return {
-            id: product.id,
-            title: product.title || product.name || `Product ${product.id}`,
-            description: product.description || product.shortenedDescription,
-            price: product.price?.amount || product.rawInitialPrice || 0,
-            currency: product.price?.currency || product.baseCurrency || 'usd',
-            model: product.price?.model || (product.price?.amount > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
-            includedApps: product.includedApps || product.apps || [],
-            plans: product.plans || [],
-            visibility: product.visibility || 'visible' as const
+            id: pass.id,
+            title: pass.title || pass.headline || `Product ${pass.id}`,
+            description: pass.description || '',
+            price: pass.price?.amount || 0,
+            currency: pass.price?.currency || 'usd',
+            model: pass.price?.model || (pass.price?.amount > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+            includedApps: pass.includedApps || [],
+            plans: [],
+            visibility: 'visible' as const
           };
         });
         
         console.log(`✅ Mapped to ${mappedProducts.length} discovery page products`);
         return mappedProducts;
         
-      } catch (apiError) {
-        console.error("❌ Direct API call failed:", apiError);
+      } catch (graphqlError) {
+        console.error("❌ GraphQL discovery search failed:", graphqlError);
         console.log("⚠️ Falling back to empty array - smart upselling won't work");
         return [];
       }
