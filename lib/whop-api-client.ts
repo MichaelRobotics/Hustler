@@ -1,4 +1,4 @@
-import { whopSdk } from './whop-sdk';
+import { whopSdk } from '@/lib/whop-sdk';
 
 export interface WhopProduct {
   id: string;
@@ -109,8 +109,8 @@ export class WhopApiClient {
       
       console.log("🔍 Getting discovery page products using SDK methods...");
       
-      // Get access passes (discovery page products)
-      const accessPassesResult = await (sdkWithContext.companies as any).listAccessPasses({
+      // Get access passes (discovery page products) - use global SDK
+      const accessPassesResult = await (whopSdk.companies as any).listAccessPasses({
         companyId: this.companyId,
         visibility: "all",
         first: 100
@@ -125,7 +125,7 @@ export class WhopApiClient {
       }
       
       // Get plans for pricing information
-      const plansResult = await (sdkWithContext.companies as any).listPlans({
+      const plansResult = await (whopSdk.companies as any).listPlans({
         companyId: this.companyId,
         visibility: "all",
         first: 100
