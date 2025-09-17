@@ -171,6 +171,8 @@ export class WhopApiClient {
           throw new Error("WHOP_API_KEY not found in environment variables");
         }
         
+        console.log(`🔍 Making API call for company: ${this.companyId} with user: ${this.userId}`);
+        
         const response = await fetch(`https://api.whop.com/v5/company/products?first=100`, {
           method: 'GET',
           headers: {
@@ -193,16 +195,26 @@ export class WhopApiClient {
         const data = await response.json();
         console.log(`🔍 Raw API Response:`, JSON.stringify(data, null, 2));
         
-        const products = data?.products || data?.data?.products || [];
+        const products = data?.data || [];
         console.log(`Found ${products.length} discovery page products via direct API`);
         
-        if (products.length === 0) {
-          console.log("⚠️ No discovery page products found for company");
+        // Check if products belong to the correct company
+        const correctCompanyProducts = products.filter((product: any) => {
+          const productCompanyId = product.company_id || product.page_id;
+          const isCorrectCompany = productCompanyId === this.companyId;
+          console.log(`🔍 Product ${product.id} company: ${productCompanyId}, expected: ${this.companyId}, match: ${isCorrectCompany}`);
+          return isCorrectCompany;
+        });
+        
+        console.log(`✅ Found ${correctCompanyProducts.length} products for correct company ${this.companyId}`);
+        
+        if (correctCompanyProducts.length === 0) {
+          console.log("⚠️ No discovery page products found for the correct company");
           return [];
         }
         
         // Map discovery page products to our format
-        const mappedProducts: WhopProduct[] = products.map((product: any) => {
+        const mappedProducts: WhopProduct[] = correctCompanyProducts.map((product: any) => {
           console.log(`🔍 Discovery Product ${product.id}:`, JSON.stringify(product, null, 2));
           
           return {
