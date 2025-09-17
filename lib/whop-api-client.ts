@@ -181,11 +181,18 @@ export class WhopApiClient {
           }
         });
         
+        console.log(`🔍 API Response Status: ${response.status} ${response.statusText}`);
+        console.log(`🔍 API Response Headers:`, Object.fromEntries(response.headers.entries()));
+        
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ API Error Response:`, errorText);
           throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
+        console.log(`🔍 Raw API Response:`, JSON.stringify(data, null, 2));
+        
         const products = data?.products || data?.data?.products || [];
         console.log(`Found ${products.length} discovery page products via direct API`);
         
