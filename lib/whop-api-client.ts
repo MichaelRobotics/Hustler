@@ -178,8 +178,8 @@ export class WhopApiClient {
         console.log(`  - x-user-id: ${this.userId}`);
         
         // Try different API endpoints to get company products
-        // First try v2/oauth/company/products with company ID as query parameter
-        const response = await fetch(`https://api.whop.com/v2/oauth/company/products?company_id=${this.companyId}&first=100`, {
+        // First try v5/company/products (non-OAuth endpoint)
+        const response = await fetch(`https://api.whop.com/v5/company/products?first=100`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
