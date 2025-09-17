@@ -68,13 +68,20 @@ export class WhopApiClient {
         console.log("🔍 Getting installed apps using listExperiences...");
         
         // Get experiences for the company (these represent installed apps) with retry logic
+        console.log(`🔍 Calling listExperiences with companyId: ${this.companyId}`);
         const experiencesResult = await this.retryApiCall(
-          () => (sdkWithContext.experiences as any).listExperiences({
-            companyId: this.companyId,
-            first: 100
-          }),
-          "listExperiences"
+          () => {
+            console.log(`🔍 Executing listExperiences API call...`);
+            return (sdkWithContext.experiences as any).listExperiences({
+              companyId: this.companyId,
+              first: 100
+            });
+          },
+          "listExperiences",
+          3, // maxRetries
+          15000 // 15 second timeout per attempt
         );
+        console.log(`🔍 listExperiences API call completed, processing result...`);
         
         const experiences = (experiencesResult as any)?.experiencesV2?.nodes || [];
         console.log(`Found ${experiences.length} installed apps for company ${this.companyId}`);
@@ -115,8 +122,10 @@ export class WhopApiClient {
       }
       
     } catch (error) {
-      console.error("Error fetching installed apps:", error);
-      throw new Error(`Failed to fetch installed apps: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("❌ Error fetching installed apps:", error);
+      console.log("⚠️ Falling back to empty array - no FREE apps will be created");
+      // Return empty array instead of throwing to allow sync to continue
+      return [];
     }
   }
 
@@ -252,19 +261,28 @@ export class WhopApiClient {
   }
 
   /**
-   * Retry API call with exponential backoff
+   * Retry API call with exponential backoff and timeout
    */
   private async retryApiCall<T>(
     apiCall: () => Promise<T>,
     operationName: string,
-    maxRetries: number = 3
+    maxRetries: number = 3,
+    timeoutMs: number = 30000 // 30 second timeout per attempt
   ): Promise<T> {
     let lastError: Error | null = null;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔄 ${operationName} attempt ${attempt}/${maxRetries}`);
-        const result = await apiCall();
+        console.log(`🔄 ${operationName} attempt ${attempt}/${maxRetries} (timeout: ${timeoutMs}ms)`);
+        
+        // Add timeout to prevent hanging
+        const result = await Promise.race([
+          apiCall(),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`${operationName} timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+        
         console.log(`✅ ${operationName} succeeded on attempt ${attempt}`);
         return result;
       } catch (error) {
