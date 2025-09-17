@@ -84,8 +84,24 @@ async function createUserContext(
 		if (!experience) {
 			console.log("Experience not found, creating new experience...");
 			
-			// Before creating new experience, check if we need to cleanup abandoned ones
-			const companyId = whopCompanyId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "";
+			// Get the company ID from the Whop API if not provided
+			let companyId = whopCompanyId;
+			if (!companyId) {
+				console.log("Company ID not provided, fetching from Whop API...");
+				try {
+					const whopExperience = await whopSdk.experiences.getExperience({
+						experienceId: whopExperienceId,
+					});
+					companyId = whopExperience.company.id;
+					console.log(`✅ Got company ID from Whop API: ${companyId}`);
+				} catch (error) {
+					console.error("❌ Failed to get company ID from Whop API:", error);
+					// Fallback to environment variable as last resort
+					companyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "";
+					console.log(`⚠️ Using fallback company ID: ${companyId}`);
+				}
+			}
+			
 			let isReinstallScenario = false;
 			
 			if (companyId) {
