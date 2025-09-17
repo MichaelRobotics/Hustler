@@ -93,7 +93,8 @@ export class WhopApiClient {
       console.log(`Fetching owner's business products for company ${companyId}...`);
       
       // Use direct HTTP API call since SDK doesn't have this method
-      const response = await fetch(`https://api.whop.com/v5/company/products?companyId=${companyId}&first=100`, {
+      // Try v2 OAuth endpoint first
+      const response = await fetch(`https://api.whop.com/v2/oauth/company/products?companyId=${companyId}&first=100`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
@@ -106,6 +107,7 @@ export class WhopApiClient {
       }
 
       const result = await response.json();
+      console.log(`🔍 API Response:`, JSON.stringify(result, null, 2));
       const products = result?.products?.nodes || [];
       console.log(`Found ${products.length} business products`);
       
