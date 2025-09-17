@@ -91,24 +91,95 @@ export class WhopApiClient {
   async getCompanyProducts(companyId: string): Promise<WhopProduct[]> {
     try {
       console.log(`Fetching owner's business products for company ${companyId}...`);
+      console.log(`🔑 Using API key: ${process.env.WHOP_API_KEY ? 'Present' : 'Missing'}`);
       
       // Use direct HTTP API call since SDK doesn't have this method
       // Try v2 OAuth endpoint first
-      const response = await fetch(`https://api.whop.com/v2/oauth/company/products?companyId=${companyId}&first=100`, {
+      const url = `https://api.whop.com/v2/oauth/company/products?companyId=${companyId}&first=100`;
+      console.log(`🌐 Making request to: ${url}`);
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
           'Content-Type': 'application/json',
         },
       });
+      
+      console.log(`📡 API Response status: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.log(`❌ v2 OAuth endpoint failed with status ${response.status}, trying v5 endpoint...`);
+        
+        // Try v5 endpoint as fallback
+        const v5Response = await fetch(`https://api.whop.com/v5/company/products?companyId=${companyId}&first=100`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        console.log(`📡 v5 API Response status: ${v5Response.status} ${v5Response.statusText}`);
+        
+        if (!v5Response.ok) {
+          throw new Error(`Both v2 and v5 endpoints failed. v2: ${response.status}, v5: ${v5Response.status}`);
+        }
+        
+        // Use v5 response
+        const result = await v5Response.json();
+        console.log(`🔍 v5 API Response:`, JSON.stringify(result, null, 2));
+        
+        // Try different response structures for v5
+        let products = [];
+        if (result?.products?.nodes) {
+          products = result.products.nodes;
+        } else if (result?.products) {
+          products = result.products;
+        } else if (result?.data?.products) {
+          products = result.data.products;
+        } else if (Array.isArray(result)) {
+          products = result;
+        } else {
+          console.log(`⚠️ Unexpected v5 API response structure:`, Object.keys(result || {}));
+        }
+        
+        console.log(`Found ${products.length} business products from v5`);
+        
+        // Map to our product format
+        const mappedProducts = products.map((product: any) => ({
+          id: product.id,
+          title: product.title || product.name,
+          description: product.description,
+          price: product.price?.amount || product.price || 0,
+          currency: product.price?.currency || 'usd',
+          model: product.price?.model || product.model || 'free',
+          includedApps: product.includedApps || [],
+          plans: product.plans || [],
+          visibility: product.visibility || 'visible'
+        }));
+        
+        console.log(`Mapped to ${mappedProducts.length} business products from v5`);
+        return mappedProducts;
       }
 
       const result = await response.json();
       console.log(`🔍 API Response:`, JSON.stringify(result, null, 2));
-      const products = result?.products?.nodes || [];
+      
+      // Try different response structures
+      let products = [];
+      if (result?.products?.nodes) {
+        products = result.products.nodes;
+      } else if (result?.products) {
+        products = result.products;
+      } else if (result?.data?.products) {
+        products = result.data.products;
+      } else if (Array.isArray(result)) {
+        products = result;
+      } else {
+        console.log(`⚠️ Unexpected API response structure:`, Object.keys(result || {}));
+      }
+      
       console.log(`Found ${products.length} business products`);
       
       // Map to our product format

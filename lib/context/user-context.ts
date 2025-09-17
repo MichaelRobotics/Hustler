@@ -248,13 +248,15 @@ async function createUserContext(
 						// Run sync in background to avoid blocking user creation
 						setTimeout(async () => {
 							try {
+								console.log(`🔄 Starting background product sync for user ${newUser.id}...`);
 								await triggerProductSyncForNewAdmin(
 									newUser.id,
 									experience.id,
 									experience.whopCompanyId
 								);
+								console.log(`✅ Background product sync completed for user ${newUser.id}`);
 							} catch (error) {
-								console.error("Background product sync failed:", error);
+								console.error("❌ Background product sync failed:", error);
 							}
 						}, 1000); // 1 second delay to ensure user creation is complete
 					} catch (error) {

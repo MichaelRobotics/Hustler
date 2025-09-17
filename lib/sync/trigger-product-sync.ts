@@ -16,6 +16,7 @@ export async function triggerProductSyncForNewAdmin(
 ): Promise<void> {
 	try {
 		console.log(`🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
+		console.log(`📊 Company ID: ${companyId}`);
 
 		// Check if products have already been synced for this experience
 		const existingResources = await db.select()
@@ -40,12 +41,20 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`🚀 Starting smart upselling sync for experience ${experienceId}`);
 
 		// Get Whop API client
+		console.log("🔧 Getting Whop API client...");
 		const whopClient = getWhopApiClient();
+		console.log("✅ Whop API client created");
 
 		// Step 1: Get owner's business products from discovery page
 		console.log("🏪 Fetching owner's business products...");
-		const businessProducts = await whopClient.getCompanyProducts(companyId);
-		console.log(`Found ${businessProducts.length} business products`);
+		let businessProducts;
+		try {
+			businessProducts = await whopClient.getCompanyProducts(companyId);
+			console.log(`✅ Found ${businessProducts.length} business products`);
+		} catch (error) {
+			console.error("❌ Error fetching business products:", error);
+			throw new Error(`Failed to fetch business products: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 
 		// Step 2: Determine funnel name and get funnel product
 		const funnelName = whopClient.determineFunnelName(businessProducts);
@@ -58,13 +67,18 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Step 3: Create funnel with smart naming using proper action
 		console.log("📊 Creating funnel...");
-		const funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-			name: funnelName,
-			description: `Funnel for ${funnelName}`,
-			resources: [] // Will assign resources after creation
-		});
-
-		console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+		let funnel;
+		try {
+			funnel = await createFunnel({ id: userId, experience: { id: experienceId } } as any, {
+				name: funnelName,
+				description: `Funnel for ${funnelName}`,
+				resources: [] // Will assign resources after creation
+			});
+			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+		} catch (error) {
+			console.error("❌ Error creating funnel:", error);
+			throw new Error(`Failed to create funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 
 		// Step 4: Create resources and collect their IDs
 		const resourceIds: string[] = [];
@@ -72,24 +86,32 @@ export async function triggerProductSyncForNewAdmin(
 		// Create FREE apps from funnel product only
 		console.log("📱 Creating FREE apps from funnel product...");
 		if (funnelProduct && funnelProduct.includedApps.length > 0) {
-			// Get app details for each included app
-			const allApps = await whopClient.getInstalledApps(companyId);
-			const funnelApps = allApps.filter(app => funnelProduct.includedApps.includes(app.id));
-			
-			console.log(`Found ${funnelApps.length} apps included in funnel product`);
-			
-			for (const app of funnelApps) {
-				const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-					name: app.name || app.description || `App ${app.id}`,
-					type: "MY_PRODUCTS",
-					category: "FREE_VALUE",
-					link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
-					description: app.description,
-					whopProductId: app.id
-				});
+			try {
+				// Get app details for each included app
+				const allApps = await whopClient.getInstalledApps(companyId);
+				const funnelApps = allApps.filter(app => funnelProduct.includedApps.includes(app.id));
 				
-				resourceIds.push(resource.id);
-				console.log(`✅ Created FREE resource for app: ${app.name || app.id}`);
+				console.log(`Found ${funnelApps.length} apps included in funnel product`);
+				
+				for (const app of funnelApps) {
+					try {
+						const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
+							name: app.name || app.description || `App ${app.id}`,
+							type: "MY_PRODUCTS",
+							category: "FREE_VALUE",
+							link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+							description: app.description,
+							whopProductId: app.id
+						});
+						
+						resourceIds.push(resource.id);
+						console.log(`✅ Created FREE resource for app: ${app.name || app.id}`);
+					} catch (error) {
+						console.error(`❌ Error creating FREE resource for app ${app.id}:`, error);
+					}
+				}
+			} catch (error) {
+				console.error("❌ Error fetching installed apps:", error);
 			}
 		} else {
 			console.log(`⚠️ No apps found in funnel product or no funnel product`);
@@ -101,29 +123,41 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`Found ${upsellProducts.length} upsell products`);
 		
 		for (const product of upsellProducts) {
-			const cheapestPlan = whopClient.getCheapestPlan(product);
-			const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
-			
-			const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
-				name: product.title,
-				type: "MY_PRODUCTS",
-				category: "PAID",
-				link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
-				description: product.description,
-				whopProductId: product.id
-			});
-			
-			resourceIds.push(resource.id);
-			console.log(`✅ Created PAID resource for product: ${product.title}`);
+			try {
+				const cheapestPlan = whopClient.getCheapestPlan(product);
+				const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
+				
+				const resource = await createResource({ id: userId, experience: { id: experienceId } } as any, {
+					name: product.title,
+					type: "MY_PRODUCTS",
+					category: "PAID",
+					link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
+					description: product.description,
+					whopProductId: product.id
+				});
+				
+				resourceIds.push(resource.id);
+				console.log(`✅ Created PAID resource for product: ${product.title}`);
+			} catch (error) {
+				console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
+			}
 		}
 
 		// Step 5: Assign all resources to the funnel
 		if (resourceIds.length > 0) {
 			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel...`);
-			for (const resourceId of resourceIds) {
-				await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
+			try {
+				for (const resourceId of resourceIds) {
+					try {
+						await addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId);
+					} catch (error) {
+						console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
+					}
+				}
+				console.log(`✅ Assigned ${resourceIds.length} resources to funnel`);
+			} catch (error) {
+				console.error("❌ Error assigning resources to funnel:", error);
 			}
-			console.log(`✅ Assigned ${resourceIds.length} resources to funnel`);
 		}
 
 		// Step 6: Mark user as synced
