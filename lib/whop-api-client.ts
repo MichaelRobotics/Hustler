@@ -161,16 +161,64 @@ export class WhopApiClient {
       console.log("🔍 Fetching company products from discovery page using proper API...");
       
       // Since the SDK doesn't have a direct company products method,
-      // we need to use a different approach. The issue is that we were
-      // getting access passes from installed apps (experiences) instead
-      // of the actual discovery page products.
+      // we need to use the direct API approach to get discovery page products
+      console.log("🔍 Using direct API call to fetch discovery page products...");
       
-      // For now, let's return an empty array and log that we need to implement
-      // the proper discovery page products API
-      console.log("⚠️ Company products API not available in SDK - returning empty array");
-      console.log("⚠️ This means the smart upselling system won't work until we implement proper discovery page products fetching");
-      
-      return [];
+      try {
+        // Use direct fetch API call to get discovery page products
+        const apiKey = process.env.WHOP_API_KEY;
+        if (!apiKey) {
+          throw new Error("WHOP_API_KEY not found in environment variables");
+        }
+        
+        const response = await fetch(`https://api.whop.com/v5/company/products?first=100`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'x-company-id': this.companyId,
+            'x-user-id': this.userId,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const products = data?.products || data?.data?.products || [];
+        console.log(`Found ${products.length} discovery page products via direct API`);
+        
+        if (products.length === 0) {
+          console.log("⚠️ No discovery page products found for company");
+          return [];
+        }
+        
+        // Map discovery page products to our format
+        const mappedProducts: WhopProduct[] = products.map((product: any) => {
+          console.log(`🔍 Discovery Product ${product.id}:`, JSON.stringify(product, null, 2));
+          
+          return {
+            id: product.id,
+            title: product.title || product.name || `Product ${product.id}`,
+            description: product.description || product.shortenedDescription,
+            price: product.price?.amount || product.rawInitialPrice || 0,
+            currency: product.price?.currency || product.baseCurrency || 'usd',
+            model: product.price?.model || (product.price?.amount > 0 ? 'one-time' : 'free') as 'free' | 'one-time' | 'recurring',
+            includedApps: product.includedApps || product.apps || [],
+            plans: product.plans || [],
+            visibility: product.visibility || 'visible' as const
+          };
+        });
+        
+        console.log(`✅ Mapped to ${mappedProducts.length} discovery page products`);
+        return mappedProducts;
+        
+      } catch (apiError) {
+        console.error("❌ Direct API call failed:", apiError);
+        console.log("⚠️ Falling back to empty array - smart upselling won't work");
+        return [];
+      }
       
     } catch (error) {
       console.error("Error fetching company products:", error);
