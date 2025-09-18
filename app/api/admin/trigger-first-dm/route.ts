@@ -17,7 +17,7 @@ import type { FunnelFlow } from "@/lib/types/funnel";
 
 export async function POST(request: NextRequest) {
   try {
-    const { experienceId } = await request.json();
+    const { experienceId, productId } = await request.json();
 
     if (!experienceId) {
       return NextResponse.json(
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Admin triggering first DM for user ${whopUserId} in experience ${experienceId}`);
+    console.log(`Admin triggering first DM for user ${whopUserId} in experience ${experienceId}${productId ? ` for product ${productId}` : ''}`);
 
     // Step 1: Get the experience record to get our internal experience ID
     const experience = await db.query.experiences.findFirst({
@@ -71,19 +71,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 3: Find a live (deployed) funnel for this experience - REQUIRED
+    // Step 3: Find a live (deployed) funnel for this experience and product - REQUIRED
     const liveFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.experienceId, experience.id),
+        productId ? eq(funnels.whopProductId, productId) : undefined, // Product-specific if provided
         eq(funnels.isDeployed, true) // Only use deployed funnels for admin DM triggering
       ),
     });
 
     if (!liveFunnel) {
+      const errorMessage = productId 
+        ? `No deployed funnel found for experience ${experienceId} and product ${productId}. Please deploy a funnel for this product first.`
+        : `No deployed funnel found for experience ${experienceId}. Please deploy a funnel first.`;
+        
       return NextResponse.json(
         { 
           error: "No live funnel found",
-          details: `No deployed funnel found for experience ${experienceId}. Please deploy a funnel first.`
+          details: errorMessage
         },
         { status: 400 }
       );
@@ -220,6 +225,7 @@ export async function POST(request: NextRequest) {
       conversationId: conversationId,
       whopUserId,
       experienceId,
+      productId: productId || null,
       adminMode: true,
       dmSent: true, // Always true now since we require DM sending
       welcomeMessage: welcomeMessage,

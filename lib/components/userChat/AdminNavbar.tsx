@@ -1,8 +1,20 @@
 "use client";
 
-import { MessageSquare, Play, RotateCcw, Settings, ChevronDown, ChevronUp } from "lucide-react";
+import { MessageSquare, Play, RotateCcw, Settings, ChevronDown, ChevronUp, Package } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ProductSelectionModal } from "@/lib/components/admin/ProductSelectionModal";
+
+interface DiscoveryProduct {
+	id: string;           // accessPass.id
+	title: string;        // Product name
+	description?: string;
+	price: number;
+	currency: string;
+	isFree: boolean;
+	route: string;
+	discoveryPageUrl?: string;
+}
 
 interface AdminNavbarProps {
 	conversationId: string | null;
@@ -16,8 +28,9 @@ interface AdminNavbarProps {
 	adminError: string | null;
 	adminSuccess: string | null;
 	onCheckStatus: () => void;
-	onTriggerDM: () => void;
+	onTriggerDM: (productId?: string) => void;
 	onResetConversations: () => void;
+	experienceId?: string;
 }
 
 export const AdminNavbar: React.FC<AdminNavbarProps> = ({
@@ -29,8 +42,56 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 	onCheckStatus,
 	onTriggerDM,
 	onResetConversations,
+	experienceId,
 }) => {
 	const [isExpanded, setIsExpanded] = useState(false);
+	const [isProductSelectionOpen, setIsProductSelectionOpen] = useState(false);
+	const [discoveryProducts, setDiscoveryProducts] = useState<DiscoveryProduct[]>([]);
+	const [productsLoading, setProductsLoading] = useState(false);
+	const [selectedProduct, setSelectedProduct] = useState<DiscoveryProduct | null>(null);
+
+	// Fetch discovery products
+	const fetchDiscoveryProducts = async () => {
+		if (!experienceId) return;
+		setProductsLoading(true);
+		try {
+			const response = await fetch(`/api/products/discovery?experienceId=${experienceId}`);
+			if (response.ok) {
+				const data = await response.json();
+				setDiscoveryProducts(data.data || []);
+			}
+		} catch (error) {
+			console.error("Error fetching discovery products:", error);
+		} finally {
+			setProductsLoading(false);
+		}
+	};
+
+	// Handle product selection
+	const handleProductSelect = (product: DiscoveryProduct) => {
+		setSelectedProduct(product);
+		onTriggerDM(product.id);
+	};
+
+	// Handle DM trigger with product selection
+	const handleTriggerDM = () => {
+		if (discoveryProducts.length > 0) {
+			setIsProductSelectionOpen(true);
+			if (discoveryProducts.length === 0) {
+				fetchDiscoveryProducts();
+			}
+		} else {
+			// No products available, trigger DM without product
+			onTriggerDM();
+		}
+	};
+
+	// Load products on mount
+	useEffect(() => {
+		if (experienceId && discoveryProducts.length === 0) {
+			fetchDiscoveryProducts();
+		}
+	}, [experienceId]);
 
 	return (
 		<div className="bg-black/80 backdrop-blur-sm border-b border-white/10">
@@ -75,11 +136,11 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 						</button>
 						
 						<button
-							onClick={onTriggerDM}
+							onClick={handleTriggerDM}
 							disabled={adminLoading || !!conversationId}
 							className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 disabled:opacity-50 text-blue-300 text-xs rounded transition-colors"
 						>
-							<Play size={12} />
+							<Package size={12} />
 							DM
 						</button>
 						
@@ -92,6 +153,13 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 							Reset
 						</button>
 					</div>
+
+					{/* Selected Product */}
+					{selectedProduct && (
+						<div className="text-xs text-blue-300 bg-blue-500/10 px-2 py-1 rounded">
+							Product: {selectedProduct.title}
+						</div>
+					)}
 
 					{/* Messages */}
 					{adminError && (
@@ -106,6 +174,15 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 					)}
 				</div>
 			)}
+
+			{/* Product Selection Modal */}
+			<ProductSelectionModal
+				isOpen={isProductSelectionOpen}
+				products={discoveryProducts}
+				onClose={() => setIsProductSelectionOpen(false)}
+				onProductSelect={handleProductSelect}
+				loading={productsLoading}
+			/>
 		</div>
 	);
 };

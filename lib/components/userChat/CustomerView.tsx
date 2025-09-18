@@ -187,7 +187,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	};
 
 
-	const triggerDMForAdmin = async () => {
+	const triggerDMForAdmin = async (productId?: string) => {
 		if (!experienceId) {
 			setAdminError("Experience ID is required");
 			return;
@@ -201,13 +201,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			const response = await fetch('/api/admin/trigger-first-dm', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ experienceId }),
+				body: JSON.stringify({ experienceId, productId }),
 			});
 
 			const result = await response.json();
 			
 			if (result.success) {
-				setAdminSuccess(`DM sent successfully! Conversation ID: ${result.conversationId}`);
+				const productInfo = result.productId ? ` for product ${result.productId}` : '';
+				setAdminSuccess(`DM sent successfully${productInfo}! Conversation ID: ${result.conversationId}`);
 				setConversationId(result.conversationId);
 				await checkConversationStatus();
 			} else {
@@ -408,6 +409,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						onCheckStatus={checkConversationStatus}
 						onTriggerDM={triggerDMForAdmin}
 						onResetConversations={resetConversations}
+						experienceId={experienceId}
 					/>
 				</div>
 			)}
