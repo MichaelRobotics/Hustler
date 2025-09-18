@@ -59,10 +59,12 @@ export async function handleUserJoinEvent(
 		});
 
 		if (!existingUser) {
-			// Create user record
+			// Create user record with required fields
 			await db.insert(users).values({
 				whopUserId: userId,
 				experienceId: experience.id,
+				email: `user_${userId}@whop.local`, // Default email since we don't have it from webhook
+				name: `User ${userId}`, // Default name since we don't have it from webhook
 				accessLevel: "customer",
 				createdAt: new Date(),
 				updatedAt: new Date(),
