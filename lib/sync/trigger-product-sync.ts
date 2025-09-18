@@ -296,23 +296,38 @@ export async function triggerProductSyncForNewAdmin(
 			]);
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
-			// Classify apps by type
-			const classifiedApps = {
-				learn: installedApps.filter(app => classifyAppType(app.name) === 'learn'),
-				earn: installedApps.filter(app => classifyAppType(app.name) === 'earn'),
-				community: installedApps.filter(app => classifyAppType(app.name) === 'community'),
-				other: installedApps.filter(app => classifyAppType(app.name) === 'other')
-			};
+			// Get the funnel product to filter apps by visibility
+			const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
+			if (!funnelProduct) {
+				console.log("⚠️ No funnel product found, skipping FREE apps creation");
+				updateProgress("free_resources_skipped", true);
+			} else {
+				console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
+				console.log(`🔍 Funnel product includedApps:`, funnelProduct.includedApps);
+				
+				// Only include apps that are in the funnel product's includedApps (visible to users)
+				const availableApps = installedApps.filter(app => 
+					funnelProduct.includedApps.includes(app.id)
+				);
+				console.log(`🔍 Found ${availableApps.length} apps that are included in funnel product (visible to users)`);
+				
+				// Classify apps by type (only from available apps)
+				const classifiedApps = {
+					learn: availableApps.filter(app => classifyAppType(app.name) === 'learn'),
+					earn: availableApps.filter(app => classifyAppType(app.name) === 'earn'),
+					community: availableApps.filter(app => classifyAppType(app.name) === 'community'),
+					other: availableApps.filter(app => classifyAppType(app.name) === 'other')
+				};
 			
-			console.log(`📊 App classification results:`);
-			console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
-			console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
-			console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
-			console.log(`  - Other/Utility: ${classifiedApps.other.length} apps`);
-			
-			// Apply selection hierarchy for 4 FREE apps
-			const maxFreeApps = 4;
-			const selectedApps: typeof installedApps = [];
+				console.log(`📊 App classification results:`);
+				console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
+				console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
+				console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
+				console.log(`  - Other/Utility: ${classifiedApps.other.length} apps`);
+				
+				// Apply selection hierarchy for 4 FREE apps
+				const maxFreeApps = 4;
+				const selectedApps: typeof availableApps = [];
 			
 			// 1. Learning/Educational - at least 1 if available
 			if (classifiedApps.learn.length > 0) {
@@ -449,6 +464,7 @@ export async function triggerProductSyncForNewAdmin(
 				console.log(`⚠️ No installed apps found for company`);
 				updateProgress("free_resources_skipped", true);
 			}
+			} // End of funnel product check
 		} catch (error) {
 			console.error(`❌ Error fetching installed apps:`, error);
 			syncState.errors.push(`Installed apps fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
