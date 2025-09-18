@@ -282,104 +282,89 @@ export async function triggerProductSyncForNewAdmin(
 		// Step 4: Create resources and collect their IDs
 		const resourceIds: string[] = [];
 		
-		// Create FREE apps from funnel product's included apps
+		// Create FREE apps from installed apps
 		updateProgress("creating_free_resources");
-		console.log("📱 Creating FREE apps from funnel product's included apps...");
+		console.log("📱 Creating FREE apps from installed apps...");
 		try {
-			// Get apps from the funnel product's includedApps
-			const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
-			if (!funnelProduct) {
-				console.log("⚠️ No funnel product found, skipping FREE apps creation");
-				updateProgress("free_resources_completed", true);
-			} else {
-				console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
-				console.log(`🔍 Funnel product includedApps:`, funnelProduct.includedApps);
-				
-				// Get all installed apps to match with includedApps
-				const installedAppsTimeout = 45000; // 45 seconds total
-				const installedApps = await Promise.race([
-					whopClient.getInstalledApps(),
-					new Promise<never>((_, reject) => 
-						setTimeout(() => reject(new Error(`Installed apps fetch timeout after ${installedAppsTimeout}ms`)), installedAppsTimeout)
-					)
-				]);
-				console.log(`🔍 Found ${installedApps.length} total installed apps`);
-				
-				// Filter installed apps to only those included in the funnel product
-				const availableApps = installedApps.filter(app => 
-					funnelProduct.includedApps.includes(app.id)
-				);
-				console.log(`🔍 Found ${availableApps.length} apps that are included in funnel product`);
+			// Add timeout to installed apps fetch
+			const installedAppsTimeout = 45000; // 45 seconds total
+			const installedApps = await Promise.race([
+				whopClient.getInstalledApps(),
+				new Promise<never>((_, reject) => 
+					setTimeout(() => reject(new Error(`Installed apps fetch timeout after ${installedAppsTimeout}ms`)), installedAppsTimeout)
+				)
+			]);
+			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
-				// Classify apps by type (only from available apps)
-				const classifiedApps = {
-					learn: availableApps.filter(app => classifyAppType(app.name) === 'learn'),
-					earn: availableApps.filter(app => classifyAppType(app.name) === 'earn'),
-					community: availableApps.filter(app => classifyAppType(app.name) === 'community'),
-					other: availableApps.filter(app => classifyAppType(app.name) === 'other')
-				};
-				
-				console.log(`📊 App classification results:`);
-				console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
-				console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
-				console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
-				console.log(`  - Other/Utility: ${classifiedApps.other.length} apps`);
+			// Classify apps by type
+			const classifiedApps = {
+				learn: installedApps.filter(app => classifyAppType(app.name) === 'learn'),
+				earn: installedApps.filter(app => classifyAppType(app.name) === 'earn'),
+				community: installedApps.filter(app => classifyAppType(app.name) === 'community'),
+				other: installedApps.filter(app => classifyAppType(app.name) === 'other')
+			};
 			
-				// Apply selection hierarchy for 4 FREE apps
-				const maxFreeApps = 4;
-				const selectedApps: typeof availableApps = [];
+			console.log(`📊 App classification results:`);
+			console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
+			console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
+			console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
+			console.log(`  - Other/Utility: ${classifiedApps.other.length} apps`);
+			
+			// Apply selection hierarchy for 4 FREE apps
+			const maxFreeApps = 4;
+			const selectedApps: typeof installedApps = [];
+			
+			// 1. Learning/Educational - at least 1 if available
+			if (classifiedApps.learn.length > 0) {
+				const learnApp = classifiedApps.learn[0];
+				selectedApps.push(learnApp);
+				console.log(`✅ Selected Learning app: ${learnApp.name}`);
+			}
+			
+			// 2. Earning/Monetization - at least 1 if available
+			if (classifiedApps.earn.length > 0 && selectedApps.length < maxFreeApps) {
+				const earnApp = classifiedApps.earn[0];
+				selectedApps.push(earnApp);
+				console.log(`✅ Selected Earning app: ${earnApp.name}`);
+			}
+			
+			// 3. Community/Social - at least 1 if available (Discord first)
+			if (classifiedApps.community.length > 0 && selectedApps.length < maxFreeApps) {
+				// Prioritize Discord apps
+				const discordApp = classifiedApps.community.find(app => app.name.toLowerCase().includes('discord'));
+				const communityApp = discordApp || classifiedApps.community[0];
+				selectedApps.push(communityApp);
+				console.log(`✅ Selected Community app: ${communityApp.name}${discordApp ? ' (Discord prioritized)' : ''}`);
+			}
+			
+			// 4. Other/Utility - at least 1 if available
+			if (classifiedApps.other.length > 0 && selectedApps.length < maxFreeApps) {
+				const otherApp = classifiedApps.other[0];
+				selectedApps.push(otherApp);
+				console.log(`✅ Selected Other/Utility app: ${otherApp.name}`);
+			}
+			
+			// Fill remaining slots with any available apps (maintaining order)
+			const remainingSlots = maxFreeApps - selectedApps.length;
+			if (remainingSlots > 0) {
+				const allApps = [...classifiedApps.learn, ...classifiedApps.earn, ...classifiedApps.community, ...classifiedApps.other];
+				const remainingApps = allApps.filter(app => !selectedApps.includes(app));
 				
-				// 1. Learning/Educational - at least 1 if available
-				if (classifiedApps.learn.length > 0) {
-					const learnApp = classifiedApps.learn[0];
-					selectedApps.push(learnApp);
-					console.log(`✅ Selected Learning app: ${learnApp.name}`);
+				for (let i = 0; i < Math.min(remainingSlots, remainingApps.length); i++) {
+					selectedApps.push(remainingApps[i]);
+					console.log(`✅ Selected additional app: ${remainingApps[i].name}`);
 				}
+			}
+			
+			console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with hierarchical selection`);
+			
+			if (selectedApps.length > 0) {
+				// Create FREE resources for each selected app (with batching for performance)
+				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
+				let successCount = 0;
+				let errorCount = 0;
 				
-				// 2. Earning/Monetization - at least 1 if available
-				if (classifiedApps.earn.length > 0 && selectedApps.length < maxFreeApps) {
-					const earnApp = classifiedApps.earn[0];
-					selectedApps.push(earnApp);
-					console.log(`✅ Selected Earning app: ${earnApp.name}`);
-				}
-				
-				// 3. Community/Social - at least 1 if available (Discord first)
-				if (classifiedApps.community.length > 0 && selectedApps.length < maxFreeApps) {
-					// Prioritize Discord apps
-					const discordApp = classifiedApps.community.find(app => app.name.toLowerCase().includes('discord'));
-					const communityApp = discordApp || classifiedApps.community[0];
-					selectedApps.push(communityApp);
-					console.log(`✅ Selected Community app: ${communityApp.name}${discordApp ? ' (Discord prioritized)' : ''}`);
-				}
-				
-				// 4. Other/Utility - at least 1 if available
-				if (classifiedApps.other.length > 0 && selectedApps.length < maxFreeApps) {
-					const otherApp = classifiedApps.other[0];
-					selectedApps.push(otherApp);
-					console.log(`✅ Selected Other/Utility app: ${otherApp.name}`);
-				}
-				
-				// Fill remaining slots with any available apps (maintaining order)
-				const remainingSlots = maxFreeApps - selectedApps.length;
-				if (remainingSlots > 0) {
-					const allApps = [...classifiedApps.learn, ...classifiedApps.earn, ...classifiedApps.community, ...classifiedApps.other];
-					const remainingApps = allApps.filter(app => !selectedApps.includes(app));
-					
-					for (let i = 0; i < Math.min(remainingSlots, remainingApps.length); i++) {
-						selectedApps.push(remainingApps[i]);
-						console.log(`✅ Selected additional app: ${remainingApps[i].name}`);
-					}
-				}
-				
-				console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with hierarchical selection`);
-				
-				if (selectedApps.length > 0) {
-					// Create FREE resources for each selected app (with batching for performance)
-					const batchSize = 10; // Process 10 apps at a time (increased for better performance)
-					let successCount = 0;
-					let errorCount = 0;
-					
-					for (let i = 0; i < selectedApps.length; i += batchSize) {
+				for (let i = 0; i < selectedApps.length; i += batchSize) {
 					const batch = selectedApps.slice(i, i + batchSize);
 					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
 					
@@ -458,12 +443,11 @@ export async function triggerProductSyncForNewAdmin(
 					}
 				}
 				
-					console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
-					updateProgress("free_resources_completed", true);
-				} else {
-					console.log(`⚠️ No apps found in funnel product's includedApps`);
-					updateProgress("free_resources_skipped", true);
-				}
+				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
+				updateProgress("free_resources_completed", true);
+			} else {
+				console.log(`⚠️ No installed apps found for company`);
+				updateProgress("free_resources_skipped", true);
 			}
 		} catch (error) {
 			console.error(`❌ Error fetching installed apps:`, error);

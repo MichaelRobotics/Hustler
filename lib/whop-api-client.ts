@@ -164,7 +164,23 @@ export class WhopApiClient {
           }
           
           if (experiences.length > 0) {
-            const apps: WhopApp[] = experiences.map((exp: any) => ({
+            // Filter out non-visible experiences before mapping to apps
+            const visibleExperiences = experiences.filter((exp: any) => {
+              // Check if experience has visibility field and it's set to 'visible'
+              const isVisible = exp.visibility === 'visible' || exp.visibility === undefined;
+              const isActive = exp.status === 'active' || exp.status === undefined;
+              
+              if (!isVisible || !isActive) {
+                console.log(`🚫 Filtering out non-visible app: ${exp.app?.name || exp.name} (visibility: ${exp.visibility}, status: ${exp.status})`);
+                return false;
+              }
+              
+              return true;
+            });
+            
+            console.log(`🔍 Filtered ${experiences.length} experiences to ${visibleExperiences.length} visible experiences`);
+            
+            const apps: WhopApp[] = visibleExperiences.map((exp: any) => ({
               id: exp.app?.id || exp.id,
               name: exp.app?.name || exp.name,
               description: exp.description,
@@ -200,6 +216,9 @@ export class WhopApiClient {
             }
             
             return apps;
+          } else {
+            console.log(`⚠️ No visible experiences found after filtering`);
+            return [];
           }
           
         } catch (strategyError) {
