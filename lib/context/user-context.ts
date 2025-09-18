@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
-import { triggerProductSyncForNewAdmin } from "../sync/trigger-product-sync";
+// Removed direct import - now using API routes for product sync
 import { cleanupAbandonedExperiences, checkIfCleanupNeeded } from "../sync/experience-cleanup";
 import type { AuthenticatedUser, UserContext } from "../types/user";
 
@@ -257,39 +257,55 @@ async function createUserContext(
 					},
 				});
 
-				// Trigger product sync for new admin users
+				// Trigger product sync for new admin users via API route
 				if (initialAccessLevel === "admin") {
-					console.log(`🚀 New admin user created, triggering product sync for experience ${experience.id}`);
+					console.log(`🚀 New admin user created, triggering async product sync for experience ${experience.id}`);
 					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
 					
 					try {
-						// Run sync immediately but don't await it to avoid blocking user creation
-						console.log(`🔄 Starting immediate product sync for user ${newUser.id}...`);
+						// Call API route instead of direct function to prevent timeouts
+						console.log(`🔄 Triggering async product sync via API route for user ${newUser.id}...`);
 						
 						// Use setImmediate for better error handling in Node.js
 						setImmediate(async () => {
 							try {
-								console.log(`🔄 Executing product sync for user ${newUser.id}...`);
-								console.log(`🔧 Environment check - WHOP_API_KEY: ${process.env.WHOP_API_KEY ? 'Present' : 'Missing'}`);
-								console.log(`🔧 Environment check - NEXT_PUBLIC_WHOP_COMPANY_ID: ${process.env.NEXT_PUBLIC_WHOP_COMPANY_ID ? 'Present' : 'Missing'}`);
+								console.log(`🔄 Calling /api/admin/sync-products/trigger for user ${newUser.id}...`);
 								
-								await triggerProductSyncForNewAdmin(
-									newUser.id,
-									experience.id,
-									experience.whopCompanyId
-								);
-								console.log(`✅ Product sync completed for user ${newUser.id}`);
+								// Call the API route asynchronously
+								const response = await fetch('/api/admin/sync-products/trigger', {
+									method: 'POST',
+									headers: {
+										'Content-Type': 'application/json',
+										// Pass the user context for authentication
+										'X-User-Id': newUser.id,
+										'X-Experience-Id': experience.id,
+										'X-Company-Id': experience.whopCompanyId
+									},
+									body: JSON.stringify({
+										userId: newUser.id,
+										experienceId: experience.id,
+										companyId: experience.whopCompanyId
+									})
+								});
+
+								if (response.ok) {
+									const result = await response.json();
+									console.log(`✅ Product sync API call successful:`, result);
+								} else {
+									const error = await response.json();
+									console.error(`❌ Product sync API call failed:`, error);
+								}
 							} catch (error) {
-								console.error("❌ Product sync failed:", error);
+								console.error("❌ Product sync API call failed:", error);
 								console.error("❌ Error details:", error instanceof Error ? error.stack : error);
 								console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
 								console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
 							}
 						});
 						
-						console.log(`⏰ Product sync queued for immediate execution`);
+						console.log(`⏰ Product sync API call queued for immediate execution`);
 					} catch (error) {
-						console.error("❌ Error queuing product sync:", error);
+						console.error("❌ Error queuing product sync API call:", error);
 					}
 				}
 			}
