@@ -121,6 +121,16 @@ export class WhopApiClient {
           const experiences = experiencesResult?.experiencesV2?.nodes || [];
           console.log(`✅ ${strategy.name} strategy succeeded! Found ${experiences.length} experiences`);
           
+          // INVESTIGATION: Log full experience object structure to see all available fields
+          if (experiences.length > 0) {
+            console.log(`🔍 INVESTIGATION: Full experience object structure:`);
+            console.log(JSON.stringify(experiences[0], null, 2));
+            console.log(`🔍 INVESTIGATION: Experience object keys:`, Object.keys(experiences[0] || {}));
+            if (experiences[0]?.app) {
+              console.log(`🔍 INVESTIGATION: App object keys:`, Object.keys(experiences[0].app));
+            }
+          }
+          
           if (experiences.length > 0) {
             const apps: WhopApp[] = experiences.map((exp: any) => ({
               id: exp.app?.id || exp.id,
@@ -135,6 +145,24 @@ export class WhopApiClient {
             }));
             
             console.log(`✅ Mapped to ${apps.length} installed apps from API`);
+            
+            // INVESTIGATION: Log final app structure to see what fields we have
+            if (apps.length > 0) {
+              console.log(`🔍 INVESTIGATION: Final app object structure:`);
+              console.log(JSON.stringify(apps[0], null, 2));
+              console.log(`🔍 INVESTIGATION: App object keys:`, Object.keys(apps[0]));
+              
+              // INVESTIGATION: Check for potential app type fields
+              const app = apps[0] as any;
+              console.log(`🔍 INVESTIGATION: Potential app type fields:`);
+              console.log(`  - category: ${app.category || 'NOT FOUND'}`);
+              console.log(`  - type: ${app.type || 'NOT FOUND'}`);
+              console.log(`  - tags: ${app.tags || 'NOT FOUND'}`);
+              console.log(`  - businessModel: ${app.businessModel || 'NOT FOUND'}`);
+              console.log(`  - appStoreCategory: ${app.appStoreCategory || 'NOT FOUND'}`);
+              console.log(`  - appType: ${app.appType || 'NOT FOUND'}`);
+            }
+            
             return apps;
           }
           
@@ -190,6 +218,13 @@ export class WhopApiClient {
           const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
           console.log(`✅ ${strategy.name} strategy succeeded! Found ${accessPasses.length} access passes`);
           
+          // INVESTIGATION: Log full access pass object structure to see all available fields
+          if (accessPasses.length > 0) {
+            console.log(`🔍 INVESTIGATION: Full access pass object structure:`);
+            console.log(JSON.stringify(accessPasses[0], null, 2));
+            console.log(`🔍 INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
+          }
+          
           if (accessPasses.length > 0) {
             // Try to get plans (optional - don't fail if this times out)
             let plans: any[] = [];
@@ -206,6 +241,14 @@ export class WhopApiClient {
               ]);
               plans = plansResult?.plans?.nodes || [];
               console.log(`✅ Found ${plans.length} plans`);
+              
+              // INVESTIGATION: Log full plan object structure to see all available fields
+              if (plans.length > 0) {
+                console.log(`🔍 INVESTIGATION: Full plan object structure:`);
+                console.log(JSON.stringify(plans[0], null, 2));
+                console.log(`🔍 INVESTIGATION: Plan object keys:`, Object.keys(plans[0]));
+              }
+              
             } catch (planError) {
               console.log("⚠️ Plans API failed, continuing with access passes only");
             }
@@ -213,6 +256,24 @@ export class WhopApiClient {
             // Map to products
             const products = this.mapAccessPassesToProducts(accessPasses, plans);
             console.log(`✅ Mapped to ${products.length} DISCOVERY PAGE PRODUCTS`);
+            
+            // INVESTIGATION: Log final product structure to see what fields we have
+            if (products.length > 0) {
+              console.log(`🔍 INVESTIGATION: Final product object structure:`);
+              console.log(JSON.stringify(products[0], null, 2));
+              console.log(`🔍 INVESTIGATION: Product object keys:`, Object.keys(products[0]));
+              
+              // INVESTIGATION: Check for potential product type fields
+              const product = products[0] as any;
+              console.log(`🔍 INVESTIGATION: Potential product type fields:`);
+              console.log(`  - category: ${product.category || 'NOT FOUND'}`);
+              console.log(`  - type: ${product.type || 'NOT FOUND'}`);
+              console.log(`  - tags: ${product.tags || 'NOT FOUND'}`);
+              console.log(`  - businessModel: ${product.businessModel || 'NOT FOUND'}`);
+              console.log(`  - appStoreCategory: ${product.appStoreCategory || 'NOT FOUND'}`);
+              console.log(`  - productType: ${product.productType || 'NOT FOUND'}`);
+            }
+            
             return products;
           }
           

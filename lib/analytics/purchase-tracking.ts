@@ -27,6 +27,7 @@ export interface ClickTrackingData {
   timestamp: Date;
   userAgent?: string;
   ipAddress?: string;
+  redirectUrl?: string;
 }
 
 /**
@@ -179,8 +180,8 @@ async function recordConversion(
     await db.update(funnelAnalytics)
       .set({
         conversions: sql`${funnelAnalytics.conversions} + 1`,
-        revenue: sql`${funnelAnalytics.revenue} + ${purchaseData.amount}`,
-        paidConversions: sql`${funnelAnalytics.paidConversions} + 1`
+        productRevenue: sql`${funnelAnalytics.productRevenue} + ${purchaseData.amount}`,
+        resourceConversions: sql`${funnelAnalytics.resourceConversions} + 1`
       })
       .where(eq(funnelAnalytics.id, existingAnalytics[0].id));
   } else {
@@ -191,12 +192,9 @@ async function recordConversion(
       date: today,
       resourceClicks: 0,
       freeClicks: 0,
-      paidClicks: 0,
       conversions: 1,
-      revenue: purchaseData.amount,
-      uniqueUsers: 0,
-      conversionRate: 0,
-      paidConversions: 1
+      productRevenue: purchaseData.amount.toString(),
+      resourceConversions: 1
     });
   }
 }
@@ -225,11 +223,11 @@ export async function getConversionAnalytics(
       .where(and(...whereConditions));
 
     // Calculate totals
-    const totals = analytics.reduce((acc, record) => ({
+    const totals = analytics.reduce((acc: any, record: any) => ({
       totalClicks: acc.totalClicks + (record.resourceClicks || 0),
       totalConversions: acc.totalConversions + (record.conversions || 0),
-      totalRevenue: acc.totalRevenue + (record.revenue || 0),
-      totalPaidConversions: acc.totalPaidConversions + (record.paidConversions || 0)
+      totalRevenue: acc.totalRevenue + (parseFloat(record.productRevenue || '0')),
+      totalPaidConversions: acc.totalPaidConversions + (record.resourceConversions || 0)
     }), {
       totalClicks: 0,
       totalConversions: 0,

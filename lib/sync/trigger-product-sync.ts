@@ -264,15 +264,23 @@ export async function triggerProductSyncForNewAdmin(
 			]);
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
-			if (installedApps.length > 0) {
+			// Limit FREE apps to maximum 4
+			const maxFreeApps = 4;
+			const limitedFreeApps = installedApps.slice(0, maxFreeApps);
+			if (installedApps.length > maxFreeApps) {
+				console.log(`⚠️ Limiting FREE apps to ${maxFreeApps} (found ${installedApps.length}, using first ${maxFreeApps})`);
+			}
+			console.log(`📱 Processing ${limitedFreeApps.length} FREE apps (max ${maxFreeApps})`);
+			
+			if (limitedFreeApps.length > 0) {
 				// Create FREE resources for each installed app (with batching for performance)
 				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
 				let successCount = 0;
 				let errorCount = 0;
 				
-				for (let i = 0; i < installedApps.length; i += batchSize) {
-					const batch = installedApps.slice(i, i + batchSize);
-					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(installedApps.length/batchSize)} (${batch.length} apps)`);
+				for (let i = 0; i < limitedFreeApps.length; i += batchSize) {
+					const batch = limitedFreeApps.slice(i, i + batchSize);
+					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedFreeApps.length/batchSize)} (${batch.length} apps)`);
 					
 					// Process batch in parallel with individual error handling and retry logic
 					const batchPromises = batch.map(async (app) => {
@@ -368,15 +376,23 @@ export async function triggerProductSyncForNewAdmin(
 		const upsellProducts = whopClient.getUpsellProducts(discoveryProducts, funnelProduct?.id || '');
 		console.log(`Found ${upsellProducts.length} upsell products`);
 		
-		if (upsellProducts.length > 0) {
+		// Limit PAID products to maximum 4
+		const maxPaidProducts = 4;
+		const limitedPaidProducts = upsellProducts.slice(0, maxPaidProducts);
+		if (upsellProducts.length > maxPaidProducts) {
+			console.log(`⚠️ Limiting PAID products to ${maxPaidProducts} (found ${upsellProducts.length}, using first ${maxPaidProducts})`);
+		}
+		console.log(`💳 Processing ${limitedPaidProducts.length} PAID products (max ${maxPaidProducts})`);
+		
+		if (limitedPaidProducts.length > 0) {
 			// Create PAID resources with batching for performance
 			const batchSize = 10; // Process 10 products at a time (increased for better performance)
 			let successCount = 0;
 			let errorCount = 0;
 			
-			for (let i = 0; i < upsellProducts.length; i += batchSize) {
-				const batch = upsellProducts.slice(i, i + batchSize);
-				console.log(`🔍 Processing PAID products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(upsellProducts.length/batchSize)} (${batch.length} products)`);
+			for (let i = 0; i < limitedPaidProducts.length; i += batchSize) {
+				const batch = limitedPaidProducts.slice(i, i + batchSize);
+				console.log(`🔍 Processing PAID products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedPaidProducts.length/batchSize)} (${batch.length} products)`);
 				
 				// Process batch in parallel with individual error handling and retry logic
 				const batchPromises = batch.map(async (product) => {
