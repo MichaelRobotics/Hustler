@@ -120,18 +120,27 @@ async function checkConversationHandler(
       console.log(`[check-conversation] Debug - Found conversation ${activeConversation.id} for user ${targetWhopUserId}`);
     }
 
-    // Get the live funnel for this experience (needed even when no conversation exists)
-    const liveFunnel = await db.query.funnels.findFirst({
-      where: and(
-        eq(funnels.experienceId, experience.id),
-        eq(funnels.isDeployed, true)
-      ),
-    });
-
-    // Handle case where no live funnel exists
+    // Get the funnel flow - either from the conversation's funnel or find a live funnel
     let funnelFlow = null;
-    if (liveFunnel) {
-      funnelFlow = liveFunnel.flow as FunnelFlow;
+    if (activeConversation) {
+      // If we have a conversation, get the funnel from the conversation's funnelId
+      const conversationFunnel = await db.query.funnels.findFirst({
+        where: eq(funnels.id, activeConversation.funnelId),
+      });
+      if (conversationFunnel) {
+        funnelFlow = conversationFunnel.flow as FunnelFlow;
+      }
+    } else {
+      // If no conversation, get any live funnel for this experience
+      const liveFunnel = await db.query.funnels.findFirst({
+        where: and(
+          eq(funnels.experienceId, experience.id),
+          eq(funnels.isDeployed, true)
+        ),
+      });
+      if (liveFunnel) {
+        funnelFlow = liveFunnel.flow as FunnelFlow;
+      }
     }
 
     if (!activeConversation) {
