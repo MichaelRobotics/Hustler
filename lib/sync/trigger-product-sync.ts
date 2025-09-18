@@ -6,6 +6,38 @@ import { createResource } from "@/lib/actions/resource-actions";
 import { createFunnel, addResourceToFunnel } from "@/lib/actions/funnel-actions";
 import { whopSdk } from "@/lib/whop-sdk";
 
+// App type classification based on name patterns
+function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
+  const name = appName.toLowerCase();
+  
+  // Learning/Educational apps
+  if (name.includes('course') || name.includes('learn') || name.includes('education') || 
+      name.includes('tutorial') || name.includes('training') || name.includes('guide')) {
+    return 'learn';
+  }
+  
+  // Earning/Monetization apps
+  if (name.includes('earn') || name.includes('money') || name.includes('revenue') || 
+      name.includes('profit') || name.includes('income') || name.includes('rewards') || 
+      name.includes('bounties') || name.includes('giveaway') || name.includes('discount')) {
+    return 'earn';
+  }
+  
+  // Community/Social apps
+  if (name.includes('chat') || name.includes('community') || name.includes('social') || 
+      name.includes('discord') || name.includes('forum') || name.includes('livestream') || 
+      name.includes('clip') || name.includes('site') || name.includes('list')) {
+    return 'community';
+  }
+  
+  // Free/Utility apps
+  if (name.includes('free') || name.includes('utility') || name.includes('tool')) {
+    return 'other';
+  }
+  
+  return 'other';
+}
+
 /**
  * Trigger product sync for a new admin user
  * This function is called when a new admin user is created for an experience
@@ -264,23 +296,77 @@ export async function triggerProductSyncForNewAdmin(
 			]);
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
-			// Limit FREE apps to maximum 4
-			const maxFreeApps = 4;
-			const limitedFreeApps = installedApps.slice(0, maxFreeApps);
-			if (installedApps.length > maxFreeApps) {
-				console.log(`⚠️ Limiting FREE apps to ${maxFreeApps} (found ${installedApps.length}, using first ${maxFreeApps})`);
-			}
-			console.log(`📱 Processing ${limitedFreeApps.length} FREE apps (max ${maxFreeApps})`);
+			// Classify apps by type
+			const classifiedApps = {
+				learn: installedApps.filter(app => classifyAppType(app.name) === 'learn'),
+				earn: installedApps.filter(app => classifyAppType(app.name) === 'earn'),
+				community: installedApps.filter(app => classifyAppType(app.name) === 'community'),
+				other: installedApps.filter(app => classifyAppType(app.name) === 'other')
+			};
 			
-			if (limitedFreeApps.length > 0) {
-				// Create FREE resources for each installed app (with batching for performance)
+			console.log(`📊 App classification results:`);
+			console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
+			console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
+			console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
+			console.log(`  - Other/Utility: ${classifiedApps.other.length} apps`);
+			
+			// Apply selection hierarchy for 4 FREE apps
+			const maxFreeApps = 4;
+			const selectedApps: typeof installedApps = [];
+			
+			// 1. Learning/Educational - at least 1 if available
+			if (classifiedApps.learn.length > 0) {
+				const learnApp = classifiedApps.learn[0];
+				selectedApps.push(learnApp);
+				console.log(`✅ Selected Learning app: ${learnApp.name}`);
+			}
+			
+			// 2. Earning/Monetization - at least 1 if available
+			if (classifiedApps.earn.length > 0 && selectedApps.length < maxFreeApps) {
+				const earnApp = classifiedApps.earn[0];
+				selectedApps.push(earnApp);
+				console.log(`✅ Selected Earning app: ${earnApp.name}`);
+			}
+			
+			// 3. Community/Social - at least 1 if available (Discord first)
+			if (classifiedApps.community.length > 0 && selectedApps.length < maxFreeApps) {
+				// Prioritize Discord apps
+				const discordApp = classifiedApps.community.find(app => app.name.toLowerCase().includes('discord'));
+				const communityApp = discordApp || classifiedApps.community[0];
+				selectedApps.push(communityApp);
+				console.log(`✅ Selected Community app: ${communityApp.name}${discordApp ? ' (Discord prioritized)' : ''}`);
+			}
+			
+			// 4. Other/Utility - at least 1 if available
+			if (classifiedApps.other.length > 0 && selectedApps.length < maxFreeApps) {
+				const otherApp = classifiedApps.other[0];
+				selectedApps.push(otherApp);
+				console.log(`✅ Selected Other/Utility app: ${otherApp.name}`);
+			}
+			
+			// Fill remaining slots with any available apps (maintaining order)
+			const remainingSlots = maxFreeApps - selectedApps.length;
+			if (remainingSlots > 0) {
+				const allApps = [...classifiedApps.learn, ...classifiedApps.earn, ...classifiedApps.community, ...classifiedApps.other];
+				const remainingApps = allApps.filter(app => !selectedApps.includes(app));
+				
+				for (let i = 0; i < Math.min(remainingSlots, remainingApps.length); i++) {
+					selectedApps.push(remainingApps[i]);
+					console.log(`✅ Selected additional app: ${remainingApps[i].name}`);
+				}
+			}
+			
+			console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with hierarchical selection`);
+			
+			if (selectedApps.length > 0) {
+				// Create FREE resources for each selected app (with batching for performance)
 				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
 				let successCount = 0;
 				let errorCount = 0;
 				
-				for (let i = 0; i < limitedFreeApps.length; i += batchSize) {
-					const batch = limitedFreeApps.slice(i, i + batchSize);
-					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedFreeApps.length/batchSize)} (${batch.length} apps)`);
+				for (let i = 0; i < selectedApps.length; i += batchSize) {
+					const batch = selectedApps.slice(i, i + batchSize);
+					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
 					
 					// Process batch in parallel with individual error handling and retry logic
 					const batchPromises = batch.map(async (app) => {

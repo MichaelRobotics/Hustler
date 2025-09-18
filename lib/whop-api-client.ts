@@ -1,5 +1,37 @@
 import { whopSdk } from '@/lib/whop-sdk';
 
+// App type classification based on name patterns
+function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
+  const name = appName.toLowerCase();
+  
+  // Learning/Educational apps
+  if (name.includes('course') || name.includes('learn') || name.includes('education') || 
+      name.includes('tutorial') || name.includes('training') || name.includes('guide')) {
+    return 'learn';
+  }
+  
+  // Earning/Monetization apps
+  if (name.includes('earn') || name.includes('money') || name.includes('revenue') || 
+      name.includes('profit') || name.includes('income') || name.includes('rewards') || 
+      name.includes('bounties') || name.includes('giveaway') || name.includes('discount')) {
+    return 'earn';
+  }
+  
+  // Community/Social apps
+  if (name.includes('chat') || name.includes('community') || name.includes('social') || 
+      name.includes('discord') || name.includes('forum') || name.includes('livestream') || 
+      name.includes('clip') || name.includes('site') || name.includes('list')) {
+    return 'community';
+  }
+  
+  // Free/Utility apps
+  if (name.includes('free') || name.includes('utility') || name.includes('tool')) {
+    return 'other';
+  }
+  
+  return 'other';
+}
+
 export interface WhopProduct {
   id: string;
   title: string;
@@ -161,6 +193,10 @@ export class WhopApiClient {
               console.log(`  - businessModel: ${app.businessModel || 'NOT FOUND'}`);
               console.log(`  - appStoreCategory: ${app.appStoreCategory || 'NOT FOUND'}`);
               console.log(`  - appType: ${app.appType || 'NOT FOUND'}`);
+              
+              // INVESTIGATION: Test name-based classification
+              const classifiedType = classifyAppType(app.name);
+              console.log(`🔍 INVESTIGATION: Name-based classification for "${app.name}": ${classifiedType}`);
             }
             
             return apps;
@@ -272,6 +308,10 @@ export class WhopApiClient {
               console.log(`  - businessModel: ${product.businessModel || 'NOT FOUND'}`);
               console.log(`  - appStoreCategory: ${product.appStoreCategory || 'NOT FOUND'}`);
               console.log(`  - productType: ${product.productType || 'NOT FOUND'}`);
+              
+              // INVESTIGATION: Test name-based classification for products
+              const classifiedType = classifyAppType(product.title);
+              console.log(`🔍 INVESTIGATION: Name-based classification for product "${product.title}": ${classifiedType}`);
             }
             
             return products;
