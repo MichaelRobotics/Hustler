@@ -263,42 +263,36 @@ async function createUserContext(
 					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
 					
 					try {
-						// Call API route instead of direct function to prevent timeouts
-						console.log(`🔄 Triggering async product sync via API route for user ${newUser.id}...`);
+						// Call sync function directly in server-side context to prevent timeouts
+						console.log(`🔄 Triggering async product sync for user ${newUser.id}...`);
 						
 						// Use setImmediate for better error handling in Node.js
 						setImmediate(async () => {
 							try {
-								console.log(`🔄 Calling /api/admin/sync-products/trigger for user ${newUser.id}...`);
+								console.log(`🔄 Calling product sync function directly for user ${newUser.id}...`);
 								
-								// Import apiPost to follow established patterns
-								const { apiPost } = await import('../utils/api-client');
+								// Import the sync function directly since we're in server-side context
+								const { triggerProductSyncForNewAdmin } = await import('../sync/trigger-product-sync');
 								
-								// Call the API route using established api-client pattern
-								const response = await apiPost('/api/admin/sync-products/trigger', {
-									userId: newUser.id,
-									experienceId: experience.id,
-									companyId: experience.whopCompanyId
-								}, experience.id); // Pass experienceId as parameter (established pattern)
-
-								if (response.ok) {
-									const result = await response.json();
-									console.log(`✅ Product sync API call successful:`, result);
-								} else {
-									const error = await response.json();
-									console.error(`❌ Product sync API call failed:`, error);
-								}
+								// Call the function directly (server-side context)
+								await triggerProductSyncForNewAdmin(
+									newUser.id,
+									experience.id,
+									experience.whopCompanyId
+								);
+								
+								console.log(`✅ Product sync completed successfully for user ${newUser.id}`);
 							} catch (error) {
-								console.error("❌ Product sync API call failed:", error);
+								console.error("❌ Product sync failed:", error);
 								console.error("❌ Error details:", error instanceof Error ? error.stack : error);
 								console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
 								console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
 							}
 						});
 						
-						console.log(`⏰ Product sync API call queued for immediate execution`);
+						console.log(`⏰ Product sync queued for immediate execution`);
 					} catch (error) {
-						console.error("❌ Error queuing product sync API call:", error);
+						console.error("❌ Error queuing product sync:", error);
 					}
 				}
 			}
