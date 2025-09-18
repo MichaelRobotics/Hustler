@@ -4,6 +4,7 @@ import { eq, and, isNotNull } from "drizzle-orm";
 import { getWhopApiClient } from "@/lib/whop-api-client";
 import { createResource } from "@/lib/actions/resource-actions";
 import { createFunnel, addResourceToFunnel } from "@/lib/actions/funnel-actions";
+import { whopSdk } from "@/lib/whop-sdk";
 
 /**
  * Trigger product sync for a new admin user
@@ -160,6 +161,19 @@ export async function triggerProductSyncForNewAdmin(
 		const whopClient = getWhopApiClient(companyId, whopUserId);
 		console.log("✅ Whop API client created with proper multi-tenant context");
 
+		// Get the App ID for affiliate tracking
+		console.log("🔧 Getting App ID for affiliate tracking...");
+		let affiliateAppId = experienceId; // Fallback to experience ID
+		try {
+			const whopExperience = await whopSdk.experiences.getExperience({
+				experienceId: experienceId,
+			});
+			affiliateAppId = whopExperience.app?.id || experienceId;
+			console.log(`✅ Got App ID for affiliate tracking: ${affiliateAppId}`);
+		} catch (error) {
+			console.log(`⚠️ Could not get App ID from experience, using experience ID: ${experienceId}`);
+		}
+
 		// Step 1: Get owner's business products from discovery page
 		updateProgress("fetching_discovery_products");
 		console.log("🏪 Fetching owner's discovery page products...");
@@ -264,11 +278,21 @@ export async function triggerProductSyncForNewAdmin(
 					const batchPromises = batch.map(async (app) => {
 						try {
 							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
+							// Generate tracking URL that will redirect to Whop
+							const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/track/click?` + new URLSearchParams({
+								resourceId: `app-${app.id}`, // We'll create this resource ID
+								userId: userId,
+								experienceId: experienceId,
+								funnelId: funnel.id,
+								// Store the actual destination URL
+								redirectUrl: `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`
+							}).toString();
+							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,
 								type: "MY_PRODUCTS",
 								category: "FREE_VALUE",
-								link: `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`,
+								link: trackingUrl,
 								description: app.description || `Free access to ${app.name}`,
 								whopProductId: app.id
 							});
@@ -280,7 +304,7 @@ export async function triggerProductSyncForNewAdmin(
 										name: app.name,
 										type: "MY_PRODUCTS",
 										category: "FREE_VALUE",
-										link: `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`,
+										link: trackingUrl,
 										description: app.description || `Free access to ${app.name}`,
 										whopProductId: app.id
 									});
@@ -361,16 +385,40 @@ export async function triggerProductSyncForNewAdmin(
 						const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
 						
 						// Use discovery page URL if available, otherwise fallback to hub URL
-						const productLink = product.discoveryPageUrl 
+						let destinationUrl = product.discoveryPageUrl 
 							? `${product.discoveryPageUrl}${planParam}`
 							: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`;
+						
+						// Add affiliate tracking to PAID product links
+						// Pattern: /discover/{accessPassRoute}/?app={yourAppId}
+						if (product.discoveryPageUrl) {
+							// For discovery page URLs, add app parameter for affiliate tracking
+							const url = new URL(destinationUrl);
+							url.searchParams.set('app', affiliateAppId); // Use App ID for affiliate tracking
+							destinationUrl = url.toString();
+						} else {
+							// For hub URLs, we can't add affiliate tracking directly
+							// But we can add it as a query parameter for tracking
+							const url = new URL(destinationUrl);
+							url.searchParams.set('affiliate', affiliateAppId);
+							destinationUrl = url.toString();
+						}
+						
+						// Generate tracking URL that will redirect to product
+						const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/track/click?` + new URLSearchParams({
+							resourceId: `product-${product.id}`,
+							userId: userId,
+							experienceId: experienceId,
+							funnelId: funnel.id,
+							redirectUrl: destinationUrl
+						}).toString();
 						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title,
 								type: "MY_PRODUCTS",
 								category: "PAID",
-								link: productLink,
+								link: trackingUrl,
 								description: product.description,
 								whopProductId: product.id
 							}),

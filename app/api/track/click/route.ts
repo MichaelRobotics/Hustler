@@ -3,6 +3,27 @@ import { db } from "@/lib/supabase/db-server";
 import { funnelAnalytics, resources } from "@/lib/supabase/schema";
 import { eq, and, sql } from "drizzle-orm";
 
+// Store click tracking for purchase attribution
+const clickTracking = new Map<string, {
+  resourceId: string;
+  userId: string;
+  experienceId: string;
+  funnelId: string;
+  timestamp: Date;
+  userAgent?: string;
+  ipAddress?: string;
+}>();
+
+// Clean up old tracking data (older than 24 hours)
+setInterval(() => {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  for (const [key, data] of clickTracking.entries()) {
+    if (data.timestamp < cutoff) {
+      clickTracking.delete(key);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 export async function POST(request: NextRequest) {
   try {
     const { resourceId, userId, experienceId, funnelId } = await request.json();
@@ -13,6 +34,22 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Store click tracking for purchase attribution
+    const trackingKey = `${userId}-${resourceId}-${Date.now()}`;
+    clickTracking.set(trackingKey, {
+      resourceId,
+      userId,
+      experienceId,
+      funnelId,
+      timestamp: new Date(),
+      userAgent: request.headers.get('user-agent') || undefined,
+      ipAddress: request.headers.get('x-forwarded-for') || 
+                 request.headers.get('x-real-ip') || 
+                 'unknown'
+    });
+
+    console.log(`📊 Click tracked: ${resourceId} by user ${userId} in funnel ${funnelId}`);
     
     // Get resource details
     const resource = await db.select()
@@ -102,6 +139,7 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get("userId");
     const experienceId = searchParams.get("experienceId");
     const funnelId = searchParams.get("funnelId");
+    const redirectUrl = searchParams.get("redirectUrl");
     
     if (!resourceId || !userId || !experienceId || !funnelId) {
       return NextResponse.json(
@@ -121,10 +159,18 @@ export async function GET(request: NextRequest) {
       return trackResponse;
     }
     
-    const trackData = await trackResponse.json();
+    // Use provided redirectUrl or fallback to trackData.redirectUrl
+    const finalRedirectUrl = redirectUrl || (await trackResponse.json()).redirectUrl;
+    
+    if (!finalRedirectUrl) {
+      return NextResponse.json(
+        { error: "No redirect URL provided" },
+        { status: 400 }
+      );
+    }
     
     // Redirect to the actual resource
-    return NextResponse.redirect(trackData.redirectUrl);
+    return NextResponse.redirect(finalRedirectUrl);
     
   } catch (error) {
     console.error("Click tracking GET error:", error);
