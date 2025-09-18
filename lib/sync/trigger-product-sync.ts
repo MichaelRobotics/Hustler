@@ -268,7 +268,7 @@ export async function triggerProductSyncForNewAdmin(
 								name: app.name,
 								type: "MY_PRODUCTS",
 								category: "FREE_VALUE",
-								link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+								link: `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`,
 								description: app.description || `Free access to ${app.name}`,
 								whopProductId: app.id
 							});
@@ -280,7 +280,7 @@ export async function triggerProductSyncForNewAdmin(
 										name: app.name,
 										type: "MY_PRODUCTS",
 										category: "FREE_VALUE",
-										link: `https://whop.com/hub/${companyId}/${app.id}?ref=${experienceId}`,
+										link: `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`,
 										description: app.description || `Free access to ${app.name}`,
 										whopProductId: app.id
 									});
@@ -360,12 +360,17 @@ export async function triggerProductSyncForNewAdmin(
 						const cheapestPlan = whopClient.getCheapestPlan(product);
 						const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
 						
+						// Use discovery page URL if available, otherwise fallback to hub URL
+						const productLink = product.discoveryPageUrl 
+							? `${product.discoveryPageUrl}${planParam}`
+							: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`;
+						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title,
 								type: "MY_PRODUCTS",
 								category: "PAID",
-								link: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`,
+								link: productLink,
 								description: product.description,
 								whopProductId: product.id
 							}),

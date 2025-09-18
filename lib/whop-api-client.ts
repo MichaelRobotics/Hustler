@@ -37,6 +37,7 @@ export interface WhopApp {
   discoveryPageUrl?: string;
   checkoutUrl?: string;
   route?: string;
+  experienceId?: string; // The experience ID for this app installation
 }
 
 export class WhopApiClient {
@@ -129,7 +130,8 @@ export class WhopApiClient {
               currency: 'usd',
               discoveryPageUrl: undefined,
               checkoutUrl: undefined,
-              route: undefined
+              route: undefined,
+              experienceId: exp.id // Store the experience ID for this app installation
             }));
             
             console.log(`✅ Mapped to ${apps.length} installed apps from API`);
