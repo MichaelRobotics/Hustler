@@ -263,36 +263,25 @@ async function createUserContext(
 					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
 					
 					try {
-						// Call sync function directly in server-side context to prevent timeouts
-						console.log(`🔄 Triggering async product sync for user ${newUser.id}...`);
+						// Call sync function directly and await it to ensure completion
+						console.log(`🔄 Triggering product sync for user ${newUser.id}...`);
 						
-						// Use setImmediate for better error handling in Node.js
-						setImmediate(async () => {
-							try {
-								console.log(`🔄 Calling product sync function directly for user ${newUser.id}...`);
-								
-								// Import the sync function directly since we're in server-side context
-								const { triggerProductSyncForNewAdmin } = await import('../sync/trigger-product-sync');
-								
-								// Call the function directly (server-side context)
-								await triggerProductSyncForNewAdmin(
-									newUser.id,
-									experience.id,
-									experience.whopCompanyId
-								);
-								
-								console.log(`✅ Product sync completed successfully for user ${newUser.id}`);
-							} catch (error) {
-								console.error("❌ Product sync failed:", error);
-								console.error("❌ Error details:", error instanceof Error ? error.stack : error);
-								console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
-								console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
-							}
-						});
+						// Import the sync function directly since we're in server-side context
+						const { triggerProductSyncForNewAdmin } = await import('../sync/trigger-product-sync');
 						
-						console.log(`⏰ Product sync queued for immediate execution`);
+						// Call the function directly and await it to ensure completion
+						await triggerProductSyncForNewAdmin(
+							newUser.id,
+							experience.id,
+							experience.whopCompanyId
+						);
+						
+						console.log(`✅ Product sync completed successfully for user ${newUser.id}`);
 					} catch (error) {
-						console.error("❌ Error queuing product sync:", error);
+						console.error("❌ Product sync failed:", error);
+						console.error("❌ Error details:", error instanceof Error ? error.stack : error);
+						console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
+						console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
 					}
 				}
 			}
