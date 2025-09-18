@@ -64,6 +64,7 @@ export const useFunnelDeployment = (
 		// Check if any other funnel is currently live for the same product
 		// Only check if this funnel has a whopProductId (product-specific validation)
 		if (currentFunnel.whopProductId) {
+			console.log(`🔍 Checking for live funnels for product: ${currentFunnel.whopProductId}`);
 			try {
 				// Check if user context is available
 				if (!user?.experienceId) {
@@ -72,9 +73,15 @@ export const useFunnelDeployment = (
 
 				// Use product-specific live funnel check
 				const response = await apiGet(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}&productId=${currentFunnel.whopProductId}`, user.experienceId);
+				console.log(`🔍 Live funnel check response:`, response.status, response.ok);
+				
 				if (response.ok) {
 					const data = await response.json();
+					console.log(`🔍 Live funnel check data:`, data);
+					
 					if (data.success && data.data.hasLiveFunnel) {
+						console.log(`🔍 Found live funnel: ${data.data.liveFunnelName}`);
+						// Return early - don't continue with product validation if there's a live funnel conflict
 						return {
 							isValid: false,
 							message: `Funnel "${data.data.liveFunnelName}" is currently live for this product.`,
@@ -88,6 +95,8 @@ export const useFunnelDeployment = (
 				console.error("Error checking for live funnels:", error);
 				// Continue with deployment if check fails
 			}
+		} else {
+			console.log(`🔍 No whopProductId found for funnel: ${currentFunnel.id}`);
 		}
 
 		// Extract product names from the generated funnel flow (what the AI actually offers)
