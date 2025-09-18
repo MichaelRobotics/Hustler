@@ -271,22 +271,15 @@ async function createUserContext(
 							try {
 								console.log(`🔄 Calling /api/admin/sync-products/trigger for user ${newUser.id}...`);
 								
-								// Call the API route asynchronously
-								const response = await fetch('/api/admin/sync-products/trigger', {
-									method: 'POST',
-									headers: {
-										'Content-Type': 'application/json',
-										// Pass the user context for authentication
-										'X-User-Id': newUser.id,
-										'X-Experience-Id': experience.id,
-										'X-Company-Id': experience.whopCompanyId
-									},
-									body: JSON.stringify({
-										userId: newUser.id,
-										experienceId: experience.id,
-										companyId: experience.whopCompanyId
-									})
-								});
+								// Import apiPost to follow established patterns
+								const { apiPost } = await import('../utils/api-client');
+								
+								// Call the API route using established api-client pattern
+								const response = await apiPost('/api/admin/sync-products/trigger', {
+									userId: newUser.id,
+									experienceId: experience.id,
+									companyId: experience.whopCompanyId
+								}, experience.id); // Pass experienceId as parameter (established pattern)
 
 								if (response.ok) {
 									const result = await response.json();
