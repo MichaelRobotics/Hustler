@@ -305,11 +305,43 @@ export async function triggerProductSyncForNewAdmin(
 				console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
 				console.log(`🔍 Funnel product includedApps:`, funnelProduct.includedApps);
 				
-				// Only include apps that are in the funnel product's includedApps (visible to users)
-				const availableApps = installedApps.filter(app => 
-					funnelProduct.includedApps.includes(app.id)
-				);
-				console.log(`🔍 Found ${availableApps.length} apps that are included in funnel product (visible to users)`);
+				// Check which apps have access passes for the funnel product
+				// If an experience (app) has an access pass for the funnel product, it's included
+				console.log(`🔍 Checking which apps have access passes for funnel product: ${funnelProduct.title} (ID: ${funnelProduct.id})`);
+				
+				const availableApps: typeof installedApps = [];
+				
+				for (const app of installedApps) {
+					if (!app.experienceId) {
+						console.log(`⚠️ App "${app.name}" has no experienceId, skipping`);
+						continue;
+					}
+					
+					try {
+						// Check if this experience has an access pass for the funnel product
+						const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
+							experienceId: app.experienceId
+						});
+						
+						const accessPasses = accessPassesResult?.accessPasses || [];
+						const hasAccessPass = accessPasses.some((accessPass: any) => 
+							accessPass.id === funnelProduct.id
+						);
+						
+						if (hasAccessPass) {
+							console.log(`✅ App "${app.name}" has access pass for funnel product "${funnelProduct.title}"`);
+							availableApps.push(app);
+						} else {
+							console.log(`❌ App "${app.name}" does not have access pass for funnel product "${funnelProduct.title}"`);
+						}
+					} catch (error) {
+						console.log(`⚠️ Error checking access passes for app "${app.name}":`, error);
+						// If we can't check access passes, include the app as fallback
+						availableApps.push(app);
+					}
+				}
+				
+				console.log(`🔍 Found ${availableApps.length} apps that have access passes for the funnel product`);
 				
 				// Classify apps by type (only from available apps)
 				const classifiedApps = {
