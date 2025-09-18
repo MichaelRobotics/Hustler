@@ -127,9 +127,9 @@ export class WhopApiClient {
       
       // MULTIPLE RETRY STRATEGY: Try different approaches
       const strategies = [
-        { name: "Ultra-fast", timeout: 2000, first: 5 },
-        { name: "Fast", timeout: 5000, first: 10 },
-        { name: "Standard", timeout: 10000, first: 20 }
+        { name: "Ultra-fast", timeout: 2000, first: 10 },
+        { name: "Fast", timeout: 5000, first: 20 },
+        { name: "Standard", timeout: 10000, first: 50 }
       ];
       
       for (const strategy of strategies) {

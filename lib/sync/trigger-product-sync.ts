@@ -241,8 +241,7 @@ export async function triggerProductSyncForNewAdmin(
 		
 		console.log(`🎯 Funnel will be named: "${funnelName}"`);
 		if (funnelProduct) {
-			console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
-			console.log(`🔍 Funnel product includedApps:`, funnelProduct.includedApps);
+			console.log(`🎯 Funnel product: ${funnelProduct.title}`);
 		} else {
 			console.log(`⚠️ No funnel product found!`);
 		}
@@ -302,8 +301,7 @@ export async function triggerProductSyncForNewAdmin(
 				console.log("⚠️ No funnel product found, skipping FREE apps creation");
 				updateProgress("free_resources_skipped", true);
 			} else {
-				console.log(`🎯 Funnel product: ${funnelProduct.title} (${funnelProduct.includedApps.length} apps included)`);
-				console.log(`🔍 Funnel product includedApps:`, funnelProduct.includedApps);
+				console.log(`🎯 Funnel product: ${funnelProduct.title}`);
 				
 				// Check which apps have access passes for the funnel product
 				// If an experience (app) has an access pass for the funnel product, it's included
