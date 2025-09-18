@@ -37,6 +37,7 @@ export interface FunnelWithResources {
 	sends: number;
 	createdAt: Date;
 	updatedAt: Date;
+	whopProductId?: string; // 🔑 Discovery page product ID
 	resources: Array<{
 		id: string;
 		name: string;
@@ -244,6 +245,7 @@ export async function getFunnelById(
 			sends: funnel.sends,
 			createdAt: funnel.createdAt,
 			updatedAt: funnel.updatedAt,
+			whopProductId: funnel.whopProductId || undefined, // 🔑 Include whopProductId
 			resources: Array.from(resourcesMap.values()),
 		};
 	} catch (error) {
@@ -329,6 +331,7 @@ export async function getFunnels(
 					sends: funnel.sends,
 					createdAt: funnel.createdAt,
 					updatedAt: funnel.updatedAt,
+					whopProductId: funnel.whopProductId || undefined, // 🔑 Include whopProductId
 					resources: [],
 				});
 			}
@@ -512,6 +515,11 @@ export async function checkForOtherLiveFunnels(
 	excludeFunnelId?: string,
 ): Promise<{ hasLiveFunnel: boolean; liveFunnelName?: string }> {
 	try {
+		console.log(`🔍 [DATABASE QUERY] Checking for live funnels with:`);
+		console.log(`🔍 [DATABASE QUERY] - experienceId: ${user.experience.id}`);
+		console.log(`🔍 [DATABASE QUERY] - whopProductId: ${productId}`);
+		console.log(`🔍 [DATABASE QUERY] - excludeFunnelId: ${excludeFunnelId}`);
+		
 		const liveFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.experienceId, user.experience.id),
@@ -524,6 +532,8 @@ export async function checkForOtherLiveFunnels(
 				name: true,
 			},
 		});
+
+		console.log(`🔍 [DATABASE QUERY] Found live funnel:`, liveFunnel);
 
 		return {
 			hasLiveFunnel: !!liveFunnel,

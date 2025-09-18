@@ -36,6 +36,12 @@ export const useFunnelDeployment = (
 	enableCalculationsForGoLive?: () => void,
 	user?: { experienceId?: string } | null,
 ) => {
+	console.log(`🔍 [USE FUNNEL DEPLOYMENT] Hook initialized with funnel:`, {
+		id: currentFunnel.id,
+		name: currentFunnel.name,
+		whopProductId: currentFunnel.whopProductId,
+		userExperienceId: user?.experienceId
+	});
 	const [isDeploying, setIsDeploying] = React.useState(false);
 	const [deploymentLog, setDeploymentLog] = React.useState<string[]>([]);
 	const [deploymentValidation, setDeploymentValidation] =
@@ -51,7 +57,18 @@ export const useFunnelDeployment = (
 		extraProducts: string[];
 		liveFunnelName?: string;
 	}> => {
+		console.log(`🔍 [VALIDATE DEPLOYMENT] Starting validation with funnel:`, {
+			id: currentFunnel.id,
+			name: currentFunnel.name,
+			whopProductId: currentFunnel.whopProductId,
+			hasFlow: !!currentFunnel.flow,
+			hasResources: !!currentFunnel.resources,
+			userExperienceId: user?.experienceId
+		});
+		console.log(`🔍 [VALIDATE DEPLOYMENT] Full funnel object:`, currentFunnel);
+
 		if (!currentFunnel.flow || !currentFunnel.resources) {
+			console.log(`🔍 [VALIDATE DEPLOYMENT] Funnel missing flow or resources`);
 			return {
 				isValid: false,
 				message:
@@ -64,23 +81,30 @@ export const useFunnelDeployment = (
 		// Check if any other funnel is currently live for the same product
 		// Only check if this funnel has a whopProductId (product-specific validation)
 		if (currentFunnel.whopProductId) {
-			console.log(`🔍 Checking for live funnels for product: ${currentFunnel.whopProductId}`);
+			console.log(`🔍 [FRONTEND VALIDATION] Checking for live funnels for product: ${currentFunnel.whopProductId}`);
+			console.log(`🔍 [FRONTEND VALIDATION] Funnel ID: ${currentFunnel.id}`);
+			console.log(`🔍 [FRONTEND VALIDATION] User experience ID: ${user?.experienceId}`);
+			
 			try {
 				// Check if user context is available
 				if (!user?.experienceId) {
+					console.error(`🔍 [FRONTEND VALIDATION] No experience ID found for user`);
 					throw new Error("Experience ID is required");
 				}
 
 				// Use product-specific live funnel check
-				const response = await apiGet(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}&productId=${currentFunnel.whopProductId}`, user.experienceId);
-				console.log(`🔍 Live funnel check response:`, response.status, response.ok);
+				const apiUrl = `/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}&productId=${currentFunnel.whopProductId}`;
+				console.log(`🔍 [FRONTEND VALIDATION] API URL: ${apiUrl}`);
+				
+				const response = await apiGet(apiUrl, user.experienceId);
+				console.log(`🔍 [FRONTEND VALIDATION] Response status: ${response.status}, ok: ${response.ok}`);
 				
 				if (response.ok) {
 					const data = await response.json();
-					console.log(`🔍 Live funnel check data:`, data);
+					console.log(`🔍 [FRONTEND VALIDATION] Response data:`, JSON.stringify(data, null, 2));
 					
 					if (data.success && data.data.hasLiveFunnel) {
-						console.log(`🔍 Found live funnel: ${data.data.liveFunnelName}`);
+						console.log(`🔍 [FRONTEND VALIDATION] Found live funnel: ${data.data.liveFunnelName}`);
 						// Return early - don't continue with product validation if there's a live funnel conflict
 						return {
 							isValid: false,
@@ -89,14 +113,23 @@ export const useFunnelDeployment = (
 							extraProducts: [],
 							liveFunnelName: data.data.liveFunnelName,
 						};
+					} else {
+						console.log(`🔍 [FRONTEND VALIDATION] No live funnel found, continuing with deployment`);
 					}
+				} else {
+					console.error(`🔍 [FRONTEND VALIDATION] API call failed with status: ${response.status}`);
+					const errorText = await response.text();
+					console.error(`🔍 [FRONTEND VALIDATION] Error response:`, errorText);
 				}
 			} catch (error) {
-				console.error("Error checking for live funnels:", error);
+				console.error(`🔍 [FRONTEND VALIDATION] Error checking for live funnels:`, error);
 				// Continue with deployment if check fails
 			}
 		} else {
-			console.log(`🔍 No whopProductId found for funnel: ${currentFunnel.id}`);
+			console.log(`🔍 [FRONTEND VALIDATION] No whopProductId found for funnel: ${currentFunnel.id}`);
+			console.log(`🔍 [FRONTEND VALIDATION] This means the funnel was not created with a product association`);
+			console.log(`🔍 [FRONTEND VALIDATION] Frontend validation will skip live funnel check and proceed with deployment`);
+			console.log(`🔍 [FRONTEND VALIDATION] Backend will catch the live funnel conflict and throw an error`);
 		}
 
 		// Extract product names from the generated funnel flow (what the AI actually offers)
@@ -163,17 +196,33 @@ export const useFunnelDeployment = (
 	};
 
 	const handleDeploy = async () => {
+		console.log(`🔍 [HANDLE DEPLOY] ===== FUNCTION CALLED =====`);
+		console.log(`🔍 [HANDLE DEPLOY] Starting deployment for funnel:`, {
+			id: currentFunnel.id,
+			name: currentFunnel.name,
+			whopProductId: currentFunnel.whopProductId,
+			hasFlow: !!currentFunnel.flow,
+			hasResources: !!currentFunnel.resources,
+			userExperienceId: user?.experienceId
+		});
+
 		// Enable calculations for Go Live action
 		if (enableCalculationsForGoLive) {
 			enableCalculationsForGoLive();
 		}
 
 		// Validate deployment before proceeding
+		console.log(`🔍 [HANDLE DEPLOY] Running validation...`);
 		const validation = await validateDeployment();
+		console.log(`🔍 [HANDLE DEPLOY] Validation result:`, validation);
+		
 		if (!validation.isValid) {
+			console.log(`🔍 [HANDLE DEPLOY] Validation failed, showing validation modal`);
 			setDeploymentValidation(validation);
 			return;
 		}
+
+		console.log(`🔍 [HANDLE DEPLOY] Validation passed, proceeding with deployment`);
 
 		setDeploymentAction('deploy');
 		setIsDeploying(true);
@@ -236,12 +285,18 @@ export const useFunnelDeployment = (
 				`Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			]);
 
+			// Parse error message to extract live funnel name if it's a live funnel conflict
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			const liveFunnelMatch = errorMessage.match(/Funnel "([^"]+)" is currently live/);
+			const liveFunnelName = liveFunnelMatch ? liveFunnelMatch[1] : undefined;
+
 			// Show error in validation modal
 			setDeploymentValidation({
 				isValid: false,
-				message: `Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				message: errorMessage,
 				missingProducts: [],
 				extraProducts: [],
+				liveFunnelName: liveFunnelName, // Set liveFunnelName if it's a live funnel conflict
 			});
 
 			// Stop deployment after showing error

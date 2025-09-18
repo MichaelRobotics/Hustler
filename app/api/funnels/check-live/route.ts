@@ -50,6 +50,9 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 		}
 
 		// Check for live funnels - product-specific or global based on productId parameter
+		console.log(`🔍 [BACKEND API] Checking live funnels - productId: ${productId}, excludeFunnelId: ${excludeFunnelId}`);
+		console.log(`🔍 [BACKEND API] User experience ID: ${userContext.user.experience.id}`);
+		
 		const liveFunnelCheck = productId 
 			? await checkForOtherLiveFunnels(
 				userContext.user,
@@ -60,6 +63,8 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 				userContext.user,
 				excludeFunnelId || undefined,
 			);
+			
+		console.log(`🔍 [BACKEND API] Live funnel check result:`, JSON.stringify(liveFunnelCheck, null, 2));
 
 		return createSuccessResponse(
 			liveFunnelCheck,
