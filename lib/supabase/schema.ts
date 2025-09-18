@@ -47,7 +47,7 @@ export const experiences = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		whopExperienceId: text("whop_experience_id").notNull().unique(),
-		whopCompanyId: text("whop_company_id").notNull(), // App creator's company (metadata only)
+		whopCompanyId: text("whop_company_id").notNull(), 
 		name: text("name").notNull(),
 		description: text("description"),
 		logo: text("logo"),
@@ -119,6 +119,7 @@ export const funnels = pgTable(
 		description: text("description"),
 		flow: jsonb("flow"), // The complete funnel flow JSON
 		visualizationState: jsonb("visualization_state").default("{}"), // User visualization preferences and layout
+		whopProductId: text("whop_product_id"), // Discovery page product ID (accessPass.id)
 		isDeployed: boolean("is_deployed").default(false).notNull(),
 		wasEverDeployed: boolean("was_ever_deployed").default(false).notNull(),
 		generationStatus: generationStatusEnum("generation_status")
@@ -131,6 +132,7 @@ export const funnels = pgTable(
 	(table) => ({
 		experienceIdIdx: index("funnels_experience_id_idx").on(table.experienceId),
 		userIdIdx: index("funnels_user_id_idx").on(table.userId),
+		whopProductIdIdx: index("funnels_whop_product_id_idx").on(table.whopProductId),
 		isDeployedIdx: index("funnels_is_deployed_idx").on(table.isDeployed),
 		generationStatusIdx: index("funnels_generation_status_idx").on(
 			table.generationStatus,
@@ -146,6 +148,11 @@ export const funnels = pgTable(
 		),
 		experienceDeployedIdx: index("funnels_experience_deployed_idx").on(
 			table.experienceId,
+			table.isDeployed,
+		),
+		experienceProductDeployedIdx: index("funnels_experience_product_deployed_idx").on(
+			table.experienceId,
+			table.whopProductId,
 			table.isDeployed,
 		),
 	}),

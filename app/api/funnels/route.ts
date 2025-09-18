@@ -113,6 +113,7 @@ async function createFunnelHandler(request: NextRequest, context: AuthContext) {
 			name: input.name,
 			description: input.description,
 			resources: input.resources || [],
+			whopProductId: input.whopProductId, // 🔑 NEW: Product association
 		});
 
 		return NextResponse.json(

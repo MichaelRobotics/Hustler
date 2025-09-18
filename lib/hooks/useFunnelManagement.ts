@@ -43,6 +43,12 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	
+	// Product selection modal state
+	const [isProductSelectionOpen, setIsProductSelectionOpen] = useState(false);
+	const [discoveryProducts, setDiscoveryProducts] = useState<any[]>([]);
+	const [productsLoading, setProductsLoading] = useState(false);
+	const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
 
 	// Use regular fetch since authentication is handled server-side
 
@@ -701,5 +707,15 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 		
 		// Utilities
 		isFunnelNameAvailable,
+		
+		// Product selection handlers
+		isProductSelectionOpen,
+		setIsProductSelectionOpen,
+		discoveryProducts,
+		setDiscoveryProducts,
+		productsLoading,
+		setProductsLoading,
+		selectedProduct,
+		setSelectedProduct,
 	};
 }

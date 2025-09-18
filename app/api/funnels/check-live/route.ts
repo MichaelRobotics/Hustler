@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { checkForOtherLiveFunnels } from "../../../../lib/actions/funnel-actions";
+import { checkForAnyLiveFunnels } from "../../../../lib/actions/funnel-actions";
 import {
 	createErrorResponse,
 	createSuccessResponse,
@@ -48,8 +48,8 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 			);
 		}
 
-		// Check for live funnels
-		const liveFunnelCheck = await checkForOtherLiveFunnels(
+		// Check for live funnels across all products for this experience
+		const liveFunnelCheck = await checkForAnyLiveFunnels(
 			userContext.user,
 			excludeFunnelId || undefined,
 		);

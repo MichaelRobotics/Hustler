@@ -2,7 +2,7 @@
 
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
-import { apiPost } from "@/lib/utils/api-client";
+import { apiGet, apiPost } from "@/lib/utils/api-client";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Button, Heading, Text } from "frosted-ui";
 import {
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { ProductSelectionModal } from "./ProductSelectionModal";
 
 interface Funnel {
 	id: string;
@@ -55,6 +56,26 @@ interface FunnelsDashboardProps {
 	funnelToDelete: Funnel | null;
 	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
 	user?: { experienceId?: string } | null;
+	// Product selection props
+	isProductSelectionOpen: boolean;
+	setIsProductSelectionOpen: (open: boolean) => void;
+	discoveryProducts: any[];
+	setDiscoveryProducts: (products: any[]) => void;
+	productsLoading: boolean;
+	setProductsLoading: (loading: boolean) => void;
+	selectedProduct: any | null;
+	setSelectedProduct: (product: any | null) => void;
+}
+
+interface DiscoveryProduct {
+	id: string;
+	title: string;
+	description?: string;
+	price: number;
+	currency: string;
+	isFree: boolean;
+	route: string;
+	discoveryPageUrl?: string;
 }
 
 const FunnelsDashboard = React.memo(
@@ -80,6 +101,15 @@ const FunnelsDashboard = React.memo(
 		funnelToDelete,
 		isFunnelNameAvailable,
 		user,
+		// Product selection props
+		isProductSelectionOpen,
+		setIsProductSelectionOpen,
+		discoveryProducts,
+		setDiscoveryProducts,
+		productsLoading,
+		setProductsLoading,
+		selectedProduct,
+		setSelectedProduct,
 	}: FunnelsDashboardProps) => {
 		// State to track which dropdown is open and which button is highlighted
 		const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -99,63 +129,100 @@ const FunnelsDashboard = React.memo(
 			}
 		}, [editingFunnelId, funnels]);
 
-	// Memoized handler for creating a new funnel
-	const handleCreateNewFunnel = useCallback(
-		async (funnelName: string) => {
-			// Check if name is available
-			if (!isFunnelNameAvailable(funnelName)) {
-				console.error("Funnel name already exists");
-				return;
-			}
-
-			// Check if user context is available
-			if (!user?.experienceId) {
-				console.error("Experience ID is required");
-				return;
-			}
-
-			setIsSaving(true);
+		// Fetch discovery products
+		const fetchDiscoveryProducts = useCallback(async () => {
+			if (!user?.experienceId) return;
+			
+			setProductsLoading(true);
 			try {
-				const response = await apiPost("/api/funnels", {
-					name: funnelName.trim()
-				}, user.experienceId);
+				const response = await apiGet("/api/products/discovery", user.experienceId);
+				if (response.ok) {
+					const data = await response.json();
+					setDiscoveryProducts(data.data || []);
+				}
+			} catch (error) {
+				console.error("Error fetching discovery products:", error);
+			} finally {
+				setProductsLoading(false);
+			}
+		}, [user?.experienceId, setProductsLoading, setDiscoveryProducts]);
 
-				if (!response.ok) {
-					const errorData = await response.json();
-					throw new Error(errorData.message || "Failed to create funnel");
+		// Handle product selection
+		const handleProductSelect = useCallback((product: DiscoveryProduct) => {
+			setSelectedProduct(product);
+			setNewFunnelName(product.title); // 🔑 Auto-fill funnel name
+			setIsProductSelectionOpen(false);
+			setIsCreatingNewFunnel(true); // Show name input
+		}, [setSelectedProduct, setNewFunnelName, setIsProductSelectionOpen, setIsCreatingNewFunnel]);
+
+		// Handle opening product selection
+		const handleOpenProductSelection = useCallback(() => {
+			setIsProductSelectionOpen(true);
+			if (discoveryProducts.length === 0) {
+				fetchDiscoveryProducts();
+			}
+		}, [setIsProductSelectionOpen, discoveryProducts.length, fetchDiscoveryProducts]);
+
+		// Memoized handler for creating a new funnel
+		const handleCreateNewFunnel = useCallback(
+			async (funnelName: string) => {
+				// Check if name is available
+				if (!isFunnelNameAvailable(funnelName)) {
+					console.error("Funnel name already exists");
+					return;
 				}
 
-				const data = await response.json();
-				const newFunnel = data.data;
+				// Check if user context is available
+				if (!user?.experienceId) {
+					console.error("Experience ID is required");
+					return;
+				}
 
-				// Update funnels state (like the original handleAddFunnel)
-				setFunnels([...funnels, newFunnel]);
+				setIsSaving(true);
+				try {
+					const response = await apiPost("/api/funnels", {
+						name: funnelName.trim(),
+						whopProductId: selectedProduct?.id, // 🔑 Product association
+					}, user.experienceId);
 
-				// Reset states
-				setIsCreatingNewFunnel(false);
-				handleSetIsRenaming(false);
-				setEditingFunnelId(null);
-				setNewFunnelName("");
+					if (!response.ok) {
+						const errorData = await response.json();
+						throw new Error(errorData.message || "Failed to create funnel");
+					}
 
-				return newFunnel;
-			} catch (error) {
-				console.error("Error creating funnel:", error);
-				throw error;
-			} finally {
-				setIsSaving(false);
-			}
-		},
-		[
-			funnels,
-			setFunnels,
-			setIsCreatingNewFunnel,
-			setIsRenaming,
-			setEditingFunnelId,
-			setNewFunnelName,
-			isFunnelNameAvailable,
-			user?.experienceId,
-		],
-	);
+					const data = await response.json();
+					const newFunnel = data.data;
+
+					// Update funnels state (like the original handleAddFunnel)
+					setFunnels([...funnels, newFunnel]);
+
+					// Reset states
+					setIsCreatingNewFunnel(false);
+					handleSetIsRenaming(false);
+					setEditingFunnelId(null);
+					setNewFunnelName("");
+					setSelectedProduct(null); // 🔑 Clear selected product
+
+					return newFunnel;
+				} catch (error) {
+					console.error("Error creating funnel:", error);
+					throw error;
+				} finally {
+					setIsSaving(false);
+				}
+			},
+			[
+				funnels,
+				setFunnels,
+				setIsCreatingNewFunnel,
+				setIsRenaming,
+				setEditingFunnelId,
+				setNewFunnelName,
+				isFunnelNameAvailable,
+				user?.experienceId,
+				selectedProduct, // 🔑 Include selected product
+			],
+		);
 
 		// Memoized computed values for better performance
 		const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
@@ -625,6 +692,15 @@ const FunnelsDashboard = React.memo(
 						);
 					})}
 				</div>
+
+				{/* Product Selection Modal */}
+				<ProductSelectionModal
+					isOpen={isProductSelectionOpen}
+					products={discoveryProducts}
+					onClose={() => setIsProductSelectionOpen(false)}
+					onProductSelect={handleProductSelect}
+					loading={productsLoading}
+				/>
 			</div>
 		);
 	},

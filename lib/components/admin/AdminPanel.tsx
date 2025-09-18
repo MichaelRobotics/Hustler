@@ -109,6 +109,15 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleGenerationComplete,
 		handleGenerationError,
 		isFunnelNameAvailable,
+		// Product selection variables
+		isProductSelectionOpen,
+		setIsProductSelectionOpen,
+		discoveryProducts,
+		setDiscoveryProducts,
+		productsLoading,
+		setProductsLoading,
+		selectedProduct,
+		setSelectedProduct,
 	} = useFunnelManagement(user);
 
 	const {
@@ -245,18 +254,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		setSelectedFunnel(null);
 	}, [setCurrentView, setSelectedFunnel]);
 
-	// Handle inline funnel creation
+	// Handle inline funnel creation - now opens product selection modal
 	const handleCreateNewFunnelInline = useCallback(() => {
-		setIsCreatingNewFunnel(true);
-		setIsRenaming(true);
-		setEditingFunnelId("new-funnel-temp");
-		setNewFunnelName(""); // Initialize with empty name
-	}, [
-		setIsCreatingNewFunnel,
-		setIsRenaming,
-		setEditingFunnelId,
-		setNewFunnelName,
-	]);
+		// Open product selection modal instead of direct creation
+		setIsProductSelectionOpen(true);
+	}, [setIsProductSelectionOpen]);
 
 	// Handle library modal state changes
 	const handleLibraryModalStateChange = useCallback((isModalOpen: boolean) => {
@@ -623,17 +625,26 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							/>
 
 							<div className="mt-8">
-								<FunnelsDashboard
-									funnels={funnels}
-									setFunnels={setFunnels}
-									handleEditFunnel={handleEditFunnelWithNavigation}
-									handleDeployFunnel={handleDeployFunnel}
-									setFunnelToDelete={handleDeleteFunnel}
-									editingFunnelId={editingFunnelId}
-									setEditingFunnelId={setEditingFunnelId}
-									handleSaveFunnelName={handleSaveFunnelName}
-									onFunnelClick={handleFunnelClickWithNavigation}
-									handleDuplicateFunnel={handleDuplicateFunnel}
+							<FunnelsDashboard
+								funnels={funnels}
+								setFunnels={setFunnels}
+								handleEditFunnel={handleEditFunnelWithNavigation}
+								handleDeployFunnel={handleDeployFunnel}
+								setFunnelToDelete={handleDeleteFunnel}
+								editingFunnelId={editingFunnelId}
+								setEditingFunnelId={setEditingFunnelId}
+								handleSaveFunnelName={handleSaveFunnelName}
+								onFunnelClick={handleFunnelClickWithNavigation}
+								handleDuplicateFunnel={handleDuplicateFunnel}
+								// Product selection props
+								isProductSelectionOpen={isProductSelectionOpen}
+								setIsProductSelectionOpen={setIsProductSelectionOpen}
+								discoveryProducts={discoveryProducts}
+								setDiscoveryProducts={setDiscoveryProducts}
+								productsLoading={productsLoading}
+								setProductsLoading={setProductsLoading}
+								selectedProduct={selectedProduct}
+								setSelectedProduct={setSelectedProduct}
 									handleManageResources={handleManageResourcesWithNavigation}
 									isRenaming={isRenaming}
 									setIsRenaming={setIsRenaming}

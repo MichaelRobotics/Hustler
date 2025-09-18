@@ -265,7 +265,8 @@ export async function triggerProductSyncForNewAdmin(
 					() => createFunnel({ id: userId, experience: { id: experienceId } } as any, {
 						name: funnelName,
 						description: `Funnel for ${funnelName}`,
-						resources: [] // Will assign resources after creation
+						resources: [], // Will assign resources after creation
+						whopProductId: funnelProduct?.id // 🔑 Associate funnel with discovery page product
 					}),
 					"createFunnel"
 				);
