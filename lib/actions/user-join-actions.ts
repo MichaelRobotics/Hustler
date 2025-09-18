@@ -72,25 +72,27 @@ export async function handleUserJoinEvent(
 			console.log(`User ${userId} already exists in experience ${experience.id}`);
 		}
 
-		// Step 3: Find deployed funnel for this experience
+		// Step 3: Find deployed funnel for this experience AND product
 		const liveFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.experienceId, experience.id),
+				eq(funnels.whopProductId, productId),
 				eq(funnels.isDeployed, true)
 			),
 			columns: {
 				id: true,
 				flow: true,
 				experienceId: true,
+				whopProductId: true,
 			},
 		});
 
 		if (!liveFunnel || !liveFunnel.flow) {
-			console.error(`No deployed funnel found for experience ${experience.id}`);
+			console.log(`No deployed funnel found for experience ${experience.id} and product ${productId} - ignoring webhook`);
 			return;
 		}
 
-		console.log(`Found live funnel ${liveFunnel.id} for experience ${experience.id}`);
+		console.log(`Found live funnel ${liveFunnel.id} for experience ${experience.id} and product ${productId}`);
 
 		// Step 4: Extract welcome message from funnel flow
 		const welcomeMessage = getWelcomeMessage(liveFunnel.flow);
@@ -174,7 +176,7 @@ export async function handleUserJoinEvent(
 	// The cron jobs will automatically detect and process this conversation
 	console.log(`Conversation ${conversationId} created - cron jobs will handle DM monitoring`);
 
-		console.log(`Successfully processed user join for ${userId} with funnel ${liveFunnel.id}`);
+		console.log(`Successfully processed user join for ${userId} with funnel ${liveFunnel.id} for product ${productId}`);
 	} catch (error) {
 		console.error("Error handling user join event:", error);
 		// Don't throw - we want webhook to return 200 even if processing fails

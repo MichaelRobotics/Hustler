@@ -89,7 +89,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 		);
 
 		// Handle user join event asynchronously
-		// Note: We need to map product_id to experience_id
+		// Pass product_id to find matching live funnel
 		if (user_id && product_id) {
 			waitUntil(
 				handleUserJoinEvent(user_id, product_id, webhookData),
