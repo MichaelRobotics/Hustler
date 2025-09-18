@@ -10,6 +10,7 @@ interface Funnel {
 	isDeployed?: boolean;
 	wasEverDeployed?: boolean;
 	resources?: Resource[];
+	whopProductId?: string; // Discovery page product ID
 }
 
 interface Resource {
@@ -60,29 +61,33 @@ export const useFunnelDeployment = (
 			};
 		}
 
-		// Check if any other funnel is currently live
-		try {
-			// Check if user context is available
-			if (!user?.experienceId) {
-				throw new Error("Experience ID is required");
-			}
-
-			const response = await apiGet(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}`, user.experienceId);
-			if (response.ok) {
-				const data = await response.json();
-				if (data.success && data.data.hasLiveFunnel) {
-					return {
-						isValid: false,
-						message: `Funnel "${data.data.liveFunnelName}" is currently live.`,
-						missingProducts: [],
-						extraProducts: [],
-						liveFunnelName: data.data.liveFunnelName,
-					};
+		// Check if any other funnel is currently live for the same product
+		// Only check if this funnel has a whopProductId (product-specific validation)
+		if (currentFunnel.whopProductId) {
+			try {
+				// Check if user context is available
+				if (!user?.experienceId) {
+					throw new Error("Experience ID is required");
 				}
+
+				// Use product-specific live funnel check
+				const response = await apiGet(`/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}&productId=${currentFunnel.whopProductId}`, user.experienceId);
+				if (response.ok) {
+					const data = await response.json();
+					if (data.success && data.data.hasLiveFunnel) {
+						return {
+							isValid: false,
+							message: `Funnel "${data.data.liveFunnelName}" is currently live for this product.`,
+							missingProducts: [],
+							extraProducts: [],
+							liveFunnelName: data.data.liveFunnelName,
+						};
+					}
+				}
+			} catch (error) {
+				console.error("Error checking for live funnels:", error);
+				// Continue with deployment if check fails
 			}
-		} catch (error) {
-			console.error("Error checking for live funnels:", error);
-			// Continue with deployment if check fails
 		}
 
 		// Extract product names from the generated funnel flow (what the AI actually offers)

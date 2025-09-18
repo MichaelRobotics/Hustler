@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { checkForAnyLiveFunnels } from "../../../../lib/actions/funnel-actions";
+import { checkForAnyLiveFunnels, checkForOtherLiveFunnels } from "../../../../lib/actions/funnel-actions";
 import {
 	createErrorResponse,
 	createSuccessResponse,
@@ -21,6 +21,7 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 		const { user } = context;
 		const { searchParams } = new URL(request.url);
 		const excludeFunnelId = searchParams.get("excludeFunnelId");
+		const productId = searchParams.get("productId");
 
 		// Use experience ID from URL or fallback to a default
 		// Validate experience ID is provided
@@ -48,11 +49,17 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 			);
 		}
 
-		// Check for live funnels across all products for this experience
-		const liveFunnelCheck = await checkForAnyLiveFunnels(
-			userContext.user,
-			excludeFunnelId || undefined,
-		);
+		// Check for live funnels - product-specific or global based on productId parameter
+		const liveFunnelCheck = productId 
+			? await checkForOtherLiveFunnels(
+				userContext.user,
+				productId,
+				excludeFunnelId || undefined,
+			)
+			: await checkForAnyLiveFunnels(
+				userContext.user,
+				excludeFunnelId || undefined,
+			);
 
 		return createSuccessResponse(
 			liveFunnelCheck,
