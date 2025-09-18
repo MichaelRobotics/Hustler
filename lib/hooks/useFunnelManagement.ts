@@ -708,14 +708,32 @@ export function useFunnelManagement(user?: { experienceId?: string } | null) {
 		// Utilities
 		isFunnelNameAvailable,
 		
-		// Product selection handlers
-		isProductSelectionOpen,
-		setIsProductSelectionOpen,
-		discoveryProducts,
-		setDiscoveryProducts,
-		productsLoading,
-		setProductsLoading,
-		selectedProduct,
-		setSelectedProduct,
+	// Product selection handlers
+	isProductSelectionOpen,
+	setIsProductSelectionOpen,
+	discoveryProducts,
+	setDiscoveryProducts,
+	productsLoading,
+	setProductsLoading,
+	selectedProduct,
+	setSelectedProduct,
+	
+	// Fetch discovery products function
+	fetchDiscoveryProducts: async () => {
+		if (!experienceId) return;
+		
+		setProductsLoading(true);
+		try {
+			const response = await apiGet("/api/products/discovery", experienceId);
+			if (response.ok) {
+				const data = await response.json();
+				setDiscoveryProducts(data.data || []);
+			}
+		} catch (error) {
+			console.error("Error fetching discovery products:", error);
+		} finally {
+			setProductsLoading(false);
+		}
+	},
 	};
 }

@@ -118,6 +118,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		setProductsLoading,
 		selectedProduct,
 		setSelectedProduct,
+		fetchDiscoveryProducts,
 	} = useFunnelManagement(user);
 
 	const {
@@ -258,7 +259,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	const handleCreateNewFunnelInline = useCallback(() => {
 		// Open product selection modal instead of direct creation
 		setIsProductSelectionOpen(true);
-	}, [setIsProductSelectionOpen]);
+		// Fetch products if not already loaded
+		if (discoveryProducts.length === 0) {
+			fetchDiscoveryProducts();
+		}
+	}, [setIsProductSelectionOpen, discoveryProducts.length, fetchDiscoveryProducts]);
 
 	// Handle library modal state changes
 	const handleLibraryModalStateChange = useCallback((isModalOpen: boolean) => {
@@ -645,6 +650,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								setProductsLoading={setProductsLoading}
 								selectedProduct={selectedProduct}
 								setSelectedProduct={setSelectedProduct}
+								fetchDiscoveryProducts={fetchDiscoveryProducts}
 									handleManageResources={handleManageResourcesWithNavigation}
 									isRenaming={isRenaming}
 									setIsRenaming={setIsRenaming}

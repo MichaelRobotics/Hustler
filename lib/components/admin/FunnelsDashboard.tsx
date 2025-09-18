@@ -2,7 +2,7 @@
 
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
-import { apiGet, apiPost } from "@/lib/utils/api-client";
+import { apiPost } from "@/lib/utils/api-client";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Button, Heading, Text } from "frosted-ui";
 import {
@@ -65,6 +65,7 @@ interface FunnelsDashboardProps {
 	setProductsLoading: (loading: boolean) => void;
 	selectedProduct: any | null;
 	setSelectedProduct: (product: any | null) => void;
+	fetchDiscoveryProducts: () => Promise<void>;
 }
 
 interface DiscoveryProduct {
@@ -101,15 +102,16 @@ const FunnelsDashboard = React.memo(
 		funnelToDelete,
 		isFunnelNameAvailable,
 		user,
-		// Product selection props
-		isProductSelectionOpen,
-		setIsProductSelectionOpen,
-		discoveryProducts,
-		setDiscoveryProducts,
-		productsLoading,
-		setProductsLoading,
-		selectedProduct,
-		setSelectedProduct,
+	// Product selection props
+	isProductSelectionOpen,
+	setIsProductSelectionOpen,
+	discoveryProducts,
+	setDiscoveryProducts,
+	productsLoading,
+	setProductsLoading,
+	selectedProduct,
+	setSelectedProduct,
+	fetchDiscoveryProducts,
 	}: FunnelsDashboardProps) => {
 		// State to track which dropdown is open and which button is highlighted
 		const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -129,23 +131,6 @@ const FunnelsDashboard = React.memo(
 			}
 		}, [editingFunnelId, funnels]);
 
-		// Fetch discovery products
-		const fetchDiscoveryProducts = useCallback(async () => {
-			if (!user?.experienceId) return;
-			
-			setProductsLoading(true);
-			try {
-				const response = await apiGet("/api/products/discovery", user.experienceId);
-				if (response.ok) {
-					const data = await response.json();
-					setDiscoveryProducts(data.data || []);
-				}
-			} catch (error) {
-				console.error("Error fetching discovery products:", error);
-			} finally {
-				setProductsLoading(false);
-			}
-		}, [user?.experienceId, setProductsLoading, setDiscoveryProducts]);
 
 		// Handle product selection
 		const handleProductSelect = useCallback((product: DiscoveryProduct) => {
