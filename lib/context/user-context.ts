@@ -264,7 +264,7 @@ async function createUserContext(
 					
 					try {
 						// Call sync function directly and await it to ensure completion
-						console.log(`🔄 Triggering product sync for user ${newUser.id}...`);
+						console.log(`[USER-CONTEXT] 🔄 Triggering product sync for user ${newUser.id}...`);
 						
 						// Import the sync function directly since we're in server-side context
 						const { triggerProductSyncForNewAdmin } = await import('../sync/trigger-product-sync');
@@ -276,7 +276,7 @@ async function createUserContext(
 							experience.whopCompanyId
 						);
 						
-						console.log(`✅ Product sync completed successfully for user ${newUser.id}`);
+						console.log(`[USER-CONTEXT] ✅ Product sync completed successfully for user ${newUser.id}`);
 					} catch (error) {
 						console.error("❌ Product sync failed:", error);
 						console.error("❌ Error details:", error instanceof Error ? error.stack : error);

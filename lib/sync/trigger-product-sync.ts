@@ -32,7 +32,7 @@ export async function triggerProductSyncForNewAdmin(
 	// Enhanced keepalive with progress reporting
 	const globalKeepAlive = setInterval(() => {
 		const elapsed = Math.round((Date.now() - syncState.startTime) / 1000);
-		console.log(`💓 Global Keepalive: Product sync in progress... Phase: ${syncState.phase}, Progress: ${syncState.progress}%, Elapsed: ${elapsed}s`);
+		console.log(`[PRODUCT-SYNC] 💓 Global Keepalive: Product sync in progress... Phase: ${syncState.phase}, Progress: ${syncState.progress}%, Elapsed: ${elapsed}s`);
 	}, 5000); // Every 5 seconds for more frequent updates
 
 	// Progress update helper
@@ -40,9 +40,9 @@ export async function triggerProductSyncForNewAdmin(
 		syncState.phase = phase;
 		if (stepCompleted) {
 			syncState.completedSteps++;
-			syncState.progress = Math.round((syncState.completedSteps / syncState.totalSteps) * 100);
 		}
-		console.log(`📊 Progress Update: ${phase} - ${syncState.progress}% (${syncState.completedSteps}/${syncState.totalSteps})`);
+		syncState.progress = Math.round((syncState.completedSteps / syncState.totalSteps) * 100);
+		console.log(`[PRODUCT-SYNC] 📊 Progress Update: ${phase} - ${syncState.progress}% (${syncState.completedSteps}/${syncState.totalSteps})`);
 	};
 
 	// Circuit breaker for external API calls
@@ -80,9 +80,9 @@ export async function triggerProductSyncForNewAdmin(
 	};
 	
 	try {
-		console.log(`🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
-		console.log(`📊 Company ID: ${companyId}`);
-		console.log(`🔧 Function called at: ${new Date().toISOString()}`);
+		console.log(`[PRODUCT-SYNC] 🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
+		console.log(`[PRODUCT-SYNC] 📊 Company ID: ${companyId}`);
+		console.log(`[PRODUCT-SYNC] 🔧 Function called at: ${new Date().toISOString()}`);
 
 		// Check database connection health before starting
 		updateProgress("checking_database_health");
@@ -374,6 +374,7 @@ export async function triggerProductSyncForNewAdmin(
 						
 						console.log(`✅ Created PAID resource for product: ${product.title}`);
 						successCount++;
+						syncState.successCounts.paidResources++;
 						return resource.id;
 					} catch (error) {
 						console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
@@ -413,6 +414,7 @@ export async function triggerProductSyncForNewAdmin(
 								() => addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId),
 								`addResourceToFunnel-${resourceId}`
 							);
+							syncState.successCounts.assignments++;
 							return true;
 						} catch (error) {
 							console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
@@ -440,43 +442,44 @@ export async function triggerProductSyncForNewAdmin(
 			.set({ productsSynced: true })
 			.where(eq(users.id, userId));
 
-		// Final progress update
-		updateProgress("sync_completed", true);
+		// Final progress update - mark all steps as completed
+		syncState.completedSteps = syncState.totalSteps;
+		syncState.progress = 100;
+		console.log(`[PRODUCT-SYNC] 📊 Progress Update: sync_completed - 100% (${syncState.completedSteps}/${syncState.totalSteps})`);
 		
 		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
-		const freeCount = funnelProduct?.includedApps.length || 0;
 		
-		console.log(`🎉 Smart upselling sync completed for experience ${experienceId}:`);
-		console.log(`   - Total time: ${totalElapsed}s`);
-		console.log(`   - Progress: ${syncState.progress}%`);
-		console.log(`   - Funnel: "${funnelName}"`);
-		console.log(`   - FREE apps: ${syncState.successCounts.freeResources}`);
-		console.log(`   - PAID upsells: ${syncState.successCounts.paidResources}`);
-		console.log(`   - Assignments: ${syncState.successCounts.assignments}`);
+		console.log(`[PRODUCT-SYNC] 🎉 Smart upselling sync completed for experience ${experienceId}:`);
+		console.log(`[PRODUCT-SYNC]    - Total time: ${totalElapsed}s`);
+		console.log(`[PRODUCT-SYNC]    - Progress: ${syncState.progress}%`);
+		console.log(`[PRODUCT-SYNC]    - Funnel: "${funnelName}"`);
+		console.log(`[PRODUCT-SYNC]    - FREE apps: ${syncState.successCounts.freeResources}`);
+		console.log(`[PRODUCT-SYNC]    - PAID upsells: ${syncState.successCounts.paidResources}`);
+		console.log(`[PRODUCT-SYNC]    - Assignments: ${syncState.successCounts.assignments}`);
 		
 		if (syncState.errors.length > 0) {
-			console.log(`⚠️ Errors encountered (${syncState.errors.length}):`);
+			console.log(`[PRODUCT-SYNC] ⚠️ Errors encountered (${syncState.errors.length}):`);
 			syncState.errors.forEach((error, index) => {
-				console.log(`   ${index + 1}. ${error}`);
+				console.log(`[PRODUCT-SYNC]    ${index + 1}. ${error}`);
 			});
 		}
 
 	} catch (error) {
-		console.error("❌ Error during smart upselling sync:", error);
+		console.error("[PRODUCT-SYNC] ❌ Error during smart upselling sync:", error);
 		syncState.errors.push(`Critical error: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		
 		// Log final state even on error
 		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
-		console.log(`💥 Sync failed after ${totalElapsed}s at ${syncState.progress}% progress`);
-		console.log(`   - Errors: ${syncState.errors.length}`);
-		console.log(`   - Success counts:`, syncState.successCounts);
+		console.log(`[PRODUCT-SYNC] 💥 Sync failed after ${totalElapsed}s at ${syncState.progress}% progress`);
+		console.log(`[PRODUCT-SYNC]    - Errors: ${syncState.errors.length}`);
+		console.log(`[PRODUCT-SYNC]    - Success counts:`, syncState.successCounts);
 		
 		// Don't mark as synced if there was a critical error
 		throw error;
 	} finally {
 		// Always clear the global keepalive interval
 		clearInterval(globalKeepAlive);
-		console.log("🧹 Cleaned up global keepalive mechanism");
+		console.log("[PRODUCT-SYNC] 🧹 Cleaned up global keepalive mechanism");
 	}
 }
 
