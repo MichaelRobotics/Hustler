@@ -2,10 +2,6 @@ import { type NextRequest, NextResponse } from "next/server";
 import { makeWebhookValidator } from "@whop/api";
 import { trackPurchaseConversion, type PurchaseData } from "@/lib/analytics/purchase-tracking";
 
-// Import click tracking from the track/click route
-// Note: In production, you'd want to use a shared store like Redis
-const clickTracking = new Map<string, any>();
-
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
 });
@@ -68,8 +64,8 @@ async function trackPurchase(purchaseData: any) {
 			purchaseTime: new Date(purchaseData.created_at || Date.now())
 		};
 
-		// Track the conversion with attribution
-		const success = await trackPurchaseConversion(purchaseInfo, clickTracking);
+		// Track the conversion (simplified for Whop native tracking)
+		const success = await trackPurchaseConversion(purchaseInfo);
 		
 		if (success) {
 			console.log(`✅ Purchase conversion tracked: ${purchaseInfo.amount} ${purchaseInfo.currency}`);

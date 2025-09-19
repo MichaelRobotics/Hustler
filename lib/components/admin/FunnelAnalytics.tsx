@@ -17,26 +17,37 @@ interface FunnelAnalyticsProps {
  * @returns {JSX.Element} The rendered FunnelAnalytics component.
  */
 const FunnelAnalytics: React.FC<FunnelAnalyticsProps> = ({ stats }) => {
-	// Calculate key metrics
+	// Calculate key metrics using real data
 	const conversionRate =
-		stats.total > 0
-			? ((stats.converted / stats.total) * 100).toFixed(1)
+		stats.totalStarts > 0
+			? ((stats.totalConversions / stats.totalStarts) * 100).toFixed(1)
 			: "0.0";
-	const qualificationRate =
-		stats.total > 0
-			? ((stats.qualifiedUsers / stats.total) * 100).toFixed(1)
+	const interestRate =
+		stats.totalStarts > 0
+			? ((stats.totalInterest / stats.totalStarts) * 100).toFixed(1)
 			: "0.0";
-	const avgConversionRate = 2.5; // Industry average for comparison
-	const isConversionAboveAvg =
-		Number.parseFloat(conversionRate) > avgConversionRate;
+	const intentRate =
+		stats.totalStarts > 0
+			? ((stats.totalIntent / stats.totalStarts) * 100).toFixed(1)
+			: "0.0";
 
-	// Mock trend data (in real app, this would come from historical data)
+	// Use real growth percentages from analytics
 	const trendData = {
-		users: { change: "+12.5%", trend: "up" as const },
-		conversions: { change: "+8.3%", trend: "up" as const },
-		conversionRate: {
-			change: isConversionAboveAvg ? "+2.1%" : "-1.2%",
-			trend: isConversionAboveAvg ? ("up" as const) : ("down" as const),
+		awareness: { 
+			change: stats.startsGrowthPercent >= 0 ? `+${stats.startsGrowthPercent.toFixed(1)}%` : `${stats.startsGrowthPercent.toFixed(1)}%`, 
+			trend: stats.startsGrowthPercent >= 0 ? ("up" as const) : ("down" as const) 
+		},
+		interest: { 
+			change: stats.interestGrowthPercent >= 0 ? `+${stats.interestGrowthPercent.toFixed(1)}%` : `${stats.interestGrowthPercent.toFixed(1)}%`, 
+			trend: stats.interestGrowthPercent >= 0 ? ("up" as const) : ("down" as const) 
+		},
+		intent: { 
+			change: stats.intentGrowthPercent >= 0 ? `+${stats.intentGrowthPercent.toFixed(1)}%` : `${stats.intentGrowthPercent.toFixed(1)}%`, 
+			trend: stats.intentGrowthPercent >= 0 ? ("up" as const) : ("down" as const) 
+		},
+		conversion: {
+			change: stats.conversionsGrowthPercent >= 0 ? `+${stats.conversionsGrowthPercent.toFixed(1)}%` : `${stats.conversionsGrowthPercent.toFixed(1)}%`,
+			trend: stats.conversionsGrowthPercent >= 0 ? ("up" as const) : ("down" as const),
 		},
 	};
 
@@ -44,34 +55,34 @@ const FunnelAnalytics: React.FC<FunnelAnalyticsProps> = ({ stats }) => {
 	const metrics = [
 		{
 			icon: <Users strokeWidth={2.5} />,
-			title: "Total Users",
-			value: stats.total.toLocaleString(),
-			change: trendData.users.change,
-			trend: trendData.users.trend,
+			title: "Awareness",
+			value: (stats.totalStarts || 0).toLocaleString(),
+			change: trendData.awareness.change,
+			trend: trendData.awareness.trend,
 			colorScheme: "blue" as const,
 		},
 		{
 			icon: <Target strokeWidth={2.5} />,
-			title: "Qualified Users",
-			value: stats.qualifiedUsers.toLocaleString(),
-			change: "+5.2%",
-			trend: "up" as const,
+			title: "Interested",
+			value: (stats.totalInterest || 0).toLocaleString(),
+			change: trendData.interest.change,
+			trend: trendData.interest.trend,
 			colorScheme: "slate" as const,
 		},
 		{
 			icon: <TrendingUp strokeWidth={2.5} />,
-			title: "Click Rate",
-			value: stats.converted.toLocaleString(),
-			change: trendData.conversions.change,
-			trend: trendData.conversions.trend,
+			title: "Intent",
+			value: (stats.totalIntent || 0).toLocaleString(),
+			change: trendData.intent.change,
+			trend: trendData.intent.trend,
 			colorScheme: "green" as const,
 		},
 		{
 			icon: <BarChart3 strokeWidth={2.5} />,
 			title: "Conversion Rate",
 			value: `${conversionRate}%`,
-			change: trendData.conversionRate.change,
-			trend: trendData.conversionRate.trend,
+			change: trendData.conversion.change,
+			trend: trendData.conversion.trend,
 			colorScheme: "orange" as const,
 		},
 	];

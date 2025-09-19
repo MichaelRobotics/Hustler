@@ -24,6 +24,23 @@ export interface FunnelStats {
 	total: number;
 	qualifiedUsers: number;
 	converted: number;
+	// New analytics fields
+	totalStarts: number;
+	totalInterest: number;
+	totalIntent: number;
+	totalConversions: number;
+	totalProductRevenue: number;
+	totalAffiliateRevenue: number;
+	todayStarts: number;
+	todayInterest: number;
+	todayIntent: number;
+	todayConversions: number;
+	todayProductRevenue: number;
+	todayAffiliateRevenue: number;
+	startsGrowthPercent: number;
+	intentGrowthPercent: number;
+	conversionsGrowthPercent: number;
+	interestGrowthPercent: number;
 }
 
 export interface User {
@@ -70,6 +87,23 @@ export const processFunnelStats = (
 		total: funnelUsers.length,
 		qualifiedUsers: funnelUsers.filter((u) => u.isQualified).length,
 		converted: funnelUsers.filter((u) => u.stepCompleted === 6).length,
+		// Add default values for new fields
+		totalStarts: funnelUsers.length,
+		totalInterest: funnelUsers.filter((u) => u.isQualified).length,
+		totalIntent: funnelUsers.filter((u) => u.stepCompleted >= 3).length,
+		totalConversions: funnelUsers.filter((u) => u.stepCompleted === 6).length,
+		totalProductRevenue: 0,
+		totalAffiliateRevenue: 0,
+		todayStarts: 0,
+		todayInterest: 0,
+		todayIntent: 0,
+		todayConversions: 0,
+		todayProductRevenue: 0,
+		todayAffiliateRevenue: 0,
+		startsGrowthPercent: 0,
+		intentGrowthPercent: 0,
+		conversionsGrowthPercent: 0,
+		interestGrowthPercent: 0,
 	};
 
 	console.log("Funnel stats result:", result);
@@ -139,79 +173,110 @@ export const processSalesStats = (
 	return result;
 };
 
-// Mock data generators (to be replaced with backend calls)
-export const generateMockFunnelStats = (): FunnelStats => ({
-	total: 1250,
-	qualifiedUsers: 890,
-	converted: 156,
-});
-
-export const generateMockSalesStats = (): SalesStats => ({
-	affiliate: [
-		{
-			name: "Premium Course Bundle",
-			sales: 45,
-			revenue: 2250.0,
-			type: "AFFILIATE",
-		},
-		{
-			name: "Marketing Masterclass",
-			sales: 32,
-			revenue: 1280.0,
-			type: "AFFILIATE",
-		},
-		{
-			name: "Business Strategy Guide",
-			sales: 28,
-			revenue: 840.0,
-			type: "AFFILIATE",
-		},
-	],
-	myProducts: [
-		{
-			name: "Hustler Pro Membership",
-			sales: 89,
-			revenue: 4450.0,
-			type: "MY_PRODUCTS",
-		},
-		{
-			name: "Funnel Builder Toolkit",
-			sales: 67,
-			revenue: 2010.0,
-			type: "MY_PRODUCTS",
-		},
-		{
-			name: "Analytics Dashboard",
-			sales: 43,
-			revenue: 1290.0,
-			type: "MY_PRODUCTS",
-		},
-	],
-	affiliateTotal: { sales: 105, revenue: 4370.0 },
-	myProductsTotal: { sales: 199, revenue: 7750.0 },
-});
+// Mock data generators removed - now using real data from API
 
 // Backend integration helpers
 export const fetchFunnelStats = async (
 	funnelId: string,
 ): Promise<FunnelStats> => {
-	// TODO: Replace with actual API call
-	// const response = await fetch(`/api/funnels/${funnelId}/stats`);
-	// return response.json();
-
-	// For now, return mock data
-	return generateMockFunnelStats();
+	try {
+		// Call our real analytics API
+		const response = await fetch(`/api/analytics/tracking-links?funnelId=${funnelId}`);
+		
+		if (!response.ok) {
+			throw new Error(`Failed to fetch analytics: ${response.statusText}`);
+		}
+		
+		const data = await response.json();
+		
+		if (!data.success || !data.data.funnelAnalytics || data.data.funnelAnalytics.length === 0) {
+			// Return zero data if no analytics found
+			return {
+				total: 0,
+				qualifiedUsers: 0,
+				converted: 0,
+				totalStarts: 0,
+				totalInterest: 0,
+				totalIntent: 0,
+				totalConversions: 0,
+				totalProductRevenue: 0,
+				totalAffiliateRevenue: 0,
+				todayStarts: 0,
+				todayInterest: 0,
+				todayIntent: 0,
+				todayConversions: 0,
+				todayProductRevenue: 0,
+				todayAffiliateRevenue: 0,
+				startsGrowthPercent: 0,
+				intentGrowthPercent: 0,
+				conversionsGrowthPercent: 0,
+				interestGrowthPercent: 0,
+			};
+		}
+		
+		// Get the first funnel analytics record
+		const funnelData = data.data.funnelAnalytics[0];
+		
+		// Map the real data to our interface
+		return {
+			total: funnelData.totalStarts || 0,
+			qualifiedUsers: funnelData.totalInterest || 0,
+			converted: funnelData.totalConversions || 0,
+			totalStarts: funnelData.totalStarts || 0,
+			totalInterest: funnelData.totalInterest || 0,
+			totalIntent: funnelData.totalIntent || 0,
+			totalConversions: funnelData.totalConversions || 0,
+			totalProductRevenue: parseFloat(funnelData.totalProductRevenue || '0'),
+			totalAffiliateRevenue: parseFloat(funnelData.totalAffiliateRevenue || '0'),
+			todayStarts: funnelData.todayStarts || 0,
+			todayInterest: funnelData.todayInterest || 0,
+			todayIntent: funnelData.todayIntent || 0,
+			todayConversions: funnelData.todayConversions || 0,
+			todayProductRevenue: parseFloat(funnelData.todayProductRevenue || '0'),
+			todayAffiliateRevenue: parseFloat(funnelData.todayAffiliateRevenue || '0'),
+			startsGrowthPercent: parseFloat(funnelData.startsGrowthPercent || '0'),
+			intentGrowthPercent: parseFloat(funnelData.intentGrowthPercent || '0'),
+			conversionsGrowthPercent: parseFloat(funnelData.conversionsGrowthPercent || '0'),
+			interestGrowthPercent: parseFloat(funnelData.interestGrowthPercent || '0'),
+		};
+	} catch (error) {
+		console.error('Error fetching funnel stats:', error);
+		// Return zero data on error
+		return {
+			total: 0,
+			qualifiedUsers: 0,
+			converted: 0,
+			totalStarts: 0,
+			totalInterest: 0,
+			totalIntent: 0,
+			totalConversions: 0,
+			totalProductRevenue: 0,
+			totalAffiliateRevenue: 0,
+			todayStarts: 0,
+			todayInterest: 0,
+			todayIntent: 0,
+			todayConversions: 0,
+			todayProductRevenue: 0,
+			todayAffiliateRevenue: 0,
+			startsGrowthPercent: 0,
+			intentGrowthPercent: 0,
+			conversionsGrowthPercent: 0,
+			interestGrowthPercent: 0,
+		};
+	}
 };
 
 export const fetchSalesStats = async (
 	funnelId: string,
 ): Promise<SalesStats> => {
-	// TODO: Replace with actual API call
-	// const response = await fetch(`/api/funnels/${funnelId}/sales`);
-	// return response.json();
-
-	// For now, return mock data
-	return generateMockSalesStats();
+	// Return empty sales data (no mock data)
+	// This will show $0.00 totals and no individual product cards
+	return {
+		affiliate: [],
+		myProducts: [],
+		affiliateTotal: { sales: 0, revenue: 0.0 },
+		myProductsTotal: { sales: 0, revenue: 0.0 },
+	};
 };
 
 export const fetchFunnelUsers = async (funnelId: string): Promise<User[]> => {

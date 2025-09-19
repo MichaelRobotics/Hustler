@@ -4,7 +4,7 @@ import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { Button, Heading, Text } from "frosted-ui";
 import { Activity, ArrowLeft, Edit3, Settings } from "lucide-react";
 import React, { useMemo, useCallback } from "react";
-import { useProcessedAnalyticsData } from "../../hooks/useAnalyticsData";
+import { useAnalyticsData } from "../../hooks/useAnalyticsData";
 import type { Funnel, SalesData, User } from "../../utils/adminAnalytics";
 import { ThemeToggle } from "../common/ThemeToggle";
 import UnifiedNavigation from "../common/UnifiedNavigation";
@@ -39,12 +39,11 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 		onGlobalGeneration,
 		isGenerating,
 	}) => {
-		// Use the custom hook to process analytics data
-		const { funnelStats, salesStats } = useProcessedAnalyticsData(
-			allUsers,
-			allSalesData,
-			funnel.id,
-		);
+		// Use the custom hook to fetch real analytics data
+		const { funnelStats, salesStats, isLoading, error, isRefreshing } = useAnalyticsData({
+			funnel,
+			enableBackend: true,
+		});
 
 		// Memoized computed values for better performance
 		const funnelValidation = useMemo(
@@ -161,7 +160,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 						{/* Live Performance Indicator */}
 						<div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-700/30 mb-6 w-fit mt-12">
 							<Activity
-								className="h-4 w-4 text-green-600 dark:text-green-400"
+								className={`h-4 w-4 text-green-600 dark:text-green-400 ${isRefreshing ? 'animate-pulse' : ''}`}
 								strokeWidth={2.5}
 							/>
 							<Text
@@ -170,12 +169,58 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 								color="green"
 								className="dark:text-green-300"
 							>
-								Live Performance
+								Live Performance {isRefreshing ? '(Updating...)' : ''}
 							</Text>
 						</div>
 
-						{/* Check if funnel was ever live - if never live, show no analytics message */}
-						{!funnel.wasEverDeployed && (!funnelStats || !salesStats) ? (
+						{/* Loading state */}
+						{isLoading ? (
+							<div className="mb-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 border border-gray-200 dark:border-gray-700/30 rounded-xl text-center">
+								<div className="mb-4">
+									<Activity
+										className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4 animate-pulse"
+										strokeWidth={1.5}
+									/>
+									<Heading
+										size="5"
+										weight="bold"
+										className="text-gray-800 dark:text-gray-200 mb-2"
+									>
+										Loading Analytics...
+									</Heading>
+									<Text
+										size="3"
+										color="gray"
+										className="text-gray-700 dark:text-gray-300"
+									>
+										Fetching real-time data
+									</Text>
+								</div>
+							</div>
+						) : error ? (
+							<div className="mb-8 p-8 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-700/30 rounded-xl text-center">
+								<div className="mb-4">
+									<Activity
+										className="h-16 w-16 text-red-400 dark:text-red-500 mx-auto mb-4"
+										strokeWidth={1.5}
+									/>
+									<Heading
+										size="5"
+										weight="bold"
+										className="text-red-800 dark:text-red-200 mb-2"
+									>
+										Error Loading Analytics
+									</Heading>
+									<Text
+										size="3"
+										color="red"
+										className="text-red-700 dark:text-red-300"
+									>
+										{error}
+									</Text>
+								</div>
+							</div>
+						) : !funnel.wasEverDeployed && (!funnelStats || !salesStats) ? (
 							<div className="mb-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 border border-gray-200 dark:border-gray-700/30 rounded-xl text-center">
 								<div className="mb-4">
 									<Activity

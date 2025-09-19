@@ -5,12 +5,69 @@ import { db } from "../supabase/db-server";
 import {
 	experiences,
 	funnelAnalytics,
+	funnelResourceAnalytics,
 	funnelResources,
 	funnels,
 	resources,
 } from "../supabase/schema";
 import { generateFunnelFlow } from "./ai-actions";
 import { PRODUCT_LIMITS, GLOBAL_LIMITS } from "../types/resource";
+
+// Helper function to calculate percentage growth
+function calculateGrowthPercent(current: number, previous: number): number {
+	if (previous === 0) {
+		return current > 0 ? 100 : 0;
+	}
+	return ((current - previous) / previous) * 100;
+}
+
+// Function to update growth percentages for funnel analytics
+export async function updateFunnelGrowthPercentages(funnelId: string) {
+	try {
+		// Get current analytics data
+		const currentAnalytics = await db.query.funnelAnalytics.findFirst({
+			where: eq(funnelAnalytics.funnelId, funnelId),
+		});
+
+		if (!currentAnalytics) return;
+
+		// Calculate growth percentages using yesterday's metrics
+		const startsGrowth = calculateGrowthPercent(
+			currentAnalytics.todayStarts || 0,
+			currentAnalytics.yesterdayStarts || 0
+		);
+		
+		const intentGrowth = calculateGrowthPercent(
+			currentAnalytics.todayIntent || 0,
+			currentAnalytics.yesterdayIntent || 0
+		);
+		
+		const conversionsGrowth = calculateGrowthPercent(
+			currentAnalytics.todayConversions || 0,
+			currentAnalytics.yesterdayConversions || 0
+		);
+		
+		const interestGrowth = calculateGrowthPercent(
+			currentAnalytics.todayInterest || 0,
+			currentAnalytics.yesterdayInterest || 0
+		);
+
+		// Update the growth percentages
+		await db.update(funnelAnalytics)
+			.set({
+				startsGrowthPercent: startsGrowth.toString(),
+				intentGrowthPercent: intentGrowth.toString(),
+				conversionsGrowthPercent: conversionsGrowth.toString(),
+				interestGrowthPercent: interestGrowth.toString(),
+				lastUpdated: new Date()
+			})
+			.where(eq(funnelAnalytics.funnelId, funnelId));
+
+	} catch (error) {
+		console.error("Error updating funnel growth percentages:", error);
+		throw error;
+	}
+}
 
 export interface CreateFunnelInput {
 	name: string;
@@ -826,43 +883,79 @@ export async function getFunnelAnalytics(
 			);
 		}
 
-		// Build date filter
-		let dateFilter = eq(funnelAnalytics.funnelId, funnelId);
-
-		if (startDate) {
-			dateFilter = and(
-				sql`${funnelAnalytics.date} >= ${startDate}`,
-			)!;
-		}
-
-		if (endDate) {
-			dateFilter = and(dateFilter, sql`${funnelAnalytics.date} <= ${endDate}`)!;
-		}
-
-		// Get analytics data
-		const analytics = await db.query.funnelAnalytics.findMany({
-			where: dateFilter,
-			orderBy: [asc(funnelAnalytics.date)],
+		// Get overall funnel analytics (1 record per funnel)
+		const funnelAnalyticsData = await db.query.funnelAnalytics.findFirst({
+			where: eq(funnelAnalytics.funnelId, funnelId),
 		});
 
-		// Calculate totals
-		const totals = analytics.reduce(
-			(acc: any, record: any) => {
-				acc.views += record.views;
-				acc.starts += record.starts;
-				acc.completions += record.completions;
-				acc.conversions += record.conversions;
-				acc.revenue += Number.parseFloat(record.revenue);
-				return acc;
-			},
-			{
-				views: 0,
-				starts: 0,
-				completions: 0,
-				conversions: 0,
-				revenue: 0,
-			},
-		);
+		// Get resource-specific analytics
+		const resourceAnalytics = await db.query.funnelResourceAnalytics.findMany({
+			where: eq(funnelResourceAnalytics.funnelId, funnelId),
+			with: {
+				resource: true
+			}
+		});
+
+		// Calculate totals from funnel analytics
+		const funnelData = funnelAnalyticsData || {
+			totalStarts: 0,
+			totalIntent: 0,
+			totalConversions: 0,
+			totalAffiliateRevenue: "0",
+			totalProductRevenue: "0",
+			totalInterest: 0,
+			todayStarts: 0,
+			todayIntent: 0,
+			todayConversions: 0,
+			todayAffiliateRevenue: "0",
+			todayProductRevenue: "0",
+			todayInterest: 0,
+			startsGrowthPercent: "0",
+			intentGrowthPercent: "0",
+			conversionsGrowthPercent: "0",
+			interestGrowthPercent: "0"
+		};
+
+		const totals = {
+			// Overall metrics
+			totalStarts: funnelData.totalStarts || 0,
+			totalIntent: funnelData.totalIntent || 0,
+			totalConversions: funnelData.totalConversions || 0,
+			totalAffiliateRevenue: parseFloat(funnelData.totalAffiliateRevenue || '0'),
+			totalProductRevenue: parseFloat(funnelData.totalProductRevenue || '0'),
+			totalRevenue: parseFloat(funnelData.totalAffiliateRevenue || '0') + parseFloat(funnelData.totalProductRevenue || '0'),
+			totalInterest: funnelData.totalInterest || 0,
+			// Today's metrics
+			todayStarts: funnelData.todayStarts || 0,
+			todayIntent: funnelData.todayIntent || 0,
+			todayConversions: funnelData.todayConversions || 0,
+			todayAffiliateRevenue: parseFloat(funnelData.todayAffiliateRevenue || '0'),
+			todayProductRevenue: parseFloat(funnelData.todayProductRevenue || '0'),
+			todayRevenue: parseFloat(funnelData.todayAffiliateRevenue || '0') + parseFloat(funnelData.todayProductRevenue || '0'),
+			todayInterest: funnelData.todayInterest || 0,
+			// Growth percentages
+			startsGrowthPercent: parseFloat(funnelData.startsGrowthPercent || '0'),
+			intentGrowthPercent: parseFloat(funnelData.intentGrowthPercent || '0'),
+			conversionsGrowthPercent: parseFloat(funnelData.conversionsGrowthPercent || '0'),
+			interestGrowthPercent: parseFloat(funnelData.interestGrowthPercent || '0')
+		};
+
+		// Calculate resource-specific totals
+		const resourceTotals = resourceAnalytics.reduce((acc: any, record: any) => ({
+			totalResourceClicks: acc.totalResourceClicks + (record.totalResourceClicks || 0),
+			totalResourceConversions: acc.totalResourceConversions + (record.totalResourceConversions || 0),
+			totalResourceRevenue: acc.totalResourceRevenue + parseFloat(record.totalResourceRevenue || '0'),
+			todayResourceClicks: acc.todayResourceClicks + (record.todayResourceClicks || 0),
+			todayResourceConversions: acc.todayResourceConversions + (record.todayResourceConversions || 0),
+			todayResourceRevenue: acc.todayResourceRevenue + parseFloat(record.todayResourceRevenue || '0')
+		}), {
+			totalResourceClicks: 0,
+			totalResourceConversions: 0,
+			totalResourceRevenue: 0,
+			todayResourceClicks: 0,
+			todayResourceConversions: 0,
+			todayResourceRevenue: 0
+		});
 
 		return {
 			funnel: {
@@ -870,8 +963,12 @@ export async function getFunnelAnalytics(
 				name: existingFunnel.name,
 				isDeployed: existingFunnel.isDeployed,
 			},
-			analytics: analytics,
-			totals: totals,
+			analytics: funnelData,
+			resourceAnalytics: resourceAnalytics,
+			totals: {
+				...totals,
+				...resourceTotals
+			},
 			period: {
 				startDate: startDate || null,
 				endDate: endDate || null,

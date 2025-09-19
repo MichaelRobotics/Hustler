@@ -5,11 +5,13 @@
  * Handles all conversation operations in one place.
  */
 
-import { and, eq, desc, asc } from "drizzle-orm";
+import { and, eq, desc, asc, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
+import { updateFunnelGrowthPercentages } from "./funnel-actions";
+import { safeBackgroundTracking, trackInterestBackground } from "../analytics/background-tracking";
 
 export interface Conversation {
 	id: string;
@@ -348,6 +350,16 @@ export async function updateConversationBlock(
 			.where(eq(conversations.id, conversationId));
 
 		console.log(`[Phase Detection] Updated conversation ${conversationId} to phase ${newPhase}`);
+
+		// Track interest when conversation reaches PAIN_POINT_QUALIFICATION stage
+		const isPainPointQualificationStage = funnelFlow.stages.some(
+			stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(blockId)
+		);
+		
+		if (isPainPointQualificationStage) {
+			console.log(`🚀 [UPDATE-CONVERSATION] About to track interest for experience ${conversation.experienceId}, funnel ${conversation.funnelId}`);
+			safeBackgroundTracking(() => trackInterestBackground(conversation.experienceId, conversation.funnelId));
+		}
 	} catch (error) {
 		console.error("Error updating conversation block:", error);
 		throw error;
@@ -791,6 +803,8 @@ export async function transitionToInternalChat(
 		// Update conversation to EXPERIENCE_QUALIFICATION stage
 		await updateConversationBlock(conversationId, firstExperienceQualBlockId, [...(conversation.userPath || []), firstExperienceQualBlockId], conversation.experienceId);
 
+		// Note: Interest tracking is handled in the load-conversation API when user actually enters the stage
+
 		console.log(`Successfully transitioned conversation ${conversationId} to EXPERIENCE_QUALIFICATION stage`);
 
 		return true;
@@ -1072,3 +1086,5 @@ export async function updateConversation(
 		throw error;
 	}
 }
+
+// Tracking functions removed to prevent database conflicts and timeouts

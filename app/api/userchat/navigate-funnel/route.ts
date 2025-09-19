@@ -7,6 +7,7 @@ import {
   type AuthContext,
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
+import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
@@ -173,6 +174,16 @@ async function processFunnelNavigation(
       })
       .where(eq(conversations.id, conversationId))
       .returning();
+
+    // Track interest when conversation reaches PAIN_POINT_QUALIFICATION stage
+    const isPainPointQualificationStage = nextBlockId && funnelFlow.stages.some(
+      stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(nextBlockId)
+    );
+    
+    if (isPainPointQualificationStage) {
+      console.log(`🚀 [NAVIGATE-FUNNEL] About to track interest for experience ${conversation.experienceId}, funnel ${conversation.funnelId}`);
+      safeBackgroundTracking(() => trackInterestBackground(conversation.experienceId, conversation.funnelId));
+    }
 
     // Record user message
     await db.insert(messages).values({

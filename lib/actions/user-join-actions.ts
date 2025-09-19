@@ -5,25 +5,30 @@
  * This is part of Phase 1 of the Two-Phase Chat Initiation System.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { experiences, funnels, conversations, messages, users } from "../supabase/schema";
+import { experiences, funnels, conversations, messages, users, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 // import { dmMonitoringService } from "./dm-monitoring-actions"; // DEPRECATED - using cron jobs now
 import { createConversation, addMessage } from "./simplified-conversation-actions";
 import { closeExistingActiveConversationsByWhopUserId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";
+import { updateFunnelGrowthPercentages } from "./funnel-actions";
+import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
 
 /**
  * Handle user join event from webhook
  * 
  * @param userId - Whop user ID
  * @param productId - Whop product ID (from membership webhook)
+ * @param webhookData - Full webhook data
+ * @param membershipId - Whop membership ID (for DM operations)
  */
 export async function handleUserJoinEvent(
 	userId: string,
 	productId: string,
 	webhookData?: any,
+	membershipId?: string,
 ): Promise<void> {
 	try {
 		console.log(`Processing user join event: ${userId} for product ${productId}`);
@@ -104,12 +109,14 @@ export async function handleUserJoinEvent(
 		}
 
 		// Step 5: Close any existing active conversations for this user
-		await closeExistingActiveConversationsByWhopUserId(userId, experience.id);
+		// Use membershipId for DM operations if available, otherwise fall back to userId
+		const dmUserId = membershipId || userId;
+		await closeExistingActiveConversationsByWhopUserId(dmUserId, experience.id);
 
 		// Step 6: Check if conversation already exists (race condition protection)
 		const existingConversation = await db.query.conversations.findFirst({
 			where: and(
-				eq(conversations.whopUserId, userId),
+				eq(conversations.whopUserId, dmUserId),
 				eq(conversations.experienceId, experience.id),
 				eq(conversations.status, "active")
 			),
@@ -124,16 +131,20 @@ export async function handleUserJoinEvent(
 		const conversationId = await createConversation(
 			experience.id,
 			liveFunnel.id,
-			userId,
+			dmUserId,
 			liveFunnel.flow.startBlockId,
 		);
 
 	// Send welcome DM and record it
-	const dmSent = await sendWelcomeDM(userId, welcomeMessage, conversationId);
+	const dmSent = await sendWelcomeDM(dmUserId, welcomeMessage, conversationId);
 	if (!dmSent) {
 		console.error(`Failed to send DM to user ${userId}`);
 		return;
 	}
+
+	// Track awareness (starts) when welcome message is sent - BACKGROUND PROCESSING
+	console.log(`🚀 [USER-JOIN] About to track awareness for experience ${experience.id}, funnel ${liveFunnel.id}`);
+	safeBackgroundTracking(() => trackAwarenessBackground(experience.id, liveFunnel.id));
 
 	// Get the member ID from the DM conversation
 	let memberId = null;
@@ -270,4 +281,6 @@ export async function sendWelcomeDM(
 		return false;
 	}
 }
+
+// Old tracking functions removed - now using background tracking service
 

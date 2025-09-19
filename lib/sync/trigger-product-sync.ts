@@ -5,6 +5,7 @@ import { getWhopApiClient } from "@/lib/whop-api-client";
 import { createResource } from "@/lib/actions/resource-actions";
 import { createFunnel, addResourceToFunnel } from "@/lib/actions/funnel-actions";
 import { whopSdk } from "@/lib/whop-sdk";
+import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 
 // App type classification based on name patterns
 function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
@@ -418,21 +419,14 @@ export async function triggerProductSyncForNewAdmin(
 					const batchPromises = batch.map(async (app) => {
 						try {
 							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
-							// Generate tracking URL that will redirect to Whop
-							const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/track/click?` + new URLSearchParams({
-								resourceId: `app-${app.id}`, // We'll create this resource ID
-								userId: userId,
-								experienceId: experienceId,
-								funnelId: funnel.id,
-								// Store the actual destination URL
-								redirectUrl: `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`
-							}).toString();
+          // Use direct app link for free resources (leads to app inside Whop)
+          const directUrl = `https://whop.com/joined/${companyId}/${app.experienceId}/app/?ref=${experienceId}`;
 							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,
 								type: "MY_PRODUCTS",
 								category: "FREE_VALUE",
-								link: trackingUrl,
+								link: directUrl,
 								description: app.description || `Free access to ${app.name}`,
 								whopProductId: app.id
 							});
@@ -444,7 +438,7 @@ export async function triggerProductSyncForNewAdmin(
 										name: app.name,
 										type: "MY_PRODUCTS",
 										category: "FREE_VALUE",
-										link: trackingUrl,
+										link: directUrl,
 										description: app.description || `Free access to ${app.name}`,
 										whopProductId: app.id
 									});
@@ -533,41 +527,42 @@ export async function triggerProductSyncForNewAdmin(
 						const cheapestPlan = whopClient.getCheapestPlan(product);
 						const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
 						
-						// Use discovery page URL if available, otherwise fallback to hub URL
-						let destinationUrl = product.discoveryPageUrl 
-							? `${product.discoveryPageUrl}${planParam}`
-							: `https://whop.com/hub/${companyId}/products/${product.id}${planParam}`;
-						
-						// Add affiliate tracking to PAID product links
-						// Pattern: /discover/{accessPassRoute}/?app={yourAppId}
-						if (product.discoveryPageUrl) {
-							// For discovery page URLs, add app parameter for affiliate tracking
-							const url = new URL(destinationUrl);
-							url.searchParams.set('app', affiliateAppId); // Use App ID for affiliate tracking
-							destinationUrl = url.toString();
-						} else {
-							// For hub URLs, we can't add affiliate tracking directly
-							// But we can add it as a query parameter for tracking
-							const url = new URL(destinationUrl);
-							url.searchParams.set('affiliate', affiliateAppId);
-							destinationUrl = url.toString();
-						}
-						
-						// Generate tracking URL that will redirect to product
-						const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/track/click?` + new URLSearchParams({
-							resourceId: `product-${product.id}`,
-							userId: userId,
-							experienceId: experienceId,
-							funnelId: funnel.id,
-							redirectUrl: destinationUrl
-						}).toString();
+          // Generate Whop native tracking link for paid products
+          let trackingUrl: string;
+          
+          try {
+            if (product.discoveryPageUrl) {
+              // Create discovery tracking link using Whop API
+              const trackingLink = await whopNativeTrackingService.createDiscoveryTrackingLink(
+                product.discoveryPageUrl,
+                cheapestPlan?.id || product.id,
+                companyId,
+                `Product: ${product.title}`,
+                affiliateAppId
+              );
+              trackingUrl = trackingLink.url;
+            } else {
+              // Create simple checkout tracking link
+              const trackingLink = await whopNativeTrackingService.createTrackingLink(
+                cheapestPlan?.id || product.id,
+                companyId,
+                `Product: ${product.title}`,
+                'checkout'
+              );
+              trackingUrl = trackingLink.url;
+            }
+          } catch (error) {
+            console.error(`Failed to create tracking link for ${product.title}:`, error);
+            // Fallback to simple checkout link
+            trackingUrl = whopNativeTrackingService.createSimpleCheckoutLink(cheapestPlan?.id || product.id);
+          }
 						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title,
 								type: "MY_PRODUCTS",
 								category: "PAID",
-								link: trackingUrl,
+								link: trackingUrl, // Use Whop native tracking link
 								description: product.description,
 								whopProductId: product.id
 							}),

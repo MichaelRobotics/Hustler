@@ -8,13 +8,14 @@
  * UPDATED: Now uses multi-tenant architecture for proper tenant isolation.
  */
 
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, funnels, funnelInteractions, messages, experiences } from "../supabase/schema";
+import { conversations, funnels, funnelInteractions, messages, experiences, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelBlock, FunnelBlockOption, FunnelFlow } from "../types/funnel";
 import { updateConversationBlock, addMessage } from "./simplified-conversation-actions";
 import { multiTenantDMMonitoringManager } from "./tenant-dm-monitoring-service";
+import { updateFunnelGrowthPercentages } from "./funnel-actions";
 
 /**
  * Error message templates for progressive error handling
@@ -1012,6 +1013,8 @@ export class DMMonitoringService {
 			const updatedUserPath = [...(conversation.userPath || []), firstExperienceQualBlockId];
 			await updateConversationBlock(conversationId, firstExperienceQualBlockId, updatedUserPath, conversation.experienceId);
 
+			// Note: Interest tracking is handled in the load-conversation API when user actually enters the stage
+
 			// Generate and send transition message
 			const chatLink = await this.generateChatLink(conversationId, experienceId);
 			const personalizedMessage = transitionMessage.replace(
@@ -1040,6 +1043,8 @@ export class DMMonitoringService {
 		return `${baseUrl}/experiences/${experienceId}/chat/${conversationId}`;
 	}
 }
+
+// Tracking functions removed to prevent database conflicts and timeouts
 
 // Export singleton instance (DEPRECATED - use multiTenantDMMonitoringManager instead)
 export const dmMonitoringService = new DMMonitoringService();

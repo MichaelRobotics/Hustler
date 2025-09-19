@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { funnels, funnelResources, resources, conversations, funnelInteractions, experiences, users, funnelAnalytics, messages } from "./schema";
+import { funnels, funnelResources, resources, conversations, funnelInteractions, experiences, users, funnelAnalytics, messages } from "../lib/supabase/schema";
 
 export const funnelResourcesRelations = relations(funnelResources, ({one}) => ({
 	funnel: one(funnels, {
@@ -84,10 +84,6 @@ export const funnelAnalyticsRelations = relations(funnelAnalytics, ({one}) => ({
 	funnel: one(funnels, {
 		fields: [funnelAnalytics.funnelId],
 		references: [funnels.id]
-	}),
-	resource: one(resources, {
-		fields: [funnelAnalytics.resourceId],
-		references: [resources.id]
 	}),
 }));
 

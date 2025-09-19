@@ -1,12 +1,14 @@
-import { db } from "@/lib/supabase/db-server";
-import { funnelAnalytics, resources } from "@/lib/supabase/schema";
-import { eq, and, sql } from "drizzle-orm";
-import { trackAffiliateCommission, extractAffiliateAppId } from "./affiliate-tracking";
-
 /**
- * Purchase Tracking Utilities
- * Handles conversion tracking and attribution
+ * Simplified Purchase Tracking
+ * 
+ * Handles conversion tracking from Whop webhooks for the new analytics system.
+ * This replaces the complex custom tracking with a simpler Whop-native approach.
  */
+
+import { db } from "@/lib/supabase/db-server";
+import { funnelAnalytics } from "@/lib/supabase/schema";
+import { eq, sql } from "drizzle-orm";
+import { updateFunnelGrowthPercentages } from "../actions/funnel-actions";
 
 export interface PurchaseData {
   userId: string;
@@ -17,69 +19,35 @@ export interface PurchaseData {
   amount: number;
   currency: string;
   purchaseTime: Date;
-}
-
-export interface ClickTrackingData {
-  resourceId: string;
-  userId: string;
-  experienceId: string;
-  funnelId: string;
-  timestamp: Date;
-  userAgent?: string;
-  ipAddress?: string;
-  redirectUrl?: string;
+  metadata?: {
+    funnelId?: string;
+    experienceId?: string;
+    [key: string]: any;
+  };
 }
 
 /**
- * Track purchase conversion with attribution
+ * Track purchase conversion from Whop webhook
+ * Simplified for Whop native tracking system
  */
 export async function trackPurchaseConversion(
-  purchaseData: PurchaseData,
-  clickTracking: Map<string, ClickTrackingData>
+  purchaseData: PurchaseData
 ): Promise<boolean> {
   try {
-    console.log("🔍 Tracking purchase conversion for user:", purchaseData.userId);
+    console.log("🔍 Tracking Whop webhook conversion for user:", purchaseData.userId);
 
-    // Find matching click tracking data
-    const matchingClick = findMatchingClick(purchaseData.userId, clickTracking);
+    // Get funnel and experience from metadata
+    const funnelId = purchaseData.metadata?.funnelId;
+    const experienceId = purchaseData.metadata?.experienceId;
     
-    if (!matchingClick) {
-      console.log("⚠️ No matching click found for purchase");
+    if (!funnelId || !experienceId) {
+      console.log("⚠️ No funnel/experience metadata found for purchase");
       return false;
     }
 
-    // Find the resource that was clicked
-    const resource = await findResourceByWhopProduct(
-      purchaseData.productId,
-      purchaseData.accessPassId,
-      purchaseData.planId
-    );
-
-    if (!resource) {
-      console.log("⚠️ No matching resource found for purchase");
-      return false;
-    }
-
-    // Record conversion in analytics
-    await recordConversion(matchingClick, resource, purchaseData);
-    
-    // Check if this was an affiliate purchase
-    const affiliateAppId = extractAffiliateAppId(matchingClick.redirectUrl || '');
-    if (affiliateAppId) {
-      console.log(`💰 Affiliate purchase detected! App ID: ${affiliateAppId}`);
-      
-			// Track affiliate commission (10% rate)
-			await trackAffiliateCommission(
-				affiliateAppId,
-				purchaseData.productId || '',
-				purchaseData.userId,
-				purchaseData.amount,
-				purchaseData.currency,
-				0.10 // 10% commission rate
-			);
-    }
-    
-    console.log(`✅ Purchase conversion tracked: ${purchaseData.amount} ${purchaseData.currency}`);
+    // Update funnel analytics with conversion
+    await updateFunnelConversionAnalytics(experienceId, funnelId, purchaseData);
+    console.log("✅ Whop webhook conversion tracked successfully");
     return true;
 
   } catch (error) {
@@ -89,164 +57,64 @@ export async function trackPurchaseConversion(
 }
 
 /**
- * Find matching click tracking data for a user
+ * Update funnel analytics with conversion data
  */
-function findMatchingClick(
-  userId: string,
-  clickTracking: Map<string, ClickTrackingData>
-): ClickTrackingData | null {
-  // Find the most recent click for this user (within last 24 hours)
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  
-  let latestClick: ClickTrackingData | null = null;
-  let latestTime = cutoff;
-
-  for (const [, clickData] of clickTracking.entries()) {
-    if (clickData.userId === userId && clickData.timestamp > latestTime) {
-      latestClick = clickData;
-      latestTime = clickData.timestamp;
-    }
-  }
-
-  return latestClick;
-}
-
-/**
- * Find resource by Whop product/plan/access pass ID
- */
-async function findResourceByWhopProduct(
-  productId?: string,
-  accessPassId?: string,
-  planId?: string
-) {
-  try {
-    // Search by whopProductId
-    if (productId) {
-      const resource = await db.select()
-        .from(resources)
-        .where(eq(resources.whopProductId, productId))
-        .limit(1);
-      
-      if (resource[0]) return resource[0];
-    }
-
-    // Search by access pass ID (if stored in description or metadata)
-    if (accessPassId) {
-      const resource = await db.select()
-        .from(resources)
-        .where(
-          and(
-            eq(resources.type, "MY_PRODUCTS"),
-            sql`${resources.description} LIKE ${'%' + accessPassId + '%'}`
-          )
-        )
-        .limit(1);
-      
-      if (resource[0]) return resource[0];
-    }
-
-    return null;
-  } catch (error) {
-    console.error("Error finding resource:", error);
-    return null;
-  }
-}
-
-/**
- * Record conversion in analytics
- */
-async function recordConversion(
-  clickData: ClickTrackingData,
-  resource: any,
-  purchaseData: PurchaseData
-) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Check if analytics record exists for today
-  const existingAnalytics = await db.select()
-    .from(funnelAnalytics)
-    .where(
-      and(
-        eq(funnelAnalytics.funnelId, clickData.funnelId),
-        eq(funnelAnalytics.date, today),
-        eq(funnelAnalytics.resourceId, resource.id)
-      )
-    )
-    .limit(1);
-
-  if (existingAnalytics.length > 0) {
-    // Update existing record
-    await db.update(funnelAnalytics)
-      .set({
-        conversions: sql`${funnelAnalytics.conversions} + 1`,
-        productRevenue: sql`${funnelAnalytics.productRevenue} + ${purchaseData.amount}`,
-        resourceConversions: sql`${funnelAnalytics.resourceConversions} + 1`
-      })
-      .where(eq(funnelAnalytics.id, existingAnalytics[0].id));
-  } else {
-    // Create new record
-    await db.insert(funnelAnalytics).values({
-      funnelId: clickData.funnelId,
-      resourceId: resource.id,
-      date: today,
-      resourceClicks: 0,
-      freeClicks: 0,
-      conversions: 1,
-      productRevenue: purchaseData.amount.toString(),
-      resourceConversions: 1
-    });
-  }
-}
-
-/**
- * Get conversion analytics for a funnel
- */
-export async function getConversionAnalytics(
+async function updateFunnelConversionAnalytics(
+  experienceId: string,
   funnelId: string,
-  startDate?: Date,
-  endDate?: Date
-) {
+  purchaseData: PurchaseData
+): Promise<void> {
   try {
-    const whereConditions = [eq(funnelAnalytics.funnelId, funnelId)];
+    const today = new Date();
+    const isToday = isTodayDate(today);
     
-    if (startDate) {
-      whereConditions.push(sql`${funnelAnalytics.date} >= ${startDate}`);
-    }
-    
-    if (endDate) {
-      whereConditions.push(sql`${funnelAnalytics.date} <= ${endDate}`);
-    }
-
-    const analytics = await db.select()
+    // Check if funnel analytics record exists
+    const existingFunnelAnalytics = await db.select()
       .from(funnelAnalytics)
-      .where(and(...whereConditions));
+      .where(eq(funnelAnalytics.funnelId, funnelId))
+      .limit(1);
 
-    // Calculate totals
-    const totals = analytics.reduce((acc: any, record: any) => ({
-      totalClicks: acc.totalClicks + (record.resourceClicks || 0),
-      totalConversions: acc.totalConversions + (record.conversions || 0),
-      totalRevenue: acc.totalRevenue + (parseFloat(record.productRevenue || '0')),
-      totalPaidConversions: acc.totalPaidConversions + (record.resourceConversions || 0)
-    }), {
-      totalClicks: 0,
-      totalConversions: 0,
-      totalRevenue: 0,
-      totalPaidConversions: 0
-    });
+    const affiliateAmount = 0; // No affiliate tracking in simplified system
+    const productAmount = purchaseData.amount;
 
-    const conversionRate = totals.totalClicks > 0 
-      ? (totals.totalConversions / totals.totalClicks) * 100 
-      : 0;
-
-    return {
-      ...totals,
-      conversionRate: Math.round(conversionRate * 100) / 100,
-      analytics
-    };
-
+    if (existingFunnelAnalytics.length > 0) {
+      // Update existing record
+      await db.update(funnelAnalytics)
+        .set({
+          totalConversions: sql`${funnelAnalytics.totalConversions} + 1`,
+          totalProductRevenue: sql`${funnelAnalytics.totalProductRevenue} + ${productAmount}`,
+          todayConversions: isToday ? sql`${funnelAnalytics.todayConversions} + 1` : funnelAnalytics.todayConversions,
+          todayProductRevenue: isToday ? sql`${funnelAnalytics.todayProductRevenue} + ${productAmount}` : funnelAnalytics.todayProductRevenue,
+          lastUpdated: new Date()
+        })
+        .where(eq(funnelAnalytics.id, existingFunnelAnalytics[0].id));
+    } else {
+      // Create new record
+      await db.insert(funnelAnalytics).values({
+        experienceId,
+        funnelId,
+        totalConversions: 1,
+        totalProductRevenue: productAmount.toString(),
+        todayConversions: isToday ? 1 : 0,
+        todayProductRevenue: isToday ? productAmount.toString() : "0",
+        lastUpdated: new Date()
+      });
+    }
+    
+    // Update growth percentages
+    await updateFunnelGrowthPercentages(funnelId);
+    
+    console.log(`✅ Updated funnel analytics for funnel ${funnelId}`);
   } catch (error) {
-    console.error("Error getting conversion analytics:", error);
+    console.error("Error updating funnel conversion analytics:", error);
     throw error;
   }
+}
+
+/**
+ * Check if the given date is today
+ */
+function isTodayDate(date: Date): boolean {
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
 }

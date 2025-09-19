@@ -92,6 +92,13 @@
       "when": 1758018291123,
       "tag": "20250916102451_melodic_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1758222391758,
+      "tag": "20250918190631_analytics-restructure",
+      "breakpoints": true
     }
   ]
 }

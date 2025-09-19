@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
 import { getConversationMessages, filterMessagesFromExperienceQualification } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, funnels, messages } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { conversations, experiences, funnels, messages, funnelAnalytics } from "@/lib/supabase/schema";
+import { eq, and, sql } from "drizzle-orm";
 import {
   type AuthContext,
   createErrorResponse,
@@ -11,6 +11,8 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
+import { updateFunnelGrowthPercentages } from "@/lib/actions/funnel-actions";
+import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 
 async function loadConversationHandler(
   request: NextRequest,
@@ -107,6 +109,12 @@ async function loadConversationHandler(
       isValueDeliveryStage
     });
 
+		// Track interest when user reaches PAIN_POINT_QUALIFICATION stage - BACKGROUND PROCESSING
+		if (isPainPointQualificationStage) {
+			console.log(`🚀 [LOAD-CONVERSATION] About to track interest for experience ${conversation.experienceId}, funnel ${conversation.funnelId}`);
+			safeBackgroundTracking(() => trackInterestBackground(conversation.experienceId, conversation.funnelId));
+		}
+
     // Check if conversation is in DM funnel phase (between WELCOME and VALUE_DELIVERY)
     const isDMFunnelActive = (isWelcomeStage || isValueDeliveryStage) && !isTransitionStage && !isExperienceQualificationStage;
 
@@ -139,6 +147,8 @@ async function loadConversationHandler(
                 updatedAt: new Date(),
               })
               .where(eq(conversations.id, conversationId));
+
+            // Interest tracking removed to prevent database conflicts
 
             // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
             const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
@@ -270,6 +280,8 @@ async function loadConversationHandler(
     return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
+
+// Tracking functions removed to prevent database conflicts and timeouts
 
 // Export the protected route handler
 export const POST = withWhopAuth(loadConversationHandler);

@@ -213,33 +213,74 @@ CREATE POLICY "Users can insert company funnel interactions" ON funnel_interacti
     );
 
 -- ===== FUNNEL_ANALYTICS TABLE POLICIES =====
--- Users can only see analytics from their company
-CREATE POLICY "Users can view company funnel analytics" ON funnel_analytics
+-- Users can only see analytics from their experience
+CREATE POLICY "Users can view experience funnel analytics" ON funnel_analytics
     FOR SELECT USING (
-        company_id IN (
-            SELECT id FROM companies 
-            WHERE whop_company_id = current_setting('app.current_company_id', true)
+        experience_id IN (
+            SELECT id FROM experiences 
+            WHERE id = current_setting('app.current_experience_id', true)
         )
     );
 
-CREATE POLICY "Users can insert company funnel analytics" ON funnel_analytics
+CREATE POLICY "Users can insert experience funnel analytics" ON funnel_analytics
     FOR INSERT WITH CHECK (
-        company_id IN (
-            SELECT id FROM companies 
-            WHERE whop_company_id = current_setting('app.current_company_id', true)
+        experience_id IN (
+            SELECT id FROM experiences 
+            WHERE id = current_setting('app.current_experience_id', true)
         )
     );
 
-CREATE POLICY "Users can update company funnel analytics" ON funnel_analytics
+CREATE POLICY "Users can update experience funnel analytics" ON funnel_analytics
     FOR UPDATE USING (
-        company_id IN (
-            SELECT id FROM companies 
-            WHERE whop_company_id = current_setting('app.current_company_id', true)
+        experience_id IN (
+            SELECT id FROM experiences 
+            WHERE id = current_setting('app.current_experience_id', true)
+        )
+    );
+
+-- Resource analytics policies
+CREATE POLICY "Users can view experience funnel resource analytics" ON funnel_resource_analytics
+    FOR SELECT USING (
+        experience_id IN (
+            SELECT id FROM experiences 
+            WHERE id = current_setting('app.current_experience_id', true)
+        )
+    );
+
+CREATE POLICY "Users can insert experience funnel resource analytics" ON funnel_resource_analytics
+    FOR INSERT WITH CHECK (
+        experience_id IN (
+            SELECT id FROM experiences 
+            WHERE id = current_setting('app.current_experience_id', true)
+        )
+    );
+
+CREATE POLICY "Users can update experience funnel resource analytics" ON funnel_resource_analytics
+    FOR UPDATE USING (
+        experience_id IN (
+            SELECT id FROM experiences 
+            WHERE id = current_setting('app.current_experience_id', true)
         )
     );
 
 -- ===== HELPER FUNCTIONS =====
--- Function to set current company context
+-- Function to set current experience context
+CREATE OR REPLACE FUNCTION set_current_experience(experience_id text)
+RETURNS void AS $$
+BEGIN
+    PERFORM set_config('app.current_experience_id', experience_id, true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to get current experience context
+CREATE OR REPLACE FUNCTION get_current_experience()
+RETURNS text AS $$
+BEGIN
+    RETURN current_setting('app.current_experience_id', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Legacy company functions for backward compatibility
 CREATE OR REPLACE FUNCTION set_current_company(company_id text)
 RETURNS void AS $$
 BEGIN
@@ -247,7 +288,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Function to get current company context
 CREATE OR REPLACE FUNCTION get_current_company()
 RETURNS text AS $$
 BEGIN

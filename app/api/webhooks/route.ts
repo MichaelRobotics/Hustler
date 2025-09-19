@@ -82,17 +82,17 @@ export async function POST(request: NextRequest): Promise<Response> {
 			);
 		}
 	} else if (webhookData.action === "membership.went_valid") {
-		const { user_id, product_id } = webhookData.data;
+		const { user_id, product_id, membership_id } = webhookData.data;
 
 		console.log(
-			`Membership went valid: User ${user_id} joined product ${product_id}`,
+			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id}`,
 		);
 
 		// Handle user join event asynchronously
 		// Pass product_id to find matching live funnel
 		if (user_id && product_id) {
 			waitUntil(
-				handleUserJoinEvent(user_id, product_id, webhookData),
+				handleUserJoinEvent(user_id, product_id, webhookData, membership_id),
 			);
 		} else {
 			console.error("Missing user_id or product_id in membership webhook");

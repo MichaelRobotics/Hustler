@@ -26,11 +26,12 @@ interface UseAnalyticsDataReturn {
 	isLoading: boolean;
 	error: string | null;
 	refreshData: () => Promise<void>;
+	isRefreshing: boolean;
 }
 
 export const useAnalyticsData = ({
 	funnel,
-	enableBackend = false,
+	enableBackend = true, // Enable backend by default
 }: UseAnalyticsDataProps): UseAnalyticsDataReturn => {
 	const [funnelStats, setFunnelStats] = useState<FunnelStats | null>(null);
 	const [salesStats, setSalesStats] = useState<SalesStats | null>(null);
@@ -38,6 +39,7 @@ export const useAnalyticsData = ({
 	const [salesData, setSalesData] = useState<SalesData[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [isRefreshing, setIsRefreshing] = useState(false);
 
 	const fetchData = async () => {
 		if (!funnel.id) return;
@@ -87,8 +89,62 @@ export const useAnalyticsData = ({
 		await fetchData();
 	};
 
+	// Live update function that only updates numbers without full re-render
+	const updateLiveNumbers = async () => {
+		if (!funnel.id || !enableBackend) return;
+		
+		setIsRefreshing(true);
+		
+		try {
+			const response = await fetch(`/api/analytics/tracking-links?funnelId=${funnel.id}`);
+			
+			if (!response.ok) return;
+			
+			const data = await response.json();
+			
+			if (data.success && data.data.funnelAnalytics && data.data.funnelAnalytics.length > 0) {
+				const funnelData = data.data.funnelAnalytics[0];
+				
+				// Only update the numbers, not the entire state
+				setFunnelStats(prevStats => {
+					if (!prevStats) return prevStats;
+					
+					return {
+						...prevStats,
+						// Update only the live numbers
+						totalStarts: funnelData.totalStarts || 0,
+						totalInterest: funnelData.totalInterest || 0,
+						totalIntent: funnelData.totalIntent || 0,
+						totalConversions: funnelData.totalConversions || 0,
+						todayStarts: funnelData.todayStarts || 0,
+						todayInterest: funnelData.todayInterest || 0,
+						todayIntent: funnelData.todayIntent || 0,
+						todayConversions: funnelData.todayConversions || 0,
+						todayProductRevenue: parseFloat(funnelData.todayProductRevenue || '0'),
+						todayAffiliateRevenue: parseFloat(funnelData.todayAffiliateRevenue || '0'),
+						startsGrowthPercent: parseFloat(funnelData.startsGrowthPercent || '0'),
+						intentGrowthPercent: parseFloat(funnelData.intentGrowthPercent || '0'),
+						conversionsGrowthPercent: parseFloat(funnelData.conversionsGrowthPercent || '0'),
+						interestGrowthPercent: parseFloat(funnelData.interestGrowthPercent || '0'),
+					};
+				});
+			}
+		} catch (error) {
+			console.error('Error updating live numbers:', error);
+		} finally {
+			setIsRefreshing(false);
+		}
+	};
+
 	useEffect(() => {
 		fetchData();
+		
+		// Auto-refresh every 30 seconds for live updates - ONLY updates numbers
+		const interval = setInterval(() => {
+			updateLiveNumbers();
+		}, 30000); // 30 seconds
+		
+		return () => clearInterval(interval);
 	}, [funnel.id, enableBackend]);
 
 	return {
@@ -99,6 +155,7 @@ export const useAnalyticsData = ({
 		isLoading,
 		error,
 		refreshData,
+		isRefreshing,
 	};
 };
 

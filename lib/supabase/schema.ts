@@ -309,27 +309,51 @@ export const funnelAnalytics = pgTable(
 		id: uuid("id").defaultRandom().primaryKey(),
 		experienceId: uuid("experience_id")
 			.notNull()
-			.references(() => experiences.id, { onDelete: "cascade" }), // Experience-based scoping
+			.references(() => experiences.id, { onDelete: "cascade" }),
 		funnelId: uuid("funnel_id")
 			.notNull()
 			.references(() => funnels.id, { onDelete: "cascade" }),
-		date: timestamp("date").notNull(),
-		starts: integer("starts").default(0).notNull(),
-		completions: integer("completions").default(0).notNull(),
-		conversions: integer("conversions").default(0).notNull(),
-		affiliateRevenue: decimal("affiliate_revenue", { precision: 10, scale: 2 })
+		// Overall metrics (lifetime)
+		totalStarts: integer("total_starts").default(0).notNull(),
+		totalIntent: integer("total_intent").default(0).notNull(),
+		totalConversions: integer("total_conversions").default(0).notNull(),
+		totalAffiliateRevenue: decimal("total_affiliate_revenue", { precision: 10, scale: 2 })
 			.default("0")
 			.notNull(),
-		productRevenue: decimal("product_revenue", { precision: 10, scale: 2 })
+		totalProductRevenue: decimal("total_product_revenue", { precision: 10, scale: 2 })
 			.default("0")
 			.notNull(),
-		freeClicks: integer("free_clicks").default(0).notNull(),
-		resourceId: uuid("resource_id").references(() => resources.id, { onDelete: "cascade" }),
-		resourceClicks: integer("resource_clicks").default(0).notNull(),
-		resourceConversions: integer("resource_conversions").default(0).notNull(),
-		resourceRevenue: decimal("resource_revenue", { precision: 10, scale: 2 })
+		totalInterest: integer("total_interest").default(0).notNull(),
+		// Today's metrics
+		todayStarts: integer("today_starts").default(0).notNull(),
+		todayIntent: integer("today_intent").default(0).notNull(),
+		todayConversions: integer("today_conversions").default(0).notNull(),
+		todayAffiliateRevenue: decimal("today_affiliate_revenue", { precision: 10, scale: 2 })
 			.default("0")
 			.notNull(),
+		todayProductRevenue: decimal("today_product_revenue", { precision: 10, scale: 2 })
+			.default("0")
+			.notNull(),
+		todayInterest: integer("today_interest").default(0).notNull(),
+		// Yesterday's metrics (for growth calculations)
+		yesterdayStarts: integer("yesterday_starts").default(0).notNull(),
+		yesterdayIntent: integer("yesterday_intent").default(0).notNull(),
+		yesterdayConversions: integer("yesterday_conversions").default(0).notNull(),
+		yesterdayInterest: integer("yesterday_interest").default(0).notNull(),
+		// Growth/Loss percentage fields
+		startsGrowthPercent: decimal("starts_growth_percent", { precision: 5, scale: 2 })
+			.default("0")
+			.notNull(),
+		intentGrowthPercent: decimal("intent_growth_percent", { precision: 5, scale: 2 })
+			.default("0")
+			.notNull(),
+		conversionsGrowthPercent: decimal("conversions_growth_percent", { precision: 5, scale: 2 })
+			.default("0")
+			.notNull(),
+		interestGrowthPercent: decimal("interest_growth_percent", { precision: 5, scale: 2 })
+			.default("0")
+			.notNull(),
+		lastUpdated: timestamp("last_updated").defaultNow().notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => ({
@@ -337,14 +361,48 @@ export const funnelAnalytics = pgTable(
 			table.experienceId,
 		),
 		funnelIdIdx: index("funnel_analytics_funnel_id_idx").on(table.funnelId),
-		dateIdx: index("funnel_analytics_date_idx").on(table.date),
-		resourceIdIdx: index("funnel_analytics_resource_id_idx").on(table.resourceId),
-		affiliateRevenueIdx: index("funnel_analytics_affiliate_revenue_idx").on(table.affiliateRevenue),
-		productRevenueIdx: index("funnel_analytics_product_revenue_idx").on(table.productRevenue),
-		uniqueFunnelDate: unique("unique_funnel_date").on(
-			table.funnelId,
-			table.date,
-		),
+		lastUpdatedIdx: index("funnel_analytics_last_updated_idx").on(table.lastUpdated),
+		totalRevenueIdx: index("funnel_analytics_total_revenue_idx").on(table.totalAffiliateRevenue, table.totalProductRevenue),
+		uniqueFunnel: unique("unique_funnel").on(table.funnelId),
+	}),
+);
+
+// ===== RESOURCE ANALYTICS TABLE =====
+// Note: This table already exists in the database, so we don't define it here
+// to avoid constraint conflicts during migration
+export const funnelResourceAnalytics = pgTable(
+	"funnel_resource_analytics",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		funnelId: uuid("funnel_id")
+			.notNull()
+			.references(() => funnels.id, { onDelete: "cascade" }),
+		resourceId: uuid("resource_id")
+			.notNull()
+			.references(() => resources.id, { onDelete: "cascade" }),
+		// Overall metrics (lifetime)
+		totalResourceClicks: integer("total_resource_clicks").default(0).notNull(),
+		totalResourceConversions: integer("total_resource_conversions").default(0).notNull(),
+		totalResourceRevenue: decimal("total_resource_revenue", { precision: 10, scale: 2 })
+			.default("0")
+			.notNull(),
+		totalInterest: integer("total_interest").default(0).notNull(),
+		// Today's metrics
+		todayResourceClicks: integer("today_resource_clicks").default(0).notNull(),
+		todayResourceConversions: integer("today_resource_conversions").default(0).notNull(),
+		todayResourceRevenue: decimal("today_resource_revenue", { precision: 10, scale: 2 })
+			.default("0")
+			.notNull(),
+		todayInterest: integer("today_interest").default(0).notNull(),
+		lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		// No constraints or indexes defined here to avoid conflicts
+		// The table already exists in the database
 	}),
 );
 
@@ -451,6 +509,24 @@ export const funnelAnalyticsRelations = relations(
 		funnel: one(funnels, {
 			fields: [funnelAnalytics.funnelId],
 			references: [funnels.id],
+		}),
+	}),
+);
+
+export const funnelResourceAnalyticsRelations = relations(
+	funnelResourceAnalytics,
+	({ one }) => ({
+		experience: one(experiences, {
+			fields: [funnelResourceAnalytics.experienceId],
+			references: [experiences.id],
+		}),
+		funnel: one(funnels, {
+			fields: [funnelResourceAnalytics.funnelId],
+			references: [funnels.id],
+		}),
+		resource: one(resources, {
+			fields: [funnelResourceAnalytics.resourceId],
+			references: [resources.id],
 		}),
 	}),
 );
