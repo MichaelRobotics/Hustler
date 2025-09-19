@@ -208,23 +208,28 @@ class AffiliateCheckoutService {
 
   /**
    * Create affiliate links for all paid products
-   * This creates both discovery and checkout links for each paid product
+   * For PAID products: Use direct checkout sessions (better conversion, guaranteed attribution)
+   * For FREE products: Use discovery page links (lower risk, user can browse)
    */
   async createPaidProductAffiliateLinks(
     products: WhopProduct[],
     affiliateCode: string,
     funnelId?: string
   ): Promise<{
-    discoveryLinks: Array<{ product: WhopProduct; url: string }>;
-    checkoutLinks: AffiliateCheckoutData[];
+    paidCheckoutLinks: AffiliateCheckoutData[];
+    freeDiscoveryLinks: Array<{ product: WhopProduct; url: string }>;
   }> {
     try {
-      console.log(`🔗 Creating affiliate links for ${products.length} paid products`);
+      console.log(`🔗 Creating affiliate links for ${products.length} products`);
       
       const paidProducts = products.filter(p => !p.isFree && p.price > 0);
-      const discoveryLinks: Array<{ product: WhopProduct; url: string }> = [];
-      const checkoutLinks: AffiliateCheckoutData[] = [];
+      const freeProducts = products.filter(p => p.isFree || p.price === 0);
+      
+      const paidCheckoutLinks: AffiliateCheckoutData[] = [];
+      const freeDiscoveryLinks: Array<{ product: WhopProduct; url: string }> = [];
 
+      // For PAID products: Create direct checkout sessions
+      console.log(`💰 Creating checkout sessions for ${paidProducts.length} paid products...`);
       for (const product of paidProducts) {
         try {
           // Get the cheapest plan for this product
@@ -234,16 +239,7 @@ class AffiliateCheckoutService {
             continue;
           }
 
-          // Create discovery link
-          const discoveryUrl = this.createAffiliateDiscoveryLink(
-            product,
-            affiliateCode,
-            funnelId,
-            'unknown'
-          );
-          discoveryLinks.push({ product, url: discoveryUrl });
-
-          // Create checkout session
+          // Create direct checkout session (better for paid products)
           const checkoutData = await this.createAffiliateCheckout(
             product,
             cheapestPlan.id,
@@ -251,21 +247,42 @@ class AffiliateCheckoutService {
             funnelId,
             'unknown'
           );
-          checkoutLinks.push(checkoutData);
+          paidCheckoutLinks.push(checkoutData);
 
-          console.log(`✅ Created affiliate links for: ${product.title}`);
+          console.log(`✅ Created checkout session for PAID product: ${product.title} ($${product.price})`);
 
         } catch (error) {
-          console.error(`❌ Error creating affiliate links for ${product.title}:`, error);
+          console.error(`❌ Error creating checkout session for ${product.title}:`, error);
           // Continue with other products
         }
       }
 
-      console.log(`✅ Created ${discoveryLinks.length} discovery links and ${checkoutLinks.length} checkout links`);
-      return { discoveryLinks, checkoutLinks };
+      // For FREE products: Create discovery page links
+      console.log(`🆓 Creating discovery links for ${freeProducts.length} free products...`);
+      for (const product of freeProducts) {
+        try {
+          // Create discovery page link (better for free products)
+          const discoveryUrl = this.createAffiliateDiscoveryLink(
+            product,
+            affiliateCode,
+            funnelId,
+            'unknown'
+          );
+          freeDiscoveryLinks.push({ product, url: discoveryUrl });
+
+          console.log(`✅ Created discovery link for FREE product: ${product.title}`);
+
+        } catch (error) {
+          console.error(`❌ Error creating discovery link for ${product.title}:`, error);
+          // Continue with other products
+        }
+      }
+
+      console.log(`✅ Created ${paidCheckoutLinks.length} checkout sessions and ${freeDiscoveryLinks.length} discovery links`);
+      return { paidCheckoutLinks, freeDiscoveryLinks };
 
     } catch (error) {
-      console.error("❌ Error creating paid product affiliate links:", error);
+      console.error("❌ Error creating product affiliate links:", error);
       throw error;
     }
   }

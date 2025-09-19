@@ -73,24 +73,25 @@ async function createAffiliateLinksHandler(request: NextRequest, context: AuthCo
     let results: any = {};
 
     if (createForAllPaid) {
-      // Create affiliate links for all paid products
-      console.log("🔗 Creating affiliate links for all paid products...");
+      // Create affiliate links for all products (paid = checkout sessions, free = discovery links)
+      console.log("🔗 Creating affiliate links for all products...");
       
       const products = await whopClient.getCompanyProducts();
-      const paidProducts = products.filter(p => !p.isFree && p.price > 0);
       
       const affiliateLinks = await affiliateCheckoutService.createPaidProductAffiliateLinks(
-        paidProducts,
+        products,
         affiliateCode,
         funnelId
       );
 
       results = {
         success: true,
-        totalProducts: paidProducts.length,
-        discoveryLinks: affiliateLinks.discoveryLinks,
-        checkoutLinks: affiliateLinks.checkoutLinks,
-        message: `Created affiliate links for ${paidProducts.length} paid products`
+        totalProducts: products.length,
+        paidProducts: affiliateLinks.paidCheckoutLinks.length,
+        freeProducts: affiliateLinks.freeDiscoveryLinks.length,
+        paidCheckoutLinks: affiliateLinks.paidCheckoutLinks,
+        freeDiscoveryLinks: affiliateLinks.freeDiscoveryLinks,
+        message: `Created ${affiliateLinks.paidCheckoutLinks.length} checkout sessions for paid products and ${affiliateLinks.freeDiscoveryLinks.length} discovery links for free products`
       };
 
     } else if (productId && planId) {
@@ -105,48 +106,62 @@ async function createAffiliateLinksHandler(request: NextRequest, context: AuthCo
       }
 
       if (product.isFree || product.price === 0) {
-        return NextResponse.json({ error: "Cannot create affiliate links for free products" }, { status: 400 });
+        // For free products, create discovery link
+        const discoveryUrl = affiliateCheckoutService.createAffiliateDiscoveryLink(
+          product,
+          affiliateCode,
+          funnelId,
+          'unknown'
+        );
+
+        results = {
+          success: true,
+          product: {
+            id: product.id,
+            title: product.title,
+            price: product.price,
+            currency: product.currency,
+            isFree: true
+          },
+          discoveryUrl: discoveryUrl,
+          message: `Created discovery link for FREE product: ${product.title}`
+        };
+      } else {
+        // For paid products, create checkout session
+        const checkoutData = await affiliateCheckoutService.createAffiliateCheckout(
+          product,
+          planId,
+          affiliateCode,
+          funnelId,
+          'unknown'
+        );
+
+        results = {
+          success: true,
+          product: {
+            id: product.id,
+            title: product.title,
+            price: product.price,
+            currency: product.currency,
+            isFree: false
+          },
+          checkoutData: checkoutData,
+          message: `Created checkout session for PAID product: ${product.title} ($${product.price})`
+        };
       }
 
-      // Create discovery link
-      const discoveryUrl = affiliateCheckoutService.createAffiliateDiscoveryLink(
-        product,
-        affiliateCode,
-        funnelId,
-        'unknown'
-      );
-
-      // Create checkout session
-      const checkoutData = await affiliateCheckoutService.createAffiliateCheckout(
-        product,
-        planId,
-        affiliateCode,
-        funnelId,
-        'unknown'
-      );
-
-      results = {
-        success: true,
-        product: {
-          id: product.id,
-          title: product.title,
-          price: product.price,
-          currency: product.currency
-        },
-        discoveryUrl: discoveryUrl,
-        checkoutData: checkoutData,
-        message: `Created affiliate links for product: ${product.title}`
-      };
-
     } else if (funnelId) {
-      // Create funnel affiliate links for all paid products
+      // Create funnel affiliate links for all products
       console.log(`🎯 Creating funnel affiliate links for funnel: ${funnelId}`);
       
       const products = await whopClient.getCompanyProducts();
       const paidProducts = products.filter(p => !p.isFree && p.price > 0);
+      const freeProducts = products.filter(p => p.isFree || p.price === 0);
       
-      const funnelLinks: any[] = [];
+      const paidFunnelLinks: any[] = [];
+      const freeFunnelLinks: any[] = [];
       
+      // For paid products: Create checkout sessions for each funnel block
       for (const product of paidProducts) {
         const cheapestPlan = product.plans?.[0];
         if (cheapestPlan) {
@@ -156,17 +171,41 @@ async function createAffiliateLinksHandler(request: NextRequest, context: AuthCo
             affiliateCode,
             funnelId
           );
-          funnelLinks.push(...productFunnelLinks);
+          paidFunnelLinks.push(...productFunnelLinks);
+        }
+      }
+
+      // For free products: Create discovery links for each funnel block
+      for (const product of freeProducts) {
+        const blocks = ['value_delivery', 'transition', 'offer'];
+        for (const blockId of blocks) {
+          const discoveryUrl = affiliateCheckoutService.createAffiliateDiscoveryLink(
+            product,
+            affiliateCode,
+            funnelId,
+            blockId
+          );
+          freeFunnelLinks.push({
+            funnelId,
+            blockId,
+            productId: product.id,
+            productName: product.title,
+            discoveryUrl: discoveryUrl,
+            type: 'discovery'
+          });
         }
       }
 
       results = {
         success: true,
         funnelId: funnelId,
-        totalProducts: paidProducts.length,
-        totalLinks: funnelLinks.length,
-        funnelLinks: funnelLinks,
-        message: `Created ${funnelLinks.length} funnel affiliate links for ${paidProducts.length} products`
+        totalProducts: products.length,
+        paidProducts: paidProducts.length,
+        freeProducts: freeProducts.length,
+        paidFunnelLinks: paidFunnelLinks,
+        freeFunnelLinks: freeFunnelLinks,
+        totalLinks: paidFunnelLinks.length + freeFunnelLinks.length,
+        message: `Created ${paidFunnelLinks.length} checkout sessions for paid products and ${freeFunnelLinks.length} discovery links for free products`
       };
 
     } else {
