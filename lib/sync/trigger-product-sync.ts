@@ -226,7 +226,7 @@ export async function triggerProductSyncForNewAdmin(
 					)
 				]);
 				circuitBreaker.onSuccess();
-				console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
+			console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
 			}
 		} catch (error) {
 			circuitBreaker.onFailure();
@@ -264,14 +264,14 @@ export async function triggerProductSyncForNewAdmin(
 			} else {
 				funnel = await retryDatabaseOperation(
 					() => createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-						name: funnelName,
-						description: `Funnel for ${funnelName}`,
+				name: funnelName,
+				description: `Funnel for ${funnelName}`,
 						resources: [], // Will assign resources after creation
 						whopProductId: funnelProduct?.id // 🔑 Associate funnel with discovery page product
 					}),
 					"createFunnel"
 				);
-				console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
 			}
 			updateProgress("funnel_created", true);
 		} catch (error) {
@@ -436,8 +436,8 @@ export async function triggerProductSyncForNewAdmin(
 									console.log(`🔍 Executing createResource for ${app.name}...`);
 									return createResource({ id: userId, experience: { id: experienceId } } as any, {
 										name: app.name,
-										type: "MY_PRODUCTS",
-										category: "FREE_VALUE",
+						type: "MY_PRODUCTS",
+						category: "FREE_VALUE",
 										link: directUrl,
 										description: app.description || `Free access to ${app.name}`,
 										whopProductId: app.id
@@ -485,7 +485,7 @@ export async function triggerProductSyncForNewAdmin(
 				
 				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
 				updateProgress("free_resources_completed", true);
-			} else {
+		} else {
 				console.log(`⚠️ No installed apps found for company`);
 				updateProgress("free_resources_skipped", true);
 			}
@@ -523,10 +523,10 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Process batch in parallel with individual error handling and retry logic
 				const batchPromises = batch.map(async (product) => {
-					try {
-						const cheapestPlan = whopClient.getCheapestPlan(product);
-						const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
-						
+			try {
+				const cheapestPlan = whopClient.getCheapestPlan(product);
+				const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
+				
           // Generate Whop native tracking link for paid products
           let trackingUrl: string;
           
@@ -559,12 +559,12 @@ export async function triggerProductSyncForNewAdmin(
 						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
-								name: product.title,
-								type: "MY_PRODUCTS",
-								category: "PAID",
+					name: product.title,
+					type: "MY_PRODUCTS",
+					category: "PAID",
 								link: trackingUrl, // Use Whop native tracking link
-								description: product.description,
-								whopProductId: product.id
+					description: product.description,
+					whopProductId: product.id
 							}),
 							`createResource-PAID-${product.title}`
 						);
@@ -613,8 +613,8 @@ export async function triggerProductSyncForNewAdmin(
 							);
 							syncState.successCounts.assignments++;
 							return true;
-						} catch (error) {
-							console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
+					} catch (error) {
+						console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
 							return false;
 						}
 					});

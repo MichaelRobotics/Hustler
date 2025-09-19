@@ -187,13 +187,13 @@ ${badJson}
     },
     "value_trading_guide": {
       "id": "value_trading_guide",
-      "message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nHere is the link: https://caseyscrypto.com/free-charting-guide\\n\\nPlease review it, because the next step is where we build your personal plan. Reply with 'done' when you're ready.",
+      "message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nPlease review it, because the next step is where we build your personal plan. Reply with 'done' when you're ready.\\n\\n[LINK]",
       "resourceName": "The 3 Core Principles of Crypto Charting",
       "options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
     },
     "transition_to_vip_chat": {
       "id": "transition_to_vip_chat",
-      "message": "Excellent. You've completed the first step. ✅\\n\\nNow it's time to build your personal strategy plan. To do that, I've prepared a private, unlimited chat session just for you.\\n\\nClick below to begin your Personal Strategy Session now.\\n\\n➡️ [LINK_TO_PRIVATE_CHAT] ⬅️",
+      "message": "Excellent. You've completed the first step. ✅\\n\\nNow it's time to build your personal strategy plan. To do that, I've prepared a private, unlimited chat session just for you.\\n\\nClick below to begin your Personal Strategy Session now.\\n\\n[LINK]",
       "options": [{"text": "Continue to Strategy Session", "nextBlockId": "experience_qual_1"}]
     },
     "experience_qual_1": {
@@ -208,7 +208,7 @@ ${badJson}
     },
     "offer_risk_management": {
       "id": "offer_risk_management",
-      "message": "That makes perfect sense. Managing risk is the #1 skill that separates successful traders from gamblers.\\n\\nBased on everything you've told me, the clear next step is our \\"Crypto Risk Management\\" video workshop.\\n\\nYou can get instant access here:\\nhttps://whop.com/crypto-casey/risk-workshop",
+      "message": "That makes perfect sense. Managing risk is the #1 skill that separates successful traders from gamblers.\\n\\nBased on everything you've told me, the clear next step is our \\"Crypto Risk Management\\" video workshop.\\n\\nYou can get instant access here:\\n\\n[LINK]",
       "resourceName": "Crypto Risk Management Workshop",
       "options": []
     }
@@ -339,7 +339,7 @@ export const generateFunnelFlow = async (
 	const resourceList = resources
 		.map((r) => {
 			const categoryLabel = r.category; // Use exact category: "PAID" or "FREE_VALUE"
-			let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type}, Link: ${r.link})`;
+			let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type})`;
 		if (r.promoCode) {
 			details += ` [Promo Code: ${r.promoCode}]`;
 			}
@@ -416,7 +416,9 @@ export const generateFunnelFlow = async (
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
 	The message must present a resource with category "FREE_VALUE" and instruct the user to reply "done" to proceed, creating the "Open Loop".
-	*Example:* "Perfect. Here is our free guide... Please review it... Reply with 'done' when you're ready."
+	*Example:* "Perfect. Here is our free guide... Please review it... Reply with 'done' when you're ready.
+
+	[LINK]"
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'done' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
 	
@@ -426,14 +428,14 @@ export const generateFunnelFlow = async (
 	- Congratulate them on completing the first step
 	- Explain what comes next in the strategy session
 	- Keep it conversational and encouraging
-	- Include normal link (not button): [LINK_TO_PRIVATE_CHAT]
+	- Include link placeholder: [LINK]
 	- **FORBIDDEN**: Do NOT use the 3-part OFFER structure (Value Stack + FOMO + CTA)
 	- **FORBIDDEN**: Do NOT use "The Observer" vs "The Action Taker" contrast
 	- **FORBIDDEN**: Do NOT use "Our Service Isn't For Everyone" or similar exclusivity language
 	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
 	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
-	**Example Structure (5-LINE TRANSITION MESSAGE):**
+	**Example Structure (6-LINE TRANSITION MESSAGE):**
 	"Excellent! You've completed step one. ✅
 	
 	Now let's move to your personalized strategy session.
@@ -442,7 +444,7 @@ export const generateFunnelFlow = async (
 	
 	Ready to continue?
 	
-	Start your Strategy Session: [LINK_TO_PRIVATE_CHAT]"
+	[LINK]"
 	
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have options that connect to the corresponding EXPERIENCE_QUALIFICATION blocks in Funnel 2. These options should have generic connector text like "Continue" or "Start Session" - they are system connectors only and will not be displayed as user choices in the preview chat.
 	
@@ -496,7 +498,7 @@ export const generateFunnelFlow = async (
 	- **If promo code is available**: Include it in the message (e.g., "Use code SALES20 for 20% off")
 	- Make the action clear and compelling
 	- **SENTENCE RULE**: Use shorter, more impactful sentences. Separate every 2 sentences with an empty line for better readability
-	- **LINK RULE**: All links/buttons must be on separate lines after empty line. No empty lines at end of message
+	- **LINK RULE**: [LINK] must be alone on its own line with empty line above it. No text can be on the same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
 	
 	**Example Structure (8-LINE OFFER MESSAGE):**
 	"You're ready to transform your sales game! With the Sales Pro Course, you'll gain proven strategies.
@@ -507,7 +509,7 @@ export const generateFunnelFlow = async (
 
 	Which one will you be? Use code SALES20 for 20% off.
 
-	> Seize Your Advantage Now < [RESOURCE_LINK]"
+	[LINK]"
 	
 	---
 	
@@ -626,12 +628,12 @@ export const generateFunnelFlow = async (
 	1. **MESSAGE LENGTH**: Every message (except first funnel "Answer by..." and OFFER messages) is 5 lines or fewer; OFFER messages can be 8 lines or fewer
 	2. **RESOURCE MAPPING**: Each FREE_VALUE resource → VALUE_DELIVERY block, each PAID resource → OFFER block
 	3. **EXACT NAMES**: resourceName fields match exactly with provided resource names
-	4. **LINKS INCLUDED**: Use actual links from the resource list in messages
+	4. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages
 	5. **PROMO CODES**: If available, include promo codes in OFFER messages
 	6. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
 	7. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
 	8. **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	9. **LINK FORMATTING**: All links/buttons on separate lines after empty line, no empty lines at end
+	9. **LINK FORMATTING**: [LINK] must be alone on its own line with empty line above it. No text on same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
 	10. **NO DUPLICATES**: Each resource appears in exactly one block
 	11. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	
@@ -698,7 +700,7 @@ export const generateFunnelFlow = async (
 		 },
 		 "transition_to_vip_chat": {
 			"id": "transition_to_vip_chat",
-			"message": "Excellent. You've completed the first step. ✅\\n\\nNow it's time to build your personal strategy plan. To do that, I've prepared a private, unlimited chat session just for you.\\n\\nClick below to begin your Personal Strategy Session now.\\n\\n➡️ [LINK_TO_PRIVATE_CHAT] ⬅️",
+			"message": "Excellent. You've completed the first step. ✅\\n\\nNow it's time to build your personal strategy plan. To do that, I've prepared a private, unlimited chat session just for you.\\n\\nClick below to begin your Personal Strategy Session now.\\n\\n[LINK]",
 			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "experience_qual_1": {
