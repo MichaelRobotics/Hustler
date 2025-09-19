@@ -66,7 +66,7 @@ export const useAnalyticsData = ({
 			} else {
 				// Mock data path (current implementation)
 				const [stats, sales, userData, salesDataResult] = await Promise.all([
-					fetchFunnelStats(funnel.id),
+					fetchFunnelStats(funnel.id, experienceId),
 					fetchSalesStats(funnel.id),
 					fetchFunnelUsers(funnel.id),
 					fetchFunnelSales(funnel.id),
