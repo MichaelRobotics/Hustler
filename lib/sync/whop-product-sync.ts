@@ -10,29 +10,10 @@ import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
 import { experiences, resources, users } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct } from "../whop-api-client";
+import { affiliateCheckoutService } from "../analytics/affiliate-checkout-service";
+import type { WhopProduct } from "../whop-api-client";
 
-export interface WhopProduct {
-	id: string;
-	title: string;
-	description?: string;
-	price: number;
-	currency: string;
-	model: 'free' | 'one-time' | 'recurring';
-	includedApps: string[];
-	plans: Array<{
-		id: string;
-		price: number;
-		currency: string;
-		title?: string;
-	}>;
-	visibility: 'archived' | 'hidden' | 'quick_link' | 'visible';
-	status: "active" | "inactive" | "draft";
-	category?: string;
-	tags?: string[];
-	imageUrl?: string;
-	createdAt: Date;
-	updatedAt: Date;
-}
+// Using WhopProduct from whop-api-client to avoid type conflicts
 
 export interface SyncResult {
 	success: boolean;
@@ -175,11 +156,47 @@ export class WhopProductSync {
 				),
 			});
 
+			// Generate appropriate link based on product type
+			let productLink: string;
+			const category = this.determineCategory(whopProduct);
+			
+			if (category === "PAID") {
+				// For PAID products: Create checkout session with affiliate tracking
+				try {
+					const affiliateCode = `app_${user.experienceId}`; // Use experience ID as affiliate code
+					const cheapestPlan = this.getCheapestPlan(whopProduct);
+					
+					if (cheapestPlan) {
+						const checkoutData = await affiliateCheckoutService.createAffiliateCheckout(
+							whopProduct,
+							cheapestPlan.id,
+							affiliateCode,
+							'product_sync',
+							'unknown'
+						);
+						productLink = checkoutData.url;
+						console.log(`✅ Created checkout session for PAID product: ${whopProduct.title} ($${whopProduct.price})`);
+					} else {
+						// Fallback to discovery page if no plan found
+						productLink = this.generateProductLink(whopProduct.id);
+						console.log(`⚠️ No plan found for PAID product, using discovery page: ${whopProduct.title}`);
+					}
+				} catch (error) {
+					// Fallback to discovery page if checkout session creation fails
+					productLink = this.generateProductLink(whopProduct.id);
+					console.log(`⚠️ Checkout session creation failed, using discovery page: ${whopProduct.title} - ${error instanceof Error ? error.message : 'Unknown error'}`);
+				}
+			} else {
+				// For FREE products: Use discovery page link
+				productLink = this.generateProductLink(whopProduct.id);
+				console.log(`✅ Created discovery link for FREE product: ${whopProduct.title}`);
+			}
+
 			const resourceData = {
 				name: whopProduct.title,
 				type: "MY_PRODUCTS" as const,
-				category: this.determineCategory(whopProduct),
-				link: this.generateProductLink(whopProduct.id),
+				category: category,
+				link: productLink,
 				description: whopProduct.description || null,
 				whopProductId: whopProduct.id,
 				updatedAt: new Date(),
@@ -232,24 +249,8 @@ export class WhopProductSync {
 				const whopClient = getWhopApiClient(user.experience.whopCompanyId, user.whopUserId);
 				const apiProducts = await whopClient.getCompanyProducts();
 
-			// Transform API products to our format
-			const whopProducts: WhopProduct[] = apiProducts.map((product: ApiWhopProduct) => ({
-				id: product.id,
-				title: product.title || "Unnamed Product",
-				description: product.description,
-				price: product.price || 0,
-				currency: product.currency || 'usd',
-				model: product.model || 'free',
-				includedApps: product.includedApps || [],
-				plans: product.plans || [],
-				visibility: product.visibility || 'visible',
-				status: (product.status as "active" | "inactive" | "draft") || "active",
-				category: product.category,
-				tags: product.tags || [],
-				imageUrl: product.imageUrl,
-				createdAt: product.createdAt ? new Date(product.createdAt) : new Date(),
-				updatedAt: product.updatedAt ? new Date(product.updatedAt) : new Date(),
-			}));
+			// Return API products directly (they already have the correct format)
+			const whopProducts: WhopProduct[] = apiProducts;
 
 			// Filter by status if needed
 			if (!options.includeInactive) {
@@ -280,6 +281,21 @@ export class WhopProductSync {
 	 */
 	private generateProductLink(productId: string): string {
 		return `https://whop.com/products/${productId}`;
+	}
+
+	/**
+	 * Get the cheapest plan for a product
+	 */
+	private getCheapestPlan(product: WhopProduct): { id: string; price: number; currency: string; title?: string } | null {
+		if (!product.plans || product.plans.length === 0) {
+			return null;
+		}
+
+		const cheapestPlan = product.plans.reduce((cheapest, current) => 
+			current.price < cheapest.price ? current : cheapest
+		);
+
+		return cheapestPlan;
 	}
 
 	/**
@@ -351,8 +367,8 @@ export class WhopProductSync {
 				category: productData.category,
 				tags: productData.tags || [],
 				imageUrl: productData.image_url,
-				createdAt: new Date(productData.created_at),
-				updatedAt: new Date(productData.updated_at),
+				createdAt: productData.created_at,
+				updatedAt: productData.updated_at,
 			};
 
 			await this.syncProduct(user, whopProduct, true);
