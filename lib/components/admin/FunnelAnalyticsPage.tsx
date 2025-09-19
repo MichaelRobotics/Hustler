@@ -19,6 +19,7 @@ interface FunnelAnalyticsPageProps {
 	onGoToBuilder: (funnel: Funnel) => void;
 	onGlobalGeneration: () => Promise<void>;
 	isGenerating: boolean;
+	experienceId?: string;
 }
 
 /**
@@ -38,11 +39,13 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 		onGoToBuilder,
 		onGlobalGeneration,
 		isGenerating,
+		experienceId,
 	}) => {
 		// Use the custom hook to fetch real analytics data
 		const { funnelStats, salesStats, isLoading, error, isRefreshing } = useAnalyticsData({
 			funnel,
 			enableBackend: true,
+			experienceId,
 		});
 
 		// Memoized computed values for better performance

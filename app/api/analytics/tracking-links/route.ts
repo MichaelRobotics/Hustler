@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 import { db } from "@/lib/supabase/db-server";
-import { resources, funnelAnalytics, funnelResourceAnalytics, funnelResources } from "@/lib/supabase/schema";
+import { resources, funnelAnalytics, funnelResourceAnalytics, funnelResources, experiences } from "@/lib/supabase/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
 /**
@@ -29,19 +29,48 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting tracking analytics for:`, { companyId, experienceId, funnelId });
 
+    // Resolve Whop experience ID to database UUID if needed
+    let resolvedExperienceId = experienceId;
+    if (experienceId && experienceId.startsWith('exp_')) {
+      // This is a Whop experience ID, need to resolve to database UUID
+      const experience = await db.select()
+        .from(experiences)
+        .where(eq(experiences.whopExperienceId, experienceId))
+        .limit(1);
+      
+      if (experience.length > 0) {
+        resolvedExperienceId = experience[0].id;
+        console.log(`📊 Resolved Whop experience ID ${experienceId} to database UUID ${resolvedExperienceId}`);
+      } else {
+        console.warn(`⚠️ No experience found for Whop experience ID: ${experienceId}`);
+        return NextResponse.json(
+          { error: `Experience not found: ${experienceId}` },
+          { status: 404 }
+        );
+      }
+    }
+
     let funnelAnalyticsData: any[] = [];
     let resourceAnalyticsData: any[] = [];
     let resourcesData: any[] = [];
 
     if (funnelId) {
-      // Get data for specific funnel
+      // Get data for specific funnel (and experience if provided)
+      const funnelWhere = resolvedExperienceId 
+        ? and(eq(funnelAnalytics.funnelId, funnelId), eq(funnelAnalytics.experienceId, resolvedExperienceId))
+        : eq(funnelAnalytics.funnelId, funnelId);
+      
       funnelAnalyticsData = await db.select()
         .from(funnelAnalytics)
-        .where(eq(funnelAnalytics.funnelId, funnelId));
+        .where(funnelWhere);
+      
+      const resourceWhere = resolvedExperienceId
+        ? and(eq(funnelResourceAnalytics.funnelId, funnelId), eq(funnelResourceAnalytics.experienceId, resolvedExperienceId))
+        : eq(funnelResourceAnalytics.funnelId, funnelId);
       
       resourceAnalyticsData = await db.select()
         .from(funnelResourceAnalytics)
-        .where(eq(funnelResourceAnalytics.funnelId, funnelId));
+        .where(resourceWhere);
       
       // Get resources through the junction table
       const funnelResourcesData = await db.select()
@@ -56,19 +85,19 @@ export async function GET(request: NextRequest) {
       } else {
         resourcesData = [];
       }
-    } else if (experienceId) {
+    } else if (resolvedExperienceId) {
       // Get data for specific experience
       funnelAnalyticsData = await db.select()
         .from(funnelAnalytics)
-        .where(eq(funnelAnalytics.experienceId, experienceId));
+        .where(eq(funnelAnalytics.experienceId, resolvedExperienceId));
       
       resourceAnalyticsData = await db.select()
         .from(funnelResourceAnalytics)
-        .where(eq(funnelResourceAnalytics.experienceId, experienceId));
+        .where(eq(funnelResourceAnalytics.experienceId, resolvedExperienceId));
       
       resourcesData = await db.select()
         .from(resources)
-        .where(eq(resources.experienceId, experienceId));
+        .where(eq(resources.experienceId, resolvedExperienceId));
     } else if (companyId) {
       // For company-wide analytics, you might need to join across experiences/funnels
       // For simplicity, this example assumes experienceId or funnelId is usually provided
@@ -88,7 +117,7 @@ export async function GET(request: NextRequest) {
         totalFunnels: funnelAnalyticsData.length,
       },
       funnelAnalytics: funnelAnalyticsData.map((funnel: any) => ({
-        experienceId: funnel.experienceId,
+        experienceId: experienceId, // Return original Whop experience ID, not database UUID
         funnelId: funnel.funnelId,
         totalStarts: funnel.totalStarts || 0,
         totalIntent: funnel.totalIntent || 0,
@@ -199,3 +228,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

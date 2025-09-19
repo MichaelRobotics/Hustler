@@ -295,6 +295,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						...user,
 						funnelId: selectedFunnel.id,
 					}))}
+					experienceId={user?.experienceId}
 					allSalesData={generateSalesData().map((sale) => ({
 						...sale,
 						funnelId: selectedFunnel.id,

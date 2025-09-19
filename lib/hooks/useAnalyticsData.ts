@@ -16,6 +16,7 @@ import {
 interface UseAnalyticsDataProps {
 	funnel: Funnel;
 	enableBackend?: boolean; // Flag to switch between mock and backend data
+	experienceId?: string; // Experience ID for multitenancy
 }
 
 interface UseAnalyticsDataReturn {
@@ -32,6 +33,7 @@ interface UseAnalyticsDataReturn {
 export const useAnalyticsData = ({
 	funnel,
 	enableBackend = true, // Enable backend by default
+	experienceId,
 }: UseAnalyticsDataProps): UseAnalyticsDataReturn => {
 	const [funnelStats, setFunnelStats] = useState<FunnelStats | null>(null);
 	const [salesStats, setSalesStats] = useState<SalesStats | null>(null);
@@ -51,7 +53,7 @@ export const useAnalyticsData = ({
 			if (enableBackend) {
 				// Backend integration path
 				const [stats, sales, userData, salesDataResult] = await Promise.all([
-					fetchFunnelStats(funnel.id),
+					fetchFunnelStats(funnel.id, experienceId),
 					fetchSalesStats(funnel.id),
 					fetchFunnelUsers(funnel.id),
 					fetchFunnelSales(funnel.id),
@@ -96,7 +98,12 @@ export const useAnalyticsData = ({
 		setIsRefreshing(true);
 		
 		try {
-			const response = await fetch(`/api/analytics/tracking-links?funnelId=${funnel.id}`);
+			const url = new URL('/api/analytics/tracking-links', window.location.origin);
+			url.searchParams.set('funnelId', funnel.id);
+			if (experienceId) {
+				url.searchParams.set('experienceId', experienceId);
+			}
+			const response = await fetch(url.toString());
 			
 			if (!response.ok) return;
 			

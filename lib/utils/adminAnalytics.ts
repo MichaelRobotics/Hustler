@@ -178,10 +178,16 @@ export const processSalesStats = (
 // Backend integration helpers
 export const fetchFunnelStats = async (
 	funnelId: string,
+	experienceId?: string,
 ): Promise<FunnelStats> => {
 	try {
 		// Call our real analytics API
-		const response = await fetch(`/api/analytics/tracking-links?funnelId=${funnelId}`);
+		const url = new URL('/api/analytics/tracking-links', window.location.origin);
+		url.searchParams.set('funnelId', funnelId);
+		if (experienceId) {
+			url.searchParams.set('experienceId', experienceId);
+		}
+		const response = await fetch(url.toString());
 		
 		if (!response.ok) {
 			throw new Error(`Failed to fetch analytics: ${response.statusText}`);
