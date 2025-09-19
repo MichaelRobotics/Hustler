@@ -6,16 +6,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { affiliateCheckoutService } from "@/lib/analytics/affiliate-checkout-service";
 import { getWhopApiClient } from "@/lib/whop-api-client";
-import { authenticateWhopUser } from "@/lib/middleware/whop-auth";
+import { getUserContext } from "@/lib/context/user-context";
+import {
+	createErrorResponse,
+	createSuccessResponse,
+	withWhopAuth,
+} from "@/lib/middleware/whop-auth";
+import type { AuthContext } from "@/lib/middleware/whop-auth";
 
-export async function POST(request: NextRequest) {
+async function createAffiliateLinksHandler(request: NextRequest, context: AuthContext) {
   try {
     console.log("🔗 Creating affiliate links for paid products...");
 
-    // Authenticate user
-    const userContext = await authenticateWhopUser(request);
+    const { user } = context;
+
+    // Validate experience ID is provided
+    if (!user.experienceId) {
+      return NextResponse.json(
+        { error: "Experience ID is required" },
+        { status: 400 },
+      );
+    }
+    const experienceId = user.experienceId;
+
+    // Get the full user context
+    const userContext = await getUserContext(
+      user.userId,
+      "", // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+    );
+
     if (!userContext) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "User context not found" },
+        { status: 401 },
+      );
+    }
+
+    // Get company ID from experience
+    const companyId = userContext.user.experience?.whopCompanyId;
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "Company ID not found in experience" },
+        { status: 400 },
+      );
     }
 
     // Parse request body
@@ -33,10 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get Whop API client
-    const whopClient = getWhopApiClient(
-      userContext.experience.whopCompanyId, 
-      userContext.user.id
-    );
+    const whopClient = getWhopApiClient(companyId, userContext.user.id);
 
     let results: any = {};
 
@@ -155,21 +187,47 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function getAffiliateLinkInfoHandler(request: NextRequest, context: AuthContext) {
   try {
     console.log("📊 Getting affiliate link information...");
 
-    // Authenticate user
-    const userContext = await authenticateWhopUser(request);
+    const { user } = context;
+
+    // Validate experience ID is provided
+    if (!user.experienceId) {
+      return NextResponse.json(
+        { error: "Experience ID is required" },
+        { status: 400 },
+      );
+    }
+    const experienceId = user.experienceId;
+
+    // Get the full user context
+    const userContext = await getUserContext(
+      user.userId,
+      "", // whopCompanyId is optional for experience-based isolation
+      experienceId,
+      false, // forceRefresh
+    );
+
     if (!userContext) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "User context not found" },
+        { status: 401 },
+      );
+    }
+
+    // Get company ID from experience
+    const companyId = userContext.user.experience?.whopCompanyId;
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "Company ID not found in experience" },
+        { status: 400 },
+      );
     }
 
     // Get Whop API client
-    const whopClient = getWhopApiClient(
-      userContext.experience.whopCompanyId, 
-      userContext.user.id
-    );
+    const whopClient = getWhopApiClient(companyId, userContext.user.id);
 
     // Get all products
     const products = await whopClient.getCompanyProducts();
@@ -205,9 +263,10 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error("❌ Error getting product information:", error);
-    return NextResponse.json(
-      { error: "Failed to get product information", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
   }
 }
+
+// Export the protected route handlers
+export const POST = withWhopAuth(createAffiliateLinksHandler);
+export const GET = withWhopAuth(getAffiliateLinkInfoHandler);

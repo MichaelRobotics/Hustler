@@ -65,9 +65,13 @@ class AffiliateCheckoutService {
         }
       });
 
+      if (!checkoutSession) {
+        throw new Error("Failed to create checkout session");
+      }
+
       const affiliateCheckout: AffiliateCheckoutData = {
         id: checkoutSession.id,
-        url: checkoutSession.purchase_url,
+        url: (checkoutSession as any).purchase_url || (checkoutSession as any).url || `https://whop.com/checkout/${planId}`,
         name: `${product.title} - Affiliate Checkout`,
         planId: planId,
         productId: product.id,

@@ -217,7 +217,8 @@ class TrackingLinksService {
         return {
           funnelId: parts[1],
           blockId: parts[3],
-          productId: parts[5]
+          productId: parts[5],
+          planId: 'unknown' // We don't have planId in the internal notes format
         };
       }
       return null;
