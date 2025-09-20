@@ -270,7 +270,7 @@ export async function addMessage(
 	try {
 		console.log(`[addMessage] Inserting message for conversation ${conversationId}:`, {
 			type,
-			content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+			content: content ? content.substring(0, 100) + (content.length > 100 ? '...' : '') : 'no content',
 		});
 
 		const [newMessage] = await db.insert(messages).values({
@@ -287,7 +287,7 @@ export async function addMessage(
 			stack: error instanceof Error ? error.stack : undefined,
 			conversationId,
 			type,
-			content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+			content: content ? content.substring(0, 100) + (content.length > 100 ? '...' : '') : 'no content',
 		});
 		throw error;
 	}
@@ -515,7 +515,7 @@ export async function processUserMessage(
 		}
 
 		console.log(`[processUserMessage] Current block: ${currentBlockId}`, {
-			message: currentBlock.message?.substring(0, 100),
+			message: currentBlock.message ? currentBlock.message.substring(0, 100) : 'no message',
 			optionsCount: currentBlock.options?.length || 0
 		});
 
@@ -729,7 +729,7 @@ async function processValidOptionSelection(
 				conversationId,
 				hasAnimatedButton: formattedMessage.includes('animated-gold-button'),
 				hasLinkPlaceholder: formattedMessage.includes('[LINK]'),
-				messagePreview: formattedMessage.substring(0, 200)
+				messagePreview: formattedMessage ? formattedMessage.substring(0, 200) : 'no message'
 			});
 			messageId = await addMessage(conversationId, "bot", formattedMessage);
 			console.log(`[processValidOptionSelection] Bot message recorded successfully with ID: ${messageId}`);

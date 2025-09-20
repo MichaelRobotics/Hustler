@@ -67,7 +67,7 @@ export async function getConversationMessages(
     console.log(`[UNIFIED-MESSAGES] Sample messages:`, unifiedMessages.slice(0, 3).map(m => ({
       id: m.id,
       type: m.type,
-      text: m.text.substring(0, 50) + (m.text.length > 50 ? '...' : ''),
+      text: m.text ? m.text.substring(0, 50) + (m.text.length > 50 ? '...' : '') : 'no text',
       timestamp: m.timestamp
     })));
     return unifiedMessages;
@@ -166,7 +166,7 @@ export function filterMessagesFromExperienceQualification(
       ).filter(Boolean);
       
       for (const block of experienceBlocks) {
-        if (block.message && message.text.includes(block.message.substring(0, 50))) {
+        if (block.message && message.text && block.message.substring(0, 50) && message.text.includes(block.message.substring(0, 50))) {
           experienceQualificationStartIndex = i;
           console.log(`[UNIFIED-MESSAGES] Found EXPERIENCE_QUALIFICATION start at message index ${i} by content match`);
           break;

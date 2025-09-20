@@ -37,7 +37,7 @@ const CollapsibleText: React.FC<CollapsibleTextProps> = ({
 			title={isExpanded ? "Click to collapse" : "Click to expand"}
 		>
 			{/* Show the full text if expanded, otherwise show the truncated version with an ellipsis. */}
-			{isExpanded ? text : `${text.substring(0, maxLength)}...`}
+			{isExpanded ? text : text ? `${text.substring(0, maxLength)}...` : ''}
 		</span>
 	);
 };

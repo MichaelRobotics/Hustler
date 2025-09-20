@@ -88,12 +88,12 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Function to resolve [LINK] placeholders for OFFER stage messages
 	const resolveOfferLinks = useCallback(async (message: string, resourceName: string): Promise<string> => {
-		if (!message.includes('[LINK]') || !experienceId || !resourceName) {
+		if (!message || !message.includes('[LINK]') || !experienceId || !resourceName) {
 			return message;
 		}
 
 		try {
-			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
+			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message ? message.substring(0, 100) : 'undefined', `resourceName: ${resourceName}`);
 			
 			// Call the API to resolve links with resourceName
 			const response = await apiPost('/api/userchat/resolve-offer-links', {
@@ -127,7 +127,7 @@ const UserChat: React.FC<UserChatProps> = ({
 						let content = msg.text || msg.content;
 						
 						// Resolve [LINK] placeholders for bot messages
-						if (msg.type === "bot" && content.includes('[LINK]')) {
+						if (msg.type === "bot" && content && content.includes('[LINK]')) {
 							// Get resourceName from message metadata
 							const resourceName = msg.metadata?.resourceName;
 							if (resourceName) {
@@ -153,7 +153,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				console.log("UserChat: All messages:", formattedMessages.map(m => ({
 					id: m.id,
 					type: m.type,
-					content: m.content.substring(0, 50) + (m.content.length > 50 ? '...' : ''),
+					content: m.content ? m.content.substring(0, 50) + (m.content.length > 50 ? '...' : '') : 'no content',
 					createdAt: m.createdAt
 				})));
 				// Scroll to bottom after loading messages
@@ -730,7 +730,7 @@ const UserChat: React.FC<UserChatProps> = ({
 						return (
 							<div className="space-y-3">
 								<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
-									{text.replace('[LINK]', '')}
+									{text ? text.replace('[LINK]', '') : ''}
 								</Text>
 								<div className="mt-6 pt-4 flex justify-center">
 									<div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full">
@@ -743,8 +743,8 @@ const UserChat: React.FC<UserChatProps> = ({
 						);
 					}
 					// Split message by [LINK] placeholders
-					const parts = text.split('[LINK]');
-					const linkCount = (text.match(/\[LINK\]/g) || []).length;
+					const parts = text ? text.split('[LINK]') : [''];
+					const linkCount = text ? (text.match(/\[LINK\]/g) || []).length : 0;
 					
 					return (
 						<div className="space-y-3">
@@ -868,17 +868,25 @@ const UserChat: React.FC<UserChatProps> = ({
 		console.log("UserChat: Rendering message list:", messagesToShow.length, "messages");
 		console.log("UserChat: Message list sample:", messagesToShow.slice(0, 2).map(m => ({
 			type: m.type,
-			text: m.text.substring(0, 30) + (m.text.length > 30 ? '...' : ''),
+			text: m.text ? m.text.substring(0, 30) + (m.text.length > 30 ? '...' : '') : 'no text',
 			timestamp: m.timestamp
 		})));
 
-		return messagesToShow.map((msg: any, index: number) => (
-			<MessageComponent
-				key={`${msg.type}-${index}`}
-				msg={msg}
-				index={index}
-			/>
-		));
+		return messagesToShow.map((msg: any, index: number) => {
+			// Safety check for message object
+			if (!msg || typeof msg !== 'object') {
+				console.warn(`[UserChat] Invalid message object at index ${index}:`, msg);
+				return null;
+			}
+			
+			return (
+				<MessageComponent
+					key={`${msg.type}-${index}`}
+					msg={msg}
+					index={index}
+				/>
+			);
+		});
 	}, [conversationMessages]);
 
 	// Memoized options list

@@ -121,7 +121,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 					hasAnimatedButton: (parsedMessage.content || "").includes('animated-gold-button'),
 					hasLinkPlaceholder: (parsedMessage.content || "").includes('[LINK]'),
 					contentLength: (parsedMessage.content || "").length,
-					contentPreview: (parsedMessage.content || "").substring(0, 200)
+					contentPreview: parsedMessage.content ? parsedMessage.content.substring(0, 200) : 'no content'
 				});
 
 				// Update last message time for connection health
