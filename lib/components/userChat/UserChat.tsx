@@ -637,8 +637,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				type: msg.type, 
 				hasAnimatedButton: text.includes('animated-gold-button'),
 				hasLink: text.includes('[LINK]'),
-				text: text.substring(0, 200) + '...',
-				fullText: text // Show full text for debugging
+				text: text.substring(0, 200) + '...'
 			});
 			
 			// Check for animated button HTML first
@@ -720,7 +719,7 @@ const UserChat: React.FC<UserChatProps> = ({
 									{partIndex < linkCount && (
 										<div className="mt-6 pt-4 flex justify-center">
 											<AnimatedGoldButton
-												href={conversation?.affiliateLink || "#"}
+												href="#"
 												text="Get Started"
 												icon="sparkles"
 												onClick={async () => {
@@ -730,12 +729,25 @@ const UserChat: React.FC<UserChatProps> = ({
 														trackIntent(experienceId, conversation.funnelId);
 													}
 													
-													// Use pre-generated affiliate link
-													if (conversation?.affiliateLink) {
-														console.log(`[UserChat] Using pre-generated affiliate link: ${conversation.affiliateLink}`);
-														window.location.href = conversation.affiliateLink;
-													} else {
-														console.error('No pre-generated affiliate link available');
+													// Resolve the link when button is clicked
+													try {
+														// Get resourceName from message metadata
+														const resourceName = msg.metadata?.resourceName;
+														if (resourceName) {
+															const resolvedMessage = await resolveOfferLinks(text, resourceName);
+															// Extract the first resolved link
+															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
+															if (linkMatch) {
+																// Keep user inside Whop - navigate to the same page
+																window.location.href = linkMatch[0];
+															} else {
+																console.error('No resolved link found');
+															}
+														} else {
+															console.error('No resourceName available for link resolution');
+														}
+													} catch (error) {
+														console.error('Error resolving link on click:', error);
 													}
 												}}
 											/>
