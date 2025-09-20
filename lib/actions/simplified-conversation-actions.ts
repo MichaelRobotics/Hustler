@@ -7,7 +7,7 @@
 
 import { and, eq, desc, asc, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences, resources } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { getWhopApiClient } from "../whop-api-client";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
@@ -636,6 +636,103 @@ async function processValidOptionSelection(
 		if (nextBlock) {
 			// Format bot message with options if available
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
+			
+			// Check if this block is in OFFER stage and handle resource lookup (same as navigate-funnel)
+			const isOfferBlock = nextBlockId ? funnelFlow.stages.some(
+				stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
+			) : false;
+			
+			if (isOfferBlock && nextBlock.resourceName) {
+				console.log(`[processValidOptionSelection] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
+				
+				// Always show "Generating Link..." during retry process
+				const generatingLinkHtml = `<div class="generating-link-placeholder">Generating Link...</div>`;
+				formattedMessage = formattedMessage.replace('[LINK]', generatingLinkHtml);
+				
+				// Retry logic for resource lookup
+				const maxRetries = 5;
+				const retryDelay = 1000; // Start with 1 second delay
+				let resource = null;
+				let retryCount = 0;
+				
+				while (!resource && retryCount < maxRetries) {
+					try {
+						console.log(`[processValidOptionSelection] Resource lookup attempt ${retryCount + 1}/${maxRetries}`);
+						
+						// Lookup resource by name and experience
+						resource = await db.query.resources.findFirst({
+							where: and(
+								eq(resources.name, nextBlock.resourceName),
+								eq(resources.experienceId, experienceId)
+							),
+						});
+						
+						if (resource) {
+							console.log(`[processValidOptionSelection] Found resource: ${resource.name} with link: ${resource.link}`);
+							break; // Success, exit retry loop
+						} else {
+							retryCount++;
+							if (retryCount < maxRetries) {
+								console.log(`[processValidOptionSelection] Resource not found, retrying in ${retryDelay * retryCount}ms...`);
+								await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
+							}
+						}
+					} catch (error) {
+						retryCount++;
+						console.error(`[processValidOptionSelection] Error in resource lookup attempt ${retryCount}:`, error);
+						if (retryCount < maxRetries) {
+							console.log(`[processValidOptionSelection] Retrying in ${retryDelay * retryCount}ms...`);
+							await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
+						}
+					}
+				}
+				
+				if (resource) {
+					// Check if link already has affiliate parameters
+					const hasAffiliate = resource.link.includes('app=') || resource.link.includes('ref=');
+					
+					if (!hasAffiliate) {
+						console.log(`[processValidOptionSelection] Adding affiliate parameters to resource link`);
+						
+						// Get affiliate app ID (same logic as product-sync)
+						let affiliateAppId = experienceId; // Use experience ID as fallback
+						try {
+							const whopExperience = await whopSdk.experiences.getExperience({
+								experienceId: experienceId,
+							});
+							affiliateAppId = whopExperience.app?.id || experienceId;
+							console.log(`[processValidOptionSelection] Got affiliate app ID: ${affiliateAppId}`);
+						} catch (error) {
+							console.log(`[processValidOptionSelection] Could not get app ID, using experience ID: ${experienceId}`);
+						}
+						
+						// Add affiliate parameter to the link
+						const url = new URL(resource.link);
+						url.searchParams.set('app', affiliateAppId);
+						const affiliateLink = url.toString();
+						
+						console.log(`[processValidOptionSelection] Generated affiliate link: ${affiliateLink}`);
+						
+						// Replace generating link placeholder with animated button HTML
+						const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
+						formattedMessage = formattedMessage.replace(generatingLinkHtml, buttonHtml);
+					} else {
+						console.log(`[processValidOptionSelection] Resource link already has affiliate parameters, using as-is`);
+						// Replace generating link placeholder with animated button HTML
+						const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
+						formattedMessage = formattedMessage.replace(generatingLinkHtml, buttonHtml);
+					}
+				} else {
+					console.log(`[processValidOptionSelection] Resource not found after ${maxRetries} attempts: ${nextBlock.resourceName}`);
+					// Replace generating link placeholder with reload page text
+					formattedMessage = formattedMessage.replace(generatingLinkHtml, 'Reload Page');
+				}
+			} else if (formattedMessage.includes('[LINK]')) {
+				// Handle other blocks that might have [LINK] placeholder
+				console.log(`[processValidOptionSelection] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage`);
+				// Replace [LINK] placeholder with fallback text
+				formattedMessage = formattedMessage.replace('[LINK]', '[Link not available]');
+			}
 			
 			if (nextBlock.options && nextBlock.options.length > 0) {
 				const numberedOptions = nextBlock.options
