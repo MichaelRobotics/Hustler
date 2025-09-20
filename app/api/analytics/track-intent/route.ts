@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { trackIntentBackground } from "../../../lib/analytics/background-tracking";
+import { trackIntentBackground } from "../../../../lib/analytics/background-tracking";
 
 export async function POST(request: NextRequest) {
   try {
