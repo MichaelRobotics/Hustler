@@ -11,7 +11,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, resources } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { updateConversationBlock, addMessage, detectConversationPhase } from "../actions/simplified-conversation-actions";
 import type { FunnelFlow, FunnelBlock, FunnelBlockOption } from "../types/funnel";
@@ -89,7 +89,64 @@ export async function sendDirectMessage(
 }
 
 /**
- * Send next block message with options
+ * Look up resource by name and experience ID
+ * Returns the resource link if found, null otherwise
+ */
+export async function lookupResourceLink(resourceName: string, experienceId: string): Promise<string | null> {
+  try {
+    console.log(`[Resource Lookup] Looking up resource: "${resourceName}" for experience: ${experienceId}`);
+    
+    const resource = await db.query.resources.findFirst({
+      where: and(
+        eq(resources.experienceId, experienceId),
+        eq(resources.name, resourceName)
+      ),
+    });
+
+    if (resource?.link) {
+      console.log(`[Resource Lookup] Found resource link: ${resource.link}`);
+      return resource.link;
+    } else {
+      console.log(`[Resource Lookup] Resource not found or has no link: "${resourceName}"`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[Resource Lookup] Error looking up resource "${resourceName}":`, error);
+    return null;
+  }
+}
+
+/**
+ * Replace [LINK] placeholders with actual resource links
+ */
+async function resolveLinkPlaceholders(message: string, block: FunnelBlock, experienceId: string): Promise<string> {
+  // Check if message contains [LINK] placeholder
+  if (!message.includes('[LINK]')) {
+    return message;
+  }
+
+  // Check if block has resourceName
+  if (!block.resourceName) {
+    console.log(`[Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
+    return message;
+  }
+
+  // Look up the resource link
+  const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
+  
+  if (resourceLink) {
+    // Replace all [LINK] placeholders with the actual link
+    const resolvedMessage = message.replace(/\[LINK\]/g, resourceLink);
+    console.log(`[Link Resolution] Replaced [LINK] with: ${resourceLink}`);
+    return resolvedMessage;
+  } else {
+    console.log(`[Link Resolution] Resource not found, keeping [LINK] placeholder`);
+    return message;
+  }
+}
+
+/**
+ * Send next block message with options and dynamic link resolution
  */
 export async function sendNextBlockMessage(
   conversationId: string,
@@ -112,7 +169,10 @@ export async function sendNextBlockMessage(
       });
     }
 
-    return await sendDirectMessage(conversationId, message, experienceId);
+    // Resolve [LINK] placeholders with actual resource links
+    const resolvedMessage = await resolveLinkPlaceholders(message, block, experienceId);
+
+    return await sendDirectMessage(conversationId, resolvedMessage, experienceId);
 
   } catch (error) {
     console.error(`[DM Core] Error sending next block message:`, error);
