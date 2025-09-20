@@ -194,17 +194,31 @@ export async function triggerProductSyncForNewAdmin(
 		const whopClient = getWhopApiClient(companyId, whopUserId);
 		console.log("✅ Whop API client created with proper multi-tenant context");
 
+		// Get the Whop experience ID for the current app
+		console.log("🔧 Getting Whop experience ID for current app...");
+		const currentExperience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, experienceId),
+			columns: { whopExperienceId: true }
+		});
+		
+		if (!currentExperience) {
+			throw new Error(`Experience not found: ${experienceId}`);
+		}
+		
+		const currentWhopExperienceId = currentExperience.whopExperienceId;
+		console.log(`✅ Current Whop experience ID: ${currentWhopExperienceId}`);
+
 		// Get the App ID for affiliate tracking
 		console.log("🔧 Getting App ID for affiliate tracking...");
-		let affiliateAppId = experienceId; // Fallback to experience ID
+		let affiliateAppId = currentWhopExperienceId; // Use Whop experience ID as fallback
 		try {
 			const whopExperience = await whopSdk.experiences.getExperience({
-				experienceId: experienceId,
+				experienceId: currentWhopExperienceId, // Use Whop experience ID, not database UUID
 			});
-			affiliateAppId = whopExperience.app?.id || experienceId;
+			affiliateAppId = whopExperience.app?.id || currentWhopExperienceId;
 			console.log(`✅ Got App ID for affiliate tracking: ${affiliateAppId}`);
 		} catch (error) {
-			console.log(`⚠️ Could not get App ID from experience, using experience ID: ${experienceId}`);
+			console.log(`⚠️ Could not get App ID from experience, using Whop experience ID: ${currentWhopExperienceId}`);
 		}
 
 		// Step 1: Get owner's business products from discovery page
@@ -307,9 +321,9 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Check which apps have access passes for the funnel product
 				// If an experience (app) has an access pass for the funnel product, it's included
-				// BUT exclude apps that have the same experience ID as the current app
+				// BUT exclude apps that have the same Whop experience ID as the current app
 				console.log(`🔍 Checking which apps have access passes for funnel product: ${funnelProduct.title} (ID: ${funnelProduct.id})`);
-				console.log(`🔍 Excluding apps with experience ID: ${experienceId} (current app)`);
+				console.log(`🔍 Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
 				
 				const availableApps: typeof installedApps = [];
 				
@@ -319,9 +333,9 @@ export async function triggerProductSyncForNewAdmin(
 						continue;
 					}
 					
-					// Skip apps that have the same experience ID as the current app
-					if (app.experienceId === experienceId) {
-						console.log(`🚫 Skipping app "${app.name}" - same experience ID as current app (${experienceId})`);
+					// Skip apps that have the same Whop experience ID as the current app
+					if (app.experienceId === currentWhopExperienceId) {
+						console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
 						continue;
 					}
 					
@@ -349,7 +363,7 @@ export async function triggerProductSyncForNewAdmin(
 					}
 				}
 				
-				console.log(`🔍 Found ${availableApps.length} apps that have access passes for the funnel product (excluding current app)`);
+				console.log(`🔍 Found ${availableApps.length} apps that have access passes for the funnel product (excluding current app with Whop experience ID: ${currentWhopExperienceId})`);
 				
 				// Classify apps by type (only from available apps)
 				const classifiedApps = {
