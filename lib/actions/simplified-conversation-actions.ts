@@ -637,16 +637,6 @@ async function processValidOptionSelection(
 			// Format bot message with options if available
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
 			
-			// Check if this is an OFFER stage block and resolve [LINK] placeholders with animated gold buttons
-			const isOfferStage = funnelFlow.stages.some(stage => 
-				stage.name === "OFFER" && stage.blockIds.includes(nextBlockId!)
-			);
-			
-			if (isOfferStage && formattedMessage.includes('[LINK]')) {
-				console.log(`[processValidOptionSelection] Processing OFFER stage with [LINK] placeholder`);
-				formattedMessage = await resolveOfferLinkPlaceholders(formattedMessage, nextBlock, experienceId);
-			}
-			
 			if (nextBlock.options && nextBlock.options.length > 0) {
 				const numberedOptions = nextBlock.options
 					.map((opt: any, index: number) => `${index + 1}. ${opt.text}`)
@@ -993,6 +983,67 @@ async function resolveAppLinkPlaceholders(message: string, experienceId: string)
 }
 
 /**
+ * Replace [LINK] placeholders with actual resource links for OFFER stage messages
+ * This function handles [LINK] placeholders in OFFER blocks by replacing them with actual resource links
+ * 
+ * @param message - Message to process
+ * @param experienceId - Internal experience ID
+ * @returns Resolved message with actual links
+ */
+export async function resolveOfferLinkPlaceholders(message: string, experienceId: string): Promise<string> {
+  // Check if message contains [LINK] placeholder
+  if (!message.includes('[LINK]')) {
+    return message;
+  }
+
+  console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for experience ${experienceId}`);
+
+  try {
+    // Get the experience record to get the Whop experience ID
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.id, experienceId),
+      columns: { whopExperienceId: true, whopCompanyId: true }
+    });
+
+    if (!experience) {
+      console.log(`[Offer Link Resolution] Experience not found, keeping [LINK] placeholder`);
+      return message;
+    }
+
+    // Look up resources for this experience (similar to VALUE_DELIVERY stage)
+    const resourcesList = await db.query.resources.findMany({
+      where: and(
+        eq(resources.experienceId, experienceId),
+        eq(resources.type, "MY_PRODUCTS")
+      ),
+      columns: { name: true, link: true }
+    });
+
+    if (resourcesList.length === 0) {
+      console.log(`[Offer Link Resolution] No resources found for experience ${experienceId}, keeping [LINK] placeholder`);
+      return message;
+    }
+
+    // For OFFER stage, we'll use the first available resource link
+    // In a more sophisticated implementation, we could match by resource name or other criteria
+    const resourceLink = resourcesList[0].link;
+    
+    if (resourceLink) {
+      // Replace all [LINK] placeholders with the actual resource link
+      const resolvedMessage = message.replace(/\[LINK\]/g, resourceLink);
+      console.log(`[Offer Link Resolution] Replaced [LINK] with: ${resourceLink}`);
+      return resolvedMessage;
+    } else {
+      console.log(`[Offer Link Resolution] Resource link not found, keeping [LINK] placeholder`);
+      return message;
+    }
+  } catch (error) {
+    console.error(`[Offer Link Resolution] Error resolving links:`, error);
+    return message; // Return original message on error
+  }
+}
+
+/**
  * Send transition message with app link resolution
  * This function handles [LINK] placeholders in transition blocks by replacing them with actual app links
  * 
@@ -1205,135 +1256,6 @@ export async function updateConversation(
 	} catch (error) {
 		console.error("Error updating conversation:", error);
 		throw error;
-	}
-}
-
-/**
- * Replace [LINK] placeholders with animated gold buttons for OFFER blocks
- */
-async function resolveOfferLinkPlaceholders(message: string, block: any, experienceId: string): Promise<string> {
-	// Check if message contains [LINK] placeholder
-	if (!message.includes('[LINK]')) {
-		return message;
-	}
-
-	// Check if block has resourceName
-	if (!block.resourceName) {
-		console.log(`[Offer Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
-		return message;
-	}
-
-	// Look up the resource link
-	const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
-	
-	if (resourceLink) {
-		// Create animated gold button with icon and lead magnet text
-		const animatedButton = createAnimatedGoldButton(resourceLink, block.resourceName);
-		
-		// Replace all [LINK] placeholders with the animated button
-		const resolvedMessage = message.replace(/\[LINK\]/g, animatedButton);
-		console.log(`[Offer Link Resolution] Replaced [LINK] with animated gold button for: ${block.resourceName}`);
-		return resolvedMessage;
-	} else {
-		console.log(`[Offer Link Resolution] Resource not found for: ${block.resourceName}`);
-		return message;
-	}
-}
-
-/**
- * Look up resource link from database
- */
-async function lookupResourceLink(resourceName: string, experienceId: string): Promise<string | null> {
-	try {
-		const resource = await db.query.resources.findFirst({
-			where: and(
-				eq(resources.name, resourceName),
-				eq(resources.experienceId, experienceId)
-			),
-			columns: { link: true }
-		});
-
-		return resource?.link || null;
-	} catch (error) {
-		console.error(`[Resource Lookup] Error looking up resource ${resourceName}:`, error);
-		return null;
-	}
-}
-
-/**
- * Create animated gold button HTML for OFFER blocks
- */
-function createAnimatedGoldButton(link: string, resourceName: string): string {
-	// Generate lead magnet text based on resource name
-	const leadMagnetText = generateLeadMagnetText(resourceName);
-	
-	// Create animated gold button with icon
-	const buttonHtml = `
-<a href="${link}" style="
-  display: inline-block;
-  background: linear-gradient(45deg, #FFD700, #FFA500, #FFD700);
-  background-size: 200% 200%;
-  animation: goldShine 2s ease-in-out infinite;
-  color: #000;
-  text-decoration: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: bold;
-  font-size: 16px;
-  text-align: center;
-  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
-  transition: all 0.3s ease;
-  border: 2px solid #FFD700;
-  position: relative;
-  overflow: hidden;
-">
-  <span style="
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  ">
-    <span style="font-size: 18px;">🎯</span>
-    <span>${leadMagnetText}</span>
-  </span>
-</a>
-
-<style>
-@keyframes goldShine {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-</style>`;
-
-	return buttonHtml;
-}
-
-/**
- * Generate lead magnet text based on resource name
- */
-function generateLeadMagnetText(resourceName: string): string {
-	// Convert resource name to lead magnet text
-	const name = resourceName.toLowerCase();
-	
-	if (name.includes('course') || name.includes('guide') || name.includes('tutorial')) {
-		return 'Get Free Course';
-	} else if (name.includes('template') || name.includes('kit')) {
-		return 'Download Template';
-	} else if (name.includes('tool') || name.includes('calculator')) {
-		return 'Access Tool';
-	} else if (name.includes('checklist') || name.includes('list')) {
-		return 'Get Checklist';
-	} else if (name.includes('ebook') || name.includes('book')) {
-		return 'Read Ebook';
-	} else if (name.includes('video') || name.includes('tutorial')) {
-		return 'Watch Video';
-	} else if (name.includes('discord') || name.includes('community')) {
-		return 'Join Community';
-	} else if (name.includes('discount') || name.includes('deal')) {
-		return 'Get Discount';
-	} else {
-		return 'Get Resource';
 	}
 }
 

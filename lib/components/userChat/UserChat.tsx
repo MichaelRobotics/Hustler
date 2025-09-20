@@ -17,6 +17,7 @@ import type { ConversationWithMessages } from "../../types/user";
 import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
+import AnimatedGoldButton from "./AnimatedGoldButton";
 
 interface UserChatProps {
 	funnelFlow: FunnelFlow;
@@ -69,29 +70,76 @@ const UserChat: React.FC<UserChatProps> = ({
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
 
+	// Function to resolve [LINK] placeholders for OFFER stage messages
+	const resolveOfferLinks = useCallback(async (message: string): Promise<string> => {
+		if (!message.includes('[LINK]') || !experienceId) {
+			return message;
+		}
+
+		try {
+			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100));
+			
+			// Call the API to resolve links
+			const response = await apiPost('/api/userchat/resolve-offer-links', {
+				message,
+				experienceId
+			}, experienceId);
+
+			if (response.ok) {
+				const result = await response.json();
+				if (result.success && result.resolvedMessage) {
+					console.log(`[UserChat] Successfully resolved [LINK] placeholders`);
+					return result.resolvedMessage;
+				}
+			}
+			
+			console.log(`[UserChat] Link resolution failed, keeping [LINK] placeholders`);
+			return message;
+		} catch (error) {
+			console.error(`[UserChat] Error resolving links:`, error);
+			return message;
+		}
+	}, [experienceId]);
+
 	// Initialize conversation messages from backend data IMMEDIATELY
 	useEffect(() => {
 		if (conversation?.messages) {
-			const formattedMessages = conversation.messages.map((msg: any) => ({
-				id: msg.id,
-				type: msg.type,
-				content: msg.text || msg.content, // Use text property from unified messages, fallback to content
-				metadata: msg.metadata,
-				createdAt: msg.timestamp || msg.createdAt, // Use timestamp from unified messages, fallback to createdAt
-			}));
-			setConversationMessages(formattedMessages);
-			console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
-			console.log("UserChat: Sample message:", formattedMessages[0]);
-			console.log("UserChat: All messages:", formattedMessages.map(m => ({
-				id: m.id,
-				type: m.type,
-				content: m.content.substring(0, 50) + (m.content.length > 50 ? '...' : ''),
-				createdAt: m.createdAt
-			})));
-			// Scroll to bottom after loading messages
-			setTimeout(() => scrollToBottom(), 100);
+			const processMessages = async () => {
+				const formattedMessages = await Promise.all(
+					conversation.messages.map(async (msg: any) => {
+						let content = msg.text || msg.content;
+						
+						// Resolve [LINK] placeholders for bot messages
+						if (msg.type === "bot" && content.includes('[LINK]')) {
+							content = await resolveOfferLinks(content);
+						}
+						
+						return {
+							id: msg.id,
+							type: msg.type,
+							content,
+							metadata: msg.metadata,
+							createdAt: msg.timestamp || msg.createdAt,
+						};
+					})
+				);
+				
+				setConversationMessages(formattedMessages);
+				console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
+				console.log("UserChat: Sample message:", formattedMessages[0]);
+				console.log("UserChat: All messages:", formattedMessages.map(m => ({
+					id: m.id,
+					type: m.type,
+					content: m.content.substring(0, 50) + (m.content.length > 50 ? '...' : ''),
+					createdAt: m.createdAt
+				})));
+				// Scroll to bottom after loading messages
+				setTimeout(() => scrollToBottom(), 100);
+			};
+			
+			processMessages();
 		}
-	}, [conversation?.messages]);
+	}, [conversation?.messages, resolveOfferLinks]);
 
 	// WebSocket integration for REAL-TIME updates only (background initialization)
 	const { isConnected, sendMessage, sendTypingIndicator, typingUsers } = useWhopWebSocket({
@@ -559,6 +607,66 @@ const UserChat: React.FC<UserChatProps> = ({
 				);
 			}
 
+			// Handle [LINK] placeholders in bot messages
+			const renderMessageWithLinks = (text: string) => {
+				if (msg.type === "bot" && text.includes('[LINK]')) {
+					// Split message by [LINK] placeholders
+					const parts = text.split('[LINK]');
+					const linkCount = (text.match(/\[LINK\]/g) || []).length;
+					
+					return (
+						<div className="space-y-3">
+							{parts.map((part, partIndex) => (
+								<div key={partIndex}>
+									{part.trim() && (
+										<Text
+											size="2"
+											className="whitespace-pre-wrap leading-relaxed text-base"
+										>
+											{part.trim()}
+										</Text>
+									)}
+									{partIndex < linkCount && (
+										<div className="mt-3 flex justify-center">
+											<AnimatedGoldButton
+												href="#"
+												text="Get Started"
+												icon="sparkles"
+												onClick={async () => {
+													// Resolve the link when button is clicked
+													try {
+														const resolvedMessage = await resolveOfferLinks(text);
+														// Extract the first resolved link
+														const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
+														if (linkMatch) {
+															window.open(linkMatch[0], '_blank', 'noopener,noreferrer');
+														} else {
+															console.error('No resolved link found');
+														}
+													} catch (error) {
+														console.error('Error resolving link on click:', error);
+													}
+												}}
+											/>
+										</div>
+									)}
+								</div>
+							))}
+						</div>
+					);
+				}
+				
+				// Regular message without [LINK] placeholders
+				return (
+					<Text
+						size="2"
+						className="whitespace-pre-wrap leading-relaxed text-base"
+					>
+						{text}
+					</Text>
+				);
+			};
+
 			return (
 				<div
 					key={`${msg.type}-${index}`}
@@ -571,12 +679,7 @@ const UserChat: React.FC<UserChatProps> = ({
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
 						}`}
 					>
-						<Text
-							size="2"
-							className="whitespace-pre-wrap leading-relaxed text-base"
-						>
-							{msg.text}
-						</Text>
+						{renderMessageWithLinks(msg.text)}
 					</div>
 				</div>
 			);
