@@ -60,15 +60,19 @@ async function processOfferBlockHandler(
 
     const { messageId, messageText, conversationId } = requestBody;
 
-    if (!messageId || !messageText || !conversationId) {
+    if (!messageText || !conversationId) {
       console.error(`[process-offer-block] Missing required parameters:`, { messageId, messageText, conversationId });
       return createErrorResponse(
         "MISSING_PARAMETERS",
-        "messageId, messageText, and conversationId are required"
+        "messageText and conversationId are required"
       );
     }
 
-    console.log(`[process-offer-block] Processing message ${messageId} for conversation ${conversationId}`);
+    // Generate messageId if not provided
+    const finalMessageId = messageId || `temp-${Date.now()}`;
+    console.log(`[process-offer-block] Using messageId: ${finalMessageId} (provided: ${messageId})`);
+
+    console.log(`[process-offer-block] Processing message ${finalMessageId} for conversation ${conversationId}`);
 
     // Test database connection first
     try {
@@ -259,7 +263,7 @@ async function processOfferBlockHandler(
     console.error("Error processing OFFER block:", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      messageId: requestBody?.messageId,
+      messageId: requestBody?.messageId || `temp-${Date.now()}`,
       conversationId: requestBody?.conversationId,
       experienceId: context?.user?.experienceId
     });

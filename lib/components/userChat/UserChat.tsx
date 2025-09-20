@@ -92,18 +92,22 @@ const UserChat: React.FC<UserChatProps> = ({
 	// Function to process OFFER blocks by calling backend
 	const processOfferBlock = useCallback(async (messageId: string, messageText: string): Promise<void> => {
 		console.log(`[UserChat] Processing OFFER block for message ${messageId}`);
+		console.log(`[UserChat] processOfferBlock params:`, { messageId, messageText: messageText.substring(0, 100) + '...', conversationId, experienceId });
 		
 		// Add to processing messages set
 		setProcessingMessages(prev => new Set(prev).add(messageId));
 		
 		try {
 			// Call the backend to process the OFFER block
-			const response = await apiPost('/api/userchat/process-offer-block', {
+			const requestBody = {
 				messageId,
 				messageText,
 				conversationId,
 				experienceId
-			}, experienceId);
+			};
+			console.log(`[UserChat] Sending request body:`, requestBody);
+			
+			const response = await apiPost('/api/userchat/process-offer-block', requestBody, experienceId);
 			
 			if (response.ok) {
 				const result = await response.json();
@@ -724,14 +728,16 @@ const UserChat: React.FC<UserChatProps> = ({
 				fullText: text // Show full text for debugging
 			});
 			
-			// Hook: If this is a bot message with [LINK] placeholder, wait for backend processing
-			if (msg.type === "bot" && text.includes('[LINK]') && !text.includes('animated-gold-button') && !text.includes('generating-link-placeholder')) {
-				console.log(`[UserChat] Hook: Detected [LINK] placeholder, waiting for backend processing...`);
-				
-				// Trigger backend processing if not already processing
-				if (!processingMessages.has(msg.id)) {
-					processOfferBlock(msg.id, text);
-				}
+		// Hook: If this is a bot message with [LINK] placeholder, wait for backend processing
+		if (msg.type === "bot" && text.includes('[LINK]') && !text.includes('animated-gold-button') && !text.includes('generating-link-placeholder')) {
+			console.log(`[UserChat] Hook: Detected [LINK] placeholder, waiting for backend processing...`);
+			console.log(`[UserChat] Message object:`, { id: msg.id, type: msg.type, hasId: !!msg.id });
+			
+			// Trigger backend processing if not already processing
+			if (!processingMessages.has(msg.id)) {
+				console.log(`[UserChat] Calling processOfferBlock with messageId: ${msg.id}`);
+				processOfferBlock(msg.id, text);
+			}
 				
 				// Show generating link animation while waiting
 				return (
