@@ -660,12 +660,12 @@ const UserChat: React.FC<UserChatProps> = ({
 					});
 					
 					return (
-						<div className="space-y-3">
+						<div className="space-y-6">
 							{/* All text content first */}
 							{textParts}
-							{/* All buttons below text */}
+							{/* All buttons below text with extra spacing */}
 							{buttons.length > 0 && (
-								<div className="flex justify-center">
+								<div className="flex justify-center pt-4">
 									{buttons}
 								</div>
 							)}
@@ -692,7 +692,7 @@ const UserChat: React.FC<UserChatProps> = ({
 										</Text>
 									)}
 									{partIndex < linkCount && (
-										<div className="mt-3 flex justify-center">
+										<div className="mt-6 pt-4 flex justify-center">
 											<AnimatedGoldButton
 												href="#"
 												text="Get Started"
