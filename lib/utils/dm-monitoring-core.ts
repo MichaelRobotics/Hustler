@@ -14,6 +14,7 @@ import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions, resources, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { updateConversationBlock, addMessage, detectConversationPhase } from "../actions/simplified-conversation-actions";
+import { getWhopApiClient } from "../whop-api-client";
 import type { FunnelFlow, FunnelBlock, FunnelBlockOption } from "../types/funnel";
 
 /**
@@ -117,81 +118,9 @@ export async function lookupResourceLink(resourceName: string, experienceId: str
 }
 
 /**
- * Look up experience details by internal experience ID
- * Returns the experience data if found, null otherwise
+ * Replace [LINK] placeholders with actual resource links
  */
-export async function lookupExperience(experienceId: string): Promise<{ whopExperienceId: string; whopCompanyId: string; name: string } | null> {
-  try {
-    console.log(`[Experience Lookup] Looking up experience: ${experienceId}`);
-    
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.id, experienceId),
-    });
-
-    if (experience?.whopExperienceId && experience?.whopCompanyId) {
-      console.log(`[Experience Lookup] Found experience: ${experience.name} (${experience.whopExperienceId})`);
-      return {
-        whopExperienceId: experience.whopExperienceId,
-        whopCompanyId: experience.whopCompanyId,
-        name: experience.name
-      };
-    } else {
-      console.log(`[Experience Lookup] Experience not found or missing data: ${experienceId}`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`[Experience Lookup] Error looking up experience "${experienceId}":`, error);
-    return null;
-  }
-}
-
-/**
- * Generate app link using company slug and app slug
- * Returns the app URL if successful, null otherwise
- */
-export async function generateAppLink(whopExperienceId: string, whopCompanyId: string, experienceName: string): Promise<string | null> {
-  try {
-    console.log(`[App Link Generation] Generating app link for experience: ${experienceName}`);
-    
-    // Get company slug from Whop API
-    let companySlug: string | null = null;
-    try {
-      const companyResult = await whopSdk.companies.getCompany({
-        companyId: whopCompanyId
-      });
-      const company = companyResult as any;
-      companySlug = company?.route || company?.title?.toLowerCase().replace(/[^a-z0-9]/g, '-') || null;
-      console.log(`[App Link Generation] Company slug: ${companySlug}`);
-    } catch (error) {
-      console.error(`[App Link Generation] Error getting company slug:`, error);
-      // Fallback to company ID if slug not available
-      companySlug = whopCompanyId;
-    }
-    
-    // Generate app slug from experience name and ID
-    const appSlug = experienceName
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') + '-' + whopExperienceId.slice(-8);
-    
-    console.log(`[App Link Generation] App slug: ${appSlug}`);
-    
-    // Construct the app URL
-    const appUrl = `https://whop.com/joined/${companySlug}/${appSlug}/app/`;
-    console.log(`[App Link Generation] Generated app URL: ${appUrl}`);
-    
-    return appUrl;
-  } catch (error) {
-    console.error(`[App Link Generation] Error generating app link:`, error);
-    return null;
-  }
-}
-
-/**
- * Replace [LINK] placeholders with actual resource links for VALUE_DELIVERY blocks
- */
-async function resolveResourceLinkPlaceholders(message: string, block: FunnelBlock, experienceId: string): Promise<string> {
+async function resolveLinkPlaceholders(message: string, block: FunnelBlock, experienceId: string): Promise<string> {
   // Check if message contains [LINK] placeholder
   if (!message.includes('[LINK]')) {
     return message;
@@ -199,7 +128,7 @@ async function resolveResourceLinkPlaceholders(message: string, block: FunnelBlo
 
   // Check if block has resourceName
   if (!block.resourceName) {
-    console.log(`[Resource Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
+    console.log(`[Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
     return message;
   }
 
@@ -209,60 +138,11 @@ async function resolveResourceLinkPlaceholders(message: string, block: FunnelBlo
   if (resourceLink) {
     // Replace all [LINK] placeholders with the actual link
     const resolvedMessage = message.replace(/\[LINK\]/g, resourceLink);
-    console.log(`[Resource Link Resolution] Replaced [LINK] with: ${resourceLink}`);
+    console.log(`[Link Resolution] Replaced [LINK] with: ${resourceLink}`);
     return resolvedMessage;
   } else {
-    console.log(`[Resource Link Resolution] Resource not found, keeping [LINK] placeholder`);
+    console.log(`[Link Resolution] Resource not found, keeping [LINK] placeholder`);
     return message;
-  }
-}
-
-/**
- * Replace [LINK] placeholders with actual app links for TRANSITION blocks
- */
-async function resolveAppLinkPlaceholders(message: string, experienceId: string): Promise<string> {
-  // Check if message contains [LINK] placeholder
-  if (!message.includes('[LINK]')) {
-    return message;
-  }
-
-  // Look up the experience details
-  const experience = await lookupExperience(experienceId);
-  
-  if (!experience) {
-    console.log(`[App Link Resolution] Experience not found, keeping [LINK] placeholder`);
-    return message;
-  }
-
-  // Generate the app link
-  const appLink = await generateAppLink(experience.whopExperienceId, experience.whopCompanyId, experience.name);
-  
-  if (appLink) {
-    // Replace all [LINK] placeholders with the actual app link
-    const resolvedMessage = message.replace(/\[LINK\]/g, appLink);
-    console.log(`[App Link Resolution] Replaced [LINK] with: ${appLink}`);
-    return resolvedMessage;
-  } else {
-    console.log(`[App Link Resolution] App link generation failed, keeping [LINK] placeholder`);
-    return message;
-  }
-}
-
-/**
- * Replace [LINK] placeholders with appropriate links based on block type
- */
-async function resolveLinkPlaceholders(message: string, block: FunnelBlock, experienceId: string, funnelFlow: FunnelFlow): Promise<string> {
-  // Check if this is a TRANSITION block
-  const isTransitionBlock = funnelFlow.stages.some(stage => 
-    stage.name === 'TRANSITION' && stage.blockIds.includes(block.id)
-  );
-
-  if (isTransitionBlock) {
-    console.log(`[Link Resolution] Detected TRANSITION block, resolving app links`);
-    return await resolveAppLinkPlaceholders(message, experienceId);
-  } else {
-    console.log(`[Link Resolution] Detected non-TRANSITION block, resolving resource links`);
-    return await resolveResourceLinkPlaceholders(message, block, experienceId);
   }
 }
 
@@ -290,8 +170,8 @@ export async function sendNextBlockMessage(
       });
     }
 
-    // Resolve [LINK] placeholders with appropriate links based on block type
-    const resolvedMessage = await resolveLinkPlaceholders(message, block, experienceId, funnelFlow);
+    // Resolve [LINK] placeholders with actual resource links
+    const resolvedMessage = await resolveLinkPlaceholders(message, block, experienceId);
 
     return await sendDirectMessage(conversationId, resolvedMessage, experienceId);
 

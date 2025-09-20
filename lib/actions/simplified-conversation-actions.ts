@@ -7,8 +7,9 @@
 
 import { and, eq, desc, asc, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels, funnelAnalytics } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
+import { getWhopApiClient } from "../whop-api-client";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "../analytics/background-tracking";
@@ -877,10 +878,118 @@ export async function generateChatLink(conversationId: string, experienceId: str
 }
 
 /**
- * Send transition message to user via DM
+ * Look up experience details by internal experience ID
+ * Returns the experience data if found, null otherwise
+ */
+async function lookupExperience(experienceId: string): Promise<{ whopExperienceId: string; whopCompanyId: string; name: string } | null> {
+  try {
+    console.log(`[Experience Lookup] Looking up experience: ${experienceId}`);
+    
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.id, experienceId),
+    });
+
+    if (experience?.whopExperienceId && experience?.whopCompanyId) {
+      console.log(`[Experience Lookup] Found experience: ${experience.name} (${experience.whopExperienceId})`);
+      return {
+        whopExperienceId: experience.whopExperienceId,
+        whopCompanyId: experience.whopCompanyId,
+        name: experience.name
+      };
+    } else {
+      console.log(`[Experience Lookup] Experience not found or missing data: ${experienceId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[Experience Lookup] Error looking up experience "${experienceId}":`, error);
+    return null;
+  }
+}
+
+/**
+ * Generate app link using company route and app slug (same logic as product sync)
+ * Returns the app URL if successful, null otherwise
+ */
+async function generateAppLink(whopExperienceId: string, whopCompanyId: string, experienceName: string): Promise<string | null> {
+  try {
+    console.log(`[App Link Generation] Generating app link for experience: ${experienceName}`);
+    
+    // Get Whop API client
+    const whopClient = getWhopApiClient(whopCompanyId, 'system'); // Use 'system' as userId for API calls
+    
+    // Create a WhopApp-like object (same structure as in product sync)
+    const appName = experienceName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    
+    const experienceIdSuffix = whopExperienceId.replace('exp_', '');
+    const experienceSlug = `${appName}-${experienceIdSuffix}`;
+    
+    const mockApp = {
+      id: whopExperienceId,
+      name: experienceName,
+      description: `App: ${experienceName}`,
+      price: 0,
+      currency: 'usd',
+      discoveryPageUrl: undefined,
+      checkoutUrl: undefined,
+      route: undefined,
+      experienceId: whopExperienceId,
+      companyRoute: undefined, // Will be set by generateAppUrl
+      appSlug: experienceSlug
+    };
+    
+    // Use the same generateAppUrl method as product sync
+    const appUrl = whopClient.generateAppUrl(mockApp, undefined, true);
+    
+    console.log(`[App Link Generation] Generated app URL: ${appUrl}`);
+    return appUrl;
+  } catch (error) {
+    console.error(`[App Link Generation] Error generating app link:`, error);
+    return null;
+  }
+}
+
+/**
+ * Replace [LINK] placeholders with actual app links for transition blocks
+ */
+async function resolveAppLinkPlaceholders(message: string, experienceId: string): Promise<string> {
+  // Check if message contains [LINK] placeholder
+  if (!message.includes('[LINK]')) {
+    return message;
+  }
+
+  // Look up the experience details
+  const experience = await lookupExperience(experienceId);
+  
+  if (!experience) {
+    console.log(`[App Link Resolution] Experience not found, keeping [LINK] placeholder`);
+    return message;
+  }
+
+  // Generate the app link
+  const appLink = await generateAppLink(experience.whopExperienceId, experience.whopCompanyId, experience.name);
+  
+  if (appLink) {
+    // Replace all [LINK] placeholders with the actual app link
+    const resolvedMessage = message.replace(/\[LINK\]/g, appLink);
+    console.log(`[App Link Resolution] Replaced [LINK] with: ${appLink}`);
+    return resolvedMessage;
+  } else {
+    console.log(`[App Link Resolution] App link generation failed, keeping [LINK] placeholder`);
+    return message;
+  }
+}
+
+/**
+ * Send transition message with app link resolution
+ * This function handles [LINK] placeholders in transition blocks by replacing them with actual app links
  * 
  * @param whopUserId - Whop user ID
  * @param message - Transition message to send
+ * @param experienceId - Internal experience ID (will be used to get Whop experience ID)
  * @returns Success status
  */
 export async function sendTransitionMessage(
@@ -889,19 +998,22 @@ export async function sendTransitionMessage(
 	experienceId: string,
 ): Promise<boolean> {
 	try {
-		console.log(`Sending transition message to user ${whopUserId}`);
+		console.log(`[Transition Message] Sending transition message to user ${whopUserId}`);
+
+		// Resolve [LINK] placeholders with actual app links
+		const resolvedMessage = await resolveAppLinkPlaceholders(message, experienceId);
 
 		// Send DM using existing Whop SDK
 		await whopSdk.messages.sendDirectMessageToUser({
 			toUserIdOrUsername: whopUserId,
-			message: message,
+			message: resolvedMessage,
 		});
 
-		console.log(`Successfully sent transition message to user ${whopUserId}`);
+		console.log(`[Transition Message] Successfully sent transition message to user ${whopUserId}`);
 		return true;
 
 	} catch (error) {
-		console.error(`Error sending transition message to user ${whopUserId}:`, error);
+		console.error(`[Transition Message] Error sending transition message to user ${whopUserId}:`, error);
 		return false;
 	}
 }
