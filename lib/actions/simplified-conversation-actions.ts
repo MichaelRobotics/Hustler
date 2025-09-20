@@ -637,12 +637,20 @@ async function processValidOptionSelection(
 			// Format bot message with options if available
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
 			
-			// Check if this block is in OFFER stage and handle resource lookup (same as navigate-funnel)
-			const isOfferBlock = nextBlockId ? funnelFlow.stages.some(
-				stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
-			) : false;
-			
-			if (isOfferBlock && nextBlock.resourceName) {
+		// Check if this block is in OFFER stage and handle resource lookup (same as navigate-funnel)
+		const isOfferBlock = nextBlockId ? funnelFlow.stages.some(
+			stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
+		) : false;
+		
+		console.log(`[processValidOptionSelection] OFFER block check:`, {
+			nextBlockId,
+			isOfferBlock,
+			hasResourceName: !!nextBlock.resourceName,
+			resourceName: nextBlock.resourceName,
+			stages: funnelFlow.stages.map(s => ({ name: s.name, blockIds: s.blockIds }))
+		});
+		
+		if (isOfferBlock && nextBlock.resourceName) {
 				console.log(`[processValidOptionSelection] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
 				
 				// Always show "Generating Link..." during retry process
@@ -741,10 +749,19 @@ async function processValidOptionSelection(
 				formattedMessage = `${formattedMessage}\n\n${numberedOptions}`;
 			}
 
-			botMessage = formattedMessage;
+		botMessage = formattedMessage;
 
-			// Record bot message (same as navigate-funnel)
-			await addMessage(conversationId, "bot", formattedMessage);
+		console.log(`[processValidOptionSelection] Final bot message:`, {
+			hasLink: formattedMessage.includes('[LINK]'),
+			hasAnimatedButton: formattedMessage.includes('animated-gold-button'),
+			hasGeneratingLink: formattedMessage.includes('generating-link-placeholder'),
+			hasReloadPage: formattedMessage.includes('Reload Page'),
+			messageLength: formattedMessage.length,
+			messagePreview: formattedMessage.substring(0, 200) + '...'
+		});
+
+		// Record bot message (same as navigate-funnel)
+		await addMessage(conversationId, "bot", formattedMessage);
 		}
 
 		// Reset escalation level on valid response

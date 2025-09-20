@@ -670,13 +670,16 @@ const UserChat: React.FC<UserChatProps> = ({
 			}
 
 		// Handle [LINK] placeholders and animated button HTML in bot messages
-			const renderMessageWithLinks = (text: string) => {
+		const renderMessageWithLinks = (msg: any, text: string) => {
 			// Debug logging
 			console.log(`[UserChat] Rendering message:`, { 
 				type: msg.type, 
 				hasAnimatedButton: text.includes('animated-gold-button'),
 				hasLink: text.includes('[LINK]'),
-				text: text.substring(0, 200) + '...'
+				isGeneratingLinkPlaceholder: text.includes('generating-link-placeholder'),
+				hasReloadPage: text.includes('Reload Page'),
+				text: text.substring(0, 200) + '...',
+				fullText: text // Show full text for debugging
 			});
 			
 			// Check for generating link placeholder first
@@ -876,7 +879,7 @@ const UserChat: React.FC<UserChatProps> = ({
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
 						}`}
 					>
-						{renderMessageWithLinks(msg.text)}
+						{renderMessageWithLinks(msg, msg.text)}
 					</div>
 				</div>
 			);
