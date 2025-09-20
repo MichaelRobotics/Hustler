@@ -9,7 +9,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { experiences, funnels, conversations, messages, users, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
-// import { dmMonitoringService } from "./dm-monitoring-actions"; // DEPRECATED - using cron jobs now
 import { createConversation, addMessage } from "./simplified-conversation-actions";
 import { closeExistingActiveConversationsByWhopUserId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";

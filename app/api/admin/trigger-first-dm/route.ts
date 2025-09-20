@@ -4,7 +4,6 @@ import { conversations, experiences, funnels, messages } from "@/lib/supabase/sc
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { getWelcomeMessage } from "@/lib/actions/user-join-actions";
-// import { multiTenantDMMonitoringManager } from "@/lib/actions/tenant-dm-monitoring-service"; // DEPRECATED - using cron jobs now
 import { findOrCreateUserForConversation, closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 import { headers } from "next/headers";
 import type { FunnelFlow } from "@/lib/types/funnel";

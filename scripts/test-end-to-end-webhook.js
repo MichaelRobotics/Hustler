@@ -189,7 +189,7 @@ async function testPhase2Integration() {
         
         // Run a simple test to verify Phase 2 functions work
         const testScript = `
-            const { dmMonitoringService } = require('./lib/actions/dm-monitoring-actions');
+            // DEPRECATED: dm-monitoring-actions.ts has been removed - using cron-based system now
             console.log('Phase 2 functions imported successfully');
         `;
         

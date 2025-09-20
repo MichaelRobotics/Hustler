@@ -10,7 +10,7 @@
 
 // Import all phase functions
 const { handleUserJoinEvent } = require('../lib/actions/user-join-actions');
-const { dmMonitoringService } = require('../lib/actions/dm-monitoring-actions');
+// DEPRECATED: dm-monitoring-actions.ts has been removed - using cron-based system now
 const { completeDMToInternalTransition } = require('../lib/actions/internal-chat-transition-actions');
 
 // Test configuration

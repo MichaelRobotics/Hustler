@@ -199,7 +199,7 @@ async function validatePhase4() {
 	logSection('Validating Integration');
 	
 	validateFileContent(
-		'lib/actions/dm-monitoring-actions.ts',
+		// 'lib/actions/dm-monitoring-actions.ts', // REMOVED - using cron-based system now
 		'DM Monitoring Integration',
 		['completeDMToInternalTransition', 'handleFunnel1Completion', 'isTransitionBlock']
 	);

@@ -8,7 +8,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-// import { dmMonitoringService } from "../../../lib/actions/dm-monitoring-actions"; // DEPRECATED - using cron jobs now
 import { authenticateWhopUser } from "../../../lib/middleware/whop-auth";
 
 /**

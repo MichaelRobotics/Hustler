@@ -6,7 +6,7 @@ Phase 2 implements the core message polling and response processing system for t
 ## 🎯 Key Components Implemented
 
 ### 1. DMMonitoringService Class
-**File:** `lib/actions/dm-monitoring-actions.ts`
+**File:** `lib/utils/cron-dm-monitoring.ts` (replaces deprecated dm-monitoring-actions.ts)
 
 A comprehensive service class that manages:
 - **Polling Intervals**: 5s for first minute, then 10s intervals

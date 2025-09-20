@@ -10,7 +10,8 @@ import { and, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, funnels, experiences } from "@/lib/supabase/schema";
 import { whopSdk } from "@/lib/whop-sdk";
-import { processUserResponse, sendNextBlockMessage, sendRePromptMessage, sendTransitionMessage, shouldSendRePrompt } from "@/lib/utils/dm-monitoring-core";
+import { processUserResponse, sendNextBlockMessage, sendRePromptMessage, shouldSendRePrompt } from "@/lib/utils/dm-monitoring-core";
+import { sendTransitionMessage } from "@/lib/actions/simplified-conversation-actions";
 import { detectConversationPhase } from "@/lib/actions/simplified-conversation-actions";
 import { rateLimiter } from "@/lib/middleware/rate-limiter";
 import { tenantMetricsCollector } from "@/lib/monitoring/tenant-metrics";
@@ -602,13 +603,14 @@ export async function handlePhase2Cleanup(experienceId?: string): Promise<{
         );
 
         if (transitionBlock) {
-          const result = await sendTransitionMessage(
-            conversation.id,
-            transitionBlock,
+          // Send transition message with app link resolution
+          const success = await sendTransitionMessage(
+            conversation.whopUserId,
+            transitionBlock.message,
             conversation.experienceId
           );
 
-          if (result.success) {
+          if (success) {
             // Complete the conversation
             await db.update(conversations)
               .set({
@@ -620,7 +622,7 @@ export async function handlePhase2Cleanup(experienceId?: string): Promise<{
             results.push({
               conversationId: conversation.id,
               action: 'completed_conversation',
-              result: result.success ? 'Success' : result.error || 'Unknown error'
+              result: success ? 'Success' : 'Failed to send transition message'
             });
             processed++;
           }

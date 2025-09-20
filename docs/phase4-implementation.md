@@ -49,7 +49,7 @@ docs/phase4-implementation.md                    # This documentation
 
 ### Modified Files
 ```
-lib/actions/dm-monitoring-actions.ts             # Integrated Phase 4 transition
+lib/utils/cron-dm-monitoring.ts                  # Cron-based DM monitoring (replaces dm-monitoring-actions.ts)
 ```
 
 ## 🔧 Core Functions
