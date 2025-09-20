@@ -694,7 +694,8 @@ const UserChat: React.FC<UserChatProps> = ({
 															// Extract the first resolved link
 															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
 															if (linkMatch) {
-																window.open(linkMatch[0], '_blank', 'noopener,noreferrer');
+																// Keep user inside Whop - navigate to the same page
+																window.location.href = linkMatch[0];
 															} else {
 																console.error('No resolved link found');
 															}

@@ -36,7 +36,8 @@ const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
       e.preventDefault();
       onClick();
     } else {
-      window.open(href, '_blank', 'noopener,noreferrer');
+      // Keep user inside Whop - navigate to the same page
+      window.location.href = href;
     }
   };
 
