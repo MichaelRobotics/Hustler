@@ -25,11 +25,11 @@ import AnimatedGoldButton from "./AnimatedGoldButton";
 async function trackIntent(experienceId: string, funnelId: string): Promise<void> {
   try {
     await apiPost("/api/analytics/track-intent", {
-      experienceId,
+				experienceId,
       funnelId
     });
     console.log(`✅ [UserChat] Intent tracked for experience ${experienceId}, funnel ${funnelId}`);
-  } catch (error) {
+		} catch (error) {
     console.error("❌ [UserChat] Error tracking intent:", error);
     // Don't throw - this is background tracking
   }
@@ -627,7 +627,7 @@ const UserChat: React.FC<UserChatProps> = ({
 					<div className="flex justify-center my-4">
 						<div className="px-4 py-2 bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-300 dark:border-amber-700/50 rounded-full shadow-sm">
 							<Text size="1" weight="medium" className="text-amber-700 dark:text-amber-300 text-center">
-								{msg.text}
+								{msg.text || 'System message'}
 							</Text>
 						</div>
 					</div>
@@ -635,15 +635,21 @@ const UserChat: React.FC<UserChatProps> = ({
 			}
 
 		// Handle [LINK] placeholders and animated button HTML in bot messages
-		const renderMessageWithLinks = (text: string) => {
-			// Debug logging
-			console.log(`[UserChat] Rendering message:`, { 
-				type: msg.type, 
-				hasAnimatedButton: text.includes('animated-gold-button'),
-				hasLink: text.includes('[LINK]'),
-				text: text.substring(0, 200) + '...',
-				fullText: text // Show full text for debugging
-			});
+			const renderMessageWithLinks = (text: string) => {
+		// Safety check for undefined text
+		if (!text || typeof text !== 'string') {
+			console.warn(`[UserChat] Invalid text provided to renderMessageWithLinks:`, { text, type: typeof text, msg });
+			return <Text size="2" className="text-gray-500 italic">Invalid message content</Text>;
+		}
+		
+		// Debug logging
+		console.log(`[UserChat] Rendering message:`, { 
+			type: msg.type, 
+			hasAnimatedButton: text.includes('animated-gold-button'),
+			hasLink: text.includes('[LINK]'),
+			text: text.substring(0, 200) + '...',
+			fullText: text // Show full text for debugging
+		});
 			
 			// Check for animated button HTML first
 			if (msg.type === "bot" && text.includes('animated-gold-button')) {
@@ -818,7 +824,7 @@ const UserChat: React.FC<UserChatProps> = ({
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
 						}`}
 					>
-						{renderMessageWithLinks(msg.text)}
+						{msg && typeof msg === 'object' ? renderMessageWithLinks(msg.text || '') : <Text size="2" className="text-gray-500 italic">Invalid message</Text>}
 					</div>
 				</div>
 			);
