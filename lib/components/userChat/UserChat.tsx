@@ -667,6 +667,8 @@ const UserChat: React.FC<UserChatProps> = ({
 											console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
 											trackIntent(experienceId, conversation.funnelId);
 										}
+										// Redirect to the link
+										window.location.href = href;
 									}}
 								/>
 							);

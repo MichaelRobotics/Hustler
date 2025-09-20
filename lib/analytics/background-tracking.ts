@@ -1,5 +1,5 @@
 import { db } from "@/lib/supabase/db-server";
-import { funnelAnalytics } from "@/lib/supabase/schema";
+import { funnelAnalytics, experiences } from "@/lib/supabase/schema";
 import { eq, sql, and } from "drizzle-orm";
 
 /**
@@ -125,11 +125,24 @@ export async function trackInterestBackground(
  * This is called when a user clicks a resource link button
  */
 export async function trackIntentBackground(
-  experienceId: string,
+  whopExperienceId: string,
   funnelId: string
 ): Promise<void> {
   try {
-    console.log(`📊 [BACKGROUND] Tracking intent for funnel ${funnelId} in experience ${experienceId}`);
+    console.log(`📊 [BACKGROUND] Tracking intent for funnel ${funnelId} in experience ${whopExperienceId}`);
+    
+    // First, find the database UUID for this Whop experience ID
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, whopExperienceId),
+    });
+
+    if (!experience) {
+      console.error(`❌ [BACKGROUND] Experience not found for whopExperienceId: ${whopExperienceId}`);
+      return;
+    }
+
+    const experienceId = experience.id;
+    console.log(`📊 [BACKGROUND] Found experience UUID: ${experienceId} for whopExperienceId: ${whopExperienceId}`);
     
     const today = new Date();
     const isToday = isTodayDate(today);
@@ -147,7 +160,6 @@ export async function trackIntentBackground(
       // Update existing record
       await db.update(funnelAnalytics)
         .set({
-          experienceId: experienceId, // Set experienceId if it was null
           totalIntent: sql`${funnelAnalytics.totalIntent} + 1`,
           todayIntent: isToday ? sql`${funnelAnalytics.todayIntent} + 1` : funnelAnalytics.todayIntent,
           lastUpdated: new Date()
