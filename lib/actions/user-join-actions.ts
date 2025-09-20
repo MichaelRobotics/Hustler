@@ -10,7 +10,7 @@ import { db } from "../supabase/db-server";
 import { experiences, funnels, conversations, messages, users, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { createConversation, addMessage } from "./simplified-conversation-actions";
-import { closeExistingActiveConversationsByWhopUserId } from "./user-management-actions";
+import { closeExistingActiveConversationsByWhopUserId, closeExistingActiveConversationsByMembershipId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
@@ -108,14 +108,16 @@ export async function handleUserJoinEvent(
 		}
 
 		// Step 5: Close any existing active conversations for this user
-		// Use membershipId for DM operations if available, otherwise fall back to userId
-		const dmUserId = membershipId || userId;
-		await closeExistingActiveConversationsByWhopUserId(dmUserId, experience.id);
+		// Close by both whopUserId and membershipId to be safe
+		await closeExistingActiveConversationsByWhopUserId(userId, experience.id);
+		if (membershipId) {
+			await closeExistingActiveConversationsByMembershipId(membershipId, experience.id);
+		}
 
 		// Step 6: Check if conversation already exists (race condition protection)
 		const existingConversation = await db.query.conversations.findFirst({
 			where: and(
-				eq(conversations.whopUserId, dmUserId),
+				eq(conversations.whopUserId, userId),
 				eq(conversations.experienceId, experience.id),
 				eq(conversations.status, "active")
 			),
@@ -130,11 +132,13 @@ export async function handleUserJoinEvent(
 		const conversationId = await createConversation(
 			experience.id,
 			liveFunnel.id,
-			dmUserId,
+			userId, // Use actual whopUserId
 			liveFunnel.flow.startBlockId,
+			membershipId, // Pass membershipId separately
 		);
 
 	// Send welcome DM and record it
+	const dmUserId = membershipId || userId; // Use membershipId for DM operations
 	const dmSent = await sendWelcomeDM(dmUserId, welcomeMessage, conversationId);
 	if (!dmSent) {
 		console.error(`Failed to send DM to user ${userId}`);
@@ -154,16 +158,20 @@ export async function handleUserJoinEvent(
 		// Get the DM conversations to find the new one
 		const dmConversations = await whopSdk.messages.listDirectMessageConversations();
 		const newConversation = dmConversations.find(conv => 
-			conv.feedMembers.some(member => 
-				// Look for a conversation where one member is the agent and the other is our user
-				member.username === 'tests-agentb2' // Agent username
-			) && conv.lastMessage?.content?.includes('Welcome, [Username]!')
+			// Look for a conversation that contains our welcome message
+			conv.lastMessage?.content?.includes('Welcome, [Username]!') ||
+			conv.lastMessage?.content?.includes('Welcome!') ||
+			conv.lastMessage?.content?.includes('Welcome to')
 		);
 		
 		if (newConversation) {
-			// Find the member ID for our user (not the agent)
+			// Find the member ID for our user
+			// Look for a member that matches our userId or membershipId
 			const userMember = newConversation.feedMembers.find(member => 
-				member.username !== 'tests-agentb2'
+				member.id === userId || 
+				member.id === membershipId ||
+				member.username === userId ||
+				member.username === membershipId
 			);
 			if (userMember) {
 				memberId = userMember.id;

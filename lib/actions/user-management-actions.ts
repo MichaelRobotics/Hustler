@@ -77,3 +77,33 @@ export async function closeExistingActiveConversationsByWhopUserId(
 		throw error;
 	}
 }
+
+/**
+ * Close existing active conversations by membership ID
+ * This ensures we don't have duplicate conversations for the same membership
+ */
+export async function closeExistingActiveConversationsByMembershipId(
+	membershipId: string,
+	experienceId: string,
+): Promise<number> {
+	try {
+		const result = await db.update(conversations)
+			.set({ 
+				status: "closed",
+				updatedAt: new Date()
+			})
+			.where(
+				and(
+					eq(conversations.membershipId, membershipId),
+					eq(conversations.experienceId, experienceId),
+					eq(conversations.status, "active")
+				)
+			);
+
+		console.log(`Closed ${result.rowCount || 0} existing active conversations for membershipId ${membershipId}`);
+		return result.rowCount || 0;
+	} catch (error) {
+		console.error("Error closing existing active conversations by membershipId:", error);
+		throw error;
+	}
+}

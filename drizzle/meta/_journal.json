@@ -99,6 +99,13 @@
       "when": 1758222391758,
       "tag": "20250918190631_analytics-restructure",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1758377329553,
+      "tag": "20250920140849_add_membership_id_to_conversations",
+      "breakpoints": true
     }
   ]
 }

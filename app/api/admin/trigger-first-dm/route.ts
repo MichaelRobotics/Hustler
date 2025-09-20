@@ -150,16 +150,18 @@ export async function POST(request: NextRequest) {
       // Get the DM conversations to find the new one
       const dmConversations = await whopSdk.messages.listDirectMessageConversations();
       const newConversation = dmConversations.find(conv => 
-        conv.feedMembers.some(member => 
-          // Look for a conversation where one member is the agent and the other is our user
-          member.username === 'tests-agentb2' // Agent username
-        ) && conv.lastMessage?.content?.includes('Welcome, [Username]!')
+        // Look for a conversation that contains our welcome message
+        conv.lastMessage?.content?.includes('Welcome, [Username]!') ||
+        conv.lastMessage?.content?.includes('Welcome!') ||
+        conv.lastMessage?.content?.includes('Welcome to')
       );
       
       if (newConversation) {
-        // Find the member ID for our user (not the agent)
+        // Find the member ID for our user
+        // Look for a member that matches our whopUserId
         const userMember = newConversation.feedMembers.find(member => 
-          member.username !== 'tests-agentb2'
+          member.id === whopUserId || 
+          member.username === whopUserId
         );
         if (userMember) {
           memberId = userMember.id;

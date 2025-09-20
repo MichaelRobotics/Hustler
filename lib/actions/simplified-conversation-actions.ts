@@ -226,6 +226,7 @@ export async function createConversation(
 	funnelId: string,
 	whopUserId: string,
 	startBlockId: string,
+	membershipId?: string,
 ): Promise<string> {
 	try {
 		// Close any existing active conversations for this user
@@ -245,6 +246,7 @@ export async function createConversation(
 			experienceId,
 			funnelId,
 			whopUserId,
+			membershipId,
 			status: "active",
 			currentBlockId: startBlockId,
 			userPath: [startBlockId],

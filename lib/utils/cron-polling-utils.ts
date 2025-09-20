@@ -353,22 +353,24 @@ export async function processConversationPolling(
           console.log(`    Last message:`, dm.lastMessage?.content || 'No last message');
         });
 
-        // Find conversation with this user using the same logic as old monitoring
+        // Find conversation with this user using stored member ID or fallback logic
+        const whopMemberId = conversation.metadata?.whopMemberId;
         const userDM = dmConversations.find((conv: any) => {
-          // Look for conversations with the agent (tests-agentb2) and our user
-          const hasAgent = conv.feedMembers?.some((member: any) => member.username === 'tests-agentb2');
-          
-          // Check if any member matches our user (by username or ID)
-          const hasUser = conv.feedMembers?.some((member: any) => 
-            member.username === conversation.whopUserId || 
-            member.id === conversation.whopUserId
-          );
-          
-          // Also check if the last message is from our user (by user ID)
-          const lastMessageFromUser = conv.lastMessage && conv.lastMessage.userId === conversation.whopUserId;
-          
-          // Return true if we have agent + (user member OR last message from user)
-          return hasAgent && (hasUser || lastMessageFromUser);
+          if (whopMemberId) {
+            // Use stored member ID if available
+            return conv.feedMembers?.some((member: any) => member.id === whopMemberId);
+          } else {
+            // Fallback: Look for conversations with our user
+            const hasUser = conv.feedMembers?.some((member: any) => 
+              member.username === conversation.whopUserId || 
+              member.id === conversation.whopUserId
+            );
+            
+            // Also check if the last message is from our user (by user ID)
+            const lastMessageFromUser = conv.lastMessage && conv.lastMessage.userId === conversation.whopUserId;
+            
+            return hasUser || lastMessageFromUser;
+          }
         });
 
         if (!userDM) {
