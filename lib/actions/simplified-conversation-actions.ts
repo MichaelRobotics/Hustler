@@ -913,6 +913,9 @@ async function generateAppLink(whopExperienceId: string, whopCompanyId: string, 
     // Get Whop API client
     const whopClient = getWhopApiClient(whopCompanyId, 'system'); // Use 'system' as userId for API calls
     
+    // Get company route (same as product sync)
+    const companyRoute = await whopClient.getCompanyRoute();
+    
     // Create a WhopApp-like object (same structure as in product sync)
     const appName = experienceName
       .toLowerCase()
@@ -933,7 +936,7 @@ async function generateAppLink(whopExperienceId: string, whopCompanyId: string, 
       checkoutUrl: undefined,
       route: undefined,
       experienceId: whopExperienceId,
-      companyRoute: undefined, // Will be set by generateAppUrl
+      companyRoute: companyRoute || undefined, // Use actual company route
       appSlug: experienceSlug
     };
     
