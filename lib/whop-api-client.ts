@@ -580,14 +580,16 @@ export class WhopApiClient {
   /**
    * Generate custom app URL using slugs
    * Falls back to system IDs if slugs are not available
+   * For FREE apps, no ref or affiliate parameters are added
    */
-  generateAppUrl(app: WhopApp, refId?: string): string {
+  generateAppUrl(app: WhopApp, refId?: string, isFree: boolean = true): string {
     // Try to use custom slugs first
     if (app.companySlug && app.appSlug) {
       const baseUrl = `https://whop.com/joined/${app.companySlug}/${app.appSlug}/app/`;
       const url = new URL(baseUrl);
       
-      if (refId) {
+      // Only add ref parameter for paid apps
+      if (refId && !isFree) {
         url.searchParams.set('ref', refId);
       }
       
@@ -599,7 +601,8 @@ export class WhopApiClient {
     const baseUrl = `https://whop.com/joined/${this.companyId}/${app.experienceId}/app/`;
     const url = new URL(baseUrl);
     
-    if (refId) {
+    // Only add ref parameter for paid apps
+    if (refId && !isFree) {
       url.searchParams.set('ref', refId);
     }
     

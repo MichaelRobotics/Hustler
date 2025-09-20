@@ -420,7 +420,8 @@ export async function triggerProductSyncForNewAdmin(
 						try {
 							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
           // Use custom app URL with slugs (falls back to system IDs)
-          const directUrl = whopClient.generateAppUrl(app, experienceId);
+          // FREE apps don't need ref or affiliate parameters
+          const directUrl = whopClient.generateAppUrl(app, experienceId, true);
 							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,

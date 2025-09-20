@@ -199,12 +199,14 @@ class WhopNativeTrackingService {
    * Create a direct app link for free products
    * This leads directly to the app inside Whop
    * Uses system IDs (fallback for when slugs are not available)
+   * FREE apps don't include ref or affiliate parameters
    */
-  createDirectAppLink(companyId: string, experienceId: string, refId?: string): string {
+  createDirectAppLink(companyId: string, experienceId: string, refId?: string, isFree: boolean = true): string {
     const baseUrl = `https://whop.com/joined/${companyId}/${experienceId}/app/`;
     const url = new URL(baseUrl);
     
-    if (refId) {
+    // Only add ref parameter for paid apps
+    if (refId && !isFree) {
       url.searchParams.set('ref', refId);
     }
     
@@ -214,12 +216,14 @@ class WhopNativeTrackingService {
   /**
    * Create a custom app link using slugs
    * This leads directly to the app inside Whop with custom URLs
+   * FREE apps don't include ref or affiliate parameters
    */
-  createCustomAppLink(companySlug: string, appSlug: string, refId?: string): string {
+  createCustomAppLink(companySlug: string, appSlug: string, refId?: string, isFree: boolean = true): string {
     const baseUrl = `https://whop.com/joined/${companySlug}/${appSlug}/app/`;
     const url = new URL(baseUrl);
     
-    if (refId) {
+    // Only add ref parameter for paid apps
+    if (refId && !isFree) {
       url.searchParams.set('ref', refId);
     }
     
