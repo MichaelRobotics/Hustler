@@ -13,7 +13,7 @@ import {
 import type { FunnelFlow } from "@/lib/types/funnel";
 import { updateFunnelGrowthPercentages } from "@/lib/actions/funnel-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
-// Removed direct import - now using API call
+import { generateAffiliateLinkForOfferStage } from "@/lib/actions/simplified-conversation-actions";
 
 async function loadConversationHandler(
   request: NextRequest,
@@ -153,33 +153,7 @@ async function loadConversationHandler(
 
             // Generate affiliate link for OFFER stage when transitioning to EXPERIENCE_QUALIFICATION
             console.log(`[TRANSITION] Generating affiliate link for OFFER stage (background)`);
-            safeBackgroundTracking(async () => {
-              try {
-                // Get the authorization header from the original request
-                const authHeader = request.headers.get('authorization');
-                const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/userchat/generate-affiliate-link`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...(authHeader && { 'Authorization': authHeader }),
-                  },
-                  body: JSON.stringify({
-                    conversationId,
-                    experienceId: conversation.experienceId,
-                    funnelFlow
-                  })
-                });
-                
-                if (response.ok) {
-                  const result = await response.json();
-                  console.log(`[TRANSITION] Affiliate link generated successfully:`, result.affiliateLink);
-                } else {
-                  console.error(`[TRANSITION] Failed to generate affiliate link:`, response.status);
-                }
-              } catch (error) {
-                console.error(`[TRANSITION] Error calling affiliate link API:`, error);
-              }
-            });
+            safeBackgroundTracking(() => generateAffiliateLinkForOfferStage(conversationId, conversation.experienceId, funnelFlow));
 
             // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
             const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
