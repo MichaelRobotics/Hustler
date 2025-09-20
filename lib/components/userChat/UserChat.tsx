@@ -640,22 +640,33 @@ const UserChat: React.FC<UserChatProps> = ({
 												onClick={async () => {
 													// Resolve the link when button is clicked
 													try {
+														console.log('[Button Click] Starting link resolution...');
+														console.log('[Button Click] Message text:', text.substring(0, 100));
+														
 														// Get blockId from message metadata or use current blockId
 														const blockId = msg.metadata?.blockId || conversation?.currentBlockId;
+														console.log('[Button Click] BlockId:', blockId);
+														
 														if (blockId) {
+															console.log('[Button Click] Resolving links...');
 															const resolvedMessage = await resolveOfferLinks(text, blockId);
+															console.log('[Button Click] Resolved message:', resolvedMessage.substring(0, 200));
+															
 															// Extract the first resolved link
 															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
+															console.log('[Button Click] Link match:', linkMatch);
+															
 															if (linkMatch) {
+																console.log('[Button Click] Opening link:', linkMatch[0]);
 																window.open(linkMatch[0], '_blank', 'noopener,noreferrer');
 															} else {
-																console.error('No resolved link found');
+																console.error('[Button Click] No resolved link found in message:', resolvedMessage);
 															}
 														} else {
-															console.error('No blockId available for link resolution');
+															console.error('[Button Click] No blockId available for link resolution');
 														}
 													} catch (error) {
-														console.error('Error resolving link on click:', error);
+														console.error('[Button Click] Error resolving link on click:', error);
 													}
 												}}
 											/>

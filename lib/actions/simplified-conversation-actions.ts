@@ -1029,10 +1029,23 @@ export async function resolveOfferLinkPlaceholders(message: string, blockId: str
   console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for block ${blockId}, experience ${experienceId}`);
 
   try {
+    // First, convert Whop experience ID to internal database UUID
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, experienceId),
+      columns: { id: true }
+    });
+
+    if (!experience) {
+      console.log(`[Offer Link Resolution] Experience not found for whopExperienceId: ${experienceId}`);
+      return message;
+    }
+
+    console.log(`[Offer Link Resolution] Found experience: ${experience.id} for whopExperienceId: ${experienceId}`);
+
     // Get the funnel flow to find the block and its resourceName
     const conversation = await db.query.conversations.findFirst({
       where: and(
-        eq(conversations.experienceId, experienceId),
+        eq(conversations.experienceId, experience.id), // Use database UUID, not Whop ID
         eq(conversations.currentBlockId, blockId)
       ),
       with: {
@@ -1060,7 +1073,7 @@ export async function resolveOfferLinkPlaceholders(message: string, blockId: str
     }
 
     // Look up the specific resource by name (same as VALUE_DELIVERY stage)
-    const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
+    const resourceLink = await lookupResourceLink(block.resourceName, experience.id);
     
     if (resourceLink) {
       // Replace all [LINK] placeholders with the actual link
