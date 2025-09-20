@@ -70,6 +70,8 @@ export interface WhopApp {
   checkoutUrl?: string;
   route?: string;
   experienceId?: string; // The experience ID for this app installation
+  companySlug?: string; // Company slug for custom URLs
+  appSlug?: string; // App slug for custom URLs
 }
 
 export class WhopApiClient {
@@ -115,6 +117,28 @@ export class WhopApiClient {
     const data = await apiCall();
     this.cache.set(cacheKey, { data, timestamp: now });
     return data;
+  }
+
+  /**
+   * Get company slug for custom URLs
+   */
+  async getCompanySlug(): Promise<string | null> {
+    try {
+      console.log(`🔍 Getting company slug for company ${this.companyId}...`);
+      
+      const companyResult = await whopSdk.companies.getCompany({
+        companyId: this.companyId
+      });
+      
+      const company = companyResult as any;
+      const slug = company?.slug || company?.title?.toLowerCase().replace(/[^a-z0-9]/g, '-') || null;
+      
+      console.log(`✅ Company slug: ${slug}`);
+      return slug;
+    } catch (error) {
+      console.error("❌ Error getting company slug:", error);
+      return null;
+    }
   }
 
   /**
@@ -164,17 +188,31 @@ export class WhopApiClient {
           }
           
           if (experiences.length > 0) {
-            const apps: WhopApp[] = experiences.map((exp: any) => ({
-              id: exp.app?.id || exp.id,
-              name: exp.app?.name || exp.name,
-              description: exp.description,
-              price: 0,
-              currency: 'usd',
-              discoveryPageUrl: undefined,
-              checkoutUrl: undefined,
-              route: undefined,
-              experienceId: exp.id // Store the experience ID for this app installation
-            }));
+            // Get company slug for custom URLs
+            const companySlug = await this.getCompanySlug();
+            
+            const apps: WhopApp[] = experiences.map((exp: any) => {
+              // Generate app slug from name
+              const appSlug = (exp.app?.name || exp.name)
+                ?.toLowerCase()
+                .replace(/[^a-z0-9]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '') + '-' + (exp.id?.slice(-8) || '');
+              
+              return {
+                id: exp.app?.id || exp.id,
+                name: exp.app?.name || exp.name,
+                description: exp.description,
+                price: 0,
+                currency: 'usd',
+                discoveryPageUrl: undefined,
+                checkoutUrl: undefined,
+                route: undefined,
+                experienceId: exp.id, // Store the experience ID for this app installation
+                companySlug: companySlug || undefined,
+                appSlug: appSlug || undefined
+              };
+            });
             
             console.log(`✅ Mapped to ${apps.length} installed apps from API`);
             
@@ -537,6 +575,36 @@ export class WhopApiClient {
     );
 
     return cheapestPlan;
+  }
+
+  /**
+   * Generate custom app URL using slugs
+   * Falls back to system IDs if slugs are not available
+   */
+  generateAppUrl(app: WhopApp, refId?: string): string {
+    // Try to use custom slugs first
+    if (app.companySlug && app.appSlug) {
+      const baseUrl = `https://whop.com/joined/${app.companySlug}/${app.appSlug}/app/`;
+      const url = new URL(baseUrl);
+      
+      if (refId) {
+        url.searchParams.set('ref', refId);
+      }
+      
+      console.log(`✅ Generated custom app URL: ${url.toString()}`);
+      return url.toString();
+    }
+    
+    // Fallback to system IDs
+    const baseUrl = `https://whop.com/joined/${this.companyId}/${app.experienceId}/app/`;
+    const url = new URL(baseUrl);
+    
+    if (refId) {
+      url.searchParams.set('ref', refId);
+    }
+    
+    console.log(`⚠️ Generated fallback app URL: ${url.toString()}`);
+    return url.toString();
   }
 }
 
