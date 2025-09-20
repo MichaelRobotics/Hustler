@@ -18,6 +18,7 @@ import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
+import GeneratingLink from "./GeneratingLink";
 
 /**
  * Track intent by calling the API endpoint
@@ -81,41 +82,79 @@ const UserChat: React.FC<UserChatProps> = ({
 		createdAt: Date;
 	}>>([]);
 	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
+	const [generatingLinks, setGeneratingLinks] = useState<Set<string>>(new Set());
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
 
-	// Function to resolve [LINK] placeholders for OFFER stage messages
-	const resolveOfferLinks = useCallback(async (message: string, resourceName: string): Promise<string> => {
+	// Function to resolve [LINK] placeholders for OFFER stage messages with retry logic
+	const resolveOfferLinks = useCallback(async (message: string, resourceName: string, messageId?: string): Promise<string> => {
 		if (!message.includes('[LINK]') || !experienceId || !resourceName) {
 			return message;
 		}
 
-		try {
-			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
-			
-			// Call the API to resolve links with resourceName
-			const response = await apiPost('/api/userchat/resolve-offer-links', {
-				message,
-				resourceName,
-				experienceId
-			}, experienceId);
+		// Mark this message as generating links
+		if (messageId) {
+			setGeneratingLinks(prev => new Set(prev).add(messageId));
+		}
 
-			if (response.ok) {
-				const result = await response.json();
-				if (result.success && result.resolvedMessage) {
-					console.log(`[UserChat] Successfully resolved [LINK] placeholders`);
-					return result.resolvedMessage;
+		const maxRetries = 3;
+		const retryDelay = 1000; // Start with 1 second delay
+		let retryCount = 0;
+
+		while (retryCount < maxRetries) {
+			try {
+				console.log(`[UserChat] Resolving [LINK] placeholders attempt ${retryCount + 1}/${maxRetries} for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
+				
+				// Call the API to resolve links with resourceName
+				const response = await apiPost('/api/userchat/resolve-offer-links', {
+					message,
+					resourceName,
+					experienceId
+				}, experienceId);
+
+				if (response.ok) {
+					const result = await response.json();
+					if (result.success && result.resolvedMessage) {
+						console.log(`[UserChat] Successfully resolved [LINK] placeholders on attempt ${retryCount + 1}`);
+						// Remove from generating links set
+						if (messageId) {
+							setGeneratingLinks(prev => {
+								const newSet = new Set(prev);
+								newSet.delete(messageId);
+								return newSet;
+							});
+						}
+						return result.resolvedMessage;
+					}
+				}
+				
+				retryCount++;
+				if (retryCount < maxRetries) {
+					console.log(`[UserChat] Link resolution failed, retrying in ${retryDelay * retryCount}ms...`);
+					await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
+				}
+			} catch (error) {
+				retryCount++;
+				console.error(`[UserChat] Error resolving links attempt ${retryCount}:`, error);
+				if (retryCount < maxRetries) {
+					console.log(`[UserChat] Retrying in ${retryDelay * retryCount}ms...`);
+					await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
 				}
 			}
-			
-			console.log(`[UserChat] Link resolution failed, keeping [LINK] placeholders`);
-			return message;
-		} catch (error) {
-			console.error(`[UserChat] Error resolving links:`, error);
-			return message;
 		}
+		
+		console.log(`[UserChat] Link resolution failed after ${maxRetries} attempts, keeping [LINK] placeholders`);
+		// Remove from generating links set
+		if (messageId) {
+			setGeneratingLinks(prev => {
+				const newSet = new Set(prev);
+				newSet.delete(messageId);
+				return newSet;
+			});
+		}
+		return message;
 	}, [experienceId]);
 
 	// Initialize conversation messages from backend data IMMEDIATELY
@@ -131,7 +170,7 @@ const UserChat: React.FC<UserChatProps> = ({
 							// Get resourceName from message metadata
 							const resourceName = msg.metadata?.resourceName;
 							if (resourceName) {
-								content = await resolveOfferLinks(content, resourceName);
+								content = await resolveOfferLinks(content, resourceName, msg.id);
 							} else {
 								console.log(`[UserChat] No resourceName in metadata for message with [LINK] placeholder`);
 							}
@@ -700,6 +739,9 @@ const UserChat: React.FC<UserChatProps> = ({
 				
 				// Handle legacy [LINK] placeholders
 				if (msg.type === "bot" && text.includes('[LINK]')) {
+					// Check if this message is currently generating links
+					const isGeneratingLink = generatingLinks.has(msg.id);
+					
 					// Split message by [LINK] placeholders
 					const parts = text.split('[LINK]');
 					const linkCount = (text.match(/\[LINK\]/g) || []).length;
@@ -718,39 +760,43 @@ const UserChat: React.FC<UserChatProps> = ({
 									)}
 									{partIndex < linkCount && (
 										<div className="mt-6 pt-4 flex justify-center">
-											<AnimatedGoldButton
-												href="#"
-												text="Get Started"
-												icon="sparkles"
-												onClick={async () => {
-													// Track intent when user clicks button
-													if (conversation?.funnelId && experienceId) {
-														console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
-														trackIntent(experienceId, conversation.funnelId);
-													}
-													
-													// Resolve the link when button is clicked
-													try {
-														// Get resourceName from message metadata
-														const resourceName = msg.metadata?.resourceName;
-														if (resourceName) {
-															const resolvedMessage = await resolveOfferLinks(text, resourceName);
-															// Extract the first resolved link
-															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
-															if (linkMatch) {
-																// Keep user inside Whop - navigate to the same page
-																window.location.href = linkMatch[0];
-															} else {
-																console.error('No resolved link found');
-															}
-														} else {
-															console.error('No resourceName available for link resolution');
+											{isGeneratingLink ? (
+												<GeneratingLink />
+											) : (
+												<AnimatedGoldButton
+													href="#"
+													text="Get Started"
+													icon="sparkles"
+													onClick={async () => {
+														// Track intent when user clicks button
+														if (conversation?.funnelId && experienceId) {
+															console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
+															trackIntent(experienceId, conversation.funnelId);
 														}
-													} catch (error) {
-														console.error('Error resolving link on click:', error);
-													}
-												}}
-											/>
+														
+														// Resolve the link when button is clicked
+														try {
+															// Get resourceName from message metadata
+															const resourceName = msg.metadata?.resourceName;
+															if (resourceName) {
+																const resolvedMessage = await resolveOfferLinks(text, resourceName, msg.id);
+																// Extract the first resolved link
+																const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
+																if (linkMatch) {
+																	// Keep user inside Whop - navigate to the same page
+																	window.location.href = linkMatch[0];
+																} else {
+																	console.error('No resolved link found');
+																}
+															} else {
+																console.error('No resourceName available for link resolution');
+															}
+														} catch (error) {
+															console.error('Error resolving link on click:', error);
+														}
+													}}
+												/>
+											)}
 										</div>
 									)}
 								</div>
