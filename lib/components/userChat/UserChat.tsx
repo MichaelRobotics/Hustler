@@ -859,11 +859,28 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Memoized message list - show conversation messages
 	const messageList = useMemo(() => {
-		const messagesToShow = conversationMessages.map(msg => ({
-			type: msg.type,
-			text: msg.content, // Use content property
-			timestamp: msg.createdAt,
-		}));
+		if (!Array.isArray(conversationMessages)) {
+			console.warn(`[UserChat] conversationMessages is not an array:`, conversationMessages);
+			return [];
+		}
+		
+		const messagesToShow = conversationMessages.map(msg => {
+			// Safety check for each message
+			if (!msg || typeof msg !== 'object') {
+				console.warn(`[UserChat] Invalid message in conversationMessages:`, msg);
+				return {
+					type: 'system',
+					text: 'Invalid message',
+					timestamp: new Date(),
+				};
+			}
+			
+			return {
+				type: msg.type || 'unknown',
+				text: msg.content || '', // Use content property
+				timestamp: msg.createdAt || new Date(),
+			};
+		});
 
 		console.log("UserChat: Rendering message list:", messagesToShow.length, "messages");
 		console.log("UserChat: Message list sample:", messagesToShow.slice(0, 2).map(m => ({
