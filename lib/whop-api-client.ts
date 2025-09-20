@@ -70,7 +70,7 @@ export interface WhopApp {
   checkoutUrl?: string;
   route?: string;
   experienceId?: string; // The experience ID for this app installation
-  companySlug?: string; // Company slug for custom URLs
+  companyRoute?: string; // Company route for URL generation
   appSlug?: string; // App slug for custom URLs
 }
 
@@ -120,23 +120,24 @@ export class WhopApiClient {
   }
 
   /**
-   * Get company slug for custom URLs
+   * Get company route/slug for custom URLs
    */
-  async getCompanySlug(): Promise<string | null> {
+  async getCompanyRoute(): Promise<string | null> {
     try {
-      console.log(`🔍 Getting company slug for company ${this.companyId}...`);
+      console.log(`🔍 Getting company route for company ${this.companyId}...`);
       
       const companyResult = await whopSdk.companies.getCompany({
         companyId: this.companyId
       });
       
       const company = companyResult as any;
-      const slug = company?.slug || company?.title?.toLowerCase().replace(/[^a-z0-9]/g, '-') || null;
+      // Use the actual route field from Whop API
+      const route = company?.route || null;
       
-      console.log(`✅ Company slug: ${slug}`);
-      return slug;
+      console.log(`✅ Company route: ${route}`);
+      return route;
     } catch (error) {
-      console.error("❌ Error getting company slug:", error);
+      console.error("❌ Error getting company route:", error);
       return null;
     }
   }
@@ -188,17 +189,10 @@ export class WhopApiClient {
           }
           
           if (experiences.length > 0) {
-            // Get company slug for custom URLs
-            const companySlug = await this.getCompanySlug();
+            // Get company route for custom URLs
+            const companyRoute = await this.getCompanyRoute();
             
             const apps: WhopApp[] = experiences.map((exp: any) => {
-              // Generate app slug from name
-              const appSlug = (exp.app?.name || exp.name)
-                ?.toLowerCase()
-                .replace(/[^a-z0-9]/g, '-')
-                .replace(/-+/g, '-')
-                .replace(/^-|-$/g, '') + '-' + (exp.id?.slice(-8) || '');
-              
               return {
                 id: exp.app?.id || exp.id,
                 name: exp.app?.name || exp.name,
@@ -207,10 +201,10 @@ export class WhopApiClient {
                 currency: 'usd',
                 discoveryPageUrl: undefined,
                 checkoutUrl: undefined,
-                route: undefined,
+                route: undefined, // Apps don't have custom routes
                 experienceId: exp.id, // Store the experience ID for this app installation
-                companySlug: companySlug || undefined,
-                appSlug: appSlug || undefined
+                companyRoute: companyRoute || undefined, // Company route for URL generation
+                appSlug: undefined // Apps don't have custom slugs
               };
             });
             
@@ -578,27 +572,14 @@ export class WhopApiClient {
   }
 
   /**
-   * Generate custom app URL using slugs
-   * Falls back to system IDs if slugs are not available
+   * Generate app URL using company route and experience ID
+   * Format: https://whop.com/joined/{companyRoute}/{experienceId}/app/
    * For FREE apps, no ref or affiliate parameters are added
    */
   generateAppUrl(app: WhopApp, refId?: string, isFree: boolean = true): string {
-    // Try to use custom slugs first
-    if (app.companySlug && app.appSlug) {
-      const baseUrl = `https://whop.com/joined/${app.companySlug}/${app.appSlug}/app/`;
-      const url = new URL(baseUrl);
-      
-      // Only add ref parameter for paid apps
-      if (refId && !isFree) {
-        url.searchParams.set('ref', refId);
-      }
-      
-      console.log(`✅ Generated custom app URL: ${url.toString()}`);
-      return url.toString();
-    }
-    
-    // Fallback to system IDs
-    const baseUrl = `https://whop.com/joined/${this.companyId}/${app.experienceId}/app/`;
+    // Use company route if available, otherwise fall back to company ID
+    const companyIdentifier = app.companyRoute || this.companyId;
+    const baseUrl = `https://whop.com/joined/${companyIdentifier}/${app.experienceId}/app/`;
     const url = new URL(baseUrl);
     
     // Only add ref parameter for paid apps
@@ -606,7 +587,7 @@ export class WhopApiClient {
       url.searchParams.set('ref', refId);
     }
     
-    console.log(`⚠️ Generated fallback app URL: ${url.toString()}`);
+    console.log(`✅ Generated app URL: ${url.toString()}`);
     return url.toString();
   }
 }

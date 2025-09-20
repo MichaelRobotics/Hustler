@@ -419,9 +419,9 @@ export async function triggerProductSyncForNewAdmin(
 					const batchPromises = batch.map(async (app) => {
 						try {
 							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
-          // Use custom app URL with slugs (falls back to system IDs)
+          // Use app URL with company route and experience ID
           // FREE apps don't need ref or affiliate parameters
-          const directUrl = whopClient.generateAppUrl(app, experienceId, true);
+          const directUrl = whopClient.generateAppUrl(app, undefined, true);
 							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,
