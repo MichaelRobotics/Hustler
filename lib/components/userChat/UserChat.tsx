@@ -18,6 +18,8 @@ import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
+import { safeBackgroundTracking } from "../../analytics/background-tracking";
+import { trackIntentBackground } from "../../analytics/background-tracking";
 
 interface UserChatProps {
 	funnelFlow: FunnelFlow;
@@ -645,6 +647,13 @@ const UserChat: React.FC<UserChatProps> = ({
 									href={href}
 									text={buttonText}
 									icon="sparkles"
+									onClick={() => {
+										// Track intent when user clicks button
+										if (conversation?.funnelId && experienceId) {
+											console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
+											safeBackgroundTracking(() => trackIntentBackground(experienceId, conversation.funnelId));
+										}
+									}}
 								/>
 							);
 						} else if (partIndex % 3 === 0) {
@@ -698,6 +707,12 @@ const UserChat: React.FC<UserChatProps> = ({
 												text="Get Started"
 												icon="sparkles"
 												onClick={async () => {
+													// Track intent when user clicks button
+													if (conversation?.funnelId && experienceId) {
+														console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
+														safeBackgroundTracking(() => trackIntentBackground(experienceId, conversation.funnelId));
+													}
+													
 													// Resolve the link when button is clicked
 													try {
 														// Get resourceName from message metadata

@@ -121,6 +121,57 @@ export async function trackInterestBackground(
 }
 
 /**
+ * Track intent when user clicks button and discovery page product is shown
+ * This is called when a user clicks a resource link button
+ */
+export async function trackIntentBackground(
+  experienceId: string,
+  funnelId: string
+): Promise<void> {
+  try {
+    console.log(`📊 [BACKGROUND] Tracking intent for funnel ${funnelId} in experience ${experienceId}`);
+    
+    const today = new Date();
+    const isToday = isTodayDate(today);
+    
+    // Check if funnel analytics record exists for this specific experience and funnel
+    const existingFunnelAnalytics = await db.select()
+      .from(funnelAnalytics)
+      .where(and(
+        eq(funnelAnalytics.funnelId, funnelId),
+        eq(funnelAnalytics.experienceId, experienceId)
+      ))
+      .limit(1);
+
+    if (existingFunnelAnalytics.length > 0) {
+      // Update existing record
+      await db.update(funnelAnalytics)
+        .set({
+          experienceId: experienceId, // Set experienceId if it was null
+          totalIntent: sql`${funnelAnalytics.totalIntent} + 1`,
+          todayIntent: isToday ? sql`${funnelAnalytics.todayIntent} + 1` : funnelAnalytics.todayIntent,
+          lastUpdated: new Date()
+        })
+        .where(eq(funnelAnalytics.id, existingFunnelAnalytics[0].id));
+    } else {
+      // Create new record
+      await db.insert(funnelAnalytics).values({
+        experienceId,
+        funnelId,
+        totalIntent: 1,
+        todayIntent: isToday ? 1 : 0,
+        lastUpdated: new Date()
+      });
+    }
+
+    console.log(`✅ [BACKGROUND] Tracked intent for funnel ${funnelId}`);
+  } catch (error) {
+    console.error("❌ [BACKGROUND] Error tracking intent:", error);
+    // Don't throw - this is background tracking
+  }
+}
+
+/**
  * Check if a date is today
  */
 function isTodayDate(date: Date): boolean {
