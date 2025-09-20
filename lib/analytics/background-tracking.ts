@@ -186,13 +186,14 @@ function isTodayDate(date: Date): boolean {
 export function safeBackgroundTracking(
   trackingFunction: () => Promise<void>
 ): void {
-  // Use setImmediate to run in the next tick, completely non-blocking
-  setImmediate(async () => {
+  // Use setTimeout to run in the next tick, completely non-blocking
+  // This works in both Node.js and browser environments
+  setTimeout(async () => {
     try {
       await trackingFunction();
     } catch (error) {
       console.error("❌ [BACKGROUND] Safe tracking error:", error);
       // Silently fail - never break the main flow
     }
-  });
+  }, 0);
 }
