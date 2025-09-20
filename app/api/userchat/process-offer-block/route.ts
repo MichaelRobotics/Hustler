@@ -18,20 +18,50 @@ async function processOfferBlockHandler(
   request: NextRequest,
   context: AuthContext
 ) {
+  let requestBody: any = null; // Define requestBody here for wider scope
   try {
+    console.log(`[process-offer-block] Starting request processing`);
+    console.log(`[process-offer-block] Request method: ${request.method}`);
+    console.log(`[process-offer-block] Request URL: ${request.url}`);
+    
+    // Validate HTTP method
+    if (request.method !== 'POST') {
+      console.error(`[process-offer-block] Invalid method: ${request.method}, expected POST`);
+      return createErrorResponse(
+        "METHOD_NOT_ALLOWED",
+        `Method ${request.method} not allowed. Use POST.`
+      );
+    }
+    
     const { user } = context;
+    console.log(`[process-offer-block] User context:`, { userId: user?.userId, experienceId: user?.experienceId });
+    
     const experienceId = user.experienceId;
 
     if (!experienceId) {
+      console.error(`[process-offer-block] Missing experience ID`);
       return createErrorResponse(
         "MISSING_EXPERIENCE_ID",
         "Experience ID is required"
       );
     }
 
-    const { messageId, messageText, conversationId } = await request.json();
+    let requestBody;
+    try {
+      requestBody = await request.json();
+      console.log(`[process-offer-block] Request body:`, requestBody);
+    } catch (error) {
+      console.error(`[process-offer-block] Error parsing request body:`, error);
+      return createErrorResponse(
+        "INVALID_JSON",
+        "Invalid JSON in request body"
+      );
+    }
+
+    const { messageId, messageText, conversationId } = requestBody;
 
     if (!messageId || !messageText || !conversationId) {
+      console.error(`[process-offer-block] Missing required parameters:`, { messageId, messageText, conversationId });
       return createErrorResponse(
         "MISSING_PARAMETERS",
         "messageId, messageText, and conversationId are required"
@@ -40,19 +70,35 @@ async function processOfferBlockHandler(
 
     console.log(`[process-offer-block] Processing message ${messageId} for conversation ${conversationId}`);
 
+    // Test database connection first
+    try {
+      await db.query.experiences.findFirst({ limit: 1 });
+      console.log(`[process-offer-block] Database connection test successful`);
+    } catch (dbError) {
+      console.error(`[process-offer-block] Database connection test failed:`, dbError);
+      return createErrorResponse(
+        "DATABASE_ERROR",
+        "Database connection failed"
+      );
+    }
+
     // Get the experience record
+    console.log(`[process-offer-block] Looking up experience with whopExperienceId: ${experienceId}`);
     const experience = await db.query.experiences.findFirst({
       where: eq(experiences.whopExperienceId, experienceId),
     });
 
     if (!experience) {
+      console.error(`[process-offer-block] Experience not found for whopExperienceId: ${experienceId}`);
       return createErrorResponse(
         "EXPERIENCE_NOT_FOUND",
         "Experience not found"
       );
     }
+    console.log(`[process-offer-block] Found experience: ${experience.id} for whopExperienceId: ${experienceId}`);
 
     // Get conversation with funnel data
+    console.log(`[process-offer-block] Looking up conversation: ${conversationId} for experience: ${experience.id}`);
     const conversation = await db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
@@ -63,12 +109,22 @@ async function processOfferBlockHandler(
       },
     });
 
-    if (!conversation || !conversation.funnel?.flow) {
+    if (!conversation) {
+      console.error(`[process-offer-block] Conversation not found: ${conversationId} for experience: ${experience.id}`);
       return createErrorResponse(
         "CONVERSATION_NOT_FOUND",
-        "Conversation or funnel not found"
+        "Conversation not found"
       );
     }
+
+    if (!conversation.funnel?.flow) {
+      console.error(`[process-offer-block] Funnel flow not found for conversation: ${conversationId}`);
+      return createErrorResponse(
+        "FUNNEL_NOT_FOUND",
+        "Funnel flow not found"
+      );
+    }
+    console.log(`[process-offer-block] Found conversation with funnel flow`);
 
     const funnelFlow = conversation.funnel.flow as any;
     const currentBlockId = conversation.currentBlockId;
@@ -200,7 +256,13 @@ async function processOfferBlockHandler(
     });
 
   } catch (error) {
-    console.error("Error processing OFFER block:", error);
+    console.error("Error processing OFFER block:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      messageId: requestBody?.messageId,
+      conversationId: requestBody?.conversationId,
+      experienceId: context?.user?.experienceId
+    });
     return createErrorResponse(
       "INTERNAL_ERROR",
       "Failed to process OFFER block"
@@ -208,4 +270,28 @@ async function processOfferBlockHandler(
   }
 }
 
+// Handle POST requests
 export const POST = withWhopAuth(processOfferBlockHandler);
+
+// Handle GET requests for testing
+export async function GET(request: NextRequest) {
+  console.log(`[process-offer-block] GET request received`);
+  return NextResponse.json({ 
+    message: "process-offer-block API is working", 
+    method: "GET",
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Handle OPTIONS requests for CORS
+export async function OPTIONS(request: NextRequest) {
+  console.log(`[process-offer-block] OPTIONS request received`);
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
