@@ -13,7 +13,7 @@ import {
 import type { FunnelFlow } from "@/lib/types/funnel";
 import { updateFunnelGrowthPercentages } from "@/lib/actions/funnel-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
-import { preGenerateAffiliateLink } from "@/lib/actions/simplified-conversation-actions";
+import { generateAffiliateLinkForOfferStage } from "@/lib/actions/simplified-conversation-actions";
 
 async function loadConversationHandler(
   request: NextRequest,
@@ -151,9 +151,9 @@ async function loadConversationHandler(
 
             // Interest tracking removed to prevent database conflicts
 
-            // Generate affiliate link for OFFER stage (background, non-blocking)
-            console.log(`[TRANSITION] Pre-generating affiliate link for OFFER stage (background)`);
-            safeBackgroundTracking(() => preGenerateAffiliateLink(conversationId, conversation.experienceId, funnelFlow));
+            // Generate affiliate link for OFFER stage when transitioning to EXPERIENCE_QUALIFICATION
+            console.log(`[TRANSITION] Generating affiliate link for OFFER stage (background)`);
+            safeBackgroundTracking(() => generateAffiliateLinkForOfferStage(conversationId, conversation.experienceId, funnelFlow));
 
             // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
             const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];

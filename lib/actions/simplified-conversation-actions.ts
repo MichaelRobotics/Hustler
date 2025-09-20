@@ -633,7 +633,7 @@ async function processValidOptionSelection(
 			.where(eq(conversations.id, conversationId))
 			.returning();
 
-		// Check if we're transitioning TO PAIN_POINT_QUALIFICATION stage
+		// Track interest when conversation reaches PAIN_POINT_QUALIFICATION stage
 		const isTransitioningToPainPointStage = nextBlockId && funnelFlow.stages.some(
 			stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(nextBlockId)
 		);
@@ -657,7 +657,7 @@ async function processValidOptionSelection(
 			if (isOfferBlock && nextBlock.resourceName) {
 				console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
 				
-				// Get the conversation to check for pre-generated affiliate link
+				// Get the conversation to check for pre-generated affiliate link (generated during TRANSITION → EXPERIENCE_QUALIFICATION)
 				const conversation = await db.query.conversations.findFirst({
 					where: eq(conversations.id, conversationId),
 				});
@@ -1248,21 +1248,21 @@ export async function updateConversation(
 // Tracking functions removed to prevent database conflicts and timeouts
 
 /**
- * Pre-generate affiliate link for OFFER stage
- * This ensures the link is ready when the OFFER stage is reached
+ * Generate affiliate link when conversation transitions to EXPERIENCE_QUALIFICATION stage
+ * This ensures the link is ready when the user reaches the OFFER stage later
  */
-export async function preGenerateAffiliateLink(
+export async function generateAffiliateLinkForOfferStage(
 	conversationId: string,
 	experienceId: string,
 	funnelFlow: FunnelFlow
 ): Promise<void> {
 	try {
-		console.log(`[PRE-GENERATE] Starting affiliate link generation for conversation ${conversationId}`);
+		console.log(`[AFFILIATE-GEN] Generating affiliate link for OFFER stage (conversation ${conversationId})`);
 		
 		// Find the OFFER stage block
 		const offerStage = funnelFlow.stages.find(stage => stage.name === 'OFFER');
 		if (!offerStage) {
-			console.log(`[PRE-GENERATE] No OFFER stage found in funnel flow`);
+			console.log(`[AFFILIATE-GEN] No OFFER stage found in funnel flow`);
 			return;
 		}
 		
@@ -1272,11 +1272,11 @@ export async function preGenerateAffiliateLink(
 			.find(block => block && block.resourceName);
 			
 		if (!offerBlock) {
-			console.log(`[PRE-GENERATE] No OFFER block with resourceName found`);
+			console.log(`[AFFILIATE-GEN] No OFFER block with resourceName found`);
 			return;
 		}
 		
-		console.log(`[PRE-GENERATE] Found OFFER block: ${offerBlock.id} with resourceName: ${offerBlock.resourceName}`);
+		console.log(`[AFFILIATE-GEN] Found OFFER block: ${offerBlock.id} with resourceName: ${offerBlock.resourceName}`);
 		
 		// Lookup resource by name and experience
 		const resource = await db.query.resources.findFirst({
@@ -1287,11 +1287,11 @@ export async function preGenerateAffiliateLink(
 		});
 		
 		if (!resource) {
-			console.log(`[PRE-GENERATE] Resource not found: ${offerBlock.resourceName}`);
+			console.log(`[AFFILIATE-GEN] Resource not found: ${offerBlock.resourceName}`);
 			return;
 		}
 		
-		console.log(`[PRE-GENERATE] Found resource: ${resource.name} with link: ${resource.link}`);
+		console.log(`[AFFILIATE-GEN] Found resource: ${resource.name} with link: ${resource.link}`);
 		
 		// Check if link already has affiliate parameters
 		const hasAffiliate = resource.link.includes('app=') || resource.link.includes('ref=');
@@ -1299,49 +1299,35 @@ export async function preGenerateAffiliateLink(
 		let affiliateLink = resource.link;
 		
 		if (!hasAffiliate) {
-			console.log(`[PRE-GENERATE] Adding affiliate parameters to resource link`);
+			console.log(`[AFFILIATE-GEN] Adding affiliate parameters to resource link`);
 			
 			// Get affiliate app ID (simplified - use experience ID directly)
 			const affiliateAppId = experienceId;
-			console.log(`[PRE-GENERATE] Using experience ID as affiliate app ID: ${affiliateAppId}`);
+			console.log(`[AFFILIATE-GEN] Using experience ID as affiliate app ID: ${affiliateAppId}`);
 			
 			// Add affiliate parameter to the link
 			const url = new URL(resource.link);
 			url.searchParams.set('app', affiliateAppId);
 			affiliateLink = url.toString();
 		} else {
-			console.log(`[PRE-GENERATE] Resource link already has affiliate parameters, using as-is`);
+			console.log(`[AFFILIATE-GEN] Resource link already has affiliate parameters, using as-is`);
 		}
 		
-		console.log(`[PRE-GENERATE] Generated affiliate link: ${affiliateLink}`);
+		console.log(`[AFFILIATE-GEN] Generated affiliate link: ${affiliateLink}`);
 		
 		// Store the affiliate link in the conversation
-		console.log(`[PRE-GENERATE] Updating conversation ${conversationId} with affiliate link`);
-		const updateResult = await db.update(conversations)
+		console.log(`[AFFILIATE-GEN] Storing affiliate link in conversation ${conversationId}`);
+		await db.update(conversations)
 			.set({
 				affiliateLink: affiliateLink,
 				updatedAt: new Date()
 			})
 			.where(eq(conversations.id, conversationId));
-		
-		console.log(`[PRE-GENERATE] Database update result:`, updateResult);
 			
-		console.log(`[PRE-GENERATE] Stored affiliate link in conversation ${conversationId}`);
-		
-		// Verify the link was stored
-		const verifyConversation = await db.query.conversations.findFirst({
-			where: eq(conversations.id, conversationId),
-		});
-		console.log(`[PRE-GENERATE] Verification - stored affiliate link: ${verifyConversation?.affiliateLink}`);
+		console.log(`[AFFILIATE-GEN] Successfully stored affiliate link for OFFER stage`);
 		
 	} catch (error) {
-		console.error(`[PRE-GENERATE] Error generating affiliate link:`, error);
-		console.error(`[PRE-GENERATE] Error details:`, {
-			conversationId,
-			experienceId,
-			error: error instanceof Error ? error.message : String(error),
-			stack: error instanceof Error ? error.stack : undefined
-		});
+		console.error(`[AFFILIATE-GEN] Error generating affiliate link for OFFER stage:`, error);
 		// Don't throw - this is background processing
 	}
 }
