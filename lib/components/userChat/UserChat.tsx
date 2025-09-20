@@ -18,8 +18,22 @@ import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
-import { safeBackgroundTracking } from "../../analytics/background-tracking";
-import { trackIntentBackground } from "../../analytics/background-tracking";
+
+/**
+ * Track intent by calling the API endpoint
+ */
+async function trackIntent(experienceId: string, funnelId: string): Promise<void> {
+  try {
+    await apiPost("/api/analytics/track-intent", {
+      experienceId,
+      funnelId
+    });
+    console.log(`✅ [UserChat] Intent tracked for experience ${experienceId}, funnel ${funnelId}`);
+  } catch (error) {
+    console.error("❌ [UserChat] Error tracking intent:", error);
+    // Don't throw - this is background tracking
+  }
+}
 
 interface UserChatProps {
 	funnelFlow: FunnelFlow;
@@ -651,7 +665,7 @@ const UserChat: React.FC<UserChatProps> = ({
 										// Track intent when user clicks button
 										if (conversation?.funnelId && experienceId) {
 											console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
-											safeBackgroundTracking(() => trackIntentBackground(experienceId, conversation.funnelId));
+											trackIntent(experienceId, conversation.funnelId);
 										}
 									}}
 								/>
@@ -710,7 +724,7 @@ const UserChat: React.FC<UserChatProps> = ({
 													// Track intent when user clicks button
 													if (conversation?.funnelId && experienceId) {
 														console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
-														safeBackgroundTracking(() => trackIntentBackground(experienceId, conversation.funnelId));
+														trackIntent(experienceId, conversation.funnelId);
 													}
 													
 													// Resolve the link when button is clicked
