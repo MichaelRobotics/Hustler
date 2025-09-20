@@ -193,6 +193,16 @@ export class WhopApiClient {
             const companyRoute = await this.getCompanyRoute();
             
             const apps: WhopApp[] = experiences.map((exp: any) => {
+              // Generate experience slug: {appName}-{experienceIdSuffix}
+              const appName = (exp.app?.name || exp.name || 'app')
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+              
+              const experienceIdSuffix = exp.id?.replace('exp_', '') || '';
+              const experienceSlug = `${appName}-${experienceIdSuffix}`;
+              
               return {
                 id: exp.app?.id || exp.id,
                 name: exp.app?.name || exp.name,
@@ -204,7 +214,7 @@ export class WhopApiClient {
                 route: undefined, // Apps don't have custom routes
                 experienceId: exp.id, // Store the experience ID for this app installation
                 companyRoute: companyRoute || undefined, // Company route for URL generation
-                appSlug: undefined // Apps don't have custom slugs
+                appSlug: experienceSlug // Generated experience slug
               };
             });
             
@@ -572,14 +582,19 @@ export class WhopApiClient {
   }
 
   /**
-   * Generate app URL using company route and experience ID
-   * Format: https://whop.com/joined/{companyRoute}/{experienceId}/app/
+   * Generate app URL using company route and experience slug
+   * Format: https://whop.com/joined/{companyRoute}/{experienceSlug}/app/
+   * Falls back to experience ID if slug not available
    * For FREE apps, no ref or affiliate parameters are added
    */
   generateAppUrl(app: WhopApp, refId?: string, isFree: boolean = true): string {
     // Use company route if available, otherwise fall back to company ID
     const companyIdentifier = app.companyRoute || this.companyId;
-    const baseUrl = `https://whop.com/joined/${companyIdentifier}/${app.experienceId}/app/`;
+    
+    // Use experience slug if available, otherwise fall back to experience ID
+    const experienceIdentifier = app.appSlug || app.experienceId;
+    
+    const baseUrl = `https://whop.com/joined/${companyIdentifier}/${experienceIdentifier}/app/`;
     const url = new URL(baseUrl);
     
     // Only add ref parameter for paid apps
