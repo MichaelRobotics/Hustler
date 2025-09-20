@@ -212,13 +212,14 @@ async function processFunnelNavigation(
 
       botMessage = formattedMessage;
 
-      // Record bot message
+      // Record bot message with metadata (blockId and resourceName for link resolution)
       await db.insert(messages).values({
         conversationId: conversationId,
         type: "bot",
         content: formattedMessage,
         metadata: {
           blockId: nextBlockId,
+          resourceName: nextBlock.resourceName || null,
           timestamp: new Date().toISOString(),
         },
       });

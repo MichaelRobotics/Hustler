@@ -32,10 +32,10 @@ const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
     // Call custom onClick if provided
     if (onClick) {
       onClick();
-    } else {
-      // Only open href if no custom onClick handler is provided
-      window.open(href, '_blank', 'noopener,noreferrer');
     }
+    
+    // Open link in new tab
+    window.open(href, '_blank', 'noopener,noreferrer');
   };
 
   const getIcon = () => {

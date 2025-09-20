@@ -71,18 +71,18 @@ const UserChat: React.FC<UserChatProps> = ({
 	const { appearance, toggleTheme } = useTheme();
 
 	// Function to resolve [LINK] placeholders for OFFER stage messages
-	const resolveOfferLinks = useCallback(async (message: string, blockId: string): Promise<string> => {
-		if (!message.includes('[LINK]') || !experienceId || !blockId) {
+	const resolveOfferLinks = useCallback(async (message: string, resourceName: string): Promise<string> => {
+		if (!message.includes('[LINK]') || !experienceId || !resourceName) {
 			return message;
 		}
 
 		try {
-			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `blockId: ${blockId}`);
+			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
 			
-			// Call the API to resolve links with blockId
+			// Call the API to resolve links with resourceName
 			const response = await apiPost('/api/userchat/resolve-offer-links', {
 				message,
-				blockId,
+				resourceName,
 				experienceId
 			}, experienceId);
 
@@ -112,10 +112,12 @@ const UserChat: React.FC<UserChatProps> = ({
 						
 						// Resolve [LINK] placeholders for bot messages
 						if (msg.type === "bot" && content.includes('[LINK]')) {
-							// Get blockId from message metadata or use current blockId
-							const blockId = msg.metadata?.blockId || conversation.currentBlockId;
-							if (blockId) {
-								content = await resolveOfferLinks(content, blockId);
+							// Get resourceName from message metadata
+							const resourceName = msg.metadata?.resourceName;
+							if (resourceName) {
+								content = await resolveOfferLinks(content, resourceName);
+							} else {
+								console.log(`[UserChat] No resourceName in metadata for message with [LINK] placeholder`);
 							}
 						}
 						
@@ -640,33 +642,22 @@ const UserChat: React.FC<UserChatProps> = ({
 												onClick={async () => {
 													// Resolve the link when button is clicked
 													try {
-														console.log('[Button Click] Starting link resolution...');
-														console.log('[Button Click] Message text:', text.substring(0, 100));
-														
-														// Get blockId from message metadata or use current blockId
-														const blockId = msg.metadata?.blockId || conversation?.currentBlockId;
-														console.log('[Button Click] BlockId:', blockId);
-														
-														if (blockId) {
-															console.log('[Button Click] Resolving links...');
-															const resolvedMessage = await resolveOfferLinks(text, blockId);
-															console.log('[Button Click] Resolved message:', resolvedMessage.substring(0, 200));
-															
+														// Get resourceName from message metadata
+														const resourceName = msg.metadata?.resourceName;
+														if (resourceName) {
+															const resolvedMessage = await resolveOfferLinks(text, resourceName);
 															// Extract the first resolved link
 															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
-															console.log('[Button Click] Link match:', linkMatch);
-															
 															if (linkMatch) {
-																console.log('[Button Click] Opening link:', linkMatch[0]);
 																window.open(linkMatch[0], '_blank', 'noopener,noreferrer');
 															} else {
-																console.error('[Button Click] No resolved link found in message:', resolvedMessage);
+																console.error('No resolved link found');
 															}
 														} else {
-															console.error('[Button Click] No blockId available for link resolution');
+															console.error('No resourceName available for link resolution');
 														}
 													} catch (error) {
-														console.error('[Button Click] Error resolving link on click:', error);
+														console.error('Error resolving link on click:', error);
 													}
 												}}
 											/>

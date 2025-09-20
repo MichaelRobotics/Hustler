@@ -266,6 +266,7 @@ export async function addMessage(
 	conversationId: string,
 	type: "user" | "bot",
 	content: string,
+	metadata?: any,
 ): Promise<string> {
 	try {
 		console.log(`[addMessage] Inserting message for conversation ${conversationId}:`, {
@@ -277,6 +278,7 @@ export async function addMessage(
 			conversationId,
 			type,
 			content,
+			metadata: metadata || null,
 		}).returning();
 
 		console.log(`[addMessage] Message inserted successfully with ID: ${newMessage.id}`);
@@ -599,6 +601,7 @@ async function processValidOptionSelection(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
+	resourceName?: string | null;
 	error?: string;
 }> {
 	try {
@@ -646,8 +649,12 @@ async function processValidOptionSelection(
 
 			botMessage = formattedMessage;
 
-			// Record bot message (same as navigate-funnel)
-			await addMessage(conversationId, "bot", formattedMessage);
+			// Record bot message with metadata (blockId and resourceName for link resolution)
+			await addMessage(conversationId, "bot", formattedMessage, {
+				blockId: nextBlockId,
+				resourceName: nextBlock.resourceName || null,
+				timestamp: new Date().toISOString(),
+			});
 		}
 
 		// Reset escalation level on valid response
@@ -659,6 +666,7 @@ async function processValidOptionSelection(
 			success: true,
 			botMessage: botMessage || undefined,
 			nextBlockId: nextBlockId || undefined,
+			resourceName: nextBlock?.resourceName || null,
 		};
 
 	} catch (error) {
@@ -1016,64 +1024,21 @@ async function lookupResourceLink(resourceName: string, experienceId: string): P
  * Uses the same logic as VALUE_DELIVERY stage - looks up specific resource by resourceName
  * 
  * @param message - Message to process
- * @param blockId - Block ID to get resourceName from
+ * @param resourceName - Resource name to look up
  * @param experienceId - Internal experience ID
  * @returns Resolved message with actual links
  */
-export async function resolveOfferLinkPlaceholders(message: string, blockId: string, experienceId: string): Promise<string> {
+export async function resolveOfferLinkPlaceholders(message: string, resourceName: string, experienceId: string): Promise<string> {
   // Check if message contains [LINK] placeholder
   if (!message.includes('[LINK]')) {
     return message;
   }
 
-  console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for block ${blockId}, experience ${experienceId}`);
+  console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for resourceName ${resourceName}, experience ${experienceId}`);
 
   try {
-    // First, convert Whop experience ID to internal database UUID
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.whopExperienceId, experienceId),
-      columns: { id: true }
-    });
-
-    if (!experience) {
-      console.log(`[Offer Link Resolution] Experience not found for whopExperienceId: ${experienceId}`);
-      return message;
-    }
-
-    console.log(`[Offer Link Resolution] Found experience: ${experience.id} for whopExperienceId: ${experienceId}`);
-
-    // Get the funnel flow to find the block and its resourceName
-    const conversation = await db.query.conversations.findFirst({
-      where: and(
-        eq(conversations.experienceId, experience.id), // Use database UUID, not Whop ID
-        eq(conversations.currentBlockId, blockId)
-      ),
-      with: {
-        funnel: true,
-      },
-    });
-
-    if (!conversation?.funnel?.flow) {
-      console.log(`[Offer Link Resolution] Conversation or funnel not found, keeping [LINK] placeholder`);
-      return message;
-    }
-
-    const funnelFlow = conversation.funnel.flow as FunnelFlow;
-    const block = funnelFlow.blocks[blockId];
-
-    if (!block) {
-      console.log(`[Offer Link Resolution] Block ${blockId} not found in funnel flow, keeping [LINK] placeholder`);
-      return message;
-    }
-
-    // Check if block has resourceName (same as VALUE_DELIVERY stage)
-    if (!block.resourceName) {
-      console.log(`[Offer Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
-      return message;
-    }
-
     // Look up the specific resource by name (same as VALUE_DELIVERY stage)
-    const resourceLink = await lookupResourceLink(block.resourceName, experience.id);
+    const resourceLink = await lookupResourceLink(resourceName, experienceId);
     
     if (resourceLink) {
       // Replace all [LINK] placeholders with the actual link
