@@ -633,17 +633,23 @@ async function processValidOptionSelection(
 			.where(eq(conversations.id, conversationId))
 			.returning();
 
-		// Track interest and pre-generate affiliate link when conversation reaches PAIN_POINT_QUALIFICATION stage
-		const isPainPointQualificationStage = nextBlockId && funnelFlow.stages.some(
+		// Check if we're transitioning TO PAIN_POINT_QUALIFICATION stage
+		const isTransitioningToPainPointStage = nextBlockId && funnelFlow.stages.some(
 			stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(nextBlockId)
 		);
 		
-		if (isPainPointQualificationStage) {
+		if (isTransitioningToPainPointStage) {
 			console.log(`🚀 [processValidOptionSelection] About to track interest for experience ${experienceId}, funnel ${updatedConversation[0].funnelId}`);
 			safeBackgroundTracking(() => trackInterestBackground(experienceId, updatedConversation[0].funnelId));
 			
 			// Pre-generate affiliate link for OFFER stage
-			await preGenerateAffiliateLink(conversationId, experienceId, funnelFlow);
+			console.log(`[processValidOptionSelection] Pre-generating affiliate link for OFFER stage`);
+			try {
+				await preGenerateAffiliateLink(conversationId, experienceId, funnelFlow);
+				console.log(`[processValidOptionSelection] Pre-generation completed successfully`);
+			} catch (error) {
+				console.error(`[processValidOptionSelection] Pre-generation failed:`, error);
+			}
 		}
 
 		// Generate bot response (same as navigate-funnel)
@@ -662,8 +668,15 @@ async function processValidOptionSelection(
 				
 				try {
 					// Get the conversation to check for pre-generated affiliate link
+					console.log(`[OFFER] Checking for pre-generated affiliate link in conversation ${conversationId}`);
 					const conversation = await db.query.conversations.findFirst({
 						where: eq(conversations.id, conversationId),
+					});
+					
+					console.log(`[OFFER] Conversation data:`, {
+						id: conversation?.id,
+						affiliateLink: conversation?.affiliateLink,
+						hasAffiliateLink: !!conversation?.affiliateLink
 					});
 					
 					if (conversation?.affiliateLink) {
@@ -1391,17 +1404,32 @@ async function preGenerateAffiliateLink(
 		console.log(`[PRE-GENERATE] Generated affiliate link: ${affiliateLink}`);
 		
 		// Store the affiliate link in the conversation
-		await db.update(conversations)
+		console.log(`[PRE-GENERATE] Updating conversation ${conversationId} with affiliate link`);
+		const updateResult = await db.update(conversations)
 			.set({
 				affiliateLink: affiliateLink,
 				updatedAt: new Date()
 			})
 			.where(eq(conversations.id, conversationId));
+		
+		console.log(`[PRE-GENERATE] Database update result:`, updateResult);
 			
 		console.log(`[PRE-GENERATE] Stored affiliate link in conversation ${conversationId}`);
 		
+		// Verify the link was stored
+		const verifyConversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+		});
+		console.log(`[PRE-GENERATE] Verification - stored affiliate link: ${verifyConversation?.affiliateLink}`);
+		
 	} catch (error) {
 		console.error(`[PRE-GENERATE] Error generating affiliate link:`, error);
+		console.error(`[PRE-GENERATE] Error details:`, {
+			conversationId,
+			experienceId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
 		// Don't throw - this is background processing
 	}
 }
