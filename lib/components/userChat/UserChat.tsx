@@ -165,6 +165,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	}, [conversation?.messages, resolveOfferLinks]);
 
 	// WebSocket integration for REAL-TIME updates only (background initialization)
+	console.log(`[UserChat] WebSocket connection status: conversationId=${conversationId}, experienceId=${experienceId}`);
 	const { isConnected, sendMessage, sendTypingIndicator, typingUsers } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
@@ -201,6 +202,9 @@ const UserChat: React.FC<UserChatProps> = ({
 			console.error("WebSocket error:", error);
 		},
 	});
+
+	// Log WebSocket connection status
+	console.log(`[UserChat] WebSocket isConnected: ${isConnected}`);
 
 	// Refresh conversation data when WebSocket receives new messages (optimized)
 	const refreshConversation = useCallback(async () => {
@@ -643,6 +647,7 @@ const UserChat: React.FC<UserChatProps> = ({
 			
 			// Check for animated button HTML first
 			if (msg.type === "bot" && text.includes('animated-gold-button')) {
+					console.log(`[UserChat] Found animated button in message, processing...`);
 					// Parse the HTML and extract the button data
 					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
 					const parts = text.split(buttonRegex);
@@ -699,8 +704,38 @@ const UserChat: React.FC<UserChatProps> = ({
 					);
 				}
 				
-				// Handle legacy [LINK] placeholders
+				// Handle legacy [LINK] placeholders (with delay to allow processing)
 				if (msg.type === "bot" && text.includes('[LINK]')) {
+					console.log(`[UserChat] Found [LINK] placeholder, checking if this is a new message that needs processing...`);
+					
+					// Check if this is a recent message (less than 3 seconds old) that might still be processing
+					const messageAge = msg.createdAt ? Date.now() - new Date(msg.createdAt).getTime() : 0;
+					const isRecentMessage = messageAge < 3000; // 3 seconds
+					
+					if (isRecentMessage) {
+						console.log(`[UserChat] Recent message with [LINK] placeholder, showing loading state...`);
+						
+						// Set a timeout to refresh the conversation after processing should complete
+						setTimeout(() => {
+							console.log(`[UserChat] Refreshing conversation to get processed content...`);
+							refreshConversation();
+						}, 2000); // Wait 2 seconds for processing to complete
+						
+						return (
+							<div className="space-y-3">
+								<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+									{text.replace('[LINK]', '')}
+								</Text>
+								<div className="mt-6 pt-4 flex justify-center">
+									<div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full">
+										<Text size="2" className="text-gray-600 dark:text-gray-400">
+											Loading link...
+										</Text>
+									</div>
+								</div>
+							</div>
+						);
+					}
 					// Split message by [LINK] placeholders
 					const parts = text.split('[LINK]');
 					const linkCount = (text.match(/\[LINK\]/g) || []).length;

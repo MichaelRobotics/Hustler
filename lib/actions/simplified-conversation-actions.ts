@@ -599,6 +599,8 @@ async function processValidOptionSelection(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
+	processedMessage?: string;
+	messageId?: string;
 	error?: string;
 }> {
 	try {
@@ -633,6 +635,7 @@ async function processValidOptionSelection(
 
 		// Generate bot response (same as navigate-funnel)
 		let botMessage = null;
+		let messageId = null;
 		if (nextBlock) {
 			// Check if this is an OFFER stage block and handle resource lookup
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
@@ -728,8 +731,13 @@ async function processValidOptionSelection(
 				hasLinkPlaceholder: formattedMessage.includes('[LINK]'),
 				messagePreview: formattedMessage.substring(0, 200)
 			});
-			await addMessage(conversationId, "bot", formattedMessage);
-			console.log(`[processValidOptionSelection] Bot message recorded successfully`);
+			messageId = await addMessage(conversationId, "bot", formattedMessage);
+			console.log(`[processValidOptionSelection] Bot message recorded successfully with ID: ${messageId}`);
+			console.log(`[processValidOptionSelection] Processed message content:`, formattedMessage);
+			
+			// Manually trigger frontend update with processed content
+			// Since WebSocket might send before processing completes, we'll return the processed content
+			// and let the API route handle the frontend notification
 		}
 
 		// Reset escalation level on valid response
@@ -741,6 +749,8 @@ async function processValidOptionSelection(
 			success: true,
 			botMessage: botMessage || undefined,
 			nextBlockId: nextBlockId || undefined,
+			processedMessage: botMessage || undefined, // Include the fully processed message
+			messageId: messageId || undefined,
 		};
 
 	} catch (error) {
