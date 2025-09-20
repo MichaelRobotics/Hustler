@@ -71,17 +71,18 @@ const UserChat: React.FC<UserChatProps> = ({
 	const { appearance, toggleTheme } = useTheme();
 
 	// Function to resolve [LINK] placeholders for OFFER stage messages
-	const resolveOfferLinks = useCallback(async (message: string): Promise<string> => {
-		if (!message.includes('[LINK]') || !experienceId) {
+	const resolveOfferLinks = useCallback(async (message: string, blockId: string): Promise<string> => {
+		if (!message.includes('[LINK]') || !experienceId || !blockId) {
 			return message;
 		}
 
 		try {
-			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100));
+			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `blockId: ${blockId}`);
 			
-			// Call the API to resolve links
+			// Call the API to resolve links with blockId
 			const response = await apiPost('/api/userchat/resolve-offer-links', {
 				message,
+				blockId,
 				experienceId
 			}, experienceId);
 
@@ -111,7 +112,11 @@ const UserChat: React.FC<UserChatProps> = ({
 						
 						// Resolve [LINK] placeholders for bot messages
 						if (msg.type === "bot" && content.includes('[LINK]')) {
-							content = await resolveOfferLinks(content);
+							// Get blockId from message metadata or use current blockId
+							const blockId = msg.metadata?.blockId || conversation.currentBlockId;
+							if (blockId) {
+								content = await resolveOfferLinks(content, blockId);
+							}
 						}
 						
 						return {
@@ -635,13 +640,19 @@ const UserChat: React.FC<UserChatProps> = ({
 												onClick={async () => {
 													// Resolve the link when button is clicked
 													try {
-														const resolvedMessage = await resolveOfferLinks(text);
-														// Extract the first resolved link
-														const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
-														if (linkMatch) {
-															window.open(linkMatch[0], '_blank', 'noopener,noreferrer');
+														// Get blockId from message metadata or use current blockId
+														const blockId = msg.metadata?.blockId || conversation?.currentBlockId;
+														if (blockId) {
+															const resolvedMessage = await resolveOfferLinks(text, blockId);
+															// Extract the first resolved link
+															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
+															if (linkMatch) {
+																window.open(linkMatch[0], '_blank', 'noopener,noreferrer');
+															} else {
+																console.error('No resolved link found');
+															}
 														} else {
-															console.error('No resolved link found');
+															console.error('No blockId available for link resolution');
 														}
 													} catch (error) {
 														console.error('Error resolving link on click:', error);

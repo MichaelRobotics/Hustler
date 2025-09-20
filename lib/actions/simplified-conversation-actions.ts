@@ -983,58 +983,92 @@ async function resolveAppLinkPlaceholders(message: string, experienceId: string)
 }
 
 /**
+ * Look up resource by name and experience ID (same as VALUE_DELIVERY stage)
+ * Returns the resource link if found, null otherwise
+ */
+async function lookupResourceLink(resourceName: string, experienceId: string): Promise<string | null> {
+  try {
+    console.log(`[Resource Lookup] Looking up resource: "${resourceName}" for experience: ${experienceId}`);
+    
+    const resource = await db.query.resources.findFirst({
+      where: and(
+        eq(resources.experienceId, experienceId),
+        eq(resources.name, resourceName)
+      ),
+    });
+
+    if (resource?.link) {
+      console.log(`[Resource Lookup] Found resource link: ${resource.link}`);
+      return resource.link;
+    } else {
+      console.log(`[Resource Lookup] Resource not found or has no link: "${resourceName}"`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[Resource Lookup] Error looking up resource "${resourceName}":`, error);
+    return null;
+  }
+}
+
+/**
  * Replace [LINK] placeholders with actual resource links for OFFER stage messages
  * This function handles [LINK] placeholders in OFFER blocks by replacing them with actual resource links
+ * Uses the same logic as VALUE_DELIVERY stage - looks up specific resource by resourceName
  * 
  * @param message - Message to process
+ * @param blockId - Block ID to get resourceName from
  * @param experienceId - Internal experience ID
  * @returns Resolved message with actual links
  */
-export async function resolveOfferLinkPlaceholders(message: string, experienceId: string): Promise<string> {
+export async function resolveOfferLinkPlaceholders(message: string, blockId: string, experienceId: string): Promise<string> {
   // Check if message contains [LINK] placeholder
   if (!message.includes('[LINK]')) {
     return message;
   }
 
-  console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for experience ${experienceId}`);
+  console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for block ${blockId}, experience ${experienceId}`);
 
   try {
-    // Get the experience record to get the Whop experience ID
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.id, experienceId),
-      columns: { whopExperienceId: true, whopCompanyId: true }
-    });
-
-    if (!experience) {
-      console.log(`[Offer Link Resolution] Experience not found, keeping [LINK] placeholder`);
-      return message;
-    }
-
-    // Look up resources for this experience (similar to VALUE_DELIVERY stage)
-    const resourcesList = await db.query.resources.findMany({
+    // Get the funnel flow to find the block and its resourceName
+    const conversation = await db.query.conversations.findFirst({
       where: and(
-        eq(resources.experienceId, experienceId),
-        eq(resources.type, "MY_PRODUCTS")
+        eq(conversations.experienceId, experienceId),
+        eq(conversations.currentBlockId, blockId)
       ),
-      columns: { name: true, link: true }
+      with: {
+        funnel: true,
+      },
     });
 
-    if (resourcesList.length === 0) {
-      console.log(`[Offer Link Resolution] No resources found for experience ${experienceId}, keeping [LINK] placeholder`);
+    if (!conversation?.funnel?.flow) {
+      console.log(`[Offer Link Resolution] Conversation or funnel not found, keeping [LINK] placeholder`);
       return message;
     }
 
-    // For OFFER stage, we'll use the first available resource link
-    // In a more sophisticated implementation, we could match by resource name or other criteria
-    const resourceLink = resourcesList[0].link;
+    const funnelFlow = conversation.funnel.flow as FunnelFlow;
+    const block = funnelFlow.blocks[blockId];
+
+    if (!block) {
+      console.log(`[Offer Link Resolution] Block ${blockId} not found in funnel flow, keeping [LINK] placeholder`);
+      return message;
+    }
+
+    // Check if block has resourceName (same as VALUE_DELIVERY stage)
+    if (!block.resourceName) {
+      console.log(`[Offer Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
+      return message;
+    }
+
+    // Look up the specific resource by name (same as VALUE_DELIVERY stage)
+    const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
     
     if (resourceLink) {
-      // Replace all [LINK] placeholders with the actual resource link
+      // Replace all [LINK] placeholders with the actual link
       const resolvedMessage = message.replace(/\[LINK\]/g, resourceLink);
       console.log(`[Offer Link Resolution] Replaced [LINK] with: ${resourceLink}`);
       return resolvedMessage;
     } else {
-      console.log(`[Offer Link Resolution] Resource link not found, keeping [LINK] placeholder`);
+      console.log(`[Offer Link Resolution] Resource not found, keeping [LINK] placeholder`);
       return message;
     }
   } catch (error) {

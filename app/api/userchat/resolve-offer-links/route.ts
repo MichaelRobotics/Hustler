@@ -45,12 +45,19 @@ async function resolveOfferLinksHandler(
       );
     }
 
-    const { message } = requestBody;
+    if (!requestBody.blockId) {
+      return createErrorResponse(
+        "MISSING_BLOCK_ID",
+        "Block ID is required"
+      );
+    }
 
-    console.log(`[resolve-offer-links] Resolving links for message:`, message.substring(0, 100));
+    const { message, blockId } = requestBody;
 
-    // Resolve [LINK] placeholders
-    const resolvedMessage = await resolveOfferLinkPlaceholders(message, experienceId);
+    console.log(`[resolve-offer-links] Resolving links for message:`, message.substring(0, 100), `blockId: ${blockId}`);
+
+    // Resolve [LINK] placeholders using specific blockId to get resourceName
+    const resolvedMessage = await resolveOfferLinkPlaceholders(message, blockId, experienceId);
 
     console.log(`[resolve-offer-links] Resolved message:`, resolvedMessage.substring(0, 100));
 
