@@ -83,10 +83,52 @@ const UserChat: React.FC<UserChatProps> = ({
 	}>>([]);
 	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
 	const [generatingLinks, setGeneratingLinks] = useState<Set<string>>(new Set());
+	const [processingMessages, setProcessingMessages] = useState<Set<string>>(new Set());
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
+
+	// Function to process OFFER blocks by calling backend
+	const processOfferBlock = useCallback(async (messageId: string, messageText: string): Promise<void> => {
+		console.log(`[UserChat] Processing OFFER block for message ${messageId}`);
+		
+		// Add to processing messages set
+		setProcessingMessages(prev => new Set(prev).add(messageId));
+		
+		try {
+			// Call the backend to process the OFFER block
+			const response = await apiPost('/api/userchat/process-offer-block', {
+				messageId,
+				messageText,
+				conversationId,
+				experienceId
+			}, experienceId);
+			
+			if (response.ok) {
+				const result = await response.json();
+				if (result.processedMessage) {
+					console.log(`[UserChat] Successfully processed OFFER block for message ${messageId}`);
+					
+					// Update the message in conversationMessages
+					setConversationMessages(prev => prev.map(msg => 
+						msg.id === messageId 
+							? { ...msg, content: result.processedMessage }
+							: msg
+					));
+				}
+			}
+		} catch (error) {
+			console.error(`[UserChat] Error processing OFFER block for message ${messageId}:`, error);
+		} finally {
+			// Remove from processing messages set
+			setProcessingMessages(prev => {
+				const newSet = new Set(prev);
+				newSet.delete(messageId);
+				return newSet;
+			});
+		}
+	}, [conversationId, experienceId]);
 
 	// Function to resolve [LINK] placeholders for OFFER stage messages with retry logic
 	const resolveOfferLinks = useCallback(async (message: string, resourceName: string, messageId?: string): Promise<string> => {
@@ -681,6 +723,28 @@ const UserChat: React.FC<UserChatProps> = ({
 				text: text.substring(0, 200) + '...',
 				fullText: text // Show full text for debugging
 			});
+			
+			// Hook: If this is a bot message with [LINK] placeholder, wait for backend processing
+			if (msg.type === "bot" && text.includes('[LINK]') && !text.includes('animated-gold-button') && !text.includes('generating-link-placeholder')) {
+				console.log(`[UserChat] Hook: Detected [LINK] placeholder, waiting for backend processing...`);
+				
+				// Trigger backend processing if not already processing
+				if (!processingMessages.has(msg.id)) {
+					processOfferBlock(msg.id, text);
+				}
+				
+				// Show generating link animation while waiting
+				return (
+					<div className="space-y-6">
+						<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+							{text.replace('[LINK]', '').trim()}
+						</Text>
+						<div className="flex justify-center pt-4">
+							<GeneratingLink />
+						</div>
+					</div>
+				);
+			}
 			
 			// Check for generating link placeholder first
 			if (msg.type === "bot" && text.includes('generating-link-placeholder')) {

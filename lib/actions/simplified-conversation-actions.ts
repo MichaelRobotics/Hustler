@@ -522,6 +522,8 @@ export async function processUserMessage(
 		// First, add the user message to the database
 		console.log(`[processUserMessage] Adding user message to conversation ${conversationId}:`, messageContent);
 		const userMessageId = await addMessage(conversationId, "user", messageContent);
+		
+		console.log(`[processUserMessage] Starting option matching for message: "${messageContent}"`);
 		console.log(`[processUserMessage] User message added with ID: ${userMessageId}`);
 
 		// Try to find a matching option (same logic as navigate-funnel)
@@ -544,6 +546,7 @@ export async function processUserMessage(
 					console.log(`[processUserMessage] Found option by number: ${optionIndex + 1} -> "${foundOption.text}"`);
 					
 					// Process the valid option selection
+					console.log(`[processUserMessage] Calling processValidOptionSelection for option by number: ${optionIndex + 1}`);
 					return await processValidOptionSelection(
 						conversationId,
 						messageContent,
@@ -558,6 +561,7 @@ export async function processUserMessage(
 			console.log(`[processUserMessage] Found matching option: "${selectedOption.text}"`);
 			
 			// Process the valid option selection
+			console.log(`[processUserMessage] Calling processValidOptionSelection for matching option: "${selectedOption.text}"`);
 			return await processValidOptionSelection(
 				conversationId,
 				messageContent,
@@ -634,6 +638,15 @@ async function processValidOptionSelection(
 		// Generate bot response (same as navigate-funnel)
 		let botMessage = null;
 		if (nextBlock) {
+			console.log(`[processValidOptionSelection] Processing nextBlock:`, {
+				nextBlockId,
+				blockMessage: nextBlock.message?.substring(0, 100) + '...',
+				hasResourceName: !!nextBlock.resourceName,
+				resourceName: nextBlock.resourceName,
+				hasOptions: !!(nextBlock.options && nextBlock.options.length > 0),
+				optionsCount: nextBlock.options?.length || 0
+			});
+			
 			// Format bot message with options if available
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
 			
@@ -738,6 +751,13 @@ async function processValidOptionSelection(
 			} else if (formattedMessage.includes('[LINK]')) {
 				// Handle other blocks that might have [LINK] placeholder
 				console.log(`[processValidOptionSelection] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage`);
+				console.log(`[processValidOptionSelection] OFFER block check failed:`, {
+					nextBlockId,
+					isOfferBlock,
+					hasResourceName: !!nextBlock.resourceName,
+					resourceName: nextBlock.resourceName,
+					messageContainsLink: formattedMessage.includes('[LINK]')
+				});
 				// Replace [LINK] placeholder with fallback text
 				formattedMessage = formattedMessage.replace('[LINK]', '[Link not available]');
 			}
