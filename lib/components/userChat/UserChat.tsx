@@ -84,6 +84,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
 	const [generatingLinks, setGeneratingLinks] = useState<Set<string>>(new Set());
 	const [processingMessages, setProcessingMessages] = useState<Set<string>>(new Set());
+	const [processedMessages, setProcessedMessages] = useState<Map<string, string>>(new Map());
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -113,6 +114,16 @@ const UserChat: React.FC<UserChatProps> = ({
 				const result = await response.json();
 				if (result.processedMessage) {
 					console.log(`[UserChat] Successfully processed OFFER block for message ${messageId}`);
+					console.log(`[UserChat] API returned processed message:`, {
+						hasAnimatedButton: result.processedMessage.includes('animated-gold-button'),
+						hasGeneratingLink: result.processedMessage.includes('generating-link-placeholder'),
+						hasReloadPage: result.processedMessage.includes('Reload Page'),
+						messageLength: result.processedMessage.length,
+						messagePreview: result.processedMessage.substring(0, 200) + '...'
+					});
+					
+					// Store the processed message
+					setProcessedMessages(prev => new Map(prev).set(messageId, result.processedMessage));
 					
 					// Update the message in conversationMessages
 					setConversationMessages(prev => prev.map(msg => 
@@ -120,6 +131,8 @@ const UserChat: React.FC<UserChatProps> = ({
 							? { ...msg, content: result.processedMessage }
 							: msg
 					));
+					
+					console.log(`[UserChat] Updated message ${messageId} with processed content`);
 				}
 			}
 		} catch (error) {
@@ -733,24 +746,36 @@ const UserChat: React.FC<UserChatProps> = ({
 			console.log(`[UserChat] Hook: Detected [LINK] placeholder, waiting for backend processing...`);
 			console.log(`[UserChat] Message object:`, { id: msg.id, type: msg.type, hasId: !!msg.id });
 			
-			// Trigger backend processing if not already processing
-			if (!processingMessages.has(msg.id)) {
-				console.log(`[UserChat] Calling processOfferBlock with messageId: ${msg.id}`);
-				processOfferBlock(msg.id, text);
+			// Check if we have a processed message for this messageId
+			const processedMessage = processedMessages.get(msg.id);
+			if (processedMessage) {
+				console.log(`[UserChat] Found processed message for ${msg.id}, rendering it`);
+				// Use the processed message instead of the original text
+				return renderMessageWithLinks(msg, processedMessage);
 			}
-				
-				// Show generating link animation while waiting
+			
+			// Check if this message is already being processed
+			if (processingMessages.has(msg.id)) {
+				console.log(`[UserChat] Message ${msg.id} is already being processed, waiting...`);
+				// Return a loading state while processing
 				return (
-					<div className="space-y-6">
-						<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
-							{text.replace('[LINK]', '').trim()}
-						</Text>
-						<div className="flex justify-center pt-4">
-							<GeneratingLink />
-						</div>
+					<div className="flex justify-center items-center py-8">
+						<div className="text-gray-500 dark:text-gray-400">Processing message...</div>
 					</div>
 				);
 			}
+			
+			// Trigger backend processing
+			console.log(`[UserChat] Calling processOfferBlock with messageId: ${msg.id}`);
+			processOfferBlock(msg.id, text);
+			
+			// Return loading state while processing
+			return (
+				<div className="flex justify-center items-center py-8">
+					<div className="text-gray-500 dark:text-gray-400">Processing message...</div>
+				</div>
+			);
+		}
 			
 			// Check for generating link placeholder first
 			if (msg.type === "bot" && text.includes('generating-link-placeholder')) {
@@ -794,11 +819,18 @@ const UserChat: React.FC<UserChatProps> = ({
 				);
 			}
 			
-			// Check for animated button HTML
-			if (msg.type === "bot" && text.includes('animated-gold-button')) {
-					// Parse the HTML and extract the button data
-					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
-					const parts = text.split(buttonRegex);
+		// Check for animated button HTML
+		if (msg.type === "bot" && text.includes('animated-gold-button')) {
+				console.log(`[UserChat] Rendering processed message with animated button for message ${msg.id}`);
+				console.log(`[UserChat] Processed message content:`, {
+					hasAnimatedButton: text.includes('animated-gold-button'),
+					messageLength: text.length,
+					messagePreview: text.substring(0, 200) + '...'
+				});
+				
+				// Parse the HTML and extract the button data
+				const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
+				const parts = text.split(buttonRegex);
 					
 					// Separate text and buttons
 					const textParts: React.ReactNode[] = [];
@@ -837,6 +869,8 @@ const UserChat: React.FC<UserChatProps> = ({
 							}
 						}
 					});
+					
+					console.log(`[UserChat] Rendering final message with ${buttons.length} button(s) for message ${msg.id}`);
 					
 					return (
 						<div className="space-y-6">

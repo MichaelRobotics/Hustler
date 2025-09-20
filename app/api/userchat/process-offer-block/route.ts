@@ -253,6 +253,16 @@ async function processOfferBlockHandler(
       hasReloadPage: formattedMessage.includes('Reload Page'),
     });
 
+    console.log(`[process-offer-block] Final processed message:`, {
+      originalMessage: messageText.substring(0, 100) + '...',
+      processedMessage: formattedMessage.substring(0, 200) + '...',
+      hasAnimatedButton: formattedMessage.includes('animated-gold-button'),
+      hasGeneratingLink: formattedMessage.includes('generating-link-placeholder'),
+      hasReloadPage: formattedMessage.includes('Reload Page'),
+      resourceFound: !!resource,
+      messageLength: formattedMessage.length
+    });
+
     return createSuccessResponse({
       processedMessage: formattedMessage,
       isOfferBlock: true,
