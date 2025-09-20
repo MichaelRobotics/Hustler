@@ -13,7 +13,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions, resources, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
-import { updateConversationBlock, addMessage, detectConversationPhase } from "../actions/simplified-conversation-actions";
+import { updateConversationBlock, addMessage, detectConversationPhase, sendTransitionMessage as sendEnhancedTransitionMessage } from "../actions/simplified-conversation-actions";
 import { getWhopApiClient } from "../whop-api-client";
 import type { FunnelFlow, FunnelBlock, FunnelBlockOption } from "../types/funnel";
 
@@ -274,10 +274,16 @@ export async function processUserResponse(
     // Add user message to database
     await addMessage(conversationId, "user", messageContent);
 
-    // Check if this is a Phase 2 "done" response
+    // Check phase-specific completion logic
     const currentPhase = detectConversationPhase(currentBlockId, funnelFlow);
-    if (currentPhase === 'PHASE2' && messageContent.toLowerCase().trim() === 'done') {
-      // Handle Phase 2 completion - transition to TRANSITION stage
+    
+    // Phase 1 completion: User responds to WELCOME → Send VALUE_DELIVERY message
+    if (currentPhase === 'PHASE1') {
+      return await handlePhase1Completion(conversationId, funnelFlow, experienceId);
+    }
+    
+    // Phase 2 completion: User responds to VALUE_DELIVERY → Send TRANSITION message
+    if (currentPhase === 'PHASE2') {
       return await handlePhase2Completion(conversationId, funnelFlow, experienceId);
     }
 
@@ -313,8 +319,12 @@ export async function processUserResponse(
     // Check if this is a TRANSITION block
     const nextBlock = funnelFlow.blocks[nextBlockId];
     if (isTransitionBlock(nextBlock, funnelFlow)) {
-      // Send transition message and complete conversation
-      await sendTransitionMessage(conversationId, nextBlock, experienceId);
+      // Send transition message with app link resolution and complete conversation
+      await sendEnhancedTransitionMessage(
+        conversation.whopUserId,
+        nextBlock.message,
+        experienceId
+      );
       return { success: true, nextBlockId };
     }
 
@@ -444,7 +454,70 @@ async function handleInvalidResponse(
 }
 
 /**
- * Handle Phase 2 completion (user said "done")
+ * Handle Phase 1 completion (user responded to WELCOME)
+ */
+async function handlePhase1Completion(
+  conversationId: string,
+  funnelFlow: FunnelFlow,
+  experienceId: string
+): Promise<{ success: boolean; nextBlockId?: string; error?: string }> {
+  try {
+    // Find VALUE_DELIVERY block
+    const valueDeliveryStage = funnelFlow.stages.find(stage => stage.name === 'VALUE_DELIVERY');
+    if (!valueDeliveryStage || valueDeliveryStage.blockIds.length === 0) {
+      return { success: false, error: "No VALUE_DELIVERY blocks found" };
+    }
+
+    const valueDeliveryBlockId = valueDeliveryStage.blockIds[0];
+    const valueDeliveryBlock = funnelFlow.blocks[valueDeliveryBlockId];
+
+    if (!valueDeliveryBlock) {
+      return { success: false, error: "VALUE_DELIVERY block not found" };
+    }
+
+    // Update conversation to VALUE_DELIVERY stage
+    const conversation = await db.query.conversations.findFirst({
+      where: and(
+        eq(conversations.id, conversationId),
+        eq(conversations.experienceId, experienceId)
+      ),
+    });
+
+    if (!conversation) {
+      return { success: false, error: "Conversation not found" };
+    }
+
+    const updatedUserPath = [...(conversation.userPath || []), valueDeliveryBlockId].filter(Boolean);
+    await updateConversationBlock(conversationId, valueDeliveryBlockId, updatedUserPath, experienceId);
+
+    // Set Phase 2 start time
+    await db.update(conversations)
+      .set({
+        phase2StartTime: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(conversations.id, conversationId));
+
+    // Send VALUE_DELIVERY message with resource link resolution
+    const result = await sendNextBlockMessage(conversationId, valueDeliveryBlockId, funnelFlow, experienceId);
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    console.log(`[DM Core] Sent VALUE_DELIVERY message and completed Phase 1 for conversation ${conversationId}`);
+    return { success: true, nextBlockId: valueDeliveryBlockId };
+
+  } catch (error) {
+    console.error(`[DM Core] Error handling Phase 1 completion:`, error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Handle Phase 2 completion (user responded to VALUE_DELIVERY)
  */
 async function handlePhase2Completion(
   conversationId: string,
@@ -480,8 +553,12 @@ async function handlePhase2Completion(
     const updatedUserPath = [...(conversation.userPath || []), transitionBlockId].filter(Boolean);
     await updateConversationBlock(conversationId, transitionBlockId, updatedUserPath, experienceId);
 
-    // Send transition message
-    await sendTransitionMessage(conversationId, transitionBlock, experienceId);
+    // Send transition message with app link resolution
+    await sendEnhancedTransitionMessage(
+      conversation.whopUserId,
+      transitionBlock.message,
+      conversation.experienceId
+    );
 
     return { success: true, nextBlockId: transitionBlockId };
 
@@ -494,47 +571,6 @@ async function handlePhase2Completion(
   }
 }
 
-/**
- * Send transition message with personalized chat link
- */
-export async function sendTransitionMessage(
-  conversationId: string,
-  transitionBlock: FunnelBlock,
-  experienceId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Create personalized chat link
-    const chatLink = `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'https://your-app.vercel.app'}/chat/${conversationId}`;
-    
-    // Create personalized message with chat link
-    const personalizedMessage = transitionBlock.message?.replace('{CHAT_LINK}', chatLink) || 
-      `Thanks for your interest! You can continue the conversation here: ${chatLink}`;
-
-    // Send transition message
-    const result = await sendDirectMessage(conversationId, personalizedMessage, experienceId);
-    if (!result.success) {
-      return result;
-    }
-
-    // Mark conversation as completed
-    await db.update(conversations)
-      .set({
-        status: "completed",
-        updatedAt: new Date(),
-      })
-      .where(eq(conversations.id, conversationId));
-
-    console.log(`[DM Core] Sent transition message and completed conversation ${conversationId}`);
-    return { success: true };
-
-  } catch (error) {
-    console.error(`[DM Core] Error sending transition message:`, error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
 
 /**
  * Check if a block is a transition block

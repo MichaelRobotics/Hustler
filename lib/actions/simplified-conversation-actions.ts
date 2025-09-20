@@ -19,7 +19,7 @@ export interface Conversation {
 	experienceId: string;
 	funnelId: string;
 	whopUserId: string;
-	status: "active" | "completed" | "closed" | "abandoned";
+	status: "active" | "closed" | "abandoned";
 	currentBlockId?: string;
 	userPath?: string[];
 	createdAt: Date;
@@ -61,14 +61,9 @@ export function detectConversationPhase(currentBlockId: string | null, funnelFlo
 		if (stage.blockIds.includes(currentBlockId)) {
 			switch (stage.name) {
 				case 'WELCOME':
-				case 'VALUE_DELIVERY':
 					return 'PHASE1';
-				case 'EXPERIENCE_QUALIFICATION':
-				case 'PAIN_POINT_QUALIFICATION':
-				case 'OFFER':
+				case 'VALUE_DELIVERY':
 					return 'PHASE2';
-				case 'TRANSITION':
-					return 'TRANSITION';
 				default:
 					return 'COMPLETED';
 			}
@@ -89,12 +84,12 @@ export function isTransitionBlock(block: FunnelBlock, funnelFlow: FunnelFlow): b
 }
 
 /**
- * Check if a block is a Phase 1 block (WELCOME and VALUE_DELIVERY stages)
+ * Check if a block is a Phase 1 block (WELCOME stage)
  */
 export function isPhase1Block(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
 	if (!block || !funnelFlow) return false;
 	
-	const phase1Stages = ['WELCOME', 'VALUE_DELIVERY'];
+	const phase1Stages = ['WELCOME'];
 	return phase1Stages.some(stageName => {
 		const stage = funnelFlow.stages.find(s => s.name === stageName);
 		return stage ? stage.blockIds.includes(block.id) : false;
@@ -102,12 +97,12 @@ export function isPhase1Block(block: FunnelBlock, funnelFlow: FunnelFlow): boole
 }
 
 /**
- * Check if a block is a Phase 2 block (EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION, OFFER)
+ * Check if a block is a Phase 2 block (VALUE_DELIVERY stage)
  */
 export function isPhase2Block(block: FunnelBlock, funnelFlow: FunnelFlow): boolean {
 	if (!block || !funnelFlow) return false;
 	
-	const phase2Stages = ['EXPERIENCE_QUALIFICATION', 'PAIN_POINT_QUALIFICATION', 'OFFER'];
+	const phase2Stages = ['VALUE_DELIVERY'];
 	return phase2Stages.some(stageName => {
 		const stage = funnelFlow.stages.find(s => s.name === stageName);
 		return stage ? stage.blockIds.includes(block.id) : false;
@@ -236,7 +231,7 @@ export async function createConversation(
 		// Close any existing active conversations for this user
 		await db.update(conversations)
 			.set({
-				status: "completed",
+				status: "closed",
 				updatedAt: new Date(),
 			})
 			.where(and(
@@ -368,18 +363,17 @@ export async function updateConversationBlock(
 }
 
 /**
- * Complete conversation
+ * Update conversation timestamp
  */
-export async function completeConversation(conversationId: string): Promise<void> {
+export async function updateConversationTimestamp(conversationId: string): Promise<void> {
 	try {
 		await db.update(conversations)
 			.set({
-				status: "completed",
 				updatedAt: new Date(),
 			})
 			.where(eq(conversations.id, conversationId));
 	} catch (error) {
-		console.error("Error completing conversation:", error);
+		console.error("Error updating conversation timestamp:", error);
 		throw error;
 	}
 }
@@ -1138,7 +1132,7 @@ export async function updateConversation(
 	conversationId: string,
 	experienceId: string,
 	updates: {
-		status?: "active" | "completed" | "closed" | "abandoned";
+		status?: "active" | "closed" | "abandoned";
 		currentBlockId?: string;
 		userPath?: string[];
 	},

@@ -153,7 +153,7 @@ console.log("  • POST /api/webhooks/whop-products - WHOP product webhooks");
 console.log("  • GET/POST /api/resources/sync - WHOP product synchronization");
 
 console.log("\n✅ Analytics API Routes:");
-console.log("  • GET /api/analytics - Analytics data retrieval");
+console.log("  • GET /api/analytics/tracking-links - Tracking link analytics");
 
 console.log("\n✅ Reporting API Routes:");
 console.log(

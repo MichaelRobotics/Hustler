@@ -60,10 +60,7 @@ export async function loadRealConversations(
 		// Add status filter
 		if (filters.status && filters.status !== "all") {
 			if (filters.status === "open") {
-				whereConditions = and(whereConditions, or(
-					eq(conversations.status, "active"),
-					eq(conversations.status, "completed")
-				))!;
+				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
 			} else if (filters.status === "closed") {
 				whereConditions = and(whereConditions, eq(conversations.status, "closed"))!;
 			}
@@ -235,10 +232,7 @@ export async function getConversationList(
 		// Add status filter
 		if (filters.status && filters.status !== "all") {
 			if (filters.status === "open") {
-				whereConditions = and(whereConditions, or(
-					eq(conversations.status, "active"),
-					eq(conversations.status, "completed")
-				))!;
+				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
 			} else if (filters.status === "closed") {
 				whereConditions = and(whereConditions, eq(conversations.status, "closed"))!;
 			}

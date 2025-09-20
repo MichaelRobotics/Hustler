@@ -611,17 +611,16 @@ export async function handlePhase2Cleanup(experienceId?: string): Promise<{
           );
 
           if (success) {
-            // Complete the conversation
+            // Update conversation timestamp
             await db.update(conversations)
               .set({
-                status: 'completed',
                 updatedAt: new Date(),
               })
               .where(eq(conversations.id, conversation.id));
 
             results.push({
               conversationId: conversation.id,
-              action: 'completed_conversation',
+              action: 'sent_transition_message',
               result: success ? 'Success' : 'Failed to send transition message'
             });
             processed++;

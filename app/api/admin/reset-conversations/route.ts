@@ -51,10 +51,7 @@ export async function POST(request: NextRequest) {
       where: and(
         eq(conversations.whopUserId, whopUserId),
         eq(conversations.experienceId, experience.id),
-        or(
-          eq(conversations.status, "active"),
-          eq(conversations.status, "completed")
-        )
+        eq(conversations.status, "active")
       ),
     });
 

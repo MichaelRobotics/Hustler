@@ -50,13 +50,10 @@ export async function getLiveChatConversations(
 
 		// Apply status filter - simplified logic
 		if (filters.status === "open") {
-			// Show active and completed conversations (both are "open" for admin)
-			whereConditions = and(whereConditions, or(
-				eq(conversations.status, "active"),
-				eq(conversations.status, "completed")
-			));
+			// Show active conversations
+			whereConditions = and(whereConditions, eq(conversations.status, "active"));
 		} else if (filters.status === "closed") {
-			// Show only closed conversations
+			// Show closed conversations
 			whereConditions = and(whereConditions, eq(conversations.status, "closed"));
 		}
 		// If status is "all", show all conversations (no additional filter)
@@ -173,8 +170,8 @@ export async function getLiveChatConversations(
 				// Determine conversation stage based on current block
 				const currentStage = determineConversationStage(conv.currentBlockId, conv.funnel?.flow as FunnelFlow);
 
-				// Status mapping: active/completed = open, closed/abandoned = closed
-				const displayStatus = (conv.status === "active" || conv.status === "completed") ? "open" : "closed";
+				// Status mapping: active = open, closed/abandoned = closed
+				const displayStatus = conv.status === "active" ? "open" : "closed";
 
 				return {
 					id: conv.id,
@@ -305,7 +302,7 @@ export async function getLiveChatConversationDetails(
 		const currentStage = determineConversationStage(conversation.currentBlockId, conversation.funnel?.flow as FunnelFlow);
 
 		// Status mapping: active and completed = open, closed and abandoned = closed
-		const displayStatus = (conversation.status === "active" || conversation.status === "completed") ? "open" : "closed";
+		const displayStatus = conversation.status === "active" ? "open" : "closed";
 
 		return {
 			id: conversation.id,
@@ -409,7 +406,7 @@ export async function sendLiveChatMessage(
 		}
 
 		// Allow sending messages to active and completed conversations
-		if (conversation.status !== "active" && conversation.status !== "completed") {
+		if (conversation.status !== "active") {
 			console.error("sendLiveChatMessage: Conversation not in valid state for messaging:", {
 				conversationId,
 				status: conversation.status,

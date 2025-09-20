@@ -59,7 +59,7 @@ export async function closeExistingActiveConversationsByWhopUserId(
 		const result = await db
 			.update(conversations)
 			.set({ 
-				status: "completed",
+				status: "closed",
 				updatedAt: new Date()
 			})
 			.where(

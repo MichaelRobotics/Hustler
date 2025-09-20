@@ -77,10 +77,7 @@ async function checkConversationHandler(
       where: and(
         eq(conversations.whopUserId, targetWhopUserId),
         eq(conversations.experienceId, experience.id),
-        or(
-          eq(conversations.status, "active"),
-          eq(conversations.status, "completed")
-        )
+        eq(conversations.status, "active")
       ),
       with: {
         funnel: true,
