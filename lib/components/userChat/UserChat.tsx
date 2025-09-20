@@ -630,32 +630,45 @@ const UserChat: React.FC<UserChatProps> = ({
 					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
 					const parts = text.split(buttonRegex);
 					
+					// Separate text and buttons
+					const textParts: React.ReactNode[] = [];
+					const buttons: React.ReactNode[] = [];
+					
+					parts.forEach((part, partIndex) => {
+						if (partIndex % 3 === 1) {
+							// This is the href
+							const href = part;
+							const buttonText = parts[partIndex + 1] || "Get Your Free Guide";
+							buttons.push(
+								<AnimatedGoldButton 
+									key={partIndex} 
+									href={href}
+									text={buttonText}
+									icon="sparkles"
+								/>
+							);
+						} else if (partIndex % 3 === 0) {
+							// This is text content
+							if (part.trim()) {
+								textParts.push(
+									<Text key={partIndex} size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+										{part.trim()}
+									</Text>
+								);
+							}
+						}
+					});
+					
 					return (
 						<div className="space-y-3">
-							{parts.map((part, partIndex) => {
-								// Check if this part is a button (odd indices after split)
-								if (partIndex % 3 === 1) {
-									// This is the href
-									const href = part;
-									const buttonText = parts[partIndex + 1] || "Get Your Free Guide";
-									return (
-										<AnimatedGoldButton 
-											key={partIndex} 
-											href={href}
-											text={buttonText}
-											icon="sparkles"
-										/>
-									);
-								} else if (partIndex % 3 === 0) {
-									// This is text content
-									return part.trim() ? (
-										<Text key={partIndex} size="2" className="whitespace-pre-wrap leading-relaxed text-base">
-											{part.trim()}
-										</Text>
-									) : null;
-								}
-								return null;
-							})}
+							{/* All text content first */}
+							{textParts}
+							{/* All buttons below text */}
+							{buttons.length > 0 && (
+								<div className="flex justify-center">
+									{buttons}
+								</div>
+							)}
 						</div>
 					);
 				}
