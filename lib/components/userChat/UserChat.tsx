@@ -25,11 +25,11 @@ import AnimatedGoldButton from "./AnimatedGoldButton";
 async function trackIntent(experienceId: string, funnelId: string): Promise<void> {
   try {
     await apiPost("/api/analytics/track-intent", {
-				experienceId,
+      experienceId,
       funnelId
     });
     console.log(`✅ [UserChat] Intent tracked for experience ${experienceId}, funnel ${funnelId}`);
-		} catch (error) {
+  } catch (error) {
     console.error("❌ [UserChat] Error tracking intent:", error);
     // Don't throw - this is background tracking
   }
@@ -88,12 +88,12 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Function to resolve [LINK] placeholders for OFFER stage messages
 	const resolveOfferLinks = useCallback(async (message: string, resourceName: string): Promise<string> => {
-		if (!message || !message.includes('[LINK]') || !experienceId || !resourceName) {
+		if (!message.includes('[LINK]') || !experienceId || !resourceName) {
 			return message;
 		}
 
 		try {
-			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message ? message.substring(0, 100) : 'undefined', `resourceName: ${resourceName}`);
+			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
 			
 			// Call the API to resolve links with resourceName
 			const response = await apiPost('/api/userchat/resolve-offer-links', {
@@ -127,7 +127,7 @@ const UserChat: React.FC<UserChatProps> = ({
 						let content = msg.text || msg.content;
 						
 						// Resolve [LINK] placeholders for bot messages
-						if (msg.type === "bot" && content && content.includes('[LINK]')) {
+						if (msg.type === "bot" && content.includes('[LINK]')) {
 							// Get resourceName from message metadata
 							const resourceName = msg.metadata?.resourceName;
 							if (resourceName) {
@@ -153,7 +153,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				console.log("UserChat: All messages:", formattedMessages.map(m => ({
 					id: m.id,
 					type: m.type,
-					content: m.content ? m.content.substring(0, 50) + (m.content.length > 50 ? '...' : '') : 'no content',
+					content: m.content.substring(0, 50) + (m.content.length > 50 ? '...' : ''),
 					createdAt: m.createdAt
 				})));
 				// Scroll to bottom after loading messages
@@ -627,7 +627,7 @@ const UserChat: React.FC<UserChatProps> = ({
 					<div className="flex justify-center my-4">
 						<div className="px-4 py-2 bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-300 dark:border-amber-700/50 rounded-full shadow-sm">
 							<Text size="1" weight="medium" className="text-amber-700 dark:text-amber-300 text-center">
-								{msg.text || 'System message'}
+								{msg.text}
 							</Text>
 						</div>
 					</div>
@@ -635,25 +635,18 @@ const UserChat: React.FC<UserChatProps> = ({
 			}
 
 		// Handle [LINK] placeholders and animated button HTML in bot messages
-			const renderMessageWithLinks = (text: string) => {
-		// Safety check for undefined text
-		if (!text || typeof text !== 'string') {
-			console.warn(`[UserChat] Invalid text provided to renderMessageWithLinks:`, { text, type: typeof text, msg });
-			return <Text size="2" className="text-gray-500 italic">Invalid message content</Text>;
-		}
-		
-		// Debug logging
-		console.log(`[UserChat] Rendering message:`, { 
-			type: msg.type, 
-			hasAnimatedButton: text.includes('animated-gold-button'),
-			hasLink: text.includes('[LINK]'),
-			text: text.substring(0, 200) + '...',
-			fullText: text // Show full text for debugging
-		});
+		const renderMessageWithLinks = (text: string) => {
+			// Debug logging
+			console.log(`[UserChat] Rendering message:`, { 
+				type: msg.type, 
+				hasAnimatedButton: text.includes('animated-gold-button'),
+				hasLink: text.includes('[LINK]'),
+				text: text.substring(0, 200) + '...',
+				fullText: text // Show full text for debugging
+			});
 			
 			// Check for animated button HTML first
 			if (msg.type === "bot" && text.includes('animated-gold-button')) {
-					console.log(`[UserChat] Found animated button in message, processing...`);
 					// Parse the HTML and extract the button data
 					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
 					const parts = text.split(buttonRegex);
@@ -710,41 +703,11 @@ const UserChat: React.FC<UserChatProps> = ({
 					);
 				}
 				
-				// Handle legacy [LINK] placeholders (with delay to allow processing)
+				// Handle legacy [LINK] placeholders
 				if (msg.type === "bot" && text.includes('[LINK]')) {
-					console.log(`[UserChat] Found [LINK] placeholder, checking if this is a new message that needs processing...`);
-					
-					// Check if this is a recent message (less than 3 seconds old) that might still be processing
-					const messageAge = msg.createdAt ? Date.now() - new Date(msg.createdAt).getTime() : 0;
-					const isRecentMessage = messageAge < 3000; // 3 seconds
-					
-					if (isRecentMessage) {
-						console.log(`[UserChat] Recent message with [LINK] placeholder, showing loading state...`);
-						
-						// Set a timeout to refresh the conversation after processing should complete
-						setTimeout(() => {
-							console.log(`[UserChat] Refreshing conversation to get processed content...`);
-							refreshConversation();
-						}, 2000); // Wait 2 seconds for processing to complete
-						
-						return (
-							<div className="space-y-3">
-								<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
-									{text ? text.replace('[LINK]', '') : ''}
-								</Text>
-								<div className="mt-6 pt-4 flex justify-center">
-									<div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full">
-										<Text size="2" className="text-gray-600 dark:text-gray-400">
-											Loading link...
-										</Text>
-									</div>
-								</div>
-							</div>
-						);
-					}
 					// Split message by [LINK] placeholders
-					const parts = text ? text.split('[LINK]') : [''];
-					const linkCount = text ? (text.match(/\[LINK\]/g) || []).length : 0;
+					const parts = text.split('[LINK]');
+					const linkCount = (text.match(/\[LINK\]/g) || []).length;
 					
 					return (
 						<div className="space-y-3">
@@ -824,7 +787,7 @@ const UserChat: React.FC<UserChatProps> = ({
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
 						}`}
 					>
-						{msg && typeof msg === 'object' ? renderMessageWithLinks(msg.text || '') : <Text size="2" className="text-gray-500 italic">Invalid message</Text>}
+						{renderMessageWithLinks(msg.text)}
 					</div>
 				</div>
 			);
@@ -859,51 +822,26 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Memoized message list - show conversation messages
 	const messageList = useMemo(() => {
-		if (!Array.isArray(conversationMessages)) {
-			console.warn(`[UserChat] conversationMessages is not an array:`, conversationMessages);
-			return [];
-		}
-		
-		const messagesToShow = conversationMessages.map(msg => {
-			// Safety check for each message
-			if (!msg || typeof msg !== 'object') {
-				console.warn(`[UserChat] Invalid message in conversationMessages:`, msg);
-				return {
-					type: 'system',
-					text: 'Invalid message',
-					timestamp: new Date(),
-				};
-			}
-			
-			return {
-				type: msg.type || 'unknown',
-				text: msg.content || '', // Use content property
-				timestamp: msg.createdAt || new Date(),
-			};
-		});
+		const messagesToShow = conversationMessages.map(msg => ({
+			type: msg.type,
+			text: msg.content, // Use content property
+			timestamp: msg.createdAt,
+		}));
 
 		console.log("UserChat: Rendering message list:", messagesToShow.length, "messages");
 		console.log("UserChat: Message list sample:", messagesToShow.slice(0, 2).map(m => ({
 			type: m.type,
-			text: m.text ? m.text.substring(0, 30) + (m.text.length > 30 ? '...' : '') : 'no text',
+			text: m.text.substring(0, 30) + (m.text.length > 30 ? '...' : ''),
 			timestamp: m.timestamp
 		})));
 
-		return messagesToShow.map((msg: any, index: number) => {
-			// Safety check for message object
-			if (!msg || typeof msg !== 'object') {
-				console.warn(`[UserChat] Invalid message object at index ${index}:`, msg);
-				return null;
-			}
-			
-			return (
-				<MessageComponent
-					key={`${msg.type}-${index}`}
-					msg={msg}
-					index={index}
-				/>
-			);
-		});
+		return messagesToShow.map((msg: any, index: number) => (
+			<MessageComponent
+				key={`${msg.type}-${index}`}
+				msg={msg}
+				index={index}
+			/>
+		));
 	}, [conversationMessages]);
 
 	// Memoized options list

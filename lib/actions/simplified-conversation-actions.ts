@@ -270,7 +270,7 @@ export async function addMessage(
 	try {
 		console.log(`[addMessage] Inserting message for conversation ${conversationId}:`, {
 			type,
-			content: content ? content.substring(0, 100) + (content.length > 100 ? '...' : '') : 'no content',
+			content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
 		});
 
 		const [newMessage] = await db.insert(messages).values({
@@ -287,7 +287,7 @@ export async function addMessage(
 			stack: error instanceof Error ? error.stack : undefined,
 			conversationId,
 			type,
-			content: content ? content.substring(0, 100) + (content.length > 100 ? '...' : '') : 'no content',
+			content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
 		});
 		throw error;
 	}
@@ -515,7 +515,7 @@ export async function processUserMessage(
 		}
 
 		console.log(`[processUserMessage] Current block: ${currentBlockId}`, {
-			message: currentBlock.message ? currentBlock.message.substring(0, 100) : 'no message',
+			message: currentBlock.message?.substring(0, 100),
 			optionsCount: currentBlock.options?.length || 0
 		});
 
@@ -599,8 +599,6 @@ async function processValidOptionSelection(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
-	processedMessage?: string;
-	messageId?: string;
 	error?: string;
 }> {
 	try {
@@ -635,7 +633,6 @@ async function processValidOptionSelection(
 
 		// Generate bot response (same as navigate-funnel)
 		let botMessage = null;
-		let messageId = null;
 		if (nextBlock) {
 			// Check if this is an OFFER stage block and handle resource lookup
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
@@ -645,8 +642,12 @@ async function processValidOptionSelection(
 				stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
 			) : false;
 			
+			// ONLY process OFFER blocks - other blocks should not have [LINK] placeholders
 			if (isOfferBlock && nextBlock.resourceName) {
 				console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
+				
+				// Ensure we have a resource before proceeding
+				let resolvedLink = null;
 				
 				try {
 					// Lookup resource by name and experience
@@ -681,37 +682,34 @@ async function processValidOptionSelection(
 							// Add affiliate parameter to the link
 							const url = new URL(resource.link);
 							url.searchParams.set('app', affiliateAppId);
-							const affiliateLink = url.toString();
-							
-							console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
-							
-							// Replace [LINK] placeholder with animated button HTML
-							const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
+							resolvedLink = url.toString();
+						} else {
+							console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
+							resolvedLink = resource.link;
+						}
+						
+						console.log(`[OFFER] Generated resolved link: ${resolvedLink}`);
+						
+						// Only replace [LINK] placeholder if we have a resolved link
+						if (resolvedLink) {
+							const buttonHtml = `<div class="animated-gold-button" data-href="${resolvedLink}">Get Your Free Guide</div>`;
 							formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
 							console.log(`[OFFER] Generated button HTML: ${buttonHtml}`);
 							console.log(`[OFFER] Final formatted message: ${formattedMessage}`);
 						} else {
-							console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
-							// Replace [LINK] placeholder with animated button HTML
-							const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
-							formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
-							console.log(`[OFFER] Generated button HTML: ${buttonHtml}`);
-							console.log(`[OFFER] Final formatted message: ${formattedMessage}`);
+							console.error(`[OFFER] No resolved link available, keeping [LINK] placeholder`);
 						}
 					} else {
 						console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
-						// Replace [LINK] placeholder with fallback text
 						formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
 					}
 				} catch (error) {
 					console.error(`[OFFER] Error processing resource lookup:`, error);
-					// Replace [LINK] placeholder with fallback text
 					formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
 				}
 			} else if (formattedMessage.includes('[LINK]')) {
 				// Handle other blocks that might have [LINK] placeholder
-				console.log(`[LINK] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage`);
-				// Replace [LINK] placeholder with fallback text
+				console.log(`[LINK] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage - removing placeholder`);
 				formattedMessage = formattedMessage.replace('[LINK]', '[Link not available]');
 			}
 			
@@ -729,15 +727,11 @@ async function processValidOptionSelection(
 				conversationId,
 				hasAnimatedButton: formattedMessage.includes('animated-gold-button'),
 				hasLinkPlaceholder: formattedMessage.includes('[LINK]'),
-				messagePreview: formattedMessage ? formattedMessage.substring(0, 200) : 'no message'
+				messagePreview: formattedMessage.substring(0, 200)
 			});
-			messageId = await addMessage(conversationId, "bot", formattedMessage);
+			const messageId = await addMessage(conversationId, "bot", formattedMessage);
 			console.log(`[processValidOptionSelection] Bot message recorded successfully with ID: ${messageId}`);
 			console.log(`[processValidOptionSelection] Processed message content:`, formattedMessage);
-			
-			// Manually trigger frontend update with processed content
-			// Since WebSocket might send before processing completes, we'll return the processed content
-			// and let the API route handle the frontend notification
 		}
 
 		// Reset escalation level on valid response
@@ -749,8 +743,6 @@ async function processValidOptionSelection(
 			success: true,
 			botMessage: botMessage || undefined,
 			nextBlockId: nextBlockId || undefined,
-			processedMessage: botMessage || undefined, // Include the fully processed message
-			messageId: messageId || undefined,
 		};
 
 	} catch (error) {
