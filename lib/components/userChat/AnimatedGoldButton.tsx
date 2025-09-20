@@ -1,97 +1,65 @@
 "use client";
-
-import React from "react";
-import { ExternalLink, ArrowRight, Sparkles } from "lucide-react";
+import React from 'react';
+import { Sparkles, ArrowRight, Star } from 'lucide-react';
 
 interface AnimatedGoldButtonProps {
   href: string;
   text: string;
-  icon?: "external" | "arrow" | "sparkles";
+  icon?: 'sparkles' | 'arrowRight' | 'star';
   onClick?: () => void;
+  className?: string;
 }
 
-/**
- * Animated Gold Button Component for [LINK] placeholders
- * 
- * Features:
- * - Animated gold gradient background
- * - Pulsing animation to draw attention
- * - Icon + two-word lead magnet text
- * - Smooth hover effects
- * - Mobile-optimized touch interactions
- */
-const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
-  href,
-  text,
-  icon = "external",
-  onClick
+const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({ 
+  href, 
+  text, 
+  icon = 'sparkles', 
+  onClick,
+  className = ''
 }) => {
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    
-    // Call custom onClick if provided
-    if (onClick) {
-      onClick();
-    }
-    
-    // Open link in new tab
-    window.open(href, '_blank', 'noopener,noreferrer');
-  };
-
   const getIcon = () => {
     switch (icon) {
-      case "arrow":
-        return <ArrowRight size={16} className="text-white" />;
-      case "sparkles":
-        return <Sparkles size={16} className="text-white" />;
-      case "external":
+      case 'sparkles':
+        return <Sparkles className="w-5 h-5" />;
+      case 'arrowRight':
+        return <ArrowRight className="w-5 h-5" />;
+      case 'star':
+        return <Star className="w-5 h-5" />;
       default:
-        return <ExternalLink size={16} className="text-white" />;
+        return <Sparkles className="w-5 h-5" />;
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      e.preventDefault();
+      onClick();
+    } else {
+      window.open(href, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
-    <button
+    <a
+      href={href}
       onClick={handleClick}
-      className="group relative inline-flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-white text-sm transition-all duration-300 transform hover:scale-105 active:scale-95 touch-manipulation shadow-lg hover:shadow-xl"
-      style={{
-        background: "linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%)",
-        backgroundSize: "200% 200%",
-        animation: "goldenPulse 2s ease-in-out infinite",
-        WebkitTapHighlightColor: "transparent",
-      }}
+      className={`relative inline-flex items-center justify-center px-6 py-3 text-lg font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group ${className}`}
     >
       {/* Animated background overlay */}
-      <div 
-        className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"
-        style={{
-          background: "linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%)",
-          backgroundSize: "200% 200%",
-          animation: "goldenPulse 1.5s ease-in-out infinite",
-        }}
-      />
+      <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+      
+      {/* Shimmer effect */}
+      <span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
       
       {/* Content */}
-      <div className="relative flex items-center gap-2">
+      <span className="relative flex items-center space-x-2 z-10">
         {getIcon()}
-        <span className="whitespace-nowrap">{text}</span>
-      </div>
+        <span>{text}</span>
+      </span>
       
-      {/* CSS Animation */}
-      <style jsx>{`
-        @keyframes goldenPulse {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-      `}</style>
-    </button>
+      {/* Glow effect */}
+      <span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
+    </a>
   );
 };
 

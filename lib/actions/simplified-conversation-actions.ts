@@ -7,7 +7,7 @@
 
 import { and, eq, desc, asc, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences, resources } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { getWhopApiClient } from "../whop-api-client";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
@@ -266,7 +266,6 @@ export async function addMessage(
 	conversationId: string,
 	type: "user" | "bot",
 	content: string,
-	metadata?: any,
 ): Promise<string> {
 	try {
 		console.log(`[addMessage] Inserting message for conversation ${conversationId}:`, {
@@ -278,7 +277,6 @@ export async function addMessage(
 			conversationId,
 			type,
 			content,
-			metadata: metadata || null,
 		}).returning();
 
 		console.log(`[addMessage] Message inserted successfully with ID: ${newMessage.id}`);
@@ -601,7 +599,6 @@ async function processValidOptionSelection(
 	botMessage?: string;
 	nextBlockId?: string;
 	phaseTransition?: ConversationPhase;
-	resourceName?: string | null;
 	error?: string;
 }> {
 	try {
@@ -649,12 +646,8 @@ async function processValidOptionSelection(
 
 			botMessage = formattedMessage;
 
-			// Record bot message with metadata (blockId and resourceName for link resolution)
-			await addMessage(conversationId, "bot", formattedMessage, {
-				blockId: nextBlockId,
-				resourceName: nextBlock.resourceName || null,
-				timestamp: new Date().toISOString(),
-			});
+			// Record bot message (same as navigate-funnel)
+			await addMessage(conversationId, "bot", formattedMessage);
 		}
 
 		// Reset escalation level on valid response
@@ -666,7 +659,6 @@ async function processValidOptionSelection(
 			success: true,
 			botMessage: botMessage || undefined,
 			nextBlockId: nextBlockId || undefined,
-			resourceName: nextBlock?.resourceName || null,
 		};
 
 	} catch (error) {
@@ -987,71 +979,6 @@ async function resolveAppLinkPlaceholders(message: string, experienceId: string)
   } else {
     console.log(`[App Link Resolution] App link generation failed, keeping [LINK] placeholder`);
     return message;
-  }
-}
-
-/**
- * Look up resource by name and experience ID (same as VALUE_DELIVERY stage)
- * Returns the resource link if found, null otherwise
- */
-async function lookupResourceLink(resourceName: string, experienceId: string): Promise<string | null> {
-  try {
-    console.log(`[Resource Lookup] Looking up resource: "${resourceName}" for experience: ${experienceId}`);
-    
-    const resource = await db.query.resources.findFirst({
-      where: and(
-        eq(resources.experienceId, experienceId),
-        eq(resources.name, resourceName)
-      ),
-    });
-
-    if (resource?.link) {
-      console.log(`[Resource Lookup] Found resource link: ${resource.link}`);
-      return resource.link;
-    } else {
-      console.log(`[Resource Lookup] Resource not found or has no link: "${resourceName}"`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`[Resource Lookup] Error looking up resource "${resourceName}":`, error);
-    return null;
-  }
-}
-
-/**
- * Replace [LINK] placeholders with actual resource links for OFFER stage messages
- * This function handles [LINK] placeholders in OFFER blocks by replacing them with actual resource links
- * Uses the same logic as VALUE_DELIVERY stage - looks up specific resource by resourceName
- * 
- * @param message - Message to process
- * @param resourceName - Resource name to look up
- * @param experienceId - Internal experience ID
- * @returns Resolved message with actual links
- */
-export async function resolveOfferLinkPlaceholders(message: string, resourceName: string, experienceId: string): Promise<string> {
-  // Check if message contains [LINK] placeholder
-  if (!message.includes('[LINK]')) {
-    return message;
-  }
-
-  console.log(`[Offer Link Resolution] Processing message with [LINK] placeholder for resourceName ${resourceName}, experience ${experienceId}`);
-
-  try {
-    // Look up the specific resource by name (same as VALUE_DELIVERY stage)
-    const resourceLink = await lookupResourceLink(resourceName, experienceId);
-    
-    if (resourceLink) {
-      // Replace all [LINK] placeholders with the actual link
-      const resolvedMessage = message.replace(/\[LINK\]/g, resourceLink);
-      console.log(`[Offer Link Resolution] Replaced [LINK] with: ${resourceLink}`);
-      return resolvedMessage;
-    } else {
-      console.log(`[Offer Link Resolution] Resource not found, keeping [LINK] placeholder`);
-      return message;
-    }
-  } catch (error) {
-    console.error(`[Offer Link Resolution] Error resolving links:`, error);
-    return message; // Return original message on error
   }
 }
 

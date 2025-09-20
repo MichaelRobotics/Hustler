@@ -187,7 +187,6 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 								content: result.funnelResponse.botMessage,
 								metadata: {
 									blockId: result.funnelResponse.nextBlockId,
-									resourceName: result.funnelResponse.resourceName || null,
 									timestamp: new Date().toISOString(),
 									cached: !!cachedData,
 								},

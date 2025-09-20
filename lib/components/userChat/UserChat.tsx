@@ -614,8 +614,45 @@ const UserChat: React.FC<UserChatProps> = ({
 				);
 			}
 
-			// Handle [LINK] placeholders in bot messages
+			// Handle [LINK] placeholders and animated button HTML in bot messages
 			const renderMessageWithLinks = (text: string) => {
+				// Check for animated button HTML first
+				if (msg.type === "bot" && text.includes('animated-gold-button')) {
+					// Parse the HTML and extract the button data
+					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
+					const parts = text.split(buttonRegex);
+					
+					return (
+						<div className="space-y-3">
+							{parts.map((part, partIndex) => {
+								// Check if this part is a button (odd indices after split)
+								if (partIndex % 3 === 1) {
+									// This is the href
+									const href = part;
+									const buttonText = parts[partIndex + 1] || "Get Your Free Guide";
+									return (
+										<AnimatedGoldButton 
+											key={partIndex} 
+											href={href}
+											text={buttonText}
+											icon="sparkles"
+										/>
+									);
+								} else if (partIndex % 3 === 0) {
+									// This is text content
+									return part.trim() ? (
+										<Text key={partIndex} size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+											{part.trim()}
+										</Text>
+									) : null;
+								}
+								return null;
+							})}
+						</div>
+					);
+				}
+				
+				// Handle legacy [LINK] placeholders
 				if (msg.type === "bot" && text.includes('[LINK]')) {
 					// Split message by [LINK] placeholders
 					const parts = text.split('[LINK]');
