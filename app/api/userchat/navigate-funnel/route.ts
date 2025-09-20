@@ -212,6 +212,10 @@ async function processFunnelNavigation(
       if (isOfferBlock && nextBlock.resourceName) {
         console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
         
+        // Always show "Generating Link..." during retry process
+        const generatingLinkHtml = `<div class="generating-link-placeholder">Generating Link...</div>`;
+        formattedMessage = formattedMessage.replace('[LINK]', generatingLinkHtml);
+        
         // Retry logic for resource lookup
         const maxRetries = 5;
         const retryDelay = 1000; // Start with 1 second delay
@@ -276,19 +280,19 @@ async function processFunnelNavigation(
             
             console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
             
-            // Replace [LINK] placeholder with animated button HTML
+            // Replace generating link placeholder with animated button HTML
             const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
-            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+            formattedMessage = formattedMessage.replace(generatingLinkHtml, buttonHtml);
           } else {
             console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
-            // Replace [LINK] placeholder with animated button HTML
+            // Replace generating link placeholder with animated button HTML
             const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
-            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+            formattedMessage = formattedMessage.replace(generatingLinkHtml, buttonHtml);
           }
         } else {
           console.log(`[OFFER] Resource not found after ${maxRetries} attempts: ${nextBlock.resourceName}`);
-          // Replace [LINK] placeholder with fallback text
-          formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
+          // Replace generating link placeholder with reload page text
+          formattedMessage = formattedMessage.replace(generatingLinkHtml, 'Reload Page');
         }
       } else if (formattedMessage.includes('[LINK]')) {
         // Handle other blocks that might have [LINK] placeholder

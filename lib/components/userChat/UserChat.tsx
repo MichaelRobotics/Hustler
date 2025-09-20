@@ -106,17 +106,17 @@ const UserChat: React.FC<UserChatProps> = ({
 		while (retryCount < maxRetries) {
 			try {
 				console.log(`[UserChat] Resolving [LINK] placeholders attempt ${retryCount + 1}/${maxRetries} for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
-				
-				// Call the API to resolve links with resourceName
-				const response = await apiPost('/api/userchat/resolve-offer-links', {
-					message,
-					resourceName,
-					experienceId
-				}, experienceId);
+			
+			// Call the API to resolve links with resourceName
+			const response = await apiPost('/api/userchat/resolve-offer-links', {
+				message,
+				resourceName,
+				experienceId
+			}, experienceId);
 
-				if (response.ok) {
-					const result = await response.json();
-					if (result.success && result.resolvedMessage) {
+			if (response.ok) {
+				const result = await response.json();
+				if (result.success && result.resolvedMessage) {
 						console.log(`[UserChat] Successfully resolved [LINK] placeholders on attempt ${retryCount + 1}`);
 						// Remove from generating links set
 						if (messageId) {
@@ -126,16 +126,16 @@ const UserChat: React.FC<UserChatProps> = ({
 								return newSet;
 							});
 						}
-						return result.resolvedMessage;
-					}
+					return result.resolvedMessage;
 				}
-				
+			}
+			
 				retryCount++;
 				if (retryCount < maxRetries) {
 					console.log(`[UserChat] Link resolution failed, retrying in ${retryDelay * retryCount}ms...`);
 					await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
 				}
-			} catch (error) {
+		} catch (error) {
 				retryCount++;
 				console.error(`[UserChat] Error resolving links attempt ${retryCount}:`, error);
 				if (retryCount < maxRetries) {
@@ -679,7 +679,49 @@ const UserChat: React.FC<UserChatProps> = ({
 				text: text.substring(0, 200) + '...'
 			});
 			
-			// Check for animated button HTML first
+			// Check for generating link placeholder first
+			if (msg.type === "bot" && text.includes('generating-link-placeholder')) {
+				// Parse the HTML and extract the placeholder
+				const placeholderRegex = /<div class="generating-link-placeholder">([^<]+)<\/div>/g;
+				const parts = text.split(placeholderRegex);
+				
+				// Separate text and generating link
+				const textParts: React.ReactNode[] = [];
+				const generatingLinks: React.ReactNode[] = [];
+				
+				parts.forEach((part, partIndex) => {
+					if (partIndex % 2 === 1) {
+						// This is the generating link text
+						generatingLinks.push(
+							<GeneratingLink key={partIndex} />
+						);
+					} else if (partIndex % 2 === 0) {
+						// This is text content
+						if (part.trim()) {
+							textParts.push(
+								<Text key={partIndex} size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+									{part.trim()}
+								</Text>
+							);
+						}
+					}
+				});
+				
+				return (
+					<div className="space-y-6">
+						{/* All text content first */}
+						{textParts}
+						{/* All generating links below text */}
+						{generatingLinks.length > 0 && (
+							<div className="flex justify-center pt-4">
+								{generatingLinks}
+							</div>
+						)}
+					</div>
+				);
+			}
+			
+			// Check for animated button HTML
 			if (msg.type === "bot" && text.includes('animated-gold-button')) {
 					// Parse the HTML and extract the button data
 					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
@@ -737,7 +779,40 @@ const UserChat: React.FC<UserChatProps> = ({
 					);
 				}
 				
-				// Handle legacy [LINK] placeholders
+				// Handle "Reload Page" text (when resource not found)
+				if (msg.type === "bot" && text.includes('Reload Page')) {
+					// Split message by "Reload Page" text
+					const parts = text.split('Reload Page');
+					
+					return (
+						<div className="space-y-3">
+							{parts.map((part, partIndex) => (
+								<div key={partIndex}>
+									{part.trim() && (
+										<Text
+											size="2"
+											className="whitespace-pre-wrap leading-relaxed text-base"
+										>
+											{part.trim()}
+										</Text>
+									)}
+									{partIndex < parts.length - 1 && (
+										<div className="mt-6 pt-4 flex justify-center">
+											<Text
+												size="2"
+												className="text-gray-500 dark:text-gray-400 italic"
+											>
+												Reload Page
+											</Text>
+										</div>
+									)}
+								</div>
+							))}
+						</div>
+					);
+				}
+				
+				// Handle legacy [LINK] placeholders (should not happen in OFFER blocks anymore)
 				if (msg.type === "bot" && text.includes('[LINK]')) {
 					// Check if this message is currently generating links
 					const isGeneratingLink = generatingLinks.has(msg.id);
@@ -763,39 +838,12 @@ const UserChat: React.FC<UserChatProps> = ({
 											{isGeneratingLink ? (
 												<GeneratingLink />
 											) : (
-												<AnimatedGoldButton
-													href="#"
-													text="Get Started"
-													icon="sparkles"
-													onClick={async () => {
-														// Track intent when user clicks button
-														if (conversation?.funnelId && experienceId) {
-															console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
-															trackIntent(experienceId, conversation.funnelId);
-														}
-														
-														// Resolve the link when button is clicked
-														try {
-															// Get resourceName from message metadata
-															const resourceName = msg.metadata?.resourceName;
-															if (resourceName) {
-																const resolvedMessage = await resolveOfferLinks(text, resourceName, msg.id);
-																// Extract the first resolved link
-																const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
-																if (linkMatch) {
-																	// Keep user inside Whop - navigate to the same page
-																	window.location.href = linkMatch[0];
-																} else {
-																	console.error('No resolved link found');
-																}
-															} else {
-																console.error('No resourceName available for link resolution');
-															}
-														} catch (error) {
-															console.error('Error resolving link on click:', error);
-														}
-													}}
-												/>
+												<Text
+													size="2"
+													className="text-gray-500 dark:text-gray-400 italic"
+												>
+													Link not available
+												</Text>
 											)}
 										</div>
 									)}
