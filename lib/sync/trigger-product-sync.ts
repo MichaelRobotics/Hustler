@@ -307,13 +307,21 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Check which apps have access passes for the funnel product
 				// If an experience (app) has an access pass for the funnel product, it's included
+				// BUT exclude apps that have the same experience ID as the current app
 				console.log(`🔍 Checking which apps have access passes for funnel product: ${funnelProduct.title} (ID: ${funnelProduct.id})`);
+				console.log(`🔍 Excluding apps with experience ID: ${experienceId} (current app)`);
 				
 				const availableApps: typeof installedApps = [];
 				
 				for (const app of installedApps) {
 					if (!app.experienceId) {
 						console.log(`⚠️ App "${app.name}" has no experienceId, skipping`);
+						continue;
+					}
+					
+					// Skip apps that have the same experience ID as the current app
+					if (app.experienceId === experienceId) {
+						console.log(`🚫 Skipping app "${app.name}" - same experience ID as current app (${experienceId})`);
 						continue;
 					}
 					
@@ -341,7 +349,7 @@ export async function triggerProductSyncForNewAdmin(
 					}
 				}
 				
-				console.log(`🔍 Found ${availableApps.length} apps that have access passes for the funnel product`);
+				console.log(`🔍 Found ${availableApps.length} apps that have access passes for the funnel product (excluding current app)`);
 				
 				// Classify apps by type (only from available apps)
 				const classifiedApps = {
