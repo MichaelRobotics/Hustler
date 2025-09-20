@@ -614,10 +614,18 @@ const UserChat: React.FC<UserChatProps> = ({
 				);
 			}
 
-			// Handle [LINK] placeholders and animated button HTML in bot messages
-			const renderMessageWithLinks = (text: string) => {
-				// Check for animated button HTML first
-				if (msg.type === "bot" && text.includes('animated-gold-button')) {
+		// Handle [LINK] placeholders and animated button HTML in bot messages
+		const renderMessageWithLinks = (text: string) => {
+			// Debug logging
+			console.log(`[UserChat] Rendering message:`, { 
+				type: msg.type, 
+				hasAnimatedButton: text.includes('animated-gold-button'),
+				hasLink: text.includes('[LINK]'),
+				text: text.substring(0, 200) + '...'
+			});
+			
+			// Check for animated button HTML first
+			if (msg.type === "bot" && text.includes('animated-gold-button')) {
 					// Parse the HTML and extract the button data
 					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
 					const parts = text.split(buttonRegex);
@@ -673,7 +681,7 @@ const UserChat: React.FC<UserChatProps> = ({
 									{partIndex < linkCount && (
 										<div className="mt-3 flex justify-center">
 											<AnimatedGoldButton
-												href="javascript:void(0)"
+												href="#"
 												text="Get Started"
 												icon="sparkles"
 												onClick={async () => {
