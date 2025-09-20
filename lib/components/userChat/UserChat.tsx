@@ -637,7 +637,8 @@ const UserChat: React.FC<UserChatProps> = ({
 				type: msg.type, 
 				hasAnimatedButton: text.includes('animated-gold-button'),
 				hasLink: text.includes('[LINK]'),
-				text: text.substring(0, 200) + '...'
+				text: text.substring(0, 200) + '...',
+				fullText: text // Show full text for debugging
 			});
 			
 			// Check for animated button HTML first

@@ -117,6 +117,12 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 				};
 
 				console.log("UserChat WebSocket: Processed chat message:", chatMessage);
+				console.log("UserChat WebSocket: Message content analysis:", {
+					hasAnimatedButton: (parsedMessage.content || "").includes('animated-gold-button'),
+					hasLinkPlaceholder: (parsedMessage.content || "").includes('[LINK]'),
+					contentLength: (parsedMessage.content || "").length,
+					contentPreview: (parsedMessage.content || "").substring(0, 200)
+				});
 
 				// Update last message time for connection health
 				setLastMessageTime(Date.now());

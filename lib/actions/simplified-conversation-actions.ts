@@ -685,11 +685,15 @@ async function processValidOptionSelection(
 							// Replace [LINK] placeholder with animated button HTML
 							const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
 							formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+							console.log(`[OFFER] Generated button HTML: ${buttonHtml}`);
+							console.log(`[OFFER] Final formatted message: ${formattedMessage}`);
 						} else {
 							console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
 							// Replace [LINK] placeholder with animated button HTML
 							const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
 							formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+							console.log(`[OFFER] Generated button HTML: ${buttonHtml}`);
+							console.log(`[OFFER] Final formatted message: ${formattedMessage}`);
 						}
 					} else {
 						console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
@@ -718,7 +722,14 @@ async function processValidOptionSelection(
 			botMessage = formattedMessage;
 
 			// Record bot message (same as navigate-funnel)
+			console.log(`[processValidOptionSelection] About to record bot message:`, {
+				conversationId,
+				hasAnimatedButton: formattedMessage.includes('animated-gold-button'),
+				hasLinkPlaceholder: formattedMessage.includes('[LINK]'),
+				messagePreview: formattedMessage.substring(0, 200)
+			});
 			await addMessage(conversationId, "bot", formattedMessage);
+			console.log(`[processValidOptionSelection] Bot message recorded successfully`);
 		}
 
 		// Reset escalation level on valid response
