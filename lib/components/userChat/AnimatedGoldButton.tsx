@@ -3,6 +3,7 @@ import React from 'react';
 import { Sparkles, ArrowRight, Star } from 'lucide-react';
 
 interface AnimatedGoldButtonProps {
+  href: string;
   text: string;
   icon?: 'sparkles' | 'arrowRight' | 'star';
   onClick?: () => void;
@@ -10,13 +11,12 @@ interface AnimatedGoldButtonProps {
 }
 
 const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({ 
+  href,
   text, 
   icon = 'sparkles', 
   onClick,
   className = ''
 }) => {
-  // DIRECT LINK EMBEDDED INSIDE THE COMPONENT
-  const DIRECT_LINK = "https://example.com/your-resource-link-here";
   
   const getIcon = () => {
     switch (icon) {
@@ -36,13 +36,13 @@ const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
       e.preventDefault();
       onClick();
     } else {
-      window.open(DIRECT_LINK, '_blank', 'noopener,noreferrer');
+      window.open(href, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
     <a
-      href={DIRECT_LINK}
+      href={href}
       onClick={handleClick}
       className={`relative inline-flex items-center justify-center px-6 py-3 text-lg font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group ${className}`}
     >

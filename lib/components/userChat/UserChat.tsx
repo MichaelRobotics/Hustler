@@ -633,6 +633,7 @@ const UserChat: React.FC<UserChatProps> = ({
 									return (
 										<AnimatedGoldButton 
 											key={partIndex} 
+											href={href}
 											text={buttonText}
 											icon="sparkles"
 										/>
@@ -672,6 +673,7 @@ const UserChat: React.FC<UserChatProps> = ({
 									{partIndex < linkCount && (
 										<div className="mt-3 flex justify-center">
 											<AnimatedGoldButton
+												href="#"
 												text="Get Started"
 												icon="sparkles"
 												onClick={async () => {
