@@ -37,6 +37,7 @@ export interface ConversationWithMessages {
 	currentBlockId?: string;
 	userPath?: any;
 	metadata?: any;
+	affiliateLink?: string;
 	createdAt: Date;
 	updatedAt: Date;
 	messages: Array<{

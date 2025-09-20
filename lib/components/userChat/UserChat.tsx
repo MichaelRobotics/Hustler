@@ -25,11 +25,11 @@ import AnimatedGoldButton from "./AnimatedGoldButton";
 async function trackIntent(experienceId: string, funnelId: string): Promise<void> {
   try {
     await apiPost("/api/analytics/track-intent", {
-      experienceId,
+				experienceId,
       funnelId
     });
     console.log(`✅ [UserChat] Intent tracked for experience ${experienceId}, funnel ${funnelId}`);
-  } catch (error) {
+		} catch (error) {
     console.error("❌ [UserChat] Error tracking intent:", error);
     // Don't throw - this is background tracking
   }
@@ -165,7 +165,6 @@ const UserChat: React.FC<UserChatProps> = ({
 	}, [conversation?.messages, resolveOfferLinks]);
 
 	// WebSocket integration for REAL-TIME updates only (background initialization)
-	console.log(`[UserChat] WebSocket connection status: conversationId=${conversationId}, experienceId=${experienceId}`);
 	const { isConnected, sendMessage, sendTypingIndicator, typingUsers } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
@@ -202,9 +201,6 @@ const UserChat: React.FC<UserChatProps> = ({
 			console.error("WebSocket error:", error);
 		},
 	});
-
-	// Log WebSocket connection status
-	console.log(`[UserChat] WebSocket isConnected: ${isConnected}`);
 
 	// Refresh conversation data when WebSocket receives new messages (optimized)
 	const refreshConversation = useCallback(async () => {
@@ -635,7 +631,7 @@ const UserChat: React.FC<UserChatProps> = ({
 			}
 
 		// Handle [LINK] placeholders and animated button HTML in bot messages
-		const renderMessageWithLinks = (text: string) => {
+			const renderMessageWithLinks = (text: string) => {
 			// Debug logging
 			console.log(`[UserChat] Rendering message:`, { 
 				type: msg.type, 
@@ -724,7 +720,7 @@ const UserChat: React.FC<UserChatProps> = ({
 									{partIndex < linkCount && (
 										<div className="mt-6 pt-4 flex justify-center">
 											<AnimatedGoldButton
-												href="#"
+												href={conversation?.affiliateLink || "#"}
 												text="Get Started"
 												icon="sparkles"
 												onClick={async () => {
@@ -734,25 +730,12 @@ const UserChat: React.FC<UserChatProps> = ({
 														trackIntent(experienceId, conversation.funnelId);
 													}
 													
-													// Resolve the link when button is clicked
-													try {
-														// Get resourceName from message metadata
-														const resourceName = msg.metadata?.resourceName;
-														if (resourceName) {
-															const resolvedMessage = await resolveOfferLinks(text, resourceName);
-															// Extract the first resolved link
-															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
-															if (linkMatch) {
-																// Keep user inside Whop - navigate to the same page
-																window.location.href = linkMatch[0];
-															} else {
-																console.error('No resolved link found');
-															}
-														} else {
-															console.error('No resourceName available for link resolution');
-														}
-													} catch (error) {
-														console.error('Error resolving link on click:', error);
+													// Use pre-generated affiliate link
+													if (conversation?.affiliateLink) {
+														console.log(`[UserChat] Using pre-generated affiliate link: ${conversation.affiliateLink}`);
+														window.location.href = conversation.affiliateLink;
+													} else {
+														console.error('No pre-generated affiliate link available');
 													}
 												}}
 											/>

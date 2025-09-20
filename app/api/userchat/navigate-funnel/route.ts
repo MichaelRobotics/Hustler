@@ -212,70 +212,77 @@ async function processFunnelNavigation(
       if (isOfferBlock && nextBlock.resourceName) {
         console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
         
-        // Ensure we have a resource before proceeding
-        let resolvedLink = null;
-        
         try {
-          // Lookup resource by name and experience
-          const resource = await db.query.resources.findFirst({
-            where: and(
-              eq(resources.name, nextBlock.resourceName),
-              eq(resources.experienceId, conversation.experienceId)
-            ),
-          });
-          
-          if (resource) {
-            console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
+          // Check for pre-generated affiliate link first
+          if (conversation.affiliateLink) {
+            console.log(`[OFFER] Using pre-generated affiliate link: ${conversation.affiliateLink}`);
             
-            // Check if link already has affiliate parameters
-            const hasAffiliate = resource.link.includes('app=') || resource.link.includes('ref=');
-            
-            if (!hasAffiliate) {
-              console.log(`[OFFER] Adding affiliate parameters to resource link`);
-              
-              // Get affiliate app ID (same logic as product-sync)
-              let affiliateAppId = conversation.experienceId; // Use experience ID as fallback
-              try {
-                const whopExperience = await whopSdk.experiences.getExperience({
-                  experienceId: conversation.experienceId,
-                });
-                affiliateAppId = whopExperience.app?.id || conversation.experienceId;
-                console.log(`[OFFER] Got affiliate app ID: ${affiliateAppId}`);
-              } catch (error) {
-                console.log(`[OFFER] Could not get app ID, using experience ID: ${conversation.experienceId}`);
-              }
-              
-              // Add affiliate parameter to the link
-              const url = new URL(resource.link);
-              url.searchParams.set('app', affiliateAppId);
-              resolvedLink = url.toString();
-            } else {
-              console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
-              resolvedLink = resource.link;
-            }
-            
-            console.log(`[OFFER] Generated resolved link: ${resolvedLink}`);
-            
-            // Only replace [LINK] placeholder if we have a resolved link
-            if (resolvedLink) {
-              const buttonHtml = `<div class="animated-gold-button" data-href="${resolvedLink}">Get Your Free Guide</div>`;
-              formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
-              console.log(`[OFFER] Generated button HTML: ${buttonHtml}`);
-              console.log(`[OFFER] Final formatted message: ${formattedMessage}`);
-            } else {
-              console.error(`[OFFER] No resolved link available, keeping [LINK] placeholder`);
-            }
+            // Replace [LINK] placeholder with animated button HTML using pre-generated link
+            const buttonHtml = `<div class="animated-gold-button" data-href="${conversation.affiliateLink}">Get Your Free Guide</div>`;
+            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
           } else {
-            console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
-            formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
+            console.log(`[OFFER] No pre-generated affiliate link found, falling back to on-the-fly generation`);
+            
+            // Fallback to on-the-fly generation (original logic)
+            const resource = await db.query.resources.findFirst({
+              where: and(
+                eq(resources.name, nextBlock.resourceName),
+                eq(resources.experienceId, conversation.experienceId)
+              ),
+            });
+            
+            if (resource) {
+              console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
+              
+              // Check if link already has affiliate parameters
+              const hasAffiliate = resource.link.includes('app=') || resource.link.includes('ref=');
+              
+              if (!hasAffiliate) {
+                console.log(`[OFFER] Adding affiliate parameters to resource link`);
+                
+                // Get affiliate app ID (same logic as product-sync)
+                let affiliateAppId = conversation.experienceId; // Use experience ID as fallback
+                try {
+                  const whopExperience = await whopSdk.experiences.getExperience({
+                    experienceId: conversation.experienceId,
+                  });
+                  affiliateAppId = whopExperience.app?.id || conversation.experienceId;
+                  console.log(`[OFFER] Got affiliate app ID: ${affiliateAppId}`);
+                } catch (error) {
+                  console.log(`[OFFER] Could not get app ID, using experience ID: ${conversation.experienceId}`);
+                }
+                
+                // Add affiliate parameter to the link
+                const url = new URL(resource.link);
+                url.searchParams.set('app', affiliateAppId);
+                const affiliateLink = url.toString();
+                
+                console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
+                
+                // Replace [LINK] placeholder with animated button HTML
+                const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
+                formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+              } else {
+                console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
+                // Replace [LINK] placeholder with animated button HTML
+                const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
+                formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+              }
+            } else {
+              console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
+              // Replace [LINK] placeholder with fallback text
+              formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
+            }
           }
         } catch (error) {
           console.error(`[OFFER] Error processing resource lookup:`, error);
+          // Replace [LINK] placeholder with fallback text
           formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
         }
       } else if (formattedMessage.includes('[LINK]')) {
         // Handle other blocks that might have [LINK] placeholder
-        console.log(`[LINK] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage - removing placeholder`);
+        console.log(`[LINK] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage`);
+        // Replace [LINK] placeholder with fallback text
         formattedMessage = formattedMessage.replace('[LINK]', '[Link not available]');
       }
       
