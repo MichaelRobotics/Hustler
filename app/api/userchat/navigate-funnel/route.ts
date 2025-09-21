@@ -8,7 +8,6 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
-import { whopSdk } from "@/lib/whop-sdk";
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
@@ -212,87 +211,30 @@ async function processFunnelNavigation(
       if (isOfferBlock && nextBlock.resourceName) {
         console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
         
-        // Always show "Generating Link..." during retry process
-        const generatingLinkHtml = `<div class="generating-link-placeholder">Generating Link...</div>`;
-        formattedMessage = formattedMessage.replace('[LINK]', generatingLinkHtml);
-        
-        // Retry logic for resource lookup
-        const maxRetries = 5;
-        const retryDelay = 1000; // Start with 1 second delay
-        let resource = null;
-        let retryCount = 0;
-        
-        while (!resource && retryCount < maxRetries) {
-          try {
-            console.log(`[OFFER] Resource lookup attempt ${retryCount + 1}/${maxRetries}`);
-            
-            // Lookup resource by name and experience
-            resource = await db.query.resources.findFirst({
-              where: and(
-                eq(resources.name, nextBlock.resourceName),
-                eq(resources.experienceId, conversation.experienceId)
-              ),
-            });
-            
-            if (resource) {
-              console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
-              break; // Success, exit retry loop
-            } else {
-              retryCount++;
-              if (retryCount < maxRetries) {
-                console.log(`[OFFER] Resource not found, retrying in ${retryDelay * retryCount}ms...`);
-                await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
-              }
-            }
-          } catch (error) {
-            retryCount++;
-            console.error(`[OFFER] Error in resource lookup attempt ${retryCount}:`, error);
-            if (retryCount < maxRetries) {
-              console.log(`[OFFER] Retrying in ${retryDelay * retryCount}ms...`);
-              await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
-            }
-          }
-        }
-        
-        if (resource) {
-          // Check if link already has affiliate parameters
-          const hasAffiliate = resource.link.includes('app=') || resource.link.includes('ref=');
+        try {
+          // Lookup resource by name and experience
+          const resource = await db.query.resources.findFirst({
+            where: and(
+              eq(resources.name, nextBlock.resourceName),
+              eq(resources.experienceId, conversation.experienceId)
+            ),
+          });
           
-          if (!hasAffiliate) {
-            console.log(`[OFFER] Adding affiliate parameters to resource link`);
+          if (resource) {
+            console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
             
-            // Get affiliate app ID (same logic as product-sync)
-            let affiliateAppId = conversation.experienceId; // Use experience ID as fallback
-            try {
-              const whopExperience = await whopSdk.experiences.getExperience({
-                experienceId: conversation.experienceId,
-              });
-              affiliateAppId = whopExperience.app?.id || conversation.experienceId;
-              console.log(`[OFFER] Got affiliate app ID: ${affiliateAppId}`);
-            } catch (error) {
-              console.log(`[OFFER] Could not get app ID, using experience ID: ${conversation.experienceId}`);
-            }
-            
-            // Add affiliate parameter to the link
-            const url = new URL(resource.link);
-            url.searchParams.set('app', affiliateAppId);
-            const affiliateLink = url.toString();
-            
-            console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
-            
-            // Replace generating link placeholder with animated button HTML
-            const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
-            formattedMessage = formattedMessage.replace(generatingLinkHtml, buttonHtml);
-          } else {
-            console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
-            // Replace generating link placeholder with animated button HTML
+            // Replace [LINK] placeholder with animated button HTML using resource.link directly
             const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
-            formattedMessage = formattedMessage.replace(generatingLinkHtml, buttonHtml);
+            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+          } else {
+            console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
+            // Replace [LINK] placeholder with fallback text
+            formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
           }
-        } else {
-          console.log(`[OFFER] Resource not found after ${maxRetries} attempts: ${nextBlock.resourceName}`);
-          // Replace generating link placeholder with reload page text
-          formattedMessage = formattedMessage.replace(generatingLinkHtml, 'Reload Page');
+        } catch (error) {
+          console.error(`[OFFER] Error processing resource lookup:`, error);
+          // Replace [LINK] placeholder with fallback text
+          formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
         }
       } else if (formattedMessage.includes('[LINK]')) {
         // Handle other blocks that might have [LINK] placeholder

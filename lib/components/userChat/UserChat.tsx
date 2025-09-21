@@ -18,7 +18,6 @@ import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
-import GeneratingLink from "./GeneratingLink";
 
 /**
  * Track intent by calling the API endpoint
@@ -26,11 +25,11 @@ import GeneratingLink from "./GeneratingLink";
 async function trackIntent(experienceId: string, funnelId: string): Promise<void> {
   try {
     await apiPost("/api/analytics/track-intent", {
-				experienceId,
+      experienceId,
       funnelId
     });
     console.log(`✅ [UserChat] Intent tracked for experience ${experienceId}, funnel ${funnelId}`);
-		} catch (error) {
+  } catch (error) {
     console.error("❌ [UserChat] Error tracking intent:", error);
     // Don't throw - this is background tracking
   }
@@ -82,89 +81,19 @@ const UserChat: React.FC<UserChatProps> = ({
 		createdAt: Date;
 	}>>([]);
 	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
-	const [generatingLinks, setGeneratingLinks] = useState<Set<string>>(new Set());
-	const [processingMessages, setProcessingMessages] = useState<Set<string>>(new Set());
-	const [processedMessages, setProcessedMessages] = useState<Map<string, string>>(new Map());
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
 
-	// Function to process OFFER blocks by calling backend
-	const processOfferBlock = useCallback(async (messageId: string, messageText: string): Promise<void> => {
-		console.log(`[UserChat] Processing OFFER block for message ${messageId}`);
-		console.log(`[UserChat] processOfferBlock params:`, { messageId, messageText: messageText.substring(0, 100) + '...', conversationId, experienceId });
-		
-		// Add to processing messages set
-		setProcessingMessages(prev => new Set(prev).add(messageId));
-		
-		try {
-			// Call the backend to process the OFFER block
-			const requestBody = {
-				messageId,
-				messageText,
-				conversationId,
-				experienceId
-			};
-			console.log(`[UserChat] Sending request body:`, requestBody);
-			
-			const response = await apiPost('/api/userchat/process-offer-block', requestBody, experienceId);
-			
-			if (response.ok) {
-				const result = await response.json();
-				if (result.processedMessage) {
-					console.log(`[UserChat] Successfully processed OFFER block for message ${messageId}`);
-					console.log(`[UserChat] API returned processed message:`, {
-						hasAnimatedButton: result.processedMessage.includes('animated-gold-button'),
-						hasGeneratingLink: result.processedMessage.includes('generating-link-placeholder'),
-						hasReloadPage: result.processedMessage.includes('Reload Page'),
-						messageLength: result.processedMessage.length,
-						messagePreview: result.processedMessage.substring(0, 200) + '...'
-					});
-					
-					// Store the processed message
-					setProcessedMessages(prev => new Map(prev).set(messageId, result.processedMessage));
-					
-					// Update the message in conversationMessages
-					setConversationMessages(prev => prev.map(msg => 
-						msg.id === messageId 
-							? { ...msg, content: result.processedMessage }
-							: msg
-					));
-					
-					console.log(`[UserChat] Updated message ${messageId} with processed content`);
-				}
-			}
-		} catch (error) {
-			console.error(`[UserChat] Error processing OFFER block for message ${messageId}:`, error);
-		} finally {
-			// Remove from processing messages set
-			setProcessingMessages(prev => {
-				const newSet = new Set(prev);
-				newSet.delete(messageId);
-				return newSet;
-			});
-		}
-	}, [conversationId, experienceId]);
-
-	// Function to resolve [LINK] placeholders for OFFER stage messages with retry logic
-	const resolveOfferLinks = useCallback(async (message: string, resourceName: string, messageId?: string): Promise<string> => {
+	// Function to resolve [LINK] placeholders for OFFER stage messages
+	const resolveOfferLinks = useCallback(async (message: string, resourceName: string): Promise<string> => {
 		if (!message.includes('[LINK]') || !experienceId || !resourceName) {
 			return message;
 		}
 
-		// Mark this message as generating links
-		if (messageId) {
-			setGeneratingLinks(prev => new Set(prev).add(messageId));
-		}
-
-		const maxRetries = 3;
-		const retryDelay = 1000; // Start with 1 second delay
-		let retryCount = 0;
-
-		while (retryCount < maxRetries) {
-			try {
-				console.log(`[UserChat] Resolving [LINK] placeholders attempt ${retryCount + 1}/${maxRetries} for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
+		try {
+			console.log(`[UserChat] Resolving [LINK] placeholders for message:`, message.substring(0, 100), `resourceName: ${resourceName}`);
 			
 			// Call the API to resolve links with resourceName
 			const response = await apiPost('/api/userchat/resolve-offer-links', {
@@ -176,44 +105,17 @@ const UserChat: React.FC<UserChatProps> = ({
 			if (response.ok) {
 				const result = await response.json();
 				if (result.success && result.resolvedMessage) {
-						console.log(`[UserChat] Successfully resolved [LINK] placeholders on attempt ${retryCount + 1}`);
-						// Remove from generating links set
-						if (messageId) {
-							setGeneratingLinks(prev => {
-								const newSet = new Set(prev);
-								newSet.delete(messageId);
-								return newSet;
-							});
-						}
+					console.log(`[UserChat] Successfully resolved [LINK] placeholders`);
 					return result.resolvedMessage;
 				}
 			}
 			
-				retryCount++;
-				if (retryCount < maxRetries) {
-					console.log(`[UserChat] Link resolution failed, retrying in ${retryDelay * retryCount}ms...`);
-					await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
-				}
+			console.log(`[UserChat] Link resolution failed, keeping [LINK] placeholders`);
+			return message;
 		} catch (error) {
-				retryCount++;
-				console.error(`[UserChat] Error resolving links attempt ${retryCount}:`, error);
-				if (retryCount < maxRetries) {
-					console.log(`[UserChat] Retrying in ${retryDelay * retryCount}ms...`);
-					await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
-				}
-			}
+			console.error(`[UserChat] Error resolving links:`, error);
+			return message;
 		}
-		
-		console.log(`[UserChat] Link resolution failed after ${maxRetries} attempts, keeping [LINK] placeholders`);
-		// Remove from generating links set
-		if (messageId) {
-			setGeneratingLinks(prev => {
-				const newSet = new Set(prev);
-				newSet.delete(messageId);
-				return newSet;
-			});
-		}
-		return message;
 	}, [experienceId]);
 
 	// Initialize conversation messages from backend data IMMEDIATELY
@@ -229,7 +131,7 @@ const UserChat: React.FC<UserChatProps> = ({
 							// Get resourceName from message metadata
 							const resourceName = msg.metadata?.resourceName;
 							if (resourceName) {
-								content = await resolveOfferLinks(content, resourceName, msg.id);
+								content = await resolveOfferLinks(content, resourceName);
 							} else {
 								console.log(`[UserChat] No resourceName in metadata for message with [LINK] placeholder`);
 							}
@@ -729,108 +631,20 @@ const UserChat: React.FC<UserChatProps> = ({
 			}
 
 		// Handle [LINK] placeholders and animated button HTML in bot messages
-		const renderMessageWithLinks = (msg: any, text: string) => {
+		const renderMessageWithLinks = (text: string) => {
 			// Debug logging
 			console.log(`[UserChat] Rendering message:`, { 
 				type: msg.type, 
 				hasAnimatedButton: text.includes('animated-gold-button'),
 				hasLink: text.includes('[LINK]'),
-				isGeneratingLinkPlaceholder: text.includes('generating-link-placeholder'),
-				hasReloadPage: text.includes('Reload Page'),
-				text: text.substring(0, 200) + '...',
-				fullText: text // Show full text for debugging
+				text: text.substring(0, 200) + '...'
 			});
 			
-		// Hook: If this is a bot message with [LINK] placeholder, wait for backend processing
-		if (msg.type === "bot" && text.includes('[LINK]') && !text.includes('animated-gold-button') && !text.includes('generating-link-placeholder')) {
-			console.log(`[UserChat] Hook: Detected [LINK] placeholder, waiting for backend processing...`);
-			console.log(`[UserChat] Message object:`, { id: msg.id, type: msg.type, hasId: !!msg.id });
-			
-			// Check if we have a processed message for this messageId
-			const processedMessage = processedMessages.get(msg.id);
-			if (processedMessage) {
-				console.log(`[UserChat] Found processed message for ${msg.id}, rendering it`);
-				// Use the processed message instead of the original text
-				return renderMessageWithLinks(msg, processedMessage);
-			}
-			
-			// Check if this message is already being processed
-			if (processingMessages.has(msg.id)) {
-				console.log(`[UserChat] Message ${msg.id} is already being processed, waiting...`);
-				// Return a loading state while processing
-				return (
-					<div className="flex justify-center items-center py-8">
-						<div className="text-gray-500 dark:text-gray-400">Processing message...</div>
-					</div>
-				);
-			}
-			
-			// Trigger backend processing
-			console.log(`[UserChat] Calling processOfferBlock with messageId: ${msg.id}`);
-			processOfferBlock(msg.id, text);
-			
-			// Return loading state while processing
-			return (
-				<div className="flex justify-center items-center py-8">
-					<div className="text-gray-500 dark:text-gray-400">Processing message...</div>
-				</div>
-			);
-		}
-			
-			// Check for generating link placeholder first
-			if (msg.type === "bot" && text.includes('generating-link-placeholder')) {
-				// Parse the HTML and extract the placeholder
-				const placeholderRegex = /<div class="generating-link-placeholder">([^<]+)<\/div>/g;
-				const parts = text.split(placeholderRegex);
-				
-				// Separate text and generating link
-				const textParts: React.ReactNode[] = [];
-				const generatingLinks: React.ReactNode[] = [];
-				
-				parts.forEach((part, partIndex) => {
-					if (partIndex % 2 === 1) {
-						// This is the generating link text
-						generatingLinks.push(
-							<GeneratingLink key={partIndex} />
-						);
-					} else if (partIndex % 2 === 0) {
-						// This is text content
-						if (part.trim()) {
-							textParts.push(
-								<Text key={partIndex} size="2" className="whitespace-pre-wrap leading-relaxed text-base">
-									{part.trim()}
-								</Text>
-							);
-						}
-					}
-				});
-				
-				return (
-					<div className="space-y-6">
-						{/* All text content first */}
-						{textParts}
-						{/* All generating links below text */}
-						{generatingLinks.length > 0 && (
-							<div className="flex justify-center pt-4">
-								{generatingLinks}
-							</div>
-						)}
-					</div>
-				);
-			}
-			
-		// Check for animated button HTML
-		if (msg.type === "bot" && text.includes('animated-gold-button')) {
-				console.log(`[UserChat] Rendering processed message with animated button for message ${msg.id}`);
-				console.log(`[UserChat] Processed message content:`, {
-					hasAnimatedButton: text.includes('animated-gold-button'),
-					messageLength: text.length,
-					messagePreview: text.substring(0, 200) + '...'
-				});
-				
-				// Parse the HTML and extract the button data
-				const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
-				const parts = text.split(buttonRegex);
+			// Check for animated button HTML first
+			if (msg.type === "bot" && text.includes('animated-gold-button')) {
+					// Parse the HTML and extract the button data
+					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
+					const parts = text.split(buttonRegex);
 					
 					// Separate text and buttons
 					const textParts: React.ReactNode[] = [];
@@ -870,8 +684,6 @@ const UserChat: React.FC<UserChatProps> = ({
 						}
 					});
 					
-					console.log(`[UserChat] Rendering final message with ${buttons.length} button(s) for message ${msg.id}`);
-					
 					return (
 						<div className="space-y-6">
 							{/* All text content first */}
@@ -886,44 +698,8 @@ const UserChat: React.FC<UserChatProps> = ({
 					);
 				}
 				
-				// Handle "Reload Page" text (when resource not found)
-				if (msg.type === "bot" && text.includes('Reload Page')) {
-					// Split message by "Reload Page" text
-					const parts = text.split('Reload Page');
-					
-					return (
-						<div className="space-y-3">
-							{parts.map((part, partIndex) => (
-								<div key={partIndex}>
-									{part.trim() && (
-										<Text
-											size="2"
-											className="whitespace-pre-wrap leading-relaxed text-base"
-										>
-											{part.trim()}
-										</Text>
-									)}
-									{partIndex < parts.length - 1 && (
-										<div className="mt-6 pt-4 flex justify-center">
-											<Text
-												size="2"
-												className="text-gray-500 dark:text-gray-400 italic"
-											>
-												Reload Page
-											</Text>
-										</div>
-									)}
-								</div>
-							))}
-						</div>
-					);
-				}
-				
-				// Handle legacy [LINK] placeholders (should not happen in OFFER blocks anymore)
+				// Handle legacy [LINK] placeholders
 				if (msg.type === "bot" && text.includes('[LINK]')) {
-					// Check if this message is currently generating links
-					const isGeneratingLink = generatingLinks.has(msg.id);
-					
 					// Split message by [LINK] placeholders
 					const parts = text.split('[LINK]');
 					const linkCount = (text.match(/\[LINK\]/g) || []).length;
@@ -942,16 +718,39 @@ const UserChat: React.FC<UserChatProps> = ({
 									)}
 									{partIndex < linkCount && (
 										<div className="mt-6 pt-4 flex justify-center">
-											{isGeneratingLink ? (
-												<GeneratingLink />
-											) : (
-												<Text
-													size="2"
-													className="text-gray-500 dark:text-gray-400 italic"
-												>
-													Link not available
-												</Text>
-											)}
+											<AnimatedGoldButton
+												href="#"
+												text="Get Started"
+												icon="sparkles"
+												onClick={async () => {
+													// Track intent when user clicks button
+													if (conversation?.funnelId && experienceId) {
+														console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
+														trackIntent(experienceId, conversation.funnelId);
+													}
+													
+													// Resolve the link when button is clicked
+													try {
+														// Get resourceName from message metadata
+														const resourceName = msg.metadata?.resourceName;
+														if (resourceName) {
+															const resolvedMessage = await resolveOfferLinks(text, resourceName);
+															// Extract the first resolved link
+															const linkMatch = resolvedMessage.match(/https?:\/\/[^\s]+/);
+															if (linkMatch) {
+																// Keep user inside Whop - navigate to the same page
+																window.location.href = linkMatch[0];
+															} else {
+																console.error('No resolved link found');
+															}
+														} else {
+															console.error('No resourceName available for link resolution');
+														}
+													} catch (error) {
+														console.error('Error resolving link on click:', error);
+													}
+												}}
+											/>
 										</div>
 									)}
 								</div>
@@ -983,7 +782,7 @@ const UserChat: React.FC<UserChatProps> = ({
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
 						}`}
 					>
-						{renderMessageWithLinks(msg, msg.text)}
+						{renderMessageWithLinks(msg.text)}
 					</div>
 				</div>
 			);
