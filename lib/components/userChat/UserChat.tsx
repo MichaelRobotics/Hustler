@@ -381,18 +381,15 @@ const UserChat: React.FC<UserChatProps> = ({
 
 			if (result.success && result.conversation) {
 				// IMMEDIATE UI UPDATE: Add bot response if available
-				if (result.conversation.currentBlockId) {
-					const nextBlock = funnelFlow.blocks[result.conversation.currentBlockId];
-					if (nextBlock?.message) {
-						const botMessage = {
-							id: `temp-bot-${Date.now()}`,
-							type: "bot" as const,
-							content: nextBlock.message,
-							createdAt: new Date(),
-						};
-						setConversationMessages(prev => [...prev, botMessage]);
-						scrollToBottom();
-					}
+				if (result.botMessage) {
+					const botMessage = {
+						id: `temp-bot-${Date.now()}`,
+						type: "bot" as const,
+						content: result.botMessage, // Use processed message from backend
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, botMessage]);
+					scrollToBottom();
 				}
 				
 				// IMMEDIATE UI UPDATE: Update local current block ID to show new options immediately
