@@ -232,7 +232,7 @@ export function getWelcomeMessage(funnelFlow: FunnelFlow): string | null {
 
 		// Add options if they exist
 		if (startBlock.options && startBlock.options.length > 0) {
-			welcomeMessage += "\n\nAnswer by pasting one of those numbers\n";
+			welcomeMessage += "\n\nAnswer by number/keyword\n\n";
 			startBlock.options.forEach((option, index) => {
 				welcomeMessage += `${index + 1}. ${option.text}\n`;
 			});
