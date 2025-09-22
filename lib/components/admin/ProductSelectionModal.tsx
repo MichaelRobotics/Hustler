@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Text } from "frosted-ui";
-import { X } from "lucide-react";
+import { X, Package, Sparkles } from "lucide-react";
 import type React from "react";
 
 interface DiscoveryProduct {
@@ -60,11 +60,33 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 			{/* Products List */}
 			<div className="p-4 max-h-80 overflow-y-auto">
 				{loading ? (
-					<div className="flex flex-col items-center justify-center py-12 space-y-4">
-						<div className="animate-spin rounded-full h-8 w-8 border-2 border-violet-200 border-t-violet-500"></div>
-						<Text size="2" color="gray" className="text-gray-500 dark:text-gray-400">
-							Loading products...
-						</Text>
+					<div className="flex flex-col items-center justify-center py-16 space-y-6">
+						{/* Animated Product Icon with Spinning Ring */}
+						<div className="relative">
+							{/* Outer spinning ring */}
+							<div className="absolute inset-0 w-16 h-16 border-2 border-violet-200 dark:border-violet-800 rounded-full animate-spin"></div>
+							{/* Inner spinning ring */}
+							<div className="absolute inset-2 w-12 h-12 border-2 border-transparent border-t-violet-500 dark:border-t-violet-400 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+							{/* Center icon */}
+							<div className="relative w-16 h-16 flex items-center justify-center">
+								<Package className="w-8 h-8 text-violet-500 dark:text-violet-400 animate-pulse" strokeWidth={1.5} />
+							</div>
+							{/* Floating sparkles */}
+							<Sparkles className="absolute -top-2 -right-2 w-4 h-4 text-violet-400 dark:text-violet-500 animate-ping" strokeWidth={2} />
+							<Sparkles className="absolute -bottom-2 -left-2 w-3 h-3 text-violet-300 dark:text-violet-600 animate-ping" strokeWidth={2} style={{ animationDelay: '0.5s' }} />
+						</div>
+						
+						{/* Loading text with animated dots */}
+						<div className="flex items-center space-x-1">
+							<Text size="2" color="gray" className="text-gray-500 dark:text-gray-400">
+								Loading products
+							</Text>
+							<div className="flex space-x-1">
+								<div className="w-1 h-1 bg-violet-500 rounded-full animate-bounce"></div>
+								<div className="w-1 h-1 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+								<div className="w-1 h-1 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+							</div>
+						</div>
 					</div>
 				) : (
 					<div className="space-y-2">
