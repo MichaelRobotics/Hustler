@@ -406,9 +406,7 @@ export const generateFunnelFlow = async (
 	*Example Message for Funnel 2:*
 	"Now let's assess your current level with this topic.
 	
-	Where would you honestly place yourself right now?
-	
-	"
+	Where would you honestly place yourself right now?"
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
 	The message must present a resource with category "FREE_VALUE".
