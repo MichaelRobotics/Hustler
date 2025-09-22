@@ -250,12 +250,12 @@ async function processFunnelNavigation(
               console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
               
               // Replace [LINK] placeholder with animated button HTML
-              const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Your Free Guide</div>`;
+              const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Started!</div>`;
               formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
             } else {
               console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
               // Replace [LINK] placeholder with animated button HTML
-              const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Your Free Guide</div>`;
+              const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
               formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
             }
           } else {
