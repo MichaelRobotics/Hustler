@@ -77,7 +77,7 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 						</div>
 						
 						{/* Loading text with animated dots */}
-						<div className="flex items-center space-x-1">
+						<div className="flex items-center space-x-3">
 							<Text size="2" color="gray" className="text-gray-500 dark:text-gray-400">
 								Loading products
 							</Text>
