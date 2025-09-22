@@ -567,7 +567,7 @@ export const generateFunnelFlow = async (
 		 - Each offer block in Funnel 2 must represent exactly ONE resource with category "PAID".
 		 - Never mix multiple resources in a single offer block.
 	
-	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a free value resource that is community-based (like Discord access, community guides, or general community resources). This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides community access or general community value.
+	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a FREE_VALUE resource from the provided resource list. This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides general value to anyone exploring.
 	
 	---
 	### VALIDATION
@@ -582,7 +582,7 @@ export const generateFunnelFlow = async (
 	- Number of OFFER blocks = number of PAID resources
 	- Each \`resourceName\` appears in exactly ONE block (no duplicates)
 	- ALL provided resources represented in funnel
-	- First WELCOME block has escape hatch option pointing to a community-based free value resource
+	- First WELCOME block has escape hatch option pointing to a FREE_VALUE resource from the provided list
 	- **CRITICAL**: Resources with category "FREE_VALUE" ONLY in VALUE_DELIVERY blocks
 	- **CRITICAL**: Resources with category "PAID" ONLY in OFFER blocks
 	- **CRITICAL**: PAID resources CANNOT be in VALUE_DELIVERY blocks
@@ -684,21 +684,21 @@ export const generateFunnelFlow = async (
 			"message": "Welcome! What's your main goal?",
 			"options": [
 			  {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
-			  {"text": "Just exploring for now", "nextBlockId": "value_community_access"}
+			  {"text": "Just exploring for now", "nextBlockId": "value_crypto_basics"}
 			]
 		 },
-		 // NOTE: "Just exploring for now" points to a community-based free value resource
-		 // This provides community access or general community value for anyone exploring
+		 // NOTE: "Just exploring for now" points to a FREE_VALUE resource from the provided list
+		 // This provides general value to anyone exploring without specific interests
 		 "value_trading_guide": {
 			"id": "value_trading_guide",
 			"message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nHere is the link: https://caseyscrypto.com/free-charting-guide\\n\\nPlease review it, because the next step is where we build your personal plan.",
 			"resourceName": "The 3 Core Principles of Crypto Charting",
 			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
 		 },
-		 "value_community_access": {
-			"id": "value_community_access",
-			"message": "No problem! Here's access to our free community Discord where you can explore, ask questions, and connect with others.\\n\\nJoin our Discord to get started and explore what interests you most.\\n\\nHere is the link: https://discord.gg/your-community\\n\\nAfter you join, you can explore different channels and find what resonates with you!",
-			"resourceName": "Community Discord Access",
+		 "value_crypto_basics": {
+			"id": "value_crypto_basics",
+			"message": "No problem! Here's our free crypto basics guide to get you started.\\n\\nThis covers the fundamentals: what crypto is, how it works, and where to begin your journey.\\n\\nHere is the link: https://caseyscrypto.com/crypto-basics-guide\\n\\nAfter you review it, you can explore more specific topics in our community!",
+			"resourceName": "Crypto Basics Guide",
 			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
 		 },
 		 "transition_to_vip_chat": {
