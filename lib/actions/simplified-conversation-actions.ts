@@ -1004,6 +1004,22 @@ export async function sendTransitionMessage(
 			message: resolvedMessage,
 		});
 
+		// Find conversation to save message to database
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.whopUserId, whopUserId),
+				eq(conversations.experienceId, experienceId)
+			),
+		});
+
+		if (conversation) {
+			// Record bot message in database
+			await addMessage(conversation.id, "bot", resolvedMessage);
+			console.log(`[Transition Message] Saved transition message to database for conversation ${conversation.id}`);
+		} else {
+			console.warn(`[Transition Message] Could not find conversation for whopUserId ${whopUserId} to save message to database`);
+		}
+
 		console.log(`[Transition Message] Successfully sent transition message to user ${whopUserId}`);
 		return true;
 
