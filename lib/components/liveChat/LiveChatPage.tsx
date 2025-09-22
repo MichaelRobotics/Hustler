@@ -557,7 +557,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			<div className="h-full w-full">
 				{/* Enhanced Header with Whop Design Patterns - Hidden on mobile when in chat */}
 				<div
-					className={`${selectedConversation ? "hidden lg:block" : "block"} sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-0 -mx-0 sm:-mx-0 lg:-mx-0 px-0 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg`}
+					className={`${selectedConversation ? "hidden lg:block" : "block"} sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-0 -mx-0 sm:-mx-0 lg:-mx-0 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg`}
 				>
 					<LiveChatHeader
 						onBack={onBack}

@@ -651,7 +651,7 @@ const UserChat: React.FC<UserChatProps> = ({
 						if (partIndex % 3 === 1) {
 							// This is the href
 							const href = part;
-							const buttonText = parts[partIndex + 1] || "Get Your Free Guide";
+							const buttonText = parts[partIndex + 1] || "Get Started!";
 							buttons.push(
 								<AnimatedGoldButton 
 									key={partIndex} 
