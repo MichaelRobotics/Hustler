@@ -19,10 +19,11 @@ import type { FunnelFlow, FunnelBlock, FunnelBlockOption } from "../types/funnel
 
 /**
  * Re-prompt configuration for both phases
+ * Note: PHASE1 messages will be dynamically generated with real options
  */
 export const RE_PROMPT_CONFIG = {
   PHASE1: {
-    10: "Hey, what's your niche? Reply 1 for E-commerce, etc.",
+    10: "Hey! What's your niche?",
     60: "Missed you! Reply with a number for free value.",
     720: "Still interested? Reply for your free resource!"
   },
@@ -164,7 +165,16 @@ export async function sendNextBlockMessage(
     // Format message with options
     let message = block.message || "Please select an option:";
     if (block.options && block.options.length > 0) {
-      message += "\n\nAnswer with number/keyword\n";
+      // Check if message already contains instruction line to avoid duplication
+      const hasInstruction = message.toLowerCase().includes('answer') && 
+                           (message.toLowerCase().includes('number') || message.toLowerCase().includes('keyword'));
+      
+      if (!hasInstruction) {
+        message += "\n\nAnswer with number/keyword\n";
+      } else {
+        message += "\n\n";
+      }
+      
       block.options.forEach((option, index) => {
         message += `${index + 1}. ${option.text}\n`;
       });
@@ -185,6 +195,68 @@ export async function sendNextBlockMessage(
 }
 
 /**
+ * Generate dynamic re-prompt message with real options from current block
+ */
+async function generateDynamicRePromptMessage(
+  conversationId: string,
+  phase: 'PHASE1' | 'PHASE2',
+  timing: number,
+  experienceId: string
+): Promise<string> {
+  try {
+    // Get conversation with funnel data
+    const conversation = await db.query.conversations.findFirst({
+      where: and(
+        eq(conversations.id, conversationId),
+        eq(conversations.experienceId, experienceId)
+      ),
+      with: {
+        funnel: true,
+      },
+    });
+
+    if (!conversation?.funnel?.flow) {
+      // Fallback to static message if no funnel data
+      return RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+    }
+
+    const funnelFlow = conversation.funnel.flow as FunnelFlow;
+    const currentBlockId = conversation.currentBlockId;
+
+    if (!currentBlockId) {
+      return RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+    }
+
+    const currentBlock = funnelFlow.blocks[currentBlockId];
+    if (!currentBlock) {
+      return RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+    }
+
+    // For PHASE1, generate dynamic message with real options
+    if (phase === 'PHASE1' && timing === 10) {
+      let message = "Hey! What's your niche?";
+      
+      if (currentBlock.options && currentBlock.options.length > 0) {
+        message += "\n\nAnswer by number/keyword\n";
+        currentBlock.options.forEach((option, index) => {
+          message += `${index + 1}. ${option.text}\n`;
+        });
+      }
+      
+      return message;
+    }
+
+    // For other timings, use static messages
+    return RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+
+  } catch (error) {
+    console.error(`[DM Core] Error generating dynamic re-prompt message:`, error);
+    // Fallback to static message
+    return RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+  }
+}
+
+/**
  * Send re-prompt message based on phase and timing
  */
 export async function sendRePromptMessage(
@@ -194,7 +266,9 @@ export async function sendRePromptMessage(
   experienceId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const rePromptMessage = RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]];
+    // Generate dynamic message with real options
+    const rePromptMessage = await generateDynamicRePromptMessage(conversationId, phase, timing, experienceId);
+    
     if (!rePromptMessage) {
       return { success: false, error: `No re-prompt message for phase ${phase} timing ${timing}` };
     }
@@ -274,7 +348,56 @@ export async function processUserResponse(
     // Add user message to database
     await addMessage(conversationId, "user", messageContent);
 
-    // Check phase-specific completion logic
+    // First, try to validate the user response against current block options
+    console.log(`[DM Core] Processing user response: "${messageContent}" for block: ${currentBlockId}`);
+    console.log(`[DM Core] Current block options:`, currentBlock.options?.map((opt: any, i: number) => `${i + 1}. "${opt.text}"`) || 'No options');
+    
+    const validationResult = validateUserResponse(messageContent, currentBlock);
+    console.log(`[DM Core] Validation result:`, { isValid: validationResult.isValid, selectedOption: validationResult.selectedOption?.text });
+    
+    // If user provided a valid option selection, process it normally
+    if (validationResult.isValid && validationResult.selectedOption) {
+      const selectedOption = validationResult.selectedOption;
+      const nextBlockId = selectedOption.nextBlockId;
+      
+      if (!nextBlockId) {
+        return { success: false, error: "No next block ID found" };
+      }
+
+      // Record funnel interaction
+      await db.insert(funnelInteractions).values({
+        conversationId: conversationId,
+        blockId: currentBlockId,
+        optionText: selectedOption.text,
+        nextBlockId: nextBlockId,
+      });
+
+      // Update conversation block with phase detection
+      const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
+      await updateConversationBlock(conversationId, nextBlockId, updatedUserPath, experienceId);
+
+      // Check if this is a TRANSITION block
+      const nextBlock = funnelFlow.blocks[nextBlockId];
+      if (isTransitionBlock(nextBlock, funnelFlow)) {
+        // Send transition message with app link resolution and complete conversation
+        await sendEnhancedTransitionMessage(
+          conversation.whopUserId,
+          nextBlock.message,
+          experienceId
+        );
+        return { success: true, nextBlockId };
+      }
+
+      // Send next block message
+      const result = await sendNextBlockMessage(conversationId, nextBlockId, funnelFlow, experienceId);
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+
+      return { success: true, nextBlockId };
+    }
+
+    // If no valid option was selected, check for phase-specific completion logic
     const currentPhase = detectConversationPhase(currentBlockId, funnelFlow);
     
     // Phase 1 completion: User responds to WELCOME → Send VALUE_DELIVERY message
@@ -287,54 +410,8 @@ export async function processUserResponse(
       return await handlePhase2Completion(conversationId, funnelFlow, experienceId);
     }
 
-    // Find matching option using existing validation logic
-    const validationResult = validateUserResponse(messageContent, currentBlock);
-    if (!validationResult.isValid) {
-      // Handle invalid response with progressive error handling
-      return await handleInvalidResponse(conversationId, experienceId);
-    }
-
-    const selectedOption = validationResult.selectedOption;
-    if (!selectedOption) {
-      return { success: false, error: "No valid option selected" };
-    }
-
-    const nextBlockId = selectedOption.nextBlockId;
-    if (!nextBlockId) {
-      return { success: false, error: "No next block ID found" };
-    }
-
-    // Record funnel interaction
-    await db.insert(funnelInteractions).values({
-      conversationId: conversationId,
-      blockId: currentBlockId,
-      optionText: selectedOption.text,
-      nextBlockId: nextBlockId,
-    });
-
-    // Update conversation block with phase detection
-    const updatedUserPath = [...(conversation.userPath || []), nextBlockId].filter(Boolean);
-    await updateConversationBlock(conversationId, nextBlockId, updatedUserPath, experienceId);
-
-    // Check if this is a TRANSITION block
-    const nextBlock = funnelFlow.blocks[nextBlockId];
-    if (isTransitionBlock(nextBlock, funnelFlow)) {
-      // Send transition message with app link resolution and complete conversation
-      await sendEnhancedTransitionMessage(
-        conversation.whopUserId,
-        nextBlock.message,
-        experienceId
-      );
-      return { success: true, nextBlockId };
-    }
-
-    // Send next block message
-    const result = await sendNextBlockMessage(conversationId, nextBlockId, funnelFlow, experienceId);
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-
-    return { success: true, nextBlockId };
+    // If no valid option and not a phase completion, handle as invalid response
+    return await handleInvalidResponse(conversationId, experienceId);
 
   } catch (error) {
     console.error(`[DM Core] Error processing user response:`, error);
@@ -359,10 +436,15 @@ function validateUserResponse(
   try {
     // Normalize user input
     const normalizedInput = normalizeInput(userMessage);
+    console.log(`[DM Core] Validating user response: "${userMessage}" -> normalized: "${normalizedInput}"`);
+    console.log(`[DM Core] Available options:`, (currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. "${opt.text}" (normalized: "${normalizeInput(opt.text)}")`));
 
     // Check for exact text matches (case-insensitive)
     for (const option of currentBlock.options || []) {
-      if (normalizeInput(option.text) === normalizedInput) {
+      const normalizedOption = normalizeInput(option.text);
+      console.log(`[DM Core] Comparing "${normalizedInput}" with "${normalizedOption}"`);
+      if (normalizedOption === normalizedInput) {
+        console.log(`[DM Core] Found exact text match: "${option.text}"`);
         return {
           isValid: true,
           selectedOption: option,
@@ -374,7 +456,9 @@ function validateUserResponse(
     const numberMatch = normalizedInput.match(/^(\d+)$/);
     if (numberMatch) {
       const optionIndex = parseInt(numberMatch[1]) - 1;
+      console.log(`[DM Core] Number selection: ${numberMatch[1]} -> index ${optionIndex}`);
       if (optionIndex >= 0 && optionIndex < (currentBlock.options || []).length) {
+        console.log(`[DM Core] Found number match: option ${optionIndex + 1} -> "${currentBlock.options[optionIndex].text}"`);
         return {
           isValid: true,
           selectedOption: currentBlock.options[optionIndex],
@@ -385,7 +469,7 @@ function validateUserResponse(
     // Invalid response
     return {
       isValid: false,
-      errorMessage: `Please select one of the following options:\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
+      errorMessage: `Answer with number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
     };
 
   } catch (error) {

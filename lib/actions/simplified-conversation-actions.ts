@@ -684,7 +684,7 @@ async function handleEscalation(
 		let errorMessage: string;
 		switch (escalationLevel) {
 			case 1:
-				errorMessage = `Please choose from the provided options above:\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				errorMessage = `Answer with number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
 				break;
 			case 2:
 				errorMessage = `I'll inform the Whop owner about your request. Please wait for assistance.`;
@@ -693,7 +693,7 @@ async function handleEscalation(
 				errorMessage = `I'm unable to help you further. Please contact the Whop owner directly.`;
 				break;
 			default:
-				errorMessage = `Please select one of the following options:\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				errorMessage = `Answer with number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
 		}
 
 		// Increment escalation level
@@ -936,10 +936,10 @@ async function generateAppLink(whopExperienceId: string, whopCompanyId: string, 
       appSlug: experienceSlug
     };
     
-    // Use the mobile-optimized generateAppUrl method for better mobile compatibility
-    const appUrl = whopClient.generateMobileAppUrl(mockApp, undefined, true);
+    // Use the regular generateAppUrl method (mobile-optimized version adds unwanted parameters)
+    const appUrl = whopClient.generateAppUrl(mockApp, undefined, true);
     
-    console.log(`[App Link Generation] Generated mobile-optimized app URL: ${appUrl}`);
+    console.log(`[App Link Generation] Generated app URL: ${appUrl}`);
     return appUrl;
   } catch (error) {
     console.error(`[App Link Generation] Error generating app link:`, error);

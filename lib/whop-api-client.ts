@@ -614,24 +614,6 @@ export class WhopApiClient {
     return url.toString();
   }
 
-  /**
-   * Generate mobile-optimized app URL with additional parameters
-   * This method adds mobile-specific parameters that might help with deep linking
-   */
-  generateMobileAppUrl(app: WhopApp, refId?: string, isFree: boolean = true): string {
-    const baseUrl = this.generateAppUrl(app, refId, isFree);
-    const url = new URL(baseUrl);
-    
-    // Add mobile-specific parameters that might help with deep linking
-    url.searchParams.set('mobile', 'true');
-    url.searchParams.set('source', 'button_click');
-    
-    // Add timestamp to prevent caching issues
-    url.searchParams.set('t', Date.now().toString());
-    
-    console.log(`📱 Generated mobile-optimized app URL: ${url.toString()}`);
-    return url.toString();
-  }
 }
 
 // Cache for API clients to avoid recreating them

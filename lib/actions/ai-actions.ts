@@ -126,7 +126,7 @@ ${badJson}
 - FUNNEL_2: EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 - VALUE_DELIVERY: ONLY "FREE_VALUE" resources
 - OFFER: ONLY "PAID" resources
-- ALL messages max 5 lines (except first "Answer by..." and OFFER messages)
+- ALL messages max 5 lines (except OFFER messages)
 - OFFER messages max 8 lines with proper paragraph spacing
 - OFFER: 3-part structure (Value Stack + FOMO + CTA)
 - TRANSITION: Simple conversational bridge, NO 3-part structure, NO "Observer/Action Taker" contrast
@@ -351,7 +351,7 @@ export const generateFunnelFlow = async (
 	You are an expert marketing funnel strategist. Your task is to create a branching chatbot conversation flow in a hierarchical JSON format. This flow represents a **complete, two-part funnel system** that transitions a user from a public chat to a private, personalized session.
 	
 	**🚨 CRITICAL MESSAGE LENGTH RULE 🚨**
-	**EVERY MESSAGE MUST BE 5 LINES OR FEWER** (except first funnel "Answer by..." instruction)
+	**EVERY MESSAGE MUST BE 5 LINES OR FEWER**
 	**COUNT EVERY LINE INCLUDING EMPTY LINES**
 	**VIOLATION = REJECTION**
 	
@@ -381,15 +381,20 @@ export const generateFunnelFlow = async (
 	### ITEM MESSAGE CONSTRUCTION
 	
 	**1. FOR ITEMS WITH CHOICES (in \`FUNNEL_1_WELCOME_GATE\`):**
-	The 'message' string should be a short, impactful headline.
-	
+	The 'message' string must be structured exactly like this:
+	- **Line 1**: A short, impactful headline.
+
 	*Example Message for Funnel 1:*
-	"Welcome! What's your main goal?"
+	"Welcome! What's your main goal?
+	
+	Answer with number/keyword"
 	
 	**IMPORTANT**: Do NOT include the numbered options in the message text. The options are defined in the 'options' array.
 	
 	**2. FOR ITEMS WITH CHOICES (in \`FUNNEL_2_STRATEGY_SESSION\`):**
-	The 'message' string for qualification stages (\`EXPERIENCE_QUALIFICATION\`, \`PAIN_POINT_QUALIFICATION\`) should be direct and concise.
+	The 'message' string for qualification stages (\`EXPERIENCE_QUALIFICATION\`, \`PAIN_POINT_QUALIFICATION\`) should be direct and concise. It must be structured exactly like this:
+	- **Line 1**: A direct question as the headline.
+
 	
 	**EXPERIENCE_QUALIFICATION SPECIFIC RULES:**
 	- Be engaging and specific about what you're assessing
@@ -401,10 +406,14 @@ export const generateFunnelFlow = async (
 	**CRITICAL**: This message format must NOT include the "Answer by..." instruction line.
 	
 	*Example Message for Funnel 2:*
-	"Now let's assess your current level with this topic. Where would you honestly place yourself right now?"
+	"Now let's assess your current level with this topic.
+	
+	Where would you honestly place yourself right now?
+	
+	"
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
-	The message must present a resource with category "FREE_VALUE" and create the "Open Loop" without explicit instructions.
+	The message must present a resource with category "FREE_VALUE".
 	*Example:* "Perfect. Here is our free guide... Please review it...
 
 	[LINK]"
@@ -421,7 +430,8 @@ export const generateFunnelFlow = async (
 	- **FORBIDDEN**: Do NOT use the 3-part OFFER structure (Value Stack + FOMO + CTA)
 	- **FORBIDDEN**: Do NOT use "The Observer" vs "The Action Taker" contrast
 	- **FORBIDDEN**: Do NOT use "Our Service Isn't For Everyone" or similar exclusivity language
-	- **MOBILE FORMATTING**: Use clear paragraph breaks for mobile readability
+	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
+	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
 	**Example Structure (6-LINE TRANSITION MESSAGE):**
 	"Excellent! You've completed step one. ✅
@@ -444,19 +454,18 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **ALL messages** (except first funnel "Answer by..." instruction and OFFER messages) must be **5 lines or fewer**
+	- **ALL messages** (except OFFER messages) must be **5 lines or fewer**
 	- **OFFER messages** can be **8 lines or fewer** to accommodate proper paragraph spacing
-	- **First funnel "Answer by..." instruction** does NOT count toward the 5-line limit
 	- **VIOLATION WILL RESULT IN REJECTION**: Any message over its limit will be rejected
 	- Keep messages concise and impactful
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
-	- **MOBILE FORMATTING**: Use clear paragraph breaks for mobile readability
-	- **LINK FORMATTING**: All links/buttons must be on separate lines. No empty lines at end of message.
+	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
+	- **LINK FORMATTING**: All links/buttons must be on separate lines after empty line. No empty lines at end of message. Add empty line after link/button if there's more text
 	- **EXAMPLES OF MESSAGE LENGTHS:**
 		* "Welcome! What's your main goal?\n\nAnswer with number/keyword" (3 lines - exempt)
 		* "Perfect choice! Here's your free resource.\n\nLink: [URL]\n\nReply 'done' when ready." (5 lines)
-		* "Our service isn't for everyone.\n\nWe work with specific partners.\n\nWhich type are you?\n\n> Take Action Now <" (5 lines)
+		* "Our service isn't for everyone.\n\nWe work with specific partners.\n\nWhich type are you?\n\n Take Action Now\n\n [LINK]" (5 lines)
 		* OFFER messages can be up to 8 lines with proper paragraph spacing
 	
 	**7. OFFER MESSAGE DESIGN (CRITICAL FOR PAID PRODUCTS):**
@@ -466,6 +475,7 @@ export const generateFunnelFlow = async (
 	- Present the value stack to show you give far more than you charge
 	- List specific benefits, features, or outcomes
 	- Make the value proposition clear and compelling
+	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	- End with a bridge that naturally leads to the contrast (e.g., "But here's the thing..." or "However...")
 	
 	**Part 2: Fear of Missing Out + Belonging**
@@ -475,6 +485,7 @@ export const generateFunnelFlow = async (
 	- Contrast "The Observer" (hesitant, watches others succeed) vs "The Action Taker" (decisive, builds success)
 	- Make them choose which type they want to be
 	- Use phrases like "Our Service Isn't For Everyone" or "This isn't for everyone"
+	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
 	**Part 3: Call to Action**
 	- Create urgency with time-sensitive language
@@ -483,8 +494,8 @@ export const generateFunnelFlow = async (
 	- Include resource link that will be placed in the button
 	- **If promo code is available**: Include it in the message (e.g., "Use code SALES20 for 20% off")
 	- Make the action clear and compelling
-	- **SENTENCE RULE**: Use shorter, more impactful sentences for better readability
-	- **LINK RULE**: [LINK] must be alone on its own line. No text can be on the same line as [LINK].
+	- **SENTENCE RULE**: Use shorter, more impactful sentences. Separate every 2 sentences with an empty line for better readability
+	- **LINK RULE**: [LINK] must be alone on its own line with empty line above it. No text can be on the same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
 	
 	**Example Structure (8-LINE OFFER MESSAGE):**
 	"You're ready to transform your sales game! With the Sales Pro Course, you'll gain proven strategies.
@@ -558,7 +569,7 @@ export const generateFunnelFlow = async (
 		 - Each offer block in Funnel 2 must represent exactly ONE resource with category "PAID".
 		 - Never mix multiple resources in a single offer block.
 	
-	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' with \`nextBlockId: null\`.
+	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a free value resource that is community-based (like Discord access, community guides, or general community resources). This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides community access or general community value.
 	
 	---
 	### VALIDATION
@@ -573,7 +584,7 @@ export const generateFunnelFlow = async (
 	- Number of OFFER blocks = number of PAID resources
 	- Each \`resourceName\` appears in exactly ONE block (no duplicates)
 	- ALL provided resources represented in funnel
-	- First WELCOME block has option with \`nextBlockId: null\`
+	- First WELCOME block has escape hatch option pointing to a community-based free value resource
 	- **CRITICAL**: Resources with category "FREE_VALUE" ONLY in VALUE_DELIVERY blocks
 	- **CRITICAL**: Resources with category "PAID" ONLY in OFFER blocks
 	- **CRITICAL**: PAID resources CANNOT be in VALUE_DELIVERY blocks
@@ -611,15 +622,15 @@ export const generateFunnelFlow = async (
 	### VALIDATION CHECKLIST (CRITICAL - CHECK BEFORE GENERATING)
 	
 	Before generating the JSON, verify:
-	1. **MESSAGE LENGTH**: Every message (except first funnel "Answer by..." and OFFER messages) is 5 lines or fewer; OFFER messages can be 8 lines or fewer
+	1. **MESSAGE LENGTH**: Every message (except OFFER messages) is 5 lines or fewer; OFFER messages can be 8 lines or fewer
 	2. **RESOURCE MAPPING**: Each FREE_VALUE resource → VALUE_DELIVERY block, each PAID resource → OFFER block
 	3. **EXACT NAMES**: resourceName fields match exactly with provided resource names
 	4. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages
 	5. **PROMO CODES**: If available, include promo codes in OFFER messages
 	6. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
 	7. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
-	8. **MOBILE FORMATTING**: Use clear paragraph breaks for mobile readability
-	9. **LINK FORMATTING**: [LINK] must be alone on its own line. No text on same line as [LINK].
+	8. **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
+	9. **LINK FORMATTING**: [LINK] must be alone on its own line with empty line above it. No text on same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
 	10. **NO DUPLICATES**: Each resource appears in exactly one block
 	11. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	
@@ -672,16 +683,24 @@ export const generateFunnelFlow = async (
 	  "blocks": {
 		 "welcome_1": {
 			"id": "welcome_1",
-			"message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?\\n\\nAnswer with number/keyword",
+			"message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?",
 			"options": [
 			  {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
-			  {"text": "Just exploring for now", "nextBlockId": null}
+			  {"text": "Just exploring for now", "nextBlockId": "value_community_access"}
 			]
 		 },
+		 // NOTE: "Just exploring for now" points to a community-based free value resource
+		 // This provides community access or general community value for anyone exploring
 		 "value_trading_guide": {
 			"id": "value_trading_guide",
-			"message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nHere is the link: https://caseyscrypto.com/free-charting-guide\\n\\nPlease review it, because the next step is where we build your personal plan. Reply with 'done' when you're ready.",
+			"message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nHere is the link: https://caseyscrypto.com/free-charting-guide\\n\\nPlease review it, because the next step is where we build your personal plan.",
 			"resourceName": "The 3 Core Principles of Crypto Charting",
+			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
+		 },
+		 "value_community_access": {
+			"id": "value_community_access",
+			"message": "No problem! Here's access to our free community Discord where you can explore, ask questions, and connect with others.\\n\\nJoin our Discord to get started and explore what interests you most.\\n\\nHere is the link: https://discord.gg/your-community\\n\\nAfter you join, you can explore different channels and find what resonates with you!",
+			"resourceName": "Community Discord Access",
 			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
 		 },
 		 "transition_to_vip_chat": {
