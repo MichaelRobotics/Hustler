@@ -54,6 +54,7 @@ interface FunnelsDashboardProps {
 	newFunnelName: string;
 	setNewFunnelName: (name: string) => void;
 	funnelToDelete: Funnel | null;
+	isDeleteDialogOpen: boolean;
 	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
 	user?: { experienceId?: string } | null;
 	// Product selection props
@@ -100,6 +101,7 @@ const FunnelsDashboard = React.memo(
 		newFunnelName,
 		setNewFunnelName,
 		funnelToDelete,
+		isDeleteDialogOpen,
 		isFunnelNameAvailable,
 		user,
 	// Product selection props
@@ -341,7 +343,11 @@ const FunnelsDashboard = React.memo(
 					)}
 
 					{funnelCards.map((funnel) => {
-						const isDeleting = funnelToDelete?.id === funnel.id;
+						// Only show deleting state if the delete dialog is actually open
+						const isDeleting = funnelToDelete?.id === funnel.id && isDeleteDialogOpen;
+						
+						// Check if this is the only funnel (first-time user guidance)
+						const isOnlyFunnel = funnelCards.length === 1;
 						
 						return (
 						<div
@@ -351,6 +357,10 @@ const FunnelsDashboard = React.memo(
 								isDeleting 
 									? "opacity-60 cursor-not-allowed" 
 									: "cursor-pointer hover:shadow-xl hover:shadow-violet-500/10 hover:border-violet-500/80 dark:hover:border-violet-400/90 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 dark:hover:shadow-2xl dark:hover:shadow-violet-500/20 dark:shadow-black/20"
+							} ${
+								isOnlyFunnel && !isDeleting
+									? "animate-pulse shadow-violet-500/20 shadow-2xl"
+									: ""
 							}`}
 						>
 							{/* Card Header with Status - Enhanced with smooth gradients for both themes */}
@@ -538,10 +548,7 @@ const FunnelsDashboard = React.memo(
 									<DropdownMenu.Root
 										open={openDropdownId === funnel.id}
 										onOpenChange={(open) => {
-											if (open) {
-												setOpenDropdownId(funnel.id);
-												setHighlightedButtonId(funnel.id);
-											} else {
+											if (!open) {
 												setOpenDropdownId(null);
 												setHighlightedButtonId(null);
 											}
@@ -555,7 +562,11 @@ const FunnelsDashboard = React.memo(
 														? "text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/40 border-violet-300/60 dark:border-violet-600/60"
 														: "text-muted-foreground hover:text-foreground hover:bg-surface/80 border-transparent hover:border-violet-500/40 dark:hover:border-violet-400/60"
 												}`}
-												onClick={(e) => {
+												onPointerDown={(e) => {
+													e.preventDefault();
+													e.stopPropagation();
+												}}
+												onPointerUp={(e) => {
 													e.stopPropagation();
 													if (openDropdownId === funnel.id) {
 														setOpenDropdownId(null);
@@ -564,6 +575,10 @@ const FunnelsDashboard = React.memo(
 														setOpenDropdownId(funnel.id);
 														setHighlightedButtonId(funnel.id);
 													}
+												}}
+												onClick={(e) => {
+													e.preventDefault();
+													e.stopPropagation();
 												}}
 												aria-label="Funnel options"
 											>
@@ -633,19 +648,6 @@ const FunnelsDashboard = React.memo(
 												<span>Edit</span>
 											</DropdownMenu.Item>
 
-											<DropdownMenu.Item
-												onClick={(e) => {
-													e.preventDefault();
-													e.stopPropagation();
-													handleDuplicateFunnel(funnel);
-													setOpenDropdownId(null);
-													setHighlightedButtonId(null);
-												}}
-												className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-800 dark:hover:text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-amber-300/60 dark:hover:border-amber-600/60"
-											>
-												<Copy className="h-4 w-4" strokeWidth={2.5} />
-												<span>Duplicate</span>
-											</DropdownMenu.Item>
 
 											<DropdownMenu.Separator className="h-px bg-border/60 my-1 dark:bg-violet-500/30" />
 

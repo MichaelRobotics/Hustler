@@ -95,6 +95,7 @@ export const useFunnelDeployment = (
 				// Use product-specific live funnel check
 				const apiUrl = `/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}&productId=${currentFunnel.whopProductId}`;
 				console.log(`🔍 [FRONTEND VALIDATION] API URL: ${apiUrl}`);
+				console.log(`🔍 [FRONTEND VALIDATION] Experience ID being sent: ${user.experienceId}`);
 				
 				const response = await apiGet(apiUrl, user.experienceId);
 				console.log(`🔍 [FRONTEND VALIDATION] Response status: ${response.status}, ok: ${response.ok}`);
@@ -120,10 +121,13 @@ export const useFunnelDeployment = (
 					console.error(`🔍 [FRONTEND VALIDATION] API call failed with status: ${response.status}`);
 					const errorText = await response.text();
 					console.error(`🔍 [FRONTEND VALIDATION] Error response:`, errorText);
+					// If API call fails, we should be more cautious and let backend handle it
+					console.warn(`🔍 [FRONTEND VALIDATION] API validation failed, backend will perform final validation`);
 				}
 			} catch (error) {
 				console.error(`🔍 [FRONTEND VALIDATION] Error checking for live funnels:`, error);
-				// Continue with deployment if check fails
+				// Continue with deployment if check fails - backend will catch conflicts
+				console.warn(`🔍 [FRONTEND VALIDATION] Frontend validation failed, backend will perform final validation`);
 			}
 		} else {
 			console.log(`🔍 [FRONTEND VALIDATION] No whopProductId found for funnel: ${currentFunnel.id}`);

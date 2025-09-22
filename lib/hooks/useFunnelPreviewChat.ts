@@ -24,13 +24,13 @@ export const useFunnelPreviewChat = (
 		}
 
 		// Check if this block is in a stage that should not show numbered options
-		// Stages without numbered options: VALUE_DELIVERY, TRANSITION, PAIN_POINT_QUALIFICATION, OFFER
-		// NOTE: EXPERIENCE_QUALIFICATION should show options - it's the main qualification stage
+		// Stages without numbered options: VALUE_DELIVERY, TRANSITION, PAIN_POINT_QUALIFICATION, EXPERIENCE_QUALIFICATION, OFFER
 		const shouldHideOptions = funnelFlow?.stages.some(
 			stage => 
 				(stage.name === "VALUE_DELIVERY" ||
 				 stage.name === "TRANSITION" || 
 				 stage.name === "PAIN_POINT_QUALIFICATION" || 
+				 stage.name === "EXPERIENCE_QUALIFICATION" ||
 				 stage.name === "OFFER") && 
 				stage.blockIds.includes(block.id)
 		);
@@ -101,7 +101,7 @@ export const useFunnelPreviewChat = (
 		} else {
 			// For all subsequent messages, use requestAnimationFrame for smooth performance
 			requestAnimationFrame(() => {
-				chatEndRef.current?.scrollIntoView({ behavior: "instant" });
+				chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 			});
 		}
 	}, [history]);

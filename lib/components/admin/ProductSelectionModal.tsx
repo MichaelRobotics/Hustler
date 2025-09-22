@@ -60,8 +60,11 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 			{/* Products List */}
 			<div className="p-4 max-h-80 overflow-y-auto">
 				{loading ? (
-					<div className="flex justify-center py-8">
-						<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-500"></div>
+					<div className="flex flex-col items-center justify-center py-12 space-y-4">
+						<div className="animate-spin rounded-full h-8 w-8 border-2 border-violet-200 border-t-violet-500"></div>
+						<Text size="2" color="gray" className="text-gray-500 dark:text-gray-400">
+							Loading products...
+						</Text>
 					</div>
 				) : (
 					<div className="space-y-2">

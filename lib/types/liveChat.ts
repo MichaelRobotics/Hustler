@@ -1,4 +1,5 @@
 // Live Chat Types and Interfaces
+import type { AuthenticatedUser } from "./user";
 
 export interface LiveChatUser {
 	id: string;
@@ -110,6 +111,7 @@ export interface LiveChatPageProps {
 	onBack: () => void;
 	onTypingChange?: (isTyping: boolean) => void;
 	onChatStateChange?: (isInChat: boolean) => void;
+	user: AuthenticatedUser | null;
 	experienceId: string; // Add experienceId prop for multi-tenant isolation
 }
 

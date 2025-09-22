@@ -596,6 +596,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						onBack={handleBackToDashboard}
 						onTypingChange={setIsUserTyping}
 						onChatStateChange={setIsInChat}
+						user={user}
 						experienceId={user?.experienceId || ""}
 					/>
 				</div>
@@ -659,9 +660,10 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 									setIsCreatingNewFunnel={setIsCreatingNewFunnel}
 									newFunnelName={newFunnelName}
 									setNewFunnelName={setNewFunnelName}
-									funnelToDelete={funnelToDelete}
-									isFunnelNameAvailable={isFunnelNameAvailable}
-									user={user}
+								funnelToDelete={funnelToDelete}
+								isDeleteDialogOpen={isDeleteDialogOpen}
+								isFunnelNameAvailable={isFunnelNameAvailable}
+								user={user}
 								/>
 							</div>
 

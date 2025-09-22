@@ -80,12 +80,8 @@ export const useFunnelLayout = (
 
 	// Reset layout when editing state changes (blocks change dimensions)
 	React.useEffect(() => {
-		// Only allow recalculations if not in performance mode
-		if (performanceMode) {
-			return; // Performance mode active, no more recalculations
-		}
-
-		// Only trigger recalculations when editing ENDS (save/cancel), not when editing starts
+		// Allow recalculations when editing ends, even in performance mode
+		// This enables layout updates when blocks are saved
 		if (!editingBlockId && Object.keys(positions).length > 0) {
 			// When editing ends, trigger final layout calculation
 			const timer = setTimeout(() => {
@@ -94,7 +90,7 @@ export const useFunnelLayout = (
 
 			return () => clearTimeout(timer);
 		}
-	}, [editingBlockId, positions, performanceMode]);
+	}, [editingBlockId, positions]);
 
 	// Trigger final layout calculation after blocks are rendered and measured
 	React.useEffect(() => {
@@ -127,9 +123,10 @@ export const useFunnelLayout = (
 			return;
 		}
 
-		// Prevent any recalculations when in performance mode
-		if (performanceMode) {
-			return; // Performance mode active, no more calculations
+		// Allow recalculations when layout phase is "final" (block save scenario)
+		// This enables layout updates when blocks are saved, even in performance mode
+		if (performanceMode && layoutPhase !== "final") {
+			return; // Performance mode active, but allow final phase recalculations
 		}
 
 		let maxStageWidth = 0;

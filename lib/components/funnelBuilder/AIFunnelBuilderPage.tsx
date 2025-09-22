@@ -79,7 +79,12 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	}>(null);
 
 	// Custom Hooks
-	const deployment = useFunnelDeployment(currentFunnel, onUpdate, () =>
+	const deployment = useFunnelDeployment(currentFunnel, (updatedFunnel) => {
+		// Update local state immediately for UI responsiveness
+		setCurrentFunnel(updatedFunnel);
+		// Also update parent component
+		onUpdate(updatedFunnel);
+	}, () =>
 		funnelVisualizerRef.current?.enableCalculationsForGoLive?.(),
 		user,
 	);
@@ -160,6 +165,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 											}
 											funnelId={currentFunnel.id}
 											user={user}
+											isDeployed={currentFunnel.isDeployed}
 											ref={funnelVisualizerRef}
 										/>
 									</div>

@@ -91,12 +91,12 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		// Show typing indicator
 		setIsTyping(true);
 		
-		// Simulate typing delay
+		// Simulate typing delay (reduced for better UX)
 		setTimeout(() => {
 			setIsTyping(false);
 			handleCustomInput(messageText);
 			onMessageSent?.(messageText);
-		}, 1000);
+		}, 800);
 	}, [message, handleCustomInput, onMessageSent]);
 
 	// Handle Enter key
@@ -241,10 +241,12 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				touchAction: "pan-y pinch-zoom",
 				// Prevent pull-to-refresh
 				overscrollBehavior: "contain",
+				// Improve scrolling performance
+				WebkitOverflowScrolling: "touch",
 			}}
 		>
-			{/* Header - Hidden on desktop */}
-			<div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+			{/* Header - Visible on all screen sizes */}
+			<div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
 						{onBack && (
@@ -367,6 +369,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 								onClick={handleSubmit}
 								disabled={!message.trim()}
 								className="chat-optimized p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+								title="Send message"
 							>
 								<Send size={18} className="text-white dark:text-gray-100" />
 							</button>

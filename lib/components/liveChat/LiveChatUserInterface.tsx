@@ -13,6 +13,7 @@ import type {
 	LiveChatMessage,
 } from "../../types/liveChat";
 import { ThemeToggle } from "../common/ThemeToggle";
+import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
 
 interface LiveChatUserInterfaceProps {
 	conversation: LiveChatConversation;
@@ -167,6 +168,65 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 				message.type === "agent";
 			const isUser = message.type === "user";
 
+			// Handle animated gold button HTML in bot messages
+			const renderMessageWithLinks = (text: string) => {
+				// Check for animated button HTML first
+				if (isAgent && text.includes('animated-gold-button')) {
+					// Parse the HTML and extract the button data
+					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
+					const parts = text.split(buttonRegex);
+					
+					// Separate text and buttons
+					const textParts: React.ReactNode[] = [];
+					const buttons: React.ReactNode[] = [];
+					
+					parts.forEach((part, partIndex) => {
+						if (partIndex % 3 === 1) {
+							// This is the href
+							const href = part;
+							const buttonText = parts[partIndex + 1] || "Get Your Free Guide";
+							buttons.push(
+								<AnimatedGoldButton 
+									key={partIndex} 
+									href={href}
+									text={buttonText}
+									icon="sparkles"
+									onClick={() => {
+										// Redirect to the link
+										window.location.href = href;
+									}}
+								/>
+							);
+						} else if (partIndex % 3 === 0) {
+							// This is text content
+							if (part.trim()) {
+								textParts.push(
+									<div key={partIndex} className="text-sm leading-relaxed whitespace-pre-wrap">
+										{part.trim()}
+									</div>
+								);
+							}
+						}
+					});
+					
+					return (
+						<div className="space-y-6">
+							{/* All text content first */}
+							{textParts}
+							{/* All buttons below text with extra spacing and centered */}
+							{buttons.length > 0 && (
+								<div className="flex justify-center pt-4">
+									{buttons}
+								</div>
+							)}
+						</div>
+					);
+				}
+				
+				// Regular message rendering
+				return <div className="text-sm leading-relaxed whitespace-pre-wrap">{text}</div>;
+			};
+
 			return (
 				<div
 					key={message.id}
@@ -179,7 +239,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm" // User messages: white on left
 						}`}
 					>
-						<div className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</div>
+						{renderMessageWithLinks(message.text)}
 					</div>
 				</div>
 			);

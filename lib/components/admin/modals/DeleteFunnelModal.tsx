@@ -4,6 +4,7 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { Button, Heading, Text } from "frosted-ui";
 import { Trash2 } from "lucide-react";
 import React from "react";
+import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 
 interface Funnel {
 	id: string;
@@ -31,6 +32,9 @@ export default function DeleteFunnelModal({
 	funnelToDelete,
 	onConfirmDelete,
 }: DeleteFunnelModalProps) {
+	// Check if funnel is live and cannot be deleted
+	const isLiveFunnel = funnelToDelete?.isDeployed && hasValidFlow(funnelToDelete);
+	
 	return (
 		<AlertDialog.Root open={isOpen} onOpenChange={onOpenChange}>
 			<AlertDialog.Portal>
@@ -74,7 +78,8 @@ export default function DeleteFunnelModal({
 								<Button
 									color="red"
 									onClick={onConfirmDelete}
-									className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
+									disabled={isLiveFunnel}
+									className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-red-600"
 								>
 									<Trash2 size={18} strokeWidth={2.5} className="mr-2" />
 									Delete

@@ -82,10 +82,9 @@ const useDebounce = (value: string, delay: number) => {
 	return debouncedValue;
 };
 
-const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experienceId }) => {
-	// Get user context from authentication (same pattern as UserChat)
-	const [user, setUser] = useState<AuthenticatedUser | null>(null);
-	const [loading, setLoading] = useState(true);
+const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experienceId, user }) => {
+	// User is now passed as prop (same pattern as ResourceLibrary)
+	const [loading, setLoading] = useState(false);
 	const [authError, setAuthError] = useState<string | null>(null);
 	
 	// All other state hooks must be declared before any conditional returns
@@ -112,40 +111,14 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	const intervalRef = useRef<NodeJS.Timeout | null>(null);
 	const lastUpdateRef = useRef<number>(0);
 
-	// Fetch user context on component mount (same pattern as ExperiencePage)
+	// User is passed as prop - no need to fetch (same pattern as ResourceLibrary)
 	useEffect(() => {
-		const fetchUserContext = async () => {
-			try {
-				setLoading(true);
-				const response = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
-				
-				if (!response.ok) {
-					if (response.status === 403) {
-						setAuthError("Access denied");
-					} else if (response.status === 401) {
-						setAuthError("Authentication required");
-					} else {
-						setAuthError("Failed to load user context");
-					}
-					return;
-				}
+		if (!user) {
+			setAuthError("User not available");
+		}
+	}, [user]);
 
-				const data = await response.json();
-				if (data.user) {
-					setUser(data.user);
-				}
-			} catch (err) {
-				console.error("Error fetching user context:", err);
-				setAuthError("Failed to load user context");
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchUserContext();
-	}, [experienceId]);
-
-	// WebSocket integration with UserChat system
+	// WebSocket integration - lazy loaded when user is available (same pattern as ResourceLibrary)
 	const {
 		isConnected,
 		connectionStatus,
@@ -154,23 +127,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		error: wsError,
 		reconnect,
 	} = useLiveChatIntegration({
-		user: user || {
-			id: "",
-			whopUserId: "",
-			experienceId: experienceId,
-			email: "",
-			name: "",
-			credits: 0,
-			accessLevel: "no_access" as const,
-			productsSynced: false,
-			experience: {
-				id: "",
-				whopExperienceId: experienceId,
-				whopCompanyId: "",
-				name: "",
-			},
-		}, // Provide default user when null
-		experienceId: experienceId, // Use the prop instead of user.experienceId
+		user: user!, // User is guaranteed to be available here
+		experienceId: experienceId,
 		conversationId: selectedConversationId || undefined,
 		onMessage: (message) => {
 			if (message.type === "message" && message.message) {
@@ -232,7 +190,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	}, [selectedConversationId, conversations]);
 
 	// Load conversations from database
-	const loadConversations = useCallback(async (page = 1, reset = false, searchQuery = "") => {
+	const loadConversations = useCallback(async (page = 1, reset = false) => {
 		if (!user) return;
 
 		setIsLoading(true);
@@ -242,11 +200,11 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			// Call API route for conversation list
 			const params = new URLSearchParams({
 				experienceId: experienceId, // Use the prop instead of user.experienceId
-				status: filters.status || "all",
-				sortBy: filters.sortBy || "newest",
-				search: searchQuery || "",
+				status: "all", // Load both open and closed conversations for instant switching
+				// sortBy removed - handled client-side for instant sorting
+				// search removed - handled client-side for instant search
 				page: page.toString(),
-				limit: "20",
+				limit: "50", // Increased limit to get more conversations
 			});
 
 			const response = await apiGet(`/api/livechat/conversations?${params}`, experienceId, {
@@ -274,7 +232,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		} finally {
 			setIsLoading(false);
 		}
-	}, [user, experienceId, filters.status, filters.sortBy]);
+	}, [user, experienceId]);
 
 	// Load conversation details (optimized - messages included)
 	const loadConversationDetailsCallback = useCallback(async (conversationId: string) => {
@@ -509,22 +467,22 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	}, []);
 
 	const handleFiltersChange = useCallback((newFilters: LiveChatFilters) => {
+		// Always deselect current conversation when switching filters (Open/Closed status, sorting, etc.)
+		// This prevents showing a conversation that might not exist in the new filtered view
+		if (selectedConversationId) {
+			setSelectedConversationId(null);
+		}
 		setFilters(newFilters);
-	}, []);
+	}, [selectedConversationId]);
 
 	const handleSearchChange = useCallback((query: string) => {
 		setSearchQuery(query);
 	}, []);
 
-	// Load conversations on mount and when filters change
+	// Load conversations on mount (both open and closed for instant switching)
 	useEffect(() => {
-		loadConversations(1, true, debouncedSearchQuery);
-	}, [user, filters.status, filters.sortBy, loadConversations]);
-
-	// Handle search with debouncing
-	useEffect(() => {
-		loadConversations(1, true, debouncedSearchQuery);
-	}, [debouncedSearchQuery, loadConversations]);
+		loadConversations(1, true);
+	}, [user]);
 
 	// Load conversation details when selected
 	useEffect(() => {
@@ -533,8 +491,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		}
 	}, [selectedConversationId, loadConversationDetailsCallback]);
 
-	// Show loading state
-	if (loading) {
+	// Show loading state only if user is not available (same pattern as ResourceLibrary)
+	if (!user) {
 		return (
 			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
 				<div className="text-center">
@@ -599,7 +557,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			<div className="h-full w-full">
 				{/* Enhanced Header with Whop Design Patterns - Hidden on mobile when in chat */}
 				<div
-					className={`${selectedConversation ? "hidden lg:block" : "block"}`}
+					className={`${selectedConversation ? "hidden lg:block" : "block"} sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-0 -mx-0 sm:-mx-0 lg:-mx-0 px-0 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg`}
 				>
 					<LiveChatHeader
 						onBack={onBack}
@@ -613,7 +571,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 
 				{/* Main Content Area */}
 				<div
-					className={`flex-grow flex flex-col md:overflow-hidden ${selectedConversation ? "lg:gap-6 lg:mt-8" : "gap-6 mt-8"}`}
+					className={`flex-grow flex flex-col md:overflow-hidden lg:gap-6 lg:mt-4`}
 				>
 					{/* Mobile: Show conversation list or chat view */}
 					<div
@@ -638,7 +596,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 									onSearchReset={handleSearchReset}
 									isLoading={isLoading}
 									hasMore={hasMore}
-									onLoadMore={() => loadConversations(currentPage + 1, false, debouncedSearchQuery)}
+									onLoadMore={() => loadConversations(currentPage + 1, false)}
 								/>
 							</div>
 						)}
