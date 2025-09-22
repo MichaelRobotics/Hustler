@@ -164,7 +164,16 @@ export async function sendNextBlockMessage(
 
     // Format message with options
     let message = block.message || "Please select an option:";
-    if (block.options && block.options.length > 0) {
+    
+    // Check if this is a VALUE_DELIVERY block - don't show options for these
+    const currentPhase = detectConversationPhase(blockId, funnelFlow);
+    const isValueDelivery = currentPhase === 'PHASE2';
+    
+    if (isValueDelivery) {
+      console.log(`[DM Core] VALUE_DELIVERY block detected - not showing options for block ${blockId}`);
+    }
+    
+    if (block.options && block.options.length > 0 && !isValueDelivery) {
       // Check if message already contains instruction line to avoid duplication
       const hasInstruction = message.toLowerCase().includes('answer') && 
                            (message.toLowerCase().includes('number') || message.toLowerCase().includes('keyword'));

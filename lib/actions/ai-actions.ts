@@ -179,7 +179,7 @@ ${badJson}
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?\\n\\nAnswer with number/keyword",
+      "message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?",
       "options": [
         {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
         {"text": "Just exploring for now", "nextBlockId": null}
@@ -385,9 +385,7 @@ export const generateFunnelFlow = async (
 	- **Line 1**: A short, impactful headline.
 
 	*Example Message for Funnel 1:*
-	"Welcome! What's your main goal?
-	
-	Answer with number/keyword"
+	"Welcome! What's your main goal?"
 	
 	**IMPORTANT**: Do NOT include the numbered options in the message text. The options are defined in the 'options' array.
 	
@@ -463,7 +461,7 @@ export const generateFunnelFlow = async (
 	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
 	- **LINK FORMATTING**: All links/buttons must be on separate lines after empty line. No empty lines at end of message. Add empty line after link/button if there's more text
 	- **EXAMPLES OF MESSAGE LENGTHS:**
-		* "Welcome! What's your main goal?\n\nAnswer with number/keyword" (3 lines - exempt)
+		* "Welcome! What's your main goal?" (1 line - exempt)
 		* "Perfect choice! Here's your free resource.\n\nLink: [URL]\n\nReply 'done' when ready." (5 lines)
 		* "Our service isn't for everyone.\n\nWe work with specific partners.\n\nWhich type are you?\n\n Take Action Now\n\n [LINK]" (5 lines)
 		* OFFER messages can be up to 8 lines with proper paragraph spacing
