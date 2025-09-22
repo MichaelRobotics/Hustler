@@ -381,22 +381,15 @@ export const generateFunnelFlow = async (
 	### ITEM MESSAGE CONSTRUCTION
 	
 	**1. FOR ITEMS WITH CHOICES (in \`FUNNEL_1_WELCOME_GATE\`):**
-	The 'message' string must be structured exactly like this:
-	- **Line 1**: A short, impactful headline.
-	- **Line 2**: An empty line for spacing.
-	- **Line 3**: The instruction: "Answer with number/keyword".
+	The 'message' string should be a short, impactful headline.
 	
 	*Example Message for Funnel 1:*
-	"Welcome! What's your main goal?
-	
-	Answer with number/keyword"
+	"Welcome! What's your main goal?"
 	
 	**IMPORTANT**: Do NOT include the numbered options in the message text. The options are defined in the 'options' array.
 	
 	**2. FOR ITEMS WITH CHOICES (in \`FUNNEL_2_STRATEGY_SESSION\`):**
-	The 'message' string for qualification stages (\`EXPERIENCE_QUALIFICATION\`, \`PAIN_POINT_QUALIFICATION\`) should be direct and concise. It must be structured exactly like this:
-	- **Line 1**: A direct question as the headline.
-	- **Line 2**: An empty line for spacing.
+	The 'message' string for qualification stages (\`EXPERIENCE_QUALIFICATION\`, \`PAIN_POINT_QUALIFICATION\`) should be direct and concise.
 	
 	**EXPERIENCE_QUALIFICATION SPECIFIC RULES:**
 	- Be engaging and specific about what you're assessing
@@ -408,15 +401,11 @@ export const generateFunnelFlow = async (
 	**CRITICAL**: This message format must NOT include the "Answer by..." instruction line.
 	
 	*Example Message for Funnel 2:*
-	"Now let's assess your current level with this topic.
-	
-	Where would you honestly place yourself right now?
-	
-	"
+	"Now let's assess your current level with this topic. Where would you honestly place yourself right now?"
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
-	The message must present a resource with category "FREE_VALUE" and instruct the user to reply "done" to proceed, creating the "Open Loop".
-	*Example:* "Perfect. Here is our free guide... Please review it... Reply with 'done' when you're ready.
+	The message must present a resource with category "FREE_VALUE" and create the "Open Loop" without explicit instructions.
+	*Example:* "Perfect. Here is our free guide... Please review it...
 
 	[LINK]"
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'done' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
@@ -432,8 +421,7 @@ export const generateFunnelFlow = async (
 	- **FORBIDDEN**: Do NOT use the 3-part OFFER structure (Value Stack + FOMO + CTA)
 	- **FORBIDDEN**: Do NOT use "The Observer" vs "The Action Taker" contrast
 	- **FORBIDDEN**: Do NOT use "Our Service Isn't For Everyone" or similar exclusivity language
-	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
+	- **MOBILE FORMATTING**: Use clear paragraph breaks for mobile readability
 	
 	**Example Structure (6-LINE TRANSITION MESSAGE):**
 	"Excellent! You've completed step one. ✅
@@ -463,8 +451,8 @@ export const generateFunnelFlow = async (
 	- Keep messages concise and impactful
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
-	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	- **LINK FORMATTING**: All links/buttons must be on separate lines after empty line. No empty lines at end of message. Add empty line after link/button if there's more text
+	- **MOBILE FORMATTING**: Use clear paragraph breaks for mobile readability
+	- **LINK FORMATTING**: All links/buttons must be on separate lines. No empty lines at end of message.
 	- **EXAMPLES OF MESSAGE LENGTHS:**
 		* "Welcome! What's your main goal?\n\nAnswer with number/keyword" (3 lines - exempt)
 		* "Perfect choice! Here's your free resource.\n\nLink: [URL]\n\nReply 'done' when ready." (5 lines)
@@ -478,7 +466,6 @@ export const generateFunnelFlow = async (
 	- Present the value stack to show you give far more than you charge
 	- List specific benefits, features, or outcomes
 	- Make the value proposition clear and compelling
-	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	- End with a bridge that naturally leads to the contrast (e.g., "But here's the thing..." or "However...")
 	
 	**Part 2: Fear of Missing Out + Belonging**
@@ -488,7 +475,6 @@ export const generateFunnelFlow = async (
 	- Contrast "The Observer" (hesitant, watches others succeed) vs "The Action Taker" (decisive, builds success)
 	- Make them choose which type they want to be
 	- Use phrases like "Our Service Isn't For Everyone" or "This isn't for everyone"
-	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
 	**Part 3: Call to Action**
 	- Create urgency with time-sensitive language
@@ -497,8 +483,8 @@ export const generateFunnelFlow = async (
 	- Include resource link that will be placed in the button
 	- **If promo code is available**: Include it in the message (e.g., "Use code SALES20 for 20% off")
 	- Make the action clear and compelling
-	- **SENTENCE RULE**: Use shorter, more impactful sentences. Separate every 2 sentences with an empty line for better readability
-	- **LINK RULE**: [LINK] must be alone on its own line with empty line above it. No text can be on the same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
+	- **SENTENCE RULE**: Use shorter, more impactful sentences for better readability
+	- **LINK RULE**: [LINK] must be alone on its own line. No text can be on the same line as [LINK].
 	
 	**Example Structure (8-LINE OFFER MESSAGE):**
 	"You're ready to transform your sales game! With the Sales Pro Course, you'll gain proven strategies.
@@ -632,8 +618,8 @@ export const generateFunnelFlow = async (
 	5. **PROMO CODES**: If available, include promo codes in OFFER messages
 	6. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
 	7. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
-	8. **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	9. **LINK FORMATTING**: [LINK] must be alone on its own line with empty line above it. No text on same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
+	8. **MOBILE FORMATTING**: Use clear paragraph breaks for mobile readability
+	9. **LINK FORMATTING**: [LINK] must be alone on its own line. No text on same line as [LINK].
 	10. **NO DUPLICATES**: Each resource appears in exactly one block
 	11. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	

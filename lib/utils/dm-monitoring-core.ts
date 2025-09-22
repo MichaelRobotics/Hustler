@@ -164,7 +164,7 @@ export async function sendNextBlockMessage(
     // Format message with options
     let message = block.message || "Please select an option:";
     if (block.options && block.options.length > 0) {
-      message += "\n\nPlease choose one of the following options:\n";
+      message += "\n\nAnswer with number/keyword\n";
       block.options.forEach((option, index) => {
         message += `${index + 1}. ${option.text}\n`;
       });
