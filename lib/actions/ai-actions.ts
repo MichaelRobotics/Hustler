@@ -567,6 +567,8 @@ export const generateFunnelFlow = async (
 	
 	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a FREE_VALUE resource from the provided resource list. This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides general value to anyone exploring.
 	
+	**CRITICAL**: The escape hatch MUST use an EXISTING FREE_VALUE resource from the provided resource list. DO NOT create imaginary resources like "Crypto Basics Guide" or "Community Discord Access". Only use resources that actually exist in the provided resource list.
+	
 	---
 	### VALIDATION
 	
@@ -696,7 +698,7 @@ export const generateFunnelFlow = async (
 		 "value_crypto_basics": {
 			"id": "value_crypto_basics",
 			"message": "No problem! Here's our free crypto basics guide to get you started.\\n\\nThis covers the fundamentals: what crypto is, how it works, and where to begin your journey.\\n\\nHere is the link: https://caseyscrypto.com/crypto-basics-guide\\n\\nAfter you review it, you can explore more specific topics in our community!",
-			"resourceName": "Crypto Basics Guide",
+			"resourceName": "[EXAMPLE - Use actual FREE_VALUE resource name from provided list]",
 			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
 		 },
 		 "transition_to_vip_chat": {
