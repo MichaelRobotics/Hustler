@@ -24,6 +24,7 @@ interface DeleteFunnelModalProps {
 	onOpenChange: (open: boolean) => void;
 	funnelToDelete: Funnel | null;
 	onConfirmDelete: () => void;
+	isDeleting?: boolean;
 }
 
 export default function DeleteFunnelModal({
@@ -31,6 +32,7 @@ export default function DeleteFunnelModal({
 	onOpenChange,
 	funnelToDelete,
 	onConfirmDelete,
+	isDeleting = false,
 }: DeleteFunnelModalProps) {
 	// Check if funnel is live and cannot be deleted
 	const isLiveFunnel = funnelToDelete?.isDeployed && hasValidFlow(funnelToDelete);
@@ -57,6 +59,16 @@ export default function DeleteFunnelModal({
 					</div>
 
 					<div className="space-y-5">
+						{/* Deletion Indicator */}
+						{isDeleting && (
+							<div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+								<div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+								<Text size="2" weight="semi-bold" color="red" className="text-red-700 dark:text-red-300">
+									Deletion
+								</Text>
+							</div>
+						)}
+
 						<AlertDialog.Description asChild>
 							<Text color="gray" className="text-gray-600 dark:text-gray-300">
 								Are you sure you want to delete "{funnelToDelete?.name}"? This

@@ -55,11 +55,14 @@ interface FunnelsDashboardProps {
 	setNewFunnelName: (name: string) => void;
 	funnelToDelete: Funnel | null;
 	isDeleteDialogOpen: boolean;
+	isDeleting: boolean;
 	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
 	user?: { experienceId?: string } | null;
 	// Product selection props
 	isProductSelectionOpen: boolean;
 	setIsProductSelectionOpen: (open: boolean) => void;
+	isProductSelectionActive: boolean;
+	setIsProductSelectionActive: (active: boolean) => void;
 	discoveryProducts: any[];
 	setDiscoveryProducts: (products: any[]) => void;
 	productsLoading: boolean;
@@ -102,11 +105,14 @@ const FunnelsDashboard = React.memo(
 		setNewFunnelName,
 		funnelToDelete,
 		isDeleteDialogOpen,
+		isDeleting,
 		isFunnelNameAvailable,
 		user,
 	// Product selection props
 	isProductSelectionOpen,
 	setIsProductSelectionOpen,
+	isProductSelectionActive,
+	setIsProductSelectionActive,
 	discoveryProducts,
 	setDiscoveryProducts,
 	productsLoading,
@@ -139,16 +145,19 @@ const FunnelsDashboard = React.memo(
 			setSelectedProduct(product);
 			setNewFunnelName(product.title); // 🔑 Auto-fill funnel name
 			setIsProductSelectionOpen(false);
+			setIsProductSelectionActive(false); // Show sidebar again
 			setIsCreatingNewFunnel(true); // Show name input
-		}, [setSelectedProduct, setNewFunnelName, setIsProductSelectionOpen, setIsCreatingNewFunnel]);
+			setIsRenaming(true); // Hide sidebar during funnel creation (same as rename)
+		}, [setSelectedProduct, setNewFunnelName, setIsProductSelectionOpen, setIsProductSelectionActive, setIsCreatingNewFunnel, setIsRenaming]);
 
 		// Handle opening product selection
 		const handleOpenProductSelection = useCallback(() => {
 			setIsProductSelectionOpen(true);
+			setIsProductSelectionActive(true); // Hide sidebar during product selection
 			if (discoveryProducts.length === 0) {
 				fetchDiscoveryProducts();
 			}
-		}, [setIsProductSelectionOpen, discoveryProducts.length, fetchDiscoveryProducts]);
+		}, [setIsProductSelectionOpen, setIsProductSelectionActive, discoveryProducts.length, fetchDiscoveryProducts]);
 
 		// Memoized handler for creating a new funnel
 		const handleCreateNewFunnel = useCallback(
@@ -185,6 +194,7 @@ const FunnelsDashboard = React.memo(
 
 					// Reset states
 					setIsCreatingNewFunnel(false);
+					setIsProductSelectionActive(false); // Show sidebar again
 					handleSetIsRenaming(false);
 					setEditingFunnelId(null);
 					setNewFunnelName("");
@@ -328,6 +338,7 @@ const FunnelsDashboard = React.memo(
 												setNewFunnelName("");
 												handleSetIsRenaming(false);
 												setIsCreatingNewFunnel(false);
+												setIsProductSelectionActive(false); // Show sidebar again
 											}}
 											disabled={isSaving}
 											className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -343,8 +354,8 @@ const FunnelsDashboard = React.memo(
 					)}
 
 					{funnelCards.map((funnel) => {
-						// Only show deleting state if the delete dialog is actually open
-						const isDeleting = funnelToDelete?.id === funnel.id && isDeleteDialogOpen;
+						// Show deleting state if this funnel is being deleted (from hook state)
+						const isDeletingThisFunnel = funnelToDelete?.id === funnel.id && isDeleting;
 						
 						// Check if this is the only funnel (first-time user guidance)
 						const isOnlyFunnel = funnelCards.length === 1;
@@ -352,13 +363,13 @@ const FunnelsDashboard = React.memo(
 						return (
 						<div
 							key={funnel.id}
-							onClick={() => !isDeleting && onFunnelClick(funnel)}
+							onClick={() => !isDeletingThisFunnel && onFunnelClick(funnel)}
 							className={`group relative bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl flex flex-col justify-between transition-all duration-300 shadow-lg backdrop-blur-sm overflow-hidden ${
-								isDeleting 
+								isDeletingThisFunnel 
 									? "opacity-60 cursor-not-allowed" 
 									: "cursor-pointer hover:shadow-xl hover:shadow-violet-500/10 hover:border-violet-500/80 dark:hover:border-violet-400/90 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 dark:hover:shadow-2xl dark:hover:shadow-violet-500/20 dark:shadow-black/20"
 							} ${
-								isOnlyFunnel && !isDeleting
+								isOnlyFunnel && !isDeletingThisFunnel
 									? "animate-pulse shadow-violet-500/20 shadow-2xl"
 									: ""
 							}`}
@@ -368,7 +379,7 @@ const FunnelsDashboard = React.memo(
 								<div className="flex items-start justify-between gap-3">
 									{/* Status Badge - Live (Red), Draft (Gray), Saving (Blue), or Deleting (Red) */}
 									<div className="flex items-center gap-2">
-										{isDeleting ? (
+										{isDeletingThisFunnel ? (
 											<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
 												<Circle
 													className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse fill-current"
@@ -490,6 +501,7 @@ const FunnelsDashboard = React.memo(
 													setEditingName("");
 													handleSetIsRenaming(false); // Show sidebar after cancelling with timeout
 													setIsCreatingNewFunnel(false); // Reset creation state
+													setIsProductSelectionActive(false); // Show sidebar again
 												}}
 												disabled={isSaving}
 												className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -540,7 +552,7 @@ const FunnelsDashboard = React.memo(
 
 							{/* Settings Dots - Moved to top right corner */}
 							<div className="absolute top-3 right-3 z-10">
-								{isDeleting ? (
+								{isDeletingThisFunnel ? (
 									<div className="p-2 rounded-lg opacity-50 cursor-not-allowed">
 										<MoreHorizontal className="h-4 w-4 text-muted-foreground" strokeWidth={2.5} />
 									</div>
@@ -684,7 +696,10 @@ const FunnelsDashboard = React.memo(
 				<ProductSelectionModal
 					isOpen={isProductSelectionOpen}
 					products={discoveryProducts}
-					onClose={() => setIsProductSelectionOpen(false)}
+					onClose={() => {
+						setIsProductSelectionOpen(false);
+						setIsProductSelectionActive(false); // Show sidebar again
+					}}
 					onProductSelect={handleProductSelect}
 					loading={productsLoading}
 				/>

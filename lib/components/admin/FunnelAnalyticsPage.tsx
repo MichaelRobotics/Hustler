@@ -176,31 +176,8 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 							</Text>
 						</div>
 
-						{/* Loading state */}
-						{isLoading ? (
-							<div className="mb-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 border border-gray-200 dark:border-gray-700/30 rounded-xl text-center">
-								<div className="mb-4">
-									<Activity
-										className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4 animate-pulse"
-										strokeWidth={1.5}
-									/>
-									<Heading
-										size="5"
-										weight="bold"
-										className="text-gray-800 dark:text-gray-200 mb-2"
-									>
-										Loading Analytics...
-									</Heading>
-									<Text
-										size="3"
-										color="gray"
-										className="text-gray-700 dark:text-gray-300"
-									>
-										Fetching real-time data
-									</Text>
-								</div>
-							</div>
-						) : error ? (
+						{/* Error state */}
+						{error ? (
 							<div className="mb-8 p-8 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-700/30 rounded-xl text-center">
 								<div className="mb-4">
 									<Activity

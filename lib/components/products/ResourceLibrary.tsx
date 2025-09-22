@@ -126,7 +126,10 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 	// Handle canceling new product creation
 	const handleCancelNewProduct = () => {
-		setIsCreatingNewProduct(false);
+		// Add delay before showing sidebar when canceling (matches mobile keyboard close animation)
+		setTimeout(() => {
+			setIsCreatingNewProduct(false);
+		}, 250); // 250ms delay to match mobile keyboard close animation
 		setNewResource({
 			name: "",
 			link: "",

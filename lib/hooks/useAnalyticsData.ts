@@ -35,18 +35,49 @@ export const useAnalyticsData = ({
 	enableBackend = true, // Enable backend by default
 	experienceId,
 }: UseAnalyticsDataProps): UseAnalyticsDataReturn => {
-	const [funnelStats, setFunnelStats] = useState<FunnelStats | null>(null);
-	const [salesStats, setSalesStats] = useState<SalesStats | null>(null);
+	// Initialize with fresh funnel state for instant loading
+	const getInitialFunnelStats = (): FunnelStats => ({
+		total: 0,
+		qualifiedUsers: 0,
+		converted: 0,
+		totalStarts: 0,
+		totalInterest: 0,
+		totalIntent: 0,
+		totalConversions: 0,
+		totalProductRevenue: 0,
+		totalAffiliateRevenue: 0,
+		todayStarts: 0,
+		todayInterest: 0,
+		todayIntent: 0,
+		todayConversions: 0,
+		todayProductRevenue: 0,
+		todayAffiliateRevenue: 0,
+		startsGrowthPercent: 0,
+		intentGrowthPercent: 0,
+		conversionsGrowthPercent: 0,
+		interestGrowthPercent: 0,
+	});
+
+	const getInitialSalesStats = (): SalesStats => ({
+		affiliate: [],
+		myProducts: [],
+		affiliateTotal: { sales: 0, revenue: 0 },
+		myProductsTotal: { sales: 0, revenue: 0 },
+	});
+
+	const [funnelStats, setFunnelStats] = useState<FunnelStats | null>(getInitialFunnelStats());
+	const [salesStats, setSalesStats] = useState<SalesStats | null>(getInitialSalesStats());
 	const [users, setUsers] = useState<User[]>([]);
 	const [salesData, setSalesData] = useState<SalesData[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
+	const [isLoading, setIsLoading] = useState(false); // Start with false for instant loading
 	const [error, setError] = useState<string | null>(null);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 
 	const fetchData = async () => {
 		if (!funnel.id) return;
 
-		setIsLoading(true);
+		// Don't set loading to true for initial load - let it load in background
+		setIsRefreshing(true);
 		setError(null);
 
 		try {
@@ -83,7 +114,7 @@ export const useAnalyticsData = ({
 			);
 			console.error("Error fetching analytics data:", err);
 		} finally {
-			setIsLoading(false);
+			setIsRefreshing(false);
 		}
 	};
 

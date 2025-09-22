@@ -71,6 +71,9 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	// State for tracking if we're creating a new funnel inline
 	const [isCreatingNewFunnel, setIsCreatingNewFunnel] = React.useState(false);
 
+	// State for tracking if product selection is active (to hide sidebar)
+	const [isProductSelectionActive, setIsProductSelectionActive] = React.useState(false);
+
 	// State for tracking when modals are open (to disable sidebar)
 	const [isLibraryModalOpen, setIsLibraryModalOpen] = React.useState(false);
 
@@ -119,6 +122,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		selectedProduct,
 		setSelectedProduct,
 		fetchDiscoveryProducts,
+		isDeleting,
 	} = useFunnelManagement(user);
 
 	const {
@@ -259,11 +263,12 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	const handleCreateNewFunnelInline = useCallback(() => {
 		// Open product selection modal instead of direct creation
 		setIsProductSelectionOpen(true);
+		setIsProductSelectionActive(true); // Hide sidebar during product selection
 		// Fetch products if not already loaded
 		if (discoveryProducts.length === 0) {
 			fetchDiscoveryProducts();
 		}
-	}, [setIsProductSelectionOpen, discoveryProducts.length, fetchDiscoveryProducts]);
+	}, [setIsProductSelectionOpen, setIsProductSelectionActive, discoveryProducts.length, fetchDiscoveryProducts]);
 
 	// Handle library modal state changes
 	const handleLibraryModalStateChange = useCallback((isModalOpen: boolean) => {
@@ -380,7 +385,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		if (libraryContext === "global") {
 			return (
 				<div className="flex h-screen">
-					{!isLibraryModalOpen && (
+					{!isLibraryModalOpen && !isProductSelectionActive && (
 						<AdminSidebar
 							currentView={currentView}
 							onViewChange={handleViewChange}
@@ -529,14 +534,16 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 				<div className="flex h-screen">
-					<AdminSidebar
-						currentView={currentView}
-						onViewChange={handleViewChange}
-						className="flex-shrink-0 h-full"
-						libraryContext={libraryContext}
-						currentFunnelForLibrary={selectedFunnelForLibrary}
-						disabled={isLibraryModalOpen}
-					/>
+					{!isProductSelectionActive && (
+						<AdminSidebar
+							currentView={currentView}
+							onViewChange={handleViewChange}
+							className="flex-shrink-0 h-full"
+							libraryContext={libraryContext}
+							currentFunnelForLibrary={selectedFunnelForLibrary}
+							disabled={isLibraryModalOpen}
+						/>
+					)}
 
 					<div className="flex-1 overflow-auto w-full lg:w-auto">
 						<div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
@@ -610,7 +617,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 			<div className="flex h-screen">
-				{!isRenaming && (
+				{!isRenaming && !isProductSelectionActive && (
 					<AdminSidebar
 						currentView={currentView}
 						onViewChange={handleViewChange}
@@ -646,6 +653,8 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								// Product selection props
 								isProductSelectionOpen={isProductSelectionOpen}
 								setIsProductSelectionOpen={setIsProductSelectionOpen}
+								isProductSelectionActive={isProductSelectionActive}
+								setIsProductSelectionActive={setIsProductSelectionActive}
 								discoveryProducts={discoveryProducts}
 								setDiscoveryProducts={setDiscoveryProducts}
 								productsLoading={productsLoading}
@@ -658,6 +667,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 									setIsRenaming={setIsRenaming}
 									isCreatingNewFunnel={isCreatingNewFunnel}
 									setIsCreatingNewFunnel={setIsCreatingNewFunnel}
+									isDeleting={isDeleting}
 									newFunnelName={newFunnelName}
 									setNewFunnelName={setNewFunnelName}
 								funnelToDelete={funnelToDelete}
@@ -673,6 +683,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								onOpenChange={setIsDeleteDialogOpen}
 								funnelToDelete={funnelToDelete}
 								onConfirmDelete={handleConfirmDelete}
+								isDeleting={isDeleting}
 							/>
 						</div>
 					</div>
