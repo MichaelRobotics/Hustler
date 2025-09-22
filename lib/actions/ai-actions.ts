@@ -203,7 +203,7 @@ ${badJson}
     },
     "pain_point_1": {
       "id": "pain_point_1",
-      "message": "Got it. That's the perfect place to start.\\n\\nFor beginners, what feels like the biggest hurdle for you right now?\\n\\n",
+      "message": "Got it. That's the perfect place to start.\\n\\nFor beginners, what feels like the biggest hurdle for you right now?",
       "options": [{"text": "Managing the risk of losing money.", "nextBlockId": "offer_risk_management"}]
     },
     "offer_risk_management": {
@@ -711,7 +711,7 @@ export const generateFunnelFlow = async (
 		 },
 		 "pain_point_1": {
 			"id": "pain_point_1",
-			"message": "Got it. That's the perfect place to start.\\n\\nFor beginners, what feels like the biggest hurdle for you right now?\\n\\n",
+			"message": "Got it. That's the perfect place to start.\\n\\nFor beginners, what feels like the biggest hurdle for you right now?",
 			"options": [{"text": "Managing the risk of losing money.", "nextBlockId": "offer_risk_management"}]
 		 },
 		 "offer_risk_management": {
