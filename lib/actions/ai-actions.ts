@@ -179,7 +179,7 @@ ${badJson}
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?",
+      "message": "Welcome! What's your main goal?",
       "options": [
         {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
         {"text": "Just exploring for now", "nextBlockId": null}
@@ -198,7 +198,7 @@ ${badJson}
     },
     "experience_qual_1": {
       "id": "experience_qual_1",
-      "message": "Welcome, @[Username]! Glad you made it. Let's get started.\\n\\nBased on the charting guide you just saw, where would you place your current skill level?\\n\\n",
+      "message": "Welcome, @[Username]! Glad you made it. Let's get started.\\n\\nBased on what you've seen so far, where would you place your current skill level?\\n\\n",
       "options": [{"text": "This was mostly new information (Beginner)", "nextBlockId": "pain_point_1"}]
     },
     "pain_point_1": {
@@ -681,7 +681,7 @@ export const generateFunnelFlow = async (
 	  "blocks": {
 		 "welcome_1": {
 			"id": "welcome_1",
-			"message": "Welcome, [Username]!\\n\\nTo start, what's your main interest in crypto?",
+			"message": "Welcome! What's your main goal?",
 			"options": [
 			  {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
 			  {"text": "Just exploring for now", "nextBlockId": "value_community_access"}
@@ -708,7 +708,7 @@ export const generateFunnelFlow = async (
 		 },
 		 "experience_qual_1": {
 			"id": "experience_qual_1",
-			"message": "Welcome, @[Username]! Glad you made it. Let's get started.\\n\\nBased on the charting guide you just saw, where would you place your current skill level?\\n\\n",
+			"message": "Welcome, @[Username]! Glad you made it. Let's get started.\\n\\nBased on what you've seen so far, where would you place your current skill level?\\n\\n",
 			"options": [{"text": "This was mostly new information (Beginner)", "nextBlockId": "pain_point_1"}]
 		 },
 		 "pain_point_1": {
