@@ -637,12 +637,8 @@ async function processValidOptionSelection(
 			// Format bot message with options if available
 			let formattedMessage = nextBlock.message || "Thank you for your response.";
 			
-			if (nextBlock.options && nextBlock.options.length > 0) {
-				const numberedOptions = nextBlock.options
-					.map((opt: any, index: number) => `${index + 1}. ${opt.text}`)
-					.join("\n");
-				formattedMessage = `${formattedMessage}\n\n${numberedOptions}`;
-			}
+			// UserChat system: Options are handled by frontend buttons
+			// No need to add options to bot message text
 
 			botMessage = formattedMessage;
 
@@ -940,10 +936,10 @@ async function generateAppLink(whopExperienceId: string, whopCompanyId: string, 
       appSlug: experienceSlug
     };
     
-    // Use the same generateAppUrl method as product sync
-    const appUrl = whopClient.generateAppUrl(mockApp, undefined, true);
+    // Use the mobile-optimized generateAppUrl method for better mobile compatibility
+    const appUrl = whopClient.generateMobileAppUrl(mockApp, undefined, true);
     
-    console.log(`[App Link Generation] Generated app URL: ${appUrl}`);
+    console.log(`[App Link Generation] Generated mobile-optimized app URL: ${appUrl}`);
     return appUrl;
   } catch (error) {
     console.error(`[App Link Generation] Error generating app link:`, error);

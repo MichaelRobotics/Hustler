@@ -275,12 +275,8 @@ async function processFunnelNavigation(
         formattedMessage = formattedMessage.replace('[LINK]', '[Link not available]');
       }
       
-      if (nextBlock.options && nextBlock.options.length > 0) {
-        const numberedOptions = nextBlock.options
-          .map((opt: any, index: number) => `${index + 1}. ${opt.text}`)
-          .join("\n");
-        formattedMessage = `${formattedMessage}\n\n${numberedOptions}`;
-      }
+      // UserChat system: Options are handled by frontend buttons
+      // No need to add options to bot message text
 
       botMessage = formattedMessage;
 
