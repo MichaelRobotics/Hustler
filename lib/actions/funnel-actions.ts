@@ -173,10 +173,10 @@ export async function createFunnel(
 
 			// Check product limits before assigning resources
 			const paidCount = userResources.filter(
-				(r: any) => r.category === "PAID",
+				(r: { category: string }) => r.category === "PAID",
 			).length;
 			const freeValueCount = userResources.filter(
-				(r: any) => r.category === "FREE_VALUE",
+				(r: { category: string }) => r.category === "FREE_VALUE",
 			).length;
 
 			if (paidCount > PRODUCT_LIMITS.PAID) {
@@ -276,7 +276,15 @@ export async function getFunnelById(
 		}
 
 		// Collect unique resources
-		const resourcesMap = new Map<string, any>();
+		const resourcesMap = new Map<string, {
+			id: string;
+			name: string;
+			type: "AFFILIATE" | "MY_PRODUCTS";
+			category: "PAID" | "FREE_VALUE";
+			link: string;
+			code?: string;
+			description?: string;
+		}>();
 		funnelWithResourcesRaw.forEach((row: any) => {
 			if (row.resource && !resourcesMap.has(row.resource.id)) {
 				resourcesMap.set(row.resource.id, {
@@ -492,10 +500,10 @@ export async function updateFunnel(
 
 				// Check product limits before assigning resources
 				const paidCount = userResources.filter(
-					(r: any) => r.category === "PAID",
+					(r: { category: string }) => r.category === "PAID",
 				).length;
 				const freeValueCount = userResources.filter(
-					(r: any) => r.category === "FREE_VALUE",
+					(r: { category: string }) => r.category === "FREE_VALUE",
 				).length;
 
 				if (paidCount > PRODUCT_LIMITS.PAID) {

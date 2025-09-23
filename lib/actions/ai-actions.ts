@@ -313,19 +313,137 @@ const validateAndFixFunnel = (
 				) || null;
 			}
 
-			// If no match found by name, try to find any resource with correct category
+			// CRITICAL: Only use exact name matches, never fall back to "any resource"
+			// This prevents using wrong resources that happen to have the right category
 			if (!bestMatch) {
-				bestMatch = resources.find(r => r.category === expectedCategory) || null;
+				console.warn(`No matching resource found for block ${blockId} with category ${expectedCategory}`);
+				// Don't assign any resource - let the validation fail
+				// This ensures we don't use wrong resources
 			}
 
 			if (bestMatch) {
 				block.resourceName = bestMatch.name;
 				fixesApplied++;
+			} else {
+				// Log the issue for debugging
+				console.error(`Failed to find valid resource for block ${blockId}. Expected category: ${expectedCategory}, Available resources: ${resources.map(r => `${r.name}(${r.category})`).join(', ')}`);
 			}
 		}
 	}
 
 	return generatedJson;
+};
+
+/**
+ * Validates that the generated funnel only uses provided resources
+ * @param generatedJson - The generated funnel JSON
+ * @param resources - Array of valid resources
+ * @throws {ValidationError} If funnel uses non-existing resources
+ */
+const validateGeneratedFunnelResources = (generatedJson: FunnelFlow, resources: Resource[]): void => {
+	const validResourceNames = new Set(resources.map(r => r.name));
+	const validResourceIds = new Set(resources.map(r => r.id));
+	
+	// Check all blocks that have resourceName fields
+	Object.values(generatedJson.blocks).forEach(block => {
+		if (block.resourceName) {
+			// Check if the resourceName exists in our valid resources
+			if (!validResourceNames.has(block.resourceName)) {
+				throw new ValidationError(
+					`Generated funnel uses non-existing resource: "${block.resourceName}". Valid resources: ${Array.from(validResourceNames).join(', ')}`
+				);
+			}
+			
+			// Find the corresponding resource to validate category placement
+			const correspondingResource = resources.find(r => r.name === block.resourceName);
+			if (correspondingResource) {
+				// Check if the block is in the correct stage based on resource category
+				const isValueDelivery = generatedJson.stages.some(
+					stage => stage.name === "VALUE_DELIVERY" && stage.blockIds.includes(block.id)
+				);
+				const isOffer = generatedJson.stages.some(
+					stage => stage.name === "OFFER" && stage.blockIds.includes(block.id)
+				);
+				
+				if (correspondingResource.category === "FREE_VALUE" && !isValueDelivery) {
+					throw new ValidationError(
+						`FREE_VALUE resource "${block.resourceName}" is incorrectly placed in ${isOffer ? 'OFFER' : 'other'} stage instead of VALUE_DELIVERY`
+					);
+				}
+				
+				if (correspondingResource.category === "PAID" && !isOffer) {
+					throw new ValidationError(
+						`PAID resource "${block.resourceName}" is incorrectly placed in ${isValueDelivery ? 'VALUE_DELIVERY' : 'other'} stage instead of OFFER`
+					);
+				}
+			}
+		}
+	});
+	
+	// Ensure all provided resources are used in the funnel
+	const usedResourceNames = new Set(
+		Object.values(generatedJson.blocks)
+			.filter(block => block.resourceName)
+			.map(block => block.resourceName!)
+	);
+	
+	const unusedResources = resources.filter(r => !usedResourceNames.has(r.name));
+	if (unusedResources.length > 0) {
+		console.warn(`Some resources were not used in the generated funnel: ${unusedResources.map(r => r.name).join(', ')}`);
+	}
+};
+
+/**
+ * Validates resources before AI generation to prevent non-existing resource usage
+ * @param resources - Array of resources to validate
+ * @throws {ValidationError} If resources are invalid or missing
+ */
+const validateResourcesForGeneration = (resources: Resource[]): void => {
+	if (!resources || resources.length === 0) {
+		throw new ValidationError("No resources provided for funnel generation");
+	}
+
+	// Validate each resource has required fields
+	resources.forEach((resource, index) => {
+		if (!resource.id || !resource.name || !resource.category) {
+			throw new ValidationError(
+				`Invalid resource at index ${index}: missing required fields (id, name, or category)`
+			);
+		}
+
+		// Validate category is valid
+		if (!["PAID", "FREE_VALUE"].includes(resource.category)) {
+			throw new ValidationError(
+				`Invalid resource category for "${resource.name}": ${resource.category}. Must be "PAID" or "FREE_VALUE"`
+			);
+		}
+
+		// Validate type is valid
+		if (!["AFFILIATE", "MY_PRODUCTS"].includes(resource.type)) {
+			throw new ValidationError(
+				`Invalid resource type for "${resource.name}": ${resource.type}. Must be "AFFILIATE" or "MY_PRODUCTS"`
+			);
+		}
+	});
+
+	// Check for duplicate resource names
+	const resourceNames = resources.map(r => r.name);
+	const uniqueNames = new Set(resourceNames);
+	if (resourceNames.length !== uniqueNames.size) {
+		throw new ValidationError("Duplicate resource names found. Each resource must have a unique name.");
+	}
+
+	// Ensure we have at least one resource of each category for proper funnel generation
+	const paidResources = resources.filter(r => r.category === "PAID");
+	const freeResources = resources.filter(r => r.category === "FREE_VALUE");
+
+	if (paidResources.length === 0) {
+		throw new ValidationError("At least one PAID resource is required for funnel generation");
+	}
+
+	if (freeResources.length === 0) {
+		throw new ValidationError("At least one FREE_VALUE resource is required for funnel generation");
+	}
 };
 
 /**
@@ -336,6 +454,8 @@ const validateAndFixFunnel = (
 export const generateFunnelFlow = async (
 	resources: Resource[],
 ): Promise<FunnelFlow> => {
+	// CRITICAL: Validate resources before AI generation
+	validateResourcesForGeneration(resources);
 	const resourceList = resources
 		.map((r) => {
 			const categoryLabel = r.category; // Use exact category: "PAID" or "FREE_VALUE"
@@ -355,11 +475,20 @@ export const generateFunnelFlow = async (
 	**COUNT EVERY LINE INCLUDING EMPTY LINES**
 	**VIOLATION = REJECTION**
 	
+	**🚨 CRITICAL RESOURCE VALIDATION RULE 🚨**
+	**YOU MUST ONLY USE THESE EXACT RESOURCE NAMES:**
+	${resources.map(r => `- "${r.name}" (${r.category})`).join('\n')}
+	**🚨 ZERO TOLERANCE FOR IMAGINARY RESOURCES 🚨**
+	**FORBIDDEN: Do not create, modify, or imagine any resource names not in this list**
+	**FORBIDDEN: Do not use abbreviations, variations, or similar names**
+	**FORBIDDEN: Do not create placeholder resource names**
+	**FORBIDDEN: Do not use generic names like "Free Guide" or "Premium Course"**
+	**CRITICAL: Every resourceName field MUST match EXACTLY one of the names above**
+	**VIOLATION = IMMEDIATE REJECTION**
+	
 	**CRITICAL INSTRUCTION**: You MUST create separate blocks for each resource based on their category:
 	- Each resource with category "FREE_VALUE" gets its own VALUE_DELIVERY block
 	- Each resource with category "PAID" gets its own OFFER block
-	- **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
-	- **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
 	- Do NOT put all resources in the same stage or block
 	
 	---
@@ -382,7 +511,7 @@ export const generateFunnelFlow = async (
 	
 	**1. FOR ITEMS WITH CHOICES (in \`FUNNEL_1_WELCOME_GATE\`):**
 	The 'message' string must be structured exactly like this:
-	- **Line 1**: A short, impactful headline.
+	- **Line 1**: A short, impactful headline (1 line only).
 
 	*Example Message for Funnel 1:*
 	"Welcome! What's your main goal?"
@@ -410,7 +539,9 @@ export const generateFunnelFlow = async (
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
 	The message must present a resource with category "FREE_VALUE".
-	*Example:* "Perfect. Here is our free guide... Please review it...
+	*Example:* "Perfect. Here is our free guide... Please review it.
+
+	Reply 'DONE' to access professional offers.
 
 	[LINK]"
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'done' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
@@ -429,12 +560,10 @@ export const generateFunnelFlow = async (
 	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
 	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
 	
-	**Example Structure (6-LINE TRANSITION MESSAGE):**
+	**Example Structure (5-LINE TRANSITION MESSAGE):**
 	"Excellent! You've completed step one. ✅
 	
 	Now let's move to your personalized strategy session.
-	
-	This is where we'll dive deeper into your specific situation.
 	
 	Ready to continue?
 	
@@ -450,57 +579,45 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **ALL messages** (except OFFER messages) must be **5 lines or fewer**
+	- **WELCOME messages** must be **1 line only**
+	- **All other message types** (VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
 	- **OFFER messages** can be **8 lines or fewer** to accommodate proper paragraph spacing
 	- **VIOLATION WILL RESULT IN REJECTION**: Any message over its limit will be rejected
 	- Keep messages concise and impactful
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
-	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	- **LINK FORMATTING**: All links/buttons must be on separate lines after empty line. No empty lines at end of message. Add empty line after link/button if there's more text
-	- **EXAMPLES OF MESSAGE LENGTHS:**
-		* "Welcome! What's your main goal?" (1 line - exempt)
-		* "Perfect choice! Here's your free resource.\n\nLink: [URL]\n\nReply 'done' when ready." (5 lines)
-		* "Our service isn't for everyone.\n\nWe work with specific partners.\n\nWhich type are you?\n\n Take Action Now\n\n [LINK]" (5 lines)
-		* OFFER messages can be up to 8 lines with proper paragraph spacing
+	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile (but stay within line limits)
+	- **LINK FORMATTING**: [LINK] must be on its own separate line with empty line above it. No explanatory text like "Review it here:" before [LINK]. If there's text below [LINK], add empty line after it
 	
 	**7. OFFER MESSAGE DESIGN (CRITICAL FOR PAID PRODUCTS):**
 	Each OFFER message must follow this exact 3-part structure:
 	
-	**Part 1: Value Stack Presentation**
-	- Present the value stack to show you give far more than you charge
-	- List specific benefits, features, or outcomes
-	- Make the value proposition clear and compelling
-	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
-	- End with a bridge that naturally leads to the contrast (e.g., "But here's the thing..." or "However...")
+	**🚨 CRITICAL OFFER LINE LIMIT 🚨**
+	**OFFER messages MUST NOT exceed 8 lines total**
+	**ALL formatting rules (paragraph spacing, mobile formatting, etc.) must stay within this 8-line limit**
+	**VIOLATION = REJECTION**
 	
-	**Part 2: Fear of Missing Out + Belonging**
-	- Create urgency and exclusivity
-	- Position the offer as for a "specific type of person"
-	- Use smooth transitions like "In my experience, there are two types of people:", "I've noticed something interesting:", "But here's what I've observed:", "However, I've learned that", or "The truth is, there are two kinds of people:"
-	- Contrast "The Observer" (hesitant, watches others succeed) vs "The Action Taker" (decisive, builds success)
-	- Make them choose which type they want to be
-	- Use phrases like "Our Service Isn't For Everyone" or "This isn't for everyone"
-	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
+	**Part 1: Value Stack (2-3 lines)**
+	- Present ONE key benefit/outcome
+	- Keep it specific and compelling
+	- Bridge to contrast: "But here's the thing..." or "However..."
 	
-	**Part 3: Call to Action**
-	- Create urgency with time-sensitive language
-	- Use phrases like "If you start now, you can still leverage..." vs "If you wait, you will be forced to..."
-	- End with a strong CTA button text like "Seize Your Advantage Now" or similar
-	- Include resource link that will be placed in the button
-	- **If promo code is available**: Include it in the message (e.g., "Use code SALES20 for 20% off")
-	- Make the action clear and compelling
-	- **SENTENCE RULE**: Use shorter, more impactful sentences. Separate every 2 sentences with an empty line for better readability
-	- **LINK RULE**: [LINK] must be alone on its own line with empty line above it. No text can be on the same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
+	**Part 2: FOMO + Belonging (2-3 lines)**
+	- Create urgency: "There are two types of people:"
+	- Contrast: "The Observer" vs "The Action Taker"
+	- Make them choose: "Which one will you be?"
 	
-	**Example Structure (8-LINE OFFER MESSAGE):**
-	"You're ready to transform your sales game! With the Sales Pro Course, you'll gain proven strategies.
+	**Part 3: Call to Action (2 lines)**
+	- Time-sensitive urgency: "If you start now..." vs "If you wait..."
+	- Strong CTA: "Seize Your Advantage Now"
+	- **LINK RULE**: [LINK] must be alone on its own line with empty line above it
+	
+	**Example Structure (6-LINE OFFER MESSAGE):**
+	"You're ready to transform your sales game! But here's the thing...
 
-	Our Service Isn't For Everyone. We work with specific partners.
+	There are two types of people: The Observer watches others succeed. The Action Taker seizes opportunity.
 
-	The Observer: Watches others succeed, hesitates endlessly. The Action Taker: Seizes opportunity, builds success.
-
-	Which one will you be? Use code SALES20 for 20% off.
+	Which one will you be?
 
 	[LINK]"
 	
@@ -515,19 +632,19 @@ export const generateFunnelFlow = async (
 	
 		 **CRITICAL: You MUST preserve the exact resource IDs provided above.**
 		 **CRITICAL RESOURCE MAPPING RULES:**
-		 - Resources with category "FREE_VALUE" → VALUE_DELIVERY blocks ONLY
-		 - Resources with category "PAID" → OFFER blocks ONLY
-		 - **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
-		 - **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
 		 - ONE resource = ONE corresponding block (exact 1:1 mapping)
 		 - Use EXACT resource names from the list above - NO variations or imaginary products
-		 - If no resources provided, create placeholder messages without resourceName fields
+		 - **CRITICAL**: FREE_VALUE resources → VALUE_DELIVERY blocks ONLY
+		 - **CRITICAL**: PAID resources → OFFER blocks ONLY
+		 - **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
+		 - **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
 		 
 		 **MANDATORY BLOCK CREATION:**
 		 - Create ONE VALUE_DELIVERY block for EACH resource with category "FREE_VALUE"
 		 - Create ONE OFFER block for EACH resource with category "PAID"
 		 - Each block must have its own unique ID and resourceName field
 		 - Do NOT mix resources in the same block
+		 - **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
 	
 	3.  **FUNNEL 1: "WELCOME GATE" STRUCTURE (CHAT 1)**
 		 * **Goal**: Welcome user, deliver free value, transition to second chat.
@@ -549,10 +666,6 @@ export const generateFunnelFlow = async (
 	6.  **MESSAGE CONSTRUCTION**: Follow the specific formatting rules for each message type (choices, offers, value delivery, etc.) as defined in previous instructions.
 	
 	7.  **\`resourceName\` FIELD (CRITICAL - EXACT MATCHING)**:
-		 - **VALUE_DELIVERY blocks**: Use resources with category "FREE_VALUE" only
-		 - **OFFER blocks**: Use resources with category "PAID" only
-		 - **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
-		 - **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
 		 - **EXACT MATCH**: resourceName must be EXACTLY the same as the resource name from the list above
 		 - **NO VARIATIONS**: No abbreviations, modifications, or imaginary products allowed
 		 - **ONE PER BLOCK**: Each resourceName appears in exactly ONE block (no duplicates)
@@ -567,7 +680,16 @@ export const generateFunnelFlow = async (
 	
 	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a FREE_VALUE resource from the provided resource list. This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides general value to anyone exploring.
 	
-	**CRITICAL**: The escape hatch MUST use an EXISTING FREE_VALUE resource from the provided resource list. DO NOT create imaginary resources like "Crypto Basics Guide" or "Community Discord Access". Only use resources that actually exist in the provided resource list.
+	**CRITICAL**: The escape hatch MUST use an existing FREE_VALUE resource from the provided resource list. DO NOT create imaginary resources like "Crypto Basics Guide" or "Community Discord Access". Only use resources that actually exist in the provided resource list.
+	
+	**🚨 FINAL WARNING ABOUT IMAGINARY RESOURCES 🚨**
+	**If you generate ANY resourceName that is not in the provided list above, the entire funnel will be REJECTED**
+	**This includes:**
+	- Generic names like "Free Guide", "Premium Course", "Basic Tutorial"
+	- Variations of existing names like "Crypto Guide" instead of "The 3 Core Principles of Crypto Charting"
+	- Placeholder names like "Resource 1", "Product A"
+	- Any name not EXACTLY matching the provided list
+	**ZERO TOLERANCE - IMMEDIATE REJECTION**
 	
 	---
 	### VALIDATION
@@ -583,15 +705,12 @@ export const generateFunnelFlow = async (
 	- Each \`resourceName\` appears in exactly ONE block (no duplicates)
 	- ALL provided resources represented in funnel
 	- First WELCOME block has escape hatch option pointing to a FREE_VALUE resource from the provided list
-	- **CRITICAL**: Resources with category "FREE_VALUE" ONLY in VALUE_DELIVERY blocks
-	- **CRITICAL**: Resources with category "PAID" ONLY in OFFER blocks
-	- **CRITICAL**: PAID resources CANNOT be in VALUE_DELIVERY blocks
-	- **CRITICAL**: FREE_VALUE resources CANNOT be in OFFER blocks
 	- **CRITICAL**: Every resourceName exactly matches a resource name from the provided list
 	- **CRITICAL**: NO imaginary products - only use provided resources
-	- **CRITICAL**: VALUE_DELIVERY stage contains blocks for ALL FREE_VALUE resources
-	- **CRITICAL**: OFFER stage contains blocks for ALL PAID resources
 	- **CRITICAL**: Each resource has its own individual block - NO mixing
+	- **CRITICAL**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks
+	- **CRITICAL**: PAID resources ONLY in OFFER blocks
+	- **CRITICAL**: NO placeholder blocks - ALL blocks must reference actual products
 	
 	---
 	### CRITICAL RESOURCE MAPPING EXAMPLE
@@ -617,20 +736,18 @@ export const generateFunnelFlow = async (
 	- Resource with category "PAID": "Product A" → Offer Block 1: \`resourceName: "Product A"\`
 	- Resource with category "PAID": "Product B" → Offer Block 2: \`resourceName: "Product A"\` ❌ DUPLICATE!
 	
-	### VALIDATION CHECKLIST (CRITICAL - CHECK BEFORE GENERATING)
+	### FINAL VALIDATION CHECKLIST
 	
 	Before generating the JSON, verify:
-	1. **MESSAGE LENGTH**: Every message (except OFFER messages) is 5 lines or fewer; OFFER messages can be 8 lines or fewer
-	2. **RESOURCE MAPPING**: Each FREE_VALUE resource → VALUE_DELIVERY block, each PAID resource → OFFER block
-	3. **EXACT NAMES**: resourceName fields match exactly with provided resource names
-	4. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages
-	5. **PROMO CODES**: If available, include promo codes in OFFER messages
-	6. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
-	7. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
-	8. **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	9. **LINK FORMATTING**: [LINK] must be alone on its own line with empty line above it. No text on same line as [LINK]. Don't add empty lines below [LINK] unless there's text after it
-	10. **NO DUPLICATES**: Each resource appears in exactly one block
-	11. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
+	1. **MESSAGE LENGTH**: WELCOME messages must be 1 line only; VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION messages are 5 lines or fewer; OFFER messages MUST be 8 lines or fewer (including all formatting)
+	2. **EXACT NAMES**: resourceName fields match exactly with provided resource names
+	3. **CATEGORY MAPPING**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks, PAID resources ONLY in OFFER blocks
+	4. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages; [LINK] must be on separate line with empty line above it; no explanatory text before [LINK]
+	5. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
+	6. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
+	7. **NO DUPLICATES**: Each resource appears in exactly one block
+	8. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
+	9. **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
 	
 	### JSON OUTPUT STRUCTURE
 	
@@ -758,25 +875,44 @@ export const generateFunnelFlow = async (
 
 		// Validate and auto-fix the generated funnel
 		const validatedJson = validateAndFixFunnel(generatedJson, resources);
+		
+		// CRITICAL: Final validation to ensure no non-existing resources are used
+		validateGeneratedFunnelResources(validatedJson, resources);
+		
+		// CRITICAL: Additional check for any imaginary resources that might have slipped through
+		const allResourceNames = Object.values(validatedJson.blocks)
+			.filter(block => block.resourceName)
+			.map(block => block.resourceName!);
+		
+		const validResourceNames = new Set(resources.map(r => r.name));
+		const invalidResources = allResourceNames.filter(name => !validResourceNames.has(name));
+		
+		if (invalidResources.length > 0) {
+			throw new ValidationError(
+				`CRITICAL ERROR: Generated funnel contains imaginary resources: ${invalidResources.join(', ')}. Only use these exact resources: ${Array.from(validResourceNames).join(', ')}`
+			);
+		}
+		
 		return validatedJson;
 	} catch (error) {
 		const aiError = handleSDKError(error);
 		console.error(
-			"Funnel generation failed on first attempt. Reason:",
-			aiError.message,
+			`Funnel generation failed on first attempt. Reason: ${aiError.message}`,
+			`Resources provided: ${resources.map(r => `${r.name}(${r.category})`).join(', ')}`,
 		);
 
 		if (textToProcess) {
 			try {
+				console.log("Attempting to repair malformed JSON response...");
 				const repairedJson = await repairFunnelJson(textToProcess);
 				return repairedJson;
 			} catch (repairError) {
 				console.error(
-					"Failed to repair JSON after multiple attempts:",
+					`Failed to repair JSON after multiple attempts. Resources: ${resources.map(r => r.name).join(', ')}`,
 					repairError,
 				);
 				throw new AIError(
-					"The AI returned an invalid response that could not be repaired. Please try generating again.",
+					`The AI returned an invalid response that could not be repaired. Resources provided: ${resources.map(r => r.name).join(', ')}. Please try generating again.`,
 					"CONTENT",
 				);
 			}
