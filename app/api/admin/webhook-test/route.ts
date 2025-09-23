@@ -91,7 +91,15 @@ async function testWebhookHandler(
     };
 
     // Send webhook test to main webhook endpoint
-    const webhookResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhooks`, {
+    // Use the current request URL to determine the base URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
+                   `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    
+    console.log(`[Webhook Test] Using base URL: ${baseUrl}`);
+    console.log(`[Webhook Test] Full webhook URL: ${baseUrl}/api/webhooks`);
+    
+    const webhookResponse = await fetch(`${baseUrl}/api/webhooks`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -115,7 +123,9 @@ async function testWebhookHandler(
         originalProductId: productId,
         foundProductId: actualProductId,
         experienceId,
-        userId: realUserId
+        userId: realUserId,
+        baseUrl,
+        webhookUrl: `${baseUrl}/api/webhooks`
       }
     });
 
