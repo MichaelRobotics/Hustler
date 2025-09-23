@@ -5,7 +5,7 @@
  * Handles all conversation operations in one place.
  */
 
-import { and, eq, desc, asc, sql } from "drizzle-orm";
+import { and, eq, desc, asc, sql, inArray } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
@@ -46,14 +46,14 @@ export interface ConversationWithMessages extends Conversation {
 /**
  * Phase detection types
  */
-export type ConversationPhase = 'PHASE1' | 'PHASE2' | 'TRANSITION' | 'COMPLETED';
+export type ConversationPhase = 'PHASE1' | 'PHASE2' | 'TRANSITION';
 
 /**
  * Detect conversation phase based on current block ID and funnel flow
  */
 export function detectConversationPhase(currentBlockId: string | null, funnelFlow: FunnelFlow): ConversationPhase {
 	if (!currentBlockId || !funnelFlow) {
-		return 'COMPLETED';
+		return 'PHASE1';
 	}
 
 	// Find which stage this block belongs to
@@ -65,12 +65,12 @@ export function detectConversationPhase(currentBlockId: string | null, funnelFlo
 				case 'VALUE_DELIVERY':
 					return 'PHASE2';
 				default:
-					return 'COMPLETED';
+					return 'PHASE1';
 			}
 		}
 	}
 
-	return 'COMPLETED';
+	return 'PHASE1';
 }
 
 /**
@@ -229,19 +229,40 @@ export async function createConversation(
 	membershipId?: string,
 ): Promise<string> {
 	try {
-		// Close any existing active conversations for this user
-		await db.update(conversations)
-			.set({
-				status: "closed",
-				updatedAt: new Date(),
-			})
-			.where(and(
+		console.log(`[CREATE-CONVERSATION] Starting conversation creation for whopUserId ${whopUserId} in experience ${experienceId}`);
+		
+		// Delete any existing conversations for this user
+		// First, get conversation IDs to delete related data
+		const existingConversations = await db.query.conversations.findMany({
+			where: and(
 				eq(conversations.whopUserId, whopUserId),
-				eq(conversations.experienceId, experienceId),
-				eq(conversations.status, "active"),
-			));
+				eq(conversations.experienceId, experienceId)
+			),
+			columns: { id: true }
+		});
+
+		if (existingConversations.length > 0) {
+			const conversationIds = existingConversations.map((c: any) => c.id);
+
+			// Delete related data first (foreign key constraints)
+			await db.delete(messages).where(inArray(messages.conversationId, conversationIds));
+			await db.delete(funnelInteractions).where(inArray(funnelInteractions.conversationId, conversationIds));
+
+			// Delete conversations
+			const deleteResult = await db
+				.delete(conversations)
+				.where(and(
+					eq(conversations.whopUserId, whopUserId),
+					eq(conversations.experienceId, experienceId)
+				));
+			
+			console.log(`[CREATE-CONVERSATION] Deleted ${deleteResult.rowCount || 0} existing conversations for whopUserId ${whopUserId}`);
+		} else {
+			console.log(`[CREATE-CONVERSATION] No existing conversations found for whopUserId ${whopUserId}`);
+		}
 
 		// Create new conversation
+		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}`);
 		const [newConversation] = await db.insert(conversations).values({
 			experienceId,
 			funnelId,
@@ -252,6 +273,7 @@ export async function createConversation(
 			userPath: [startBlockId],
 		}).returning();
 
+		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId}`);
 		return newConversation.id;
 	} catch (error) {
 		console.error("Error creating conversation:", error);
@@ -278,6 +300,33 @@ export async function addMessage(
 			type,
 			content,
 		}).returning();
+
+		// If this is a bot message, increment the sends counter for the funnel
+		if (type === "bot") {
+			try {
+				// Get the conversation to find the funnelId
+				const conversation = await db.query.conversations.findFirst({
+					where: eq(conversations.id, conversationId),
+				});
+
+				if (conversation?.funnelId) {
+					// Increment the sends field for this funnel
+					await db.update(funnels)
+						.set({ 
+							sends: sql`${funnels.sends} + 1`,
+							updatedAt: new Date()
+						})
+						.where(eq(funnels.id, conversation.funnelId));
+					
+					console.log(`[addMessage] Incremented sends counter for funnel ${conversation.funnelId}`);
+				} else {
+					console.warn(`[addMessage] No funnelId found for conversation ${conversationId}`);
+				}
+			} catch (sendsError) {
+				// Don't fail the message insertion if sends update fails
+				console.error(`[addMessage] Error updating sends counter:`, sendsError);
+			}
+		}
 
 		console.log(`[addMessage] Message inserted successfully with ID: ${newMessage.id}`);
 		return newMessage.id;

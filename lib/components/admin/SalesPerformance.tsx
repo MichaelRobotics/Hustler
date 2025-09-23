@@ -5,6 +5,7 @@ import SalesSection from "./components/SalesSection";
 
 interface SalesPerformanceProps {
 	salesStats: SalesStats;
+	isRefreshing?: boolean;
 }
 
 /**
@@ -16,7 +17,7 @@ interface SalesPerformanceProps {
  * @param {SalesStats} props.salesStats - An object containing aggregated sales data.
  * @returns {JSX.Element} The rendered SalesPerformance component.
  */
-const SalesPerformance: React.FC<SalesPerformanceProps> = ({ salesStats }) => {
+const SalesPerformance: React.FC<SalesPerformanceProps> = ({ salesStats, isRefreshing = false }) => {
 	return (
 		<>
 			{/* Sales Categories Grid */}
@@ -29,6 +30,7 @@ const SalesPerformance: React.FC<SalesPerformanceProps> = ({ salesStats }) => {
 					products={salesStats.myProducts}
 					total={salesStats.myProductsTotal}
 					colorScheme="pink"
+					isRefreshing={isRefreshing}
 				/>
 
 				{/* Affiliate Sales Section */}
@@ -39,6 +41,7 @@ const SalesPerformance: React.FC<SalesPerformanceProps> = ({ salesStats }) => {
 					products={salesStats.affiliate}
 					total={salesStats.affiliateTotal}
 					colorScheme="slate"
+					isRefreshing={isRefreshing}
 				/>
 			</div>
 		</>

@@ -10,6 +10,7 @@ interface SalesSectionProps {
 	products: ProductSale[];
 	total: SalesTotal;
 	colorScheme: "pink" | "blue" | "green" | "slate";
+	isRefreshing?: boolean;
 }
 
 const SalesSection: React.FC<SalesSectionProps> = ({
@@ -19,6 +20,7 @@ const SalesSection: React.FC<SalesSectionProps> = ({
 	products,
 	total,
 	colorScheme,
+	isRefreshing = false,
 }) => {
 	const getColorClasses = (scheme: string) => {
 		const colors = {
@@ -141,39 +143,47 @@ const SalesSection: React.FC<SalesSectionProps> = ({
 
 			{/* Product List */}
 			<div className="space-y-3">
-				{products.map((product) => (
-					<div
-						key={product.name}
-						className={`group bg-gradient-to-br ${colors.productBg} p-4 rounded-lg border ${colors.productBorder} ${colors.hoverShadow} transition-all duration-200`}
-					>
-						<div className="flex items-center justify-between">
-							<div className="flex-1 min-w-0">
-								<div className="flex items-center gap-2 mb-1">
-									<div className={`w-2 h-2 rounded-full ${colors.dotColor}`} />
-									<CollapsibleText text={product.name} maxLength={25} />
-								</div>
-								<Text size="1" color="gray" className="text-muted-foreground">
-									<span className="text-black dark:text-white">
-										{product.sales}
-									</span>{" "}
-									sales
-								</Text>
-							</div>
-							<div className="text-right">
-								<div className="mb-1">
-									<Text
-										size="3"
-										weight="semi-bold"
-										color="green"
-										className="dark:text-green-300"
-									>
-										${product.revenue.toFixed(2)}
+				{products.length > 0 ? (
+					products.map((product) => (
+						<div
+							key={product.name}
+							className={`group bg-gradient-to-br ${colors.productBg} p-4 rounded-lg border ${colors.productBorder} ${colors.hoverShadow} transition-all duration-200`}
+						>
+							<div className="flex items-center justify-between">
+								<div className="flex-1 min-w-0">
+									<div className="flex items-center gap-2 mb-1">
+										<div className={`w-2 h-2 rounded-full ${colors.dotColor}`} />
+										<CollapsibleText text={product.name} maxLength={25} />
+									</div>
+									<Text size="1" color="gray" className="text-muted-foreground">
+										<span className="text-black dark:text-white">
+											{product.sales}
+										</span>{" "}
+										sales
 									</Text>
+								</div>
+								<div className="text-right">
+									<div className="mb-1">
+										<Text
+											size="3"
+											weight="semi-bold"
+											color="green"
+											className="dark:text-green-300"
+										>
+											${product.revenue.toFixed(2)}
+										</Text>
+									</div>
 								</div>
 							</div>
 						</div>
+					))
+				) : (
+					<div className={`bg-gradient-to-br ${colors.productBg} p-4 rounded-lg border ${colors.productBorder} text-center`}>
+						<Text size="1" color="gray" className="text-muted-foreground">
+							No products yet
+						</Text>
 					</div>
-				))}
+				)}
 			</div>
 		</div>
 	);

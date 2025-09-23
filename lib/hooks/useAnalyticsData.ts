@@ -1,22 +1,29 @@
-import { useEffect, useState } from "react";
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
 import {
 	type Funnel,
 	type FunnelStats,
 	type SalesData,
 	type SalesStats,
 	type User,
-	fetchFunnelSales,
-	fetchFunnelStats,
-	fetchFunnelUsers,
-	fetchSalesStats,
-	processFunnelStats,
-	processSalesStats,
 } from "../utils/adminAnalytics";
+import { useAnalyticsManagement } from "./useAnalyticsManagement";
 
 interface UseAnalyticsDataProps {
 	funnel: Funnel;
-	enableBackend?: boolean; // Flag to switch between mock and backend data
-	experienceId?: string; // Experience ID for multitenancy
+	enableBackend?: boolean;
+	experienceId?: string;
+	// Optional: Pass in existing analytics management to share state
+	analyticsManagement?: {
+		analyticsData: Map<string, any>;
+		isRefreshing: boolean;
+		error: string | null;
+		getAnalyticsData: (funnelId: string) => any;
+		fetchAnalyticsData: (funnel: Funnel, experienceId?: string) => Promise<void>;
+		updateAnalyticsData: (funnel: Funnel, experienceId?: string) => Promise<void>;
+		isAnalyticsDataStale: (funnelId: string, maxAge?: number) => boolean;
+	};
 }
 
 interface UseAnalyticsDataReturn {
@@ -32,11 +39,30 @@ interface UseAnalyticsDataReturn {
 
 export const useAnalyticsData = ({
 	funnel,
-	enableBackend = true, // Enable backend by default
+	enableBackend = true,
 	experienceId,
+	analyticsManagement,
 }: UseAnalyticsDataProps): UseAnalyticsDataReturn => {
-	// Initialize with fresh funnel state for instant loading
-	const getInitialFunnelStats = (): FunnelStats => ({
+	// Use passed-in analytics management or create new instance
+	const localAnalyticsManagement = useAnalyticsManagement({ experienceId });
+	const {
+		analyticsData,
+		isRefreshing: globalIsRefreshing,
+		error: globalError,
+		getAnalyticsData,
+		fetchAnalyticsData,
+		updateAnalyticsData,
+		isAnalyticsDataStale,
+	} = analyticsManagement || localAnalyticsManagement;
+
+	// Get analytics data for this specific funnel
+	const funnelAnalyticsData = getAnalyticsData(funnel.id);
+
+	// Local state for component-specific loading
+	const [isLocalLoading, setIsLocalLoading] = useState(false);
+
+	// Initialize with zero values if no data exists
+	const funnelStats = funnelAnalyticsData?.funnelStats || {
 		total: 0,
 		qualifiedUsers: 0,
 		converted: 0,
@@ -56,134 +82,70 @@ export const useAnalyticsData = ({
 		intentGrowthPercent: 0,
 		conversionsGrowthPercent: 0,
 		interestGrowthPercent: 0,
-	});
+	};
 
-	const getInitialSalesStats = (): SalesStats => ({
+	const salesStats = funnelAnalyticsData?.salesStats || {
 		affiliate: [],
 		myProducts: [],
 		affiliateTotal: { sales: 0, revenue: 0 },
 		myProductsTotal: { sales: 0, revenue: 0 },
-	});
+	};
 
-	const [funnelStats, setFunnelStats] = useState<FunnelStats | null>(getInitialFunnelStats());
-	const [salesStats, setSalesStats] = useState<SalesStats | null>(getInitialSalesStats());
-	const [users, setUsers] = useState<User[]>([]);
-	const [salesData, setSalesData] = useState<SalesData[]>([]);
-	const [isLoading, setIsLoading] = useState(false); // Start with false for instant loading
-	const [error, setError] = useState<string | null>(null);
-	const [isRefreshing, setIsRefreshing] = useState(false);
+	const users = funnelAnalyticsData?.users || [];
+	const salesData = funnelAnalyticsData?.salesData || [];
+	const isLoading = funnelAnalyticsData?.isLoading || isLocalLoading || (!funnelAnalyticsData && enableBackend);
+	const error = funnelAnalyticsData?.error || globalError;
 
-	const fetchData = async () => {
-		if (!funnel.id) return;
+	// Fetch data when component mounts or funnel changes - only once per funnel
+	useEffect(() => {
+		if (!funnel.id || !enableBackend) return;
 
-		// Don't set loading to true for initial load - let it load in background
-		setIsRefreshing(true);
-		setError(null);
-
-		try {
-			if (enableBackend) {
-				// Backend integration path
-				const [stats, sales, userData, salesDataResult] = await Promise.all([
-					fetchFunnelStats(funnel.id, experienceId),
-					fetchSalesStats(funnel.id),
-					fetchFunnelUsers(funnel.id),
-					fetchFunnelSales(funnel.id),
-				]);
-
-				setFunnelStats(stats);
-				setSalesStats(sales);
-				setUsers(userData);
-				setSalesData(salesDataResult);
-			} else {
-				// Mock data path (current implementation)
-				const [stats, sales, userData, salesDataResult] = await Promise.all([
-					fetchFunnelStats(funnel.id, experienceId),
-					fetchSalesStats(funnel.id),
-					fetchFunnelUsers(funnel.id),
-					fetchFunnelSales(funnel.id),
-				]);
-
-				setFunnelStats(stats);
-				setSalesStats(sales);
-				setUsers(userData);
-				setSalesData(salesDataResult);
-			}
-		} catch (err) {
-			setError(
-				err instanceof Error ? err.message : "Failed to fetch analytics data",
-			);
-			console.error("Error fetching analytics data:", err);
-		} finally {
-			setIsRefreshing(false);
+		// Only fetch if we don't have any data for this funnel
+		if (!funnelAnalyticsData) {
+			console.log(`[useAnalyticsData] Initial fetch for funnel ${funnel.id}`);
+			setIsLocalLoading(true);
+			fetchAnalyticsData(funnel, experienceId).finally(() => {
+				setIsLocalLoading(false);
+			});
 		}
-	};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [funnel.id, enableBackend, experienceId]);
 
-	const refreshData = async () => {
-		await fetchData();
-	};
+	// Live updates with proper throttling to prevent mass API calls
+	useEffect(() => {
+		if (!funnel.id || !enableBackend) return;
 
-	// Live update function that only updates numbers without full re-render
-	const updateLiveNumbers = async () => {
+		console.log(`[useAnalyticsData] Setting up live updates for funnel ${funnel.id}`);
+
+		// Set up live updates every 30 seconds
+		const interval = setInterval(() => {
+			console.log(`[useAnalyticsData] Live update check for funnel ${funnel.id} - isRefreshing: ${globalIsRefreshing}`);
+			
+			// Simple approach: update every 30 seconds if not already refreshing
+			if (!globalIsRefreshing) {
+				console.log(`[useAnalyticsData] Live updating analytics for funnel ${funnel.id}`);
+				updateAnalyticsData(funnel, experienceId);
+			} else {
+				console.log(`[useAnalyticsData] Skipping live update for funnel ${funnel.id} - already refreshing`);
+			}
+		}, 30 * 1000); // 30 seconds
+
+		return () => {
+			console.log(`[useAnalyticsData] Cleaning up live updates for funnel ${funnel.id}`);
+			clearInterval(interval);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [funnel.id, enableBackend, experienceId, globalIsRefreshing]);
+
+	// Manual refresh function
+	const refreshData = useCallback(async () => {
 		if (!funnel.id || !enableBackend) return;
 		
-		setIsRefreshing(true);
-		
-		try {
-			const url = new URL('/api/analytics/tracking-links', window.location.origin);
-			url.searchParams.set('funnelId', funnel.id);
-			if (experienceId) {
-				url.searchParams.set('experienceId', experienceId);
-			}
-			const response = await fetch(url.toString());
-			
-			if (!response.ok) return;
-			
-			const data = await response.json();
-			
-			if (data.success && data.data.funnelAnalytics && data.data.funnelAnalytics.length > 0) {
-				const funnelData = data.data.funnelAnalytics[0];
-				
-				// Only update the numbers, not the entire state
-				setFunnelStats(prevStats => {
-					if (!prevStats) return prevStats;
-					
-					return {
-						...prevStats,
-						// Update only the live numbers
-						totalStarts: funnelData.totalStarts || 0,
-						totalInterest: funnelData.totalInterest || 0,
-						totalIntent: funnelData.totalIntent || 0,
-						totalConversions: funnelData.totalConversions || 0,
-						todayStarts: funnelData.todayStarts || 0,
-						todayInterest: funnelData.todayInterest || 0,
-						todayIntent: funnelData.todayIntent || 0,
-						todayConversions: funnelData.todayConversions || 0,
-						todayProductRevenue: parseFloat(funnelData.todayProductRevenue || '0'),
-						todayAffiliateRevenue: parseFloat(funnelData.todayAffiliateRevenue || '0'),
-						startsGrowthPercent: parseFloat(funnelData.startsGrowthPercent || '0'),
-						intentGrowthPercent: parseFloat(funnelData.intentGrowthPercent || '0'),
-						conversionsGrowthPercent: parseFloat(funnelData.conversionsGrowthPercent || '0'),
-						interestGrowthPercent: parseFloat(funnelData.interestGrowthPercent || '0'),
-					};
-				});
-			}
-		} catch (error) {
-			console.error('Error updating live numbers:', error);
-		} finally {
-			setIsRefreshing(false);
-		}
-	};
-
-	useEffect(() => {
-		fetchData();
-		
-		// Auto-refresh every 30 seconds for live updates - ONLY updates numbers
-		const interval = setInterval(() => {
-			updateLiveNumbers();
-		}, 30000); // 30 seconds
-		
-		return () => clearInterval(interval);
-	}, [funnel.id, enableBackend]);
+		console.log(`[useAnalyticsData] Manual refresh for funnel ${funnel.id}`);
+		setIsLocalLoading(true);
+		await fetchAnalyticsData(funnel, experienceId);
+		setIsLocalLoading(false);
+	}, [funnel.id, enableBackend, experienceId, fetchAnalyticsData]);
 
 	return {
 		funnelStats,
@@ -193,31 +155,6 @@ export const useAnalyticsData = ({
 		isLoading,
 		error,
 		refreshData,
-		isRefreshing,
-	};
-};
-
-// Alternative hook for when you have existing data arrays (current implementation)
-export const useProcessedAnalyticsData = (
-	allUsers: User[],
-	allSalesData: SalesData[],
-	funnelId: string,
-) => {
-	console.log("useProcessedAnalyticsData called with:", {
-		allUsersCount: allUsers.length,
-		allSalesDataCount: allSalesData.length,
-		funnelId,
-		sampleUser: allUsers[0],
-		sampleSale: allSalesData[0],
-	});
-
-	const funnelStats = processFunnelStats(allUsers, funnelId);
-	const salesStats = processSalesStats(allSalesData, funnelId);
-
-	console.log("Processed stats:", { funnelStats, salesStats });
-
-	return {
-		funnelStats,
-		salesStats,
+		isRefreshing: globalIsRefreshing,
 	};
 };

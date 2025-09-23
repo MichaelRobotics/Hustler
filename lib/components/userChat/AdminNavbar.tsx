@@ -1,9 +1,10 @@
 "use client";
 
-import { MessageSquare, Play, RotateCcw, Settings, ChevronDown, ChevronUp, Package } from "lucide-react";
+import { MessageSquare, Play, RotateCcw, Settings, ChevronDown, ChevronUp, Package, TestTube } from "lucide-react";
 import type React from "react";
 import { useState, useEffect } from "react";
 import { ProductSelectionModal } from "@/lib/components/admin/ProductSelectionModal";
+import { WebhookTester } from "./WebhookTester";
 
 interface DiscoveryProduct {
 	id: string;           // accessPass.id
@@ -31,6 +32,7 @@ interface AdminNavbarProps {
 	onTriggerDM: (productId?: string) => void;
 	onResetConversations: () => void;
 	experienceId?: string;
+	funnelFlow?: any;
 }
 
 export const AdminNavbar: React.FC<AdminNavbarProps> = ({
@@ -43,6 +45,7 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 	onTriggerDM,
 	onResetConversations,
 	experienceId,
+	funnelFlow,
 }) => {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [isProductSelectionOpen, setIsProductSelectionOpen] = useState(false);
@@ -153,6 +156,20 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 							Reset
 						</button>
 					</div>
+
+					{/* Webhook Tester */}
+					{funnelFlow && (
+						<div className="mt-2">
+							<WebhookTester
+								conversationId={conversationId || ''}
+								experienceId={experienceId || ''}
+								funnelFlow={funnelFlow}
+								onTestComplete={(result) => {
+									console.log('Webhook test completed:', result);
+								}}
+							/>
+						</div>
+					)}
 
 					{/* Selected Product */}
 					{selectedProduct && (

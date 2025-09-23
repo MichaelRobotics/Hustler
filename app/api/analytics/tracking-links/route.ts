@@ -139,6 +139,7 @@ export async function GET(request: NextRequest) {
       })),
       resourceAnalytics: resourceAnalyticsData.map((resource: any) => ({
         resourceId: resource.resourceId,
+        type: resource.type, // Add the type field
         totalResourceClicks: resource.totalResourceClicks || 0,
         totalResourceConversions: resource.totalResourceConversions || 0,
         totalResourceRevenue: parseFloat(resource.totalResourceRevenue || '0'),

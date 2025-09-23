@@ -434,6 +434,20 @@ export async function sendLiveChatMessage(
 			},
 		}).returning();
 
+		// Increment sends counter for the funnel
+		try {
+			await db.update(funnels)
+				.set({ 
+					sends: sql`${funnels.sends} + 1`,
+					updatedAt: new Date()
+				})
+				.where(eq(funnels.id, conversation.funnelId));
+			
+			console.log(`[livechat-integration] Incremented sends counter for funnel ${conversation.funnelId}`);
+		} catch (sendsError) {
+			console.error(`[livechat-integration] Error updating sends counter:`, sendsError);
+		}
+
 		console.log("sendLiveChatMessage: Message inserted successfully:", {
 			messageId: newMessage.id,
 			conversationId: newMessage.conversationId

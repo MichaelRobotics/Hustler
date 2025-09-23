@@ -410,6 +410,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						onTriggerDM={triggerDMForAdmin}
 						onResetConversations={resetConversations}
 						experienceId={experienceId}
+						funnelFlow={funnelFlow}
 					/>
 				</div>
 			)}

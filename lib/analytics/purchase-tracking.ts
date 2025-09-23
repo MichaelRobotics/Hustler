@@ -1,68 +1,61 @@
 /**
- * Simplified Purchase Tracking
+ * Enhanced Purchase Tracking with Scenario Detection
  * 
- * Handles conversion tracking from Whop webhooks for the new analytics system.
- * This replaces the complex custom tracking with a simpler Whop-native approach.
+ * Handles conversion tracking from Whop webhooks with scenario detection
+ * for affiliate vs product owner revenue attribution.
  */
 
 import { db } from "@/lib/supabase/db-server";
 import { funnelAnalytics } from "@/lib/supabase/schema";
 import { eq, sql } from "drizzle-orm";
 import { updateFunnelGrowthPercentages } from "../actions/funnel-actions";
+import type { ScenarioData } from "./scenario-detection";
+import { updateProductCard } from "./product-card-management";
 
-export interface PurchaseData {
-  userId: string;
-  companyId: string;
-  productId?: string;
-  accessPassId?: string;
-  planId?: string;
-  amount: number;
-  currency: string;
-  purchaseTime: Date;
-  metadata?: {
-    funnelId?: string;
-    experienceId?: string;
-    [key: string]: any;
-  };
-}
+
 
 /**
- * Track purchase conversion from Whop webhook
- * Simplified for Whop native tracking system
+ * Track purchase conversion with scenario detection and analytics
  */
-export async function trackPurchaseConversion(
-  purchaseData: PurchaseData
+export async function trackPurchaseConversionWithScenario(
+  scenarioData: ScenarioData,
+  conversation: any,
+  funnelId: string,
+  experienceId?: string
 ): Promise<boolean> {
   try {
-    console.log("🔍 Tracking Whop webhook conversion for user:", purchaseData.userId);
+    console.log(`[Purchase Tracking] Tracking conversion for scenario: ${scenarioData.scenario}`);
 
-    // Get funnel and experience from metadata
-    const funnelId = purchaseData.metadata?.funnelId;
-    const experienceId = purchaseData.metadata?.experienceId;
-    
-    if (!funnelId || !experienceId) {
-      console.log("⚠️ No funnel/experience metadata found for purchase");
+    if (scenarioData.scenario === 'error') {
+      console.log('[Purchase Tracking] Skipping analytics update - error scenario');
       return false;
     }
 
-    // Update funnel analytics with conversion
-    await updateFunnelConversionAnalytics(experienceId, funnelId, purchaseData);
-    console.log("✅ Whop webhook conversion tracked successfully");
+    // Update funnel analytics with scenario-based revenue
+    await updateFunnelAnalyticsWithScenario(funnelId, scenarioData);
+    
+    // Update product card
+    if (scenarioData.productId && experienceId) {
+      await updateProductCard(funnelId, scenarioData.productId, scenarioData, experienceId);
+    } else if (scenarioData.productId && !experienceId) {
+      console.error('[Purchase Tracking] Cannot update product card - experienceId required');
+    }
+    
+    console.log(`[Purchase Tracking] Analytics updated for scenario: ${scenarioData.scenario}`);
     return true;
-
   } catch (error) {
-    console.error("❌ Error tracking purchase conversion:", error);
+    console.error('[Purchase Tracking] Error updating analytics:', error);
     return false;
   }
 }
 
+
 /**
- * Update funnel analytics with conversion data
+ * Update funnel analytics with scenario-based revenue attribution
  */
-async function updateFunnelConversionAnalytics(
-  experienceId: string,
+async function updateFunnelAnalyticsWithScenario(
   funnelId: string,
-  purchaseData: PurchaseData
+  scenarioData: ScenarioData
 ): Promise<void> {
   try {
     const today = new Date();
@@ -74,16 +67,30 @@ async function updateFunnelConversionAnalytics(
       .where(eq(funnelAnalytics.funnelId, funnelId))
       .limit(1);
 
-    const affiliateAmount = 0; // No affiliate tracking in simplified system
-    const productAmount = purchaseData.amount;
+    let affiliateAmount = 0;
+    let productAmount = 0;
+
+    if (scenarioData.scenario === 'PRODUCT') {
+      // Whop Owner sells their own product → Track Whop Owner's product revenue
+      // Track as product revenue (My Products)
+      productAmount = scenarioData.productOwnerRevenue || 0;
+    } else if (scenarioData.scenario === 'AFFILIATE') {
+      // Whop Owner sells another Whop Owner's product → Track Whop Owner's affiliate revenue
+      // Track as affiliate revenue (Affiliate Sales)
+      affiliateAmount = scenarioData.affiliateCommission || 0;
+    }
+
+    console.log(`[Purchase Tracking] Revenue attribution - Affiliate: ${affiliateAmount}, Product: ${productAmount}`);
 
     if (existingFunnelAnalytics.length > 0) {
       // Update existing record
       await db.update(funnelAnalytics)
         .set({
           totalConversions: sql`${funnelAnalytics.totalConversions} + 1`,
+          totalAffiliateRevenue: sql`${funnelAnalytics.totalAffiliateRevenue} + ${affiliateAmount}`,
           totalProductRevenue: sql`${funnelAnalytics.totalProductRevenue} + ${productAmount}`,
           todayConversions: isToday ? sql`${funnelAnalytics.todayConversions} + 1` : funnelAnalytics.todayConversions,
+          todayAffiliateRevenue: isToday ? sql`${funnelAnalytics.todayAffiliateRevenue} + ${affiliateAmount}` : funnelAnalytics.todayAffiliateRevenue,
           todayProductRevenue: isToday ? sql`${funnelAnalytics.todayProductRevenue} + ${productAmount}` : funnelAnalytics.todayProductRevenue,
           lastUpdated: new Date()
         })
@@ -91,11 +98,13 @@ async function updateFunnelConversionAnalytics(
     } else {
       // Create new record
       await db.insert(funnelAnalytics).values({
-        experienceId,
+        experienceId: scenarioData.companyId, // This should be the experience ID, not company ID
         funnelId,
         totalConversions: 1,
+        totalAffiliateRevenue: affiliateAmount.toString(),
         totalProductRevenue: productAmount.toString(),
         todayConversions: isToday ? 1 : 0,
+        todayAffiliateRevenue: isToday ? affiliateAmount.toString() : "0",
         todayProductRevenue: isToday ? productAmount.toString() : "0",
         lastUpdated: new Date()
       });
@@ -104,9 +113,9 @@ async function updateFunnelConversionAnalytics(
     // Update growth percentages
     await updateFunnelGrowthPercentages(funnelId);
     
-    console.log(`✅ Updated funnel analytics for funnel ${funnelId}`);
+    console.log(`✅ Updated funnel analytics for funnel ${funnelId} with scenario ${scenarioData.scenario}`);
   } catch (error) {
-    console.error("Error updating funnel conversion analytics:", error);
+    console.error("Error updating funnel analytics with scenario:", error);
     throw error;
   }
 }

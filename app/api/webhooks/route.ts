@@ -4,6 +4,9 @@ import { waitUntil } from "@vercel/functions";
 import { makeWebhookValidator } from "@whop/api";
 import type { NextRequest } from "next/server";
 import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
+import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
+import { getExperienceContextFromWebhook, validateExperienceContext } from "@/lib/analytics/experience-context";
+import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tracking";
 
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
@@ -18,6 +21,14 @@ export async function POST(request: NextRequest): Promise<Response> {
 	} catch (parseError) {
 		console.error("Failed to parse request body:", parseError);
 		return new Response("Invalid webhook request", { status: 400 });
+	}
+
+	// Extract experience ID from X-Experience-ID header for multi-tenancy
+	const experienceId = request.headers.get('X-Experience-ID');
+	if (experienceId && webhookData.data) {
+		// Set the company_id to the experience ID for proper multi-tenant analytics
+		webhookData.data.company_id = experienceId;
+		console.log(`[Webhook] Using experience ID as company_id: ${experienceId}`);
 	}
 
 	// Check if this is a test request (bypass validation)
@@ -71,14 +82,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 				),
 			);
 		} else {
-			// Handle other payment types
+			// Handle other payment types with scenario detection and analytics
 			waitUntil(
-				potentiallyLongRunningHandler(
-					user_id,
-					final_amount,
-					currency,
-					amount_after_fees,
-				),
+				handlePaymentWithAnalytics(webhookData.data),
 			);
 		}
 	} else if (webhookData.action === "membership.went_valid") {
@@ -146,6 +152,53 @@ async function handleCreditPackPurchase(
 	} catch (error) {
 		console.error("Error processing credit pack purchase:", error);
 		// In production, you might want to implement retry logic or alerting here
+	}
+}
+
+/**
+ * Handle payment with scenario detection and analytics
+ */
+async function handlePaymentWithAnalytics(webhookData: any) {
+	try {
+		console.log(`[Webhook Analytics] Processing payment webhook for user: ${webhookData.user_id}`);
+
+		// Step 1: Detect scenario (affiliate vs product owner vs error)
+		const scenarioData = await detectScenario(webhookData);
+		
+		if (!validateScenarioData(scenarioData)) {
+			console.log(`[Webhook Analytics] Invalid scenario data - skipping analytics`);
+			return;
+		}
+
+		if (scenarioData.scenario === 'error') {
+			console.log(`[Webhook Analytics] Error scenario detected - skipping analytics`);
+			return;
+		}
+
+		// Step 2: Get experience context
+		const { experience, conversation } = await getExperienceContextFromWebhook(webhookData);
+		
+		if (!validateExperienceContext(experience, conversation)) {
+			console.log(`[Webhook Analytics] Invalid experience context - skipping analytics`);
+			return;
+		}
+
+		// Step 3: Update analytics with scenario-based revenue attribution
+		const success = await trackPurchaseConversionWithScenario(
+			scenarioData,
+			conversation,
+			conversation!.funnelId,
+			experience!.experienceId
+		);
+
+		if (success) {
+			console.log(`[Webhook Analytics] Successfully updated analytics for scenario: ${scenarioData.scenario}`);
+		} else {
+			console.log(`[Webhook Analytics] Failed to update analytics for scenario: ${scenarioData.scenario}`);
+		}
+
+	} catch (error) {
+		console.error(`[Webhook Analytics] Error processing payment analytics:`, error);
 	}
 }
 

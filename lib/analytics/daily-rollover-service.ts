@@ -12,12 +12,14 @@ import { sql } from "drizzle-orm";
 export class DailyRolloverService {
   /**
    * Perform daily rollover for all funnel analytics
+   * This operation is safe to run across all experiences since it's the same logic for all
    */
   async performDailyRollover(): Promise<void> {
     try {
       console.log("🔄 Starting daily rollover for funnel analytics...");
       
       // Move today's metrics to yesterday's and reset today's metrics
+      // This operation is identical for all experiences, so no WHERE clause needed
       await db.update(funnelAnalytics)
         .set({
           // Move today's metrics to yesterday's

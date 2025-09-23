@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, funnels, messages } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { conversations, experiences, funnels, messages, funnelAnalytics } from "@/lib/supabase/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { getWelcomeMessage } from "@/lib/actions/user-join-actions";
-import { findOrCreateUserForConversation, closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
+import { findOrCreateUserForConversation, deleteExistingConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 import { headers } from "next/headers";
 import type { FunnelFlow } from "@/lib/types/funnel";
 
@@ -183,8 +183,8 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Step 8: Close any existing active conversations for this admin user
-    await closeExistingActiveConversationsByWhopUserId(whopUserId, experience.id);
+    // Step 8: Delete any existing conversations for this admin user
+    await deleteExistingConversationsByWhopUserId(whopUserId, experience.id);
 
     // Step 9: Create DM conversation record (EXACT SAME as real customers)
     const [newConversation] = await db
@@ -208,11 +208,85 @@ export async function POST(request: NextRequest) {
       content: welcomeMessage,
     });
 
+    // Increment sends counter for the funnel
+    try {
+      await db.update(funnels)
+        .set({ 
+          sends: sql`${funnels.sends} + 1`,
+          updatedAt: new Date()
+        })
+        .where(eq(funnels.id, liveFunnel.id));
+      
+      console.log(`[trigger-first-dm] Incremented sends counter for funnel ${liveFunnel.id}`);
+    } catch (sendsError) {
+      console.error(`[trigger-first-dm] Error updating sends counter:`, sendsError);
+    }
+
     console.log(`Recorded welcome message in admin conversation ${conversationId}`);
+
+    // Step 11: Increment Awareness metric (totalStarts) in funnel analytics
+    try {
+      const today = new Date();
+      const isToday = (date: Date) => {
+        const today = new Date();
+        return date.getDate() === today.getDate() && 
+               date.getMonth() === today.getMonth() && 
+               date.getFullYear() === today.getFullYear();
+      };
+
+      // Update or create funnel analytics record
+      const existingAnalytics = await db.query.funnelAnalytics.findFirst({
+        where: and(
+          eq(funnelAnalytics.funnelId, liveFunnel.id),
+          eq(funnelAnalytics.experienceId, experience.id)
+        ),
+      });
+
+      if (existingAnalytics) {
+        // Update existing record
+        await db.update(funnelAnalytics)
+          .set({
+            totalStarts: sql`${funnelAnalytics.totalStarts} + 1`,
+            todayStarts: isToday(today) ? sql`${funnelAnalytics.todayStarts} + 1` : funnelAnalytics.todayStarts,
+            lastUpdated: new Date()
+          })
+          .where(eq(funnelAnalytics.id, existingAnalytics.id));
+        
+        console.log(`Updated funnel analytics - incremented totalStarts for funnel ${liveFunnel.id}`);
+      } else {
+        // Create new record
+        await db.insert(funnelAnalytics).values({
+          funnelId: liveFunnel.id,
+          experienceId: experience.id,
+          totalStarts: 1,
+          totalInterest: 0,
+          totalIntent: 0,
+          totalConversions: 0,
+          totalProductRevenue: "0",
+          totalAffiliateRevenue: "0",
+          todayStarts: 1,
+          todayInterest: 0,
+          todayIntent: 0,
+          todayConversions: 0,
+          todayProductRevenue: "0",
+          todayAffiliateRevenue: "0",
+          startsGrowthPercent: 0,
+          intentGrowthPercent: 0,
+          conversionsGrowthPercent: 0,
+          interestGrowthPercent: 0,
+          lastUpdated: new Date()
+        });
+        
+        console.log(`Created new funnel analytics record for funnel ${liveFunnel.id}`);
+      }
+    } catch (analyticsError) {
+      console.error('Error updating funnel analytics:', analyticsError);
+      // Don't fail the entire operation if analytics update fails
+    }
 
     console.log(`Successfully created DM conversation for admin. Conversation ID: ${conversationId}, Member ID: ${memberId}`);
 
-    // Step 11: Start DM monitoring (EXACT SAME as customer flow)
+    // Step 12: Start DM monitoring (EXACT SAME as customer flow)
     // Admin will experience the same DM response flow as customers
     // DM monitoring is now handled by cron jobs - no need to start monitoring service
     // The cron jobs will automatically detect and process this conversation
@@ -222,7 +296,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Admin DM sent successfully and conversation created",
+      message: "Admin DM sent successfully, conversation created, and Awareness metric incremented",
       conversationId: conversationId,
       whopUserId,
       experienceId,
@@ -230,7 +304,8 @@ export async function POST(request: NextRequest) {
       adminMode: true,
       dmSent: true, // Always true now since we require DM sending
       welcomeMessage: welcomeMessage,
-      monitoringStarted: true
+      monitoringStarted: true,
+      analyticsUpdated: true // Indicates that the Awareness metric was incremented
     });
 
   } catch (error) {

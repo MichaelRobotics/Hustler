@@ -1,6 +1,6 @@
 import { db } from "@/lib/supabase/db-server";
-import { users, experiences, conversations } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { users, experiences, conversations, messages, funnelInteractions } from "@/lib/supabase/schema";
+import { eq, and, inArray } from "drizzle-orm";
 
 /**
  * Find or create user for conversation binding
@@ -48,62 +48,95 @@ export async function findOrCreateUserForConversation(
 
 
 /**
- * Close existing active conversations for a user by whopUserId
- * This prevents multiple active conversations per user (faster lookup)
+ * Delete existing conversations for a user by whopUserId
+ * This prevents multiple conversations per user and avoids constraint violations
  */
-export async function closeExistingActiveConversationsByWhopUserId(
+export async function deleteExistingConversationsByWhopUserId(
 	whopUserId: string,
 	experienceId: string
 ): Promise<number> {
 	try {
+		// First, get conversation IDs to delete related data
+		const existingConversations = await db.query.conversations.findMany({
+			where: and(
+				eq(conversations.whopUserId, whopUserId),
+				eq(conversations.experienceId, experienceId)
+			),
+			columns: { id: true }
+		});
+
+		if (existingConversations.length === 0) {
+			console.log(`No existing conversations found for whopUserId ${whopUserId}`);
+			return 0;
+		}
+
+		const conversationIds = existingConversations.map((c: any) => c.id);
+
+		// Delete related data first (foreign key constraints)
+		await db.delete(messages).where(inArray(messages.conversationId, conversationIds));
+		await db.delete(funnelInteractions).where(inArray(funnelInteractions.conversationId, conversationIds));
+
+		// Delete conversations
 		const result = await db
-			.update(conversations)
-			.set({ 
-				status: "closed",
-				updatedAt: new Date()
-			})
+			.delete(conversations)
 			.where(
 				and(
 					eq(conversations.whopUserId, whopUserId),
-					eq(conversations.experienceId, experienceId),
-					eq(conversations.status, "active")
+					eq(conversations.experienceId, experienceId)
 				)
 			);
 
-		console.log(`Closed ${result.rowCount || 0} existing active conversations for whopUserId ${whopUserId}`);
+		console.log(`Deleted ${result.rowCount || 0} existing conversations for whopUserId ${whopUserId}`);
 		return result.rowCount || 0;
 	} catch (error) {
-		console.error("Error closing existing active conversations by whopUserId:", error);
+		console.error("Error deleting existing conversations by whopUserId:", error);
 		throw error;
 	}
 }
 
 /**
- * Close existing active conversations by membership ID
+ * Delete existing conversations by membership ID
  * This ensures we don't have duplicate conversations for the same membership
  */
-export async function closeExistingActiveConversationsByMembershipId(
+export async function deleteExistingConversationsByMembershipId(
 	membershipId: string,
 	experienceId: string,
 ): Promise<number> {
 	try {
-		const result = await db.update(conversations)
-			.set({ 
-				status: "closed",
-				updatedAt: new Date()
-			})
+		// First, get conversation IDs to delete related data
+		const existingConversations = await db.query.conversations.findMany({
+			where: and(
+				eq(conversations.membershipId, membershipId),
+				eq(conversations.experienceId, experienceId)
+			),
+			columns: { id: true }
+		});
+
+		if (existingConversations.length === 0) {
+			console.log(`No existing conversations found for membershipId ${membershipId}`);
+			return 0;
+		}
+
+		const conversationIds = existingConversations.map((c: any) => c.id);
+
+		// Delete related data first (foreign key constraints)
+		await db.delete(messages).where(inArray(messages.conversationId, conversationIds));
+		await db.delete(funnelInteractions).where(inArray(funnelInteractions.conversationId, conversationIds));
+
+		// Delete conversations
+		const result = await db
+			.delete(conversations)
 			.where(
 				and(
 					eq(conversations.membershipId, membershipId),
-					eq(conversations.experienceId, experienceId),
-					eq(conversations.status, "active")
+					eq(conversations.experienceId, experienceId)
 				)
 			);
 
-		console.log(`Closed ${result.rowCount || 0} existing active conversations for membershipId ${membershipId}`);
+		console.log(`Deleted ${result.rowCount || 0} existing conversations for membershipId ${membershipId}`);
 		return result.rowCount || 0;
 	} catch (error) {
-		console.error("Error closing existing active conversations by membershipId:", error);
+		console.error("Error deleting existing conversations by membershipId:", error);
 		throw error;
 	}
 }

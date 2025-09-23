@@ -14,6 +14,7 @@ interface FunnelBuilderHeaderProps {
 	onOpenOfferSelection: () => void;
 	onOpenOfflineConfirmation: () => void;
 	onDeploy: () => void;
+	hasAnyLiveFunnel?: boolean;
 }
 
 export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
@@ -25,6 +26,7 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 	onOpenOfferSelection,
 	onOpenOfflineConfirmation,
 	onDeploy,
+	hasAnyLiveFunnel = false,
 }) => {
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">

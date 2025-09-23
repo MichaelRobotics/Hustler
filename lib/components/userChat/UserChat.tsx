@@ -400,7 +400,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				}
 				
 				// Check for funnel completion
-				if (option.nextBlockId === "COMPLETED" || result.conversation.status === "closed") {
+				if (result.conversation.status === "closed") {
 					await handleFunnelCompletion();
 				}
 			}

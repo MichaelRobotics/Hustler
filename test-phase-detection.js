@@ -52,9 +52,9 @@ const testCases = [
   { blockId: 'offer-1', expected: 'PHASE2', description: 'OFFER stage block' },
   { blockId: 'offer-2', expected: 'PHASE2', description: 'OFFER stage block' },
   { blockId: 'transition-1', expected: 'TRANSITION', description: 'TRANSITION stage block' },
-  { blockId: 'unknown-block', expected: 'COMPLETED', description: 'Unknown block' },
-  { blockId: null, expected: 'COMPLETED', description: 'Null block ID' },
-  { blockId: undefined, expected: 'COMPLETED', description: 'Undefined block ID' }
+  { blockId: 'unknown-block', expected: 'PHASE1', description: 'Unknown block' },
+  { blockId: null, expected: 'PHASE1', description: 'Null block ID' },
+  { blockId: undefined, expected: 'PHASE1', description: 'Undefined block ID' }
 ];
 
 let passedTests = 0;

@@ -10,7 +10,7 @@ import { db } from "../supabase/db-server";
 import { experiences, funnels, conversations, messages, users, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { createConversation, addMessage } from "./simplified-conversation-actions";
-import { closeExistingActiveConversationsByWhopUserId, closeExistingActiveConversationsByMembershipId } from "./user-management-actions";
+import { deleteExistingConversationsByWhopUserId, deleteExistingConversationsByMembershipId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
@@ -107,11 +107,15 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Step 5: Close any existing active conversations for this user
-		// Close by both whopUserId and membershipId to be safe
-		await closeExistingActiveConversationsByWhopUserId(userId, experience.id);
+		// Step 5: Delete any existing conversations for this user
+		// Delete by both whopUserId and membershipId to be safe
+		const deletedByUserId = await deleteExistingConversationsByWhopUserId(userId, experience.id);
+		console.log(`[USER-JOIN] Deleted ${deletedByUserId} conversations by whopUserId ${userId}`);
+		
+		let deletedByMembershipId = 0;
 		if (membershipId) {
-			await closeExistingActiveConversationsByMembershipId(membershipId, experience.id);
+			deletedByMembershipId = await deleteExistingConversationsByMembershipId(membershipId, experience.id);
+			console.log(`[USER-JOIN] Deleted ${deletedByMembershipId} conversations by membershipId ${membershipId}`);
 		}
 
 		// Step 6: Check if conversation already exists (race condition protection)
@@ -124,11 +128,12 @@ export async function handleUserJoinEvent(
 		});
 
 		if (existingConversation) {
-			console.log(`Conversation already exists for user ${userId} in experience ${experience.id}, skipping creation`);
+			console.log(`[USER-JOIN] Conversation still exists for user ${userId} in experience ${experience.id} after deleting ${deletedByUserId + deletedByMembershipId} conversations - this indicates a race condition or deletion failed`);
 			return;
 		}
 
 		// Step 7: Create conversation record
+		console.log(`[USER-JOIN] Creating new conversation for user ${userId} in experience ${experience.id}`);
 		const conversationId = await createConversation(
 			experience.id,
 			liveFunnel.id,
@@ -136,6 +141,7 @@ export async function handleUserJoinEvent(
 			liveFunnel.flow.startBlockId,
 			membershipId, // Pass membershipId separately
 		);
+		console.log(`[USER-JOIN] Created conversation ${conversationId} for user ${userId}`);
 
 	// Send welcome DM and record it
 	const dmUserId = membershipId || userId; // Use membershipId for DM operations

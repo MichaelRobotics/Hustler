@@ -3,9 +3,9 @@
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { Button, Heading, Text } from "frosted-ui";
 import { Activity, ArrowLeft, Edit3, Settings } from "lucide-react";
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useEffect } from "react";
+import type { Funnel, SalesData, User, FunnelStats, SalesStats } from "../../utils/adminAnalytics";
 import { useAnalyticsData } from "../../hooks/useAnalyticsData";
-import type { Funnel, SalesData, User } from "../../utils/adminAnalytics";
 import { ThemeToggle } from "../common/ThemeToggle";
 import UnifiedNavigation from "../common/UnifiedNavigation";
 import FunnelAnalytics from "./FunnelAnalytics";
@@ -20,6 +20,16 @@ interface FunnelAnalyticsPageProps {
 	onGlobalGeneration: () => Promise<void>;
 	isGenerating: boolean;
 	experienceId?: string;
+	// Analytics management from AdminPanel
+	analyticsManagement?: {
+		analyticsData: Map<string, any>;
+		isRefreshing: boolean;
+		error: string | null;
+		getAnalyticsData: (funnelId: string) => any;
+		fetchAnalyticsData: (funnel: Funnel, experienceId?: string) => Promise<void>;
+		updateAnalyticsData: (funnel: Funnel, experienceId?: string) => Promise<void>;
+		isAnalyticsDataStale: (funnelId: string, maxAge?: number) => boolean;
+	};
 }
 
 /**
@@ -40,12 +50,23 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 		onGlobalGeneration,
 		isGenerating,
 		experienceId,
+		analyticsManagement,
 	}) => {
-		// Use the custom hook to fetch real analytics data
-		const { funnelStats, salesStats, isLoading, error, isRefreshing } = useAnalyticsData({
+		// Use the useAnalyticsData hook for live updates and proper data fetching
+		const {
+			funnelStats,
+			salesStats,
+			users,
+			salesData,
+			isLoading,
+			error,
+			refreshData,
+			isRefreshing,
+		} = useAnalyticsData({
 			funnel,
 			enableBackend: true,
 			experienceId,
+			analyticsManagement,
 		});
 
 		// Memoized computed values for better performance
@@ -249,11 +270,11 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 										color="blue"
 										className="dark:text-blue-300"
 									>
-										Live Sales
+										Live Sales{isRefreshing ? ' (Updating...)' : ''}
 									</Text>
 								</div>
 
-								{salesStats && <SalesPerformance salesStats={salesStats} />}
+								{salesStats && <SalesPerformance salesStats={salesStats} isRefreshing={isRefreshing} />}
 							</>
 						)}
 					</div>

@@ -56,6 +56,18 @@
     {
       "path": "/api/cron/poll-phase2-cleanup",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/close-inactive-conversations",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/delete-old-closed-conversations",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/daily-rollover",
+      "schedule": "0 1 * * *"
     }
   ]
 }

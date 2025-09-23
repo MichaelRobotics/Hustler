@@ -48,6 +48,7 @@ interface AIFunnelBuilderPageProps {
 	onGenerationComplete?: (funnelId: string) => void; // New: callback when generation is fully complete
 	onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
 	user?: { experienceId?: string } | null;
+	hasAnyLiveFunnel?: boolean; // New: indicates if any funnel is live globally
 }
 
 /**
@@ -68,6 +69,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	onGenerationComplete,
 	onGenerationError,
 	user,
+	hasAnyLiveFunnel = false, // Default to false if not provided
 }) => {
 	// State Management
 	const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
@@ -138,6 +140,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 							onOpenOfferSelection={modals.openOfferSelection}
 							onOpenOfflineConfirmation={modals.openOfflineConfirmation}
 							onDeploy={deployment.handleDeploy}
+							hasAnyLiveFunnel={hasAnyLiveFunnel}
 						/>
 					)}
 

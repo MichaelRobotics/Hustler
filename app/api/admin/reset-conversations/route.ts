@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions, experiences } from "@/lib/supabase/schema";
 import { eq, and, inArray, or } from "drizzle-orm";
-import { closeExistingActiveConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
+import { deleteExistingConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 import { validateToken } from "@whop-apps/sdk";
 import { headers } from "next/headers";
 
@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
       console.log(`Conversation ${conversation.id} reset - cron jobs will handle DM monitoring`);
     }
 
-    // Step 4: Close all active conversations
-    console.log("🗑️ Closing all active conversations...");
-    const closedCount = await closeExistingActiveConversationsByWhopUserId(whopUserId, experience.id);
-    console.log(`Closed ${closedCount} active conversations`);
+    // Step 4: Delete all conversations
+    console.log("🗑️ Deleting all conversations...");
+    const deletedCount = await deleteExistingConversationsByWhopUserId(whopUserId, experience.id);
+    console.log(`Deleted ${deletedCount} conversations`);
 
     // Step 5: Clean up related data (optional - for complete cleanup)
     console.log("🧽 Cleaning up related data...");
@@ -114,8 +114,8 @@ export async function POST(request: NextRequest) {
       data: {
         whopUserId,
         experienceId,
-        closedConversations: closedCount,
-        deletedConversations: conversationIds.length,
+        deletedConversations: deletedCount,
+        cleanedUpConversations: conversationIds.length,
         dmMonitoringStopped: activeConversations.length,
       }
     });

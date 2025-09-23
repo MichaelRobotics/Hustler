@@ -275,14 +275,115 @@ export const fetchFunnelStats = async (
 export const fetchSalesStats = async (
 	funnelId: string,
 ): Promise<SalesStats> => {
-	// Return empty sales data (no mock data)
-	// This will show $0.00 totals and no individual product cards
-	return {
-		affiliate: [],
-		myProducts: [],
-		affiliateTotal: { sales: 0, revenue: 0.0 },
-		myProductsTotal: { sales: 0, revenue: 0.0 },
-	};
+	try {
+		// Call the tracking-links API to get real sales data
+		const url = new URL('/api/analytics/tracking-links', window.location.origin);
+		url.searchParams.set('funnelId', funnelId);
+		
+		console.log(`[fetchSalesStats] Fetching sales stats for funnel ${funnelId}`);
+		
+		const response = await fetch(url.toString());
+		
+		if (!response.ok) {
+			console.error(`Failed to fetch sales stats: ${response.statusText}`);
+			return {
+				affiliate: [],
+				myProducts: [],
+				affiliateTotal: { sales: 0, revenue: 0.0 },
+				myProductsTotal: { sales: 0, revenue: 0.0 },
+			};
+		}
+		
+		const data = await response.json();
+		console.log(`[fetchSalesStats] API response:`, data);
+		
+		if (!data.success || !data.data.resourceAnalytics || data.data.resourceAnalytics.length === 0) {
+			// Return empty data if no analytics found
+			console.log(`[fetchSalesStats] No resource analytics found, returning empty data`);
+			return {
+				affiliate: [],
+				myProducts: [],
+				affiliateTotal: { sales: 0, revenue: 0.0 },
+				myProductsTotal: { sales: 0, revenue: 0.0 },
+			};
+		}
+		
+		// Process the real data from the database
+		const resourceAnalytics = data.data.resourceAnalytics;
+		const resources = data.data.resources || [];
+		
+		// Create a map of resource IDs to resource data
+		const resourceMap = new Map();
+		resources.forEach((resource: any) => {
+			resourceMap.set(resource.id, resource);
+		});
+		
+		// Get totals from funnel analytics
+		const funnelData = data.data.funnelAnalytics[0];
+		const affiliateTotalRevenue = parseFloat(funnelData?.totalAffiliateRevenue || '0');
+		const myProductsTotalRevenue = parseFloat(funnelData?.totalProductRevenue || '0');
+		
+		// Process analytics data into sales stats
+		const affiliateProducts: ProductSale[] = [];
+		const myProducts: ProductSale[] = [];
+		
+		resourceAnalytics.forEach((analytics: any) => {
+			const resource = resourceMap.get(analytics.resourceId);
+			if (!resource) return;
+			
+			const revenue = parseFloat(analytics.totalResourceRevenue || '0');
+			const sales = analytics.totalResourceConversions || 0;
+			const type = analytics.type;
+			
+			// Default null type to PRODUCT (for old records)
+			const actualType = type || 'PRODUCT';
+			
+			// Create product sale based on type field
+			const productSale: ProductSale = {
+				name: resource.name,
+				sales: sales,
+				revenue: revenue,
+				type: actualType === 'AFFILIATE' ? 'AFFILIATE' : 'MY_PRODUCTS',
+			};
+			
+			if (actualType === 'AFFILIATE') {
+				affiliateProducts.push(productSale);
+			} else if (actualType === 'PRODUCT') {
+				myProducts.push(productSale);
+			}
+		});
+		
+		// Use totals from funnel analytics instead of summing individual products
+		const affiliateTotal = {
+			sales: affiliateProducts.reduce((acc, p) => acc + p.sales, 0),
+			revenue: affiliateTotalRevenue, // Use funnel analytics total
+		};
+		
+		const myProductsTotal = {
+			sales: myProducts.reduce((acc, p) => acc + p.sales, 0),
+			revenue: myProductsTotalRevenue, // Use funnel analytics total
+		};
+		
+		const result = {
+			affiliate: affiliateProducts.sort((a, b) => b.revenue - a.revenue),
+			myProducts: myProducts.sort((a, b) => b.revenue - a.revenue),
+			affiliateTotal,
+			myProductsTotal,
+		};
+		
+		console.log('Real sales stats result:', result);
+		return result;
+		
+	} catch (error) {
+		console.error('Error fetching sales stats:', error);
+		// Return empty data on error
+		return {
+			affiliate: [],
+			myProducts: [],
+			affiliateTotal: { sales: 0, revenue: 0.0 },
+			myProductsTotal: { sales: 0, revenue: 0.0 },
+		};
+	}
 };
 
 export const fetchFunnelUsers = async (funnelId: string): Promise<User[]> => {

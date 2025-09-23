@@ -1,0 +1,1 @@
+ALTER TABLE "funnel_resource_analytics" ALTER COLUMN "scenario" SET DEFAULT 'PRODUCT';

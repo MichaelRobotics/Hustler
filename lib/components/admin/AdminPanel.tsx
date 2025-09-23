@@ -18,6 +18,7 @@ import EditFunnelModal from "./modals/EditFunnelModal";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { useFunnelManagement } from "@/lib/hooks/useFunnelManagement";
 import { useResourceManagement } from "@/lib/hooks/useResourceManagement";
+import { useAnalyticsManagement } from "@/lib/hooks/useAnalyticsManagement";
 import { useViewNavigation } from "@/lib/hooks/useViewNavigation";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import { apiPut } from "@/lib/utils/api-client";
@@ -136,6 +137,19 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleAddToFunnel,
 		handleBackToDashboard: resourceBackToDashboard,
 	} = useResourceManagement(user);
+
+	const {
+		analyticsData,
+		isRefreshing: analyticsRefreshing,
+		error: analyticsError,
+		getAnalyticsData,
+		fetchAnalyticsData,
+		updateAnalyticsData,
+		refreshAnalyticsData,
+		clearAnalyticsData,
+		clearAllAnalyticsData,
+		isAnalyticsDataStale,
+	} = useAnalyticsManagement(user);
 
 	// State synchronization: Update funnel resources when allResources changes
 	React.useEffect(() => {
@@ -322,6 +336,15 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 					isGenerating={
 						selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false
 					}
+					analyticsManagement={{
+						analyticsData,
+						isRefreshing: analyticsRefreshing,
+						error: analyticsError,
+						getAnalyticsData,
+						fetchAnalyticsData,
+						updateAnalyticsData,
+						isAnalyticsDataStale,
+					}}
 				/>
 			</>
 		);
@@ -460,6 +483,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	}
 
 	if (currentView === "funnelBuilder" && selectedFunnel) {
+		// Calculate if any funnel is live globally (excluding current funnel)
+		const hasAnyLiveFunnel = funnels.some(funnel => 
+			funnel.id !== selectedFunnel.id && funnel.isDeployed
+		);
+
 		return (
 			<AIFunnelBuilderPage
 				funnel={selectedFunnel}
@@ -524,6 +552,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				onGenerationComplete={handleGenerationComplete}
 				onGenerationError={handleGenerationError}
 				user={user}
+				hasAnyLiveFunnel={hasAnyLiveFunnel}
 			/>
 		);
 	}

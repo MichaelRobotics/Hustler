@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, messages, funnelInteractions, resources } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { conversations, messages, funnelInteractions, resources, funnels } from "@/lib/supabase/schema";
+import { eq, and, sql } from "drizzle-orm";
 import type { FunnelFlow, FunnelBlock } from "@/lib/types/funnel";
 import {
   type AuthContext,
@@ -290,6 +290,20 @@ async function processFunnelNavigation(
           timestamp: new Date().toISOString(),
         },
       });
+
+      // Increment sends counter for the funnel
+      try {
+        await db.update(funnels)
+          .set({ 
+            sends: sql`${funnels.sends} + 1`,
+            updatedAt: new Date()
+          })
+          .where(eq(funnels.id, conversation.funnelId));
+        
+        console.log(`[navigate-funnel] Incremented sends counter for funnel ${conversation.funnelId}`);
+      } catch (sendsError) {
+        console.error(`[navigate-funnel] Error updating sends counter:`, sendsError);
+      }
     }
 
     return {

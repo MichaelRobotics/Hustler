@@ -398,6 +398,7 @@ export const funnelResourceAnalytics = pgTable(
 			.default("0")
 			.notNull(),
 		todayInterest: integer("today_interest").default(0).notNull(),
+		type: text("type").notNull().default("PRODUCT"),
 		lastUpdated: timestamp("last_updated").defaultNow().notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
