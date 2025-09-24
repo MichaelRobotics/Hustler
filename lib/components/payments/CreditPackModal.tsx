@@ -28,6 +28,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	const [error, setError] = useState<string | null>(null);
 	const [selectedPack, setSelectedPack] = useState<CreditPackId | null>(null);
 	const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+	const [purchaseSuccess, setPurchaseSuccess] = useState(false);
 
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
 
@@ -42,8 +43,24 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			setIsLoading(null);
 			setSelectedPack(null);
 			setIsCheckoutLoading(false);
+			setPurchaseSuccess(false);
 		}
 	}, [isOpen]);
+
+	// Check for purchase success when component mounts
+	useEffect(() => {
+		const urlParams = new URLSearchParams(window.location.search);
+		if (urlParams.get('purchase') === 'success') {
+			// Purchase was successful, show success state
+			setPurchaseSuccess(true);
+			onPurchaseSuccess?.();
+			
+			// Clean up URL by removing the success parameter
+			const newUrl = new URL(window.location.href);
+			newUrl.searchParams.delete('purchase');
+			window.history.replaceState({}, '', newUrl.toString());
+		}
+	}, [onPurchaseSuccess]);
 
 	const handlePurchase = async (packId: CreditPackId) => {
 		try {
@@ -67,8 +84,11 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log("Opening checkout page for plan ID:", pack.planId);
 
-			// Create checkout URL
-			const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true`;
+			// Create checkout URL with redirect back to app
+			const currentUrl = new URL(window.location.href);
+			currentUrl.searchParams.set('purchase', 'success');
+			const redirectUrl = currentUrl.toString();
+			const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true&redirect=${encodeURIComponent(redirectUrl)}`;
 			
 			// Detect if we're on mobile
 			const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -157,6 +177,22 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</Button>
 				</div>
 
+				{/* Success Message */}
+				{purchaseSuccess && (
+					<div className="mx-4 sm:mx-6 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+						<div className="flex items-center space-x-2">
+							<div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+								<svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+									<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+								</svg>
+							</div>
+							<p className="text-green-600 dark:text-green-400 text-sm font-medium">
+								Purchase successful! Credits have been added to your account.
+							</p>
+						</div>
+					</div>
+				)}
+
 				{/* Error Message */}
 				{error && (
 					<div className="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -217,8 +253,29 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</div>
 				)}
 
+				{/* Success Actions */}
+				{purchaseSuccess && (
+					<div className="p-4 sm:p-6 text-center">
+						<div className="space-y-4">
+							<div className="text-6xl">🎉</div>
+							<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+								Purchase Successful!
+							</h3>
+							<p className="text-gray-600 dark:text-gray-400">
+								Your credits have been added to your account. You can now generate funnels!
+							</p>
+							<Button
+								onClick={onClose}
+								className="bg-violet-500 hover:bg-violet-600 text-white px-6 py-2 rounded-lg"
+							>
+								Continue
+							</Button>
+						</div>
+					</div>
+				)}
+
 				{/* Credit Packs */}
-				{!isCheckoutLoading && (
+				{!isCheckoutLoading && !purchaseSuccess && (
 				<div className="p-4 sm:p-6">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 						{creditPacks.map((pack) => (
