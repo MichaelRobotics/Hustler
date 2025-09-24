@@ -11,7 +11,6 @@ import {
 } from "../../actions/credit-actions";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 import type { CreditPackId } from "../../types/credit";
-import { WhopCheckoutEmbed } from "@whop/react/checkout";
 
 interface CreditPackModalProps {
 	isOpen: boolean;
@@ -28,7 +27,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedPack, setSelectedPack] = useState<CreditPackId | null>(null);
-	const [showCheckout, setShowCheckout] = useState(false);
+	const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
 
@@ -42,7 +41,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			setError(null);
 			setIsLoading(null);
 			setSelectedPack(null);
-			setShowCheckout(false);
+			setIsCheckoutLoading(false);
 		}
 	}, [isOpen]);
 
@@ -66,31 +65,42 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Showing embedded checkout for plan ID:", pack.planId);
+			console.log("Opening checkout page for plan ID:", pack.planId);
 
-			// Show embedded checkout instead of using iframe SDK
+			// Open checkout in new page with loading animation
 			setSelectedPack(packId);
-			setShowCheckout(true);
+			setIsCheckoutLoading(true);
+			
+			// Create checkout URL
+			const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true`;
+			
+			// Open in new tab/window
+			const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+			
+			if (!newWindow) {
+				setError("Please allow popups to complete your purchase.");
+				setIsCheckoutLoading(false);
+				return;
+			}
+
+			// Listen for window close to stop loading
+			const checkClosed = setInterval(() => {
+				if (newWindow.closed) {
+					clearInterval(checkClosed);
+					setIsCheckoutLoading(false);
+					setSelectedPack(null);
+					// Check if purchase was successful (you might want to refresh user data here)
+					onPurchaseSuccess?.();
+				}
+			}, 1000);
+
 		} catch (error: any) {
 			console.error("Purchase setup failed:", error);
 			setError("An unexpected error occurred. Please try again.");
+			setIsCheckoutLoading(false);
 		}
 	};
 
-	const handleCheckoutComplete = (planId: string, receiptId?: string) => {
-		console.log("Checkout completed:", { planId, receiptId });
-		setShowCheckout(false);
-		setSelectedPack(null);
-		onPurchaseSuccess?.();
-		onClose();
-	};
-
-	const handleCheckoutError = (error: string) => {
-		console.error("Checkout error:", error);
-		setError(error);
-		setShowCheckout(false);
-		setSelectedPack(null);
-	};
 
 	const getPackIcon = (packId: string) => {
 		switch (packId) {
@@ -136,50 +146,48 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</div>
 				)}
 
-				{/* Embedded Checkout */}
-				{showCheckout && selectedPack && (
+				{/* Loading Animation for Checkout */}
+				{isCheckoutLoading && selectedPack && (
 					<div className="p-4 sm:p-6">
-						<div className="mb-4">
-							<Button
-								variant="ghost"
-								size="2"
-								onClick={() => {
-									setShowCheckout(false);
-									setSelectedPack(null);
-								}}
-								className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-							>
-								← Back to Credit Packs
-							</Button>
-						</div>
-						
-						<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-							<h3 className="text-lg font-semibold mb-4 text-center">
-								Complete Your Purchase
-							</h3>
-							{(() => {
-								const pack = creditPacks.find(p => p.id === selectedPack);
-								if (!pack || !pack.planId) return null;
+						<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-8 text-center">
+							<div className="flex flex-col items-center justify-center space-y-4">
+								{/* Animated loading spinner */}
+								<div className="relative">
+									<div className="w-16 h-16 border-4 border-violet-200 dark:border-violet-800 rounded-full"></div>
+									<div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+								</div>
 								
-								return (
-									<WhopCheckoutEmbed
-										planId={pack.planId}
-										onComplete={handleCheckoutComplete}
-										fallback={
-											<div className="flex items-center justify-center py-8">
-												<div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mr-2" />
-												Loading checkout...
-											</div>
-										}
-									/>
-								);
-							})()}
+								{/* Loading text with animation */}
+								<div className="space-y-2">
+									<h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+										Opening Checkout...
+									</h3>
+									<p className="text-sm text-gray-600 dark:text-gray-400">
+										Please complete your purchase in the new window
+									</p>
+									<div className="flex items-center justify-center space-x-1">
+										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce"></div>
+										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+									</div>
+								</div>
+								
+								{/* Progress indicator */}
+								<div className="w-full max-w-xs bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+									<div className="bg-violet-500 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+								</div>
+								
+								{/* Instructions */}
+								<div className="text-xs text-gray-500 dark:text-gray-400 max-w-sm">
+									<p>If the checkout window didn't open, please check your popup blocker settings.</p>
+								</div>
+							</div>
 						</div>
 					</div>
 				)}
 
 				{/* Credit Packs */}
-				{!showCheckout && (
+				{!isCheckoutLoading && (
 				<div className="p-4 sm:p-6">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 						{creditPacks.map((pack) => (
