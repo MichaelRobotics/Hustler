@@ -74,95 +74,74 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log(`📱 Mobile payment timeout: ${timeoutDuration}ms for ${isMobile ? 'mobile' : 'desktop'}`);
 
-			// Use iframe SDK for desktop, direct checkout for mobile
-			if (isMobile) {
-				console.log("📱 Mobile detected - using direct checkout URL method");
-				
-				try {
-					// Create checkout session for mobile (with metadata)
-					// Use apiPost to include X-Experience-ID header
-					const { apiPost } = await import('@/lib/utils/api-client');
-					const response = await apiPost('/api/checkout-session', {
-						planId: pack.planId,
-						metadata: {
-							packId: pack.id,
-							credits: pack.credits,
-							source: 'mobile-credit-purchase'
-						}
-					}, experienceId); // Pass experienceId to apiPost
-
-					if (!response.ok) {
-						throw new Error(`Failed to create checkout session: ${response.statusText}`);
+			// Use iframe SDK for both mobile and desktop (proper Whop way)
+			console.log("🔄 Using iframe SDK for payment (works on both mobile and desktop)");
+			
+			try {
+				// Create charge for one-time payment
+				const { apiPost } = await import('@/lib/utils/api-client');
+				const response = await apiPost('/api/checkout-session', {
+					planId: pack.planId,
+					metadata: {
+						packId: pack.id,
+						credits: pack.credits,
+						source: 'credit-purchase'
 					}
+				}, experienceId); // Pass experienceId to apiPost
 
-					const checkoutSession = await response.json();
-					console.log("📱 Checkout session created:", checkoutSession);
-					
-					// Open the purchase URL in new tab
-					const purchaseUrl = checkoutSession.purchase_url;
-					console.log("📱 Opening mobile checkout URL:", purchaseUrl);
-					
-					const newWindow = window.open(purchaseUrl, '_blank', 'noopener,noreferrer');
-					console.log("📱 New window result:", newWindow);
-					
-					if (newWindow) {
-						// Payment opened successfully
-						console.log("📱 Mobile checkout opened successfully");
-						console.log("📱 User should complete payment in new tab");
-						// Don't close modal immediately - let user complete payment
-						// onPurchaseSuccess?.();
-						// onClose();
-						return;
-					} else {
-						console.log("📱 Failed to open new window - popup blocked?");
-						throw new Error("Failed to open checkout window - popup may be blocked");
-					}
-				} catch (error) {
-					console.error("📱 Mobile checkout failed:", error);
-					// Show error message for mobile checkout failure
-					setError("Mobile payment failed to open. Please check if popups are blocked and try again.");
-					return;
+				if (!response.ok) {
+					throw new Error(`Failed to create charge: ${response.statusText}`);
 				}
-			}
 
-			// Use iframe SDK for desktop
-			console.log("🖥️ Desktop detected - using iframe SDK method");
-			const purchasePromise = iframeSdk.inAppPurchase({
-				planId: pack.planId
-			});
-
-			const timeoutPromise = new Promise((_, reject) => {
-				setTimeout(() => reject(new Error("Payment timeout - please try again")), timeoutDuration);
-			});
-
-			const result = await Promise.race([purchasePromise, timeoutPromise]) as any;
-
-			console.log("Payment result:", result);
-
-			if (result.status === "ok") {
-				console.log("Payment successful via iframe SDK");
-				onPurchaseSuccess?.();
-				onClose();
-			} else {
-				// Handle different error scenarios with user-friendly messages
-				const errorMessage = result.error || "Payment failed";
-				let userFriendlyMessage = errorMessage;
+				const chargeResult = await response.json();
+				console.log("💳 Charge created:", chargeResult);
 				
-				// Check for common error patterns and provide better messages
+				if (!chargeResult.success || !chargeResult.inAppPurchase) {
+					throw new Error("Failed to create charge - no inAppPurchase object");
+				}
+				
+				// Use iframe SDK to open payment modal
+				console.log("🔄 Opening payment modal with iframe SDK...");
+				const result = await iframeSdk.inAppPurchase(chargeResult.inAppPurchase);
+				
+				console.log("💳 Payment result:", result);
+				
+				if (result.status === "ok") {
+					console.log("✅ Payment successful via iframe SDK");
+					onPurchaseSuccess?.();
+					onClose();
+				} else {
+					const errorMessage = result.error || "Payment failed";
+					let userFriendlyMessage = errorMessage;
+					if (errorMessage.toLowerCase().includes("cancel")) {
+						userFriendlyMessage = "Payment was cancelled. No charges were made.";
+					} else if (errorMessage.toLowerCase().includes("insufficient")) {
+						userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
+					} else if (errorMessage.toLowerCase().includes("declined")) {
+						userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
+					} else if (errorMessage.toLowerCase().includes("expired")) {
+						userFriendlyMessage = "Payment session expired. Please try again.";
+					} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+						userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+					}
+					setError(userFriendlyMessage);
+				}
+			} catch (error) {
+				console.error("💳 Payment failed:", error);
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				let userFriendlyMessage = "Payment failed - please try again";
 				if (errorMessage.toLowerCase().includes("cancel")) {
 					userFriendlyMessage = "Payment was cancelled. No charges were made.";
-				} else if (errorMessage.toLowerCase().includes("insufficient")) {
-					userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
-				} else if (errorMessage.toLowerCase().includes("declined")) {
-					userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
-				} else if (errorMessage.toLowerCase().includes("expired")) {
-					userFriendlyMessage = "Payment session expired. Please try again.";
-				} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+				} else if (errorMessage.toLowerCase().includes("timeout")) {
+					userFriendlyMessage = "Payment timed out. Please try again.";
+				} else if (errorMessage.toLowerCase().includes("network")) {
 					userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+				} else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("forbidden")) {
+					userFriendlyMessage = "Payment authorization failed. Please try again.";
 				}
-				
 				setError(userFriendlyMessage);
 			}
+
 		} catch (error) {
 			console.error("Purchase error:", error);
 			

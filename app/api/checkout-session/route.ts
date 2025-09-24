@@ -35,9 +35,13 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 		console.log("Whop SDK available:", !!whopSdk);
 		console.log("Whop SDK payments available:", !!whopSdk?.payments);
 		console.log("Whop SDK createCheckoutSession available:", !!whopSdk?.payments?.createCheckoutSession);
+		console.log("Whop SDK methods:", whopSdk ? Object.keys(whopSdk) : 'null');
+		console.log("Whop SDK payments methods:", whopSdk?.payments ? Object.keys(whopSdk.payments) : 'null');
 		console.log("Environment variables:");
 		console.log("- WHOP_API_KEY:", !!process.env.WHOP_API_KEY);
 		console.log("- NEXT_PUBLIC_WHOP_APP_ID:", !!process.env.NEXT_PUBLIC_WHOP_APP_ID);
+		console.log("- NEXT_PUBLIC_WHOP_COMPANY_ID:", !!process.env.NEXT_PUBLIC_WHOP_COMPANY_ID);
+		console.log("- NEXT_PUBLIC_WHOP_AGENT_USER_ID:", !!process.env.NEXT_PUBLIC_WHOP_AGENT_USER_ID);
 		console.log("- NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL);
 		console.log("Plan ID being used:", planId);
 		console.log("Plan ID format check:", {
@@ -46,65 +50,60 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 			validFormat: /^plan_[a-zA-Z0-9]+$/.test(planId)
 		});
 
-		// Create checkout session using Whop SDK
-		let checkoutSession;
+		// For one-time payments (credit packs), we should use chargeUser instead of createCheckoutSession
+		// createCheckoutSession is for subscriptions, chargeUser is for one-time payments
+		console.log("Using chargeUser for one-time payment instead of createCheckoutSession");
+		
+		// Get the credit pack amount from the plan ID
+		const PLAN_TO_AMOUNT_MAPPING: Record<string, number> = {
+			"plan_WLt5L02d1vJKj": 5,   // Starter pack - $5
+			"plan_wuqbRiAVRqI7b": 15,  // Popular pack - $15  
+			"plan_NEdfisFY3jDiL": 30   // Pro pack - $30
+		};
+		
+		const amount = PLAN_TO_AMOUNT_MAPPING[planId];
+		if (!amount) {
+			throw new Error(`Unknown plan ID: ${planId}`);
+		}
+		
+		console.log(`Creating charge for ${amount} credits ($${amount})`);
+		
+		let chargeResult;
 		try {
-			// Use the same URL pattern as other parts of the codebase
-			const redirectUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000";
-			console.log("Using redirect URL:", redirectUrl);
-			
-			const sessionMetadata = {
-				...metadata,
+			chargeResult = await whopSdk.payments.chargeUser({
+				amount: amount * 100, // Convert to cents
+				currency: "usd",
 				userId: user.userId,
-				experienceId: user.experienceId,
-			};
-			
-			console.log("Session metadata:", sessionMetadata);
-			console.log("Metadata keys:", Object.keys(sessionMetadata));
-			console.log("Metadata values:", Object.values(sessionMetadata));
-			
-			checkoutSession = await whopSdk.payments.createCheckoutSession({
-				planId,
-				metadata: sessionMetadata,
-				redirectUrl: `${redirectUrl}/payment-success`,
+				metadata: {
+					...metadata,
+					userId: user.userId,
+					experienceId: user.experienceId,
+				},
 			});
+			
+			console.log("Charge result:", chargeResult);
+			
+			if (!chargeResult?.inAppPurchase) {
+				throw new Error("Failed to create charge - no inAppPurchase object returned");
+			}
+			
+			// Return the inAppPurchase object for the client to use with iframeSdk
+			return NextResponse.json({
+				success: true,
+				inAppPurchase: chargeResult.inAppPurchase,
+				message: "Charge created successfully, use iframeSdk.inAppPurchase() on client"
+			});
+			
 		} catch (sdkError) {
-			console.error("Whop SDK createCheckoutSession error:", sdkError);
+			console.error("Whop SDK chargeUser error:", sdkError);
+			console.error("Error details:", {
+				message: sdkError instanceof Error ? sdkError.message : String(sdkError),
+				stack: sdkError instanceof Error ? sdkError.stack : undefined,
+				name: sdkError instanceof Error ? sdkError.name : undefined
+			});
 			throw new Error(`Whop SDK error: ${sdkError instanceof Error ? sdkError.message : String(sdkError)}`);
 		}
 
-		console.log("Checkout session created:", checkoutSession);
-		console.log("Checkout session type:", typeof checkoutSession);
-		console.log("Checkout session keys:", checkoutSession ? Object.keys(checkoutSession) : 'null');
-		console.log("Checkout session stringified:", JSON.stringify(checkoutSession, null, 2));
-
-		if (!checkoutSession || !checkoutSession.id) {
-			console.error("Checkout session creation failed - session:", checkoutSession);
-			
-			// Fallback: Use direct checkout URL if SDK fails
-			console.log("Falling back to direct checkout URL");
-			const fallbackUrl = `https://whop.com/checkout/${planId}?d2c=true`;
-			
-			return NextResponse.json({
-				id: `fallback_${Date.now()}`,
-				planId: planId,
-				purchase_url: fallbackUrl,
-				redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000"}/payment-success`,
-				fallback: true,
-			});
-		}
-
-		// Construct the purchase URL with session ID
-		const purchaseUrl = `https://whop.com/checkout/${planId}?d2c=true&session=${checkoutSession.id}`;
-		
-		console.log("Using checkout session purchase URL:", purchaseUrl);
-		
-		return NextResponse.json({
-			id: checkoutSession.id,
-			planId: checkoutSession.planId,
-			purchase_url: purchaseUrl,
-			redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000"}/payment-success`,
-		});
 
 	} catch (error) {
 		console.error("Failed to create checkout session:", error);
