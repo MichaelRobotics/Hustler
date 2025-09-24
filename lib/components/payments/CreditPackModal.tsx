@@ -66,14 +66,45 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log("Using Whop iframe SDK for payment with plan ID:", pack.planId);
 
-			// Use iframe SDK directly with plan ID (mobile-optimized)
-			// Add timeout to prevent hanging on mobile
+			// Mobile-optimized payment handling
+			const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+			const timeoutDuration = isMobile ? 15000 : 30000; // Shorter timeout for mobile
+
+			console.log(`📱 Mobile payment timeout: ${timeoutDuration}ms for ${isMobile ? 'mobile' : 'desktop'}`);
+
+			// Mobile-specific payment handling
+			if (isMobile) {
+				console.log("📱 Mobile detected - using alternative payment method");
+				
+				// For mobile, try to open the checkout link directly
+				const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true`;
+				console.log("📱 Opening mobile checkout URL:", checkoutUrl);
+				
+				// Try to open in new tab/window
+				try {
+					const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+					if (newWindow) {
+						// Payment opened successfully
+						console.log("📱 Mobile checkout opened successfully");
+						onPurchaseSuccess?.();
+						onClose();
+						return;
+					} else {
+						throw new Error("Failed to open checkout window");
+					}
+				} catch (error) {
+					console.error("📱 Mobile checkout failed:", error);
+					// Fall back to iframe SDK method
+				}
+			}
+
+			// Use iframe SDK directly with plan ID (fallback for desktop or if mobile checkout fails)
 			const purchasePromise = iframeSdk.inAppPurchase({
 				planId: pack.planId
 			});
 
 			const timeoutPromise = new Promise((_, reject) => {
-				setTimeout(() => reject(new Error("Payment timeout - please try again")), 30000); // 30 second timeout
+				setTimeout(() => reject(new Error("Payment timeout - please try again")), timeoutDuration);
 			});
 
 			const result = await Promise.race([purchasePromise, timeoutPromise]) as any;
@@ -109,12 +140,17 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			
 			// Handle different error types with user-friendly messages
 			const errorMessage = error instanceof Error ? error.message : String(error);
+			const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 			let userFriendlyMessage = "Payment failed - please try again";
 			
 			if (errorMessage.toLowerCase().includes("cancel")) {
 				userFriendlyMessage = "Payment was cancelled. No charges were made.";
 			} else if (errorMessage.toLowerCase().includes("timeout")) {
-				userFriendlyMessage = "Payment timed out. Please try again - this may be due to mobile network issues.";
+				if (isMobile) {
+					userFriendlyMessage = "Mobile payment timed out. This is common on mobile - please try again or use a different network.";
+				} else {
+					userFriendlyMessage = "Payment timed out. Please try again.";
+				}
 			} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
 				userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
 			} else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("forbidden")) {
@@ -207,6 +243,10 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</p>
 					<p className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
 						📊 User Agent: {navigator.userAgent.substring(0, 50)}...
+					</p>
+					<p className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
+						⏱️ Timeout: {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? '15s (mobile)' : '30s (desktop)'} | 
+						Payment Method: {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'Direct Checkout' : 'iframe SDK'}
 					</p>
 				</div>
 
