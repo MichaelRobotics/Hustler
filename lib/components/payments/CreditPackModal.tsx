@@ -11,53 +11,33 @@ import {
 } from "../../actions/credit-actions";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 import type { CreditPackId } from "../../types/credit";
+import EmbeddedCheckout from "./EmbeddedCheckout";
 
 interface CreditPackModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	onPurchaseSuccess?: () => void;
+	experienceId?: string;
 }
 
 export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	isOpen,
 	onClose,
 	onPurchaseSuccess,
+	experienceId,
 }) => {
 	const { isInIframe, safeInAppPurchase } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedPack, setSelectedPack] = useState<CreditPackId | null>(null);
 	const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+	const [showEmbeddedCheckout, setShowEmbeddedCheckout] = useState(false);
 
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
 
 	useEffect(() => {
 		getAllCreditPacks().then(setCreditPacks);
 	}, []);
-
-	// Set up global checkout completion callback
-	useEffect(() => {
-		// Define the global callback function
-		(window as any).onCheckoutComplete = (planId: string, receiptId: string) => {
-			console.log("Checkout completed:", { planId, receiptId });
-			setIsCheckoutLoading(false);
-			setSelectedPack(null);
-			
-			// Close the checkout window if it exists
-			if ((window as any).checkoutWindow && !(window as any).checkoutWindow.closed) {
-				(window as any).checkoutWindow.close();
-			}
-			
-			onPurchaseSuccess?.();
-			onClose();
-		};
-
-		// Cleanup function to remove the global callback and window reference
-		return () => {
-			delete (window as any).onCheckoutComplete;
-			delete (window as any).checkoutWindow;
-		};
-	}, [onPurchaseSuccess, onClose]);
 
 	// Clear error when modal opens
 	useEffect(() => {
@@ -66,6 +46,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			setIsLoading(null);
 			setSelectedPack(null);
 			setIsCheckoutLoading(false);
+			setShowEmbeddedCheckout(false);
 		}
 	}, [isOpen]);
 
@@ -89,81 +70,30 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Opening checkout page for plan ID:", pack.planId);
+			console.log("Opening embedded checkout for plan ID:", pack.planId);
 
-			// Create checkout URL with redirect control
-			const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true&skip-redirect=true&on-complete=onCheckoutComplete`;
-			
-			// Detect if we're on mobile
-			const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-			
-			if (isMobile) {
-				// On mobile, try to open in new window first, fallback to same window
-				setSelectedPack(packId);
-				setIsCheckoutLoading(true);
-				
-				// Try to open in new window on mobile too
-				const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-				
-				if (!newWindow) {
-					// If popup blocked on mobile, fallback to same window redirect
-					setError("Popup blocked. Redirecting to checkout page...");
-					setTimeout(() => {
-						window.location.href = checkoutUrl;
-					}, 2000);
-					return;
-				}
-
-				// Store reference to the new window for potential closing
-				(window as any).checkoutWindow = newWindow;
-
-				// Listen for window close to stop loading (fallback)
-				const checkClosed = setInterval(() => {
-					if (newWindow.closed) {
-						clearInterval(checkClosed);
-						setIsCheckoutLoading(false);
-						setSelectedPack(null);
-						// Check if purchase was successful (you might want to refresh user data here)
-						onPurchaseSuccess?.();
-					}
-				}, 1000);
-			} else {
-				// On desktop, try to open in new window
-				setSelectedPack(packId);
-				setIsCheckoutLoading(true);
-				
-				// Open in new tab/window
-				const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-				
-				if (!newWindow) {
-					// If popup blocked, fallback to same window redirect
-					setError("Popup blocked. Redirecting to checkout page...");
-					setTimeout(() => {
-						window.location.href = checkoutUrl;
-					}, 2000);
-					return;
-				}
-
-				// Store reference to the new window for potential closing
-				(window as any).checkoutWindow = newWindow;
-
-				// Listen for window close to stop loading (fallback)
-				const checkClosed = setInterval(() => {
-					if (newWindow.closed) {
-						clearInterval(checkClosed);
-						setIsCheckoutLoading(false);
-						setSelectedPack(null);
-						// Check if purchase was successful (you might want to refresh user data here)
-						onPurchaseSuccess?.();
-					}
-				}, 1000);
-			}
+			// Show embedded checkout instead of using window.open
+			setSelectedPack(packId);
+			setShowEmbeddedCheckout(true);
 
 		} catch (error: any) {
 			console.error("Purchase setup failed:", error);
 			setError("An unexpected error occurred. Please try again.");
-			setIsCheckoutLoading(false);
 		}
+	};
+
+	const handleCheckoutComplete = (planId: string, receiptId?: string) => {
+		console.log("Checkout completed:", { planId, receiptId });
+		setShowEmbeddedCheckout(false);
+		setSelectedPack(null);
+		onPurchaseSuccess?.();
+		onClose();
+	};
+
+	const handleCheckoutCancel = () => {
+		console.log("Checkout cancelled");
+		setShowEmbeddedCheckout(false);
+		setSelectedPack(null);
 	};
 
 
@@ -213,48 +143,26 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</div>
 				)}
 
-				{/* Loading Animation for Checkout */}
-				{isCheckoutLoading && (
-					<div className="p-4 sm:p-6">
-						<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-8 text-center">
-							<div className="flex flex-col items-center justify-center space-y-4">
-								{/* Animated loading spinner */}
-								<div className="relative">
-									<div className="w-16 h-16 border-4 border-violet-200 dark:border-violet-800 rounded-full"></div>
-									<div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
-								</div>
-								
-								{/* Loading text with animation */}
-								<div className="space-y-2">
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-										Opening Checkout...
-									</h3>
-									<p className="text-sm text-gray-600 dark:text-gray-400">
-										Please complete your purchase in the new window
-									</p>
-									<div className="flex items-center justify-center space-x-1">
-										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce"></div>
-										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-									</div>
-								</div>
-								
-								{/* Progress indicator */}
-								<div className="w-full max-w-xs bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-									<div className="bg-violet-500 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-								</div>
-								
-								{/* Instructions */}
-								<div className="text-xs text-gray-500 dark:text-gray-400 max-w-sm">
-									<p>If the checkout window didn't open, please check your popup blocker settings.</p>
-								</div>
-							</div>
-						</div>
-					</div>
-				)}
+				{/* Embedded Checkout */}
+				{showEmbeddedCheckout && selectedPack && (() => {
+					const pack = creditPacks.find(p => p.id === selectedPack);
+					if (!pack) return null;
+					
+					return (
+						<EmbeddedCheckout
+							planId={pack.planId}
+							planName={pack.name}
+							credits={pack.credits}
+							price={pack.price}
+							experienceId={experienceId}
+							onComplete={handleCheckoutComplete}
+							onCancel={handleCheckoutCancel}
+						/>
+					);
+				})()}
 
 				{/* Credit Packs */}
-				{!isCheckoutLoading && (
+				{!showEmbeddedCheckout && (
 				<div className="p-4 sm:p-6">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 						{creditPacks.map((pack) => (

@@ -77,8 +77,22 @@ export async function POST(request: NextRequest): Promise<Response> {
 			"plan_vIVdyl2yVs2Bl": { packId: "free", credits: 1 }
 		};
 
-		// Check if this is a credit pack purchase via plan ID
-		if (plan_id && PLAN_TO_CREDIT_MAPPING[plan_id as string]) {
+		// Check if this is a credit pack purchase via metadata (new checkout session method)
+		if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
+			console.log(`Credit pack purchase detected via metadata: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
+			
+			waitUntil(
+				handleCreditPackPurchaseWithCompany(
+					user_id,
+					company_id,
+					metadata.packId as CreditPackId,
+					metadata.credits as number,
+					id,
+				),
+			);
+		}
+		// Check if this is a credit pack purchase via plan ID (fallback method)
+		else if (plan_id && PLAN_TO_CREDIT_MAPPING[plan_id as string]) {
 			const creditInfo = PLAN_TO_CREDIT_MAPPING[plan_id as string];
 			console.log(`Credit pack purchase detected via plan ID ${plan_id}: ${creditInfo.credits} credits for user ${user_id} from company ${company_id}`);
 			
