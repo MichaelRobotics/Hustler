@@ -178,6 +178,7 @@ async function handleCreditPackPurchaseWithCompany(
 		await addCredits(userId, experienceId, credits);
 		console.log(`Successfully added ${credits} credits to user ${userId} in experience ${experienceId}`);
 
+		}
 
 	} catch (error) {
 		console.error("Error processing credit pack purchase with company:", error);

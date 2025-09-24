@@ -84,7 +84,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log("Opening checkout page for plan ID:", pack.planId);
 
-			// Create checkout URL with redirect back to app
+			// Create checkout URL with redirect back to current app URL
 			const currentUrl = new URL(window.location.href);
 			currentUrl.searchParams.set('purchase', 'success');
 			const redirectUrl = currentUrl.toString();
