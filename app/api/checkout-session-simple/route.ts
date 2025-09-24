@@ -9,7 +9,7 @@ import { headers } from "next/headers";
  */
 export async function POST(request: NextRequest) {
 	try {
-		const { planId, packId, credits, experienceId } = await request.json();
+		const { planId, packId, credits, experienceId, price } = await request.json();
 
 		if (!planId) {
 			return NextResponse.json(
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
 		// Create charge using chargeUser method
 		const chargeResult = await whopSdk.payments.chargeUser({
-			amount: 0, // We'll use plan-based pricing instead
+			amount: Math.round((price || 0) * 100), // Convert to cents
 			currency: "usd",
 			description: `${credits} Credits - ${packId} Pack`,
 			metadata: {
