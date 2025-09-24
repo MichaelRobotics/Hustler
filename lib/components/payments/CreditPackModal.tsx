@@ -11,6 +11,7 @@ import {
 } from "../../actions/credit-actions";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 import type { CreditPackId } from "../../types/credit";
+import { WhopCheckoutEmbed } from "@whop/react/checkout";
 
 interface CreditPackModalProps {
 	isOpen: boolean;
@@ -28,7 +29,6 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	const [error, setError] = useState<string | null>(null);
 	const [selectedPack, setSelectedPack] = useState<CreditPackId | null>(null);
 	const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-	const [purchaseSuccess, setPurchaseSuccess] = useState(false);
 
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
 
@@ -43,24 +43,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			setIsLoading(null);
 			setSelectedPack(null);
 			setIsCheckoutLoading(false);
-			setPurchaseSuccess(false);
 		}
 	}, [isOpen]);
-
-	// Check for purchase success when component mounts
-	useEffect(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		if (urlParams.get('purchase') === 'success') {
-			// Purchase was successful, show success state
-			setPurchaseSuccess(true);
-			onPurchaseSuccess?.();
-			
-			// Clean up URL by removing the success parameter
-			const newUrl = new URL(window.location.href);
-			newUrl.searchParams.delete('purchase');
-			window.history.replaceState({}, '', newUrl.toString());
-		}
-	}, [onPurchaseSuccess]);
 
 	const handlePurchase = async (packId: CreditPackId) => {
 		try {
@@ -82,59 +66,25 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Opening checkout page for plan ID:", pack.planId);
+			console.log("Showing embedded checkout for plan ID:", pack.planId);
 
-			// Create checkout URL with redirect back to current app URL
-			const currentUrl = new URL(window.location.href);
-			currentUrl.searchParams.set('purchase', 'success');
-			const redirectUrl = currentUrl.toString();
-			const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true&redirect=${encodeURIComponent(redirectUrl)}`;
-			
-			// Detect if we're on mobile
-			const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-			
-			if (isMobile) {
-				// On mobile, redirect in the same window
-				setIsCheckoutLoading(true);
-				
-				// Show loading animation briefly
-				setTimeout(() => {
-					window.location.href = checkoutUrl;
-				}, 500);
-			} else {
-				// On desktop, try to open in new window
-				setSelectedPack(packId);
-				setIsCheckoutLoading(true);
-				
-				// Open in new tab/window
-				const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-				
-				if (!newWindow) {
-					// If popup blocked, fallback to same window redirect
-					setError("Popup blocked. Redirecting to checkout page...");
-					setTimeout(() => {
-						window.location.href = checkoutUrl;
-					}, 2000);
-					return;
-				}
-
-				// Listen for window close to stop loading
-				const checkClosed = setInterval(() => {
-					if (newWindow.closed) {
-						clearInterval(checkClosed);
-						setIsCheckoutLoading(false);
-						setSelectedPack(null);
-						// Check if purchase was successful (you might want to refresh user data here)
-						onPurchaseSuccess?.();
-					}
-				}, 1000);
-			}
+			// Show embedded checkout instead of opening new window
+			setSelectedPack(packId);
+			setIsCheckoutLoading(true);
 
 		} catch (error: any) {
 			console.error("Purchase setup failed:", error);
 			setError("An unexpected error occurred. Please try again.");
 			setIsCheckoutLoading(false);
 		}
+	};
+
+	const handleCheckoutComplete = (planId: string, receiptId?: string) => {
+		console.log("Checkout completed:", { planId, receiptId });
+		setIsCheckoutLoading(false);
+		setSelectedPack(null);
+		onPurchaseSuccess?.();
+		onClose();
 	};
 
 
@@ -177,22 +127,6 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</Button>
 				</div>
 
-				{/* Success Message */}
-				{purchaseSuccess && (
-					<div className="mx-4 sm:mx-6 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-						<div className="flex items-center space-x-2">
-							<div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-								<svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-									<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-								</svg>
-							</div>
-							<p className="text-green-600 dark:text-green-400 text-sm font-medium">
-								Purchase successful! Credits have been added to your account.
-							</p>
-						</div>
-					</div>
-				)}
-
 				{/* Error Message */}
 				{error && (
 					<div className="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -200,82 +134,51 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</div>
 				)}
 
-				{/* Loading Animation for Checkout */}
-				{isCheckoutLoading && (
+				{/* Embedded Checkout */}
+				{isCheckoutLoading && selectedPack && (
 					<div className="p-4 sm:p-6">
-						<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-8 text-center">
-							<div className="flex flex-col items-center justify-center space-y-4">
-								{/* Animated loading spinner */}
-								<div className="relative">
-									<div className="w-16 h-16 border-4 border-violet-200 dark:border-violet-800 rounded-full"></div>
-									<div className="absolute top-0 left-0 w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
-								</div>
-								
-								{/* Loading text with animation */}
-								<div className="space-y-2">
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-										{(() => {
-											const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-											return isMobile ? "Redirecting to Checkout..." : "Opening Checkout...";
-										})()}
-									</h3>
-									<p className="text-sm text-gray-600 dark:text-gray-400">
-										{(() => {
-											const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-											return isMobile 
-												? "You will be redirected to complete your purchase"
-												: "Please complete your purchase in the new window";
-										})()}
-									</p>
-									<div className="flex items-center justify-center space-x-1">
-										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce"></div>
-										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-									</div>
-								</div>
-								
-								{/* Progress indicator */}
-								<div className="w-full max-w-xs bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-									<div className="bg-violet-500 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-								</div>
-								
-								{/* Instructions */}
-								<div className="text-xs text-gray-500 dark:text-gray-400 max-w-sm">
-									{(() => {
-										const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-										return isMobile 
-											? <p>You will be taken to the Whop checkout page to complete your purchase.</p>
-											: <p>If the checkout window didn't open, please check your popup blocker settings.</p>;
-									})()}
-								</div>
-							</div>
-						</div>
-					</div>
-				)}
-
-				{/* Success Actions */}
-				{purchaseSuccess && (
-					<div className="p-4 sm:p-6 text-center">
-						<div className="space-y-4">
-							<div className="text-6xl">🎉</div>
-							<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-								Purchase Successful!
-							</h3>
-							<p className="text-gray-600 dark:text-gray-400">
-								Your credits have been added to your account. You can now generate funnels!
-							</p>
+						<div className="mb-4">
 							<Button
-								onClick={onClose}
-								className="bg-violet-500 hover:bg-violet-600 text-white px-6 py-2 rounded-lg"
+								variant="ghost"
+								size="2"
+								onClick={() => {
+									setIsCheckoutLoading(false);
+									setSelectedPack(null);
+								}}
+								className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
 							>
-								Continue
+								← Back to Credit Packs
 							</Button>
+						</div>
+						
+						<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+							<h3 className="text-lg font-semibold mb-4 text-center">
+								Complete Your Purchase
+							</h3>
+							{(() => {
+								const pack = creditPacks.find(p => p.id === selectedPack);
+								if (!pack || !pack.planId) return null;
+								
+								return (
+									<WhopCheckoutEmbed
+										planId={pack.planId}
+										onComplete={handleCheckoutComplete}
+										skipRedirect={true}
+										fallback={
+											<div className="flex items-center justify-center py-8">
+												<div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mr-2" />
+												Loading checkout...
+											</div>
+										}
+									/>
+								);
+							})()}
 						</div>
 					</div>
 				)}
 
 				{/* Credit Packs */}
-				{!isCheckoutLoading && !purchaseSuccess && (
+				{!isCheckoutLoading && (
 				<div className="p-4 sm:p-6">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 						{creditPacks.map((pack) => (
