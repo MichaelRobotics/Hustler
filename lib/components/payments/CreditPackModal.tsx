@@ -72,19 +72,41 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log(`📱 Mobile payment timeout: ${timeoutDuration}ms for ${isMobile ? 'mobile' : 'desktop'}`);
 
-			// Mobile-specific payment handling
+			// Mobile-specific payment handling using Whop checkout session
 			if (isMobile) {
-				console.log("📱 Mobile detected - using alternative payment method");
+				console.log("📱 Mobile detected - using Whop checkout session method");
 				console.log("📱 Pack planId:", pack.planId);
 				console.log("📱 Pack name:", pack.name);
 				
-				// For mobile, try to open the checkout link directly
-				const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true`;
-				console.log("📱 Opening mobile checkout URL:", checkoutUrl);
-				
-				// Try to open in new tab/window
 				try {
-					const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+					// Create checkout session using Whop API
+					const response = await fetch('/api/checkout-session', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({
+							planId: pack.planId,
+							metadata: {
+								packId: pack.id,
+								credits: pack.credits,
+								source: 'mobile-credit-purchase'
+							}
+						})
+					});
+
+					if (!response.ok) {
+						throw new Error(`Failed to create checkout session: ${response.statusText}`);
+					}
+
+					const checkoutSession = await response.json();
+					console.log("📱 Checkout session created:", checkoutSession);
+					
+					// Open the purchase URL in new tab
+					const purchaseUrl = checkoutSession.purchase_url;
+					console.log("📱 Opening mobile checkout URL:", purchaseUrl);
+					
+					const newWindow = window.open(purchaseUrl, '_blank', 'noopener,noreferrer');
 					console.log("📱 New window result:", newWindow);
 					
 					if (newWindow) {
