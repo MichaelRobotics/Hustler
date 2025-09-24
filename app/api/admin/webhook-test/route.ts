@@ -96,14 +96,14 @@ async function testWebhookHandler(
         company_id: whopOwnerCompanyId, // Whop owner's company ID (who made the purchase)
         product_id: actualProductId, // Use actual Whop product ID from database
         user_id: realUserId, // Use real user ID from auth context
-        amount: 10000, // Total amount in cents (100.00 USD) - required by scenario detection
-        final_amount: 10000, // Amount in cents (100.00 USD)
-        amount_after_fees: 9500, // Amount after fees in cents (95.00 USD)
+        amount: "100.00", // Total amount in dollars (100.00 USD) - required by scenario detection
+        final_amount: "100.00", // Amount in dollars (100.00 USD)
+        amount_after_fees: "95.00", // Amount after fees in dollars (95.00 USD)
         currency: "usd",
         created_at: new Date().toISOString(),
         // Include affiliate commission for both scenarios (different recipient company IDs)
         affiliate_commission: {
-          amount: 1000, // 10.00 USD in cents
+          amount: "10.00", // 10.00 USD in dollars
           recipient_company_id: scenario === 'PRODUCT' 
             ? developerCompanyId // Developer gets the commission
             : "biz_othercompany456" // Other company gets the commission

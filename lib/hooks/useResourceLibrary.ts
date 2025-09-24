@@ -5,13 +5,14 @@ import type {
 	Resource,
 	ResourceFormData,
 } from "../types/resource";
+import type { AuthenticatedUser } from "../types/user";
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api-client";
 
 export const useResourceLibrary = (
 	allResources: Resource[],
 	allFunnels: Funnel[],
 	setAllResources: (resources: Resource[]) => void,
-	user?: { experienceId?: string } | null,
+	user?: AuthenticatedUser | null,
 ) => {
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
 	const [isAddingResource, setIsAddingResource] = useState(false);
