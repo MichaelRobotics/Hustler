@@ -75,6 +75,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			// Mobile-specific payment handling
 			if (isMobile) {
 				console.log("📱 Mobile detected - using alternative payment method");
+				console.log("📱 Pack planId:", pack.planId);
+				console.log("📱 Pack name:", pack.name);
 				
 				// For mobile, try to open the checkout link directly
 				const checkoutUrl = `https://whop.com/checkout/${pack.planId}?d2c=true`;
@@ -83,22 +85,30 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				// Try to open in new tab/window
 				try {
 					const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+					console.log("📱 New window result:", newWindow);
+					
 					if (newWindow) {
 						// Payment opened successfully
 						console.log("📱 Mobile checkout opened successfully");
-						onPurchaseSuccess?.();
-						onClose();
+						console.log("📱 User should complete payment in new tab");
+						// Don't close modal immediately - let user complete payment
+						// onPurchaseSuccess?.();
+						// onClose();
 						return;
 					} else {
-						throw new Error("Failed to open checkout window");
+						console.log("📱 Failed to open new window - popup blocked?");
+						throw new Error("Failed to open checkout window - popup may be blocked");
 					}
 				} catch (error) {
 					console.error("📱 Mobile checkout failed:", error);
-					// Fall back to iframe SDK method
+					// Show error message for mobile checkout failure
+					setError("Mobile payment failed to open. Please check if popups are blocked and try again.");
+					return;
 				}
 			}
 
-			// Use iframe SDK directly with plan ID (fallback for desktop or if mobile checkout fails)
+			// Use iframe SDK directly with plan ID (desktop only)
+			console.log("🖥️ Desktop detected - using iframe SDK method");
 			const purchasePromise = iframeSdk.inAppPurchase({
 				planId: pack.planId
 			});
@@ -204,6 +214,14 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 						🧪 TEST CLICK - TAP ME
 					</button>
 				</div>
+				
+				{/* Mobile Payment Info */}
+				{/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+					<div className="bg-blue-500 text-white p-3 text-center">
+						<p className="text-sm font-semibold">📱 Mobile Payment Method</p>
+						<p className="text-xs mt-1">On mobile, payments open in a new tab for better security and reliability.</p>
+					</div>
+				)}
 				{/* Header */}
 				<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800">
 					<div className="flex-1">
