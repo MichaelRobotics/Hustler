@@ -3,6 +3,20 @@ import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { resources, experiences } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
+import crypto from "crypto";
+
+/**
+ * Generate webhook signature for proper validation
+ */
+async function generateWebhookSignature(webhookData: any): Promise<string> {
+  const webhookSecret = process.env.WHOP_WEBHOOK_SECRET || "fallback";
+  const payload = JSON.stringify(webhookData);
+  const signature = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(payload)
+    .digest('hex');
+  return `sha256=${signature}`;
+}
 
 /**
  * POST /api/admin/webhook-test - Test webhook for specific product
@@ -90,7 +104,7 @@ async function testWebhookHandler(
       }
     };
 
-    // Send webhook test to main webhook endpoint
+    // Call the webhook endpoint with proper signature validation
     // Use the current request URL to determine the base URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
                    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
@@ -99,15 +113,22 @@ async function testWebhookHandler(
     console.log(`[Webhook Test] Using base URL: ${baseUrl}`);
     console.log(`[Webhook Test] Full webhook URL: ${baseUrl}/api/webhooks`);
     
-    const webhookResponse = await fetch(`${baseUrl}/api/webhooks`, {
+    // Create a proper webhook request with signature validation
+    const webhookSignature = await generateWebhookSignature(webhookData);
+    console.log(`[Webhook Test] Generated signature: ${webhookSignature.substring(0, 20)}...`);
+    
+    const webhookRequest = new Request(`${baseUrl}/api/webhooks`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Test-Bypass': 'true' // Bypass signature validation for testing
+        'X-Experience-ID': experienceId,
+        // Add webhook signature for proper validation
+        'X-Whop-Signature': webhookSignature
       },
       body: JSON.stringify(webhookData)
     });
-
+    
+    const webhookResponse = await fetch(webhookRequest);
     const webhookResult = await webhookResponse.text();
     
     console.log(`[Webhook Test] Webhook response status: ${webhookResponse.status}`);
@@ -129,7 +150,8 @@ async function testWebhookHandler(
         experienceId,
         userId: realUserId,
         baseUrl,
-        webhookUrl: `${baseUrl}/api/webhooks`
+        webhookUrl: `${baseUrl}/api/webhooks`,
+        signatureUsed: webhookSignature.substring(0, 20) + '...'
       }
     });
 
