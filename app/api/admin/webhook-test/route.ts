@@ -105,8 +105,11 @@ async function testWebhookHandler(
       
       console.log(`[Webhook Test] Processing payment webhook for user: ${webhookData.data?.user_id}`);
       
+      // Extract the data from webhookData.data (same as main webhook route)
+      const paymentData = webhookData.data;
+      
       // Step 1: Detect scenario (affiliate vs product owner vs error)
-      const scenarioData = await detectScenario(webhookData);
+      const scenarioData = await detectScenario(paymentData);
       
       if (!validateScenarioData(scenarioData)) {
         console.log(`[Webhook Test] Invalid scenario data - skipping analytics`);
@@ -118,7 +121,7 @@ async function testWebhookHandler(
         webhookResult = JSON.stringify({ success: false, error: 'Error scenario detected' });
       } else {
         // Step 2: Get experience context
-        const { experience, conversation } = await getExperienceContextFromWebhook(webhookData);
+        const { experience, conversation } = await getExperienceContextFromWebhook(paymentData);
         
         if (!validateExperienceContext(experience, conversation)) {
           console.log(`[Webhook Test] Invalid experience context - skipping analytics`);
