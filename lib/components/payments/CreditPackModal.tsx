@@ -11,6 +11,7 @@ import {
 } from "../../actions/credit-actions";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 import type { CreditPackId } from "../../types/credit";
+import { WhopCheckoutEmbed } from "@whop/react/checkout";
 
 interface CreditPackModalProps {
 	isOpen: boolean;
@@ -26,6 +27,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	const { isInIframe, safeInAppPurchase } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [selectedPack, setSelectedPack] = useState<CreditPackId | null>(null);
+	const [showCheckout, setShowCheckout] = useState(false);
 
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
 
@@ -38,12 +41,13 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 		if (isOpen) {
 			setError(null);
 			setIsLoading(null);
+			setSelectedPack(null);
+			setShowCheckout(false);
 		}
 	}, [isOpen]);
 
 	const handlePurchase = async (packId: CreditPackId) => {
 		try {
-			setIsLoading(packId);
 			setError(null); // Clear any previous error messages
 
 			console.log("Starting purchase for pack:", packId);
@@ -62,58 +66,30 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Using Whop iframe SDK for payment with plan ID:", pack.planId);
+			console.log("Showing embedded checkout for plan ID:", pack.planId);
 
-			// Use iframe SDK directly with plan ID
-			const result = await safeInAppPurchase({
-				planId: pack.planId
-			});
-
-			console.log("Payment result:", result);
-
-			if (result.status === "ok") {
-				console.log("Payment successful via iframe SDK");
-				onPurchaseSuccess?.();
-				onClose();
-			} else {
-				// Handle different error scenarios with user-friendly messages
-				const errorMessage = result.error || "Payment failed";
-				let userFriendlyMessage = errorMessage;
-				
-				// Check for common error patterns and provide better messages
-				if (errorMessage.toLowerCase().includes("cancel")) {
-					userFriendlyMessage = "Payment was cancelled. No charges were made.";
-				} else if (errorMessage.toLowerCase().includes("insufficient")) {
-					userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
-				} else if (errorMessage.toLowerCase().includes("declined")) {
-					userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
-				} else if (errorMessage.toLowerCase().includes("expired")) {
-					userFriendlyMessage = "Payment session expired. Please try again.";
-				} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
-					userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
-				}
-				
-				setError(userFriendlyMessage);
-			}
-		} catch (error) {
-			console.error("Purchase error:", error);
-			
-			// Handle different error types with user-friendly messages
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			let userFriendlyMessage = "Payment failed - please try again";
-			
-			if (errorMessage.toLowerCase().includes("cancel")) {
-				userFriendlyMessage = "Payment was cancelled. No charges were made.";
-			} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
-				userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
-			} else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("forbidden")) {
-				userFriendlyMessage = "Payment authorization failed. Please try again.";
-			}
-			
-			setError(userFriendlyMessage);
-		} finally {
-			setIsLoading(null);
+			// Show embedded checkout instead of using iframe SDK
+			setSelectedPack(packId);
+			setShowCheckout(true);
+		} catch (error: any) {
+			console.error("Purchase setup failed:", error);
+			setError("An unexpected error occurred. Please try again.");
 		}
+	};
+
+	const handleCheckoutComplete = (planId: string, receiptId?: string) => {
+		console.log("Checkout completed:", { planId, receiptId });
+		setShowCheckout(false);
+		setSelectedPack(null);
+		onPurchaseSuccess?.();
+		onClose();
+	};
+
+	const handleCheckoutError = (error: string) => {
+		console.error("Checkout error:", error);
+		setError(error);
+		setShowCheckout(false);
+		setSelectedPack(null);
 	};
 
 	const getPackIcon = (packId: string) => {
@@ -160,7 +136,50 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</div>
 				)}
 
+				{/* Embedded Checkout */}
+				{showCheckout && selectedPack && (
+					<div className="p-4 sm:p-6">
+						<div className="mb-4">
+							<Button
+								variant="ghost"
+								size="2"
+								onClick={() => {
+									setShowCheckout(false);
+									setSelectedPack(null);
+								}}
+								className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+							>
+								← Back to Credit Packs
+							</Button>
+						</div>
+						
+						<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+							<h3 className="text-lg font-semibold mb-4 text-center">
+								Complete Your Purchase
+							</h3>
+							{(() => {
+								const pack = creditPacks.find(p => p.id === selectedPack);
+								if (!pack || !pack.planId) return null;
+								
+								return (
+									<WhopCheckoutEmbed
+										planId={pack.planId}
+										onComplete={handleCheckoutComplete}
+										fallback={
+											<div className="flex items-center justify-center py-8">
+												<div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mr-2" />
+												Loading checkout...
+											</div>
+										}
+									/>
+								);
+							})()}
+						</div>
+					</div>
+				)}
+
 				{/* Credit Packs */}
+				{!showCheckout && (
 				<div className="p-4 sm:p-6">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 						{creditPacks.map((pack) => (
@@ -240,6 +259,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 						))}
 					</div>
 				</div>
+				)}
 
 				{/* Footer */}
 				{isInIframe && (
