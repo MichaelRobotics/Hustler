@@ -9,6 +9,7 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 import { whopSdk } from "@/lib/whop-sdk";
+import { sendDelayedAffiliateDM } from "@/lib/utils/affiliate-dm-core";
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
@@ -303,6 +304,21 @@ async function processFunnelNavigation(
         console.log(`[navigate-funnel] Incremented sends counter for funnel ${conversation.funnelId}`);
       } catch (sendsError) {
         console.error(`[navigate-funnel] Error updating sends counter:`, sendsError);
+      }
+
+      // Send affiliate DM after OFFER stage (with 5-minute delay)
+      if (isOfferBlock && nextBlock.resourceName) {
+        console.log(`[OFFER] Scheduling affiliate DM for resource: ${nextBlock.resourceName}`);
+        try {
+          await sendDelayedAffiliateDM(
+            conversationId,
+            nextBlock.resourceName,
+            conversation.experienceId,
+            5 // 5 minutes delay
+          );
+        } catch (affiliateError) {
+          console.error(`[OFFER] Error scheduling affiliate DM:`, affiliateError);
+        }
       }
     }
 

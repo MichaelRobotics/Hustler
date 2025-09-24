@@ -209,17 +209,19 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`✅ Current Whop experience ID: ${currentWhopExperienceId}`);
 
 		// Get the App ID for affiliate tracking
-		console.log("🔧 Getting App ID for affiliate tracking...");
-		let affiliateAppId = currentWhopExperienceId; // Use Whop experience ID as fallback
-		try {
-			const whopExperience = await whopSdk.experiences.getExperience({
-				experienceId: currentWhopExperienceId, // Use Whop experience ID, not database UUID
-			});
-			affiliateAppId = whopExperience.app?.id || currentWhopExperienceId;
-			console.log(`✅ Got App ID for affiliate tracking: ${affiliateAppId}`);
-		} catch (error) {
-			console.log(`⚠️ Could not get App ID from experience, using Whop experience ID: ${currentWhopExperienceId}`);
-		}
+		// COMMENTED OUT: Affiliate tracking disabled for now
+		// console.log("🔧 Getting App ID for affiliate tracking...");
+		// let affiliateAppId = currentWhopExperienceId; // Use Whop experience ID as fallback
+		// try {
+		// 	const whopExperience = await whopSdk.experiences.getExperience({
+		// 		experienceId: currentWhopExperienceId, // Use Whop experience ID, not database UUID
+		// 	});
+		// 	affiliateAppId = whopExperience.app?.id || currentWhopExperienceId;
+		// 	console.log(`✅ Got App ID for affiliate tracking: ${affiliateAppId}`);
+		// } catch (error) {
+		// 	console.log(`⚠️ Could not get App ID from experience, using Whop experience ID: ${currentWhopExperienceId}`);
+		// }
+		let affiliateAppId = undefined; // Disabled for now
 
 		// Step 1: Get owner's business products from discovery page
 		updateProgress("fetching_discovery_products");
@@ -556,12 +558,13 @@ export async function triggerProductSyncForNewAdmin(
           try {
             if (product.discoveryPageUrl) {
               // Create discovery tracking link using Whop API
+              // COMMENTED OUT: Affiliate tracking disabled for now
               const trackingLink = await whopNativeTrackingService.createDiscoveryTrackingLink(
                 product.discoveryPageUrl,
                 cheapestPlan?.id || product.id,
                 companyId,
                 `Product: ${product.title}`,
-                affiliateAppId
+                undefined // affiliateAppId disabled
               );
               trackingUrl = trackingLink.url;
             } else {

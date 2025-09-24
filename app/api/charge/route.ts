@@ -2,11 +2,11 @@ import { whopSdk } from "@/lib/whop-sdk";
 import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { NextRequest, NextResponse } from "next/server";
 
-// Credit pack pricing in cents (USD)
-const CREDIT_PACK_PRICING: Record<string, { amount: number; credits: number }> = {
-	starter: { amount: 500, credits: 5 }, // $5.00 for 5 credits
-	popular: { amount: 1500, credits: 15 }, // $15.00 for 15 credits  
-	pro: { amount: 3000, credits: 30 }, // $30.00 for 30 credits
+// Credit pack pricing in dollars (USD) - aligned with frontend pricing
+const CREDIT_PACK_PRICING: Record<string, { price: number; credits: number }> = {
+	starter: { price: 9.99, credits: 5 }, // $9.99 for 5 credits
+	popular: { price: 24.99, credits: 15 }, // $24.99 for 15 credits  
+	pro: { price: 39.99, credits: 30 }, // $39.99 for 30 credits
 };
 
 async function createChargeHandler(
@@ -35,10 +35,10 @@ async function createChargeHandler(
 			);
 		}
 
-		console.log(`Creating charge for pack ${packId}: $${packInfo.amount / 100} for ${packInfo.credits} credits`);
+		console.log(`Creating charge for pack ${packId}: $${packInfo.price} for ${packInfo.credits} credits`);
 
 		const result = await whopSdk.payments.chargeUser({
-			amount: packInfo.amount,
+			amount: packInfo.price, // Use dollar amount directly
 			currency: "usd",
 			userId: userId,
 			description: `${packInfo.credits} Credits - ${packId.charAt(0).toUpperCase() + packId.slice(1)} Pack`,

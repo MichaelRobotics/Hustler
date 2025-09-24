@@ -19,9 +19,9 @@ interface TestResult {
 }
 
 const CREDIT_PACKS = [
-	{ id: "plan_WLt5L02d1vJKj", name: "Starter", credits: 5, color: "bg-green-500" },
-	{ id: "plan_wuqbRiAVRqI7b", name: "Popular", credits: 15, color: "bg-blue-500" },
-	{ id: "plan_NEdfisFY3jDiL", name: "Pro", credits: 30, color: "bg-purple-500" }
+	{ id: "starter", name: "Starter", credits: 5, color: "bg-green-500" },
+	{ id: "popular", name: "Popular", credits: 15, color: "bg-blue-500" },
+	{ id: "pro", name: "Pro", credits: 30, color: "bg-purple-500" }
 ];
 
 export const CreditPackTester: React.FC<CreditPackTesterProps> = ({
@@ -34,16 +34,16 @@ export const CreditPackTester: React.FC<CreditPackTesterProps> = ({
 	const [testing, setTesting] = useState<string | null>(null);
 	const [results, setResults] = useState<Record<string, TestResult>>({});
 
-	const testCreditPack = async (plan_id: string, pack_name: string) => {
-		setTesting(plan_id);
+	const testCreditPack = async (packId: string, pack_name: string) => {
+		setTesting(packId);
 		setResults(prev => ({
 			...prev,
-			[plan_id]: { success: false, message: "Testing..." }
+			[packId]: { success: false, message: "Testing..." }
 		}));
 
 		try {
 			const response = await apiPost('/api/admin/test-credit-packs', {
-				plan_id
+				packId
 			}, experienceId);
 
 			const result = await response.json();
@@ -54,7 +54,7 @@ export const CreditPackTester: React.FC<CreditPackTesterProps> = ({
 					message: `✅ ${pack_name} pack test successful! Added ${result.data.credits_added} credits`,
 					data: result.data
 				};
-				setResults(prev => ({ ...prev, [plan_id]: testResult }));
+				setResults(prev => ({ ...prev, [packId]: testResult }));
 				onTestComplete?.(result);
 			} else {
 				const testResult: TestResult = {
@@ -62,7 +62,7 @@ export const CreditPackTester: React.FC<CreditPackTesterProps> = ({
 					message: `❌ ${pack_name} pack test failed: ${result.error}`,
 					error: result.error
 				};
-				setResults(prev => ({ ...prev, [plan_id]: testResult }));
+				setResults(prev => ({ ...prev, [packId]: testResult }));
 			}
 		} catch (error) {
 			const testResult: TestResult = {
@@ -70,7 +70,7 @@ export const CreditPackTester: React.FC<CreditPackTesterProps> = ({
 				message: `❌ ${pack_name} pack test failed: Network error`,
 				error: error instanceof Error ? error.message : "Unknown error"
 			};
-			setResults(prev => ({ ...prev, [plan_id]: testResult }));
+			setResults(prev => ({ ...prev, [packId]: testResult }));
 		} finally {
 			setTesting(null);
 		}

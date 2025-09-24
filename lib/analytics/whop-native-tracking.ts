@@ -122,10 +122,11 @@ class WhopNativeTrackingService {
     try {
       const url = new URL(discoveryPageUrl);
       
+      // COMMENTED OUT: Affiliate tracking disabled for now
       // Add affiliate tracking if provided
-      if (affiliateAppId) {
-        url.searchParams.set('app', affiliateAppId);
-      }
+      // if (affiliateAppId) {
+      //   url.searchParams.set('app', affiliateAppId);
+      // }
       
       return url.toString();
     } catch (error) {
@@ -205,10 +206,11 @@ class WhopNativeTrackingService {
     const baseUrl = `https://whop.com/joined/${companyRoute}/${experienceSlug}/app/`;
     const url = new URL(baseUrl);
     
+    // COMMENTED OUT: Affiliate tracking disabled for now
     // Only add ref parameter for paid apps
-    if (refId && !isFree) {
-      url.searchParams.set('ref', refId);
-    }
+    // if (refId && !isFree) {
+    //   url.searchParams.set('ref', refId);
+    // }
     
     return url.toString();
   }

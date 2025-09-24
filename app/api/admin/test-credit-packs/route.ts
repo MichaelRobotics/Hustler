@@ -45,11 +45,11 @@ async function addCreditsDirect(
 	}
 }
 
-// Plan ID to credit pack mapping (same as webhook)
-const PLAN_TO_CREDIT_MAPPING: Record<string, { packId: string; credits: number }> = {
-	"plan_NEdfisFY3jDiL": { packId: "pro", credits: 30 },
-	"plan_wuqbRiAVRqI7b": { packId: "popular", credits: 15 },
-	"plan_WLt5L02d1vJKj": { packId: "starter", credits: 5 }
+// Credit pack mapping (same as chargeUser approach)
+const CREDIT_PACK_MAPPING: Record<string, { packId: string; credits: number }> = {
+	"pro": { packId: "pro", credits: 30 },
+	"popular": { packId: "popular", credits: 15 },
+	"starter": { packId: "starter", credits: 5 }
 };
 
 /**
@@ -70,11 +70,11 @@ async function testCreditPackHandler(
 			);
 		}
 
-		const { plan_id } = await request.json();
+		const { packId } = await request.json();
 
-		if (!plan_id) {
+		if (!packId) {
 			return NextResponse.json(
-				{ error: "Missing required parameter: plan_id" },
+				{ error: "Missing required parameter: packId" },
 				{ status: 400 }
 			);
 		}
@@ -98,15 +98,15 @@ async function testCreditPackHandler(
 
 		const company_id = experience[0].whopCompanyId;
 
-		// Validate plan_id exists in our mapping
-		if (!PLAN_TO_CREDIT_MAPPING[plan_id]) {
+		// Validate packId exists in our mapping
+		if (!CREDIT_PACK_MAPPING[packId]) {
 			return NextResponse.json(
-				{ error: `Invalid plan_id: ${plan_id}. Valid plans: ${Object.keys(PLAN_TO_CREDIT_MAPPING).join(", ")}` },
+				{ error: `Invalid packId: ${packId}. Valid packs: ${Object.keys(CREDIT_PACK_MAPPING).join(", ")}` },
 				{ status: 400 }
 			);
 		}
 
-		const creditInfo = PLAN_TO_CREDIT_MAPPING[plan_id];
+		const creditInfo = CREDIT_PACK_MAPPING[packId];
 		console.log(`[Credit Pack Test] Testing: ${creditInfo.credits} credits for user ${user_id} from company ${company_id}`);
 
 		// Use the experience we already found
@@ -153,7 +153,7 @@ async function testCreditPackHandler(
 			data: {
 				user_id,
 				company_id,
-				plan_id,
+				packId: packId,
 				pack_id: creditInfo.packId,
 				credits_added: creditInfo.credits,
 				previous_credits: currentCredits,
@@ -172,17 +172,17 @@ async function testCreditPackHandler(
 	}
 }
 
-// GET endpoint to show available test plans
+// GET endpoint to show available test packs
 export async function GET() {
 	return NextResponse.json({
 		message: "Credit Pack Test Endpoint",
-		available_plans: PLAN_TO_CREDIT_MAPPING,
+		available_packs: CREDIT_PACK_MAPPING,
 		usage: {
 			method: "POST",
-			required_fields: ["plan_id"],
+			required_fields: ["packId"],
 			authentication: "Whop Auth required",
 			example: {
-				plan_id: "plan_WLt5L02d1vJKj"
+				packId: "starter"
 			}
 		}
 	});
