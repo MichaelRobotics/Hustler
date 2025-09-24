@@ -126,6 +126,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return <Star className="w-6 h-6 text-yellow-500" />;
 			case "pro":
 				return <Crown className="w-6 h-6 text-purple-500" />;
+			case "free":
+				return <Zap className="w-6 h-6 text-gray-500" />;
 			default:
 				return <Zap className="w-6 h-6 text-gray-500" />;
 		}

@@ -73,7 +73,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 		const PLAN_TO_CREDIT_MAPPING: Record<string, { packId: string; credits: number }> = {
 			"plan_NEdfisFY3jDiL": { packId: "pro", credits: 30 },
 			"plan_wuqbRiAVRqI7b": { packId: "popular", credits: 15 }, 
-			"plan_WLt5L02d1vJKj": { packId: "starter", credits: 5 }
+			"plan_WLt5L02d1vJKj": { packId: "starter", credits: 5 },
+			"plan_vIVdyl2yVs2Bl": { packId: "free", credits: 1 }
 		};
 
 		// Check if this is a credit pack purchase via plan ID
