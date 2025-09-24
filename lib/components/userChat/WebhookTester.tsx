@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "frosted-ui";
 import { TestTube, Zap, CheckCircle, XCircle, Loader } from "lucide-react";
-import { apiPost } from "../../utils/api-client";
+import { apiPost, apiGet } from "../../utils/api-client";
 
 interface WebhookTesterProps {
   conversationId: string;
@@ -69,7 +69,7 @@ export const WebhookTester: React.FC<WebhookTesterProps> = ({
           if (block && block.resourceName) {
             // Try to get the actual resource data with whopProductId
             try {
-              const response = await apiPost('/api/resources', {}, experienceId);
+              const response = await apiGet('/api/resources', experienceId);
               const result = await response.json();
               
               if (result.success && result.data?.resources) {
@@ -146,7 +146,7 @@ export const WebhookTester: React.FC<WebhookTesterProps> = ({
       
       // Use the admin webhook test API with actual Whop product ID
       const response = await apiPost('/api/admin/webhook-test', {
-        productId: product.whopProductId || `prod_${product.id}`,
+        productId: product.whopProductId || product.id, // Use whopProductId if available, otherwise use internal ID
         productName: product.name,
         scenario,
         whopProductId: product.whopProductId // Pass the actual Whop product ID

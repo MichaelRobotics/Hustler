@@ -109,6 +109,9 @@ async function testWebhookHandler(
     });
 
     const webhookResult = await webhookResponse.text();
+    
+    console.log(`[Webhook Test] Webhook response status: ${webhookResponse.status}`);
+    console.log(`[Webhook Test] Webhook response: ${webhookResult}`);
 
     return NextResponse.json({
       success: webhookResponse.ok,
@@ -119,6 +122,7 @@ async function testWebhookHandler(
       productName,
       realUserId,
       actualProductId,
+      webhookStatus: webhookResponse.status,
       debug: {
         originalProductId: productId,
         foundProductId: actualProductId,
