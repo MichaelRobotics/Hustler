@@ -77,7 +77,14 @@ export const FunnelGenerationSection: React.FC<
 			if (!creditValidationResponse.ok) {
 				const creditError = await creditValidationResponse.json();
 				
-				// Show specific credit error notification
+				// Check if it's insufficient credits error
+				if (creditError.error === "INSUFFICIENT_CREDITS") {
+					// Show credit modal instead of notification
+					setShowCreditModal(true);
+					return;
+				}
+				
+				// Show other credit errors as notifications
 				const showNotification = (message: string) => {
 					const notification = document.createElement("div");
 					notification.className =
@@ -100,7 +107,7 @@ export const FunnelGenerationSection: React.FC<
 					}, 5000);
 				};
 
-				showNotification(creditError.message || "Insufficient credits to generate funnel");
+				showNotification(creditError.message || "Credit validation failed");
 				return;
 			}
 		} catch (error) {
