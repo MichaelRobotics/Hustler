@@ -72,14 +72,12 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log(`📱 Mobile payment timeout: ${timeoutDuration}ms for ${isMobile ? 'mobile' : 'desktop'}`);
 
-			// Mobile-specific payment handling using Whop checkout session
+			// Use iframe SDK for desktop, direct checkout for mobile
 			if (isMobile) {
-				console.log("📱 Mobile detected - using Whop checkout session method");
-				console.log("📱 Pack planId:", pack.planId);
-				console.log("📱 Pack name:", pack.name);
+				console.log("📱 Mobile detected - using direct checkout URL method");
 				
 				try {
-					// Create checkout session using Whop API
+					// Create checkout session for mobile (with metadata)
 					const response = await fetch('/api/checkout-session', {
 						method: 'POST',
 						headers: {
@@ -129,7 +127,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				}
 			}
 
-			// Use iframe SDK directly with plan ID (desktop only)
+			// Use iframe SDK for desktop
 			console.log("🖥️ Desktop detected - using iframe SDK method");
 			const purchasePromise = iframeSdk.inAppPurchase({
 				planId: pack.planId
@@ -237,11 +235,16 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</button>
 				</div>
 				
-				{/* Mobile Payment Info */}
-				{/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+				{/* Payment Info */}
+				{/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? (
 					<div className="bg-blue-500 text-white p-3 text-center">
-						<p className="text-sm font-semibold">📱 Mobile Payment Method</p>
+						<p className="text-sm font-semibold">📱 Mobile Payment</p>
 						<p className="text-xs mt-1">On mobile, payments open in a new tab for better security and reliability.</p>
+					</div>
+				) : (
+					<div className="bg-blue-500 text-white p-3 text-center">
+						<p className="text-sm font-semibold">💳 Secure Payment</p>
+						<p className="text-xs mt-1">Payments are processed securely through Whop's payment system.</p>
 					</div>
 				)}
 				{/* Header */}
