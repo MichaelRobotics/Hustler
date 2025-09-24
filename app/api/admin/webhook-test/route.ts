@@ -68,25 +68,28 @@ async function testWebhookHandler(
       // Continue with fallback product ID
     }
 
-    // Create mock webhook data with real user ID and actual product ID
+    // Create mock webhook data that matches real Whop payment webhook structure
     const webhookData = {
       action: "payment.succeeded",
       data: {
-        id: `pay_test_${actualProductId}_${Date.now()}`,
-        company_id: experienceId,
-        product_id: actualProductId, // Use actual Whop product ID from database
+        id: `payment_${Date.now()}`,
         user_id: realUserId, // Use real user ID from auth context
-        amount: "100.00",
+        product_id: actualProductId, // Use actual Whop product ID from database
+        company_id: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123", // Use business ID, not experience ID
+        final_amount: 10000, // Amount in cents (100.00 USD)
+        amount_after_fees: 9500, // Amount after fees in cents (95.00 USD)
         currency: "usd",
-        created_at: new Date().toISOString(),
-        final_amount: "100.00",
-        amount_after_fees: "95.00",
-        affiliate_commission: scenario === 'PRODUCT' ? {
-          amount: "10.00",
-          recipient_company_id: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123"
-        } : {
-          amount: "10.00",
-          recipient_company_id: "biz_othercompany456"
+        metadata: {
+          type: "product_purchase",
+          experienceId: experienceId, // Include experience ID in metadata for multi-tenancy
+          scenario: scenario
+        },
+        // Include affiliate commission for both scenarios (different recipient company IDs)
+        affiliate_commission: {
+          amount: 1000, // 10.00 USD in cents
+          recipient_company_id: scenario === 'PRODUCT' 
+            ? (process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123") // Your company gets the commission
+            : "biz_othercompany456" // Other company gets the commission
         }
       }
     };
