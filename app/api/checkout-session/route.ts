@@ -50,52 +50,48 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 			validFormat: /^plan_[a-zA-Z0-9]+$/.test(planId)
 		});
 
-		// For one-time payments (credit packs), we should use chargeUser instead of createCheckoutSession
-		// createCheckoutSession is for subscriptions, chargeUser is for one-time payments
-		console.log("Using chargeUser for one-time payment instead of createCheckoutSession");
+		// Create checkout session for metadata tracking, then use iframe SDK for modal
+		console.log("Creating checkout session for iframe SDK modal");
 		
-		// Get the credit pack amount from the plan ID
-		const PLAN_TO_AMOUNT_MAPPING: Record<string, number> = {
-			"plan_WLt5L02d1vJKj": 5,   // Starter pack - $5
-			"plan_wuqbRiAVRqI7b": 15,  // Popular pack - $15  
-			"plan_NEdfisFY3jDiL": 30   // Pro pack - $30
+		// Use the same URL pattern as other parts of the codebase
+		const redirectUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000";
+		console.log("Using redirect URL:", redirectUrl);
+		
+		const sessionMetadata = {
+			...metadata,
+			userId: user.userId,
+			experienceId: user.experienceId,
 		};
 		
-		const amount = PLAN_TO_AMOUNT_MAPPING[planId];
-		if (!amount) {
-			throw new Error(`Unknown plan ID: ${planId}`);
-		}
+		console.log("Session metadata:", sessionMetadata);
 		
-		console.log(`Creating charge for ${amount} credits ($${amount})`);
-		
-		let chargeResult;
+		let checkoutSession;
 		try {
-			chargeResult = await whopSdk.payments.chargeUser({
-				amount: amount * 100, // Convert to cents
-				currency: "usd",
-				userId: user.userId,
-				metadata: {
-					...metadata,
-					userId: user.userId,
-					experienceId: user.experienceId,
-				},
+			checkoutSession = await whopSdk.payments.createCheckoutSession({
+				planId,
+				metadata: sessionMetadata,
+				redirectUrl: `${redirectUrl}/payment-success`,
 			});
 			
-			console.log("Charge result:", chargeResult);
+			console.log("Checkout session created:", checkoutSession);
 			
-			if (!chargeResult?.inAppPurchase) {
-				throw new Error("Failed to create charge - no inAppPurchase object returned");
+			if (!checkoutSession || !checkoutSession.id) {
+				console.error("Checkout session creation failed - session:", checkoutSession);
+				throw new Error("Failed to create checkout session");
 			}
 			
-			// Return the inAppPurchase object for the client to use with iframeSdk
+			// Return the checkout session for iframe SDK to use
 			return NextResponse.json({
 				success: true,
-				inAppPurchase: chargeResult.inAppPurchase,
-				message: "Charge created successfully, use iframeSdk.inAppPurchase() on client"
+				checkoutSession: {
+					id: checkoutSession.id,
+					planId: checkoutSession.planId,
+				},
+				message: "Checkout session created successfully, use iframeSdk.inAppPurchase() on client"
 			});
 			
 		} catch (sdkError) {
-			console.error("Whop SDK chargeUser error:", sdkError);
+			console.error("Whop SDK createCheckoutSession error:", sdkError);
 			console.error("Error details:", {
 				message: sdkError instanceof Error ? sdkError.message : String(sdkError),
 				stack: sdkError instanceof Error ? sdkError.stack : undefined,

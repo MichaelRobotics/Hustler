@@ -59,6 +59,13 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
+			if (!iframeSdk || typeof iframeSdk.inAppPurchase !== "function") {
+				setError(
+					"Payment system not available. Please refresh the page and try again.",
+				);
+				return;
+			}
+
 			// Get the credit pack info
 			const pack = creditPacks.find(p => p.id === packId);
 			if (!pack || !pack.planId) {
@@ -74,11 +81,11 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log(`📱 Mobile payment timeout: ${timeoutDuration}ms for ${isMobile ? 'mobile' : 'desktop'}`);
 
-			// Use iframe SDK for both mobile and desktop (proper Whop way)
-			console.log("🔄 Using iframe SDK for payment (works on both mobile and desktop)");
+			// Create checkout session and use iframe SDK for modal
+			console.log("🔄 Creating checkout session for iframe SDK modal");
 			
 			try {
-				// Create charge for one-time payment
+				// Create checkout session
 				const { apiPost } = await import('@/lib/utils/api-client');
 				const response = await apiPost('/api/checkout-session', {
 					planId: pack.planId,
@@ -90,28 +97,41 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				}, experienceId); // Pass experienceId to apiPost
 
 				if (!response.ok) {
-					throw new Error(`Failed to create charge: ${response.statusText}`);
+					throw new Error(`Failed to create checkout session: ${response.statusText}`);
 				}
 
-				const chargeResult = await response.json();
-				console.log("💳 Charge created:", chargeResult);
+				const result = await response.json();
+				console.log("💳 Checkout session created:", result);
 				
-				if (!chargeResult.success || !chargeResult.inAppPurchase) {
-					throw new Error("Failed to create charge - no inAppPurchase object");
+				if (!result.success || !result.checkoutSession) {
+					throw new Error("Failed to create checkout session - no checkout session object");
 				}
 				
-				// Use iframe SDK to open payment modal
+				// Use iframe SDK to open payment modal with checkout session
 				console.log("🔄 Opening payment modal with iframe SDK...");
-				const result = await iframeSdk.inAppPurchase(chargeResult.inAppPurchase);
+				console.log("🔄 iframeSdk available:", !!iframeSdk);
+				console.log("🔄 iframeSdk.inAppPurchase function:", typeof iframeSdk.inAppPurchase);
+				console.log("🔄 checkoutSession object:", result.checkoutSession);
 				
-				console.log("💳 Payment result:", result);
+				// Add timeout to prevent infinite loading
+				const timeoutPromise = new Promise((_, reject) => {
+					setTimeout(() => reject(new Error("Payment modal timeout - please try again")), 30000);
+				});
 				
-				if (result.status === "ok") {
+				console.log("🔄 Calling iframeSdk.inAppPurchase...");
+				const purchasePromise = iframeSdk.inAppPurchase(result.checkoutSession);
+				console.log("🔄 Purchase promise created, waiting for result...");
+				
+				const paymentResult = await Promise.race([purchasePromise, timeoutPromise]) as any;
+				
+				console.log("💳 Payment result:", paymentResult);
+				
+				if (paymentResult.status === "ok") {
 					console.log("✅ Payment successful via iframe SDK");
 					onPurchaseSuccess?.();
 					onClose();
 				} else {
-					const errorMessage = result.error || "Payment failed";
+					const errorMessage = paymentResult.error || "Payment failed";
 					let userFriendlyMessage = errorMessage;
 					if (errorMessage.toLowerCase().includes("cancel")) {
 						userFriendlyMessage = "Payment was cancelled. No charges were made.";
@@ -126,6 +146,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					}
 					setError(userFriendlyMessage);
 				}
+				
 			} catch (error) {
 				console.error("💳 Payment failed:", error);
 				const errorMessage = error instanceof Error ? error.message : String(error);
