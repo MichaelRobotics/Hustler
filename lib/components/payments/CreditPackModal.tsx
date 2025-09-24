@@ -23,7 +23,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	onClose,
 	onPurchaseSuccess,
 }) => {
-	const { isInIframe, safeInAppPurchase } = useSafeIframeSdk();
+	const { isInIframe, iframeSdk, safeInAppPurchase } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
