@@ -98,13 +98,35 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 			
 			if (isMobile) {
-				// On mobile, redirect in the same window
+				// On mobile, try to open in new window first, fallback to same window
+				setSelectedPack(packId);
 				setIsCheckoutLoading(true);
 				
-				// Show loading animation briefly
-				setTimeout(() => {
-					window.location.href = checkoutUrl;
-				}, 500);
+				// Try to open in new window on mobile too
+				const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+				
+				if (!newWindow) {
+					// If popup blocked on mobile, fallback to same window redirect
+					setError("Popup blocked. Redirecting to checkout page...");
+					setTimeout(() => {
+						window.location.href = checkoutUrl;
+					}, 2000);
+					return;
+				}
+
+				// Store reference to the new window for potential closing
+				(window as any).checkoutWindow = newWindow;
+
+				// Listen for window close to stop loading (fallback)
+				const checkClosed = setInterval(() => {
+					if (newWindow.closed) {
+						clearInterval(checkClosed);
+						setIsCheckoutLoading(false);
+						setSelectedPack(null);
+						// Check if purchase was successful (you might want to refresh user data here)
+						onPurchaseSuccess?.();
+					}
+				}, 1000);
 			} else {
 				// On desktop, try to open in new window
 				setSelectedPack(packId);
@@ -205,18 +227,10 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 								{/* Loading text with animation */}
 								<div className="space-y-2">
 									<h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-										{(() => {
-											const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-											return isMobile ? "Redirecting to Checkout..." : "Opening Checkout...";
-										})()}
+										Opening Checkout...
 									</h3>
 									<p className="text-sm text-gray-600 dark:text-gray-400">
-										{(() => {
-											const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-											return isMobile 
-												? "You will be redirected to complete your purchase"
-												: "Please complete your purchase in the new window";
-										})()}
+										Please complete your purchase in the new window
 									</p>
 									<div className="flex items-center justify-center space-x-1">
 										<div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce"></div>
@@ -232,12 +246,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 								
 								{/* Instructions */}
 								<div className="text-xs text-gray-500 dark:text-gray-400 max-w-sm">
-									{(() => {
-										const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-										return isMobile 
-											? <p>You will be taken to the Whop checkout page to complete your purchase.</p>
-											: <p>If the checkout window didn't open, please check your popup blocker settings.</p>;
-									})()}
+									<p>If the checkout window didn't open, please check your popup blocker settings.</p>
 								</div>
 							</div>
 						</div>
