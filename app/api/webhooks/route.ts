@@ -1,4 +1,4 @@
-import { addCredits, getCreditPack } from "@/lib/actions/credit-actions";
+import { addCredits } from "@/lib/actions/credit-actions";
 import type { CreditPackId } from "@/lib/types/credit";
 import { waitUntil } from "@vercel/functions";
 import { makeWebhookValidator } from "@whop/api";
@@ -7,6 +7,9 @@ import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
 import { getExperienceContextFromWebhook, validateExperienceContext } from "@/lib/analytics/experience-context";
 import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tracking";
+import { db } from "@/lib/supabase/db-server";
+import { experiences, users } from "@/lib/supabase/schema";
+import { eq, and } from "drizzle-orm";
 
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
@@ -56,29 +59,35 @@ export async function POST(request: NextRequest): Promise<Response> {
 
 	// Handle the webhook event
 	if (webhookData.action === "payment.succeeded") {
-		const { id, final_amount, amount_after_fees, currency, user_id, metadata } =
+		const { id, final_amount, amount_after_fees, currency, user_id, metadata, plan_id, company_id } =
 			webhookData.data;
 
 		// final_amount is the amount the user paid
 		// amount_after_fees is the amount that is received by you, after card fees and processing fees are taken out
 
 		console.log(
-			`Payment ${id} succeeded for ${user_id} with amount ${final_amount} ${currency}`,
+			`Payment ${id} succeeded for user ${user_id} from company ${company_id} with amount ${final_amount} ${currency}`,
 		);
 
-		// Check if this is a credit pack purchase
-		if (
-			metadata?.type === "credit_pack" &&
-			metadata?.packId &&
-			metadata?.credits
-		) {
+		// Plan ID to credit pack mapping
+		const PLAN_TO_CREDIT_MAPPING: Record<string, { packId: string; credits: number }> = {
+			"plan_NEdfisFY3jDiL": { packId: "pro", credits: 30 },
+			"plan_wuqbRiAVRqI7b": { packId: "popular", credits: 15 }, 
+			"plan_WLt5L02d1vJKj": { packId: "starter", credits: 5 }
+		};
+
+		// Check if this is a credit pack purchase via plan ID
+		if (plan_id && PLAN_TO_CREDIT_MAPPING[plan_id as string]) {
+			const creditInfo = PLAN_TO_CREDIT_MAPPING[plan_id as string];
+			console.log(`Credit pack purchase detected via plan ID ${plan_id}: ${creditInfo.credits} credits for user ${user_id} from company ${company_id}`);
+			
 			waitUntil(
-				handleCreditPackPurchase(
+				handleCreditPackPurchaseWithCompany(
 					user_id,
-					metadata.packId as CreditPackId,
-					metadata.credits as number,
+					company_id,
+					creditInfo.packId as CreditPackId,
+					creditInfo.credits,
 					id,
-					metadata?.experienceId as string, // Pass experienceId from metadata
 				),
 			);
 		} else {
@@ -109,51 +118,70 @@ export async function POST(request: NextRequest): Promise<Response> {
 	return new Response("OK", { status: 200 });
 }
 
-async function handleCreditPackPurchase(
+async function handleCreditPackPurchaseWithCompany(
 	user_id: string | null | undefined,
+	company_id: string | null | undefined,
 	packId: CreditPackId,
 	credits: number,
 	paymentId: string,
-	experienceId?: string,
 ) {
 	if (!user_id) {
 		console.error("No user_id provided for credit pack purchase");
 		return;
 	}
 
-	// Use provided experienceId or fallback to environment variable
-	const expId = experienceId || process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID || "";
-	
-	if (!expId) {
-		console.error("No experienceId available for credit pack purchase");
+	if (!company_id) {
+		console.error("No company_id provided for credit pack purchase");
 		return;
 	}
 
+	console.log(`Processing credit pack purchase: ${credits} credits for user ${user_id} from company ${company_id}`);
+
 	try {
-		console.log(
-			`Processing credit pack purchase: ${packId} for user ${user_id} in experience ${expId}`,
-		);
+		// 1. Find experience by company_id
+		const experience = await db
+			.select()
+			.from(experiences)
+			.where(eq(experiences.whopCompanyId, company_id))
+			.limit(1);
 
-		// Add credits to user's balance for specific experience
-		await addCredits(user_id, expId, credits);
+		if (experience.length === 0) {
+			console.error(`No experience found for company_id: ${company_id}`);
+			return;
+		}
 
-		// Get pack info for logging
-		const pack = await getCreditPack(packId);
-		console.log(
-			`Successfully added ${credits} credits to user ${user_id} from ${pack.name} purchase`,
-		);
+		const experienceId = experience[0].id;
+		console.log(`Found experience ${experienceId} for company ${company_id}`);
 
-		// You could also send a notification to the user here
-		// await whopSdk.notifications.sendNotification({
-		//   userId: user_id,
-		//   title: 'Credits Added!',
-		//   message: `You've received ${credits} credits from your ${pack.name} purchase!`
-		// });
+		// 2. Find user by user_id and experience_id
+		const user = await db
+			.select()
+			.from(users)
+			.where(
+				and(
+					eq(users.whopUserId, user_id),
+					eq(users.experienceId, experienceId)
+				)
+			)
+			.limit(1);
+
+		if (user.length === 0) {
+			console.error(`No user found with whop_user_id ${user_id} in experience ${experienceId}`);
+			return;
+		}
+
+		const userId = user[0].id;
+		console.log(`Found user ${userId} for whop_user_id ${user_id} in experience ${experienceId}`);
+
+		// 3. Add credits to the user
+		await addCredits(userId, experienceId, credits);
+		console.log(`Successfully added ${credits} credits to user ${userId} in experience ${experienceId}`);
+
 	} catch (error) {
-		console.error("Error processing credit pack purchase:", error);
-		// In production, you might want to implement retry logic or alerting here
+		console.error("Error processing credit pack purchase with company:", error);
 	}
 }
+
 
 /**
  * Handle payment with scenario detection and analytics

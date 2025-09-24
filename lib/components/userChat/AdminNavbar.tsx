@@ -5,6 +5,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { ProductSelectionModal } from "@/lib/components/admin/ProductSelectionModal";
 import { WebhookTester } from "./WebhookTester";
+import { CreditPackTester } from "./CreditPackTester";
 
 interface DiscoveryProduct {
 	id: string;           // accessPass.id
@@ -33,6 +34,8 @@ interface AdminNavbarProps {
 	onResetConversations: () => void;
 	experienceId?: string;
 	funnelFlow?: any;
+	user_id?: string;
+	company_id?: string;
 }
 
 export const AdminNavbar: React.FC<AdminNavbarProps> = ({
@@ -46,6 +49,8 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 	onResetConversations,
 	experienceId,
 	funnelFlow,
+	user_id,
+	company_id,
 }) => {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [isProductSelectionOpen, setIsProductSelectionOpen] = useState(false);
@@ -166,6 +171,20 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 								funnelFlow={funnelFlow}
 								onTestComplete={(result) => {
 									console.log('Webhook test completed:', result);
+								}}
+							/>
+						</div>
+					)}
+
+					{/* Credit Pack Tester */}
+					{user_id && company_id && experienceId && (
+						<div className="mt-2">
+							<CreditPackTester
+								user_id={user_id}
+								company_id={company_id}
+								experienceId={experienceId}
+								onTestComplete={(result: any) => {
+									console.log('Credit pack test completed:', result);
 								}}
 							/>
 						</div>

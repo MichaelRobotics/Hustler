@@ -33,59 +33,84 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 		getAllCreditPacks().then(setCreditPacks);
 	}, []);
 
+	// Clear error when modal opens
+	useEffect(() => {
+		if (isOpen) {
+			setError(null);
+			setIsLoading(null);
+		}
+	}, [isOpen]);
+
 	const handlePurchase = async (packId: CreditPackId) => {
 		try {
 			setIsLoading(packId);
-			setError(null);
+			setError(null); // Clear any previous error messages
 
 			console.log("Starting purchase for pack:", packId);
 
-			// Create charge on server
-			const chargeResult = await createCreditPackCharge(packId);
-			console.log("Charge result:", chargeResult);
-
-			if (chargeResult.status === "success") {
-				// Payment was successful immediately
-				console.log("Payment successful immediately");
-				onPurchaseSuccess?.();
-				onClose();
+			if (!isInIframe) {
+				setError(
+					"Please access this app through Whop to purchase credits. The payment system is only available within the Whop platform.",
+				);
 				return;
 			}
 
-			if (
-				chargeResult.status === "needs_action" &&
-				chargeResult.inAppPurchase
-			) {
-				if (isInIframe) {
-					// Use iframe SDK for payment
-					console.log("Using Whop iframe SDK for payment");
-					try {
-						const result = await safeInAppPurchase(chargeResult.inAppPurchase);
-						console.log("Payment result:", result);
+			// Get the credit pack info
+			const pack = creditPacks.find(p => p.id === packId);
+			if (!pack || !pack.planId) {
+				setError("Credit pack not found or plan ID not configured.");
+				return;
+			}
 
-						if (result.status === "ok") {
-							console.log("Payment successful via iframe SDK");
-							onPurchaseSuccess?.();
-							onClose();
-						} else {
-							setError(result.error || "Payment failed");
-						}
-					} catch (error) {
-						console.error("Iframe SDK payment error:", error);
-						setError("Payment failed - please try again");
-					}
-				} else {
-					// Not in iframe context - show helpful message
-					setError(
-						"Please access this app through Whop to purchase credits. The payment system is only available within the Whop platform.",
-					);
-				}
+			console.log("Using Whop iframe SDK for payment with plan ID:", pack.planId);
+
+			// Use iframe SDK directly with plan ID
+			const result = await safeInAppPurchase({
+				planId: pack.planId
+			});
+
+			console.log("Payment result:", result);
+
+			if (result.status === "ok") {
+				console.log("Payment successful via iframe SDK");
+				onPurchaseSuccess?.();
+				onClose();
 			} else {
-				setError("Failed to create payment. Please try again.");
+				// Handle different error scenarios with user-friendly messages
+				const errorMessage = result.error || "Payment failed";
+				let userFriendlyMessage = errorMessage;
+				
+				// Check for common error patterns and provide better messages
+				if (errorMessage.toLowerCase().includes("cancel")) {
+					userFriendlyMessage = "Payment was cancelled. No charges were made.";
+				} else if (errorMessage.toLowerCase().includes("insufficient")) {
+					userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
+				} else if (errorMessage.toLowerCase().includes("declined")) {
+					userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
+				} else if (errorMessage.toLowerCase().includes("expired")) {
+					userFriendlyMessage = "Payment session expired. Please try again.";
+				} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+					userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+				}
+				
+				setError(userFriendlyMessage);
 			}
 		} catch (error) {
 			console.error("Purchase error:", error);
-			setError("An error occurred during purchase. Please try again.");
+			
+			// Handle different error types with user-friendly messages
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			let userFriendlyMessage = "Payment failed - please try again";
+			
+			if (errorMessage.toLowerCase().includes("cancel")) {
+				userFriendlyMessage = "Payment was cancelled. No charges were made.";
+			} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+				userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+			} else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("forbidden")) {
+				userFriendlyMessage = "Payment authorization failed. Please try again.";
+			}
+			
+			setError(userFriendlyMessage);
 		} finally {
 			setIsLoading(null);
 		}
@@ -111,19 +136,18 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			<div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50">
 				{/* Header */}
 				<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800">
-					<div>
-						<h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
-							Get Credits
-						</h2>
-						<p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-							Generate more funnels
-						</p>
+					<div className="flex-1">
+						<div className="text-center">
+							<h2 className="text-xl sm:text-2xl font-bold text-violet-600 dark:text-violet-400">
+								⚡ 1 Generation = 1 Credit
+							</h2>
+						</div>
 					</div>
 					<Button
 						variant="ghost"
 						size="2"
 						onClick={onClose}
-						className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+						className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 ml-4"
 					>
 						<X className="w-4 h-4" />
 					</Button>
@@ -147,7 +171,10 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 										? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
 										: "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
 								}`}
-								onClick={() => handlePurchase(pack.id as CreditPackId)}
+								onClick={() => {
+									setError(null); // Clear any previous error
+									handlePurchase(pack.id as CreditPackId);
+								}}
 							>
 								{/* Badge */}
 								{pack.badge && (

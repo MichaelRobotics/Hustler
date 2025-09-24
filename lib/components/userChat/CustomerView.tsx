@@ -47,6 +47,32 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [adminLoading, setAdminLoading] = useState(false);
 	const [adminError, setAdminError] = useState<string | null>(null);
 	const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
+	
+	// User context for admin features
+	const [userContext, setUserContext] = useState<{
+		user_id?: string;
+		company_id?: string;
+	} | null>(null);
+
+	// Fetch user context for admin features
+	const fetchUserContext = useCallback(async () => {
+		if (!experienceId || userType !== "admin") return;
+		
+		try {
+			const response = await fetch(`/api/user/context?experienceId=${experienceId}`);
+			if (response.ok) {
+				const data = await response.json();
+				if (data.user) {
+					setUserContext({
+						user_id: data.user.whopUserId,
+						company_id: data.user.experience.whopCompanyId
+					});
+				}
+			}
+		} catch (error) {
+			console.error("Error fetching user context:", error);
+		}
+	}, [experienceId, userType]);
 
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
@@ -260,7 +286,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// Load data on mount
 	useEffect(() => {
 		loadFunnelAndConversation();
-	}, [loadFunnelAndConversation]);
+		fetchUserContext();
+	}, [loadFunnelAndConversation, fetchUserContext]);
 
 	const handleMessageSentInternal = (message: string, convId?: string) => {
 		console.log("Customer message:", {
@@ -411,6 +438,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						onResetConversations={resetConversations}
 						experienceId={experienceId}
 						funnelFlow={funnelFlow}
+						user_id={userContext?.user_id}
+						company_id={userContext?.company_id}
 					/>
 				</div>
 			)}
