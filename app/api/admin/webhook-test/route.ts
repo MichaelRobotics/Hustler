@@ -76,6 +76,7 @@ async function testWebhookHandler(
         user_id: realUserId, // Use real user ID from auth context
         product_id: actualProductId, // Use actual Whop product ID from database
         company_id: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123", // Use business ID, not experience ID
+        amount: 10000, // Total amount in cents (100.00 USD) - required by scenario detection
         final_amount: 10000, // Amount in cents (100.00 USD)
         amount_after_fees: 9500, // Amount after fees in cents (95.00 USD)
         currency: "usd",
