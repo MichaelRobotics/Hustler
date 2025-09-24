@@ -21,7 +21,7 @@ export async function trackPurchaseConversionWithScenario(
   scenarioData: ScenarioData,
   conversation: any,
   funnelId: string,
-  experienceId?: string
+  experienceId: string
 ): Promise<boolean> {
   try {
     console.log(`[Purchase Tracking] Tracking conversion for scenario: ${scenarioData.scenario}`);
@@ -31,8 +31,13 @@ export async function trackPurchaseConversionWithScenario(
       return false;
     }
 
+    if (!conversation || !funnelId || !experienceId) {
+      console.log('[Purchase Tracking] Missing conversation, funnelId, or experienceId');
+      return false;
+    }
+
     // Update funnel analytics with scenario-based revenue
-    await updateFunnelAnalyticsWithScenario(funnelId, scenarioData);
+    await updateFunnelAnalyticsWithScenario(funnelId, scenarioData, experienceId);
     
     // Update product card
     if (scenarioData.productId && experienceId) {
@@ -55,7 +60,8 @@ export async function trackPurchaseConversionWithScenario(
  */
 async function updateFunnelAnalyticsWithScenario(
   funnelId: string,
-  scenarioData: ScenarioData
+  scenarioData: ScenarioData,
+  experienceId: string
 ): Promise<void> {
   try {
     const today = new Date();
@@ -98,7 +104,7 @@ async function updateFunnelAnalyticsWithScenario(
     } else {
       // Create new record
       await db.insert(funnelAnalytics).values({
-        experienceId: scenarioData.companyId, // This should be the experience ID, not company ID
+        experienceId: experienceId, // Use the correct experience ID parameter
         funnelId,
         totalConversions: 1,
         totalAffiliateRevenue: affiliateAmount.toString(),

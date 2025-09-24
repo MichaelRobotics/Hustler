@@ -26,9 +26,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 	// Extract experience ID from X-Experience-ID header for multi-tenancy
 	const experienceId = request.headers.get('X-Experience-ID');
 	if (experienceId && webhookData.data) {
-		// Set the company_id to the experience ID for proper multi-tenant analytics
-		webhookData.data.company_id = experienceId;
-		console.log(`[Webhook] Using experience ID as company_id: ${experienceId}`);
+		// Don't override company_id - let the experience context system handle the lookup
+		// The company_id should remain as the Whop company ID from the webhook
+		console.log(`[Webhook] Processing webhook for experience: ${experienceId}`);
 	}
 
 	// Check if this is a test request (bypass validation)

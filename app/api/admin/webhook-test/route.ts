@@ -68,28 +68,41 @@ async function testWebhookHandler(
       // Continue with fallback product ID
     }
 
+    // Get the Whop company ID for this experience
+    let whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123";
+    try {
+      const experience = await db.query.experiences.findFirst({
+        where: eq(experiences.whopExperienceId, experienceId)
+      });
+      
+      if (experience?.whopCompanyId) {
+        whopCompanyId = experience.whopCompanyId;
+        console.log(`[Webhook Test] Using Whop company ID: ${whopCompanyId} for experience: ${experienceId}`);
+      } else {
+        console.log(`[Webhook Test] No Whop company ID found for experience ${experienceId}, using fallback: ${whopCompanyId}`);
+      }
+    } catch (error) {
+      console.error('[Webhook Test] Error fetching Whop company ID:', error);
+    }
+
     // Create mock webhook data that matches real Whop payment webhook structure
     const webhookData = {
       action: "payment.succeeded",
       data: {
-        id: `payment_${Date.now()}`,
-        user_id: realUserId, // Use real user ID from auth context
+        id: `pay_test_${actualProductId}_${Date.now()}`,
+        company_id: whopCompanyId, // Use actual Whop company ID, not experience ID
         product_id: actualProductId, // Use actual Whop product ID from database
-        company_id: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123", // Use business ID, not experience ID
+        user_id: realUserId, // Use real user ID from auth context
         amount: 10000, // Total amount in cents (100.00 USD) - required by scenario detection
         final_amount: 10000, // Amount in cents (100.00 USD)
         amount_after_fees: 9500, // Amount after fees in cents (95.00 USD)
         currency: "usd",
-        metadata: {
-          type: "product_purchase",
-          experienceId: experienceId, // Include experience ID in metadata for multi-tenancy
-          scenario: scenario
-        },
+        created_at: new Date().toISOString(),
         // Include affiliate commission for both scenarios (different recipient company IDs)
         affiliate_commission: {
           amount: 1000, // 10.00 USD in cents
           recipient_company_id: scenario === 'PRODUCT' 
-            ? (process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123") // Your company gets the commission
+            ? whopCompanyId // Your company gets the commission
             : "biz_othercompany456" // Other company gets the commission
         }
       }

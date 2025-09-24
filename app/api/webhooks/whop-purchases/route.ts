@@ -35,9 +35,9 @@ async function handleWhopPurchaseWebhook(request: NextRequest) {
 		// Extract experience ID from X-Experience-ID header for multi-tenancy
 		const experienceId = request.headers.get('X-Experience-ID');
 		if (experienceId && body.data) {
-			// Set the company_id to the experience ID for proper multi-tenant analytics
-			body.data.company_id = experienceId;
-			console.log(`[Whop-Purchases] Using experience ID as company_id: ${experienceId}`);
+			// Don't override company_id - let the experience context system handle the lookup
+			// The company_id should remain as the Whop company ID from the webhook
+			console.log(`[Whop-Purchases] Processing webhook for experience: ${experienceId}`);
 		}
 
 		// Handle different purchase events
