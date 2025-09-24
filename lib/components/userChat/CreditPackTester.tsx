@@ -21,8 +21,7 @@ interface TestResult {
 const CREDIT_PACKS = [
 	{ id: "plan_WLt5L02d1vJKj", name: "Starter", credits: 5, color: "bg-green-500" },
 	{ id: "plan_wuqbRiAVRqI7b", name: "Popular", credits: 15, color: "bg-blue-500" },
-	{ id: "plan_NEdfisFY3jDiL", name: "Pro", credits: 30, color: "bg-purple-500" },
-	{ id: "plan_vIVdyl2yVs2Bl", name: "Free", credits: 1, color: "bg-gray-500" }
+	{ id: "plan_NEdfisFY3jDiL", name: "Pro", credits: 30, color: "bg-purple-500" }
 ];
 
 export const CreditPackTester: React.FC<CreditPackTesterProps> = ({

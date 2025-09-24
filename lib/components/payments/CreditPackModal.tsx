@@ -4,14 +4,10 @@ import { Button } from "frosted-ui";
 import { Crown, Star, X, Zap } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import {
-	createCreditPackCharge,
-	getAllCreditPacks,
-	getCreditPack,
-} from "../../actions/credit-actions";
+import { getAllCreditPacks } from "../../actions/credit-actions";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
+import { apiPost } from "../../utils/api-client";
 import type { CreditPackId } from "../../types/credit";
-import EmbeddedCheckout from "./EmbeddedCheckout";
 
 interface CreditPackModalProps {
 	isOpen: boolean;
@@ -29,9 +25,6 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	const { isInIframe, safeInAppPurchase } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [selectedPack, setSelectedPack] = useState<CreditPackId | null>(null);
-	const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-	const [showEmbeddedCheckout, setShowEmbeddedCheckout] = useState(false);
 
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
 
@@ -44,17 +37,15 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 		if (isOpen) {
 			setError(null);
 			setIsLoading(null);
-			setSelectedPack(null);
-			setIsCheckoutLoading(false);
-			setShowEmbeddedCheckout(false);
 		}
 	}, [isOpen]);
 
 	const handlePurchase = async (packId: CreditPackId) => {
 		try {
+			setIsLoading(packId);
 			setError(null); // Clear any previous error messages
 
-			console.log("Starting purchase for pack:", packId);
+			console.log("Starting direct charge purchase for pack:", packId);
 
 			if (!isInIframe) {
 				setError(
@@ -65,37 +56,62 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			// Get the credit pack info
 			const pack = creditPacks.find(p => p.id === packId);
-			if (!pack || !pack.planId) {
-				setError("Credit pack not found or plan ID not configured.");
+			if (!pack) {
+				setError("Credit pack not found.");
 				return;
 			}
 
-			console.log("Opening embedded checkout for plan ID:", pack.planId);
+			console.log("Creating direct charge for pack:", packId);
 
-			// Show embedded checkout instead of using window.open
-			setSelectedPack(packId);
-			setShowEmbeddedCheckout(true);
+			// Step 1: Create charge on server
+			const response = await apiPost("/api/charge", { packId }, experienceId);
 
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || "Failed to create charge");
+			}
+
+			const inAppPurchase = await response.json();
+			console.log("Charge created, opening payment modal:", inAppPurchase);
+
+			// Step 2: Open payment modal with iframe SDK
+			const result = await safeInAppPurchase(inAppPurchase);
+
+			console.log("Payment result:", result);
+
+			if (result.status === "ok") {
+				console.log("Payment successful via direct charge");
+				onPurchaseSuccess?.();
+				onClose();
+			} else {
+				// Handle different error scenarios with user-friendly messages
+				const errorMessage = result.error || "Payment failed";
+				let userFriendlyMessage = errorMessage;
+				
+				// Check for common error patterns and provide better messages
+				if (errorMessage.toLowerCase().includes("cancel")) {
+					userFriendlyMessage = "Payment was cancelled. No charges were made.";
+				} else if (errorMessage.toLowerCase().includes("insufficient")) {
+					userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
+				} else if (errorMessage.toLowerCase().includes("declined")) {
+					userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
+				} else if (errorMessage.toLowerCase().includes("expired")) {
+					userFriendlyMessage = "Payment session expired. Please try again.";
+				} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+					userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+				} else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("forbidden")) {
+					userFriendlyMessage = "Payment authorization failed. Please try again or contact support.";
+				}
+				
+				setError(userFriendlyMessage);
+			}
 		} catch (error: any) {
-			console.error("Purchase setup failed:", error);
-			setError("An unexpected error occurred. Please try again.");
+			console.error("Purchase failed:", error);
+			setError(error.message || "Purchase failed. Please try again.");
+		} finally {
+			setIsLoading(null);
 		}
 	};
-
-	const handleCheckoutComplete = (planId: string, receiptId?: string) => {
-		console.log("Checkout completed:", { planId, receiptId });
-		setShowEmbeddedCheckout(false);
-		setSelectedPack(null);
-		onPurchaseSuccess?.();
-		onClose();
-	};
-
-	const handleCheckoutCancel = () => {
-		console.log("Checkout cancelled");
-		setShowEmbeddedCheckout(false);
-		setSelectedPack(null);
-	};
-
 
 	const getPackIcon = (packId: string) => {
 		switch (packId) {
@@ -105,8 +121,6 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return <Star className="w-6 h-6 text-yellow-500" />;
 			case "pro":
 				return <Crown className="w-6 h-6 text-purple-500" />;
-			case "free":
-				return <Zap className="w-6 h-6 text-gray-500" />;
 			default:
 				return <Zap className="w-6 h-6 text-gray-500" />;
 		}
@@ -143,26 +157,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</div>
 				)}
 
-				{/* Embedded Checkout */}
-				{showEmbeddedCheckout && selectedPack && (() => {
-					const pack = creditPacks.find(p => p.id === selectedPack);
-					if (!pack) return null;
-					
-					return (
-						<EmbeddedCheckout
-							planId={pack.planId}
-							planName={pack.name}
-							credits={pack.credits}
-							price={pack.price}
-							experienceId={experienceId}
-							onComplete={handleCheckoutComplete}
-							onCancel={handleCheckoutCancel}
-						/>
-					);
-				})()}
-
 				{/* Credit Packs */}
-				{!showEmbeddedCheckout && (
 				<div className="p-4 sm:p-6">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 						{creditPacks.map((pack) => (
@@ -242,7 +237,6 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 						))}
 					</div>
 				</div>
-				)}
 
 				{/* Footer */}
 				{isInIframe && (

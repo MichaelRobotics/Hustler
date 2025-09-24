@@ -73,13 +73,12 @@ export async function POST(request: NextRequest): Promise<Response> {
 		const PLAN_TO_CREDIT_MAPPING: Record<string, { packId: string; credits: number }> = {
 			"plan_NEdfisFY3jDiL": { packId: "pro", credits: 30 },
 			"plan_wuqbRiAVRqI7b": { packId: "popular", credits: 15 }, 
-			"plan_WLt5L02d1vJKj": { packId: "starter", credits: 5 },
-			"plan_vIVdyl2yVs2Bl": { packId: "free", credits: 1 }
+			"plan_WLt5L02d1vJKj": { packId: "starter", credits: 5 }
 		};
 
-		// Check if this is a credit pack purchase via metadata (new checkout session method)
+		// Check if this is a credit pack purchase via metadata (direct charge method)
 		if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
-			console.log(`Credit pack purchase detected via metadata: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
+			console.log(`Credit pack purchase detected via direct charge: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
 			
 			waitUntil(
 				handleCreditPackPurchaseWithCompany(
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 				),
 			);
 		}
-		// Check if this is a credit pack purchase via plan ID (fallback method)
+		// Check if this is a credit pack purchase via plan ID (plan-based method)
 		else if (plan_id && PLAN_TO_CREDIT_MAPPING[plan_id as string]) {
 			const creditInfo = PLAN_TO_CREDIT_MAPPING[plan_id as string];
 			console.log(`Credit pack purchase detected via plan ID ${plan_id}: ${creditInfo.credits} credits for user ${user_id} from company ${company_id}`);

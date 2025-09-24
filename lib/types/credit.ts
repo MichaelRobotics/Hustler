@@ -25,15 +25,6 @@ export const CREDIT_PACKS = {
 		planId: process.env.NEXT_PUBLIC_CREDIT_PACK_PRO_PLAN_ID,
 		description: "Power users",
 	},
-	free: {
-		id: "free",
-		name: "Free",
-		credits: 1,
-		price: 0,
-		planId: "plan_vIVdyl2yVs2Bl",
-		description: "Try it free",
-		badge: "Free",
-	},
 } as const;
 
 export type CreditPackId = keyof typeof CREDIT_PACKS;
