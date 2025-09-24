@@ -40,18 +40,33 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 		console.log("- NEXT_PUBLIC_WHOP_APP_ID:", !!process.env.NEXT_PUBLIC_WHOP_APP_ID);
 		console.log("- NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL);
 		console.log("Plan ID being used:", planId);
+		console.log("Plan ID format check:", {
+			startsWithPlan: planId.startsWith('plan_'),
+			length: planId.length,
+			validFormat: /^plan_[a-zA-Z0-9]+$/.test(planId)
+		});
 
 		// Create checkout session using Whop SDK
 		let checkoutSession;
 		try {
+			// Use the same URL pattern as other parts of the codebase
+			const redirectUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000";
+			console.log("Using redirect URL:", redirectUrl);
+			
+			const sessionMetadata = {
+				...metadata,
+				userId: user.userId,
+				experienceId: user.experienceId,
+			};
+			
+			console.log("Session metadata:", sessionMetadata);
+			console.log("Metadata keys:", Object.keys(sessionMetadata));
+			console.log("Metadata values:", Object.values(sessionMetadata));
+			
 			checkoutSession = await whopSdk.payments.createCheckoutSession({
 				planId,
-				metadata: {
-					...metadata,
-					userId: user.userId,
-					experienceId: user.experienceId,
-				},
-				redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment-success`,
+				metadata: sessionMetadata,
+				redirectUrl: `${redirectUrl}/payment-success`,
 			});
 		} catch (sdkError) {
 			console.error("Whop SDK createCheckoutSession error:", sdkError);
@@ -61,6 +76,7 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 		console.log("Checkout session created:", checkoutSession);
 		console.log("Checkout session type:", typeof checkoutSession);
 		console.log("Checkout session keys:", checkoutSession ? Object.keys(checkoutSession) : 'null');
+		console.log("Checkout session stringified:", JSON.stringify(checkoutSession, null, 2));
 
 		if (!checkoutSession || !checkoutSession.id) {
 			console.error("Checkout session creation failed - session:", checkoutSession);
@@ -73,7 +89,7 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 				id: `fallback_${Date.now()}`,
 				planId: planId,
 				purchase_url: fallbackUrl,
-				redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment-success`,
+				redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000"}/payment-success`,
 				fallback: true,
 			});
 		}
@@ -87,7 +103,7 @@ async function createCheckoutSessionHandler(request: NextRequest, context: AuthC
 			id: checkoutSession.id,
 			planId: checkoutSession.planId,
 			purchase_url: purchaseUrl,
-			redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment-success`,
+			redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3000"}/payment-success`,
 		});
 
 	} catch (error) {
