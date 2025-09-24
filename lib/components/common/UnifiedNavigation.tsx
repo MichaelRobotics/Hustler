@@ -291,7 +291,6 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 				isOpen={showCreditModal}
 				onClose={() => setShowCreditModal(false)}
 				onPurchaseSuccess={handlePurchaseSuccess}
-				experienceId={user?.experienceId}
 			/>
 		</div>
 	);

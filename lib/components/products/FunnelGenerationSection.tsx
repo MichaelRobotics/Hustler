@@ -283,7 +283,6 @@ export const FunnelGenerationSection: React.FC<
 				isOpen={showCreditModal}
 				onClose={() => setShowCreditModal(false)}
 				onPurchaseSuccess={handlePurchaseSuccess}
-				experienceId={user?.experienceId}
 			/>
 		</div>
 	);

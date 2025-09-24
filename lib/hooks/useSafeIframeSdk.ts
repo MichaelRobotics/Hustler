@@ -9,40 +9,13 @@ export function useSafeIframeSdk() {
 	const [isInIframe, setIsInIframe] = useState(false);
 
 	useEffect(() => {
-		// Enhanced iframe SDK detection for mobile compatibility
-		const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-		
 		// Check if iframe SDK is available
 		if (iframeSdk && typeof iframeSdk.inAppPurchase === "function") {
 			setIsInIframe(true);
-			console.log("✅ Whop iframe SDK detected via @whop/react");
-			console.log("📱 Mobile debug - User Agent:", navigator.userAgent);
-			console.log("📱 Mobile debug - isMobile:", isMobile);
-			console.log("📱 Mobile debug - iframeSdk methods:", Object.keys(iframeSdk));
+			console.log("Whop iframe SDK detected via @whop/react");
 		} else {
 			setIsInIframe(false);
-			console.log("❌ Whop iframe SDK not available");
-			console.log("📱 Mobile debug - iframeSdk:", iframeSdk);
-			console.log("📱 Mobile debug - inAppPurchase function:", iframeSdk?.inAppPurchase);
-			console.log("📱 Mobile debug - isMobile:", isMobile);
-			
-			// Mobile-specific iframe detection fallback
-			if (isMobile) {
-				console.log("📱 Mobile iframe detection fallback - checking window.parent");
-				if (window.parent && window.parent !== window) {
-					console.log("📱 Mobile iframe context detected via window.parent");
-					// Try to access parent iframe SDK
-					try {
-						const parentSdk = (window.parent as any).whopIframeSdk;
-						if (parentSdk && typeof parentSdk.inAppPurchase === "function") {
-							console.log("📱 Mobile iframe SDK found in parent window");
-							setIsInIframe(true);
-						}
-					} catch (error) {
-						console.log("📱 Mobile iframe SDK access blocked:", error);
-					}
-				}
-			}
+			console.log("Whop iframe SDK not available");
 		}
 	}, [iframeSdk]);
 
