@@ -3,20 +3,7 @@ import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { resources, experiences } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
-import crypto from "crypto";
-
-/**
- * Generate webhook signature for proper validation
- */
-async function generateWebhookSignature(webhookData: any): Promise<string> {
-  const webhookSecret = process.env.WHOP_WEBHOOK_SECRET || "fallback";
-  const payload = JSON.stringify(webhookData);
-  const signature = crypto
-    .createHmac('sha256', webhookSecret)
-    .update(payload)
-    .digest('hex');
-  return `sha256=${signature}`;
-}
+import { makeWebhookValidator } from "@whop/api";
 
 /**
  * POST /api/admin/webhook-test - Test webhook for specific product
@@ -104,35 +91,65 @@ async function testWebhookHandler(
       }
     };
 
-    // Call the webhook endpoint with proper signature validation
-    // Use the current request URL to determine the base URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
-                   `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    // Process webhook data directly using the same logic as /api/webhooks
+    console.log(`[Webhook Test] Processing webhook data directly`);
     
-    console.log(`[Webhook Test] Using base URL: ${baseUrl}`);
-    console.log(`[Webhook Test] Full webhook URL: ${baseUrl}/api/webhooks`);
+    let webhookResponse;
+    let webhookResult;
     
-    // Create a proper webhook request with signature validation
-    const webhookSignature = await generateWebhookSignature(webhookData);
-    console.log(`[Webhook Test] Generated signature: ${webhookSignature.substring(0, 20)}...`);
-    
-    const webhookRequest = new Request(`${baseUrl}/api/webhooks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Experience-ID': experienceId,
-        // Add webhook signature for proper validation
-        'X-Whop-Signature': webhookSignature
-      },
-      body: JSON.stringify(webhookData)
-    });
-    
-    const webhookResponse = await fetch(webhookRequest);
-    const webhookResult = await webhookResponse.text();
-    
-    console.log(`[Webhook Test] Webhook response status: ${webhookResponse.status}`);
-    console.log(`[Webhook Test] Webhook response: ${webhookResult}`);
+    try {
+      // Import the webhook processing functions directly
+      const { detectScenario, validateScenarioData } = await import('@/lib/analytics/scenario-detection');
+      const { getExperienceContextFromWebhook, validateExperienceContext } = await import('@/lib/analytics/experience-context');
+      const { trackPurchaseConversionWithScenario } = await import('@/lib/analytics/purchase-tracking');
+      
+      console.log(`[Webhook Test] Processing payment webhook for user: ${webhookData.data?.user_id}`);
+      
+      // Step 1: Detect scenario (affiliate vs product owner vs error)
+      const scenarioData = await detectScenario(webhookData);
+      
+      if (!validateScenarioData(scenarioData)) {
+        console.log(`[Webhook Test] Invalid scenario data - skipping analytics`);
+        webhookResponse = { ok: false, status: 400 };
+        webhookResult = JSON.stringify({ success: false, error: 'Invalid scenario data' });
+      } else if (scenarioData.scenario === 'error') {
+        console.log(`[Webhook Test] Error scenario detected - skipping analytics`);
+        webhookResponse = { ok: false, status: 400 };
+        webhookResult = JSON.stringify({ success: false, error: 'Error scenario detected' });
+      } else {
+        // Step 2: Get experience context
+        const { experience, conversation } = await getExperienceContextFromWebhook(webhookData);
+        
+        if (!validateExperienceContext(experience, conversation)) {
+          console.log(`[Webhook Test] Invalid experience context - skipping analytics`);
+          webhookResponse = { ok: false, status: 400 };
+          webhookResult = JSON.stringify({ success: false, error: 'Invalid experience context' });
+        } else {
+          // Step 3: Update analytics with scenario-based revenue attribution
+          const success = await trackPurchaseConversionWithScenario(
+            scenarioData,
+            conversation,
+            conversation!.funnelId,
+            experience!.experienceId
+          );
+
+          if (success) {
+            console.log(`[Webhook Test] Successfully updated analytics for scenario: ${scenarioData.scenario}`);
+            webhookResponse = { ok: true, status: 200 };
+            webhookResult = JSON.stringify({ success: true, message: 'Webhook processed successfully' });
+          } else {
+            console.log(`[Webhook Test] Failed to update analytics for scenario: ${scenarioData.scenario}`);
+            webhookResponse = { ok: false, status: 500 };
+            webhookResult = JSON.stringify({ success: false, error: 'Failed to update analytics' });
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error(`[Webhook Test] Error processing webhook:`, error);
+      webhookResponse = { ok: false, status: 500 };
+      webhookResult = JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
 
     return NextResponse.json({
       success: webhookResponse.ok,
@@ -149,9 +166,7 @@ async function testWebhookHandler(
         foundProductId: actualProductId,
         experienceId,
         userId: realUserId,
-        baseUrl,
-        webhookUrl: `${baseUrl}/api/webhooks`,
-        signatureUsed: webhookSignature.substring(0, 20) + '...'
+        processingMethod: 'direct'
       }
     });
 
