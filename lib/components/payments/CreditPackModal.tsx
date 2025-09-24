@@ -46,7 +46,9 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			setIsLoading(packId);
 			setError(null); // Clear any previous error messages
 
-			console.log("Starting purchase for pack:", packId);
+			console.log("🛒 Starting purchase for pack:", packId);
+			console.log("📱 Mobile debug - isInIframe:", isInIframe);
+			console.log("📱 Mobile debug - iframeSdk available:", !!iframeSdk);
 
 			if (!isInIframe) {
 				setError(
@@ -132,7 +134,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	if (!isOpen) return null;
 
 	return (
-		<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+		<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 touch-manipulation">
 			<div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50">
 				{/* Header */}
 				<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800">
@@ -153,6 +155,15 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</Button>
 				</div>
 
+				{/* Debug Info for Mobile */}
+				<div className="mx-4 sm:mx-6 mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+					<p className="text-blue-600 dark:text-blue-400 text-xs">
+						📱 Debug: isInIframe={isInIframe ? 'true' : 'false'} | 
+						SDK={iframeSdk ? 'available' : 'missing'} | 
+						Mobile={/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'yes' : 'no'}
+					</p>
+				</div>
+
 				{/* Error Message */}
 				{error && (
 					<div className="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -166,15 +177,11 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 						{creditPacks.map((pack) => (
 							<div
 								key={pack.id}
-								className={`relative border-2 rounded-xl p-4 sm:p-6 transition-all duration-200 cursor-pointer group ${
+								className={`relative border-2 rounded-xl p-4 sm:p-6 transition-all duration-200 group ${
 									pack.badge === "Most Popular"
 										? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
 										: "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
 								}`}
-								onClick={() => {
-									setError(null); // Clear any previous error
-									handlePurchase(pack.id as CreditPackId);
-								}}
 							>
 								{/* Badge */}
 								{pack.badge && (
@@ -216,16 +223,20 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 								{/* Purchase Button */}
 								<Button
-									onClick={(e) => {
-										e.stopPropagation();
+									onClick={() => {
+										setError(null); // Clear any previous error
 										handlePurchase(pack.id as CreditPackId);
 									}}
 									disabled={isLoading === pack.id}
-									className={`w-full ${
+									className={`w-full touch-manipulation active:scale-95 transition-all duration-150 ${
 										pack.badge === "Most Popular"
 											? "bg-violet-500 hover:bg-violet-600"
 											: "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
 									}`}
+									style={{
+										WebkitTapHighlightColor: 'transparent',
+										minHeight: '48px', // Larger touch target for mobile
+									}}
 								>
 									{isLoading === pack.id ? (
 										<div className="flex items-center justify-center">

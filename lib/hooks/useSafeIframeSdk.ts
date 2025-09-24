@@ -12,10 +12,14 @@ export function useSafeIframeSdk() {
 		// Check if iframe SDK is available
 		if (iframeSdk && typeof iframeSdk.inAppPurchase === "function") {
 			setIsInIframe(true);
-			console.log("Whop iframe SDK detected via @whop/react");
+			console.log("✅ Whop iframe SDK detected via @whop/react");
+			console.log("📱 Mobile debug - User Agent:", navigator.userAgent);
+			console.log("📱 Mobile debug - isMobile:", /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 		} else {
 			setIsInIframe(false);
-			console.log("Whop iframe SDK not available");
+			console.log("❌ Whop iframe SDK not available");
+			console.log("📱 Mobile debug - iframeSdk:", iframeSdk);
+			console.log("📱 Mobile debug - inAppPurchase function:", iframeSdk?.inAppPurchase);
 		}
 	}, [iframeSdk]);
 
