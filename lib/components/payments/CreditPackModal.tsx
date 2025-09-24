@@ -16,12 +16,14 @@ interface CreditPackModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	onPurchaseSuccess?: () => void;
+	experienceId?: string; // Add experienceId prop
 }
 
 export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	isOpen,
 	onClose,
 	onPurchaseSuccess,
+	experienceId,
 }) => {
 	const { isInIframe, iframeSdk, safeInAppPurchase } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
@@ -78,20 +80,16 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				
 				try {
 					// Create checkout session for mobile (with metadata)
-					const response = await fetch('/api/checkout-session', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-							planId: pack.planId,
-							metadata: {
-								packId: pack.id,
-								credits: pack.credits,
-								source: 'mobile-credit-purchase'
-							}
-						})
-					});
+					// Use apiPost to include X-Experience-ID header
+					const { apiPost } = await import('@/lib/utils/api-client');
+					const response = await apiPost('/api/checkout-session', {
+						planId: pack.planId,
+						metadata: {
+							packId: pack.id,
+							credits: pack.credits,
+							source: 'mobile-credit-purchase'
+						}
+					}, experienceId); // Pass experienceId to apiPost
 
 					if (!response.ok) {
 						throw new Error(`Failed to create checkout session: ${response.statusText}`);
