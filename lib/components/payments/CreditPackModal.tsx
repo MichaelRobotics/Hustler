@@ -66,10 +66,17 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			console.log("Using Whop iframe SDK for payment with plan ID:", pack.planId);
 
-			// Use iframe SDK directly with plan ID
-			const result = await safeInAppPurchase({
+			// Use iframe SDK directly with plan ID (mobile-optimized)
+			// Add timeout to prevent hanging on mobile
+			const purchasePromise = iframeSdk.inAppPurchase({
 				planId: pack.planId
 			});
+
+			const timeoutPromise = new Promise((_, reject) => {
+				setTimeout(() => reject(new Error("Payment timeout - please try again")), 30000); // 30 second timeout
+			});
+
+			const result = await Promise.race([purchasePromise, timeoutPromise]) as any;
 
 			console.log("Payment result:", result);
 
@@ -106,6 +113,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			
 			if (errorMessage.toLowerCase().includes("cancel")) {
 				userFriendlyMessage = "Payment was cancelled. No charges were made.";
+			} else if (errorMessage.toLowerCase().includes("timeout")) {
+				userFriendlyMessage = "Payment timed out. Please try again - this may be due to mobile network issues.";
 			} else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
 				userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
 			} else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("forbidden")) {
@@ -133,9 +142,32 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 	if (!isOpen) return null;
 
+	// Mobile debugging
+	console.log("📱 CreditPackModal - Rendering modal");
+	console.log("📱 CreditPackModal - Path:", window.location.pathname);
+	console.log("📱 CreditPackModal - isInIframe:", isInIframe);
+	console.log("📱 CreditPackModal - iframeSdk:", !!iframeSdk);
+
 	return (
 		<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 touch-manipulation">
 			<div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50">
+				{/* MOBILE TEST - Very Obvious Debug */}
+				<div className="bg-red-500 text-white p-2 text-center font-bold">
+					🚨 MOBILE MODAL IS RENDERING - IF YOU SEE THIS, THE MODAL IS WORKING 🚨
+				</div>
+				
+				{/* MOBILE TEST - Click Test Button */}
+				<div className="bg-green-500 text-white p-2 text-center">
+					<button 
+						onClick={() => {
+							console.log("🧪 MOBILE TEST BUTTON CLICKED!");
+							alert("Mobile test button clicked! Check console for logs.");
+						}}
+						className="bg-white text-green-500 px-4 py-2 rounded font-bold"
+					>
+						🧪 TEST CLICK - TAP ME
+					</button>
+				</div>
 				{/* Header */}
 				<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800">
 					<div className="flex-1">
@@ -155,12 +187,26 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					</Button>
 				</div>
 
-				{/* Debug Info for Mobile */}
-				<div className="mx-4 sm:mx-6 mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-					<p className="text-blue-600 dark:text-blue-400 text-xs">
-						📱 Debug: isInIframe={isInIframe ? 'true' : 'false'} | 
-						SDK={iframeSdk ? 'available' : 'missing'} | 
-						Mobile={/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'yes' : 'no'}
+				{/* Debug Info for Mobile - More Visible */}
+				<div className="mx-4 sm:mx-6 mt-4 p-4 bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg">
+					<p className="text-yellow-800 dark:text-yellow-200 text-sm font-semibold">
+						🐛 MOBILE DEBUG INFO
+					</p>
+					<p className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
+						📱 isInIframe: {isInIframe ? '✅ true' : '❌ false'} | 
+						SDK: {iframeSdk ? '✅ available' : '❌ missing'} | 
+						Mobile: {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? '✅ yes' : '❌ no'}
+					</p>
+					<p className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
+						🔧 inAppPurchase: {iframeSdk?.inAppPurchase && typeof iframeSdk.inAppPurchase === 'function' ? '✅ function' : '❌ missing'} | 
+						Loading: {isLoading || 'none'}
+					</p>
+					<p className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
+						🎯 Modal Source: {window.location.pathname.includes('/chat/') ? 'FunnelGenerationSection' : 'UnifiedNavigation'} | 
+						Path: {window.location.pathname}
+					</p>
+					<p className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
+						📊 User Agent: {navigator.userAgent.substring(0, 50)}...
 					</p>
 				</div>
 

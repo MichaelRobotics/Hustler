@@ -34,7 +34,7 @@ export default function RootLayout({
 				/>
 			</head>
 			<body>
-				<WhopIframeSdkProvider>
+				<WhopIframeSdkProvider options={{ appId: process.env.NEXT_PUBLIC_WHOP_APP_ID }}>
 					<ThemeProvider>
 						<DynamicWebsocketProvider>
 							{children}
