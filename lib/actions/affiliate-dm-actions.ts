@@ -1,5 +1,5 @@
 import { db } from "@/lib/supabase/db-server";
-import { conversations, users, resources } from "@/lib/supabase/schema";
+import { conversations, users, resources, messages } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 
@@ -85,6 +85,20 @@ Search whop whop for best products, become affiliate and sell them!`;
       toUserIdOrUsername: conversation.whopUserId,
       message: dmMessage
     });
+
+    // Save the affiliate DM to the conversation's messages table for deduplication
+    try {
+      await db.insert(messages).values({
+        conversationId: conversationId,
+        type: 'bot',
+        content: dmMessage,
+        createdAt: new Date()
+      });
+      console.log(`[AFFILIATE-DM] Saved affiliate DM to conversation messages for deduplication`);
+    } catch (error) {
+      console.error(`[AFFILIATE-DM] Failed to save affiliate DM to messages table:`, error);
+      // Continue execution even if saving fails
+    }
 
     console.log(`[AFFILIATE-DM] Successfully sent affiliate DM to user ${conversation.whopUserId}`);
     return true;
