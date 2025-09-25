@@ -136,8 +136,7 @@ Here's how to get started:
 2. Install app (https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
 3. IN APP: CLICK LIBRARY -> CLICK ADD PRODUCT -> ADD LINK ${affiliateLink} -> ASSIGN PRODUCT -> GENERATE -> GO LIVE
 
-
-Voila! Now Upsell will sell it to everybody who joins your whop!`;
+Voila! Now Upsell will sell it to every customer who joins your whop!`;
 
     // Send DM using Whop SDK
     await whopSdk.messages.sendDirectMessageToUser({
