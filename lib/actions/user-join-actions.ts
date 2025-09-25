@@ -267,7 +267,7 @@ export function getWelcomeMessage(
 
 		// Add options if they exist
 		if (startBlock.options && startBlock.options.length > 0) {
-			welcomeMessage += "\n\nSend number/keyword, start FREE\n\n";
+			welcomeMessage += "\n\nTo start, number/keyword\n\n";
 			startBlock.options.forEach((option, index) => {
 				welcomeMessage += `${index + 1}. ${option.text}\n`;
 			});

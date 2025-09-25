@@ -187,13 +187,13 @@ ${badJson}
     },
     "value_trading_guide": {
       "id": "value_trading_guide",
-      "message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nPlease review it, because the next step is where we build your personal plan. Reply with 'done' when you're ready.\\n\\n[LINK]",
+      "message": "Perfect. Trading is where the action is.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
       "resourceName": "The 3 Core Principles of Crypto Charting",
-      "options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
+      "options": [{"text": "unlock", "nextBlockId": "transition_to_vip_chat"}]
     },
     "transition_to_vip_chat": {
       "id": "transition_to_vip_chat",
-      "message": "Excellent. You've completed the first step. ✅\\n\\nNow it's time to build your personal strategy plan. To do that, I've prepared a private, unlimited chat session just for you.\\n\\nClick below to begin your Personal Strategy Session now.\\n\\n[LINK]",
+      "message": "[USER], catch!\\n\\n[LINK]",
       "options": [{"text": "Continue to Strategy Session", "nextBlockId": "experience_qual_1"}]
     },
     "experience_qual_1": {
@@ -509,11 +509,13 @@ export const generateFunnelFlow = async (
 	### ITEM MESSAGE CONSTRUCTION
 	
 	**1. FOR ITEMS WITH CHOICES (in \`FUNNEL_1_WELCOME_GATE\`):**
-	The 'message' string must be structured exactly like this:
-	- **Line 1**: A short, impactful headline (1 line only).
+	The 'message' string MUST be exactly this format:
+	- **Line 1**: "[USER], check [WHOP] BEST quick-money paths!" (1 line only).
 
-	*Example Message for Funnel 1:*
+	*CRITICAL: WELCOME message must be EXACTLY:*
 	"[USER], check [WHOP] BEST quick-money paths!"
+	
+	**NO VARIATIONS ALLOWED**: Do not modify this message format in any way.
 	
 	**IMPORTANT**: Do NOT include the numbered options in the message text. The options are defined in the 'options' array.
 	
@@ -537,36 +539,40 @@ export const generateFunnelFlow = async (
 	Where would you honestly place yourself right now?"
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
-	The message must present a resource with category "FREE_VALUE".
-	*Example:* "Perfect. Here is our free guide... Please review it.
+	The message must focus on how it will help the user make money faster and include the VIP chat invitation.
+	*Example:* 
+	**CRITICAL: WELCOME message must be EXACTLY:*
+	"Perfect. Trading is where the action is.
 
-	Reply 'DONE' to access professional offers.
+	[LINK]
 
-	[LINK]"
-	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'done' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
+	Wait! [WHOP_OWNER] cooked up a gift just for you, [USER]!
+
+	[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.
+
+	Reply "UNLOCK""
+
+
+	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'unlock' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
 	
 	**4. FOR ITEMS IN \`FUNNEL_1\`'s 'TRANSITION' STAGE:**
-	This is the final block of Funnel 1. The message should naturally bridge to the live chat experience:
+	The message MUST be exactly this format:
+	- **Line 1**: "[USER], catch!" (1 line only)
+	- **Line 2**: Empty line
+	- **Line 3**: "[LINK]" (1 line only)
 	
-	- Congratulate them on completing the first step
-	- Explain what comes next in the strategy session
-	- Keep it conversational and encouraging
-	- Include link placeholder: [LINK]
+	*CRITICAL: TRANSITION message must be EXACTLY:*
+	"[USER], catch!
+
+	[LINK]"
+	
+	**NO VARIATIONS ALLOWED**: Do not modify this message format in any way.
 	- **FORBIDDEN**: Do NOT use the 3-part OFFER structure (Value Stack + FOMO + CTA)
 	- **FORBIDDEN**: Do NOT use "The Observer" vs "The Action Taker" contrast
 	- **FORBIDDEN**: Do NOT use "Our Service Isn't For Everyone" or similar exclusivity language
-	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile
-	- **PARAGRAPH RULE**: Add empty line between different paragraphs for better readability
-	
-	**Example Structure (5-LINE TRANSITION MESSAGE):**
-	"Excellent! You've completed step one. ✅
-	
-	Now let's move to your personalized strategy session.
-	
-	Ready to continue?
-	
-	[LINK]"
+	- **FORBIDDEN**: Do NOT add congratulatory messages or explanations
+	- **FORBIDDEN**: Do NOT add any text beyond the exact format above
 	
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have options that connect to the corresponding EXPERIENCE_QUALIFICATION blocks in Funnel 2. These options should have generic connector text like "Continue" or "Start Session" - they are system connectors only and will not be displayed as user choices in the preview chat.
 	
@@ -578,10 +584,12 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **WELCOME messages** must be **1 line only**
-	- **All other message types** (VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
+	- **WELCOME messages** must be **1 line only** and MUST be exactly: "[USER], check [WHOP] BEST quick-money paths!"
+	- **VALUE_DELIVERY messages** must be **6 lines or fewer** (not counting empty lines) to accommodate structure with [WHOP_OWNER] and [USER] placeholders
+	- **All other message types** (TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
 	- **OFFER messages** can be **8 lines or fewer** to accommodate proper paragraph spacing
 	- **VIOLATION WILL RESULT IN REJECTION**: Any message over its limit will be rejected
+	- **WELCOME MESSAGE ENFORCEMENT**: WELCOME messages must be EXACTLY "[USER], check [WHOP] BEST quick-money paths!" - NO VARIATIONS ALLOWED
 	- Keep messages concise and impactful
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
@@ -738,15 +746,17 @@ export const generateFunnelFlow = async (
 	### FINAL VALIDATION CHECKLIST
 	
 	Before generating the JSON, verify:
-	1. **MESSAGE LENGTH**: WELCOME messages must be 1 line only; VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION messages are 5 lines or fewer; OFFER messages MUST be 8 lines or fewer (including all formatting)
-	2. **EXACT NAMES**: resourceName fields match exactly with provided resource names
-	3. **CATEGORY MAPPING**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks, PAID resources ONLY in OFFER blocks
-	4. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages; [LINK] must be on separate line with empty line above it; no explanatory text before [LINK]
-	5. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
-	6. **TRANSITION STRUCTURE**: TRANSITION messages should naturally bridge to live chat with normal link, NO 3-part structure, NO "Observer/Action Taker" contrast
-	7. **NO DUPLICATES**: Each resource appears in exactly one block
-	8. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
-	9. **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
+	1. **MESSAGE LENGTH**: WELCOME messages must be 1 line only and EXACTLY "[USER], check [WHOP] BEST quick-money paths!"; VALUE_DELIVERY messages must be 6 lines or fewer (not counting empty lines); TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION messages are 5 lines or fewer; OFFER messages MUST be 8 lines or fewer (including all formatting)
+	2. **WELCOME MESSAGE ENFORCEMENT**: WELCOME messages must be EXACTLY "[USER], check [WHOP] BEST quick-money paths!" - NO VARIATIONS ALLOWED
+	3. **VALUE_DELIVERY STRUCTURE**: VALUE_DELIVERY messages must include [WHOP_OWNER] and [USER] placeholders in the VIP chat invitation section
+	4. **EXACT NAMES**: resourceName fields match exactly with provided resource names
+	5. **CATEGORY MAPPING**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks, PAID resources ONLY in OFFER blocks
+	6. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages; [LINK] must be on separate line with empty line above it; no explanatory text before [LINK]
+	7. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
+	8. **TRANSITION MESSAGE ENFORCEMENT**: TRANSITION messages must be EXACTLY "[USER], catch!\n\n[LINK]" - NO VARIATIONS ALLOWED
+	9. **NO DUPLICATES**: Each resource appears in exactly one block
+	10. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
+	11. **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
 	
 	### JSON OUTPUT STRUCTURE
 	
@@ -807,19 +817,19 @@ export const generateFunnelFlow = async (
 		 // This provides general value to anyone exploring without specific interests
 		 "value_trading_guide": {
 			"id": "value_trading_guide",
-			"message": "Perfect. Trading is where the action is.\\n\\nHere is our free guide: \\"The 3 Core Principles of Crypto Charting.\\"\\n\\nHere is the link: https://caseyscrypto.com/free-charting-guide\\n\\nPlease review it, because the next step is where we build your personal plan.",
+			"message": "Perfect. Trading is where the action is.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
 			"resourceName": "The 3 Core Principles of Crypto Charting",
-			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
+			"options": [{"text": "unlock", "nextBlockId": "transition_to_vip_chat"}]
 		 },
 		 "value_crypto_basics": {
 			"id": "value_crypto_basics",
-			"message": "No problem! Here's our free crypto basics guide to get you started.\\n\\nThis covers the fundamentals: what crypto is, how it works, and where to begin your journey.\\n\\nHere is the link: https://caseyscrypto.com/crypto-basics-guide\\n\\nAfter you review it, you can explore more specific topics in our community!",
+			"message": "Perfect. Crypto basics are where it all starts.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
 			"resourceName": "[EXAMPLE - Use actual FREE_VALUE resource name from provided list]",
-			"options": [{"text": "done", "nextBlockId": "transition_to_vip_chat"}]
+			"options": [{"text": "unlock", "nextBlockId": "transition_to_vip_chat"}]
 		 },
 		 "transition_to_vip_chat": {
 			"id": "transition_to_vip_chat",
-			"message": "Excellent. You've completed the first step. ✅\\n\\nNow it's time to build your personal strategy plan. To do that, I've prepared a private, unlimited chat session just for you.\\n\\nClick below to begin your Personal Strategy Session now.\\n\\n[LINK]",
+			"message": "[USER], catch!\\n\\n[LINK]",
 			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "experience_qual_1": {

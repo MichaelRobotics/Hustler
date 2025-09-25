@@ -733,7 +733,7 @@ async function handleEscalation(
 		let errorMessage: string;
 		switch (escalationLevel) {
 			case 1:
-				errorMessage = `Send number/keyword, start FREE\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				errorMessage = `To start, number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
 				break;
 			case 2:
 				errorMessage = `I'll inform the Whop owner about your request. Please wait for assistance.`;
@@ -742,7 +742,7 @@ async function handleEscalation(
 				errorMessage = `I'm unable to help you further. Please contact the Whop owner directly.`;
 				break;
 			default:
-				errorMessage = `Send number/keyword, start FREE\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				errorMessage = `To start, number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
 		}
 
 		// Increment escalation level
@@ -1045,7 +1045,33 @@ export async function sendTransitionMessage(
 		console.log(`[Transition Message] Sending transition message to user ${whopUserId}`);
 
 		// Resolve [LINK] placeholders with actual app links
-		const resolvedMessage = await resolveAppLinkPlaceholders(message, experienceId);
+		let resolvedMessage = await resolveAppLinkPlaceholders(message, experienceId);
+		
+		// Resolve [USER] placeholder with current user's first name
+		if (resolvedMessage.includes('[USER]')) {
+			// Find conversation to get conversationId for user lookup
+			const conversation = await db.query.conversations.findFirst({
+				where: and(
+					eq(conversations.whopUserId, whopUserId),
+					eq(conversations.experienceId, experienceId)
+				),
+			});
+			
+			if (conversation?.id) {
+				// Import the user lookup function from dm-monitoring-core
+				const { lookupCurrentUser } = await import("@/lib/utils/dm-monitoring-core");
+				const userName = await lookupCurrentUser(conversation.id);
+				
+				if (userName) {
+					resolvedMessage = resolvedMessage.replace(/\[USER\]/g, userName);
+					console.log(`[Transition Message] Replaced [USER] with: ${userName}`);
+				} else {
+					console.log(`[Transition Message] User not found, keeping [USER] placeholder`);
+				}
+			} else {
+				console.log(`[Transition Message] Conversation not found, keeping [USER] placeholder`);
+			}
+		}
 
 		// Send DM using existing Whop SDK
 		await whopSdk.messages.sendDirectMessageToUser({

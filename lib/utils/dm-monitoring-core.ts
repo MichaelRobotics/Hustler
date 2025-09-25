@@ -11,7 +11,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, resources, experiences } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, resources, experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { updateConversationBlock, addMessage, detectConversationPhase, sendTransitionMessage as sendEnhancedTransitionMessage } from "../actions/simplified-conversation-actions";
 import { getWhopApiClient } from "../whop-api-client";
@@ -28,9 +28,9 @@ export const RE_PROMPT_CONFIG = {
     720: "Still interested? Reply for your free resource!"
   },
   PHASE2: {
-    15: "Reply 'done' when you've checked the value!",
-    60: "All set? Say 'done' for the next step!",
-    720: "Still with us? Reply 'done' for private chat!"
+    15: "🚨 [USER], your session expire in 24 hours!\n\naccess and claim even 75% OFF gift cards\n\nreply \"UNLOCK\" for access",
+    60: "🚨 [USER], your session expire in 24 hours!\n\naccess and claim even 75% OFF gift cards\n\nreply \"UNLOCK\" for access",
+    720: "🚨 [USER], your session expire in 24 hours!\n\naccess and claim even 75% OFF gift cards\n\nreply \"UNLOCK\" for access"
   }
 } as const;
 
@@ -119,32 +119,120 @@ export async function lookupResourceLink(resourceName: string, experienceId: str
 }
 
 /**
- * Replace [LINK] placeholders with actual resource links
+ * Look up admin user (WHOP_OWNER) by experience ID
+ * Returns the admin user's name if found, null otherwise
  */
-async function resolveLinkPlaceholders(message: string, block: FunnelBlock, experienceId: string): Promise<string> {
-  // Check if message contains [LINK] placeholder
-  if (!message.includes('[LINK]')) {
-    return message;
+async function lookupAdminUser(experienceId: string): Promise<string | null> {
+  try {
+    console.log(`[Admin Lookup] Looking up admin user for experience: ${experienceId}`);
+    
+    const adminUser = await db.query.users.findFirst({
+      where: and(
+        eq(users.experienceId, experienceId),
+        eq(users.accessLevel, "admin")
+      ),
+    });
+
+    if (adminUser?.name) {
+      // Return first word of admin name (same logic as [USER] placeholder)
+      const firstName = adminUser.name.split(' ')[0];
+      console.log(`[Admin Lookup] Found admin user: ${adminUser.name} -> firstName: ${firstName}`);
+      return firstName;
+    } else {
+      console.log(`[Admin Lookup] No admin user found for experience: ${experienceId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[Admin Lookup] Error looking up admin user for experience ${experienceId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Look up current user by conversation ID
+ * Returns the user's name if found, null otherwise
+ */
+export async function lookupCurrentUser(conversationId: string): Promise<string | null> {
+  try {
+    console.log(`[User Lookup] Looking up current user for conversation: ${conversationId}`);
+    
+    // Get conversation to find whopUserId
+    const conversation = await db.query.conversations.findFirst({
+      where: eq(conversations.id, conversationId),
+    });
+
+    if (!conversation?.whopUserId) {
+      console.log(`[User Lookup] No conversation or whopUserId found for conversation: ${conversationId}`);
+      return null;
+    }
+
+    // Find user by whopUserId and experienceId
+    const user = await db.query.users.findFirst({
+      where: and(
+        eq(users.whopUserId, conversation.whopUserId),
+        eq(users.experienceId, conversation.experienceId)
+      ),
+    });
+
+    if (user?.name) {
+      // Return first word of user name (same logic as in user-join-actions.ts)
+      const firstName = user.name.split(' ')[0];
+      console.log(`[User Lookup] Found user: ${user.name} -> firstName: ${firstName}`);
+      return firstName;
+    } else {
+      console.log(`[User Lookup] No user found for whopUserId: ${conversation.whopUserId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[User Lookup] Error looking up current user for conversation ${conversationId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Replace [LINK], [WHOP_OWNER], and [USER] placeholders with actual values
+ */
+async function resolveLinkPlaceholders(message: string, block: FunnelBlock, experienceId: string, conversationId?: string): Promise<string> {
+  let resolvedMessage = message;
+
+  // Resolve [LINK] placeholder
+  if (resolvedMessage.includes('[LINK]')) {
+    if (block.resourceName) {
+      const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
+      if (resourceLink) {
+        resolvedMessage = resolvedMessage.replace(/\[LINK\]/g, resourceLink);
+        console.log(`[Link Resolution] Replaced [LINK] with: ${resourceLink}`);
+      } else {
+        console.log(`[Link Resolution] Resource not found, keeping [LINK] placeholder`);
+      }
+    } else {
+      console.log(`[Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
+    }
   }
 
-  // Check if block has resourceName
-  if (!block.resourceName) {
-    console.log(`[Link Resolution] Block has no resourceName, keeping [LINK] placeholder`);
-    return message;
+  // Resolve [WHOP_OWNER] placeholder
+  if (resolvedMessage.includes('[WHOP_OWNER]')) {
+    const adminName = await lookupAdminUser(experienceId);
+    if (adminName) {
+      resolvedMessage = resolvedMessage.replace(/\[WHOP_OWNER\]/g, adminName);
+      console.log(`[Link Resolution] Replaced [WHOP_OWNER] with: ${adminName}`);
+    } else {
+      console.log(`[Link Resolution] Admin user not found, keeping [WHOP_OWNER] placeholder`);
+    }
   }
 
-  // Look up the resource link
-  const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
-  
-  if (resourceLink) {
-    // Replace all [LINK] placeholders with the actual link
-    const resolvedMessage = message.replace(/\[LINK\]/g, resourceLink);
-    console.log(`[Link Resolution] Replaced [LINK] with: ${resourceLink}`);
-    return resolvedMessage;
-  } else {
-    console.log(`[Link Resolution] Resource not found, keeping [LINK] placeholder`);
-    return message;
+  // Resolve [USER] placeholder
+  if (resolvedMessage.includes('[USER]') && conversationId) {
+    const userName = await lookupCurrentUser(conversationId);
+    if (userName) {
+      resolvedMessage = resolvedMessage.replace(/\[USER\]/g, userName);
+      console.log(`[Link Resolution] Replaced [USER] with: ${userName}`);
+    } else {
+      console.log(`[Link Resolution] Current user not found, keeping [USER] placeholder`);
+    }
   }
+
+  return resolvedMessage;
 }
 
 /**
@@ -179,7 +267,7 @@ export async function sendNextBlockMessage(
                            (message.toLowerCase().includes('number') || message.toLowerCase().includes('keyword'));
       
       if (!hasInstruction) {
-        message += "\n\nSend number/keyword, start FREE\n";
+        message += "\n\nTo start, number/keyword\n";
       } else {
         message += "\n\n";
       }
@@ -189,8 +277,8 @@ export async function sendNextBlockMessage(
       });
     }
 
-    // Resolve [LINK] placeholders with actual resource links
-    const resolvedMessage = await resolveLinkPlaceholders(message, block, experienceId);
+    // Resolve [LINK], [WHOP_OWNER], and [USER] placeholders with actual values
+    const resolvedMessage = await resolveLinkPlaceholders(message, block, experienceId, conversationId);
 
     return await sendDirectMessage(conversationId, resolvedMessage, experienceId);
 
@@ -246,17 +334,19 @@ async function generateDynamicRePromptMessage(
       let message = "Hey! What's your niche?";
       
       if (currentBlock.options && currentBlock.options.length > 0) {
-        message += "\n\nSend number/keyword, start FREE\n";
+        message += "\n\nTo start, number/keyword\n";
         currentBlock.options.forEach((option, index) => {
           message += `${index + 1}. ${option.text}\n`;
         });
       }
       
-      return message;
+      // Resolve placeholders for PHASE1 messages
+      return await resolveLinkPlaceholders(message, currentBlock, experienceId, conversationId);
     }
 
-    // For other timings, use static messages
-    return RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+    // For other timings, use static messages and resolve placeholders
+    const staticMessage = RE_PROMPT_CONFIG[phase][timing as keyof typeof RE_PROMPT_CONFIG[typeof phase]] || "Please respond to continue.";
+    return await resolveLinkPlaceholders(staticMessage, currentBlock, experienceId, conversationId);
 
   } catch (error) {
     console.error(`[DM Core] Error generating dynamic re-prompt message:`, error);
@@ -478,7 +568,7 @@ function validateUserResponse(
     // Invalid response
     return {
       isValid: false,
-      errorMessage: `Send number/keyword, start FREE\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
+      errorMessage: `To start, number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
     };
 
   } catch (error) {
