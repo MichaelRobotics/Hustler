@@ -1,6 +1,6 @@
 import { db } from "@/lib/supabase/db-server";
 import { conversations, users, resources, messages } from "@/lib/supabase/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 
 /**
@@ -88,13 +88,26 @@ Search whop whop for best products, become affiliate and sell them!`;
 
     // Save the affiliate DM to the conversation's messages table for deduplication
     try {
-      await db.insert(messages).values({
-        conversationId: conversationId,
-        type: 'bot',
-        content: dmMessage,
-        createdAt: new Date()
+      // Check if affiliate DM already exists to prevent duplicates
+      const existingAffiliateMessage = await db.query.messages.findFirst({
+        where: and(
+          eq(messages.conversationId, conversationId),
+          eq(messages.type, 'bot'),
+          sql`content LIKE '%Want to make money on whop but have nothing to Sell?%'`
+        )
       });
-      console.log(`[AFFILIATE-DM] Saved affiliate DM to conversation messages for deduplication`);
+
+      if (!existingAffiliateMessage) {
+        await db.insert(messages).values({
+          conversationId: conversationId,
+          type: 'bot',
+          content: dmMessage,
+          createdAt: new Date()
+        });
+        console.log(`[AFFILIATE-DM] Saved affiliate DM to conversation messages for deduplication`);
+      } else {
+        console.log(`[AFFILIATE-DM] Affiliate DM already exists in conversation messages, skipping save`);
+      }
     } catch (error) {
       console.error(`[AFFILIATE-DM] Failed to save affiliate DM to messages table:`, error);
       // Continue execution even if saving fails
