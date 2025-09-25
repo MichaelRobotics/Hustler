@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, messages } from "@/lib/supabase/schema";
+import { conversations, messages, funnels } from "@/lib/supabase/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { sendAffiliateDM } from "@/lib/actions/affiliate-dm-actions";
 
@@ -17,15 +17,35 @@ export async function GET(request: NextRequest) {
   try {
     console.log(`[AFFILIATE-DM-CRON] Starting affiliate DM cron job at ${new Date().toISOString()}`);
     
-    // Get conversations that are in OFFER stage
-    const offerConversations = await db.query.conversations.findMany({
-      where: sql`JSON_EXTRACT(current_stage, '$.name') = 'OFFER'`,
+    // Get conversations that have a current block ID (active conversations)
+    const activeConversations = await db.query.conversations.findMany({
+      where: and(
+        eq(conversations.status, 'active'),
+        sql`current_block_id IS NOT NULL`
+      ),
       with: {
         messages: {
           orderBy: [desc(messages.createdAt)],
           limit: 1
+        },
+        funnel: {
+          with: {
+            flow: true
+          }
         }
       }
+    });
+
+    // Filter conversations that are in OFFER stage
+    const offerConversations = activeConversations.filter((conversation: any) => {
+      if (!conversation.funnel?.flow?.stages || !conversation.currentBlockId) {
+        return false;
+      }
+      
+      // Check if current block is in OFFER stage
+      return conversation.funnel.flow.stages.some(
+        (stage: any) => stage.name === 'OFFER' && stage.blockIds.includes(conversation.currentBlockId)
+      );
     });
 
     console.log(`[AFFILIATE-DM-CRON] Found ${offerConversations.length} conversations in OFFER stage`);
