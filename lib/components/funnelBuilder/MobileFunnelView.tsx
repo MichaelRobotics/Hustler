@@ -92,6 +92,7 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 													{editingBlockId === blockId ? (
 														<BlockEditor
 															block={block}
+															funnelFlow={funnelFlow}
 															onSave={onBlockUpdate}
 															onCancel={() => setEditingBlockId(null)}
 														/>

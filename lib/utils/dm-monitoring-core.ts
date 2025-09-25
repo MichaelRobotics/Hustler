@@ -179,7 +179,7 @@ export async function sendNextBlockMessage(
                            (message.toLowerCase().includes('number') || message.toLowerCase().includes('keyword'));
       
       if (!hasInstruction) {
-        message += "\n\nAnswer with number/keyword\n";
+        message += "\n\nSend number/keyword, start FREE\n";
       } else {
         message += "\n\n";
       }
@@ -246,7 +246,7 @@ async function generateDynamicRePromptMessage(
       let message = "Hey! What's your niche?";
       
       if (currentBlock.options && currentBlock.options.length > 0) {
-        message += "\n\nAnswer by number/keyword\n";
+        message += "\n\nSend number/keyword, start FREE\n";
         currentBlock.options.forEach((option, index) => {
           message += `${index + 1}. ${option.text}\n`;
         });
@@ -478,7 +478,7 @@ function validateUserResponse(
     // Invalid response
     return {
       isValid: false,
-      errorMessage: `Answer with number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
+      errorMessage: `Send number/keyword, start FREE\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`,
     };
 
   } catch (error) {

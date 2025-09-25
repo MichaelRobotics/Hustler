@@ -733,7 +733,7 @@ async function handleEscalation(
 		let errorMessage: string;
 		switch (escalationLevel) {
 			case 1:
-				errorMessage = `Answer with number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				errorMessage = `Send number/keyword, start FREE\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
 				break;
 			case 2:
 				errorMessage = `I'll inform the Whop owner about your request. Please wait for assistance.`;
@@ -742,7 +742,7 @@ async function handleEscalation(
 				errorMessage = `I'm unable to help you further. Please contact the Whop owner directly.`;
 				break;
 			default:
-				errorMessage = `Answer with number/keyword\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
+				errorMessage = `Send number/keyword, start FREE\n${(currentBlock.options || []).map((opt: any, i: number) => `${i + 1}. ${opt.text}`).join('\n')}`;
 		}
 
 		// Increment escalation level

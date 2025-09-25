@@ -385,6 +385,7 @@ const FunnelVisualizer = React.memo(
 											{editingBlockId === block.id ? (
 												<BlockEditor
 													block={block}
+													funnelFlow={funnelFlow}
 													onSave={onBlockUpdate}
 													onCancel={() => setEditingBlockId(null)}
 												/>

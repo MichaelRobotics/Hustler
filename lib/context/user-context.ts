@@ -123,14 +123,35 @@ async function createUserContext(
 				}
 			}
 			
+			// Fetch company information to get the actual company name
+			let companyName = "App Installation";
+			let companyLogo = null;
+			
+			if (companyId) {
+				try {
+					const { whopSdk } = await import("@/lib/whop-sdk");
+					const companyResult = await whopSdk.companies.getCompany({
+						companyId: companyId
+					});
+					
+					companyName = companyResult.title || "App Installation";
+					companyLogo = companyResult.logo || null;
+					
+					console.log(`✅ Fetched company info: ${companyName}`);
+				} catch (error) {
+					console.warn(`⚠️ Failed to fetch company info for ${companyId}:`, error);
+					// Continue with default values
+				}
+			}
+
 			const [newExperience] = await db
 				.insert(experiences)
 				.values({
 					whopExperienceId: whopExperienceId,
 					whopCompanyId: companyId,
-					name: "App Installation",
-					description: "Experience for app installation",
-					logo: null,
+					name: companyName,
+					description: `Experience for ${companyName}`,
+					logo: companyLogo,
 				})
 				.returning();
 

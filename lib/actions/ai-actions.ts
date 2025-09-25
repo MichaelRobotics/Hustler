@@ -179,7 +179,7 @@ ${badJson}
   "blocks": {
     "welcome_1": {
       "id": "welcome_1",
-      "message": "Welcome! What's your main goal?",
+      "message": "[USER], check [WHOP] BEST quick-money paths!",
       "options": [
         {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
         {"text": "Just exploring for now", "nextBlockId": null}
@@ -482,7 +482,6 @@ export const generateFunnelFlow = async (
 	**FORBIDDEN: Do not create, modify, or imagine any resource names not in this list**
 	**FORBIDDEN: Do not use abbreviations, variations, or similar names**
 	**FORBIDDEN: Do not create placeholder resource names**
-	**FORBIDDEN: Do not use generic names like "Free Guide" or "Premium Course"**
 	**CRITICAL: Every resourceName field MUST match EXACTLY one of the names above**
 	**VIOLATION = IMMEDIATE REJECTION**
 	
@@ -514,7 +513,7 @@ export const generateFunnelFlow = async (
 	- **Line 1**: A short, impactful headline (1 line only).
 
 	*Example Message for Funnel 1:*
-	"Welcome! What's your main goal?"
+	"[USER], check [WHOP] BEST quick-money paths!"
 	
 	**IMPORTANT**: Do NOT include the numbered options in the message text. The options are defined in the 'options' array.
 	
@@ -798,7 +797,7 @@ export const generateFunnelFlow = async (
 	  "blocks": {
 		 "welcome_1": {
 			"id": "welcome_1",
-			"message": "Welcome! What's your main goal?",
+			"message": "[USER], check [WHOP] BEST quick-money paths!",
 			"options": [
 			  {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
 			  {"text": "Just exploring for now", "nextBlockId": "value_crypto_basics"}

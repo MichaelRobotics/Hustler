@@ -100,14 +100,26 @@ export async function handleUserJoinEvent(
 
 		console.log(`Found live funnel ${liveFunnel.id} for experience ${experience.id} and product ${productId}`);
 
-		// Step 4: Extract welcome message from funnel flow
-		const welcomeMessage = getWelcomeMessage(liveFunnel.flow);
+		// Step 4: Get user name and company name for personalization
+		const user = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, userId),
+				eq(users.experienceId, experience.id)
+			),
+		});
+
+		// Step 5: Extract welcome message from funnel flow with personalization
+		const welcomeMessage = getWelcomeMessage(
+			liveFunnel.flow, 
+			user?.name || `User ${userId}`, 
+			experience.name
+		);
 		if (!welcomeMessage) {
 			console.error(`No welcome message found in funnel ${liveFunnel.id}`);
 			return;
 		}
 
-		// Step 5: Delete any existing conversations for this user
+		// Step 6: Delete any existing conversations for this user
 		// Delete by both whopUserId and membershipId to be safe
 		const deletedByUserId = await deleteExistingConversationsByWhopUserId(userId, experience.id);
 		console.log(`[USER-JOIN] Deleted ${deletedByUserId} conversations by whopUserId ${userId}`);
@@ -132,7 +144,7 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Step 7: Create conversation record
+		// Step 8: Create conversation record
 		console.log(`[USER-JOIN] Creating new conversation for user ${userId} in experience ${experience.id}`);
 		const conversationId = await createConversation(
 			experience.id,
@@ -211,12 +223,18 @@ export async function handleUserJoinEvent(
 
 
 /**
- * Extract welcome message from funnel flow
+ * Extract welcome message from funnel flow with personalization
  * 
  * @param funnelFlow - The funnel flow object
+ * @param userName - User's name for [USER] replacement
+ * @param companyName - Company name for [WHOP] replacement
  * @returns Welcome message or null
  */
-export function getWelcomeMessage(funnelFlow: FunnelFlow): string | null {
+export function getWelcomeMessage(
+	funnelFlow: FunnelFlow, 
+	userName?: string, 
+	companyName?: string
+): string | null {
 	try {
 		if (!funnelFlow.startBlockId) {
 			console.error("No startBlockId found in funnel flow");
@@ -236,9 +254,20 @@ export function getWelcomeMessage(funnelFlow: FunnelFlow): string | null {
 
 		let welcomeMessage = startBlock.message;
 
+		// Replace [USER] with first word of user name
+		if (userName) {
+			const firstName = userName.split(' ')[0]; // Get only the first word
+			welcomeMessage = welcomeMessage.replace(/\[USER\]/g, firstName);
+		}
+
+		// Replace [WHOP] with actual company name
+		if (companyName) {
+			welcomeMessage = welcomeMessage.replace(/\[WHOP\]/g, companyName);
+		}
+
 		// Add options if they exist
 		if (startBlock.options && startBlock.options.length > 0) {
-			welcomeMessage += "\n\nAnswer by number/keyword\n\n";
+			welcomeMessage += "\n\nSend number/keyword, start FREE\n\n";
 			startBlock.options.forEach((option, index) => {
 				welcomeMessage += `${index + 1}. ${option.text}\n`;
 			});

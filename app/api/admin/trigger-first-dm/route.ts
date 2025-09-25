@@ -103,9 +103,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 4: Extract welcome message from funnel flow
+    // Step 4: Extract welcome message from funnel flow with personalization
     const funnelFlow = liveFunnel.flow as FunnelFlow;
-    const welcomeMessage = getWelcomeMessage(funnelFlow);
+    const welcomeMessage = getWelcomeMessage(
+      funnelFlow, 
+      "Admin", // Default name for admin testing (first word only)
+      experience.name
+    );
     
     if (!welcomeMessage) {
       return NextResponse.json(

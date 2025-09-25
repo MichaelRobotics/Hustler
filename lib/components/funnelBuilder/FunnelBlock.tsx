@@ -15,6 +15,14 @@ interface FunnelBlock {
 	options: FunnelBlockOption[];
 }
 
+interface FunnelFlow {
+	stages: Array<{
+		name: string;
+		blockIds: string[];
+	}>;
+	blocks: Record<string, FunnelBlock>;
+}
+
 interface FunnelBlockProps {
 	block: FunnelBlock;
 	blockId: string;
@@ -24,6 +32,7 @@ interface FunnelBlockProps {
 	onBlockUpdate: (block: FunnelBlock) => void;
 	highlightedPath: { blocks: Set<string>; options: Set<string> };
 	isDeployed?: boolean;
+	funnelFlow?: FunnelFlow;
 }
 
 const FunnelBlock: React.FC<FunnelBlockProps> = ({
@@ -35,6 +44,7 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 	onBlockUpdate,
 	highlightedPath,
 	isDeployed = false,
+	funnelFlow,
 }) => {
 	return (
 		<div
@@ -62,6 +72,7 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 			{editingBlockId === block.id ? (
 				<BlockEditor
 					block={block}
+					funnelFlow={funnelFlow}
 					onSave={onBlockUpdate}
 					onCancel={() => setEditingBlockId(null)}
 				/>
