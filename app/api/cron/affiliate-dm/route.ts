@@ -28,11 +28,7 @@ export async function GET(request: NextRequest) {
           orderBy: [desc(messages.createdAt)],
           limit: 1
         },
-        funnel: {
-          with: {
-            flow: true
-          }
-        }
+        funnel: true
       }
     });
 

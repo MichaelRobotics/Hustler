@@ -74,7 +74,7 @@ Why to create your own whop when you can just Search for BEST already existing p
 
 
 1. Create whop (https://whop.com/joined/whop/exp_sZInboyJKFOzbl/app/)
-2. Install app (link to my app)
+2. Install app (https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
 3. add link ${affiliateLink} to products click "generate" and "Go Live" and let bot sell it to your whop owners
 
 
