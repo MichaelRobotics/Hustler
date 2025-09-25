@@ -453,19 +453,27 @@ const validateResourcesForGeneration = (resources: Resource[]): void => {
  */
 export const generateFunnelFlow = async (
 	resources: Resource[],
+	maxTries = 3,
 ): Promise<FunnelFlow> => {
 	// CRITICAL: Validate resources before AI generation
 	validateResourcesForGeneration(resources);
-	const resourceList = resources
-		.map((r) => {
-			const categoryLabel = r.category; // Use exact category: "PAID" or "FREE_VALUE"
-			let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type})`;
-		if (r.promoCode) {
-			details += ` [Promo Code: ${r.promoCode}]`;
-			}
-			return `- ${details}`;
-		})
-		.join("\n");
+	
+	let lastError: Error | null = null;
+	
+	for (let attempt = 1; attempt <= maxTries; attempt++) {
+		try {
+			console.log(`Funnel generation attempt ${attempt}/${maxTries}`);
+			
+			const resourceList = resources
+				.map((r) => {
+					const categoryLabel = r.category; // Use exact category: "PAID" or "FREE_VALUE"
+					let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type})`;
+				if (r.promoCode) {
+					details += ` [Promo Code: ${r.promoCode}]`;
+					}
+					return `- ${details}`;
+				})
+				.join("\n");
 
 	const prompt =`
 	You are an expert marketing funnel strategist. Your task is to create a branching chatbot conversation flow in a hierarchical JSON format. This flow represents a **complete, two-part funnel system** that transitions a user from a public chat to a private, personalized session.
@@ -854,79 +862,74 @@ export const generateFunnelFlow = async (
 	`;
 	
 
-	let textToProcess = "";
-	try {
-		// Validate environment before making API calls
-		validateEnvironment();
+			// Validate environment before making API calls
+			validateEnvironment();
 
-		// Initialize the Google Gen AI SDK
-		const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+			// Initialize the Google Gen AI SDK
+			const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-		// Use the official SDK to generate content
-		const response = await genAI.models.generateContent({
-			model: "gemini-2.5-flash-preview-05-20",
-			contents: prompt,
-		});
+			// Use the official SDK to generate content
+			const response = await genAI.models.generateContent({
+				model: "gemini-2.5-flash-preview-05-20",
+				contents: prompt,
+			});
 
-		textToProcess = response.text || "";
+			let textToProcess = response.text || "";
 
-		if (!textToProcess || textToProcess.trim() === "") {
-			throw new Error("API responded with empty content.");
-		}
+			if (!textToProcess || textToProcess.trim() === "") {
+				throw new Error("API responded with empty content.");
+			}
 
-		if (textToProcess.startsWith("```json")) {
-			textToProcess = textToProcess
-				.substring(7, textToProcess.length - 3)
-				.trim();
-		}
+			if (textToProcess.startsWith("```json")) {
+				textToProcess = textToProcess
+					.substring(7, textToProcess.length - 3)
+					.trim();
+			}
 
-		const generatedJson = JSON.parse(textToProcess);
+			const generatedJson = JSON.parse(textToProcess);
 
-		// Validate and auto-fix the generated funnel
-		const validatedJson = validateAndFixFunnel(generatedJson, resources);
-		
-		// CRITICAL: Final validation to ensure no non-existing resources are used
-		validateGeneratedFunnelResources(validatedJson, resources);
-		
-		// CRITICAL: Additional check for any imaginary resources that might have slipped through
-		const allResourceNames = Object.values(validatedJson.blocks)
-			.filter(block => block.resourceName)
-			.map(block => block.resourceName!);
-		
-		const validResourceNames = new Set(resources.map(r => r.name));
-		const invalidResources = allResourceNames.filter(name => !validResourceNames.has(name));
-		
-		if (invalidResources.length > 0) {
-			throw new ValidationError(
-				`CRITICAL ERROR: Generated funnel contains imaginary resources: ${invalidResources.join(', ')}. Only use these exact resources: ${Array.from(validResourceNames).join(', ')}`
-			);
-		}
-		
-		return validatedJson;
-	} catch (error) {
-		const aiError = handleSDKError(error);
-		console.error(
-			`Funnel generation failed on first attempt. Reason: ${aiError.message}`,
-			`Resources provided: ${resources.map(r => `${r.name}(${r.category})`).join(', ')}`,
-		);
-
-		if (textToProcess) {
-			try {
-				console.log("Attempting to repair malformed JSON response...");
-				const repairedJson = await repairFunnelJson(textToProcess);
-				return repairedJson;
-			} catch (repairError) {
-				console.error(
-					`Failed to repair JSON after multiple attempts. Resources: ${resources.map(r => r.name).join(', ')}`,
-					repairError,
-				);
-				throw new AIError(
-					`The AI returned an invalid response that could not be repaired. Resources provided: ${resources.map(r => r.name).join(', ')}. Please try generating again.`,
-					"CONTENT",
+			// Validate and auto-fix the generated funnel
+			const validatedJson = validateAndFixFunnel(generatedJson, resources);
+			
+			// CRITICAL: Final validation to ensure no non-existing resources are used
+			validateGeneratedFunnelResources(validatedJson, resources);
+			
+			// CRITICAL: Additional check for any imaginary resources that might have slipped through
+			const allResourceNames = Object.values(validatedJson.blocks)
+				.filter(block => block.resourceName)
+				.map(block => block.resourceName!);
+			
+			const validResourceNames = new Set(resources.map(r => r.name));
+			const invalidResources = allResourceNames.filter(name => !validResourceNames.has(name));
+			
+			if (invalidResources.length > 0) {
+				throw new ValidationError(
+					`CRITICAL ERROR: Generated funnel contains imaginary resources: ${invalidResources.join(', ')}. Only use these exact resources: ${Array.from(validResourceNames).join(', ')}`
 				);
 			}
-		} else {
-			throw aiError; // Re-throw the categorized error
+			
+			console.log(`✅ Funnel generation successful on attempt ${attempt}`);
+			return validatedJson;
+		} catch (error) {
+			lastError = handleSDKError(error);
+			console.error(
+				`Funnel generation failed on attempt ${attempt}/${maxTries}. Reason: ${lastError.message}`,
+				`Resources provided: ${resources.map(r => `${r.name}(${r.category})`).join(', ')}`,
+			);
+			
+			// If this is the last attempt, throw the error
+			if (attempt === maxTries) {
+				console.error(`❌ All ${maxTries} attempts failed. Giving up.`);
+				throw lastError;
+			}
+			
+			// Wait a bit before retrying (exponential backoff)
+			const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+			console.log(`⏳ Waiting ${delay}ms before retry...`);
+			await new Promise(resolve => setTimeout(resolve, delay));
 		}
 	}
+	
+	// This should never be reached, but just in case
+	throw lastError || new AIError("Unexpected error: All retry attempts exhausted", "UNKNOWN");
 };
