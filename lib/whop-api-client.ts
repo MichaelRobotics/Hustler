@@ -331,8 +331,11 @@ export class WhopApiClient {
               console.log("⚠️ Plans API failed, continuing with access passes only");
             }
             
+            // Get company route for discovery page URLs
+            const companyRoute = await this.getCompanyRoute();
+            
             // Map to products
-            const products = this.mapAccessPassesToProducts(accessPasses, plans);
+            const products = this.mapAccessPassesToProducts(accessPasses, plans, companyRoute || undefined);
             console.log(`✅ Mapped to ${products.length} DISCOVERY PAGE PRODUCTS`);
             
             // INVESTIGATION: Log final product structure to see what fields we have
@@ -378,7 +381,7 @@ export class WhopApiClient {
   /**
    * Map access passes and plans to WhopProduct format
    */
-  private mapAccessPassesToProducts(accessPasses: any[], plans: any[]): WhopProduct[] {
+  private mapAccessPassesToProducts(accessPasses: any[], plans: any[], companyRoute?: string): WhopProduct[] {
     // Group plans by access pass ID
     const plansByAccessPass = new Map<string, any[]>();
     plans.forEach((plan: any) => {
@@ -411,7 +414,14 @@ export class WhopApiClient {
       const price = isFree ? 0 : minPrice;
       
       // Generate URLs
-      const discoveryPageUrl = accessPass.route ? `https://whop.com/${accessPass.route}` : undefined;
+      let discoveryPageUrl: string | undefined;
+      if (accessPass.route && companyRoute) {
+        // Use new format: https://whop.com/discover/{companyRoute}/
+        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/`;
+      } else if (accessPass.route) {
+        // Fallback to old format if company route not available
+        discoveryPageUrl = `https://whop.com/${accessPass.route}`;
+      }
       const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
       
       console.log(`🔍 DISCOVERY PAGE PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price})`);

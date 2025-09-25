@@ -245,6 +245,7 @@ export const conversations = pgTable(
 		currentBlockId: text("current_block_id"),
 		userPath: jsonb("user_path"), // Track user's path through funnel
 		phase2StartTime: timestamp("phase2_start_time"), // When Phase 2 (VALUE_DELIVERY) begins
+		myAffiliateLink: text("my_affiliate_link"), // Affiliate link for this conversation
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

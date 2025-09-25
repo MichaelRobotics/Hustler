@@ -13,7 +13,6 @@ import { getWhopApiClient } from "../whop-api-client";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "../analytics/background-tracking";
-import { sendDelayedAffiliateDM } from "../utils/affiliate-dm-core";
 
 export interface Conversation {
 	id: string;
@@ -698,28 +697,6 @@ async function processValidOptionSelection(
 
 		// Reset escalation level on valid response
 		resetEscalationLevel(conversationId);
-
-		// Check if this is an OFFER stage block and trigger affiliate DM
-		if (nextBlock && nextBlock.resourceName) {
-			// Check if this block is in OFFER stage
-			const isOfferBlock = nextBlockId ? funnelFlow.stages.some(
-				stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
-			) : false;
-			
-			if (isOfferBlock) {
-				console.log(`[processValidOptionSelection] OFFER block detected, scheduling affiliate DM for resource: ${nextBlock.resourceName}`);
-				try {
-					await sendDelayedAffiliateDM(
-						conversationId,
-						nextBlock.resourceName,
-						experienceId,
-						5 // 5 minutes delay
-					);
-				} catch (affiliateError) {
-					console.error(`[processValidOptionSelection] Error scheduling affiliate DM:`, affiliateError);
-				}
-			}
-		}
 
 		console.log(`[processValidOptionSelection] Successfully processed option selection`);
 

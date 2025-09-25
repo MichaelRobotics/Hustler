@@ -9,7 +9,6 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 import { whopSdk } from "@/lib/whop-sdk";
-import { sendDelayedAffiliateDM } from "@/lib/utils/affiliate-dm-core";
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
@@ -231,17 +230,9 @@ async function processFunnelNavigation(
             if (!hasAffiliate) {
               console.log(`[OFFER] Adding affiliate parameters to resource link`);
               
-              // Get affiliate app ID (same logic as product-sync)
-              let affiliateAppId = conversation.experienceId; // Use experience ID as fallback
-              try {
-                const whopExperience = await whopSdk.experiences.getExperience({
-                  experienceId: conversation.experienceId,
-                });
-                affiliateAppId = whopExperience.app?.id || conversation.experienceId;
-                console.log(`[OFFER] Got affiliate app ID: ${affiliateAppId}`);
-              } catch (error) {
-                console.log(`[OFFER] Could not get app ID, using experience ID: ${conversation.experienceId}`);
-              }
+              // Get affiliate app ID from environment variable
+              const affiliateAppId = process.env.NEXT_PUBLIC_WHOP_APP_ID || conversation.experienceId; // Use environment variable or experience ID as fallback
+              console.log(`[OFFER] Using affiliate app ID: ${affiliateAppId} (from ${process.env.NEXT_PUBLIC_WHOP_APP_ID ? 'NEXT_PUBLIC_WHOP_APP_ID' : 'experience ID fallback'})`);
               
               // Add affiliate parameter to the link
               const url = new URL(resource.link);
@@ -249,6 +240,20 @@ async function processFunnelNavigation(
               const affiliateLink = url.toString();
               
               console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
+              
+              // Store the affiliate link in the conversation
+              try {
+                await db.update(conversations)
+                  .set({ 
+                    myAffiliateLink: affiliateLink,
+                    updatedAt: new Date()
+                  })
+                  .where(eq(conversations.id, conversationId));
+                console.log(`[OFFER] Stored affiliate link in conversation: ${affiliateLink}`);
+              } catch (error) {
+                console.error(`[OFFER] Failed to store affiliate link in conversation:`, error);
+                // Continue execution even if storing fails
+              }
               
               // Replace [LINK] placeholder with animated button HTML
               const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Started!</div>`;
@@ -305,21 +310,6 @@ async function processFunnelNavigation(
       } catch (sendsError) {
         console.error(`[navigate-funnel] Error updating sends counter:`, sendsError);
       }
-
-      // Send affiliate DM after OFFER stage (with 5-minute delay)
-      if (isOfferBlock && nextBlock.resourceName) {
-        console.log(`[OFFER] Scheduling affiliate DM for resource: ${nextBlock.resourceName}`);
-        try {
-          await sendDelayedAffiliateDM(
-            conversationId,
-            nextBlock.resourceName,
-            conversation.experienceId,
-            5 // 5 minutes delay
-          );
-        } catch (affiliateError) {
-          console.error(`[OFFER] Error scheduling affiliate DM:`, affiliateError);
-        }
-      }
     }
 
     return {
@@ -333,3 +323,4 @@ async function processFunnelNavigation(
     throw error;
   }
 }
+

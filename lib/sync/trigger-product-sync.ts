@@ -208,21 +208,6 @@ export async function triggerProductSyncForNewAdmin(
 		const currentWhopExperienceId = currentExperience.whopExperienceId;
 		console.log(`✅ Current Whop experience ID: ${currentWhopExperienceId}`);
 
-		// Get the App ID for affiliate tracking
-		// COMMENTED OUT: Affiliate tracking disabled for now
-		// console.log("🔧 Getting App ID for affiliate tracking...");
-		// let affiliateAppId = currentWhopExperienceId; // Use Whop experience ID as fallback
-		// try {
-		// 	const whopExperience = await whopSdk.experiences.getExperience({
-		// 		experienceId: currentWhopExperienceId, // Use Whop experience ID, not database UUID
-		// 	});
-		// 	affiliateAppId = whopExperience.app?.id || currentWhopExperienceId;
-		// 	console.log(`✅ Got App ID for affiliate tracking: ${affiliateAppId}`);
-		// } catch (error) {
-		// 	console.log(`⚠️ Could not get App ID from experience, using Whop experience ID: ${currentWhopExperienceId}`);
-		// }
-		let affiliateAppId = undefined; // Disabled for now
-
 		// Step 1: Get owner's business products from discovery page
 		updateProgress("fetching_discovery_products");
 		console.log("🏪 Fetching owner's discovery page products...");
@@ -555,32 +540,14 @@ export async function triggerProductSyncForNewAdmin(
           // Generate Whop native tracking link for paid products
           let trackingUrl: string;
           
-          try {
-            if (product.discoveryPageUrl) {
-              // Create discovery tracking link using Whop API
-              // COMMENTED OUT: Affiliate tracking disabled for now
-              const trackingLink = await whopNativeTrackingService.createDiscoveryTrackingLink(
-                product.discoveryPageUrl,
-                cheapestPlan?.id || product.id,
-                companyId,
-                `Product: ${product.title}`,
-                undefined // affiliateAppId disabled
-              );
-              trackingUrl = trackingLink.url;
-            } else {
-              // Create simple checkout tracking link
-              const trackingLink = await whopNativeTrackingService.createTrackingLink(
-                cheapestPlan?.id || product.id,
-                companyId,
-                `Product: ${product.title}`,
-                'checkout'
-              );
-              trackingUrl = trackingLink.url;
-            }
-          } catch (error) {
-            console.error(`Failed to create tracking link for ${product.title}:`, error);
+          // Use discovery page URL directly (already includes affiliate tracking)
+          if (product.discoveryPageUrl) {
+            trackingUrl = product.discoveryPageUrl;
+            console.log(`✅ Using discovery page URL with affiliate tracking: ${trackingUrl}`);
+          } else {
             // Fallback to simple checkout link
             trackingUrl = whopNativeTrackingService.createSimpleCheckoutLink(cheapestPlan?.id || product.id);
+            console.log(`✅ Using fallback checkout link: ${trackingUrl}`);
           }
 						
 						const resource = await retryDatabaseOperation(
@@ -770,3 +737,4 @@ export async function shouldSyncProductsForUser(userId: string): Promise<boolean
 		return false;
 	}
 }
+

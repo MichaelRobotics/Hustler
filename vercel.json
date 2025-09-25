@@ -68,6 +68,10 @@
     {
       "path": "/api/cron/daily-rollover",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/affiliate-dm",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

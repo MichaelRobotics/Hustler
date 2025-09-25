@@ -1,10 +1,3 @@
-/**
- * Whop Native Tracking Service
- * 
- * Uses Whop's native tracking system instead of custom tracking.
- * This leverages Whop's built-in analytics for clicks, conversions, and revenue.
- */
-
 import { whopSdk } from "@/lib/whop-sdk";
 
 export interface TrackingLinkData {
@@ -70,70 +63,6 @@ class WhopNativeTrackingService {
     }
   }
 
-  /**
-   * Create a tracking link for a product discovery page
-   * This creates a link that goes to the product's discovery page with affiliate tracking
-   */
-  async createDiscoveryTrackingLink(
-    discoveryPageUrl: string,
-    planId: string,
-    whopId: string,
-    linkName: string,
-    affiliateAppId?: string
-  ): Promise<TrackingLinkData> {
-    try {
-      console.log(`🔗 Creating discovery tracking link for ${discoveryPageUrl}`);
-      
-      // TODO: Implement Whop native tracking link creation
-      // The whopSdk.plans.createQuickLink method doesn't exist in the current SDK
-      // For now, return a placeholder response
-      const response = {
-        id: `tracking_${Date.now()}`,
-        url: this.buildDiscoveryUrl(discoveryPageUrl, affiliateAppId),
-        name: linkName
-      };
-
-      if (!response.id) {
-        throw new Error('Failed to create discovery tracking link: No data returned');
-      }
-
-      const trackingLink: TrackingLinkData = {
-        id: response.id,
-        url: response.url,
-        name: linkName,
-        planId,
-        whopId,
-        destination: 'store'
-      };
-
-      console.log(`✅ Created discovery tracking link: ${trackingLink.url}`);
-      return trackingLink;
-
-    } catch (error) {
-      console.error("❌ Error creating discovery tracking link:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Build a discovery page URL with affiliate tracking
-   */
-  private buildDiscoveryUrl(discoveryPageUrl: string, affiliateAppId?: string): string {
-    try {
-      const url = new URL(discoveryPageUrl);
-      
-      // COMMENTED OUT: Affiliate tracking disabled for now
-      // Add affiliate tracking if provided
-      // if (affiliateAppId) {
-      //   url.searchParams.set('app', affiliateAppId);
-      // }
-      
-      return url.toString();
-    } catch (error) {
-      console.error("Error building discovery URL:", error);
-      return discoveryPageUrl;
-    }
-  }
 
   /**
    * Get tracking metrics for a tracking link
@@ -206,11 +135,10 @@ class WhopNativeTrackingService {
     const baseUrl = `https://whop.com/joined/${companyRoute}/${experienceSlug}/app/`;
     const url = new URL(baseUrl);
     
-    // COMMENTED OUT: Affiliate tracking disabled for now
     // Only add ref parameter for paid apps
-    // if (refId && !isFree) {
-    //   url.searchParams.set('ref', refId);
-    // }
+    if (refId && !isFree) {
+      url.searchParams.set('ref', refId);
+    }
     
     return url.toString();
   }

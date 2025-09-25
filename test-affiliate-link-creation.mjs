@@ -58,12 +58,12 @@ async function testAffiliateLinkCreation() {
     
     // Step 2: Create discovery page link
     console.log('\n🔍 Step 2: Creating Discovery Page Link...');
-    const discoveryPageUrl = `https://whop.com/discover/${accessPass.route}`;
+    const discoveryPageUrl = `https://whop.com/discover/${accessPass.route}/?app=${appId}`;
     console.log(`   Discovery Page URL: ${discoveryPageUrl}`);
     
     // Step 3: Create affiliate link with commission tracking
     console.log('\n🔍 Step 3: Creating Affiliate Link...');
-    const affiliateLink = `${discoveryPageUrl}/?app=${appId}`;
+    const affiliateLink = discoveryPageUrl; // Already includes app parameter
     console.log(`   Affiliate Link: ${affiliateLink}`);
     
     // Step 4: Test the affiliate link
