@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
-import { getConversationMessages, filterMessagesFromExperienceQualification } from "@/lib/actions/unified-message-actions";
+import { getConversationMessages, filterMessagesFromWelcomeStage } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels, messages, funnelAnalytics } from "@/lib/supabase/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -115,103 +115,9 @@ async function loadConversationHandler(
 			safeBackgroundTracking(() => trackInterestBackground(conversation.experienceId, conversation.funnelId));
 		}
 
-    // Check if conversation is in DM funnel phase (between WELCOME and VALUE_DELIVERY)
-    const isDMFunnelActive = (isWelcomeStage || isValueDeliveryStage) && !isTransitionStage && !isExperienceQualificationStage;
+    // Check if conversation is in UserChat phase (all stages are UserChat now)
+    const isDMFunnelActive = false; // No more DM funnel - everything is UserChat
 
-    // Handle TRANSITION stage - automatically transition to EXPERIENCE_QUALIFICATION
-    if (isTransitionStage) {
-      console.log(`Conversation ${conversationId} is in TRANSITION stage, transitioning to EXPERIENCE_QUALIFICATION`);
-      
-      // Find the first EXPERIENCE_QUALIFICATION block
-      const experienceQualificationStage = funnelFlow.stages.find(
-        stage => stage.name === "EXPERIENCE_QUALIFICATION"
-      );
-      
-      if (experienceQualificationStage && experienceQualificationStage.blockIds.length > 0) {
-        const firstExperienceBlockId = experienceQualificationStage.blockIds[0];
-        
-        // Use a transaction to prevent race conditions
-        await db.transaction(async (tx: any) => {
-          // First, check if conversation is still in TRANSITION stage (double-check)
-          const currentConversation = await tx.query.conversations.findFirst({
-            where: eq(conversations.id, conversationId),
-          });
-          
-          if (currentConversation?.currentBlockId === currentBlockId) {
-            // Update conversation to EXPERIENCE_QUALIFICATION stage
-            await tx
-              .update(conversations)
-              .set({
-                currentBlockId: firstExperienceBlockId,
-                userPath: [...(conversation.userPath || []), firstExperienceBlockId],
-                updatedAt: new Date(),
-              })
-              .where(eq(conversations.id, conversationId));
-
-            // Interest tracking removed to prevent database conflicts
-
-            // Add the EXPERIENCE_QUALIFICATION agent message (only if it doesn't already exist)
-            const experienceBlock = funnelFlow.blocks[firstExperienceBlockId];
-            if (experienceBlock?.message) {
-              // Check if this message already exists to prevent duplicates
-              const existingMessage = await tx.query.messages.findFirst({
-                where: and(
-                  eq(messages.conversationId, conversationId),
-                  eq(messages.type, "bot"),
-                  eq(messages.content, experienceBlock.message)
-                ),
-              });
-              
-              if (!existingMessage) {
-                await tx.insert(messages).values({
-                  conversationId: conversationId,
-                  type: "bot",
-                  content: experienceBlock.message,
-                });
-                console.log(`Added EXPERIENCE_QUALIFICATION message for conversation ${conversationId}`);
-              } else {
-                console.log(`EXPERIENCE_QUALIFICATION message already exists for conversation ${conversationId}`);
-              }
-            }
-          } else {
-            console.log(`Conversation ${conversationId} is no longer in TRANSITION stage, skipping transition`);
-          }
-        });
-
-        // Reload the updated conversation
-        const updatedConversation = await getConversationById(conversationId, conversation.experienceId);
-        if (updatedConversation) {
-          // Load unified messages for the updated conversation
-          const unifiedMessages = await getConversationMessages(
-            conversationId,
-            conversation.experienceId,
-            conversation.whopUserId
-          );
-
-          // Apply customer filtering if this is a customer request
-          const finalMessages = isCustomerRequest 
-            ? filterMessagesFromExperienceQualification(unifiedMessages, funnelFlow)
-            : unifiedMessages;
-
-          console.log(`[load-conversation] Message filtering: ${unifiedMessages.length} -> ${finalMessages.length} (customer: ${isCustomerRequest})`);
-
-          return NextResponse.json({
-            success: true,
-            conversation: {
-              ...updatedConversation,
-              messages: finalMessages, // Use filtered messages
-            },
-            funnelFlow: funnelFlow,
-            stageInfo: {
-              currentStage: "EXPERIENCE_QUALIFICATION",
-              isDMFunnelActive: false,
-              isTransitionStage: false,
-              isExperienceQualificationStage: true,
-            }
-          });
-        }
-      }
-    }
 
     // Load the conversation data
     const conversationData = await getConversationById(conversationId, conversation.experienceId);
@@ -226,7 +132,7 @@ async function loadConversationHandler(
 
       // Apply customer filtering if this is a customer request
       const finalMessages = isCustomerRequest 
-        ? filterMessagesFromExperienceQualification(unifiedMessages, funnelFlow)
+        ? filterMessagesFromWelcomeStage(unifiedMessages, funnelFlow)
         : unifiedMessages;
 
       console.log(`[load-conversation] Message filtering: ${unifiedMessages.length} -> ${finalMessages.length} (customer: ${isCustomerRequest})`);

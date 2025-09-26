@@ -247,63 +247,14 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 		[],
 	);
 
-		// Function to detect transition from TRANSITION to EXPERIENCE_QUALIFICATION and add separation line
-		const processMessagesWithTransitionLine = useCallback((messages: LiveChatMessage[]) => {
-			const processedMessages: LiveChatMessage[] = [];
-			
-			for (let i = 0; i < messages.length; i++) {
-				const message = messages[i];
-				const nextMessage = messages[i + 1];
-				
-				// Add current message
-				processedMessages.push(message);
-				
-				// Check if we need to add a transition line between consecutive bot messages
-				if (nextMessage && 
-					message.type === "bot" && 
-					nextMessage.type === "bot") {
-					
-					// Check for transition using content patterns
-					// Look for patterns that indicate TRANSITION stage (completion messages)
-					const isTransition = message.text.includes("completed step") || 
-										message.text.includes("✅") ||
-										message.text.includes("Excellent! You've completed") ||
-										message.text.includes("step one");
-					
-					// Look for patterns that indicate EXPERIENCE_QUALIFICATION stage (assessment questions)
-					const isExperienceQualification = nextMessage.text.includes("assess your current level") ||
-													nextMessage.text.includes("What's the biggest challenge") ||
-													nextMessage.text.includes("current level with the topic") ||
-													nextMessage.text.includes("assessment");
-					
-					if (isTransition && isExperienceQualification) {
-						// Add the transition separation line
-						const transitionLine: LiveChatMessage = {
-							id: `transition-${message.id}-${nextMessage.id}`,
-							conversationId: message.conversationId,
-							type: "system",
-							text: "redirect_to_live_chat",
-							timestamp: message.timestamp,
-							isRead: true,
-							metadata: {
-								funnelStage: "TRANSITION_LINE"
-							}
-						};
-						processedMessages.push(transitionLine);
-					}
-				}
-			}
-			
-			return processedMessages;
-		}, []);
+		// Removed pattern detection logic - it was dead code not used in customer flow
 
 		// Memoized messages list to prevent unnecessary re-renders
 		const messagesList = useMemo(() => {
-			const processedMessages = processMessagesWithTransitionLine(conversation.messages);
-			return processedMessages.map((message, index) => 
-				renderMessage(message, index, processedMessages)
+			return conversation.messages.map((message, index) => 
+				renderMessage(message, index, conversation.messages)
 			);
-		}, [conversation.messages, renderMessage, processMessagesWithTransitionLine]);
+		}, [conversation.messages, renderMessage]);
 
 		return (
 			<div

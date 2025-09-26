@@ -405,8 +405,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		);
 	}
 
-	// Check if we should show UserChat (for EXPERIENCE_QUALIFICATION stage or TRANSITION stage)
+	// Check if we should show UserChat (for all UserChat stages)
 	const shouldShowUserChat = stageInfo?.isExperienceQualificationStage || 
+		stageInfo?.currentStage === "WELCOME" ||
+		stageInfo?.currentStage === "VALUE_DELIVERY" ||
+		stageInfo?.currentStage === "EXPERIENCE_QUALIFICATION" ||
+		stageInfo?.currentStage === "PAIN_POINT_QUALIFICATION" ||
+		stageInfo?.currentStage === "OFFER" ||
 		(stageInfo?.isTransitionStage && conversationId) || 
 		(stageInfo?.currentStage === "TRANSITION" && conversationId);
 	

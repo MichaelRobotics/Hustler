@@ -117,14 +117,14 @@ export async function getConversationMessagesWithVersion(
 }
 
 /**
- * Filter messages to show only those from EXPERIENCE_QUALIFICATION stage onwards
- * This is used for customer access level to hide DM funnel messages
+ * Filter messages to show only those from WELCOME stage onwards
+ * This is used for customer access level to show all funnel messages
  * 
  * @param messages - Array of unified messages
  * @param funnelFlow - Funnel flow to determine stage boundaries
- * @returns Filtered messages starting from EXPERIENCE_QUALIFICATION
+ * @returns Filtered messages starting from WELCOME
  */
-export function filterMessagesFromExperienceQualification(
+export function filterMessagesFromWelcomeStage(
   messages: UnifiedMessage[],
   funnelFlow: any
 ): UnifiedMessage[] {
@@ -133,57 +133,57 @@ export function filterMessagesFromExperienceQualification(
     return messages;
   }
 
-  // Find the EXPERIENCE_QUALIFICATION stage
-  const experienceQualificationStage = funnelFlow.stages.find(
-    (stage: any) => stage.name === "EXPERIENCE_QUALIFICATION"
+  // Find the WELCOME stage
+  const welcomeStage = funnelFlow.stages.find(
+    (stage: any) => stage.name === "WELCOME"
   );
 
-  if (!experienceQualificationStage || !experienceQualificationStage.blockIds) {
-    console.log("[UNIFIED-MESSAGES] No EXPERIENCE_QUALIFICATION stage found, returning all messages");
+  if (!welcomeStage || !welcomeStage.blockIds) {
+    console.log("[UNIFIED-MESSAGES] No WELCOME stage found, returning all messages");
     return messages;
   }
 
-  // Find the first bot message that belongs to EXPERIENCE_QUALIFICATION stage
-  let experienceQualificationStartIndex = -1;
+  // Find the first bot message that belongs to WELCOME stage
+  let welcomeStartIndex = -1;
   
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i];
     
-    // Look for bot messages that might be from EXPERIENCE_QUALIFICATION stage
+    // Look for bot messages that might be from WELCOME stage
     if (message.type === "bot") {
-      // Check if this message's metadata indicates it's from EXPERIENCE_QUALIFICATION
+      // Check if this message's metadata indicates it's from WELCOME
       if (message.metadata?.blockId && 
-          experienceQualificationStage.blockIds.includes(message.metadata.blockId)) {
-        experienceQualificationStartIndex = i;
-        console.log(`[UNIFIED-MESSAGES] Found EXPERIENCE_QUALIFICATION start at message index ${i}, blockId: ${message.metadata.blockId}`);
+          welcomeStage.blockIds.includes(message.metadata.blockId)) {
+        welcomeStartIndex = i;
+        console.log(`[UNIFIED-MESSAGES] Found WELCOME start at message index ${i}, blockId: ${message.metadata.blockId}`);
         break;
       }
       
-      // Also check if the message content matches the EXPERIENCE_QUALIFICATION block message
+      // Also check if the message content matches the WELCOME block message
       // This is a fallback for messages that might not have metadata
-      const experienceBlocks = experienceQualificationStage.blockIds.map((blockId: string) => 
+      const welcomeBlocks = welcomeStage.blockIds.map((blockId: string) => 
         funnelFlow.blocks?.[blockId]
       ).filter(Boolean);
       
-      for (const block of experienceBlocks) {
+      for (const block of welcomeBlocks) {
         if (block.message && message.text.includes(block.message.substring(0, 50))) {
-          experienceQualificationStartIndex = i;
-          console.log(`[UNIFIED-MESSAGES] Found EXPERIENCE_QUALIFICATION start at message index ${i} by content match`);
+          welcomeStartIndex = i;
+          console.log(`[UNIFIED-MESSAGES] Found WELCOME start at message index ${i} by content match`);
           break;
         }
       }
       
-      if (experienceQualificationStartIndex !== -1) break;
+      if (welcomeStartIndex !== -1) break;
     }
   }
 
-  if (experienceQualificationStartIndex === -1) {
-    console.log("[UNIFIED-MESSAGES] No EXPERIENCE_QUALIFICATION messages found, returning all messages");
+  if (welcomeStartIndex === -1) {
+    console.log("[UNIFIED-MESSAGES] No WELCOME messages found, returning all messages");
     return messages;
   }
 
-  const filteredMessages = messages.slice(experienceQualificationStartIndex);
-  console.log(`[UNIFIED-MESSAGES] Filtered messages: ${messages.length} -> ${filteredMessages.length} (starting from EXPERIENCE_QUALIFICATION)`);
+  const filteredMessages = messages.slice(welcomeStartIndex);
+  console.log(`[UNIFIED-MESSAGES] Filtered messages: ${messages.length} -> ${filteredMessages.length} (starting from WELCOME)`);
   
   return filteredMessages;
 }

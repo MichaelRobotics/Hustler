@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, messages, funnelInteractions, resources, funnels } from "@/lib/supabase/schema";
+import { conversations, messages, funnelInteractions, resources, funnels, users } from "@/lib/supabase/schema";
 import { eq, and, sql } from "drizzle-orm";
 import type { FunnelFlow, FunnelBlock } from "@/lib/types/funnel";
 import {
@@ -9,6 +9,148 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 import { whopSdk } from "@/lib/whop-sdk";
+
+/**
+ * Look up resource by name and experience ID
+ * Returns the resource link if found, null otherwise
+ */
+async function lookupResourceLink(resourceName: string, experienceId: string): Promise<string | null> {
+  try {
+    console.log(`[Resource Lookup] Looking up resource: "${resourceName}" for experience: ${experienceId}`);
+    
+    const resource = await db.query.resources.findFirst({
+      where: and(
+        eq(resources.experienceId, experienceId),
+        eq(resources.name, resourceName)
+      ),
+    });
+
+    if (resource?.link) {
+      console.log(`[Resource Lookup] Found resource: ${resource.name} with link: ${resource.link}`);
+      return resource.link;
+    } else {
+      console.log(`[Resource Lookup] Resource not found: ${resourceName}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[Resource Lookup] Error looking up resource "${resourceName}":`, error);
+    return null;
+  }
+}
+
+/**
+ * Look up admin user (WHOP_OWNER) by experience ID
+ * Returns the admin user's name if found, null otherwise
+ */
+async function lookupAdminUser(experienceId: string): Promise<string | null> {
+  try {
+    console.log(`[Admin Lookup] Looking up admin user for experience: ${experienceId}`);
+    
+    const adminUser = await db.query.users.findFirst({
+      where: and(
+        eq(users.experienceId, experienceId),
+        eq(users.accessLevel, "admin")
+      ),
+    });
+
+    if (adminUser?.name) {
+      // Return first word of admin name (same logic as [USER] placeholder)
+      const firstName = adminUser.name.split(' ')[0];
+      console.log(`[Admin Lookup] Found admin user: ${adminUser.name} -> firstName: ${firstName}`);
+      return firstName;
+    } else {
+      console.log(`[Admin Lookup] No admin user found for experience: ${experienceId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[Admin Lookup] Error looking up admin user for experience ${experienceId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Look up current user by conversation ID
+ * Returns the user's name if found, null otherwise
+ */
+async function lookupCurrentUser(conversationId: string): Promise<string | null> {
+  try {
+    console.log(`[User Lookup] Looking up current user for conversation: ${conversationId}`);
+    
+    // Get conversation to find whopUserId
+    const conversation = await db.query.conversations.findFirst({
+      where: eq(conversations.id, conversationId),
+    });
+
+    if (!conversation?.whopUserId) {
+      console.log(`[User Lookup] No conversation or whopUserId found for conversation: ${conversationId}`);
+      return null;
+    }
+
+    // Get user by whopUserId
+    const user = await db.query.users.findFirst({
+      where: eq(users.whopUserId, conversation.whopUserId),
+    });
+
+    if (user?.name) {
+      // Return first word of user name (same logic as admin lookup)
+      const firstName = user.name.split(' ')[0];
+      console.log(`[User Lookup] Found user: ${user.name} -> firstName: ${firstName}`);
+      return firstName;
+    } else {
+      console.log(`[User Lookup] No user found for whopUserId: ${conversation.whopUserId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[User Lookup] Error looking up current user for conversation ${conversationId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Replace [LINK], [WHOP_OWNER], and [USER] placeholders with actual values
+ */
+async function resolvePlaceholders(message: string, block: FunnelBlock, experienceId: string, conversationId?: string): Promise<string> {
+  let resolvedMessage = message;
+
+  // Resolve [LINK] placeholder
+  if (resolvedMessage.includes('[LINK]')) {
+    if (block.resourceName) {
+      const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
+      if (resourceLink) {
+        resolvedMessage = resolvedMessage.replace(/\[LINK\]/g, resourceLink);
+        console.log(`[Placeholder Resolution] Replaced [LINK] with: ${resourceLink}`);
+      } else {
+        console.log(`[Placeholder Resolution] Resource not found, keeping [LINK] placeholder`);
+      }
+    } else {
+      console.log(`[Placeholder Resolution] Block has no resourceName, keeping [LINK] placeholder`);
+    }
+  }
+
+  // Resolve [WHOP_OWNER] placeholder
+  if (resolvedMessage.includes('[WHOP_OWNER]')) {
+    const adminName = await lookupAdminUser(experienceId);
+    if (adminName) {
+      resolvedMessage = resolvedMessage.replace(/\[WHOP_OWNER\]/g, adminName);
+      console.log(`[Placeholder Resolution] Replaced [WHOP_OWNER] with: ${adminName}`);
+    } else {
+      console.log(`[Placeholder Resolution] Admin user not found, keeping [WHOP_OWNER] placeholder`);
+    }
+  }
+
+  // Resolve [USER] placeholder
+  if (resolvedMessage.includes('[USER]') && conversationId) {
+    const userName = await lookupCurrentUser(conversationId);
+    if (userName) {
+      resolvedMessage = resolvedMessage.replace(/\[USER\]/g, userName);
+      console.log(`[Placeholder Resolution] Replaced [USER] with: ${userName}`);
+    } else {
+      console.log(`[Placeholder Resolution] Current user not found, keeping [USER] placeholder`);
+    }
+  }
+
+  return resolvedMessage;
+}
 
 /**
  * Navigate funnel in UserChat - handle option selections and custom inputs
@@ -201,13 +343,20 @@ async function processFunnelNavigation(
     // Generate bot response
     let botMessage = null;
     if (nextBlock) {
-      // Check if this is an OFFER stage block and handle resource lookup
-      let formattedMessage = nextBlock.message || "Thank you for your response.";
+      // Check if this is a VALUE_DELIVERY block
+      const isValueDelivery = nextBlockId ? funnelFlow.stages.some(
+        stage => stage.name === 'VALUE_DELIVERY' && stage.blockIds.includes(nextBlockId)
+      ) : false;
       
       // Check if this block is in OFFER stage
       const isOfferBlock = nextBlockId ? funnelFlow.stages.some(
         stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
       ) : false;
+      
+      console.log(`[Navigate Funnel] Block ${nextBlockId} - isValueDelivery: ${isValueDelivery}, isOfferBlock: ${isOfferBlock}`);
+      
+      // Start with the base message
+      let formattedMessage = nextBlock.message || "Thank you for your response.";
       
       if (isOfferBlock && nextBlock.resourceName) {
         console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
@@ -271,14 +420,12 @@ async function processFunnelNavigation(
           }
         } catch (error) {
           console.error(`[OFFER] Error processing resource lookup:`, error);
-          // Replace [LINK] placeholder with fallback text
-          formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
+          // Keep the original message with resolved placeholders
         }
-      } else if (formattedMessage.includes('[LINK]')) {
-        // Handle other blocks that might have [LINK] placeholder
-        console.log(`[LINK] Block ${nextBlockId} has [LINK] placeholder but is not OFFER stage`);
-        // Replace [LINK] placeholder with fallback text
-        formattedMessage = formattedMessage.replace('[LINK]', '[Link not available]');
+      } else {
+        // For non-OFFER blocks (including VALUE_DELIVERY), use simple placeholder resolution
+        console.log(`[Navigate Funnel] Resolving placeholders for non-OFFER block ${nextBlockId}`);
+        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
       }
       
       // UserChat system: Options are handled by frontend buttons

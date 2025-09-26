@@ -94,11 +94,10 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 		}
 	};
 
-	// Load products on mount
+	// Load products on mount only when needed (not for regular UserChat)
 	useEffect(() => {
-		if (experienceId && discoveryProducts.length === 0) {
-			fetchDiscoveryProducts();
-		}
+		// Only fetch products when explicitly needed, not on every mount
+		// This prevents unnecessary API calls when just viewing UserChat
 	}, [experienceId]);
 
 	return (

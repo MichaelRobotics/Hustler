@@ -185,8 +185,8 @@ async function checkConversationHandler(
       stage => stage.name === "OFFER" && stage.blockIds.includes(currentBlockId)
     );
 
-    // Check if conversation is in DM funnel phase (between WELCOME and VALUE_DELIVERY)
-    const isDMFunnelActive = (isWelcomeStage || isValueDeliveryStage) && !isTransitionStage && !isExperienceQualificationStage;
+    // Check if conversation is in UserChat phase (all stages are UserChat now)
+    const isDMFunnelActive = false; // No more DM funnel - everything is UserChat
     
     // Debug logging
     console.log(`Stage detection results:`, {

@@ -51,6 +51,7 @@ export const experiences = pgTable(
 		name: text("name").notNull(),
 		description: text("description"),
 		logo: text("logo"),
+		link: text("link"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

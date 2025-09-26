@@ -122,14 +122,14 @@ Invalid JSON:
 ${badJson}
 
 **CRITICAL RULES:**
-- FUNNEL_1: WELCOME → VALUE_DELIVERY → TRANSITION
-- FUNNEL_2: EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
+- FUNNEL_1: TRANSITION (webhook triggered, sends UserChat link)
+- FUNNEL_2: WELCOME → VALUE_DELIVERY → EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 - VALUE_DELIVERY: ONLY "FREE_VALUE" resources
 - OFFER: ONLY "PAID" resources
 - ALL messages max 5 lines (except OFFER messages)
 - OFFER messages max 8 lines with proper paragraph spacing
 - OFFER: 3-part structure (Value Stack + FOMO + CTA)
-- TRANSITION: Simple conversational bridge, NO 3-part structure, NO "Observer/Action Taker" contrast
+- TRANSITION: Simple message with UserChat link, NO 3-part structure
 - Each VALUE_DELIVERY block MUST have "resourceName" field with exact resource name from category FREE_VALUE
 - Each OFFER block MUST have "resourceName" field with exact resource name from category PAID
 - resourceName must match exactly from provided list
@@ -137,12 +137,18 @@ ${badJson}
 **CORRECT JSON STRUCTURE:**
 \`\`\`json
 {
-  "startBlockId": "welcome_1",
+  "startBlockId": "transition_1",
   "stages": [
+    {
+      "id": "stage-transition",
+      "name": "TRANSITION",
+      "explanation": "Webhook triggered message with UserChat link.",
+      "blockIds": ["transition_1"]
+    },
     {
       "id": "stage-welcome",
       "name": "WELCOME",
-      "explanation": "Initial greeting and user segmentation.",
+      "explanation": "Initial greeting and user segmentation in UserChat.",
       "blockIds": ["welcome_1"]
     },
     {
@@ -152,15 +158,9 @@ ${badJson}
       "blockIds": ["value_trading_guide"]
     },
     {
-      "id": "stage-transition",
-      "name": "TRANSITION",
-      "explanation": "Ends first funnel and directs to live chat.",
-      "blockIds": ["transition_to_vip_chat"]
-    },
-    {
       "id": "stage-experience",
       "name": "EXPERIENCE_QUALIFICATION",
-      "explanation": "Qualify user's skill level.",
+      "explanation": "Qualify user's skill level based on VALUE_DELIVERY choice.",
       "blockIds": ["experience_qual_1"]
     },
     {
@@ -177,24 +177,30 @@ ${badJson}
     }
   ],
   "blocks": {
+    "transition_1": {
+      "id": "transition_1",
+      "message": "[USER], catch!\\n\\n[LINK]",
+      "options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
+    },
     "welcome_1": {
       "id": "welcome_1",
       "message": "[USER], check [WHOP] BEST quick-money paths!",
       "options": [
         {"text": "Trading & Investing", "nextBlockId": "value_trading_guide"},
-        {"text": "Just exploring for now", "nextBlockId": null}
+        {"text": "Just exploring for now", "nextBlockId": "value_crypto_basics"}
       ]
     },
     "value_trading_guide": {
       "id": "value_trading_guide",
       "message": "Perfect. Trading is where the action is.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
       "resourceName": "The 3 Core Principles of Crypto Charting",
-      "options": [{"text": "unlock", "nextBlockId": "transition_to_vip_chat"}]
+      "options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
     },
-    "transition_to_vip_chat": {
-      "id": "transition_to_vip_chat",
-      "message": "[USER], catch!\\n\\n[LINK]",
-      "options": [{"text": "Continue to Strategy Session", "nextBlockId": "experience_qual_1"}]
+    "value_crypto_basics": {
+      "id": "value_crypto_basics",
+      "message": "Perfect. Crypto basics are where it all starts.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
+      "resourceName": "Crypto Basics Guide",
+      "options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
     },
     "experience_qual_1": {
       "id": "experience_qual_1",
@@ -592,9 +598,10 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
+	- **TRANSITION messages** must be **5 lines or fewer** and include UserChat link
 	- **WELCOME messages** must be **1 line only** and MUST be exactly: "[USER], check [WHOP] BEST quick-money paths!"
 	- **VALUE_DELIVERY messages** must be **6 lines or fewer** (not counting empty lines) to accommodate structure with [WHOP_OWNER] and [USER] placeholders
-	- **All other message types** (TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
+	- **All other message types** (EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
 	- **OFFER messages** can be **8 lines or fewer** to accommodate proper paragraph spacing
 	- **VIOLATION WILL RESULT IN REJECTION**: Any message over its limit will be rejected
 	- **WELCOME MESSAGE ENFORCEMENT**: WELCOME messages must be EXACTLY "[USER], check [WHOP] BEST quick-money paths!" - NO VARIATIONS ALLOWED
@@ -640,7 +647,7 @@ export const generateFunnelFlow = async (
 	
 	### FUNNEL GENERATION RULES
 	
-	1.  **OVERALL GOAL**: Generate a single JSON object that contains the structures for **BOTH** \`FUNNEL_1_WELCOME_GATE\` and \`FUNNEL_2_STRATEGY_SESSION\`. The output must be one single, valid JSON object with the standard FunnelFlow structure: \`startBlockId\`, \`stages\`, and \`blocks\`. Both funnels will be combined into this single structure for JSON formatting purposes, but they remain logically separate.
+	1.  **OVERALL GOAL**: Generate a single JSON object that contains the structures for **BOTH** \`FUNNEL_1_TRANSITION_GATE\` and \`FUNNEL_2_USERCHAT_STRATEGY_SESSION\`. The output must be one single, valid JSON object with the standard FunnelFlow structure: \`startBlockId\`, \`stages\`, and \`blocks\`. Both funnels will be combined into this single structure for JSON formatting purposes, but they remain logically separate.
 	
 	2.  **RESOURCES**: You will be provided with a list of resources, categorized as 'Free Value' or 'Paid Product'.
 		 \ ${resourceList}
@@ -649,7 +656,7 @@ export const generateFunnelFlow = async (
 		 **CRITICAL RESOURCE MAPPING RULES:**
 		 - ONE resource = ONE corresponding block (exact 1:1 mapping)
 		 - Use EXACT resource names from the list above - NO variations or imaginary products
-		 - **CRITICAL**: FREE_VALUE resources → VALUE_DELIVERY blocks ONLY
+		 - **CRITICAL**: FREE_VALUE resources → VALUE_DELIVERY blocks ONLY (leads to EXPERIENCE_QUALIFICATION)
 		 - **CRITICAL**: PAID resources → OFFER blocks ONLY
 		 - **FORBIDDEN**: PAID resources CANNOT be in VALUE_DELIVERY blocks
 		 - **FORBIDDEN**: FREE_VALUE resources CANNOT be in OFFER blocks
@@ -657,43 +664,54 @@ export const generateFunnelFlow = async (
 		 **MANDATORY BLOCK CREATION:**
 		 - Create ONE VALUE_DELIVERY block for EACH resource with category "FREE_VALUE"
 		 - Create ONE OFFER block for EACH resource with category "PAID"
+		 - Each VALUE_DELIVERY block must connect to a corresponding EXPERIENCE_QUALIFICATION block
 		 - Each block must have its own unique ID and resourceName field
 		 - Do NOT mix resources in the same block
 		 - **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
 	
-	3.  **FUNNEL 1: "WELCOME GATE" STRUCTURE (CHAT 1)**
-		 * **Goal**: Welcome user, deliver free value, transition to second chat.
-		 * **Stages**: WELCOME → VALUE_DELIVERY → TRANSITION
-	
-	4.  **FUNNEL 2: "STRATEGY SESSION" STRUCTURE (CHAT 2)**
-		 * **Goal**: Qualify user and present targeted paid resources.
-		 * **Stages**: EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
-	
-	5.  **BRANCHING LOGIC - TRANSITION TO EXPERIENCE_QUALIFICATION CONNECTIONS**:
+	3.  **FUNNEL 1: "TRANSITION GATE" STRUCTURE (WEBHOOK TRIGGERED)**
+		 * **Goal**: Send initial transition message with UserChat link, no DM funnel.
+		 * **Stages**: TRANSITION (webhook triggered, sends UserChat link)
+
+	4.  **FUNNEL 2: "USERCHAT STRATEGY SESSION" STRUCTURE (INTERNAL CHAT)**
+		 * **Goal**: Qualify user and present targeted paid resources in UserChat.
+		 * **Stages**: WELCOME → VALUE_DELIVERY → EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
+
+	5.  **BRANCHING LOGIC - VALUE_DELIVERY TO EXPERIENCE_QUALIFICATION CONNECTIONS**:
 		 * **CRITICAL**: Each VALUE_DELIVERY block must have its own corresponding EXPERIENCE_QUALIFICATION block.
-		 * **TRANSITION Stage**: Should have multiple blocks, each linking to a specific EXPERIENCE_QUALIFICATION block based on the user's VALUE_DELIVERY path.
+		 * **VALUE_DELIVERY Stage**: Should have multiple blocks, each linking to a specific EXPERIENCE_QUALIFICATION block.
 		 * **Connection Pattern**: 
-			- VALUE_DELIVERY block A → TRANSITION block A → EXPERIENCE_QUALIFICATION block A
-			- VALUE_DELIVERY block B → TRANSITION block B → EXPERIENCE_QUALIFICATION block B
+			- VALUE_DELIVERY block A → EXPERIENCE_QUALIFICATION block A → PAIN_POINT_QUALIFICATION block A → OFFER block A
+			- VALUE_DELIVERY block B → EXPERIENCE_QUALIFICATION block B → PAIN_POINT_QUALIFICATION block B → OFFER block B
 		 * **Personalization**: Each EXPERIENCE_QUALIFICATION block should reference the specific free value the user consumed in their VALUE_DELIVERY path.
-		 * **Example**: If user chose "Trading" in VALUE_DELIVERY, their TRANSITION link should lead to an EXPERIENCE_QUALIFICATION block that asks about their trading experience level.
+		 * **Example**: If user chose "Trading" in VALUE_DELIVERY, their EXPERIENCE_QUALIFICATION block should ask about their trading experience level.
 	
 	6.  **MESSAGE CONSTRUCTION**: Follow the specific formatting rules for each message type (choices, offers, value delivery, etc.) as defined in previous instructions.
+
+	7.  **FLOW STRUCTURE REQUIREMENTS**:
+		 * **TRANSITION Stage**: Must be the first stage (startBlockId points to TRANSITION block)
+		 * **WELCOME Stage**: Second stage in UserChat, provides options to users
+		 * **VALUE_DELIVERY Stage**: Third stage, delivers free value and connects to EXPERIENCE_QUALIFICATION
+		 * **EXPERIENCE_QUALIFICATION Stage**: Fourth stage, qualifies user based on VALUE_DELIVERY choice
+		 * **PAIN_POINT_QUALIFICATION Stage**: Fifth stage, identifies user pain points
+		 * **OFFER Stage**: Final stage, presents paid products
+		 * **CRITICAL**: Each VALUE_DELIVERY block must have a direct connection to its corresponding EXPERIENCE_QUALIFICATION block
+		 * **CRITICAL**: The startBlockId must point to a TRANSITION block, not WELCOME
 	
-	7.  **\`resourceName\` FIELD (CRITICAL - EXACT MATCHING)**:
+	8.  **\`resourceName\` FIELD (CRITICAL - EXACT MATCHING)**:
 		 - **EXACT MATCH**: resourceName must be EXACTLY the same as the resource name from the list above
 		 - **NO VARIATIONS**: No abbreviations, modifications, or imaginary products allowed
 		 - **ONE PER BLOCK**: Each resourceName appears in exactly ONE block (no duplicates)
 	
-	8.  **RESOURCE ID FORMAT (SECONDARY)**:
+	9.  **RESOURCE ID FORMAT (SECONDARY)**:
 		 - Each offer block in \`FUNNEL_2\`'s OFFER stage should have an ID generated from the first two words of the \`resourceName\`.
 		 - Example: If \`resourceName\` is "Beginner Dropshipping Course", the offer block ID should be "beginner_dropshipping".
 	
-	9.  **ONE RESOURCE PER OFFER (CRITICAL)**:
+	10. **ONE RESOURCE PER OFFER (CRITICAL)**:
 		 - Each offer block in Funnel 2 must represent exactly ONE resource with category "PAID".
 		 - Never mix multiple resources in a single offer block.
 	
-	10. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_1\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a FREE_VALUE resource from the provided resource list. This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides general value to anyone exploring.
+	11. **ESCAPE HATCH (CRITICAL RULE)**: The very first block in \`FUNNEL_2\`'s 'WELCOME' stage **MUST** include an option like 'Just exploring for now.' that points to a FREE_VALUE resource from the provided resource list. This option should have a \`nextBlockId\` pointing to a VALUE_DELIVERY block with a free resource that provides general value to anyone exploring.
 	
 	**CRITICAL**: The escape hatch MUST use an existing FREE_VALUE resource from the provided resource list. DO NOT create imaginary resources like "Crypto Basics Guide" or "Community Discord Access". Only use resources that actually exist in the provided resource list.
 	
@@ -773,12 +791,18 @@ export const generateFunnelFlow = async (
 	*Here is a detailed example of the correct, required JSON structure:*
 	\`\`\`json
 	{
-	  "startBlockId": "welcome_1",
+	  "startBlockId": "transition_1",
 	  "stages": [
+		 {
+			"id": "stage-transition",
+			"name": "TRANSITION",
+			"explanation": "Webhook triggered message with UserChat link.",
+			"blockIds": ["transition_1"]
+		 },
 		 {
 			"id": "stage-welcome",
 			"name": "WELCOME",
-			"explanation": "Initial greeting and user segmentation.",
+			"explanation": "Initial greeting and user segmentation in UserChat.",
 			"blockIds": ["welcome_1"]
 		 },
 		 {
@@ -788,15 +812,9 @@ export const generateFunnelFlow = async (
 			"blockIds": ["value_trading_guide"]
 		 },
 		 {
-			"id": "stage-transition",
-			"name": "TRANSITION",
-			"explanation": "Ends first funnel and directs to live chat.",
-			"blockIds": ["transition_to_vip_chat"]
-		 },
-		 {
 			"id": "stage-experience",
 			"name": "EXPERIENCE_QUALIFICATION",
-			"explanation": "Qualify user's skill level.",
+			"explanation": "Qualify user's skill level based on VALUE_DELIVERY choice.",
 			"blockIds": ["experience_qual_1"]
 		 },
 		 {
@@ -813,6 +831,11 @@ export const generateFunnelFlow = async (
 		 }
 	  ],
 	  "blocks": {
+		 "transition_1": {
+			"id": "transition_1",
+			"message": "[USER], catch!\\n\\n[LINK]",
+			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
+		 },
 		 "welcome_1": {
 			"id": "welcome_1",
 			"message": "[USER], check [WHOP] BEST quick-money paths!",
@@ -827,18 +850,13 @@ export const generateFunnelFlow = async (
 			"id": "value_trading_guide",
 			"message": "Perfect. Trading is where the action is.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
 			"resourceName": "The 3 Core Principles of Crypto Charting",
-			"options": [{"text": "unlock", "nextBlockId": "transition_to_vip_chat"}]
+			"options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "value_crypto_basics": {
 			"id": "value_crypto_basics",
 			"message": "Perfect. Crypto basics are where it all starts.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
 			"resourceName": "[EXAMPLE - Use actual FREE_VALUE resource name from provided list]",
-			"options": [{"text": "unlock", "nextBlockId": "transition_to_vip_chat"}]
-		 },
-		 "transition_to_vip_chat": {
-			"id": "transition_to_vip_chat",
-			"message": "[USER], catch!\\n\\n[LINK]",
-			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "experience_qual_1"}]
+			"options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "experience_qual_1": {
 			"id": "experience_qual_1",

@@ -3,7 +3,7 @@ import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels, messages, funnelAnalytics } from "@/lib/supabase/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
-import { getWelcomeMessage } from "@/lib/actions/user-join-actions";
+import { getTransitionMessage, updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
 import { findOrCreateUserForConversation, deleteExistingConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 import { headers } from "next/headers";
 import type { FunnelFlow } from "@/lib/types/funnel";
@@ -103,32 +103,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 4: Extract welcome message from funnel flow with personalization
+    // Step 4: Extract transition message from funnel flow with personalization
     const funnelFlow = liveFunnel.flow as FunnelFlow;
-    const welcomeMessage = getWelcomeMessage(
+    const transitionMessage = await getTransitionMessage(
       funnelFlow, 
       "Admin", // Default name for admin testing (first word only)
-      experience.name
+      experience.name,
+      experienceId
     );
     
-    if (!welcomeMessage) {
+    if (!transitionMessage) {
       return NextResponse.json(
         { 
           error: "Invalid funnel configuration",
-          details: `No welcome message found in funnel ${liveFunnel.id}. Please check your funnel flow.`
+          details: `No transition message found in funnel ${liveFunnel.id}. Please check your funnel flow.`
         },
         { status: 400 }
       );
     }
 
     // Step 5: Send real DM using Whop SDK - REQUIRED for admin
-    console.log(`Sending real DM to admin user ${whopUserId}: ${welcomeMessage}`);
+    console.log(`Sending real DM to admin user ${whopUserId}: ${transitionMessage}`);
     
     let dmSent = false;
     try {
       const dmResult = await whopSdk.messages.sendDirectMessageToUser({
         toUserIdOrUsername: whopUserId,
-        message: welcomeMessage,
+        message: transitionMessage,
       });
       
       console.log(`Real DM sent successfully to admin user ${whopUserId}`);
@@ -205,12 +206,16 @@ export async function POST(request: NextRequest) {
 
     const conversationId = newConversation.id;
 
-    // Step 10: Record welcome message in database (DM was sent successfully)
+    // Step 10: Record transition message in database (DM was sent successfully)
     await db.insert(messages).values({
       conversationId: conversationId,
       type: "bot",
-      content: welcomeMessage,
+      content: transitionMessage,
     });
+
+    // Step 10.5: Update conversation to WELCOME stage and save WELCOME message
+    console.log(`[trigger-first-dm] Updating conversation ${conversationId} to WELCOME stage`);
+    await updateConversationToWelcomeStage(conversationId, funnelFlow);
 
     // Increment sends counter for the funnel
     try {
@@ -307,7 +312,7 @@ export async function POST(request: NextRequest) {
       productId: productId || null,
       adminMode: true,
       dmSent: true, // Always true now since we require DM sending
-      welcomeMessage: welcomeMessage,
+      transitionMessage: transitionMessage,
       monitoringStarted: true,
       analyticsUpdated: true // Indicates that the Awareness metric was incremented
     });

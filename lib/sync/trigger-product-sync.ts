@@ -323,6 +323,25 @@ export async function triggerProductSyncForNewAdmin(
 					// Skip apps that have the same Whop experience ID as the current app
 					if (app.experienceId === currentWhopExperienceId) {
 						console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
+						
+						// Generate and store the app link for the current experience
+						try {
+							const appLink = whopClient.generateAppUrl(app, undefined, true);
+							console.log(`🔗 Generated app link for current experience: ${appLink}`);
+							
+							// Store the link in the experience table
+							await db.update(experiences)
+								.set({
+									link: appLink,
+									updatedAt: new Date()
+								})
+								.where(eq(experiences.id, experienceId));
+							
+							console.log(`✅ Stored app link in experience table: ${appLink}`);
+						} catch (error) {
+							console.error(`❌ Error generating/storing app link for current experience:`, error);
+						}
+						
 						continue;
 					}
 					
