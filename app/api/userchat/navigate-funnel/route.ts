@@ -422,9 +422,38 @@ async function processFunnelNavigation(
           console.error(`[OFFER] Error processing resource lookup:`, error);
           // Keep the original message with resolved placeholders
         }
+      } else if (isValueDelivery && nextBlock.resourceName) {
+        console.log(`[VALUE_DELIVERY] Processing VALUE_DELIVERY block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
+        
+        try {
+          // Lookup resource by name and experience
+          const resource = await db.query.resources.findFirst({
+            where: and(
+              eq(resources.name, nextBlock.resourceName),
+              eq(resources.experienceId, conversation.experienceId)
+            ),
+          });
+          
+          if (resource) {
+            console.log(`[VALUE_DELIVERY] Found resource: ${resource.name} with link: ${resource.link}`);
+            
+            // Replace [LINK] placeholder with animated button HTML for VALUE_DELIVERY
+            const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Icon+ Click!</div>`;
+            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+            console.log(`[VALUE_DELIVERY] Replaced [LINK] with VALUE_DELIVERY button: ${buttonHtml}`);
+          } else {
+            console.log(`[VALUE_DELIVERY] Resource not found: ${nextBlock.resourceName}`);
+            // Replace [LINK] placeholder with fallback text
+            formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
+          }
+        } catch (error) {
+          console.error(`[VALUE_DELIVERY] Error processing resource lookup:`, error);
+          // Replace [LINK] placeholder with fallback text
+          formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
+        }
       } else {
-        // For non-OFFER blocks (including VALUE_DELIVERY), use simple placeholder resolution
-        console.log(`[Navigate Funnel] Resolving placeholders for non-OFFER block ${nextBlockId}`);
+        // For other blocks, use simple placeholder resolution
+        console.log(`[Navigate Funnel] Resolving placeholders for other block ${nextBlockId}`);
         formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
       }
       
