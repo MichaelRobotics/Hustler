@@ -26,7 +26,7 @@ async function generateAppLink(experienceId: string): Promise<string> {
 	try {
 		// Get the experience to find the stored link or generate one
 		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.id, experienceId),
+			where: eq(experiences.whopExperienceId, experienceId),
 			columns: { 
 				whopCompanyId: true, 
 				whopExperienceId: true,
@@ -58,6 +58,106 @@ async function generateAppLink(experienceId: string): Promise<string> {
 		console.error(`[App Link] Error generating app link for experience ${experienceId}:`, error);
 		return "https://whop.com/apps/";
 	}
+}
+
+/**
+ * Look up admin user by experience ID
+ * Returns the admin's first name if found, null otherwise
+ */
+async function lookupAdminUser(experienceId: string): Promise<string | null> {
+	try {
+		console.log(`[Admin Lookup] Looking up admin user for experience: ${experienceId}`);
+		
+		const adminUser = await db.query.users.findFirst({
+			where: and(
+				eq(users.experienceId, experienceId),
+				eq(users.accessLevel, "admin")
+			),
+		});
+
+		if (adminUser?.name) {
+			// Return first word of admin name (same logic as [USER] placeholder)
+			const firstName = adminUser.name.split(' ')[0];
+			console.log(`[Admin Lookup] Found admin user: ${adminUser.name} -> firstName: ${firstName}`);
+			return firstName;
+		} else {
+			console.log(`[Admin Lookup] No admin user found for experience: ${experienceId}`);
+			return null;
+		}
+	} catch (error) {
+		console.error(`[Admin Lookup] Error looking up admin user for experience ${experienceId}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Look up current user by conversation ID
+ * Returns the user's first name if found, null otherwise
+ */
+async function lookupCurrentUser(conversationId: string): Promise<string | null> {
+	try {
+		console.log(`[User Lookup] Looking up current user for conversation: ${conversationId}`);
+		
+		// Get conversation to find whopUserId
+		const conversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+		});
+
+		if (!conversation?.whopUserId) {
+			console.log(`[User Lookup] No conversation or whopUserId found for conversation: ${conversationId}`);
+			return null;
+		}
+
+		// Get user by whopUserId
+		const user = await db.query.users.findFirst({
+			where: eq(users.whopUserId, conversation.whopUserId),
+		});
+
+		if (user?.name) {
+			// Return first word of user name (same logic as admin lookup)
+			const firstName = user.name.split(' ')[0];
+			console.log(`[User Lookup] Found user: ${user.name} -> firstName: ${firstName}`);
+			return firstName;
+		} else {
+			console.log(`[User Lookup] No user found for whopUserId: ${conversation.whopUserId}`);
+			return null;
+		}
+	} catch (error) {
+		console.error(`[User Lookup] Error looking up current user for conversation ${conversationId}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Resolve placeholders in message content
+ * Handles [USER] and [WHOP_OWNER] placeholders
+ */
+async function resolvePlaceholders(message: string, experienceId: string, conversationId: string): Promise<string> {
+	let resolvedMessage = message;
+
+	// Resolve [WHOP_OWNER] placeholder
+	if (resolvedMessage.includes('[WHOP_OWNER]')) {
+		const adminName = await lookupAdminUser(experienceId);
+		if (adminName) {
+			resolvedMessage = resolvedMessage.replace(/\[WHOP_OWNER\]/g, adminName);
+			console.log(`[Placeholder Resolution] Replaced [WHOP_OWNER] with: ${adminName}`);
+		} else {
+			console.log(`[Placeholder Resolution] Admin user not found, keeping [WHOP_OWNER] placeholder`);
+		}
+	}
+
+	// Resolve [USER] placeholder
+	if (resolvedMessage.includes('[USER]')) {
+		const userName = await lookupCurrentUser(conversationId);
+		if (userName) {
+			resolvedMessage = resolvedMessage.replace(/\[USER\]/g, userName);
+			console.log(`[Placeholder Resolution] Replaced [USER] with: ${userName}`);
+		} else {
+			console.log(`[Placeholder Resolution] Current user not found, keeping [USER] placeholder`);
+		}
+	}
+
+	return resolvedMessage;
 }
 
 /**
@@ -217,48 +317,6 @@ export async function handleUserJoinEvent(
 	console.log(`🚀 [USER-JOIN] About to track awareness for experience ${experience.id}, funnel ${liveFunnel.id}`);
 	safeBackgroundTracking(() => trackAwarenessBackground(experience.id, liveFunnel.id));
 
-	// Get the member ID from the DM conversation
-	let memberId = null;
-	try {
-		// Wait a moment for the DM conversation to be created
-		await new Promise(resolve => setTimeout(resolve, 2000));
-		
-		// Get the DM conversations to find the new one
-		const dmConversations = await whopSdk.messages.listDirectMessageConversations();
-		const newConversation = dmConversations.find(conv => 
-			// Look for a conversation that contains our welcome message
-			conv.lastMessage?.content?.includes('Welcome, [Username]!') ||
-			conv.lastMessage?.content?.includes('Welcome!') ||
-			conv.lastMessage?.content?.includes('Welcome to')
-		);
-		
-		if (newConversation) {
-			// Find the member ID for our user
-			// Look for a member that matches our userId or membershipId
-			const userMember = newConversation.feedMembers.find(member => 
-				member.id === userId || 
-				member.id === membershipId ||
-				member.username === userId ||
-				member.username === membershipId
-			);
-			if (userMember) {
-				memberId = userMember.id;
-				console.log(`Found member ID for user ${userId}: ${memberId}`);
-				
-				// Update conversation with member ID
-				await db.update(conversations)
-					.set({
-						metadata: {
-							...liveFunnel.flow,
-							whopMemberId: memberId,
-						},
-					})
-					.where(eq(conversations.id, conversationId));
-			}
-		}
-	} catch (error) {
-		console.error('Error getting member ID for customer:', error);
-	}
 
 	// DM monitoring is now handled by cron jobs - no need to start monitoring service
 	// The cron jobs will automatically detect and process this conversation
@@ -400,6 +458,16 @@ export async function updateConversationToWelcomeStage(
 	funnelFlow: FunnelFlow,
 ): Promise<void> {
 	try {
+		// Get conversation to find experienceId
+		const conversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+		});
+
+		if (!conversation) {
+			console.error(`No conversation found for ${conversationId}`);
+			return;
+		}
+
 		// Find the WELCOME stage
 		const welcomeStage = funnelFlow.stages.find(
 			stage => stage.name === "WELCOME"
@@ -433,61 +501,22 @@ export async function updateConversationToWelcomeStage(
 		
 		// Save WELCOME message to database with placeholder resolution
 		if (welcomeBlock.message) {
-			// Resolve placeholders in WELCOME message
-			let resolvedWelcomeMessage = welcomeBlock.message;
-			
-			// Get conversation to access experienceId and user info
-			const conversation = await db.query.conversations.findFirst({
-				where: eq(conversations.id, conversationId),
-				columns: { experienceId: true, userId: true }
-			});
-			
-			if (conversation) {
-				// Resolve [USER] placeholder
-				if (resolvedWelcomeMessage.includes('[USER]') && conversation.userId) {
-					const user = await db.query.users.findFirst({
-						where: eq(users.id, conversation.userId),
-						columns: { name: true }
-					});
-					if (user?.name) {
-						const firstName = user.name.split(' ')[0];
-						resolvedWelcomeMessage = resolvedWelcomeMessage.replace(/\[USER\]/g, firstName);
-						console.log(`[USER-JOIN] Resolved [USER] in WELCOME message: ${firstName}`);
-					}
-				}
-				
-				// Resolve [WHOP_OWNER] placeholder
-				if (resolvedWelcomeMessage.includes('[WHOP_OWNER]')) {
-					const adminUser = await db.query.users.findFirst({
-						where: and(
-							eq(users.experienceId, conversation.experienceId),
-							eq(users.accessLevel, 'admin')
-						),
-						columns: { name: true }
-					});
-					if (adminUser?.name) {
-						resolvedWelcomeMessage = resolvedWelcomeMessage.replace(/\[WHOP_OWNER\]/g, adminUser.name);
-						console.log(`[USER-JOIN] Resolved [WHOP_OWNER] in WELCOME message: ${adminUser.name}`);
-					}
-				}
-				
-				// Resolve [LINK] placeholder
-				if (resolvedWelcomeMessage.includes('[LINK]')) {
-					const appLink = await generateAppLink(conversation.experienceId);
-					resolvedWelcomeMessage = resolvedWelcomeMessage.replace(/\[LINK\]/g, appLink);
-					console.log(`[USER-JOIN] Resolved [LINK] in WELCOME message: ${appLink}`);
-				}
-			}
+			// Resolve placeholders before saving
+			const resolvedMessage = await resolvePlaceholders(
+				welcomeBlock.message, 
+				conversation.experienceId, 
+				conversationId
+			);
 			
 			await db.insert(messages).values({
 				conversationId: conversationId,
 				type: "bot",
-				content: resolvedWelcomeMessage,
+				content: resolvedMessage,
 				metadata: {
 					blockId: firstWelcomeBlockId,
 				},
 			});
-			console.log(`[USER-JOIN] Saved WELCOME message to database for conversation ${conversationId}:`, resolvedWelcomeMessage.substring(0, 100) + '...');
+			console.log(`[USER-JOIN] Saved WELCOME message to database for conversation ${conversationId}:`, resolvedMessage.substring(0, 100) + '...');
 		}
 		
 	} catch (error) {
