@@ -441,7 +441,7 @@ async function processFunnelNavigation(
             console.log(`[VALUE_DELIVERY] Found resource: ${resource.name} with link: ${resource.link}`);
             
             // Replace [LINK] placeholder with animated button HTML for VALUE_DELIVERY
-            const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Icon+ Click!</div>`;
+            const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Click!</div>`;
             formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
             console.log(`[VALUE_DELIVERY] Replaced [LINK] with VALUE_DELIVERY button: ${buttonHtml}`);
           } else {
