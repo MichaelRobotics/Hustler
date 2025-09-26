@@ -425,9 +425,6 @@ async function processFunnelNavigation(
       } else if (isValueDelivery && nextBlock.resourceName) {
         console.log(`[VALUE_DELIVERY] Processing VALUE_DELIVERY block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
         
-        // First resolve placeholders for [USER], [WHOP_OWNER], [WHOP]
-        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
-        
         try {
           // Lookup resource by name and experience
           const resource = await db.query.resources.findFirst({
@@ -454,6 +451,9 @@ async function processFunnelNavigation(
           // Replace [LINK] placeholder with fallback text
           formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
         }
+        
+        // After processing [LINK], resolve other placeholders for [USER], [WHOP_OWNER], [WHOP]
+        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
       } else {
         // For other blocks, use simple placeholder resolution
         console.log(`[Navigate Funnel] Resolving placeholders for other block ${nextBlockId}`);
