@@ -129,8 +129,34 @@ async function lookupCurrentUser(conversationId: string): Promise<string | null>
 }
 
 /**
+ * Look up company name by experience ID
+ * Returns the company name if found, null otherwise
+ */
+async function lookupCompanyName(experienceId: string): Promise<string | null> {
+	try {
+		console.log(`[Company Lookup] Looking up company name for experience: ${experienceId}`);
+		
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.whopExperienceId, experienceId),
+			columns: { name: true }
+		});
+
+		if (experience?.name) {
+			console.log(`[Company Lookup] Found company name: ${experience.name}`);
+			return experience.name;
+		} else {
+			console.log(`[Company Lookup] No company name found for experience: ${experienceId}`);
+			return null;
+		}
+	} catch (error) {
+		console.error(`[Company Lookup] Error looking up company name for experience ${experienceId}:`, error);
+		return null;
+	}
+}
+
+/**
  * Resolve placeholders in message content
- * Handles [USER] and [WHOP_OWNER] placeholders
+ * Handles [USER], [WHOP_OWNER], and [WHOP] placeholders
  */
 async function resolvePlaceholders(message: string, experienceId: string, conversationId: string): Promise<string> {
 	let resolvedMessage = message;
@@ -154,6 +180,17 @@ async function resolvePlaceholders(message: string, experienceId: string, conver
 			console.log(`[Placeholder Resolution] Replaced [USER] with: ${userName}`);
 		} else {
 			console.log(`[Placeholder Resolution] Current user not found, keeping [USER] placeholder`);
+		}
+	}
+
+	// Resolve [WHOP] placeholder
+	if (resolvedMessage.includes('[WHOP]')) {
+		const companyName = await lookupCompanyName(experienceId);
+		if (companyName) {
+			resolvedMessage = resolvedMessage.replace(/\[WHOP\]/g, companyName);
+			console.log(`[Placeholder Resolution] Replaced [WHOP] with: ${companyName}`);
+		} else {
+			console.log(`[Placeholder Resolution] Company name not found, keeping [WHOP] placeholder`);
 		}
 	}
 
