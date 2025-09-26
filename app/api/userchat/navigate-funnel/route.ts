@@ -425,6 +425,9 @@ async function processFunnelNavigation(
       } else if (isValueDelivery && nextBlock.resourceName) {
         console.log(`[VALUE_DELIVERY] Processing VALUE_DELIVERY block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
         
+        // First resolve placeholders for [USER], [WHOP_OWNER], [WHOP]
+        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
+        
         try {
           // Lookup resource by name and experience
           const resource = await db.query.resources.findFirst({
