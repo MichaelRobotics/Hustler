@@ -459,6 +459,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						conversation={conversation || undefined}
 						experienceId={experienceId}
 						onMessageSent={handleMessageSentInternal}
+						userType={userType}
 						stageInfo={stageInfo || undefined}
 					/>
 				) : (

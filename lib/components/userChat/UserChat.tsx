@@ -43,6 +43,7 @@ interface UserChatProps {
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
+	userType?: "admin" | "customer";
 	stageInfo?: {
 		currentStage: string;
 		isDMFunnelActive: boolean;
@@ -69,6 +70,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
+	userType,
 	stageInfo,
 }) => {
 	const [message, setMessage] = useState("");
@@ -728,14 +730,40 @@ const UserChat: React.FC<UserChatProps> = ({
 			timestamp: m.timestamp
 		})));
 
-		return messagesToShow.map((msg: any, index: number) => (
+		const messageElements = messagesToShow.map((msg: any, index: number) => (
 			<MessageComponent
 				key={`${msg.type}-${index}`}
 				msg={msg}
 				index={index}
 			/>
 		));
-	}, [conversationMessages]);
+
+		// Add separation line after first message for admin users
+		if (userType === "admin" && messagesToShow.length > 0) {
+			messageElements.splice(1, 0, (
+				<div key="admin-separation-line" className="relative my-6 flex items-center">
+					{/* Left line */}
+					<div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-600 to-transparent"></div>
+					
+					{/* Center text on line */}
+					<div className="px-4 py-1 bg-gradient-to-r from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40 border border-violet-300 dark:border-violet-700/50 rounded-full shadow-sm backdrop-blur-sm mx-2">
+						<div className="flex items-center gap-2">
+							<div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+							<Text size="1" weight="medium" className="text-violet-700 dark:text-violet-300 whitespace-nowrap">
+								Admin View - Live Chat
+							</Text>
+							<div className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></div>
+						</div>
+					</div>
+					
+					{/* Right line */}
+					<div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-600 to-transparent"></div>
+				</div>
+			));
+		}
+
+		return messageElements;
+	}, [conversationMessages, userType]);
 
 	// Memoized options list
 	const optionsList = useMemo(
