@@ -130,26 +130,26 @@ async function lookupCurrentUser(conversationId: string): Promise<string | null>
 
 /**
  * Look up company name by experience ID
- * Returns the company name if found, null otherwise
+ * Returns the experience name (company name) if found, null otherwise
  */
 async function lookupCompanyName(experienceId: string): Promise<string | null> {
 	try {
-		console.log(`[Company Lookup] Looking up company name for experience: ${experienceId}`);
+		console.log(`[Company Lookup] Looking up experience name for experience: ${experienceId}`);
 		
 		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, experienceId),
+			where: eq(experiences.id, experienceId),
 			columns: { name: true }
 		});
 
 		if (experience?.name) {
-			console.log(`[Company Lookup] Found company name: ${experience.name}`);
+			console.log(`[Company Lookup] Found experience name: ${experience.name}`);
 			return experience.name;
 		} else {
-			console.log(`[Company Lookup] No company name found for experience: ${experienceId}`);
+			console.log(`[Company Lookup] No experience name found for experience: ${experienceId}`);
 			return null;
 		}
 	} catch (error) {
-		console.error(`[Company Lookup] Error looking up company name for experience ${experienceId}:`, error);
+		console.error(`[Company Lookup] Error looking up experience name for experience ${experienceId}:`, error);
 		return null;
 	}
 }
