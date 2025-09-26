@@ -112,21 +112,6 @@ async function lookupCurrentUser(conversationId: string): Promise<string | null>
 async function resolvePlaceholders(message: string, block: FunnelBlock, experienceId: string, conversationId?: string): Promise<string> {
   let resolvedMessage = message;
 
-  // Resolve [LINK] placeholder
-  if (resolvedMessage.includes('[LINK]')) {
-    if (block.resourceName) {
-      const resourceLink = await lookupResourceLink(block.resourceName, experienceId);
-      if (resourceLink) {
-        resolvedMessage = resolvedMessage.replace(/\[LINK\]/g, resourceLink);
-        console.log(`[Placeholder Resolution] Replaced [LINK] with: ${resourceLink}`);
-      } else {
-        console.log(`[Placeholder Resolution] Resource not found, keeping [LINK] placeholder`);
-      }
-    } else {
-      console.log(`[Placeholder Resolution] Block has no resourceName, keeping [LINK] placeholder`);
-    }
-  }
-
   // Resolve [WHOP_OWNER] placeholder
   if (resolvedMessage.includes('[WHOP_OWNER]')) {
     const adminName = await lookupAdminUser(experienceId);
@@ -425,6 +410,9 @@ async function processFunnelNavigation(
       } else if (isValueDelivery && nextBlock.resourceName) {
         console.log(`[VALUE_DELIVERY] Processing VALUE_DELIVERY block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
         
+        // First resolve placeholders for [USER], [WHOP_OWNER], [WHOP]
+        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
+        
         try {
           // Lookup resource by name and experience
           const resource = await db.query.resources.findFirst({
@@ -451,9 +439,6 @@ async function processFunnelNavigation(
           // Replace [LINK] placeholder with fallback text
           formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
         }
-        
-        // After processing [LINK], resolve other placeholders for [USER], [WHOP_OWNER], [WHOP]
-        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
       } else {
         // For other blocks, use simple placeholder resolution
         console.log(`[Navigate Funnel] Resolving placeholders for other block ${nextBlockId}`);
