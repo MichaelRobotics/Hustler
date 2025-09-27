@@ -727,11 +727,17 @@ const UserChat: React.FC<UserChatProps> = ({
 		const filteredMessages = userType === "customer" 
 			? messagesToShow.filter(msg => {
 				// Hide transition messages from customers
-				// Transition messages typically contain "catch" and "LINK" or are bot messages with specific patterns
 				if (msg.type === "bot" && msg.text) {
-					const isTransitionMessage = msg.text.includes("catch") && 
+					// Check for TRANSITION message pattern: "Wait! [WHOP_OWNER] has a gift for you, [USER]!"
+					const isTransitionMessage = msg.text.includes("Wait!") && 
+						msg.text.includes("has a gift for you") &&
+						msg.text.includes("VIP chat");
+					
+					// Also check for other transition patterns
+					const isTransitionPattern = msg.text.includes("catch") && 
 						(msg.text.includes("LINK") || msg.text.includes("whop.com"));
-					return !isTransitionMessage;
+					
+					return !(isTransitionMessage || isTransitionPattern);
 				}
 				return true;
 			})

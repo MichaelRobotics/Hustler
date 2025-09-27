@@ -115,7 +115,7 @@ export default function ExperiencePage({
 				userName={currentUser.name}
 				experienceId={experienceId}
 				onMessageSent={handleCustomerMessage}
-				userType="customer"
+				userType="admin" // Developer admin gets admin controls on customer view
 				whopUserId={currentUser.whopUserId}
 			/>
 		);
