@@ -59,6 +59,16 @@ export default function ExperiencePage({
 
 				const data = await response.json();
 				setAuthContext(data);
+				
+				// Auto-select view based on access level in background
+				const accessLevel = data.user?.accessLevel;
+				if (accessLevel === "customer") {
+					// Customers go directly to CustomerView - no choice needed
+					setSelectedView("customer");
+				} else if (accessLevel === "admin") {
+					// Admins see view selection panel - let them choose
+					// Don't auto-select, let them choose in ViewSelectionPanel
+				}
 			} catch (err) {
 				console.error("Error fetching user context:", err);
 				setError("Failed to load user context");
@@ -136,20 +146,7 @@ export default function ExperiencePage({
 
 	// Show view selection panel only for admins, customers go directly to CustomerView
 	if (!selectedView) {
-		// Customers go directly to CustomerView - no choice
-		if (currentAccessLevel === "customer") {
-			return (
-				<CustomerView
-					userName={currentUser.name}
-					experienceId={experienceId}
-					onMessageSent={handleCustomerMessage}
-					userType="customer"
-					whopUserId={currentUser.whopUserId}
-				/>
-			);
-		}
-
-		// Admins see view selection panel
+		// Admins see view selection panel (customers are auto-selected in background)
 		return (
 			<ViewSelectionPanel
 				userName={currentUser.name}
