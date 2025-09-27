@@ -197,3 +197,4 @@ For issues with the tests or Whop SDK:
 1. Check Whop documentation: https://docs.whop.com
 2. Review rate limiting docs: https://docs.whop.com/api-reference/v5/rate-limits
 3. Check SDK reference: https://docs.whop.com/sdk
+
