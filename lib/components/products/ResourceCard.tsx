@@ -127,8 +127,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 
 		// Check if we can assign this resource (not at limit)
 		if (!canAssignResource(funnel, resource)) {
-			console.log("Cannot assign resource: limit reached for category", resource.category);
-			return;
+			return; // Silently return if limit reached
 		}
 
 		setIsAssigning(true);
@@ -137,7 +136,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			// Reset assigning state after a short delay
 			setTimeout(() => setIsAssigning(false), 1000);
 		} catch (error) {
-			console.error("Failed to assign resource to funnel:", error);
+			// Silently handle errors - no user feedback
 			setIsAssigning(false);
 		}
 	};

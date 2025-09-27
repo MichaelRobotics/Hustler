@@ -12,6 +12,7 @@ import {
 } from "../supabase/schema";
 import { generateFunnelFlow } from "./ai-actions";
 import { PRODUCT_LIMITS, GLOBAL_LIMITS } from "../types/resource";
+import { resourceAssignmentQueue } from "../queue/ResourceAssignmentQueue";
 
 // Helper function to calculate percentage growth
 function calculateGrowthPercent(current: number, previous: number): number {
@@ -989,7 +990,116 @@ export async function getFunnelAnalytics(
 }
 
 /**
- * Add a resource to a funnel
+ * Internal function to perform the actual resource assignment
+ * This function is called by the queue system to ensure sequential processing
+ */
+async function _addResourceToFunnelInternal(
+	user: AuthenticatedUser,
+	funnelId: string,
+	resourceId: string,
+): Promise<FunnelWithResources> {
+	// Check if funnel exists and user has access (following consistent auth pattern)
+	const existingFunnel = await db.query.funnels.findFirst({
+		where: and(
+			eq(funnels.id, funnelId),
+			eq(funnels.experienceId, user.experience.id), // Experience-based filtering
+		),
+	});
+
+	if (!existingFunnel) {
+		throw new Error("Funnel not found");
+	}
+
+	// Check access permissions
+	if (user.accessLevel === "customer" && existingFunnel.userId !== user.id) {
+		throw new Error("Access denied: You can only add resources to your own funnels");
+	}
+
+	// Check if resource exists and user has access (following consistent auth pattern)
+	const existingResource = await db.query.resources.findFirst({
+		where: and(
+			eq(resources.id, resourceId),
+			eq(resources.experienceId, user.experience.id), // Use database UUID for foreign key
+		),
+	});
+
+	if (!existingResource) {
+		throw new Error("Resource not found");
+	}
+
+	// Check access permissions for resource
+	if (user.accessLevel === "customer" && existingResource.userId !== user.id) {
+		throw new Error("Access denied: You can only add your own resources to funnels");
+	}
+
+	// Check if resource is already in funnel
+	const [existingRelation] = await db
+		.select()
+		.from(funnelResources)
+		.where(
+			and(
+				eq(funnelResources.funnelId, funnelId),
+				eq(funnelResources.resourceId, resourceId),
+			),
+		)
+		.limit(1);
+
+	if (existingRelation) {
+		throw new Error("Resource is already in this funnel");
+	}
+
+	// Check product limits before adding
+	const currentResources = await db
+		.select({
+			resource: resources,
+		})
+		.from(funnelResources)
+		.innerJoin(resources, eq(funnelResources.resourceId, resources.id))
+		.where(eq(funnelResources.funnelId, funnelId));
+
+	// Count current resources by category
+	const paidCount = currentResources.filter(
+		(r: any) => r.resource.category === "PAID",
+	).length;
+	const freeValueCount = currentResources.filter(
+		(r: any) => r.resource.category === "FREE_VALUE",
+	).length;
+
+	// Check if adding this resource would exceed limits
+	if (existingResource.category === "PAID" && paidCount >= PRODUCT_LIMITS.PAID) {
+		throw new Error(
+			`Cannot add paid product: limit reached (max ${PRODUCT_LIMITS.PAID} paid products per funnel)`,
+		);
+	}
+
+	if (
+		existingResource.category === "FREE_VALUE" &&
+		freeValueCount >= PRODUCT_LIMITS.FREE_VALUE
+	) {
+		throw new Error(
+			`Cannot add free product: limit reached (max ${PRODUCT_LIMITS.FREE_VALUE} free products per funnel)`,
+		);
+	}
+
+	// Add resource to funnel
+	await db.insert(funnelResources).values({
+		funnelId: funnelId,
+		resourceId: resourceId,
+	});
+
+	// Get updated funnel with resources
+	const updatedFunnel = await getFunnelById(user, funnelId);
+	if (!updatedFunnel) {
+		throw new Error("Failed to retrieve updated funnel");
+	}
+
+	return updatedFunnel;
+}
+
+/**
+ * Add a resource to a funnel (queued to prevent race conditions)
+ * This function uses a queue system to ensure assignments are processed sequentially
+ * for each user/experience combination, preventing race conditions and limit violations.
  */
 export async function addResourceToFunnel(
 	user: AuthenticatedUser,
@@ -997,102 +1107,15 @@ export async function addResourceToFunnel(
 	resourceId: string,
 ): Promise<FunnelWithResources> {
 	try {
-		// Check if funnel exists and user has access (following consistent auth pattern)
-		const existingFunnel = await db.query.funnels.findFirst({
-			where: and(
-				eq(funnels.id, funnelId),
-				eq(funnels.experienceId, user.experience.id), // Experience-based filtering
-			),
-		});
-
-		if (!existingFunnel) {
-			throw new Error("Funnel not found");
-		}
-
-		// Check access permissions
-		if (user.accessLevel === "customer" && existingFunnel.userId !== user.id) {
-			throw new Error("Access denied: You can only add resources to your own funnels");
-		}
-
-		// Check if resource exists and user has access (following consistent auth pattern)
-		const existingResource = await db.query.resources.findFirst({
-			where: and(
-				eq(resources.id, resourceId),
-				eq(resources.experienceId, user.experience.id), // Use database UUID for foreign key
-			),
-		});
-
-		if (!existingResource) {
-			throw new Error("Resource not found");
-		}
-
-		// Check access permissions for resource
-		if (user.accessLevel === "customer" && existingResource.userId !== user.id) {
-			throw new Error("Access denied: You can only add your own resources to funnels");
-		}
-
-		// Check if resource is already in funnel
-		const [existingRelation] = await db
-			.select()
-			.from(funnelResources)
-			.where(
-				and(
-					eq(funnelResources.funnelId, funnelId),
-					eq(funnelResources.resourceId, resourceId),
-				),
-			)
-			.limit(1);
-
-		if (existingRelation) {
-			throw new Error("Resource is already in this funnel");
-		}
-
-		// Check product limits before adding
-		const currentResources = await db
-			.select({
-				resource: resources,
-			})
-			.from(funnelResources)
-			.innerJoin(resources, eq(funnelResources.resourceId, resources.id))
-			.where(eq(funnelResources.funnelId, funnelId));
-
-		// Count current resources by category
-		const paidCount = currentResources.filter(
-			(r: any) => r.resource.category === "PAID",
-		).length;
-		const freeValueCount = currentResources.filter(
-			(r: any) => r.resource.category === "FREE_VALUE",
-		).length;
-
-		// Check if adding this resource would exceed limits
-		if (existingResource.category === "PAID" && paidCount >= PRODUCT_LIMITS.PAID) {
-			throw new Error(
-				`Cannot add paid product: limit reached (max ${PRODUCT_LIMITS.PAID} paid products per funnel)`,
-			);
-		}
-
-		if (
-			existingResource.category === "FREE_VALUE" &&
-			freeValueCount >= PRODUCT_LIMITS.FREE_VALUE
-		) {
-			throw new Error(
-				`Cannot add free product: limit reached (max ${PRODUCT_LIMITS.FREE_VALUE} free products per funnel)`,
-			);
-		}
-
-		// Add resource to funnel
-		await db.insert(funnelResources).values({
-			funnelId: funnelId,
-			resourceId: resourceId,
-		});
-
-		// Get updated funnel with resources
-		const updatedFunnel = await getFunnelById(user, funnelId);
-		if (!updatedFunnel) {
-			throw new Error("Failed to retrieve updated funnel");
-		}
-
-		return updatedFunnel;
+		// Use the queue system to ensure sequential processing
+		return await resourceAssignmentQueue.queueAssignment(
+			user.id,
+			user.experience.id,
+			funnelId,
+			resourceId,
+			(funnelId: string, resourceId: string) => 
+				_addResourceToFunnelInternal(user, funnelId, resourceId)
+		);
 	} catch (error) {
 		console.error("Error adding resource to funnel:", error);
 		throw error;

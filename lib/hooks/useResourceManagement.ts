@@ -119,16 +119,8 @@ export function useResourceManagement(user?: { experienceId?: string } | null) {
 				}
 			} catch (err) {
 				console.error("Error adding resource to funnel:", err);
-				// Fallback to local state update if API fails
-				const updatedFunnel = {
-					...selectedFunnel,
-					resources: [...(selectedFunnel.resources || []), resource],
-				};
-				setSelectedFunnel(updatedFunnel);
-				setFunnels(
-					funnels.map((f) => (f.id === updatedFunnel.id ? updatedFunnel : f)),
-				);
-				throw err; // Re-throw to let the component handle the error
+				// Silently handle errors - no user feedback
+				// Don't update local state on error to maintain consistency
 			}
 		}
 	};
