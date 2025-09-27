@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, funnels, messages, funnelAnalytics } from "@/lib/supabase/schema";
+import { conversations, experiences, funnels, messages, funnelAnalytics, users } from "@/lib/supabase/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { getTransitionMessage, updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
@@ -103,12 +103,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 4: Extract transition message from funnel flow with personalization
+    // Step 4: Get admin name for [WHOP_OWNER] placeholder
+    const adminUser = await db.query.users.findFirst({
+      where: and(
+        eq(users.experienceId, experience.id),
+        eq(users.accessLevel, "admin")
+      ),
+    });
+    const adminName = adminUser?.name ? adminUser.name.split(' ')[0] : experience.name;
+
+    // Step 5: Extract transition message from funnel flow with personalization
     const funnelFlow = liveFunnel.flow as FunnelFlow;
     const transitionMessage = await getTransitionMessage(
       funnelFlow, 
       "Admin", // Default name for admin testing (first word only)
-      experience.name,
+      adminName,
       experienceId
     );
     
@@ -122,7 +131,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 5: Send real DM using Whop SDK - REQUIRED for admin
+    // Step 6: Send real DM using Whop SDK - REQUIRED for admin
     console.log(`Sending real DM to admin user ${whopUserId}: ${transitionMessage}`);
     
     let dmSent = false;
@@ -178,7 +187,7 @@ export async function POST(request: NextRequest) {
       // Continue without member ID - not critical for conversation creation
     }
 
-    // Step 7: Find or create user for conversation binding
+    // Step 8: Find or create user for conversation binding
     const userId = await findOrCreateUserForConversation(
       whopUserId,
       experience.id,
@@ -188,10 +197,10 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Step 8: Delete any existing conversations for this admin user
+    // Step 9: Delete any existing conversations for this admin user
     await deleteExistingConversationsByWhopUserId(whopUserId, experience.id);
 
-    // Step 9: Create DM conversation record (EXACT SAME as real customers)
+    // Step 10: Create DM conversation record (EXACT SAME as real customers)
     const [newConversation] = await db
       .insert(conversations)
       .values({
@@ -206,14 +215,14 @@ export async function POST(request: NextRequest) {
 
     const conversationId = newConversation.id;
 
-    // Step 10: Record transition message in database (DM was sent successfully)
+    // Step 11: Record transition message in database (DM was sent successfully)
     await db.insert(messages).values({
       conversationId: conversationId,
       type: "bot",
       content: transitionMessage,
     });
 
-    // Step 10.5: Update conversation to WELCOME stage and save WELCOME message
+    // Step 12: Update conversation to WELCOME stage and save WELCOME message
     console.log(`[trigger-first-dm] Updating conversation ${conversationId} to WELCOME stage`);
     await updateConversationToWelcomeStage(conversationId, funnelFlow);
 
@@ -233,7 +242,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Recorded welcome message in admin conversation ${conversationId}`);
 
-    // Step 11: Increment Awareness metric (totalStarts) in funnel analytics
+    // Step 13: Increment Awareness metric (totalStarts) in funnel analytics
     try {
       const today = new Date();
       const isToday = (date: Date) => {

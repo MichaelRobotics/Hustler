@@ -290,11 +290,20 @@ export async function handleUserJoinEvent(
 			),
 		});
 
-		// Step 5: Extract transition message from funnel flow with personalization
+		// Step 5: Get admin name for [WHOP_OWNER] placeholder
+		const adminUser = await db.query.users.findFirst({
+			where: and(
+				eq(users.experienceId, experience.id),
+				eq(users.accessLevel, "admin")
+			),
+		});
+		const adminName = adminUser?.name ? adminUser.name.split(' ')[0] : experience.name;
+
+		// Step 6: Extract transition message from funnel flow with personalization
 		const transitionMessage = await getTransitionMessage(
 			liveFunnel.flow, 
 			user?.name || `User ${userId}`, 
-			experience.name,
+			adminName,
 			experience.whopExperienceId
 		);
 		if (!transitionMessage) {
