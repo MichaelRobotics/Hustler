@@ -60,33 +60,15 @@ export default function ExperiencePage({
 				const data = await response.json();
 				setAuthContext(data);
 				
-				// Auto-select view based on access level and company in background
-				const accessLevel = data.user?.accessLevel;
-				const companyId = data.user?.experience?.whopCompanyId;
-				const developerCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-				
-				console.log("🔍 Access Level Decision:", {
-					accessLevel,
-					companyId,
-					developerCompanyId,
-					isDeveloperCompany: companyId === developerCompanyId
-				});
-				
-				if (accessLevel === "customer") {
-					// Customers go directly to CustomerView - no choice needed
-					console.log("👤 Customer access - going to CustomerView");
-					setSelectedView("customer");
-				} else if (accessLevel === "admin") {
-					// Check if user is from developer company
-					if (companyId === developerCompanyId) {
-						// Developer company + admin = View Selection Panel (can choose Admin/Customer)
-						console.log("🛠️ Developer company + admin - showing ViewSelectionPanel");
-						// Don't auto-select, let them choose in ViewSelectionPanel
-					} else {
-						// Non-developer company + admin = Direct to Admin Panel
-						console.log("👨‍💼 Non-developer company + admin - going to AdminPanel");
-						setSelectedView("admin");
-					}
+				// Use backend decision for view selection
+				if (data.autoSelectedView) {
+					// Backend determined the view automatically
+					console.log("🎯 Backend auto-selected view:", data.autoSelectedView);
+					setSelectedView(data.autoSelectedView);
+				} else if (data.shouldShowViewSelection) {
+					// Backend determined user should see view selection panel
+					console.log("🛠️ Backend determined: show ViewSelectionPanel");
+					// Don't set selectedView, let ViewSelectionPanel handle it
 				}
 			} catch (err) {
 				console.error("Error fetching user context:", err);
@@ -163,9 +145,9 @@ export default function ExperiencePage({
 		});
 	};
 
-	// Show view selection panel only for admins, customers go directly to CustomerView
+	// Show view selection panel only when backend determined it should be shown
 	if (!selectedView) {
-		// Admins see view selection panel (customers are auto-selected in background)
+		// Backend determined this user should see view selection panel
 		return (
 			<ViewSelectionPanel
 				userName={currentUser.name}

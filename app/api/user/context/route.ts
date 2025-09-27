@@ -63,10 +63,44 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
+		// Determine view selection logic based on company and access level
+		const developerCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+		const isDeveloperCompany = whopCompanyId === developerCompanyId;
+		const accessLevel = userContext.user.accessLevel;
+		
+		// Determine if user should see view selection panel
+		let shouldShowViewSelection = false;
+		let autoSelectedView = null;
+		
+		if (accessLevel === "customer") {
+			// Customers go directly to CustomerView
+			autoSelectedView = "customer";
+		} else if (accessLevel === "admin") {
+			if (isDeveloperCompany) {
+				// Developer company + admin = View Selection Panel
+				shouldShowViewSelection = true;
+			} else {
+				// Non-developer company + admin = Direct to Admin Panel
+				autoSelectedView = "admin";
+			}
+		}
+		
+		console.log("🔍 Backend Access Decision:", {
+			accessLevel,
+			companyId: whopCompanyId,
+			developerCompanyId,
+			isDeveloperCompany,
+			shouldShowViewSelection,
+			autoSelectedView
+		});
+
 		return NextResponse.json({
 			user: userContext.user,
 			isAuthenticated: userContext.isAuthenticated,
 			hasAccess: userContext.user.accessLevel !== "no_access",
+			// Add view selection logic to response
+			shouldShowViewSelection,
+			autoSelectedView,
 		});
 	} catch (error) {
 		console.error("Error getting user context:", error);
