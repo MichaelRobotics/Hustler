@@ -27,26 +27,16 @@ export default function ExperiencePage({
 }: {
 	params: Promise<{ experienceId: string }>;
 }) {
-	const [experienceId, setExperienceId] = useState<string>("");
-	// Removed selectedView state - backend determines everything
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
-	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	// Get experienceId from params
+	// Single useEffect - get params and fetch context immediately
 	useEffect(() => {
-		params.then(({ experienceId }) => {
-			setExperienceId(experienceId);
-		});
-	}, [params]);
-
-	// Fetch user context on component mount
-	useEffect(() => {
-		if (!experienceId) return;
-
 		const fetchUserContext = async () => {
 			try {
-				setLoading(true);
+				// Get experienceId from params
+				const { experienceId } = await params;
+				
 				const response = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
 				
 				if (!response.ok) {
@@ -72,13 +62,11 @@ export default function ExperiencePage({
 			} catch (err) {
 				console.error("Error fetching user context:", err);
 				setError("Failed to load user context");
-			} finally {
-				setLoading(false);
 			}
 		};
 
 		fetchUserContext();
-	}, [experienceId]);
+	}, [params]);
 
 
 	// Show error state - let Whop handle authentication errors natively
