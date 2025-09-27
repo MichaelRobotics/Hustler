@@ -29,7 +29,13 @@ export function renderTextWithLinks(text: string): React.ReactNode[] {
           href={part}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline hover:no-underline break-all"
+          className="underline hover:no-underline break-all touch-manipulation cursor-pointer"
+          style={{ 
+            minHeight: '44px', // iOS minimum touch target
+            display: 'inline-block',
+            WebkitTouchCallout: 'default',
+            WebkitUserSelect: 'text'
+          }}
         >
           {part}
         </a>

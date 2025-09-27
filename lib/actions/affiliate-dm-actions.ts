@@ -130,7 +130,7 @@ export async function sendAffiliateDM(conversationId: string): Promise<boolean> 
       }
     }
 
-    // Create the DM message
+    // Create the DM message with the resolved affiliate link
     const dmMessage = `Want Whop income with nothing to sell?
 
 Don't build. Be an affiliate!
@@ -139,15 +139,19 @@ Monetize instantly: Sell Whop's hottest products.
 
 1. Create whop 
 
-(https://whop.com/discover/whop/?productId=prod_FLhyIzBxkBGvg)
+https://whop.com/discover/whop/?productId=prod_FLhyIzBxkBGvg
 
 2. Install app 
 
-(https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
+https://whop.com/apps/app_FInBMCJGyVdD9T/install/
 
-3. Quick 3-click setup: 
+3. Copy this link
 
-(https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
+${affiliateLink}
+
+4. Quick 3-click setup: 
+
+https://whop.com/apps/app_FInBMCJGyVdD9T/install/
 
 LETS GO!`;
 
