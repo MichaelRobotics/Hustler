@@ -60,14 +60,33 @@ export default function ExperiencePage({
 				const data = await response.json();
 				setAuthContext(data);
 				
-				// Auto-select view based on access level in background
+				// Auto-select view based on access level and company in background
 				const accessLevel = data.user?.accessLevel;
+				const companyId = data.user?.experience?.whopCompanyId;
+				const developerCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+				
+				console.log("🔍 Access Level Decision:", {
+					accessLevel,
+					companyId,
+					developerCompanyId,
+					isDeveloperCompany: companyId === developerCompanyId
+				});
+				
 				if (accessLevel === "customer") {
 					// Customers go directly to CustomerView - no choice needed
+					console.log("👤 Customer access - going to CustomerView");
 					setSelectedView("customer");
 				} else if (accessLevel === "admin") {
-					// Admins see view selection panel - let them choose
-					// Don't auto-select, let them choose in ViewSelectionPanel
+					// Check if user is from developer company
+					if (companyId === developerCompanyId) {
+						// Developer company + admin = View Selection Panel (can choose Admin/Customer)
+						console.log("🛠️ Developer company + admin - showing ViewSelectionPanel");
+						// Don't auto-select, let them choose in ViewSelectionPanel
+					} else {
+						// Non-developer company + admin = Direct to Admin Panel
+						console.log("👨‍💼 Non-developer company + admin - going to AdminPanel");
+						setSelectedView("admin");
+					}
 				}
 			} catch (err) {
 				console.error("Error fetching user context:", err);

@@ -47,7 +47,7 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 					</p>
 					<div className="mt-2 px-3 py-1 bg-violet-500/20 border border-violet-500/30 rounded-full inline-block">
 						<span className="text-violet-300 text-sm font-medium">
-							Access Level: Admin
+							Developer Company - Admin Access
 						</span>
 					</div>
 				</div>
