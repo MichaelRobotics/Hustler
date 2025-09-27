@@ -87,10 +87,6 @@ export default function ExperiencePage({
 		fetchUserContext();
 	}, [experienceId]);
 
-	// Show loading state - let Whop handle the native loading experience
-	if (loading) {
-		return null; // Return null to let Whop's native loading page show
-	}
 
 	// Show error state - let Whop handle authentication errors natively
 	if (error || !authContext?.isAuthenticated) {
