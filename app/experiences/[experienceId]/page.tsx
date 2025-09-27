@@ -28,80 +28,40 @@ export default function ExperiencePage({
 	params: Promise<{ experienceId: string }>;
 }) {
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
-	const [error, setError] = useState<string | null>(null);
+	const [experienceId, setExperienceId] = useState<string>("");
 
 	// Single useEffect - get params and fetch context immediately
 	useEffect(() => {
 		const fetchUserContext = async () => {
-			try {
-				// Get experienceId from params
-				const { experienceId } = await params;
-				
-				const response = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
-				
-				if (!response.ok) {
-					if (response.status === 403) {
-						setError("Access denied");
-					} else if (response.status === 401) {
-						setError("Authentication required");
-					} else {
-						setError("Failed to load user context");
-					}
-					return;
-				}
-
-				const data = await response.json();
-				setAuthContext(data);
-				
-				// Backend determines everything - no frontend state management
-				console.log("🎯 Backend decision:", {
-					autoSelectedView: data.autoSelectedView,
-					shouldShowViewSelection: data.shouldShowViewSelection,
-					userType: data.userType
-				});
-			} catch (err) {
-				console.error("Error fetching user context:", err);
-				setError("Failed to load user context");
+			// Get experienceId from params
+			const { experienceId: expId } = await params;
+			setExperienceId(expId);
+			
+			const response = await apiGet(`/api/user/context?experienceId=${expId}`, expId);
+			
+			if (!response.ok) {
+				// Let Whop handle all errors natively
+				return;
 			}
+
+			const data = await response.json();
+			setAuthContext(data);
+			
+			// Backend determines everything - no frontend state management
+			console.log("🎯 Backend decision:", {
+				autoSelectedView: data.autoSelectedView,
+				shouldShowViewSelection: data.shouldShowViewSelection,
+				userType: data.userType
+			});
 		};
 
 		fetchUserContext();
 	}, [params]);
 
 
-	// Show error state - let Whop handle authentication errors natively
-	if (error || !authContext?.isAuthenticated) {
-		return null; // Return null to let Whop handle authentication errors
-	}
-
-	// Show access denied if user doesn't have access
-	if (!authContext.hasAccess) {
-		return (
-			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
-				<div className="text-center max-w-2xl">
-					<h1 className="text-2xl font-bold text-white mb-6">Access Denied</h1>
-					<p className="text-gray-300 mb-6">
-						Hi <strong>{authContext.user.name}</strong>, you need access to view
-						this dashboard.
-					</p>
-					<div className="bg-gray-800 rounded-lg p-6 text-left">
-						<h2 className="text-lg font-semibold text-white mb-4">
-							User Information
-						</h2>
-						<div className="space-y-2 text-sm">
-							<div className="flex justify-between">
-								<span className="text-gray-400">Name:</span>
-								<span className="text-white">{authContext.user.name}</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-gray-400">Access Level:</span>
-								<span className="text-red-400">{authContext.user.accessLevel}</span>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		);
+	// Let Whop handle all authentication and access errors natively
+	if (!authContext) {
+		return null;
 	}
 
 	// Use authenticated user data (backend-determined)
@@ -161,15 +121,5 @@ export default function ExperiencePage({
 		);
 	}
 
-	// Fallback (should not reach here)
-	return (
-		<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
-			<div className="text-center">
-				<h1 className="text-2xl font-bold text-white mb-4">Loading...</h1>
-				<p className="text-gray-300">
-					Please wait while we prepare your experience.
-				</p>
-			</div>
-		</div>
-	);
+	// Let Whop handle all loading and error states
 }
