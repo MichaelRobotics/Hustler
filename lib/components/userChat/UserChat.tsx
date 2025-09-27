@@ -723,14 +723,28 @@ const UserChat: React.FC<UserChatProps> = ({
 			timestamp: msg.createdAt,
 		}));
 
-		console.log("UserChat: Rendering message list:", messagesToShow.length, "messages");
-		console.log("UserChat: Message list sample:", messagesToShow.slice(0, 2).map(m => ({
+		// Filter out transition messages for customers
+		const filteredMessages = userType === "customer" 
+			? messagesToShow.filter(msg => {
+				// Hide transition messages from customers
+				// Transition messages typically contain "catch" and "LINK" or are bot messages with specific patterns
+				if (msg.type === "bot" && msg.text) {
+					const isTransitionMessage = msg.text.includes("catch") && 
+						(msg.text.includes("LINK") || msg.text.includes("whop.com"));
+					return !isTransitionMessage;
+				}
+				return true;
+			})
+			: messagesToShow;
+
+		console.log("UserChat: Rendering message list:", filteredMessages.length, "messages");
+		console.log("UserChat: Message list sample:", filteredMessages.slice(0, 2).map(m => ({
 			type: m.type,
 			text: m.text.substring(0, 30) + (m.text.length > 30 ? '...' : ''),
 			timestamp: m.timestamp
 		})));
 
-		const messageElements = messagesToShow.map((msg: any, index: number) => (
+		const messageElements = filteredMessages.map((msg: any, index: number) => (
 			<MessageComponent
 				key={`${msg.type}-${index}`}
 				msg={msg}
@@ -739,7 +753,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		));
 
 		// Add separation line after first message for admin users
-		if (userType === "admin" && messagesToShow.length > 0) {
+		if (userType === "admin" && filteredMessages.length > 0) {
 			messageElements.splice(1, 0, (
 				<div key="admin-separation-line" className="relative my-6 flex items-center">
 					{/* Left line */}

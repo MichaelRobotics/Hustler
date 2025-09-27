@@ -16,10 +16,13 @@ const validateWebhook = makeWebhookValidator({
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
-	// Parse the request body first
+	// Store the original body for validation before parsing
+	const originalBody = await request.text();
+	
+	// Parse the request body
 	let webhookData;
 	try {
-		webhookData = await request.json();
+		webhookData = JSON.parse(originalBody);
 		console.log("Received webhook data:", webhookData);
 	} catch (parseError) {
 		console.error("Failed to parse request body:", parseError);
@@ -40,8 +43,14 @@ export async function POST(request: NextRequest): Promise<Response> {
 	if (!isTestRequest) {
 		// Validate the webhook signature for production requests
 		try {
-			// Use the original request directly - don't recreate it
-			await validateWebhook(request);
+			// Create a new request with the original body for validation
+			const validationRequest = new Request(request.url, {
+				method: request.method,
+				headers: request.headers,
+				body: originalBody,
+			});
+			
+			await validateWebhook(validationRequest);
 			console.log("Webhook signature validation passed");
 		} catch (error) {
 			console.error("Webhook signature validation failed:", error);
