@@ -103,39 +103,14 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 		router.back();
 	};
 
-	// Loading state
+	// Loading state - let Whop handle the native loading experience
 	if (loading) {
-		return (
-			<div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-					<p className="text-gray-600 dark:text-gray-400">Loading conversation...</p>
-				</div>
-			</div>
-		);
+		return null; // Return null to let Whop's native loading page show
 	}
 
-	// Error state
+	// Error state - let Whop handle errors natively
 	if (error) {
-		return (
-			<div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
-				<div className="text-center max-w-md mx-auto p-6">
-					<div className="text-red-500 text-6xl mb-4">⚠️</div>
-					<h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-						Unable to Load Conversation
-					</h1>
-					<p className="text-gray-600 dark:text-gray-400 mb-6">
-						{error}
-					</p>
-					<button
-						onClick={handleBack}
-						className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-					>
-						Go Back
-					</button>
-				</div>
-			</div>
-		);
+		return null; // Return null to let Whop handle errors
 	}
 
 	// No conversation found
