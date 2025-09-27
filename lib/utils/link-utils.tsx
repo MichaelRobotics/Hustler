@@ -29,7 +29,7 @@ export function renderTextWithLinks(text: string): React.ReactNode[] {
           href={part}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline break-all"
+          className="underline hover:no-underline break-all"
         >
           {part}
         </a>
