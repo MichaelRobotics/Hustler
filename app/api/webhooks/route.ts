@@ -40,14 +40,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 	if (!isTestRequest) {
 		// Validate the webhook signature for production requests
 		try {
-			// Create a new request with the same body for validation
-			const validationRequest = new Request(request.url, {
-				method: request.method,
-				headers: request.headers,
-				body: JSON.stringify(webhookData),
-			});
-			
-			await validateWebhook(validationRequest);
+			// Use the original request directly - don't recreate it
+			await validateWebhook(request);
 			console.log("Webhook signature validation passed");
 		} catch (error) {
 			console.error("Webhook signature validation failed:", error);

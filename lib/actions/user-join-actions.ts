@@ -295,7 +295,7 @@ export async function handleUserJoinEvent(
 			liveFunnel.flow, 
 			user?.name || `User ${userId}`, 
 			experience.name,
-			experience.id
+			experience.whopExperienceId
 		);
 		if (!transitionMessage) {
 			console.error(`No transition message found in funnel ${liveFunnel.id}`);
