@@ -62,19 +62,6 @@ const ExperienceView: React.FC<ExperienceViewProps> = ({ experienceId }) => {
 		fetchUserContext();
 	}, [experienceId]);
 
-	// Show loading state
-	if (loading) {
-		return (
-			<div className="flex justify-center items-center h-screen px-8 bg-gray-900">
-				<div className="text-center">
-					<h1 className="text-2xl font-bold text-white mb-4">Loading...</h1>
-					<p className="text-gray-300">
-						Please wait while we prepare your experience.
-					</p>
-				</div>
-			</div>
-		);
-	}
 
 	// Show error state
 	if (error || !authContext?.isAuthenticated) {
