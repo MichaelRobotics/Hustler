@@ -28,7 +28,7 @@ export default function ExperiencePage({
 	params: Promise<{ experienceId: string }>;
 }) {
 	const [experienceId, setExperienceId] = useState<string>("");
-	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
+	// Removed selectedView state - backend determines everything
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -63,19 +63,12 @@ export default function ExperiencePage({
 				const data = await response.json();
 				setAuthContext(data);
 				
-				// Use backend decision for view selection
-				if (data.autoSelectedView) {
-					// Backend determined the view automatically
-					console.log("🎯 Backend auto-selected view:", data.autoSelectedView);
-					setSelectedView(data.autoSelectedView);
-				} else if (data.shouldShowViewSelection) {
-					// Backend determined user should see view selection panel
-					console.log("🛠️ Backend determined: show ViewSelectionPanel");
-					// Don't set selectedView, let ViewSelectionPanel handle it
-				}
-				
-				// Log backend-determined user type
-				console.log("👤 Backend user type:", data.userType);
+				// Backend determines everything - no frontend state management
+				console.log("🎯 Backend decision:", {
+					autoSelectedView: data.autoSelectedView,
+					shouldShowViewSelection: data.shouldShowViewSelection,
+					userType: data.userType
+				});
 			} catch (err) {
 				console.error("Error fetching user context:", err);
 				setError("Failed to load user context");
@@ -133,7 +126,9 @@ export default function ExperiencePage({
 	const currentAccessLevel = authContext.user.accessLevel;
 
 	const handleViewSelected = (view: "admin" | "customer") => {
-		setSelectedView(view);
+		// For ViewSelectionPanel - when user makes a choice
+		// This will be handled by the ViewSelectionPanel component itself
+		console.log("User selected view:", view);
 	};
 
 	const handleCustomerMessage = (message: string, conversationId?: string) => {
@@ -148,9 +143,9 @@ export default function ExperiencePage({
 		});
 	};
 
-	// Show view selection panel only when backend determined it should be shown
-	if (!selectedView) {
-		// Backend determined this user should see view selection panel
+	// Backend determines everything - no frontend logic
+	if (authContext.shouldShowViewSelection) {
+		// Backend determined: show ViewSelectionPanel
 		return (
 			<ViewSelectionPanel
 				userName={currentUser.name}
@@ -160,19 +155,19 @@ export default function ExperiencePage({
 		);
 	}
 
-	// Show admin view
-	if (selectedView === "admin") {
+	if (authContext.autoSelectedView === "admin") {
+		// Backend determined: show AdminPanel
 		return <AdminPanel user={authContext?.user || null} />;
 	}
 
-	// Show customer view
-	if (selectedView === "customer") {
+	if (authContext.autoSelectedView === "customer") {
+		// Backend determined: show CustomerView
 		return (
 			<CustomerView
 				userName={currentUser.name}
 				experienceId={experienceId}
 				onMessageSent={handleCustomerMessage}
-				userType="admin"
+				userType="customer"
 				whopUserId={currentUser.whopUserId}
 			/>
 		);
