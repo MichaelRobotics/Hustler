@@ -412,6 +412,11 @@ export async function getTransitionMessage(
 			transitionMessage = transitionMessage.replace(/\[WHOP\]/g, companyName);
 		}
 
+		// Replace [WHOP_OWNER] with actual company name (new format)
+		if (companyName) {
+			transitionMessage = transitionMessage.replace(/\[WHOP_OWNER\]/g, companyName);
+		}
+
 		// Resolve [LINK] placeholder with app link
 		if (transitionMessage.includes('[LINK]')) {
 			if (experienceId) {

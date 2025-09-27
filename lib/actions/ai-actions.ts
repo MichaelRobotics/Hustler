@@ -179,7 +179,7 @@ ${badJson}
   "blocks": {
     "transition_1": {
       "id": "transition_1",
-      "message": "[USER], catch!\\n\\n[LINK]",
+      "message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!\\n\\n[LINK]",
       "options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
     },
     "welcome_1": {
@@ -192,13 +192,13 @@ ${badJson}
     },
     "value_trading_guide": {
       "id": "value_trading_guide",
-      "message": "Perfect. Trading is where the action is.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
+      "message": "Charts help you spot profitable trades.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
       "resourceName": "The 3 Core Principles of Crypto Charting",
       "options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
     },
     "value_crypto_basics": {
       "id": "value_crypto_basics",
-      "message": "Perfect. Crypto basics are where it all starts.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
+      "message": "Basics help you avoid costly mistakes.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
       "resourceName": "Crypto Basics Guide",
       "options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
     },
@@ -554,30 +554,28 @@ export const generateFunnelFlow = async (
 	
 	**3. FOR ITEMS IN \`FUNNEL_1\`'s 'VALUE_DELIVERY' STAGE:**
 	The message must focus on how it will help the user make money faster and include the VIP chat invitation.
-	*Example:* 
-	**CRITICAL: WELCOME message must be EXACTLY:*
-	"Perfect. Trading is where the action is.
+	*Structure:* 
+	**CRITICAL: VALUE_DELIVERY message must follow this EXACT structure:*
+	"[5-7 words how this will help user make quick money].
 
-	[LINK]
+	WARNING! [USER], This is just an appetizer.
 
-	Wait! [WHOP_OWNER] cooked up a gift just for you, [USER]!
+	For PRO users, UNLOCK hidden offers.
 
-	[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.
-
-	Reply "UNLOCK""
-
-
+	[LINK]"
+	
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'unlock' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
 	
 	**4. FOR ITEMS IN \`FUNNEL_1\`'s 'TRANSITION' STAGE:**
-	The message MUST be exactly this format:
-	- **Line 1**: "[USER], catch!" (1 line only)
-	- **Line 2**: Empty line
-	- **Line 3**: "[LINK]" (1 line only)
-	
-	*CRITICAL: TRANSITION message must be EXACTLY:*
-	"[USER], catch!
+
+   TRANSITION message must be EXACTLY:
+
+	"Wait! [WHOP_OWNER] has a gift for you, [USER]!
+
+	Join [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!
+
+	[WHOP_OWNER] is waiting!
 
 	[LINK]"
 	
@@ -598,7 +596,7 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **TRANSITION messages** must be **5 lines or fewer** and include UserChat link
+	- **TRANSITION messages** must be **6 lines or fewer** and include UserChat link
 	- **WELCOME messages** must be **1 line only** and MUST be exactly: "[USER], check [WHOP] BEST quick-money paths!"
 	- **VALUE_DELIVERY messages** must be **6 lines or fewer** (not counting empty lines) to accommodate structure with [WHOP_OWNER] and [USER] placeholders
 	- **All other message types** (EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
@@ -779,7 +777,7 @@ export const generateFunnelFlow = async (
 	5. **CATEGORY MAPPING**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks, PAID resources ONLY in OFFER blocks
 	6. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages; [LINK] must be on separate line with empty line above it; no explanatory text before [LINK]
 	7. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
-	8. **TRANSITION MESSAGE ENFORCEMENT**: TRANSITION messages must be EXACTLY "[USER], catch!\n\n[LINK]" - NO VARIATIONS ALLOWED
+	8. **TRANSITION MESSAGE ENFORCEMENT**: TRANSITION messages must be EXACTLY "Wait! [WHOP_OWNER] has a gift for you, [USER]!\n\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\n\n[WHOP_OWNER] is waiting!\n\n[LINK]" - NO VARIATIONS ALLOWED
 	9. **NO DUPLICATES**: Each resource appears in exactly one block
 	10. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	11. **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
@@ -833,7 +831,7 @@ export const generateFunnelFlow = async (
 	  "blocks": {
 		 "transition_1": {
 			"id": "transition_1",
-			"message": "[USER], catch!\\n\\n[LINK]",
+			"message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!\\n\\n[LINK]",
 			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
 		 },
 		 "welcome_1": {
@@ -848,19 +846,19 @@ export const generateFunnelFlow = async (
 		 // This provides general value to anyone exploring without specific interests
 		 "value_trading_guide": {
 			"id": "value_trading_guide",
-			"message": "Perfect. Trading is where the action is.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
+			"message": "Charts help you spot profitable trades.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
 			"resourceName": "The 3 Core Principles of Crypto Charting",
 			"options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "value_crypto_basics": {
 			"id": "value_crypto_basics",
-			"message": "Perfect. Crypto basics are where it all starts.\\n\\n[LINK]\\n\\nWait! [WHOP_OWNER] cooked up a gift just for you, [USER]!\\n\\n[WHOP_OWNER] waits to hand-pick products together for your unique needs in a VIP chat.\\n\\nReply \\"UNLOCK\\" for access",
+			"message": "Basics help you avoid costly mistakes.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
 			"resourceName": "[EXAMPLE - Use actual FREE_VALUE resource name from provided list]",
 			"options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "experience_qual_1": {
 			"id": "experience_qual_1",
-			"message": "Welcome, @[Username]! Glad you made it. Let's get started.\\n\\nBased on what you've seen so far, where would you place your current skill level?\\n\\n",
+			"message": "Welcome, [USER]! Glad you made it. Let's get started.\\n\\nBased on what you've seen so far, where would you place your current skill level?\\n\\n",
 			"options": [{"text": "This was mostly new information (Beginner)", "nextBlockId": "pain_point_1"}]
 		 },
 		 "pain_point_1": {
