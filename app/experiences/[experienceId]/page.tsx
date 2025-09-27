@@ -29,6 +29,7 @@ export default function ExperiencePage({
 }) {
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
 	const [experienceId, setExperienceId] = useState<string>("");
+	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
 
 	// Single useEffect - get params and fetch context immediately
 	useEffect(() => {
@@ -74,9 +75,9 @@ export default function ExperiencePage({
 	const currentAccessLevel = authContext.user.accessLevel;
 
 	const handleViewSelected = (view: "admin" | "customer") => {
-		// For ViewSelectionPanel - when user makes a choice
-		// This will be handled by the ViewSelectionPanel component itself
+		// User selected a view from ViewSelectionPanel
 		console.log("User selected view:", view);
+		setSelectedView(view);
 	};
 
 	const handleCustomerMessage = (message: string, conversationId?: string) => {
@@ -92,8 +93,8 @@ export default function ExperiencePage({
 	};
 
 	// Backend determines everything - no frontend logic
-	if (authContext.shouldShowViewSelection) {
-		// Backend determined: show ViewSelectionPanel
+	if (authContext.shouldShowViewSelection && !selectedView) {
+		// Backend determined: show ViewSelectionPanel (only if no view selected yet)
 		return (
 			<ViewSelectionPanel
 				userName={currentUser.name}
@@ -103,6 +104,24 @@ export default function ExperiencePage({
 		);
 	}
 
+	// Handle user-selected view from ViewSelectionPanel
+	if (selectedView === "admin") {
+		return <AdminPanel user={authContext?.user || null} />;
+	}
+
+	if (selectedView === "customer") {
+		return (
+			<CustomerView
+				userName={currentUser.name}
+				experienceId={experienceId}
+				onMessageSent={handleCustomerMessage}
+				userType="customer"
+				whopUserId={currentUser.whopUserId}
+			/>
+		);
+	}
+
+	// Handle backend auto-selected views
 	if (authContext.autoSelectedView === "admin") {
 		// Backend determined: show AdminPanel
 		return <AdminPanel user={authContext?.user || null} />;
