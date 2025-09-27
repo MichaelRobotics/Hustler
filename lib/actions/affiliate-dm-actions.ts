@@ -124,19 +124,25 @@ export async function sendAffiliateDM(conversationId: string): Promise<boolean> 
     }
 
     // Create the DM message
-    const dmMessage = `Want to make money on whop but have nothing to Sell?
+    const dmMessage = `Want Whop income with nothing to sell?
 
-Don't create your own product. Instead, become an affiliate! 
+Don't build. Be an affiliate!
 
-You can earn money by selling TOP products already in high demand on Whop.
+Monetize instantly: Sell Whop's hottest products.
 
-Here's how to get started:
+1. Create whop 
 
-1. Create whop (https://whop.com/joined/whop/exp_sZInboyJKFOzbl/app/)
-2. Install app (https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
-3. IN APP: CLICK LIBRARY -> CLICK ADD PRODUCT -> ADD LINK ${affiliateLink} -> ASSIGN PRODUCT -> GENERATE -> GO LIVE
+(https://whop.com/discover/whop/?productId=prod_FLhyIzBxkBGvg)
 
-Voila! Now Upsell will sell it to every customer who joins your whop!`;
+2. Install app 
+
+(https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
+
+3. Quick 3-click setup: 
+
+(https://whop.com/apps/app_FInBMCJGyVdD9T/install/)
+
+LETS GO!`;
 
     // Send DM using Whop SDK
     await whopSdk.messages.sendDirectMessageToUser({
