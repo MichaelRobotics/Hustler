@@ -17,12 +17,21 @@ export async function GET(request: NextRequest) {
   try {
     console.log(`[AFFILIATE-DM-CRON] Starting affiliate DM cron job at ${new Date().toISOString()}`);
     
-    // Get conversations that have a current block ID (active conversations)
+    // Get conversations that have a current block ID (active conversations) AND affiliateSend = false
+    console.log(`[AFFILIATE-DM-CRON] Fetching active conversations that haven't sent affiliate DM yet`);
     const activeConversations = await db.query.conversations.findMany({
       where: and(
         eq(conversations.status, 'active'),
-        sql`current_block_id IS NOT NULL`
+        sql`current_block_id IS NOT NULL`,
+        eq(conversations.affiliateSend, false) // Only get conversations that haven't sent affiliate DM
       ),
+      columns: {
+        id: true,
+        affiliateSend: true,
+        currentBlockId: true,
+        updatedAt: true,
+        whopUserId: true
+      },
       with: {
         messages: {
           orderBy: [desc(messages.createdAt)],
@@ -31,6 +40,13 @@ export async function GET(request: NextRequest) {
         funnel: true
       }
     });
+    
+    console.log(`[AFFILIATE-DM-CRON] Found ${activeConversations.length} active conversations that haven't sent affiliate DM yet`);
+    console.log(`[AFFILIATE-DM-CRON] Sample conversation data:`, activeConversations[0] ? {
+      id: activeConversations[0].id,
+      affiliateSend: activeConversations[0].affiliateSend,
+      currentBlockId: activeConversations[0].currentBlockId
+    } : 'No conversations found');
 
     // Filter conversations that are in OFFER stage
     const offerConversations = activeConversations.filter((conversation: any) => {
@@ -45,23 +61,18 @@ export async function GET(request: NextRequest) {
     });
 
     console.log(`[AFFILIATE-DM-CRON] Found ${offerConversations.length} conversations in OFFER stage`);
+    
+    // Log OFFER conversations (all should have affiliateSend = false)
+    console.log(`[AFFILIATE-DM-CRON] OFFER conversations (all eligible for affiliate DM):`);
+    offerConversations.forEach((conv: any, index: number) => {
+      console.log(`[AFFILIATE-DM-CRON] ${index + 1}. Conversation ${conv.id}: affiliateSend = ${conv.affiliateSend} (should be false)`);
+    });
 
     let sentCount = 0;
     let skippedCount = 0;
 
     for (const conversation of offerConversations) {
       try {
-        // Check if the last message is an affiliate message
-        const lastMessage = conversation.messages[0];
-        const isAffiliateMessage = lastMessage?.content?.includes('Want to make money on whop but have nothing to Sell?') ||
-                                 lastMessage?.content?.includes('Search whop whop for best products, become affiliate and sell them!');
-
-        if (isAffiliateMessage) {
-          console.log(`[AFFILIATE-DM-CRON] Skipping conversation ${conversation.id} - already sent affiliate DM`);
-          skippedCount++;
-          continue;
-        }
-
         // Check if conversation has been in OFFER stage for at least 2 minutes
         // (to avoid sending immediately when user just reached OFFER)
         const now = new Date();
@@ -75,15 +86,17 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // Send affiliate DM
-        console.log(`[AFFILIATE-DM-CRON] Sending affiliate DM to conversation ${conversation.id}`);
+        // Send affiliate DM - sendAffiliateDM() handles affiliateSend check atomically
+        console.log(`[AFFILIATE-DM-CRON] Attempting to send affiliate DM to conversation ${conversation.id}`);
         const success = await sendAffiliateDM(conversation.id);
         
         if (success) {
           sentCount++;
           console.log(`[AFFILIATE-DM-CRON] Successfully sent affiliate DM to conversation ${conversation.id}`);
         } else {
-          console.error(`[AFFILIATE-DM-CRON] Failed to send affiliate DM to conversation ${conversation.id}`);
+          // This could mean DM was already sent (affiliateSend was true) or there was an error
+          console.log(`[AFFILIATE-DM-CRON] Affiliate DM not sent for conversation ${conversation.id} (may have been already sent or error occurred)`);
+          skippedCount++;
         }
 
       } catch (error) {

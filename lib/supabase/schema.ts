@@ -247,6 +247,7 @@ export const conversations = pgTable(
 		userPath: jsonb("user_path"), // Track user's path through funnel
 		phase2StartTime: timestamp("phase2_start_time"), // When Phase 2 (VALUE_DELIVERY) begins
 		myAffiliateLink: text("my_affiliate_link"), // Affiliate link for this conversation
+		affiliateSend: boolean("affiliate_send").default(false).notNull(), // Track if affiliate DM was sent
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

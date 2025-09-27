@@ -10,21 +10,28 @@ export async function sendAffiliateDM(conversationId: string): Promise<boolean> 
   try {
     console.log(`[AFFILIATE-DM] Sending affiliate DM for conversation ${conversationId}`);
     
-    // Check if affiliate DM already exists to prevent duplicates
-    const existingAffiliateMessage = await db.query.messages.findFirst({
-      where: and(
-        eq(messages.conversationId, conversationId),
-        eq(messages.type, 'bot'),
-        sql`content LIKE '%Want to make money on whop but have nothing to Sell?%'`
-      )
-    });
+    // Use atomic update to set affiliateSend to true and get the conversation
+    // This prevents race conditions by using the database as a lock
+    const updateResult = await db.update(conversations)
+      .set({ 
+        affiliateSend: true,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(conversations.id, conversationId),
+        eq(conversations.affiliateSend, false) // Only update if affiliateSend is false
+      ))
+      .returning();
 
-    if (existingAffiliateMessage) {
-      console.log(`[AFFILIATE-DM] Affiliate DM already exists in conversation messages, skipping send`);
+    // If no rows were updated, it means affiliateSend was already true
+    if (updateResult.length === 0) {
+      console.log(`[AFFILIATE-DM] ⏭️ Affiliate DM already sent for conversation ${conversationId} (affiliateSend was already true)`);
       return true; // Return true since the DM was already sent
     }
-    
-    // Get conversation details
+
+    console.log(`[AFFILIATE-DM] ✅ Successfully claimed conversation ${conversationId} for affiliate DM (set affiliateSend to true)`);
+
+    // Now get the full conversation details for sending the DM
     const conversation = await db.query.conversations.findFirst({
       where: eq(conversations.id, conversationId),
       with: {
@@ -34,7 +41,7 @@ export async function sendAffiliateDM(conversationId: string): Promise<boolean> 
     });
 
     if (!conversation) {
-      console.error(`[AFFILIATE-DM] Conversation not found: ${conversationId}`);
+      console.error(`[AFFILIATE-DM] Conversation not found after update: ${conversationId}`);
       return false;
     }
 
@@ -150,18 +157,31 @@ LETS GO!`;
       message: dmMessage
     });
 
-    // Save the affiliate DM to the conversation's messages table for deduplication
+    // Save the affiliate DM to the conversation's messages table
     try {
+      console.log(`[AFFILIATE-DM] Saving affiliate DM to messages table for conversation ${conversationId}`);
       await db.insert(messages).values({
         conversationId: conversationId,
         type: 'bot',
         content: dmMessage,
         createdAt: new Date()
       });
-      console.log(`[AFFILIATE-DM] Saved affiliate DM to conversation messages for deduplication`);
+      console.log(`[AFFILIATE-DM] ✅ Successfully saved affiliate DM to messages table`);
     } catch (error) {
       console.error(`[AFFILIATE-DM] Failed to save affiliate DM to messages table:`, error);
-      // Continue execution even if saving fails
+      // If saving fails, we should reset affiliateSend to false so it can be retried
+      try {
+        await db.update(conversations)
+          .set({ 
+            affiliateSend: false,
+            updatedAt: new Date()
+          })
+          .where(eq(conversations.id, conversationId));
+        console.log(`[AFFILIATE-DM] Reset affiliateSend to false for retry due to save failure`);
+      } catch (resetError) {
+        console.error(`[AFFILIATE-DM] Failed to reset affiliateSend:`, resetError);
+      }
+      return false;
     }
 
     console.log(`[AFFILIATE-DM] Successfully sent affiliate DM to user ${conversation.whopUserId}`);

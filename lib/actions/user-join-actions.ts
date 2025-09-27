@@ -300,9 +300,10 @@ export async function handleUserJoinEvent(
 		const adminName = adminUser?.name ? adminUser.name.split(' ')[0] : experience.name;
 
 		// Step 6: Extract transition message from funnel flow with personalization
-		const transitionMessage = await getTransitionMessage(
+		// We'll get the user name after conversation is created using lookupCurrentUser()
+		let transitionMessage = await getTransitionMessage(
 			liveFunnel.flow, 
-			user?.name || `User ${userId}`, 
+			undefined, // Will be resolved after conversation creation
 			adminName,
 			experience.whopExperienceId
 		);
@@ -347,9 +348,16 @@ export async function handleUserJoinEvent(
 		);
 		console.log(`[USER-JOIN] Created conversation ${conversationId} for user ${userId}`);
 
+		// Step 8.5: Resolve [USER] placeholder using resolvePlaceholders() after conversation is created
+		const resolvedTransitionMessage = await resolvePlaceholders(
+			transitionMessage,
+			experience.id,
+			conversationId
+		);
+
 	// Send transition DM and record it
 	const dmUserId = membershipId || userId; // Use membershipId for DM operations
-	const dmSent = await sendTransitionDM(dmUserId, transitionMessage, conversationId);
+	const dmSent = await sendTransitionDM(dmUserId, resolvedTransitionMessage, conversationId);
 	if (!dmSent) {
 		console.error(`Failed to send DM to user ${userId}`);
 		return;

@@ -125,7 +125,11 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 							color="green"
 							onClick={onDeploy}
 							disabled={!hasFlow || hasApiError}
-							className="px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
+							className={`px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 ${
+								!hasAnyLiveFunnel && hasFlow && !hasApiError
+									? "animate-pulse animate-bounce"
+									: ""
+							}`}
 							title={
 								hasApiError
 									? "Cannot go live due to generation error"
@@ -137,7 +141,11 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 							<Play
 								size={18}
 								strokeWidth={2.5}
-								className="group-hover:scale-110 transition-transform duration-300 sm:w-5 sm:h-5"
+								className={`transition-transform duration-300 sm:w-5 sm:h-5 ${
+									!hasAnyLiveFunnel && hasFlow && !hasApiError
+										? "animate-spin"
+										: "group-hover:scale-110"
+								}`}
 							/>
 							<span className="ml-2 font-semibold text-sm sm:text-base">
 								Go Live

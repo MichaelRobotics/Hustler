@@ -18,6 +18,7 @@ import { apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
+import { renderTextWithLinks } from "../../utils/link-utils";
 
 /**
  * Track intent by calling the API endpoint
@@ -659,13 +660,13 @@ const UserChat: React.FC<UserChatProps> = ({
 				
 				// Legacy [LINK] placeholder handling removed - all link processing now handled by backend
 				
-				// Regular message without [LINK] placeholders
+				// Regular message with clickable links
 				return (
 					<Text
 						size="2"
 						className="whitespace-pre-wrap leading-relaxed text-base"
 					>
-						{text}
+						{renderTextWithLinks(text)}
 					</Text>
 				);
 			};

@@ -14,6 +14,7 @@ import type {
 } from "../../types/liveChat";
 import { ThemeToggle } from "../common/ThemeToggle";
 import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
+import { renderTextWithLinks } from "../../utils/link-utils";
 
 interface LiveChatUserInterfaceProps {
 	conversation: LiveChatConversation;
@@ -223,8 +224,8 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 					);
 				}
 				
-				// Regular message rendering
-				return <div className="text-sm leading-relaxed whitespace-pre-wrap">{text}</div>;
+				// Regular message rendering with clickable links
+				return <div className="text-sm leading-relaxed whitespace-pre-wrap">{renderTextWithLinks(text)}</div>;
 			};
 
 			return (

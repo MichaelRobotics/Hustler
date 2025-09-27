@@ -3,6 +3,7 @@
 import { Text } from "frosted-ui";
 import React from "react";
 import type { LiveChatMessage, LiveChatUser } from "../../types/liveChat";
+import { renderTextWithLinks } from "../../utils/link-utils";
 
 interface ChatMessageProps {
 	message: LiveChatMessage;
@@ -42,7 +43,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
 								isUserMessage ? "text-foreground" : "text-white"
 							}`}
 						>
-							{message.text}
+							{renderTextWithLinks(message.text)}
 						</Text>
 					</div>
 				</div>
