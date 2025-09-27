@@ -17,6 +17,9 @@ interface AuthContext {
 	user: AuthenticatedUser;
 	isAuthenticated: boolean;
 	hasAccess: boolean;
+	userType?: string; // Backend-determined user type
+	shouldShowViewSelection?: boolean;
+	autoSelectedView?: string;
 }
 
 export default function ExperiencePage({
@@ -70,6 +73,9 @@ export default function ExperiencePage({
 					console.log("🛠️ Backend determined: show ViewSelectionPanel");
 					// Don't set selectedView, let ViewSelectionPanel handle it
 				}
+				
+				// Log backend-determined user type
+				console.log("👤 Backend user type:", data.userType);
 			} catch (err) {
 				console.error("Error fetching user context:", err);
 				setError("Failed to load user context");
@@ -121,13 +127,14 @@ export default function ExperiencePage({
 		);
 	}
 
-	// Use authenticated user data
+	// Use authenticated user data (backend-determined)
 	const currentUser = { 
 		name: authContext.user.name, 
 		accessLevel: authContext.user.accessLevel,
 		whopUserId: authContext.user.whopUserId
 	};
-	const currentAccessLevel = authContext.user.accessLevel === "no_access" ? "customer" : authContext.user.accessLevel;
+	// Use backend-determined access level (no frontend logic)
+	const currentAccessLevel = authContext.user.accessLevel;
 
 	const handleViewSelected = (view: "admin" | "customer") => {
 		setSelectedView(view);

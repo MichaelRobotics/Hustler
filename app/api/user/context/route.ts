@@ -71,18 +71,25 @@ export async function GET(request: NextRequest) {
 		// Determine if user should see view selection panel
 		let shouldShowViewSelection = false;
 		let autoSelectedView = null;
+		let userType = null;
 		
 		if (accessLevel === "customer") {
 			// Customers go directly to CustomerView
 			autoSelectedView = "customer";
+			userType = "customer";
 		} else if (accessLevel === "admin") {
 			if (isDeveloperCompany) {
 				// Developer company + admin = View Selection Panel
 				shouldShowViewSelection = true;
+				userType = "developer_admin";
 			} else {
 				// Non-developer company + admin = Direct to Admin Panel
 				autoSelectedView = "admin";
+				userType = "client_admin";
 			}
+		} else if (accessLevel === "no_access") {
+			// No access - will be handled by hasAccess check
+			userType = "no_access";
 		}
 		
 		console.log("🔍 Backend Access Decision:", {
@@ -90,6 +97,7 @@ export async function GET(request: NextRequest) {
 			companyId: whopCompanyId,
 			developerCompanyId,
 			isDeveloperCompany,
+			userType,
 			shouldShowViewSelection,
 			autoSelectedView
 		});
@@ -101,6 +109,7 @@ export async function GET(request: NextRequest) {
 			// Add view selection logic to response
 			shouldShowViewSelection,
 			autoSelectedView,
+			userType, // Backend-determined user type
 		});
 	} catch (error) {
 		console.error("Error getting user context:", error);
