@@ -1,5 +1,6 @@
 /**
  * Simple utility to detect URLs in text and make them clickable
+ * Updated to follow Whop best practices for mobile and desktop
  */
 
 import React from 'react';
@@ -9,6 +10,7 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 /**
  * Converts text with URLs into React elements with clickable links
+ * Updated to follow Whop best practices for mobile and desktop
  * @param text - The text that may contain URLs
  * @returns Array of React elements (text and links)
  */
@@ -35,6 +37,21 @@ export function renderTextWithLinks(text: string): React.ReactNode[] {
             display: 'inline-block',
             WebkitTouchCallout: 'default',
             WebkitUserSelect: 'text'
+          }}
+          onClick={(e) => {
+            // Handle click according to Whop best practices
+            e.preventDefault();
+            
+            // Check if it's a Whop internal link
+            const isWhopInternalLink = part.includes('whop.com') && !part.includes('whop.com/checkout') && !part.includes('whop.com/hub');
+            
+            if (isWhopInternalLink) {
+              // For Whop internal links, navigate in same window
+              window.location.href = part;
+            } else {
+              // For external links, open in new tab
+              window.open(part, '_blank', 'noopener,noreferrer');
+            }
           }}
         >
           {part}

@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
 import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
+import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 // Server-side functions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
@@ -33,6 +34,35 @@ async function trackIntent(experienceId: string, funnelId: string): Promise<void
   } catch (error) {
     console.error("❌ [UserChat] Error tracking intent:", error);
     // Don't throw - this is background tracking
+  }
+}
+
+/**
+ * Handle external link navigation according to Whop best practices
+ * Uses iframe SDK when available, falls back to window.location for standalone
+ */
+function handleExternalLink(href: string, iframeSdk: any, isInIframe: boolean): void {
+  try {
+    // Check if it's a Whop internal link (should stay in iframe)
+    const isWhopInternalLink = href.includes('whop.com') && !href.includes('whop.com/checkout') && !href.includes('whop.com/hub');
+    
+    if (isInIframe && iframeSdk && iframeSdk.openExternalUrl) {
+      // Use Whop iframe SDK for external links (best practice)
+      console.log(`🔗 [UserChat] Opening external link via Whop iframe SDK: ${href}`);
+      iframeSdk.openExternalUrl({ url: href });
+    } else if (isWhopInternalLink) {
+      // For Whop internal links, use window.location to stay in iframe
+      console.log(`🔗 [UserChat] Opening Whop internal link: ${href}`);
+      window.location.href = href;
+    } else {
+      // For external links outside iframe, open in new tab
+      console.log(`🔗 [UserChat] Opening external link in new tab: ${href}`);
+      window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  } catch (error) {
+    console.error("❌ [UserChat] Error handling external link:", error);
+    // Fallback to window.location
+    window.location.href = href;
   }
 }
 
@@ -88,6 +118,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const { appearance, toggleTheme } = useTheme();
+	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
 	// Removed OFFER link resolution logic - links are now handled by backend
 
@@ -634,8 +665,8 @@ const UserChat: React.FC<UserChatProps> = ({
 										} else if (isValueDeliveryButton) {
 											console.log(`🎁 [UserChat] Free resource claim - no intent tracking for VALUE_DELIVERY button`);
 										}
-										// Redirect to the link
-										window.location.href = href;
+										// Handle link navigation according to Whop best practices
+										handleExternalLink(href, iframeSdk, isInIframe);
 									}}
 								/>
 							);
