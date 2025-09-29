@@ -126,12 +126,45 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		sendTyping,
 		error: wsError,
 		reconnect,
+		reset: resetWebSocket, // ✅ FIXED: Add reset function
 	} = useLiveChatIntegration({
 		user: user!, // User is guaranteed to be available here
 		experienceId: experienceId,
 		conversationId: selectedConversationId || undefined,
 		onMessage: (message) => {
+			console.log("📨 [LiveChat UI] BEFORE RECEIVING MESSAGE:", {
+				instanceId: `livechat-ui-${experienceId}-${Date.now()}`,
+				experienceId,
+				userId: user?.id,
+				userName: user?.name,
+				messageType: message.type,
+				conversationId: message.conversationId,
+				messageId: message.message?.id,
+				content: message.message?.content?.substring(0, 50) + "...",
+				messageMessageType: message.message?.type,
+				messageUserId: message.message?.metadata?.userId,
+				messageExperienceId: message.message?.metadata?.experienceId,
+				channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+				timestamp: new Date().toISOString()
+			});
+			
 			if (message.type === "message" && message.message) {
+				console.log("✅ [LiveChat UI] AFTER RECEIVING MESSAGE:", {
+					instanceId: `livechat-ui-${experienceId}-${Date.now()}`,
+					experienceId,
+					userId: user?.id,
+					userName: user?.name,
+					processedConversationId: message.conversationId,
+					processedMessageId: message.message.id,
+					processedContent: message.message.content.substring(0, 50) + "...",
+					processedMessageType: message.message.type,
+					processedUserId: message.message.metadata?.userId,
+					processedExperienceId: message.message.metadata?.experienceId,
+					channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+					timestamp: new Date().toISOString()
+				});
+				
+				console.log("✅ [LiveChat] Processing message for conversation:", message.conversationId);
 				// Update conversation with new message
 				setConversations(prev => 
 					prev.map(conv => 
@@ -155,15 +188,26 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 							: conv
 					)
 				);
+			} else {
+				console.log("⚠️ [LiveChat] Message not processed - missing type or message data");
 			}
 		},
 		onConversationUpdate: (updatedConversation) => {
 			// Update conversation in list
-			setConversations(prev => 
-				prev.map(conv => 
-					conv.id === updatedConversation.id ? updatedConversation : conv
-				)
-			);
+			setConversations(prev => {
+				const existingIndex = prev.findIndex(conv => conv.id === updatedConversation.id);
+				
+				if (existingIndex >= 0) {
+					// Update existing conversation
+					return prev.map(conv => 
+						conv.id === updatedConversation.id ? updatedConversation : conv
+					);
+				} else {
+					// New conversation - add to the beginning of the list
+					console.log("LiveChat: Adding new conversation to list:", updatedConversation.id);
+					return [updatedConversation, ...prev];
+				}
+			});
 		},
 		onStageTransition: (stageInfo) => {
 			// Handle stage transitions (TRANSITION -> EXPERIENCE_QUALIFICATION)
@@ -262,11 +306,21 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			);
 			
 			console.log("LiveChat: Loaded conversation details with messages:", conversation.messages?.length || 0);
+			
+			// ✅ FIXED: Reset WebSocket connection to sync with active clients
+			try {
+				console.log("🔄 [LiveChat] Resetting WebSocket to sync with active clients after conversation load");
+				await resetWebSocket();
+				console.log("✅ [LiveChat] WebSocket reset completed - should sync with active clients");
+			} catch (resetError) {
+				console.error("❌ [LiveChat] Failed to reset WebSocket:", resetError);
+				// Don't throw - this is not critical for conversation loading
+			}
 		} catch (err) {
 			console.error("Error loading conversation details:", err);
 			setError("Failed to load conversation details");
 		}
-	}, [user, experienceId]);
+	}, [user, experienceId, resetWebSocket]);
 
 	// Optimized backend auto-closing behavior with throttling
 	useEffect(() => {
@@ -316,8 +370,9 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			if (!selectedConversationId || !user) return;
 
 			// IMMEDIATE UI UPDATE: Add message to conversation immediately
+			const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 			const tempMessage: LiveChatMessage = {
-				id: `temp-${Date.now()}`,
+				id: messageId, // ✅ FIXED: Use same ID format as WebSocket messages
 				conversationId: selectedConversationId,
 				type: "bot" as const,
 				text: message,
@@ -325,6 +380,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				isRead: true,
 				metadata: {
 					funnelStage: "LIVECHAT",
+					isOptimistic: true, // ✅ FIXED: Mark as optimistic to prevent WebSocket duplicates
+					userId: user.id, // ✅ FIXED: Include user ID for duplicate prevention
 				},
 			};
 
@@ -352,10 +409,12 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				});
 
 				// Send message via WebSocket (non-blocking)
-				await sendWebSocketMessage(message, "bot");
+				// ✅ FIXED: Pass messageId to prevent duplicates
+				await sendWebSocketMessage(message, "bot", messageId);
 				console.log("LiveChat: WebSocket message sent (or skipped if not connected)");
 
-				// Also send via API for persistence
+				// ✅ RESTORED: Database save for user-inputted messages in LiveChat
+				// This saves admin messages to database for persistence
 				const response = await apiPost(`/api/livechat/conversations/${selectedConversationId}`, {
 					action: 'send_message',
 					message,
@@ -364,13 +423,11 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				}, user.experienceId);
 
 				console.log("LiveChat: API response status:", response.status);
-				console.log("LiveChat: API response headers:", Object.fromEntries(response.headers.entries()));
 
 				if (!response.ok) {
 					console.error("LiveChat: API request failed with status:", response.status);
 					const errorText = await response.text();
 					console.error("LiveChat: API error response:", errorText);
-					console.error("LiveChat: Setting error state from HTTP error");
 					setError(`API request failed: ${response.status} ${response.statusText}`);
 					return;
 				}
@@ -386,15 +443,18 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 								? {
 									...conv,
 									messages: conv.messages.map(msg => 
-										msg.id === tempMessage.id 
+										msg.id === messageId
 											? {
-												id: result.data.message.id,
+												id: messageId,
 												conversationId: result.data.message.conversationId,
 												type: result.data.message.type as "user" | "bot" | "system",
 												text: result.data.message.content,
 												timestamp: result.data.message.createdAt,
 												isRead: true,
-												metadata: result.data.message.metadata,
+												metadata: {
+													...result.data.message.metadata,
+													isOptimistic: false,
+												},
 											}
 											: msg
 									),
@@ -410,24 +470,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 						success: result.success,
 						error: result.error,
 						data: result.data,
-						fullResult: result
 					});
-					console.error("LiveChat: Setting error state from API response");
-					
-					// Remove temporary message on error
-					setConversations(prev => 
-						prev.map(conv => 
-							conv.id === selectedConversationId
-								? {
-									...conv,
-									messages: conv.messages.filter(msg => msg.id !== tempMessage.id),
-									messageCount: Math.max((conv.messageCount || 0) - 1, 0),
-								}
-								: conv
-						)
-					);
-					
-					setError(result.error || "Failed to send message");
+					setError("Failed to send message");
 				}
 			} catch (err) {
 				console.error("LiveChat: Exception during message send:", err);

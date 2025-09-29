@@ -23,6 +23,9 @@ export interface LiveChatMessage {
 		optionId?: string;
 		funnelStage?: string;
 		offerId?: string;
+		isOptimistic?: boolean; // ✅ FIXED: Add optimistic flag
+		userId?: string; // ✅ FIXED: Add user ID for duplicate prevention
+		experienceId?: string; // ✅ FIXED: Add experience ID for multitenancy
 	};
 }
 

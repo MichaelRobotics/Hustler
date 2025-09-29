@@ -105,7 +105,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	stageInfo,
 }) => {
 	const [message, setMessage] = useState("");
-	const [isTyping, setIsTyping] = useState(false);
+	// ✅ REMOVED: isTyping state - no typing indicators needed
 	const [conversationMessages, setConversationMessages] = useState<Array<{
 		id: string;
 		type: "user" | "bot" | "system";
@@ -116,7 +116,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
-	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	// ✅ REMOVED: typingTimeoutRef - no typing indicators needed
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
@@ -160,11 +160,29 @@ const UserChat: React.FC<UserChatProps> = ({
 	}, [conversation?.messages]);
 
 	// WebSocket integration for REAL-TIME updates only (background initialization)
-	const { isConnected, sendMessage, sendTypingIndicator, typingUsers } = useWhopWebSocket({
+	console.log("🔌 [UserChat] WebSocket configuration:", {
+		conversationId: conversationId || "",
+		experienceId: experienceId || "",
+		userType: userType,
+		hasConversation: !!conversation,
+		conversationIdFromConversation: conversation?.id
+	});
+	
+	const { isConnected, sendMessage } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
 		onMessage: (newMessage) => {
-			console.log("UserChat: Received WebSocket message:", newMessage);
+			console.log("📨 [UserChat] WebSocket message received in component:", {
+				id: newMessage.id,
+				type: newMessage.type,
+				content: newMessage.content.substring(0, 50) + "...",
+				conversationId: newMessage.metadata?.conversationId,
+				userId: newMessage.metadata?.userId,
+				experienceId: newMessage.metadata?.experienceId,
+				timestamp: newMessage.createdAt,
+				userType: userType // ✅ DEBUG: Add userType to see if admin/customer affects WebSocket
+			});
+			
 			// Check if message already exists locally
 			const messageExists = conversationMessages.some(msg => 
 				msg.content === newMessage.content && 
@@ -173,7 +191,7 @@ const UserChat: React.FC<UserChatProps> = ({
 			);
 			
 			if (!messageExists) {
-				console.log("UserChat: New message detected, adding directly...");
+				console.log("✅ [UserChat] New message detected, adding directly...");
 				// Add new message directly instead of reloading all messages
 				setConversationMessages(prev => [...prev, {
 					id: newMessage.id,
@@ -183,15 +201,11 @@ const UserChat: React.FC<UserChatProps> = ({
 					createdAt: newMessage.createdAt,
 				}]);
 			} else {
-				console.log("UserChat: Message already exists locally, skipping");
+				console.log("⚠️ [UserChat] Message already exists locally, skipping");
 			}
 			scrollToBottom();
 		},
-		onTyping: (isTyping, userId) => {
-			if (userId !== "system") {
-				setIsTyping(isTyping);
-			}
-		},
+		// ✅ REMOVED: onTyping callback - no typing indicators needed
 		onError: (error) => {
 			console.error("WebSocket error:", error);
 		},
@@ -286,6 +300,40 @@ const UserChat: React.FC<UserChatProps> = ({
 					setConversationMessages(prev => [...prev, userMessage]);
 					console.log("UserChat: Added user message to UI:", userMessage);
 					
+					// ✅ FIXED: Broadcast user message via WebSocket for real-time sync
+					console.log("🔊 [UserChat UI] BEFORE SENDING MESSAGE:", {
+						instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+						conversationId,
+						experienceId,
+						userType,
+						messageContent: messageContent.substring(0, 50) + "...",
+						isConnected,
+						channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+						timestamp: new Date().toISOString()
+					});
+					
+					try {
+						const result = await sendMessage(messageContent, "user", {
+							conversationId,
+							userId: "customer",
+							experienceId,
+							timestamp: new Date().toISOString(),
+						});
+						console.log("✅ [UserChat UI] AFTER SENDING MESSAGE:", {
+							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+							conversationId,
+							experienceId,
+							userType,
+							messageContent: messageContent.substring(0, 50) + "...",
+							broadcastResult: result,
+							isConnected,
+							channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+							timestamp: new Date().toISOString()
+						});
+					} catch (wsError) {
+						console.error("❌ [UserChat] Failed to broadcast user message:", wsError);
+					}
+					
 					// If there's a bot response, add it to UI
 					// Note: result.data.funnelResponse because createSuccessResponse wraps data
 					const funnelResponse = result.data?.funnelResponse || result.funnelResponse;
@@ -298,6 +346,40 @@ const UserChat: React.FC<UserChatProps> = ({
 						};
 						setConversationMessages(prev => [...prev, botMessage]);
 						console.log("UserChat: Added bot message to UI:", botMessage);
+						
+						// ✅ FIXED: Broadcast bot message via WebSocket for real-time sync
+						console.log("🔊 [UserChat UI] BEFORE SENDING BOT MESSAGE:", {
+							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+							conversationId,
+							experienceId,
+							userType,
+							botMessage: funnelResponse.botMessage.substring(0, 50) + "...",
+							isConnected,
+							channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+							timestamp: new Date().toISOString()
+						});
+						
+						try {
+							await sendMessage(funnelResponse.botMessage, "bot", {
+								conversationId,
+								userId: "system",
+								experienceId,
+								timestamp: new Date().toISOString(),
+								blockId: funnelResponse.nextBlockId,
+							});
+							console.log("✅ [UserChat UI] AFTER SENDING BOT MESSAGE:", {
+								instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+								conversationId,
+								experienceId,
+								userType,
+								botMessage: funnelResponse.botMessage.substring(0, 50) + "...",
+								isConnected,
+								channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+								timestamp: new Date().toISOString()
+							});
+						} catch (wsError) {
+							console.error("❌ [UserChat] Failed to broadcast bot message:", wsError);
+						}
 					}
 
 					// Update local current block ID if next block is provided
@@ -362,6 +444,40 @@ const UserChat: React.FC<UserChatProps> = ({
 			setConversationMessages(prev => [...prev, userMessage]);
 			scrollToBottom();
 
+			// ✅ FIXED: Broadcast user message via WebSocket for real-time sync
+			console.log("🔊 [UserChat UI] BEFORE SENDING OPTION MESSAGE:", {
+				instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+				conversationId,
+				experienceId,
+				userType,
+				optionText: option.text.substring(0, 50) + "...",
+				isConnected,
+				channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+				timestamp: new Date().toISOString()
+			});
+			
+			try {
+				const result = await sendMessage(option.text, "user", {
+					conversationId,
+					userId: "customer",
+					experienceId,
+					timestamp: new Date().toISOString(),
+				});
+				console.log("✅ [UserChat UI] AFTER SENDING OPTION MESSAGE:", {
+					instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+					conversationId,
+					experienceId,
+					userType,
+					optionText: option.text.substring(0, 50) + "...",
+					broadcastResult: result,
+					isConnected,
+					channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+					timestamp: new Date().toISOString()
+				});
+			} catch (wsError) {
+				console.error("❌ [UserChat] Failed to broadcast option message:", wsError);
+			}
+
 			// Navigate funnel via API route
 			const response = await apiPost('/api/userchat/navigate-funnel', {
 				conversationId,
@@ -385,6 +501,40 @@ const UserChat: React.FC<UserChatProps> = ({
 					};
 					setConversationMessages(prev => [...prev, botMessage]);
 					scrollToBottom();
+
+					// ✅ FIXED: Broadcast bot message via WebSocket for real-time sync
+					console.log("🔊 [UserChat UI] BEFORE SENDING OPTION BOT MESSAGE:", {
+						instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+						conversationId,
+						experienceId,
+						userType,
+						botMessage: result.botMessage.substring(0, 50) + "...",
+						isConnected,
+						channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+						timestamp: new Date().toISOString()
+					});
+					
+					try {
+						await sendMessage(result.botMessage, "bot", {
+							conversationId,
+							userId: "system",
+							experienceId,
+							timestamp: new Date().toISOString(),
+							blockId: result.conversation.currentBlockId,
+						});
+						console.log("✅ [UserChat UI] AFTER SENDING OPTION BOT MESSAGE:", {
+							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
+							conversationId,
+							experienceId,
+							userType,
+							botMessage: result.botMessage.substring(0, 50) + "...",
+							isConnected,
+							channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
+							timestamp: new Date().toISOString()
+						});
+					} catch (wsError) {
+						console.error("❌ [UserChat] Failed to broadcast option bot message:", wsError);
+					}
 				}
 				
 				// IMMEDIATE UI UPDATE: Update local current block ID to show new options immediately
@@ -461,18 +611,10 @@ const UserChat: React.FC<UserChatProps> = ({
 				target.style.height = Math.min(target.scrollHeight, 120) + "px";
 			});
 
-			// Send typing indicator for conversation-based chat
-			if (conversationId && experienceId && isConnected) {
-				if (typingTimeoutRef.current) {
-					clearTimeout(typingTimeoutRef.current);
-				}
-				sendTypingIndicator(true);
-				typingTimeoutRef.current = setTimeout(() => {
-					sendTypingIndicator(false);
-				}, 1000);
-			}
+			// ✅ REMOVED: Typing indicator for user messages
+			// No typing indicator shown when user types messages
 		},
-		[conversationId, experienceId, isConnected, sendTypingIndicator],
+		[conversationId, experienceId, isConnected],
 	);
 
 	// Optimized scroll to bottom - mobile performance optimized
@@ -489,13 +631,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	const handleOptionClickLocal = useCallback(
 		(option: any, index: number) => {
-			// Clear any existing timeout
-			if (typingTimeoutRef.current) {
-				clearTimeout(typingTimeoutRef.current);
-			}
-
-			// Show typing indicator FIRST
-			setIsTyping(true);
+			// ✅ REMOVED: Typing timeout clearing - no typing indicators needed
 
 			// Send user message immediately
 			onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
@@ -503,22 +639,10 @@ const UserChat: React.FC<UserChatProps> = ({
 			// Handle option selection based on conversation type
 			if (conversationId && experienceId && isConnected) {
 				// Use backend conversation handling
-				typingTimeoutRef.current = setTimeout(
-					() => {
-						setIsTyping(false);
-						handleConversationOptionSelection(option);
-					},
-					1500 + Math.random() * 1000,
-				);
+				handleConversationOptionSelection(option);
 			} else {
 				// Fallback to preview mode
-				typingTimeoutRef.current = setTimeout(
-					() => {
-						setIsTyping(false);
-						previewHandleOptionClick(option, index);
-					},
-					1500 + Math.random() * 1000,
-				);
+				previewHandleOptionClick(option, index);
 			}
 		},
 		[conversationId, experienceId, isConnected, handleConversationOptionSelection, previewHandleOptionClick, onMessageSent, scrollToBottom],
@@ -553,14 +677,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, []);
 
-	// Cleanup typing timeout on unmount
-	useEffect(() => {
-		return () => {
-			if (typingTimeoutRef.current) {
-				clearTimeout(typingTimeoutRef.current);
-			}
-		};
-	}, []);
+	// ✅ REMOVED: Typing timeout cleanup - no typing indicators needed
 
 	// Auto-scroll when conversation messages change (optimized for mobile performance)
 	useEffect(() => {
@@ -572,15 +689,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversationMessages, scrollToBottom]);
 
-	// Auto-scroll when typing indicator appears/disappears
-	useEffect(() => {
-		if (isTyping) {
-			// Scroll when typing indicator appears
-			requestAnimationFrame(() => {
-				scrollToBottom();
-			});
-		}
-	}, [isTyping, scrollToBottom]);
+	// ✅ REMOVED: Auto-scroll for typing indicator - no typing indicators needed
 
 	// Memoized message component for better performance
 	const MessageComponent = React.memo(
@@ -949,14 +1058,7 @@ const UserChat: React.FC<UserChatProps> = ({
 							</div>
 						)}
 
-					{/* Typing Indicator */}
-					{isTyping && (
-						<div className="flex justify-start mb-4">
-							<div className="max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm">
-								<TypingIndicator text="Hustler is typing..." />
-							</div>
-						</div>
-					)}
+					{/* ✅ REMOVED: Typing Indicator - no typing indicators needed */}
 
 					<div ref={chatEndRef} />
 				</div>
