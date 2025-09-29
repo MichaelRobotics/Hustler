@@ -1,11 +1,11 @@
 "use client";
 import React from 'react';
-import { Sparkles, ArrowRight, Star } from 'lucide-react';
+import { Sparkles, ArrowRight, Star, Gift } from 'lucide-react';
 
 interface AnimatedGoldButtonProps {
   href: string;
   text: string;
-  icon?: 'sparkles' | 'arrowRight' | 'star';
+  icon?: 'sparkles' | 'arrowRight' | 'star' | 'gift';
   onClick?: () => void;
   className?: string;
 }
@@ -26,6 +26,8 @@ const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
         return <ArrowRight className="w-5 h-5" />;
       case 'star':
         return <Star className="w-5 h-5" />;
+      case 'gift':
+        return <Gift className="w-5 h-5" />;
       default:
         return <Sparkles className="w-5 h-5" />;
     }

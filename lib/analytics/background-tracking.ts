@@ -63,6 +63,16 @@ export async function trackAwarenessBackground(
     }
 
     console.log(`✅ [BACKGROUND] Tracked awareness for funnel ${funnelId}`);
+    
+    // Update growth percentages after metric update
+    try {
+      const { updateFunnelGrowthPercentages } = await import("../actions/funnel-actions");
+      await updateFunnelGrowthPercentages(funnelId);
+      console.log(`📊 [BACKGROUND] Updated growth percentages for funnel ${funnelId}`);
+    } catch (growthError) {
+      console.error("❌ [BACKGROUND] Error updating growth percentages:", growthError);
+      // Don't throw - this is background tracking
+    }
   } catch (error) {
     console.error("❌ [BACKGROUND] Error tracking awareness:", error);
     // Don't throw - this is background tracking
@@ -114,6 +124,16 @@ export async function trackInterestBackground(
     }
 
     console.log(`✅ [BACKGROUND] Tracked interest for funnel ${funnelId}`);
+    
+    // Update growth percentages after metric update
+    try {
+      const { updateFunnelGrowthPercentages } = await import("../actions/funnel-actions");
+      await updateFunnelGrowthPercentages(funnelId);
+      console.log(`📊 [BACKGROUND] Updated growth percentages for funnel ${funnelId}`);
+    } catch (growthError) {
+      console.error("❌ [BACKGROUND] Error updating growth percentages:", growthError);
+      // Don't throw - this is background tracking
+    }
   } catch (error) {
     console.error("❌ [BACKGROUND] Error tracking interest:", error);
     // Don't throw - this is background tracking
@@ -177,6 +197,16 @@ export async function trackIntentBackground(
     }
 
     console.log(`✅ [BACKGROUND] Tracked intent for funnel ${funnelId}`);
+    
+    // Update growth percentages after metric update
+    try {
+      const { updateFunnelGrowthPercentages } = await import("../actions/funnel-actions");
+      await updateFunnelGrowthPercentages(funnelId);
+      console.log(`📊 [BACKGROUND] Updated growth percentages for funnel ${funnelId}`);
+    } catch (growthError) {
+      console.error("❌ [BACKGROUND] Error updating growth percentages:", growthError);
+      // Don't throw - this is background tracking
+    }
   } catch (error) {
     console.error("❌ [BACKGROUND] Error tracking intent:", error);
     // Don't throw - this is background tracking

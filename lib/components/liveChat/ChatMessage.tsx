@@ -36,6 +36,12 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
 								? "bg-white dark:bg-gray-800 border border-border/50 dark:border-border/30"
 								: "bg-violet-500 text-white"
 						}`}
+						style={{
+							userSelect: "text",
+							WebkitUserSelect: "text",
+							MozUserSelect: "text",
+							msUserSelect: "text",
+						}}
 					>
 						<Text
 							size="2"

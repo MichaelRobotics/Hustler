@@ -615,17 +615,24 @@ const UserChat: React.FC<UserChatProps> = ({
 							// This is the href
 							const href = part;
 							const buttonText = parts[partIndex + 1] || "Get Started!";
+							
+							// Determine if this is a VALUE_DELIVERY button (free resource) or OFFER button (paid resource)
+							const isValueDeliveryButton = buttonText === "Claim!";
+							const buttonIcon = isValueDeliveryButton ? "gift" : "sparkles";
+							
 							buttons.push(
 								<AnimatedGoldButton 
 									key={partIndex} 
 									href={href}
 									text={buttonText}
-									icon="sparkles"
+									icon={buttonIcon}
 									onClick={() => {
-										// Track intent when user clicks button
-										if (conversation?.funnelId && experienceId) {
+										// Only track intent for OFFER buttons (paid resources), not VALUE_DELIVERY buttons (free resources)
+										if (!isValueDeliveryButton && conversation?.funnelId && experienceId) {
 											console.log(`🚀 [UserChat] Tracking intent for experience ${experienceId}, funnel ${conversation.funnelId}`);
 											trackIntent(experienceId, conversation.funnelId);
+										} else if (isValueDeliveryButton) {
+											console.log(`🎁 [UserChat] Free resource claim - no intent tracking for VALUE_DELIVERY button`);
 										}
 										// Redirect to the link
 										window.location.href = href;
@@ -682,6 +689,12 @@ const UserChat: React.FC<UserChatProps> = ({
 								? "bg-blue-500 text-white"
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
 						}`}
+						style={{
+							userSelect: "text",
+							WebkitUserSelect: "text",
+							MozUserSelect: "text",
+							msUserSelect: "text",
+						}}
 					>
 						{renderMessageWithLinks(msg.text)}
 					</div>

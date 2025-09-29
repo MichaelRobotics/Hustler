@@ -21,10 +21,10 @@ body {
 	backface-visibility: hidden;
 	-webkit-backface-visibility: hidden;
 	touch-action: manipulation;
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	-ms-user-select: none;
-	user-select: none;
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	-ms-user-select: text;
+	user-select: text;
 }
 
 .chat-input-optimized {
@@ -64,10 +64,10 @@ body {
 	-webkit-transform: translateZ(0);
 	-webkit-backface-visibility: hidden;
 	-ms-overflow-style: none;
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	-ms-user-select: none;
-	user-select: none;
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	-ms-user-select: text;
+	user-select: text;
 }
 
 /* Typing Indicator Animation */

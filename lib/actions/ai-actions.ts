@@ -122,14 +122,14 @@ Invalid JSON:
 ${badJson}
 
 **CRITICAL RULES:**
-- FUNNEL_1: TRANSITION (webhook triggered, sends UserChat link)
+- FUNNEL_1: TRANSITION (webhook triggered, sends chat link)
 - FUNNEL_2: WELCOME → VALUE_DELIVERY → EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 - VALUE_DELIVERY: ONLY "FREE_VALUE" resources
 - OFFER: ONLY "PAID" resources
 - ALL messages max 5 lines (except OFFER messages)
 - OFFER messages max 8 lines with proper paragraph spacing
 - OFFER: 3-part structure (Value Stack + FOMO + CTA)
-- TRANSITION: Simple message with UserChat link, NO 3-part structure
+- TRANSITION: Simple message with chat link, NO 3-part structure
 - Each VALUE_DELIVERY block MUST have "resourceName" field with exact resource name from category FREE_VALUE
 - Each OFFER block MUST have "resourceName" field with exact resource name from category PAID
 - resourceName must match exactly from provided list
@@ -142,13 +142,13 @@ ${badJson}
     {
       "id": "stage-transition",
       "name": "TRANSITION",
-      "explanation": "Webhook triggered message with UserChat link.",
+      "explanation": "Webhook triggered message with chat link.",
       "blockIds": ["transition_1"]
     },
     {
       "id": "stage-welcome",
       "name": "WELCOME",
-      "explanation": "Initial greeting and user segmentation in UserChat.",
+      "explanation": "Initial greeting and user segmentation in chat.",
       "blockIds": ["welcome_1"]
     },
     {
@@ -527,7 +527,7 @@ export const generateFunnelFlow = async (
 	- **Line 1**: "[USER], check [WHOP] BEST quick-money paths!" (1 line only).
 
 	*CRITICAL: WELCOME message must be EXACTLY:*
-	"[USER], check [WHOP] BEST quick-money paths!"
+	"**Line 1**: [USER], check [WHOP] BEST quick-money paths!"
 	
 	**NO VARIATIONS ALLOWED**: Do not modify this message format in any way.
 	
@@ -556,13 +556,13 @@ export const generateFunnelFlow = async (
 	The message must focus on how it will help the user make money faster and include the VIP chat invitation.
 	*Structure:* 
 	**CRITICAL: VALUE_DELIVERY message must follow this EXACT structure:*
-	"[5-7 words how this will help user make quick money].
-
-	WARNING! [USER], This is just an appetizer.
-
-	For PRO users, UNLOCK hidden offers.
-
-	[LINK]"
+	"**Line 1**: [5-7 words how this will help user make quick money].
+	**Line 2**: Empty line
+	**Line 3**: WARNING! [USER], This is just an appetizer.
+	**Line 4**: Empty line
+	**Line 5**: For PRO users, UNLOCK hidden offers.
+	**Line 6**: Empty line
+	**Line 7**: [LINK]"
 	
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'unlock' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
@@ -571,13 +571,15 @@ export const generateFunnelFlow = async (
 
    TRANSITION message must be EXACTLY:
 
-	"Wait! [WHOP_OWNER] has a gift for you, [USER]!
+	"**Line 1**: Wait! [WHOP_OWNER] has a gift for you, [USER]!
+	**Line 2**: Empty line
+	**Line 3**: Join [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!
+	**Line 4**: Empty line
+	**Line 5**: [WHOP_OWNER] is waiting!
+	**Line 6**: Empty line
+	**Line 7**: [LINK]"
 
-	Join [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!
-
-	[WHOP_OWNER] is waiting!
-
-	[LINK]"
+	
 	
 	**NO VARIATIONS ALLOWED**: Do not modify this message format in any way.
 	- **FORBIDDEN**: Do NOT use the 3-part OFFER structure (Value Stack + FOMO + CTA)
@@ -596,7 +598,7 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **TRANSITION messages** must be **6 lines or fewer** and include UserChat link
+	- **TRANSITION messages** must be **6 lines or fewer** and include chat link
 	- **WELCOME messages** must be **1 line only** and MUST be exactly: "[USER], check [WHOP] BEST quick-money paths!"
 	- **VALUE_DELIVERY messages** must be **6 lines or fewer** (not counting empty lines) to accommodate structure with [WHOP_OWNER] and [USER] placeholders
 	- **All other message types** (EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
@@ -668,11 +670,11 @@ export const generateFunnelFlow = async (
 		 - **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
 	
 	3.  **FUNNEL 1: "TRANSITION GATE" STRUCTURE (WEBHOOK TRIGGERED)**
-		 * **Goal**: Send initial transition message with UserChat link, no DM funnel.
-		 * **Stages**: TRANSITION (webhook triggered, sends UserChat link)
+		 * **Goal**: Send initial transition message with chat link, no DM funnel.
+		 * **Stages**: TRANSITION (webhook triggered, sends chat link)
 
-	4.  **FUNNEL 2: "USERCHAT STRATEGY SESSION" STRUCTURE (INTERNAL CHAT)**
-		 * **Goal**: Qualify user and present targeted paid resources in UserChat.
+	4.  **FUNNEL 2: "STRATEGY SESSION" STRUCTURE (INTERNAL CHAT)**
+		 * **Goal**: Qualify user and present targeted paid resources in chat.
 		 * **Stages**: WELCOME → VALUE_DELIVERY → EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 
 	5.  **BRANCHING LOGIC - VALUE_DELIVERY TO EXPERIENCE_QUALIFICATION CONNECTIONS**:
@@ -688,7 +690,7 @@ export const generateFunnelFlow = async (
 
 	7.  **FLOW STRUCTURE REQUIREMENTS**:
 		 * **TRANSITION Stage**: Must be the first stage (startBlockId points to TRANSITION block)
-		 * **WELCOME Stage**: Second stage in UserChat, provides options to users
+		 * **WELCOME Stage**: Second stage in chat, provides options to users
 		 * **VALUE_DELIVERY Stage**: Third stage, delivers free value and connects to EXPERIENCE_QUALIFICATION
 		 * **EXPERIENCE_QUALIFICATION Stage**: Fourth stage, qualifies user based on VALUE_DELIVERY choice
 		 * **PAIN_POINT_QUALIFICATION Stage**: Fifth stage, identifies user pain points
@@ -794,13 +796,13 @@ export const generateFunnelFlow = async (
 		 {
 			"id": "stage-transition",
 			"name": "TRANSITION",
-			"explanation": "Webhook triggered message with UserChat link.",
+			"explanation": "Webhook triggered message with chat link.",
 			"blockIds": ["transition_1"]
 		 },
 		 {
 			"id": "stage-welcome",
 			"name": "WELCOME",
-			"explanation": "Initial greeting and user segmentation in UserChat.",
+			"explanation": "Initial greeting and user segmentation in chat.",
 			"blockIds": ["welcome_1"]
 		 },
 		 {

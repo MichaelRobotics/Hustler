@@ -239,6 +239,12 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 								? "bg-blue-500 text-white" // Agent messages: blue on right
 								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm" // User messages: white on left
 						}`}
+						style={{
+							userSelect: "text",
+							WebkitUserSelect: "text",
+							MozUserSelect: "text",
+							msUserSelect: "text",
+						}}
 					>
 						{renderMessageWithLinks(message.text)}
 					</div>

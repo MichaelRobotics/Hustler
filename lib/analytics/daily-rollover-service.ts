@@ -19,10 +19,10 @@ export class DailyRolloverService {
       console.log("🔄 Starting daily rollover for funnel analytics...");
       
       // Move today's metrics to yesterday's and reset today's metrics
-      // This operation is identical for all experiences, so no WHERE clause needed
+      // Update ALL funnel analytics records (system-wide rollover)
       await db.update(funnelAnalytics)
         .set({
-          // Move today's metrics to yesterday's
+          // Move today's metrics to yesterday's (for day-over-day comparison)
           yesterdayStarts: sql`${funnelAnalytics.todayStarts}`,
           yesterdayIntent: sql`${funnelAnalytics.todayIntent}`,
           yesterdayConversions: sql`${funnelAnalytics.todayConversions}`,
