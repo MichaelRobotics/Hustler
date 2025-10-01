@@ -415,8 +415,11 @@ export class WhopApiClient {
       
       // Generate URLs
       let discoveryPageUrl: string | undefined;
-      if (accessPass.route) {
-        // Use direct product route (recommended by Whop docs)
+      if (companyRoute && accessPass.route) {
+        // Use company route + access pass route (recommended by Whop docs)
+        discoveryPageUrl = `https://whop.com/${companyRoute}/${accessPass.route}`;
+      } else if (accessPass.route) {
+        // Fallback to direct access pass route
         discoveryPageUrl = `https://whop.com/${accessPass.route}`;
       } else if (companyRoute) {
         // Fallback to discovery page with product ID
