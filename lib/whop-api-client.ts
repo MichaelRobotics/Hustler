@@ -415,16 +415,16 @@ export class WhopApiClient {
       
       // Generate URLs
       let discoveryPageUrl: string | undefined;
-      if (accessPass.route && companyRoute) {
-        // Use new format: https://whop.com/discover/{companyRoute}/?productId={accessPassId}
-        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/?productId=${accessPass.id}`;
-      } else if (accessPass.route) {
-        // Fallback to old format if company route not available
+      if (accessPass.route) {
+        // Use direct product route (recommended by Whop docs)
         discoveryPageUrl = `https://whop.com/${accessPass.route}`;
+      } else if (companyRoute) {
+        // Fallback to discovery page with product ID
+        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/?productId=${accessPass.id}`;
       }
       const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
       
-      console.log(`🔍 DISCOVERY PAGE PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price})`);
+      console.log(`🔍 PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price}) - URL: ${discoveryPageUrl}`);
       
       return {
         id: accessPass.id,
