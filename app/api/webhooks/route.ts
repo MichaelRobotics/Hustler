@@ -65,6 +65,12 @@ export async function POST(request: NextRequest): Promise<Response> {
 		const { id, final_amount, amount_after_fees, currency, user_id, metadata, plan_id, company_id } =
 			webhookData.data;
 
+		// Check if this is an app installation link (plan_id indicates app installation)
+		if (plan_id) {
+			console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping payment webhook processing`);
+			return new Response("OK", { status: 200 });
+		}
+
 		// final_amount is the amount the user paid
 		// amount_after_fees is the amount that is received by you, after card fees and processing fees are taken out
 
@@ -92,10 +98,16 @@ export async function POST(request: NextRequest): Promise<Response> {
 			);
 		}
 	} else if (webhookData.action === "membership.went_valid") {
-		const { user_id, product_id, membership_id } = webhookData.data;
+		const { user_id, product_id, membership_id, plan_id } = webhookData.data;
+
+		// Check if this is an app installation link (plan_id indicates app installation)
+		if (plan_id) {
+			console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping webhook processing`);
+			return new Response("OK", { status: 200 });
+		}
 
 		console.log(
-			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id}`,
+			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}`,
 		);
 
 		// Handle user join event asynchronously
@@ -188,13 +200,19 @@ async function handlePaymentWithAnalytics(webhookData: any) {
 		// Step 1: Detect scenario (affiliate vs product owner vs error)
 		const scenarioData = await detectScenario(webhookData);
 		
+		// Handle free products as normal (not errors)
+		if (scenarioData.scenario === 'free_product') {
+			console.log(`[Webhook Analytics] ✅ Free product purchase - no analytics needed (this is normal)`);
+			return;
+		}
+
 		if (!validateScenarioData(scenarioData)) {
-			console.log(`[Webhook Analytics] Invalid scenario data - skipping analytics`);
+			console.log(`[Webhook Analytics] ✅ Correctly handled: Invalid scenario data - skipping analytics`);
 			return;
 		}
 
 		if (scenarioData.scenario === 'error') {
-			console.log(`[Webhook Analytics] Error scenario detected - skipping analytics`);
+			console.log(`[Webhook Analytics] ✅ Correctly handled: Error scenario detected - skipping analytics`);
 			return;
 		}
 
@@ -202,7 +220,7 @@ async function handlePaymentWithAnalytics(webhookData: any) {
 		const { experience, conversation } = await getExperienceContextFromWebhook(webhookData);
 		
 		if (!validateExperienceContext(experience, conversation)) {
-			console.log(`[Webhook Analytics] Invalid experience context - skipping analytics`);
+			console.log(`[Webhook Analytics] 🚫 Purchase NOT through your funnel - skipping analytics (user bought independently)`);
 			return;
 		}
 
@@ -215,9 +233,9 @@ async function handlePaymentWithAnalytics(webhookData: any) {
 		);
 
 		if (success) {
-			console.log(`[Webhook Analytics] Successfully updated analytics for scenario: ${scenarioData.scenario}`);
+			console.log(`[Webhook Analytics] ✅ Purchase THROUGH your funnel - analytics updated for scenario: ${scenarioData.scenario}`);
 		} else {
-			console.log(`[Webhook Analytics] Failed to update analytics for scenario: ${scenarioData.scenario}`);
+			console.log(`[Webhook Analytics] ❌ Purchase THROUGH your funnel but failed to update analytics for scenario: ${scenarioData.scenario}`);
 		}
 
 	} catch (error) {

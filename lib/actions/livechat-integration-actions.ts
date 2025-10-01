@@ -143,7 +143,7 @@ export async function getLiveChatConversations(
 				
 				const userInfo = {
 					id: userData?.id || conv.whopUserId,
-					name: userData?.name || `User ${conv.whopUserId.slice(-8)}`,
+					name: userData?.name || `User ${conv.whopUserId.slice(-8)}`, // Keep fallback for display purposes
 					email: userData?.email || `${conv.whopUserId}@whop.com`,
 					avatar: userData?.avatar || undefined,
 					isOnline: isOnline,
@@ -285,7 +285,7 @@ export async function getLiveChatConversationDetails(
 		
 		const userInfo = {
 			id: userData?.id || conversation.whopUserId,
-			name: userData?.name || `User ${conversation.whopUserId.slice(-8)}`,
+			name: userData?.name || `User ${conversation.whopUserId.slice(-8)}`, // Keep fallback for display purposes
 			email: userData?.email || `${conversation.whopUserId}@whop.com`,
 			avatar: userData?.avatar || undefined,
 			isOnline: isOnline,

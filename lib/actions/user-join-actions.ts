@@ -276,7 +276,7 @@ export async function handleUserJoinEvent(
 		});
 
 		if (!liveFunnel || !liveFunnel.flow) {
-			console.log(`No deployed funnel found for experience ${experience.id} and product ${productId} - ignoring webhook`);
+			console.log(`✅ Correctly handled: No deployed funnel found for experience ${experience.id} and product ${productId} - user joined but no DM needed`);
 			return;
 		}
 

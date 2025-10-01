@@ -94,7 +94,7 @@ export async function findConversationForUser(
       return null;
     }
 
-    console.log(`[Experience Context] Found conversation: ${conversation.id} with funnel: ${conversation.funnelId}`);
+    console.log(`[Experience Context] ✅ Found conversation: ${conversation.id} with funnel: ${conversation.funnelId} - purchase THROUGH your funnel`);
     return {
       conversationId: conversation.id,
       funnelId: conversation.funnelId,
@@ -156,7 +156,7 @@ export function validateExperienceContext(
   }
 
   if (!conversation) {
-    console.log('[Experience Context] No conversation found');
+    console.log('[Experience Context] 🚫 No conversation found - purchase NOT through your funnel (user bought independently)');
     return false;
   }
 

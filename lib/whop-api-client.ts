@@ -415,15 +415,12 @@ export class WhopApiClient {
       
       // Generate URLs
       let discoveryPageUrl: string | undefined;
-      if (companyRoute && accessPass.route) {
-        // Use company route + access pass route (recommended by Whop docs)
-        discoveryPageUrl = `https://whop.com/${companyRoute}/${accessPass.route}`;
+      if (companyRoute) {
+        // Use discovery page format for affiliate tracking (required by Whop docs)
+        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/?productId=${accessPass.id}`;
       } else if (accessPass.route) {
         // Fallback to direct access pass route
         discoveryPageUrl = `https://whop.com/${accessPass.route}`;
-      } else if (companyRoute) {
-        // Fallback to discovery page with product ID
-        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/?productId=${accessPass.id}`;
       }
       const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
       

@@ -28,17 +28,32 @@ export async function findOrCreateUserForConversation(
 			return existingUser.id;
 		}
 
+		// Try to get user data from Whop API for better user info
+		let whopUserData = null;
+		try {
+			const { whopSdk } = await import('@/lib/whop-sdk');
+			whopUserData = await whopSdk.users.getUser({ userId: whopUserId });
+		} catch (error) {
+			console.log(`Could not fetch user data from Whop API for ${whopUserId}, using fallback data`);
+		}
+
+		// Use Whop API data if available, otherwise fall back to provided userInfo or defaults
+		const finalName = whopUserData?.name || whopUserData?.username || userInfo?.name || `User ${whopUserId.slice(-8)}`;
+		const finalEmail = userInfo?.email || `${whopUserId}@whop.com`;
+		const finalAvatar = whopUserData?.profilePicture?.sourceUrl || userInfo?.avatar || null;
+
 		// Create new user if not found
 		const [newUser] = await db.insert(users).values({
 			whopUserId,
 			experienceId,
-			email: userInfo?.email || `${whopUserId}@whop.com`,
-			name: userInfo?.name || `User ${whopUserId.slice(-8)}`,
-			avatar: userInfo?.avatar,
+			email: finalEmail,
+			name: finalName,
+			avatar: finalAvatar,
 			credits: 0, // Default 0 credits for new users
+			accessLevel: "customer", // Default to customer
 		}).returning();
 
-		console.log(`Created new user for conversation: ${newUser.id} (${whopUserId})`);
+		console.log(`Created new user for conversation: ${newUser.id} (${whopUserId}) with name: ${finalName}`);
 		return newUser.id;
 	} catch (error) {
 		console.error("Error finding or creating user for conversation:", error);
