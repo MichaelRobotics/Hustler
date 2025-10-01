@@ -554,15 +554,14 @@ export async function triggerProductSyncForNewAdmin(
 				const batchPromises = batch.map(async (product) => {
 			try {
 				const cheapestPlan = whopClient.getCheapestPlan(product);
-				const planParam = cheapestPlan ? `?plan=${cheapestPlan.id}&ref=${experienceId}` : `?ref=${experienceId}`;
 				
-          // Generate Whop native tracking link for paid products
+          // Generate product link for paid products (affiliate tracking added later in funnel navigation)
           let trackingUrl: string;
           
-          // Use discovery page URL directly (already includes affiliate tracking)
+          // Use discovery page URL directly (affiliate tracking added later)
           if (product.discoveryPageUrl) {
             trackingUrl = product.discoveryPageUrl;
-            console.log(`✅ Using discovery page URL with affiliate tracking: ${trackingUrl}`);
+            console.log(`✅ Using discovery page URL: ${trackingUrl}`);
           } else {
             // Fallback to simple checkout link
             trackingUrl = whopNativeTrackingService.createSimpleCheckoutLink(cheapestPlan?.id || product.id);
@@ -574,7 +573,7 @@ export async function triggerProductSyncForNewAdmin(
 					name: product.title,
 					type: "MY_PRODUCTS",
 					category: "PAID",
-								link: trackingUrl, // Use Whop native tracking link
+								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
 					description: product.description,
 					whopProductId: product.id
 							}),

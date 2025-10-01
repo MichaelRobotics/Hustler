@@ -416,8 +416,8 @@ export class WhopApiClient {
       // Generate URLs
       let discoveryPageUrl: string | undefined;
       if (accessPass.route && companyRoute) {
-        // Use new format: https://whop.com/discover/{companyRoute}/
-        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/`;
+        // Use new format: https://whop.com/discover/{companyRoute}/?productId={accessPassId}
+        discoveryPageUrl = `https://whop.com/discover/${companyRoute}/?productId=${accessPass.id}`;
       } else if (accessPass.route) {
         // Fallback to old format if company route not available
         discoveryPageUrl = `https://whop.com/${accessPass.route}`;
