@@ -64,9 +64,9 @@ export async function findOrCreateUserForConversation(
 			.values({
 				whopUserId: whopUser.id,
 				experienceId: experienceId, // Link to experience
-				email: userInfo?.email || `${whopUserId}@whop.com`, // Keep fallback for conversation context
-				name: whopUser.name || whopUser.username || userInfo?.name || `User ${whopUserId.slice(-8)}`,
-				avatar: whopUser.profilePicture?.sourceUrl || userInfo?.avatar || null,
+				email: "", // Keep fallback for conversation context
+				name: whopUser.name || whopUser.username || "Unknown User",
+				avatar: whopUser.profilePicture?.sourceUrl || null,
 				credits: 0, // Conversation users get 0 credits
 				accessLevel: accessLevel,
 			})

@@ -6,7 +6,7 @@ import { sendAffiliateDM } from "@/lib/actions/affiliate-dm-actions";
 
 /**
  * Cron job to send affiliate DMs to users who reached OFFER stage
- * Runs every 5 minutes
+ * Runs every 1 minute
  * 
  * Logic:
  * 1. Find conversations in OFFER stage
@@ -73,15 +73,15 @@ export async function GET(request: NextRequest) {
 
     for (const conversation of offerConversations) {
       try {
-        // Check if conversation has been in OFFER stage for at least 2 minutes
+        // Check if conversation has been in OFFER stage for at least 30 seconds
         // (to avoid sending immediately when user just reached OFFER)
         const now = new Date();
         const offerStageTime = conversation.updatedAt;
         const timeDiff = now.getTime() - offerStageTime.getTime();
-        const minutesInOffer = timeDiff / (1000 * 60);
+        const secondsInOffer = timeDiff / 1000;
 
-        if (minutesInOffer < 2) {
-          console.log(`[AFFILIATE-DM-CRON] Skipping conversation ${conversation.id} - only ${minutesInOffer.toFixed(1)} minutes in OFFER stage`);
+        if (secondsInOffer < 30) {
+          console.log(`[AFFILIATE-DM-CRON] Skipping conversation ${conversation.id} - only ${secondsInOffer.toFixed(1)} seconds in OFFER stage`);
           skippedCount++;
           continue;
         }

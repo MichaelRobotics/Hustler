@@ -286,9 +286,15 @@ export async function processUserMessage(
 			return { success: false, error: "Current block not found" };
 		}
 
+		// Check if current block is in OFFER stage
+		const isOfferStage = funnelFlow.stages.some(
+			stage => stage.name === 'OFFER' && stage.blockIds.includes(currentBlockId)
+		);
+
 		console.log(`[processUserMessage] Current block: ${currentBlockId}`, {
 			message: currentBlock.message?.substring(0, 100),
-			optionsCount: currentBlock.options?.length || 0
+			optionsCount: currentBlock.options?.length || 0,
+			isOfferStage: isOfferStage
 		});
 
 		// First, add the user message to the database
@@ -340,9 +346,22 @@ export async function processUserMessage(
 			);
 		}
 
-		// No valid option found - handle escalation
-		console.log(`[processUserMessage] No valid option found, handling escalation for: "${messageContent}"`);
-		return await handleEscalation(conversationId, messageContent, currentBlock);
+		// No valid option found - handle escalation (unless in OFFER stage)
+		if (isOfferStage) {
+			console.log(`[processUserMessage] In OFFER stage - escalation disabled for: "${messageContent}"`);
+			// In OFFER stage, just acknowledge the message without escalation
+			const acknowledgmentMessage = "Thank you for your message. I'll make sure the Whop owner sees it.";
+			const botMessageId = await addMessage(conversationId, "bot", acknowledgmentMessage);
+			console.log(`[processUserMessage] Bot acknowledgment message added with ID: ${botMessageId}`);
+			
+			return {
+				success: true,
+				botMessage: acknowledgmentMessage,
+			};
+		} else {
+			console.log(`[processUserMessage] No valid option found, handling escalation for: "${messageContent}"`);
+			return await handleEscalation(conversationId, messageContent, currentBlock);
+		}
 
 	} catch (error) {
 		console.error("Error processing user message:", {

@@ -986,8 +986,21 @@ const UserChat: React.FC<UserChatProps> = ({
 
 						{/* Avatar Icon - only show if not hidden */}
 						{!hideAvatar && (
-							<div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-								<User size={16} className="text-white" />
+							<div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+								<img 
+									src="https://assets.whop.com/uploads/2025-09-23/user_16843562_4db3b797-b70e-4a15-8d31-9985fd731e6a.jpeg"
+									alt="User Avatar"
+									className="w-full h-full object-cover"
+									onError={(e) => {
+										// Fallback to default icon if image fails to load
+										const target = e.target as HTMLImageElement;
+										target.style.display = 'none';
+										const parent = target.parentElement;
+										if (parent) {
+											parent.innerHTML = '<div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
+										}
+									}}
+								/>
 							</div>
 						)}
 
@@ -1064,7 +1077,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				</div>
 
 				{/* Input Area - Now below the overflow container */}
-				{options.length > 0 && currentBlockId && (
+				{currentBlockId && (
 					<div className="flex-shrink-0 chat-input-container safe-area-bottom">
 						<div className="flex items-end gap-3">
 							<div className="flex-1">
