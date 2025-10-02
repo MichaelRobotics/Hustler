@@ -100,14 +100,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 	} else if (webhookData.action === "membership.went_valid") {
 		const { user_id, product_id, membership_id, plan_id } = webhookData.data;
 
-		// Check if this is an app installation link (plan_id indicates app installation)
-		if (plan_id) {
-			console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping webhook processing`);
-			return new Response("OK", { status: 200 });
-		}
-
 		console.log(
-			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}`,
+			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
 		);
 
 		// Handle user join event asynchronously
