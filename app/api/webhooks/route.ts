@@ -98,7 +98,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 			);
 		}
 	} else if (webhookData.action === "membership.went_valid") {
-		const { user_id, product_id, membership_id, plan_id } = webhookData.data;
+		const { user_id, product_id, membership_id, plan_id, company_buyer_id } = webhookData.data;
 
 		console.log(
 			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
@@ -110,13 +110,41 @@ export async function POST(request: NextRequest): Promise<Response> {
 			waitUntil(
 				handleUserJoinEvent(user_id, product_id, webhookData, membership_id),
 			);
+		} else if (company_buyer_id && product_id) {
+			// Fallback: Get user ID from company_buyer_id
+			console.log(`user_id is null, attempting to get user ID from company_buyer_id: ${company_buyer_id}`);
+			waitUntil(
+				handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, webhookData, membership_id),
+			);
 		} else {
-			console.error("Missing user_id or product_id in membership webhook");
+			console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
 		}
 	}
 
 	// Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
 	return new Response("OK", { status: 200 });
+}
+
+/**
+ * Handle user join event with company fallback
+ * Uses company_buyer_id as user ID when user_id is null (business purchases)
+ */
+async function handleUserJoinEventWithCompanyFallback(
+	company_buyer_id: string,
+	product_id: string,
+	webhookData: any,
+	membership_id?: string,
+): Promise<void> {
+	try {
+		console.log(`Using company_buyer_id as user ID for business purchase: ${company_buyer_id}`);
+
+		// For business purchases, use company_buyer_id as the user identifier
+		// This allows the funnel system to work with business accounts
+		await handleUserJoinEvent(company_buyer_id, product_id, webhookData, membership_id);
+
+	} catch (error) {
+		console.error(`Error handling company_buyer_id ${company_buyer_id}:`, error);
+	}
 }
 
 async function handleCreditPackPurchaseWithCompany(
