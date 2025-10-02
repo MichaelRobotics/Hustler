@@ -245,17 +245,52 @@ export async function handleUserJoinEvent(
 		});
 
 		if (!existingUser) {
-			// Create user record with required fields
-			await db.insert(users).values({
-				whopUserId: userId,
-				experienceId: experience.id,
-				email: `user_${userId}@whop.local`, // Default email since we don't have it from webhook
-				name: `User ${userId}`, // Default name since we don't have it from webhook
-				accessLevel: "customer",
-				createdAt: new Date(),
-				updatedAt: new Date(),
+			// Fetch user data from WHOP API (same strategy as user-context)
+			const whopUser = await whopSdk.users.getUser({ userId: userId });
+
+			if (!whopUser) {
+				console.error("User not found in WHOP API:", userId);
+				return;
+			}
+
+			// Determine initial access level from Whop API (same strategy as user-context)
+			let accessLevel = "customer"; // Default fallback
+			
+			try {
+				const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+					userId: userId,
+					experienceId: experience.whopExperienceId,
+				});
+				accessLevel = accessResult.accessLevel || "no_access";
+				console.log(`Whop API access level: ${accessLevel}`);
+			} catch (error) {
+				console.error("Error checking initial access level:", error);
+				accessLevel = "no_access"; // More restrictive fallback
+			}
+			
+			// Create user in our database (same strategy as user-context)
+			const [newUser] = await db
+				.insert(users)
+				.values({
+					whopUserId: whopUser.id,
+					experienceId: experience.id, // Link to experience
+					email: "", // Email is not available in public profile
+					name: whopUser.name || whopUser.username || "Unknown User",
+					avatar: whopUser.profilePicture?.sourceUrl || null,
+					credits: 0, // Customers get 0 credits
+					accessLevel: accessLevel,
+				})
+				.returning();
+
+			// Fetch the user with experience relation (same strategy as user-context)
+			const user = await db.query.users.findFirst({
+				where: eq(users.id, newUser.id),
+				with: {
+					experience: true,
+				},
 			});
-			console.log(`Created user record for ${userId} in experience ${experience.id}`);
+
+			console.log(`✅ Created user record for ${userId} with access: ${accessLevel}`);
 		} else {
 			console.log(`User ${userId} already exists in experience ${experience.id}`);
 		}

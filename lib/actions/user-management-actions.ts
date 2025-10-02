@@ -1,6 +1,7 @@
 import { db } from "@/lib/supabase/db-server";
 import { users, experiences, conversations, messages, funnelInteractions } from "@/lib/supabase/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { whopSdk } from "@/lib/whop-sdk";
 
 /**
  * Find or create user for conversation binding
@@ -28,32 +29,58 @@ export async function findOrCreateUserForConversation(
 			return existingUser.id;
 		}
 
-		// Try to get user data from Whop API for better user info
-		let whopUserData = null;
-		try {
-			const { whopSdk } = await import('@/lib/whop-sdk');
-			whopUserData = await whopSdk.users.getUser({ userId: whopUserId });
-		} catch (error) {
-			console.log(`Could not fetch user data from Whop API for ${whopUserId}, using fallback data`);
+		// Fetch user data from WHOP API (same strategy as user-context)
+		const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
+
+		if (!whopUser) {
+			console.error("User not found in WHOP API:", whopUserId);
+			throw new Error("User not found in WHOP API");
 		}
 
-		// Use Whop API data if available, otherwise fall back to provided userInfo or defaults
-		const finalName = whopUserData?.name || whopUserData?.username || userInfo?.name || `User ${whopUserId.slice(-8)}`;
-		const finalEmail = userInfo?.email || `${whopUserId}@whop.com`;
-		const finalAvatar = whopUserData?.profilePicture?.sourceUrl || userInfo?.avatar || null;
+		// Get experience data to check access level
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, experienceId),
+			columns: { whopExperienceId: true }
+		});
 
-		// Create new user if not found
-		const [newUser] = await db.insert(users).values({
-			whopUserId,
-			experienceId,
-			email: finalEmail,
-			name: finalName,
-			avatar: finalAvatar,
-			credits: 0, // Default 0 credits for new users
-			accessLevel: "customer", // Default to customer
-		}).returning();
+		// Determine initial access level from Whop API (same strategy as user-context)
+		let accessLevel = "customer"; // Default fallback
+		
+		try {
+			const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+				userId: whopUserId,
+				experienceId: experience?.whopExperienceId || "",
+			});
+			accessLevel = accessResult.accessLevel || "no_access";
+			console.log(`Whop API access level: ${accessLevel}`);
+		} catch (error) {
+			console.error("Error checking initial access level:", error);
+			accessLevel = "no_access"; // More restrictive fallback
+		}
 
-		console.log(`Created new user for conversation: ${newUser.id} (${whopUserId}) with name: ${finalName}`);
+		// Create user in our database (same strategy as user-context)
+		const [newUser] = await db
+			.insert(users)
+			.values({
+				whopUserId: whopUser.id,
+				experienceId: experienceId, // Link to experience
+				email: userInfo?.email || `${whopUserId}@whop.com`, // Keep fallback for conversation context
+				name: whopUser.name || whopUser.username || userInfo?.name || `User ${whopUserId.slice(-8)}`,
+				avatar: whopUser.profilePicture?.sourceUrl || userInfo?.avatar || null,
+				credits: 0, // Conversation users get 0 credits
+				accessLevel: accessLevel,
+			})
+			.returning();
+
+		// Fetch the user with experience relation (same strategy as user-context)
+		const user = await db.query.users.findFirst({
+			where: eq(users.id, newUser.id),
+			with: {
+				experience: true,
+			},
+		});
+
+		console.log(`Created new user for conversation: ${newUser.id} (${whopUserId})`);
 		return newUser.id;
 	} catch (error) {
 		console.error("Error finding or creating user for conversation:", error);
