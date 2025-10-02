@@ -20,6 +20,7 @@ import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
 import { renderTextWithLinks } from "../../utils/link-utils";
+import FunnelProgressBar from "./FunnelProgressBar";
 
 /**
  * Track intent by calling the API endpoint
@@ -203,6 +204,19 @@ const UserChat: React.FC<UserChatProps> = ({
 			} else {
 				console.log("⚠️ [UserChat] Message already exists locally, skipping");
 			}
+			
+			// Check for stage transition in message metadata
+			if (newMessage.metadata?.stageTransition) {
+				const newStage = newMessage.metadata.stageTransition.currentStage;
+				console.log("🔄 [UserChat] Stage transition detected:", newStage);
+				
+				// Dispatch custom event for progress bar update
+				const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
+					detail: { newStage }
+				});
+				window.dispatchEvent(stageUpdateEvent);
+			}
+			
 			scrollToBottom();
 		},
 		// ✅ REMOVED: onTyping callback - no typing indicators needed
@@ -515,13 +529,22 @@ const UserChat: React.FC<UserChatProps> = ({
 					});
 					
 					try {
-						await sendMessage(result.botMessage, "bot", {
+						// Prepare metadata with stage transition if available
+						const metadata: any = {
 							conversationId,
 							userId: "system",
 							experienceId,
 							timestamp: new Date().toISOString(),
 							blockId: result.conversation.currentBlockId,
-						});
+						};
+
+						// Add stage transition metadata if stage transition occurred
+						if (result.stageTransition) {
+							metadata.stageTransition = result.stageTransition;
+							console.log("🔄 [UserChat] Stage transition detected in API response:", result.stageTransition);
+						}
+
+						await sendMessage(result.botMessage, "bot", metadata);
 						console.log("✅ [UserChat UI] AFTER SENDING OPTION BOT MESSAGE:", {
 							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
 							conversationId,
@@ -973,7 +996,7 @@ const UserChat: React.FC<UserChatProps> = ({
 			{/* Header - Hidden on desktop */}
 			<div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
 				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3">
+					<div className="flex items-center gap-4">
 						{onBack && (
 							<button
 								onClick={onBack}
@@ -986,18 +1009,18 @@ const UserChat: React.FC<UserChatProps> = ({
 
 						{/* Avatar Icon - only show if not hidden */}
 						{!hideAvatar && (
-							<div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+							<div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
 								<img 
-									src="https://assets.whop.com/uploads/2025-09-23/user_16843562_4db3b797-b70e-4a15-8d31-9985fd731e6a.jpeg"
+									src="https://img-v2-prod.whop.com/unsafe/rs:fit:256:0/plain/https%3A%2F%2Fassets.whop.com%2Fuploads%2F2025-10-02%2Fuser_16843562_c991d27a-feaa-4318-ab44-2aaa27937382.jpeg@avif?w=256&q=75"
 									alt="User Avatar"
-									className="w-full h-full object-cover"
+									className="w-20 h-20 object-cover"
 									onError={(e) => {
 										// Fallback to default icon if image fails to load
 										const target = e.target as HTMLImageElement;
 										target.style.display = 'none';
 										const parent = target.parentElement;
 										if (parent) {
-											parent.innerHTML = '<div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
+											parent.innerHTML = '<div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
 										}
 									}}
 								/>
@@ -1053,6 +1076,18 @@ const UserChat: React.FC<UserChatProps> = ({
 				{/* Subtle Separator Line */}
 				<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mt-3" />
 			</div>
+
+			{/* Funnel Progress Bar */}
+			{funnelFlow && (
+				<FunnelProgressBar
+					currentStage={stageInfo?.currentStage || "WELCOME"}
+					stages={funnelFlow.stages}
+					onStageUpdate={(newStage) => {
+						// Handle stage updates from WebSocket
+						console.log("Progress bar stage update:", newStage);
+					}}
+				/>
+			)}
 
 			{/* Chat Container */}
 			<div className="flex-1 flex flex-col min-h-0">

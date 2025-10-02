@@ -33,17 +33,27 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 	if (!isOpen) return null;
 
 	return (
-		<div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl backdrop-blur-sm">
+		<div 
+			className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+			onClick={onClose}
+		>
+			{/* Backdrop */}
+			<div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
+			
+			{/* Modal */}
+			<div 
+				className="relative w-full max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-2 duration-300"
+				onClick={(e) => e.stopPropagation()}
+			>
 			{/* Header */}
-			<div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
-				<div className="flex items-center gap-2">
-					<div className="w-2 h-2 bg-violet-500 rounded-full"></div>
+			<div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
+				<div className="flex items-center gap-3">
 					<Text
-						size="2"
-						weight="semi-bold"
+						size="3"
+						weight="bold"
 						className="text-gray-900 dark:text-white"
 					>
-						Select Product
+						Define the Funnel's Trigger
 					</Text>
 				</div>
 				<Button
@@ -51,14 +61,24 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 					variant="ghost"
 					color="gray"
 					onClick={onClose}
-					className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+					className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
 				>
-					<X size={14} strokeWidth={2.5} />
+					<X size={16} strokeWidth={2.5} />
 				</Button>
 			</div>
 
+			{/* Explanatory Text */}
+			<div className="px-6 py-4 bg-gradient-to-r from-violet-50/50 to-purple-50/50 dark:from-violet-900/10 dark:to-purple-900/10 border-b border-gray-100 dark:border-gray-700">
+				<Text
+					size="2"
+					className="text-gray-700 dark:text-gray-300 leading-relaxed"
+				>
+					When a customer buys the product you select below, they will be entered into this funnel.
+				</Text>
+			</div>
+
 			{/* Products List */}
-			<div className="p-4 max-h-80 overflow-y-auto">
+			<div className="p-6 max-h-80 overflow-y-auto">
 				{loading ? (
 					<div className="flex flex-col items-center justify-center py-16 space-y-6">
 						{/* Animated Product Icon with Spinning Ring */}
@@ -89,29 +109,34 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 						</div>
 					</div>
 				) : (
-					<div className="space-y-2">
-						{products.map((product) => (
+					<div className="space-y-3">
+						{products.map((product, index) => (
 							<div
 								key={product.id}
 								onClick={() => {
 									onProductSelect(product);
 									onClose();
 								}}
-								className="p-3 rounded-xl border cursor-pointer transition-all duration-200 bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-violet-50/50 dark:hover:bg-violet-900/10 hover:border-violet-200 dark:hover:border-violet-500/50"
+								className="group p-4 rounded-xl border cursor-pointer transition-all duration-300 bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-gradient-to-r hover:from-violet-50 hover:to-purple-50 dark:hover:from-violet-900/20 dark:hover:to-purple-900/20 hover:border-violet-300 dark:hover:border-violet-500/50 hover:shadow-lg hover:shadow-violet-100/50 dark:hover:shadow-violet-900/20 hover:scale-[1.02] animate-in fade-in slide-in-from-left-2"
+								style={{ animationDelay: `${index * 50}ms` }}
 							>
 								<div className="flex items-center justify-between">
-									<Text
-										size="2"
-										weight="semi-bold"
-										className="text-gray-900 dark:text-white"
-									>
-										{product.title}
-									</Text>
+									<div className="flex items-center gap-3">
+										<div className="w-2 h-2 bg-violet-400 rounded-full group-hover:bg-violet-500 transition-colors duration-200"></div>
+										<Text
+											size="2"
+											weight="semi-bold"
+											className="text-gray-900 dark:text-white group-hover:text-violet-700 dark:group-hover:text-violet-300 transition-colors duration-200"
+										>
+											{product.title}
+										</Text>
+									</div>
 								</div>
 							</div>
 						))}
 					</div>
 				)}
+			</div>
 			</div>
 		</div>
 	);

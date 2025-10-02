@@ -107,6 +107,71 @@ async function lookupCurrentUser(conversationId: string): Promise<string | null>
 }
 
 /**
+ * Get current stage for a block ID
+ */
+function getCurrentStage(blockId: string | null, funnelFlow: FunnelFlow): string {
+  if (!blockId) return "UNKNOWN";
+  
+  for (const stage of funnelFlow.stages) {
+    if (stage.blockIds.includes(blockId)) {
+      return stage.name;
+    }
+  }
+  
+  return "UNKNOWN";
+}
+
+/**
+ * Send WebSocket message with stage transition
+ */
+async function sendStageTransitionWebSocket(
+  conversationId: string,
+  experienceId: string,
+  currentStage: string,
+  previousStage: string,
+  botMessage: string
+): Promise<void> {
+  try {
+    console.log(`[WebSocket] Sending stage transition: ${previousStage} -> ${currentStage}`);
+    
+    // Create WebSocket message with stage transition metadata
+    const websocketMessage = {
+      id: `stage-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: "message",
+      conversationId: conversationId,
+      messageType: "bot",
+      content: botMessage,
+      metadata: {
+        stageTransition: {
+          currentStage: currentStage,
+          previousStage: previousStage,
+          isTransitionStage: currentStage === 'TRANSITION',
+          isExperienceQualificationStage: currentStage === 'EXPERIENCE_QUALIFICATION',
+          isDMFunnelActive: true
+        }
+      },
+      experienceId: experienceId,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Note: In a real implementation, this would use the Whop WebSocket broadcast API
+    // For now, we'll log the message that should be sent
+    console.log(`[WebSocket] Stage transition message to broadcast:`, {
+      message: JSON.stringify(websocketMessage),
+      target: "everyone",
+      channels: [`experience:${experienceId}`, `livechat:${experienceId}`]
+    });
+
+    // TODO: Implement actual WebSocket broadcast using Whop's API
+    // This would typically involve calling the Whop WebSocket broadcast endpoint
+    // or using a WebSocket client to send the message to connected clients
+    
+  } catch (error) {
+    console.error(`[WebSocket] Error sending stage transition message:`, error);
+  }
+}
+
+/**
  * Replace [LINK], [WHOP_OWNER], and [USER] placeholders with actual values
  */
 async function resolvePlaceholders(message: string, block: FunnelBlock, experienceId: string, conversationId?: string): Promise<string> {
@@ -214,6 +279,7 @@ async function navigateFunnelHandler(
       conversation: result.conversation,
       nextBlockId: result.nextBlockId,
       botMessage: result.botMessage,
+      stageTransition: result.stageTransition, // Include stage transition data
     });
 
   } catch (error) {
@@ -243,6 +309,13 @@ async function processFunnelNavigation(
   conversation: any;
   nextBlockId: string | null;
   botMessage: string | null;
+  stageTransition?: {
+    currentStage: string;
+    previousStage: string;
+    isTransitionStage: boolean;
+    isExperienceQualificationStage: boolean;
+    isDMFunnelActive: boolean;
+  } | null;
 }> {
   try {
     const { text, value, blockId } = navigationData;
@@ -302,6 +375,15 @@ async function processFunnelNavigation(
       })
       .where(eq(conversations.id, conversationId))
       .returning();
+
+    // Detect stage transition and send WebSocket message
+    const previousStage = getCurrentStage(currentBlockId, funnelFlow);
+    const currentStage = getCurrentStage(nextBlockId, funnelFlow);
+    
+    if (previousStage !== currentStage) {
+      console.log(`[NAVIGATE-FUNNEL] Stage transition detected: ${previousStage} -> ${currentStage}`);
+      // We'll send the WebSocket message after we generate the bot message
+    }
 
     // Track interest when conversation reaches PAIN_POINT_QUALIFICATION stage
     const isPainPointQualificationStage = nextBlockId && funnelFlow.stages.some(
@@ -476,10 +558,25 @@ async function processFunnelNavigation(
       }
     }
 
+    // Prepare stage transition data for frontend WebSocket broadcasting
+    let stageTransition = null;
+    if (previousStage !== currentStage && botMessage) {
+      stageTransition = {
+        currentStage,
+        previousStage,
+        isTransitionStage: currentStage === 'TRANSITION',
+        isExperienceQualificationStage: currentStage === 'EXPERIENCE_QUALIFICATION',
+        isDMFunnelActive: true
+      };
+      
+      console.log(`[NAVIGATE-FUNNEL] Stage transition detected: ${previousStage} -> ${currentStage}`);
+    }
+
     return {
       conversation: updatedConversation[0],
       nextBlockId,
       botMessage,
+      stageTransition, // Include stage transition data for frontend WebSocket broadcasting
     };
 
   } catch (error) {

@@ -9,6 +9,7 @@ import type { ConversationWithMessages } from "../../types/user";
 import { apiPost } from "../../utils/api-client";
 import { Text } from "frosted-ui";
 import { MessageSquare, Play, RotateCcw, Settings, User } from "lucide-react";
+import FunnelProgressBar from "./FunnelProgressBar";
 
 /**
  * --- Customer View Component ---
