@@ -139,7 +139,7 @@ Monetize instantly: Sell Whop's hottest products.
 
 1. Create whop 
 
-https://whop.com/discover/whop/?productId=prod_FLhyIzBxkBGvg
+https://whop.com/profit-pulse-ai/profittest/
 
 2. Install app 
 
