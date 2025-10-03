@@ -10,6 +10,7 @@ import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tr
 import { db } from "@/lib/supabase/db-server";
 import { experiences, users } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
+import { whopSdk } from "@/lib/whop-sdk";
 
 const validateWebhook = makeWebhookValidator({
 	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
@@ -111,8 +112,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 				handleUserJoinEvent(user_id, product_id, webhookData, membership_id),
 			);
 		} else if (company_buyer_id && product_id) {
-			// Fallback: Get user ID from company_buyer_id
-			console.log(`user_id is null, attempting to get user ID from company_buyer_id: ${company_buyer_id}`);
+			// Fallback: Get actual user ID (company owner) from company_buyer_id
+			console.log(`user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
+			console.log(`Using company ID to fetch company owner user ID through WHOP API`);
 			waitUntil(
 				handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, webhookData, membership_id),
 			);
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
 /**
  * Handle user join event with company fallback
- * Uses company_buyer_id as user ID when user_id is null (business purchases)
+ * Uses company_buyer_id to get the actual user ID (company owner) when user_id is null
  */
 async function handleUserJoinEventWithCompanyFallback(
 	company_buyer_id: string,
@@ -136,11 +138,57 @@ async function handleUserJoinEventWithCompanyFallback(
 	membership_id?: string,
 ): Promise<void> {
 	try {
-		console.log(`Using company_buyer_id as user ID for business purchase: ${company_buyer_id}`);
+		console.log(`Company buyer ID provided: ${company_buyer_id}, fetching actual user ID...`);
 
-		// For business purchases, use company_buyer_id as the user identifier
-		// This allows the funnel system to work with business accounts
-		await handleUserJoinEvent(company_buyer_id, product_id, webhookData, membership_id);
+		// Get company information to find the owner
+		const company = await whopSdk.companies.getCompany({
+			companyId: company_buyer_id,
+		});
+
+		if (!company) {
+			console.error(`Company not found for company_buyer_id: ${company_buyer_id}`);
+			return;
+		}
+
+		// The company object should contain owner information
+		// Let's check what fields are available
+		console.log(`Company found: ${company.title} (${company.id})`);
+		console.log(`Company data:`, JSON.stringify(company, null, 2));
+
+		// Try to get the owner user ID from the company data
+		let ownerUserId: string | null = null;
+
+		// Check if company has an owner field
+		if ((company as any).owner?.id) {
+			ownerUserId = (company as any).owner.id;
+			console.log(`Found owner from company.owner.id: ${ownerUserId}`);
+		}
+		// Check if company has a user field
+		else if ((company as any).user?.id) {
+			ownerUserId = (company as any).user.id;
+			console.log(`Found owner from company.user.id: ${ownerUserId}`);
+		}
+		// Check if company has a createdBy field
+		else if ((company as any).createdBy?.id) {
+			ownerUserId = (company as any).createdBy.id;
+			console.log(`Found owner from company.createdBy.id: ${ownerUserId}`);
+		}
+		// Check if company has a userId field
+		else if ((company as any).userId) {
+			ownerUserId = (company as any).userId;
+			console.log(`Found owner from company.userId: ${ownerUserId}`);
+		}
+
+		if (!ownerUserId) {
+			console.error(`Could not find owner user ID for company ${company_buyer_id}`);
+			console.error(`Available company fields:`, Object.keys(company));
+			return;
+		}
+
+		console.log(`✅ Found company owner user ID: ${ownerUserId} for company: ${company_buyer_id}`);
+
+		// Now use the actual user ID for the user join event
+		await handleUserJoinEvent(ownerUserId, product_id, webhookData, membership_id);
 
 	} catch (error) {
 		console.error(`Error handling company_buyer_id ${company_buyer_id}:`, error);
