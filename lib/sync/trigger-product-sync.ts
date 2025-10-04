@@ -529,6 +529,62 @@ export async function triggerProductSyncForNewAdmin(
 						);
 						
 						console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
+						
+						// Get access passes for this app and update related resources
+						try {
+							if (!app.experienceId) {
+								console.log(`⚠️ App "${app.name}" has no experienceId, skipping access pass lookup`);
+								return;
+							}
+							
+							console.log(`🔍 Getting access passes for app: ${app.name} (experienceId: ${app.experienceId})`);
+							
+							const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
+								experienceId: app.experienceId
+							});
+							
+							const accessPasses = accessPassesResult?.accessPasses || [];
+							console.log(`📋 Found ${accessPasses.length} access passes for app ${app.name}:`, accessPasses.map(ap => ap.id));
+							
+							// For each access pass, find the corresponding resource and add this app name to product_id array
+							for (const accessPass of accessPasses) {
+								try {
+									// Find the resource that represents this access pass
+									const accessPassResource = await db.select()
+										.from(resources)
+										.where(eq(resources.whopProductId, accessPass.id))
+										.limit(1);
+									
+									if (accessPassResource.length > 0) {
+										const resource = accessPassResource[0];
+										const currentProductIds = resource.product_id || [];
+										
+										// Add app name to product_id array if not already present
+										if (!currentProductIds.includes(app.name)) {
+											const updatedProductIds = [...currentProductIds, app.name];
+											
+											await db.update(resources)
+												.set({
+													product_id: updatedProductIds,
+													updatedAt: new Date()
+												})
+												.where(eq(resources.id, resource.id));
+											
+											console.log(`✅ Added "${app.name}" to access pass resource ${resource.name} (${accessPass.id})`);
+										} else {
+											console.log(`ℹ️ App "${app.name}" already in access pass resource ${resource.name}`);
+										}
+									} else {
+										console.log(`⚠️ No resource found for access pass ${accessPass.id} (${accessPass.title || 'Unknown'})`);
+									}
+								} catch (error) {
+									console.error(`❌ Error updating access pass resource for ${accessPass.id}:`, error);
+								}
+							}
+						} catch (error) {
+							console.error(`❌ Error getting access passes for app ${app.name}:`, error);
+						}
+						
 						successCount++;
 						syncState.successCounts.freeResources++;
 					} catch (error) {
