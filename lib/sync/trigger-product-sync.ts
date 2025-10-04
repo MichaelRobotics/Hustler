@@ -67,6 +67,35 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`[PRODUCT-SYNC] 💓 Global Keepalive: Product sync in progress... Phase: ${syncState.phase}, Progress: ${syncState.progress}%, Elapsed: ${elapsed}s`);
 	}, 5000); // Every 5 seconds for more frequent updates
 
+	// Helper function to classify apps by name (fallback when marketplace category is not available)
+	const classifyAppByName = (appName: string): string => {
+		const name = appName.toLowerCase();
+		
+		// Learning/Educational apps
+		if (name.includes('course') || name.includes('learn') || name.includes('education') || 
+			name.includes('tutorial') || name.includes('training') || name.includes('study') ||
+			name.includes('academy') || name.includes('school') || name.includes('university')) {
+			return 'learn';
+		}
+		
+		// Earning/Monetization apps
+		if (name.includes('earn') || name.includes('money') || name.includes('profit') || 
+			name.includes('business') || name.includes('revenue') || name.includes('income') ||
+			name.includes('trading') || name.includes('investment') || name.includes('finance')) {
+			return 'earn';
+		}
+		
+		// Community/Social apps
+		if (name.includes('community') || name.includes('social') || name.includes('chat') || 
+			name.includes('forum') || name.includes('group') || name.includes('network') ||
+			name.includes('discord') || name.includes('telegram') || name.includes('slack')) {
+			return 'community';
+		}
+		
+		// Default to 'other' if no category matches
+		return 'other';
+	};
+
 	// Progress update helper
 	const updateProgress = (phase: string, stepCompleted: boolean = false) => {
 		syncState.phase = phase;
@@ -376,33 +405,47 @@ export async function triggerProductSyncForNewAdmin(
 						companyId: companyId
 					});
 					
-					const marketplaceCategory = appResult?.app?.accessPass?.marketplaceCategory;
-					if (marketplaceCategory) {
-						app.category = marketplaceCategory.name.toLowerCase();
-						console.log(`📱 App "${app.name}" category: ${app.category}`);
+					console.log(`🔍 DEBUG: App "${app.name}" getApp result:`, JSON.stringify(appResult, null, 2));
+					
+					// Check if accessPass exists and has marketplaceCategory
+					const accessPass = appResult?.app?.accessPass;
+					console.log(`🔍 DEBUG: App "${app.name}" accessPass:`, JSON.stringify(accessPass, null, 2));
+					
+					if (accessPass && accessPass.marketplaceCategory) {
+						app.category = accessPass.marketplaceCategory.name.toLowerCase();
+						console.log(`📱 App "${app.name}" category from marketplace: ${app.category}`);
 						availableApps.push(app);
 					} else {
 						console.log(`⚠️ App "${app.name}" has no marketplace category, skipping`);
+						console.log(`🔍 DEBUG: accessPass exists: ${!!accessPass}`);
+						console.log(`🔍 DEBUG: marketplaceCategory exists: ${!!(accessPass && accessPass.marketplaceCategory)}`);
+						if (accessPass) {
+							console.log(`🔍 DEBUG: accessPass keys:`, Object.keys(accessPass));
+						}
+						continue;
 					}
 				} catch (error) {
 					console.log(`⚠️ Error getting app category for "${app.name}":`, error);
-					// Skip apps where we can't get category
+					console.log(`⚠️ App "${app.name}" has no marketplace category, skipping`);
+					continue;
 				}
 			}
 			
 			console.log(`🔍 Found ${availableApps.length} apps with valid categories (excluding current app)`);
 			
-			// Classify apps by Whop SDK categories
+			// Classify apps by categories
 			const classifiedApps = {
-				learn: availableApps.filter(app => app.category?.includes('learn') || app.category?.includes('education') || app.category?.includes('course')),
-				earn: availableApps.filter(app => app.category?.includes('earn') || app.category?.includes('money') || app.category?.includes('business')),
-				community: availableApps.filter(app => app.category?.includes('community') || app.category?.includes('social') || app.category?.includes('chat'))
+				learn: availableApps.filter(app => app.category === 'learn'),
+				earn: availableApps.filter(app => app.category === 'earn'),
+				community: availableApps.filter(app => app.category === 'community'),
+				other: availableApps.filter(app => app.category === 'other')
 			};
 		
 			console.log(`📊 App classification results:`);
 			console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
 			console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
 			console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
+			console.log(`  - Other: ${classifiedApps.other.length} apps`);
 			
 			// Apply selection hierarchy for 6 FREE apps (2 per category)
 			const maxFreeApps = 6;
@@ -427,6 +470,13 @@ export async function triggerProductSyncForNewAdmin(
 			const communityApps = classifiedApps.community.slice(0, 2);
 			selectedApps.push(...communityApps);
 			console.log(`✅ Selected ${communityApps.length} Community apps: ${communityApps.map(app => app.name).join(', ')}`);
+		}
+		
+		// 4. Other - 2 apps if available
+		if (classifiedApps.other.length > 0) {
+			const otherApps = classifiedApps.other.slice(0, 2);
+			selectedApps.push(...otherApps);
+			console.log(`✅ Selected ${otherApps.length} Other apps: ${otherApps.map(app => app.name).join(', ')}`);
 		}
 		
 		console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with category-based selection`);
