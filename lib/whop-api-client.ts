@@ -403,7 +403,8 @@ export class WhopApiClient {
       
       if (accessPassPlans.length > 0) {
         accessPassPlans.forEach(plan => {
-          const price = plan.rawInitialPrice || 0;
+          // Use initialPriceDue as the primary indicator for paid/free status
+          const price = plan.initialPriceDue || 0;
           if (price < minPrice) {
             minPrice = price;
             currency = plan.baseCurrency || 'usd';
