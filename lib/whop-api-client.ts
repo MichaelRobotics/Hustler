@@ -403,11 +403,11 @@ export class WhopApiClient {
       
       if (accessPassPlans.length > 0) {
         accessPassPlans.forEach(plan => {
-          const initialPrice = plan.rawInitialPrice || 0;
+          const initialPriceDue = plan.initialPriceDue || 0;
           const renewalPrice = plan.rawRenewalPrice || 0;
           
           // For pricing display, use the minimum price (what user pays upfront)
-          const planPrice = Math.min(initialPrice, renewalPrice);
+          const planPrice = Math.min(initialPriceDue, renewalPrice);
           
           if (planPrice < minPrice) {
             minPrice = planPrice;
@@ -416,10 +416,10 @@ export class WhopApiClient {
         });
       }
       
-      // A product is free only if BOTH initial AND renewal prices are 0
-      // If either price > 0, it's considered a paid product
+      // A product is free if initialPriceDue is 0 (user pays nothing upfront)
+      // The renewal price doesn't matter for initial classification
       const hasPaidPlans = accessPassPlans.some(plan => 
-        (plan.rawInitialPrice || 0) > 0 || (plan.rawRenewalPrice || 0) > 0
+        (plan.initialPriceDue || 0) > 0
       );
       
       const isFree = !hasPaidPlans && (minPrice === 0 || minPrice === Infinity);
