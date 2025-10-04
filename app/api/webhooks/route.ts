@@ -145,6 +145,16 @@ async function handleUserJoinEventWithCompanyFallback(
 			companyId: company_buyer_id
 		});
 
+		// Debug: Log all members and their access levels
+		console.log(`🔍 Company members for ${company_buyer_id}:`, {
+			totalMembers: companyMembers?.members?.nodes?.length || 0,
+			members: companyMembers?.members?.nodes?.map(member => ({
+				id: member?.id,
+				accessLevel: member?.accessLevel,
+				status: member?.status
+			}))
+		});
+
 		// Find the admin member (only admin can make company purchases)
 		const adminMember = companyMembers?.members?.nodes?.find(member => 
 			member?.accessLevel === 'admin'
@@ -154,8 +164,22 @@ async function handleUserJoinEventWithCompanyFallback(
 			console.log(`✅ Found admin member user: ${adminMember.user.id} (${adminMember.user.name})`);
 			await handleUserJoinEvent(adminMember.user.id, product_id, webhookData, membership_id);
 		} else {
-			console.error(`❌ No admin member found for company ${company_buyer_id} - cannot process company purchase`);
-			return;
+			// Fallback: Try to find any member with a user (not just admin)
+			const anyMemberWithUser = companyMembers?.members?.nodes?.find(member => 
+				member?.user && member?.accessLevel !== 'no_access'
+			);
+			
+			if (anyMemberWithUser?.user) {
+				console.log(`⚠️ No admin found, using fallback member: ${anyMemberWithUser.user.id} (${anyMemberWithUser.user.name}) with access level: ${anyMemberWithUser.accessLevel}`);
+				await handleUserJoinEvent(anyMemberWithUser.user.id, product_id, webhookData, membership_id);
+			} else {
+				console.error(`❌ No admin member found for company ${company_buyer_id} - cannot process company purchase`);
+				console.error(`Available members:`, companyMembers?.members?.nodes?.map(m => ({
+					id: m?.id,
+					accessLevel: m?.accessLevel,
+					hasUser: !!m?.user
+				})));
+			}
 		}
 
 	} catch (error) {
