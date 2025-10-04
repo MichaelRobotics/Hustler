@@ -179,6 +179,7 @@ export const resources = pgTable(
 		whopProductId: text("whop_product_id"), // For MY_PRODUCTS sync
 		whopAppId: text("whop_app_id"), // For app-based products
 		whopMembershipId: text("whop_membership_id"), // For membership-based products
+		productApps: jsonb("product_apps"), // JSON field for product apps data
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

@@ -207,7 +207,6 @@ export async function POST(request: NextRequest) {
         experienceId: experience.id,
         funnelId: liveFunnel.id,
         whopUserId: whopUserId, // Direct Whop user ID for faster lookups
-        whopProductId: liveFunnel.whopProductId, // Include the funnel's whopProductId
         status: "active",
         currentBlockId: funnelFlow.startBlockId,
         userPath: [funnelFlow.startBlockId],

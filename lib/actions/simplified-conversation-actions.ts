@@ -115,21 +115,6 @@ export async function createConversation(
 	try {
 		console.log(`[CREATE-CONVERSATION] Starting conversation creation for whopUserId ${whopUserId} in experience ${experienceId}`);
 		
-		// Fetch the funnel to get its whopProductId
-		const funnel = await db.query.funnels.findFirst({
-			where: eq(funnels.id, funnelId),
-			columns: {
-				id: true,
-				whopProductId: true,
-			},
-		});
-
-		if (!funnel) {
-			throw new Error(`Funnel ${funnelId} not found`);
-		}
-
-		console.log(`[CREATE-CONVERSATION] Found funnel ${funnelId} with whopProductId: ${funnel.whopProductId || 'null'}`);
-		
 		// Delete any existing conversations for this user
 		// First, get conversation IDs to delete related data
 		const existingConversations = await db.query.conversations.findMany({
@@ -160,20 +145,19 @@ export async function createConversation(
 			console.log(`[CREATE-CONVERSATION] No existing conversations found for whopUserId ${whopUserId}`);
 		}
 
-		// Create new conversation with whopProductId from funnel
-		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}, whopProductId ${funnel.whopProductId || 'null'}`);
+		// Create new conversation
+		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}`);
 		const [newConversation] = await db.insert(conversations).values({
 			experienceId,
 			funnelId,
 			whopUserId,
 			membershipId,
-			whopProductId: funnel.whopProductId, // Include the funnel's whopProductId
 			status: "active",
 			currentBlockId: startBlockId,
 			userPath: [startBlockId],
 		}).returning();
 
-		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId} with whopProductId ${funnel.whopProductId || 'null'}`);
+		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId}`);
 		return newConversation.id;
 	} catch (error) {
 		console.error("Error creating conversation:", error);

@@ -72,6 +72,7 @@ export interface WhopApp {
   experienceId?: string; // The experience ID for this app installation
   companyRoute?: string; // Company route for URL generation
   appSlug?: string; // App slug for custom URLs
+  category?: string; // Marketplace category from Whop SDK
 }
 
 export class WhopApiClient {

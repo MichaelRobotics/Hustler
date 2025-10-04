@@ -1,9 +1,8 @@
 import { db } from "@/lib/supabase/db-server";
-import { resources, users, experiences, funnels } from "@/lib/supabase/schema";
+import { resources, users, experiences } from "@/lib/supabase/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { getWhopApiClient } from "@/lib/whop-api-client";
 import { createResource } from "@/lib/actions/resource-actions";
-import { createFunnel, addResourceToFunnel } from "@/lib/actions/funnel-actions";
 import { whopSdk } from "@/lib/whop-sdk";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 
@@ -48,20 +47,19 @@ export async function triggerProductSyncForNewAdmin(
 	experienceId: string,
 	companyId: string
 ): Promise<void> {
-	// Enhanced progress tracking
-	const syncState = {
-		startTime: Date.now(),
-		phase: 'initializing',
-		progress: 0,
-		totalSteps: 6,
-		completedSteps: 0,
-		errors: [] as string[],
-		successCounts: {
-			freeResources: 0,
-			paidResources: 0,
-			assignments: 0
-		}
-	};
+		// Enhanced progress tracking
+		const syncState = {
+			startTime: Date.now(),
+			phase: 'initializing',
+			progress: 0,
+			totalSteps: 5,
+			completedSteps: 0,
+			errors: [] as string[],
+			successCounts: {
+				freeResources: 0,
+				paidResources: 0
+			}
+		};
 
 	// Enhanced keepalive with progress reporting
 	const globalKeepAlive = setInterval(() => {
@@ -145,22 +143,15 @@ export async function triggerProductSyncForNewAdmin(
 			)
 			.limit(1);
 
-		// Check for existing funnels
-		const existingFunnels = await db.select()
-			.from(funnels)
-			.where(eq(funnels.experienceId, experienceId))
-			.limit(1);
-
 		// Check if user is already synced
 		const existingUserRecord = await db.query.users.findFirst({
 			where: eq(users.id, userId),
 			columns: { productsSynced: true }
 		});
 
-		if (existingResources.length > 0 || existingFunnels.length > 0 || existingUserRecord?.productsSynced) {
+		if (existingResources.length > 0 || existingUserRecord?.productsSynced) {
 			console.log(`✅ Products already synced for experience ${experienceId}, skipping sync`);
 			console.log(`   - Resources: ${existingResources.length}`);
-			console.log(`   - Funnels: ${existingFunnels.length}`);
 			console.log(`   - User synced: ${existingUserRecord?.productsSynced}`);
 			
 			// Mark user as synced even though we didn't sync (already done)
@@ -237,54 +228,98 @@ export async function triggerProductSyncForNewAdmin(
 			discoveryProducts = []; // Fallback to empty array
 		}
 
-		// Step 2: Determine funnel name and get funnel product from discovery page
-		const funnelName = whopClient.determineFunnelName(discoveryProducts);
-		const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
-		
-		console.log(`🎯 Funnel will be named: "${funnelName}"`);
-		if (funnelProduct) {
-			console.log(`🎯 Funnel product: ${funnelProduct.title}`);
-		} else {
-			console.log(`⚠️ No funnel product found!`);
-		}
+		// Step 2: Skip funnel product identification (not needed for PAID resources)
 
-		// Step 3: Create funnel with smart naming using proper action
-		updateProgress("creating_funnel");
-		console.log("📊 Creating funnel...");
-		let funnel;
-		try {
-			// Double-check for existing funnel before creating (prevent race condition)
-			const existingFunnel = await db.select()
-				.from(funnels)
-				.where(eq(funnels.experienceId, experienceId))
-				.limit(1);
+		// Step 3: Create discovery products first (PAID/FREE)
+		updateProgress("creating_discovery_resources");
+		console.log("💳 Creating discovery products (PAID/FREE)...");
+		const upsellProducts = discoveryProducts; // Use all discovery products as upsells
+		console.log(`Found ${upsellProducts.length} discovery products to use as upsells`);
+		
+		// Limit discovery products to maximum 6
+		const maxDiscoveryProducts = 6;
+		const limitedDiscoveryProducts = upsellProducts.slice(0, maxDiscoveryProducts);
+		if (upsellProducts.length > maxDiscoveryProducts) {
+			console.log(`⚠️ Limiting discovery products to ${maxDiscoveryProducts} (found ${upsellProducts.length}, using first ${maxDiscoveryProducts})`);
+		}
+		
+		if (limitedDiscoveryProducts.length > 0) {
+			console.log(`🔍 Processing ${limitedDiscoveryProducts.length} discovery products...`);
 			
-			if (existingFunnel.length > 0) {
-				console.log(`✅ Funnel already exists for experience ${experienceId}, using existing funnel`);
-				funnel = existingFunnel[0];
-			} else {
-				funnel = await retryDatabaseOperation(
-					() => createFunnel({ id: userId, experience: { id: experienceId } } as any, {
-				name: funnelName,
-				description: `Funnel for ${funnelName}`,
-						resources: [], // Will assign resources after creation
-						whopProductId: funnelProduct?.id // 🔑 Associate funnel with discovery page product
-					}),
-					"createFunnel"
-				);
-			console.log(`✅ Created funnel: ${funnel.name} (ID: ${funnel.id})`);
+			// Process discovery products in batches for better performance and error handling
+			const batchSize = 3; // Process 3 products at a time
+			let successCount = 0;
+			let errorCount = 0;
+			
+			for (let i = 0; i < limitedDiscoveryProducts.length; i += batchSize) {
+				const batch = limitedDiscoveryProducts.slice(i, i + batchSize);
+				console.log(`🔍 Processing discovery products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedDiscoveryProducts.length/batchSize)} (${batch.length} products)`);
+				
+				// Process batch in parallel with individual error handling and retry logic
+				const batchPromises = batch.map(async (product) => {
+					// Determine category based on product price/free status
+					const productCategory = product.isFree || product.price === 0 ? "FREE_VALUE" : "PAID";
+					
+					try {
+						const cheapestPlan = whopClient.getCheapestPlan(product);
+						
+						// Generate product link for paid products (affiliate tracking added later in funnel navigation)
+						let trackingUrl: string;
+						
+						// Use discovery page URL directly (affiliate tracking added later)
+						if (product.discoveryPageUrl) {
+							trackingUrl = product.discoveryPageUrl;
+							console.log(`✅ Using discovery page URL: ${trackingUrl}`);
+						} else {
+							// Fallback to simple checkout link
+							trackingUrl = whopNativeTrackingService.createSimpleCheckoutLink(cheapestPlan?.id || product.id);
+							console.log(`✅ Using fallback checkout link: ${trackingUrl}`);
+						}
+						
+						const resource = await retryDatabaseOperation(
+							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
+								name: product.title,
+								type: "MY_PRODUCTS",
+								category: productCategory,
+								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
+								description: product.description,
+								whopProductId: product.id
+							}),
+							`createResource-${productCategory}-${product.title}`
+						);
+						
+						console.log(`✅ Created ${productCategory} resource for product: ${product.title}`);
+						successCount++;
+						if (productCategory === "FREE_VALUE") {
+							syncState.successCounts.freeResources++;
+						} else {
+							syncState.successCounts.paidResources++;
+						}
+					} catch (error) {
+						console.error(`❌ Error creating ${productCategory} resource for product ${product.id}:`, error);
+						errorCount++;
+						return null;
+					}
+				});
+				
+				const batchResults = await Promise.all(batchPromises);
+				const successfulResults = batchResults.filter(id => id !== null);
+				console.log(`✅ Completed discovery products batch: ${successfulResults.length}/${batch.length} successful`);
+				
+				// Small delay between batches to prevent overwhelming the system
+				if (i + batchSize < limitedDiscoveryProducts.length) {
+					await new Promise(resolve => setTimeout(resolve, 100));
+				}
 			}
-			updateProgress("funnel_created", true);
-		} catch (error) {
-			console.error("❌ Error creating funnel:", error);
-			syncState.errors.push(`Funnel creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-			throw new Error(`Failed to create funnel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			
+			console.log(`✅ Created ${successCount} resources from discovery products (${errorCount} errors)`);
+			updateProgress("discovery_resources_completed", true);
+		} else {
+			console.log(`⚠️ No discovery products found`);
+			updateProgress("discovery_resources_skipped", true);
 		}
 
-		// Step 4: Create resources and collect their IDs
-		const resourceIds: string[] = [];
-		
-		// Create FREE apps from installed apps
+		// Step 4: Create FREE apps from installed apps second
 		updateProgress("creating_free_resources");
 		console.log("📱 Creating FREE apps from installed apps...");
 		try {
@@ -298,227 +333,187 @@ export async function triggerProductSyncForNewAdmin(
 			]);
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
-			// Get the funnel product to filter apps by visibility
-			const funnelProduct = whopClient.getFunnelProduct(discoveryProducts);
-			if (!funnelProduct) {
-				console.log("⚠️ No funnel product found, skipping FREE apps creation");
-				updateProgress("free_resources_skipped", true);
-			} else {
-				console.log(`🎯 Funnel product: ${funnelProduct.title}`);
+			// Filter out current app and get app categories from Whop SDK
+			console.log(`🔍 Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
+			
+			const availableApps: typeof installedApps = [];
+			
+			for (const app of installedApps) {
+				if (!app.experienceId) {
+					console.log(`⚠️ App "${app.name}" has no experienceId, skipping`);
+					continue;
+				}
 				
-				// Check which apps have access passes for the funnel product
-				// If an experience (app) has an access pass for the funnel product, it's included
-				// BUT exclude apps that have the same Whop experience ID as the current app
-				console.log(`🔍 Checking which apps have access passes for funnel product: ${funnelProduct.title} (ID: ${funnelProduct.id})`);
-				console.log(`🔍 Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
-				
-				const availableApps: typeof installedApps = [];
-				
-				for (const app of installedApps) {
-					if (!app.experienceId) {
-						console.log(`⚠️ App "${app.name}" has no experienceId, skipping`);
-						continue;
-					}
+				// Skip apps that have the same Whop experience ID as the current app
+				if (app.experienceId === currentWhopExperienceId) {
+					console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
 					
-					// Skip apps that have the same Whop experience ID as the current app
-					if (app.experienceId === currentWhopExperienceId) {
-						console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
-						
-						// Generate and store the app link for the current experience
-						try {
-							const appLink = whopClient.generateAppUrl(app, undefined, true);
-							console.log(`🔗 Generated app link for current experience: ${appLink}`);
-							
-							// Store the link in the experience table
-							await db.update(experiences)
-								.set({
-									link: appLink,
-									updatedAt: new Date()
-								})
-								.where(eq(experiences.id, experienceId));
-							
-							console.log(`✅ Stored app link in experience table: ${appLink}`);
-						} catch (error) {
-							console.error(`❌ Error generating/storing app link for current experience:`, error);
-						}
-						
-						continue;
-					}
-					
+					// Generate and store the app link for the current experience
 					try {
-						// Check if this experience has an access pass for the funnel product
-						const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
-							experienceId: app.experienceId
+						const appLink = whopClient.generateAppUrl(app, undefined, true);
+						console.log(`🔗 Generated app link for current experience: ${appLink}`);
+						
+						// Store the link in the experience table
+						await db.update(experiences)
+							.set({
+								link: appLink,
+								updatedAt: new Date()
+							})
+							.where(eq(experiences.id, experienceId));
+						
+						console.log(`✅ Stored app link in experience table: ${appLink}`);
+					} catch (error) {
+						console.error(`❌ Error generating/storing app link for current experience:`, error);
+					}
+					
+					continue;
+				}
+				
+				// Get app category from Whop SDK
+				try {
+					const appResult = await whopSdk.apps.getApp({
+						appId: app.id,
+						companyId: companyId
+					});
+					
+					const marketplaceCategory = appResult?.app?.accessPass?.marketplaceCategory;
+					if (marketplaceCategory) {
+						app.category = marketplaceCategory.name.toLowerCase();
+						console.log(`📱 App "${app.name}" category: ${app.category}`);
+						availableApps.push(app);
+					} else {
+						console.log(`⚠️ App "${app.name}" has no marketplace category, skipping`);
+					}
+				} catch (error) {
+					console.log(`⚠️ Error getting app category for "${app.name}":`, error);
+					// Skip apps where we can't get category
+				}
+			}
+			
+			console.log(`🔍 Found ${availableApps.length} apps with valid categories (excluding current app)`);
+			
+			// Classify apps by Whop SDK categories
+			const classifiedApps = {
+				learn: availableApps.filter(app => app.category?.includes('learn') || app.category?.includes('education') || app.category?.includes('course')),
+				earn: availableApps.filter(app => app.category?.includes('earn') || app.category?.includes('money') || app.category?.includes('business')),
+				community: availableApps.filter(app => app.category?.includes('community') || app.category?.includes('social') || app.category?.includes('chat'))
+			};
+		
+			console.log(`📊 App classification results:`);
+			console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
+			console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
+			console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
+			
+			// Apply selection hierarchy for 6 FREE apps (2 per category)
+			const maxFreeApps = 6;
+			const selectedApps: typeof availableApps = [];
+		
+		// 1. Learning/Educational - 2 apps if available
+		if (classifiedApps.learn.length > 0) {
+			const learnApps = classifiedApps.learn.slice(0, 2);
+			selectedApps.push(...learnApps);
+			console.log(`✅ Selected ${learnApps.length} Learning apps: ${learnApps.map(app => app.name).join(', ')}`);
+		}
+		
+		// 2. Earning/Monetization - 2 apps if available
+		if (classifiedApps.earn.length > 0) {
+			const earnApps = classifiedApps.earn.slice(0, 2);
+			selectedApps.push(...earnApps);
+			console.log(`✅ Selected ${earnApps.length} Earning apps: ${earnApps.map(app => app.name).join(', ')}`);
+		}
+		
+		// 3. Community/Social - 2 apps if available
+		if (classifiedApps.community.length > 0) {
+			const communityApps = classifiedApps.community.slice(0, 2);
+			selectedApps.push(...communityApps);
+			console.log(`✅ Selected ${communityApps.length} Community apps: ${communityApps.map(app => app.name).join(', ')}`);
+		}
+		
+		console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with category-based selection`);
+		
+		if (selectedApps.length > 0) {
+			// Create FREE resources for each selected app (with batching for performance)
+			const batchSize = 10; // Process 10 apps at a time (increased for better performance)
+			let successCount = 0;
+			let errorCount = 0;
+			
+			for (let i = 0; i < selectedApps.length; i += batchSize) {
+				const batch = selectedApps.slice(i, i + batchSize);
+				console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
+				
+				// Process batch in parallel with individual error handling and retry logic
+				const batchPromises = batch.map(async (app) => {
+					try {
+						console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
+						// Use app URL with company route and experience ID
+						// FREE apps don't need ref or affiliate parameters
+						const directUrl = whopClient.generateAppUrl(app, undefined, true);
+						
+						console.log(`🔍 Resource data:`, {
+							name: app.name,
+							type: "MY_PRODUCTS",
+							category: "FREE_VALUE",
+							link: directUrl,
+							description: app.description || `Free access to ${app.name}`,
+							whopProductId: app.id
 						});
 						
-						const accessPasses = accessPassesResult?.accessPasses || [];
-						const hasAccessPass = accessPasses.some((accessPass: any) => 
-							accessPass.id === funnelProduct.id
+						const resource = await retryDatabaseOperation(
+							() => {
+								console.log(`🔍 Executing createResource for ${app.name}...`);
+								return createResource({ id: userId, experience: { id: experienceId } } as any, {
+									name: app.name,
+									type: "MY_PRODUCTS",
+									category: "FREE_VALUE",
+									link: directUrl,
+									description: app.description || `Free access to ${app.name}`,
+									whopProductId: app.id
+								});
+							},
+							`createResource-FREE-${app.name}`,
+							3, // maxRetries
+							15000 // 15 second timeout
 						);
 						
-						if (hasAccessPass) {
-							console.log(`✅ App "${app.name}" has access pass for funnel product "${funnelProduct.title}"`);
-							availableApps.push(app);
-						} else {
-							console.log(`❌ App "${app.name}" does not have access pass for funnel product "${funnelProduct.title}"`);
-						}
+						console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
+						successCount++;
+						syncState.successCounts.freeResources++;
 					} catch (error) {
-						console.log(`⚠️ Error checking access passes for app "${app.name}":`, error);
-						// If we can't check access passes, include the app as fallback
-						availableApps.push(app);
+						console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
+						errorCount++;
+						return null;
 					}
-				}
+				});
 				
-				console.log(`🔍 Found ${availableApps.length} apps that have access passes for the funnel product (excluding current app with Whop experience ID: ${currentWhopExperienceId})`);
+				console.log(`🔍 Waiting for ${batch.length} FREE resource creations to complete...`);
 				
-				// Classify apps by type (only from available apps)
-				const classifiedApps = {
-					learn: availableApps.filter(app => classifyAppType(app.name) === 'learn'),
-					earn: availableApps.filter(app => classifyAppType(app.name) === 'earn'),
-					community: availableApps.filter(app => classifyAppType(app.name) === 'community'),
-					other: availableApps.filter(app => classifyAppType(app.name) === 'other')
-				};
-			
-				console.log(`📊 App classification results:`);
-				console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
-				console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
-				console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
-				console.log(`  - Other/Utility: ${classifiedApps.other.length} apps`);
+				// Add timeout to entire batch processing
+				const batchTimeout = 60000; // 60 seconds for entire batch
+				const batchResults = await Promise.race([
+					Promise.all(batchPromises),
+					new Promise<null[]>((_, reject) => 
+						setTimeout(() => reject(new Error(`FREE resources batch timeout after ${batchTimeout}ms`)), batchTimeout)
+					)
+				]).catch((error) => {
+					console.error(`❌ FREE resources batch failed:`, error);
+					return new Array(batch.length).fill(null); // Return nulls for failed batch
+				});
 				
-				// Apply selection hierarchy for 4 FREE apps
-				const maxFreeApps = 4;
-				const selectedApps: typeof availableApps = [];
-			
-			// 1. Learning/Educational - at least 1 if available
-			if (classifiedApps.learn.length > 0) {
-				const learnApp = classifiedApps.learn[0];
-				selectedApps.push(learnApp);
-				console.log(`✅ Selected Learning app: ${learnApp.name}`);
-			}
-			
-			// 2. Earning/Monetization - at least 1 if available
-			if (classifiedApps.earn.length > 0 && selectedApps.length < maxFreeApps) {
-				const earnApp = classifiedApps.earn[0];
-				selectedApps.push(earnApp);
-				console.log(`✅ Selected Earning app: ${earnApp.name}`);
-			}
-			
-			// 3. Community/Social - at least 1 if available (Discord first)
-			if (classifiedApps.community.length > 0 && selectedApps.length < maxFreeApps) {
-				// Prioritize Discord apps
-				const discordApp = classifiedApps.community.find(app => app.name.toLowerCase().includes('discord'));
-				const communityApp = discordApp || classifiedApps.community[0];
-				selectedApps.push(communityApp);
-				console.log(`✅ Selected Community app: ${communityApp.name}${discordApp ? ' (Discord prioritized)' : ''}`);
-			}
-			
-			// 4. Other/Utility - at least 1 if available
-			if (classifiedApps.other.length > 0 && selectedApps.length < maxFreeApps) {
-				const otherApp = classifiedApps.other[0];
-				selectedApps.push(otherApp);
-				console.log(`✅ Selected Other/Utility app: ${otherApp.name}`);
-			}
-			
-			// Fill remaining slots with any available apps (maintaining order)
-			const remainingSlots = maxFreeApps - selectedApps.length;
-			if (remainingSlots > 0) {
-				const allApps = [...classifiedApps.learn, ...classifiedApps.earn, ...classifiedApps.community, ...classifiedApps.other];
-				const remainingApps = allApps.filter(app => !selectedApps.includes(app));
+				const successfulResults = batchResults.filter(id => id !== null);
+				console.log(`✅ Completed FREE resources batch: ${successfulResults.length}/${batch.length} successful`);
 				
-				for (let i = 0; i < Math.min(remainingSlots, remainingApps.length); i++) {
-					selectedApps.push(remainingApps[i]);
-					console.log(`✅ Selected additional app: ${remainingApps[i].name}`);
+				// Small delay between batches to prevent overwhelming the system
+				if (i + batchSize < selectedApps.length) {
+					await new Promise(resolve => setTimeout(resolve, 100));
 				}
 			}
 			
-			console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with hierarchical selection`);
-			
-			if (selectedApps.length > 0) {
-				// Create FREE resources for each selected app (with batching for performance)
-				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
-				let successCount = 0;
-				let errorCount = 0;
-				
-				for (let i = 0; i < selectedApps.length; i += batchSize) {
-					const batch = selectedApps.slice(i, i + batchSize);
-					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
-					
-					// Process batch in parallel with individual error handling and retry logic
-					const batchPromises = batch.map(async (app) => {
-						try {
-							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
-          // Use app URL with company route and experience ID
-          // FREE apps don't need ref or affiliate parameters
-          const directUrl = whopClient.generateAppUrl(app, undefined, true);
-							
-							console.log(`🔍 Resource data:`, {
-								name: app.name,
-								type: "MY_PRODUCTS",
-								category: "FREE_VALUE",
-								link: directUrl,
-								description: app.description || `Free access to ${app.name}`,
-								whopProductId: app.id
-							});
-							
-							const resource = await retryDatabaseOperation(
-								() => {
-									console.log(`🔍 Executing createResource for ${app.name}...`);
-									return createResource({ id: userId, experience: { id: experienceId } } as any, {
-										name: app.name,
-						type: "MY_PRODUCTS",
-						category: "FREE_VALUE",
-										link: directUrl,
-										description: app.description || `Free access to ${app.name}`,
-										whopProductId: app.id
-									});
-								},
-								`createResource-FREE-${app.name}`,
-								3, // maxRetries
-								15000 // 15 second timeout
-							);
-							
-							console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
-							successCount++;
-							syncState.successCounts.freeResources++;
-							return resource.id;
-						} catch (error) {
-							console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
-							errorCount++;
-							return null;
-						}
-					});
-					
-					console.log(`🔍 Waiting for ${batch.length} FREE resource creations to complete...`);
-					
-					// Add timeout to entire batch processing
-					const batchTimeout = 60000; // 60 seconds for entire batch
-					const batchResults = await Promise.race([
-						Promise.all(batchPromises),
-						new Promise<null[]>((_, reject) => 
-							setTimeout(() => reject(new Error(`FREE resources batch timeout after ${batchTimeout}ms`)), batchTimeout)
-						)
-					]).catch((error) => {
-						console.error(`❌ FREE resources batch failed:`, error);
-						return new Array(batch.length).fill(null); // Return nulls for failed batch
-					});
-					
-					const successfulResults = batchResults.filter(id => id !== null);
-					resourceIds.push(...successfulResults);
-					console.log(`✅ Completed FREE resources batch: ${successfulResults.length}/${batch.length} successful`);
-					
-					// Small delay between batches to prevent overwhelming the system
-					if (i + batchSize < installedApps.length) {
-						await new Promise(resolve => setTimeout(resolve, 100));
-					}
-				}
-				
-				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
-				updateProgress("free_resources_completed", true);
+			console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
+			updateProgress("free_resources_completed", true);
 		} else {
-				console.log(`⚠️ No installed apps found for company`);
-				updateProgress("free_resources_skipped", true);
-			}
-			} // End of funnel product check
+			console.log(`⚠️ No apps found with valid categories`);
+			updateProgress("free_resources_skipped", true);
+		}
 		} catch (error) {
 			console.error(`❌ Error fetching installed apps:`, error);
 			syncState.errors.push(`Installed apps fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -527,125 +522,10 @@ export async function triggerProductSyncForNewAdmin(
 			updateProgress("free_resources_failed", true);
 		}
 
-		// Create PAID products as upsells (excluding funnel product)
-		console.log("💳 Creating PAID products for upselling...");
-		const upsellProducts = whopClient.getUpsellProducts(discoveryProducts, funnelProduct?.id || '');
-		console.log(`Found ${upsellProducts.length} upsell products`);
-		
-		// Limit PAID products to maximum 4
-		const maxPaidProducts = 4;
-		const limitedPaidProducts = upsellProducts.slice(0, maxPaidProducts);
-		if (upsellProducts.length > maxPaidProducts) {
-			console.log(`⚠️ Limiting PAID products to ${maxPaidProducts} (found ${upsellProducts.length}, using first ${maxPaidProducts})`);
-		}
-		console.log(`💳 Processing ${limitedPaidProducts.length} PAID products (max ${maxPaidProducts})`);
-		
-		if (limitedPaidProducts.length > 0) {
-			// Create PAID resources with batching for performance
-			const batchSize = 10; // Process 10 products at a time (increased for better performance)
-			let successCount = 0;
-			let errorCount = 0;
-			
-			for (let i = 0; i < limitedPaidProducts.length; i += batchSize) {
-				const batch = limitedPaidProducts.slice(i, i + batchSize);
-				console.log(`🔍 Processing PAID products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedPaidProducts.length/batchSize)} (${batch.length} products)`);
-				
-				// Process batch in parallel with individual error handling and retry logic
-				const batchPromises = batch.map(async (product) => {
-			try {
-				const cheapestPlan = whopClient.getCheapestPlan(product);
-				
-          // Generate product link for paid products (affiliate tracking added later in funnel navigation)
-          let trackingUrl: string;
-          
-          // Use discovery page URL directly (affiliate tracking added later)
-          if (product.discoveryPageUrl) {
-            trackingUrl = product.discoveryPageUrl;
-            console.log(`✅ Using discovery page URL: ${trackingUrl}`);
-          } else {
-            // Fallback to simple checkout link
-            trackingUrl = whopNativeTrackingService.createSimpleCheckoutLink(cheapestPlan?.id || product.id);
-            console.log(`✅ Using fallback checkout link: ${trackingUrl}`);
-          }
-						
-						const resource = await retryDatabaseOperation(
-							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
-					name: product.title,
-					type: "MY_PRODUCTS",
-					category: "PAID",
-								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
-					description: product.description,
-					whopProductId: product.id
-							}),
-							`createResource-PAID-${product.title}`
-						);
-						
-						console.log(`✅ Created PAID resource for product: ${product.title}`);
-						successCount++;
-						syncState.successCounts.paidResources++;
-						return resource.id;
-					} catch (error) {
-						console.error(`❌ Error creating PAID resource for product ${product.id}:`, error);
-						errorCount++;
-						return null;
-					}
-				});
-				
-				const batchResults = await Promise.all(batchPromises);
-				resourceIds.push(...batchResults.filter(id => id !== null));
-				
-				// Small delay between batches to prevent overwhelming the system
-				if (i + batchSize < upsellProducts.length) {
-					await new Promise(resolve => setTimeout(resolve, 100));
-				}
-			}
-			
-			console.log(`✅ Created ${successCount} PAID resources from upsell products (${errorCount} errors)`);
-		}
 
-		// Step 5: Assign all resources to the funnel
-		if (resourceIds.length > 0) {
-			console.log(`🔗 Assigning ${resourceIds.length} resources to funnel...`);
-			try {
-				// Assign resources in batches for better performance
-				const assignmentBatchSize = 20; // Increased batch size for better performance
-				let assignedCount = 0;
-				
-				for (let i = 0; i < resourceIds.length; i += assignmentBatchSize) {
-					const batch = resourceIds.slice(i, i + assignmentBatchSize);
-					console.log(`🔗 Assigning batch ${Math.floor(i/assignmentBatchSize) + 1}/${Math.ceil(resourceIds.length/assignmentBatchSize)} (${batch.length} resources)`);
-					
-					// Process assignments in parallel with retry logic
-					const assignmentPromises = batch.map(async (resourceId) => {
-						try {
-							await retryDatabaseOperation(
-								() => addResourceToFunnel({ id: userId, experience: { id: experienceId } } as any, funnel.id, resourceId),
-								`addResourceToFunnel-${resourceId}`
-							);
-							syncState.successCounts.assignments++;
-							return true;
-					} catch (error) {
-						console.error(`❌ Error assigning resource ${resourceId} to funnel:`, error);
-							return false;
-						}
-					});
-					
-					const batchResults = await Promise.all(assignmentPromises);
-					assignedCount += batchResults.filter(success => success).length;
-					
-					// Small delay between batches
-					if (i + assignmentBatchSize < resourceIds.length) {
-						await new Promise(resolve => setTimeout(resolve, 50));
-					}
-				}
-				
-				console.log(`✅ Assigned ${assignedCount}/${resourceIds.length} resources to funnel`);
-			} catch (error) {
-				console.error("❌ Error assigning resources to funnel:", error);
-			}
-		}
+		// Resources are now created in the library (no funnel assignment needed)
 
-		// Step 6: Mark user as synced
+		// Step 5: Mark user as synced
 		await db.update(users)
 			.set({ productsSynced: true })
 			.where(eq(users.id, userId));
@@ -657,13 +537,11 @@ export async function triggerProductSyncForNewAdmin(
 		
 		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
 		
-		console.log(`[PRODUCT-SYNC] 🎉 Smart upselling sync completed for experience ${experienceId}:`);
+		console.log(`[PRODUCT-SYNC] 🎉 Resource library sync completed for experience ${experienceId}:`);
 		console.log(`[PRODUCT-SYNC]    - Total time: ${totalElapsed}s`);
 		console.log(`[PRODUCT-SYNC]    - Progress: ${syncState.progress}%`);
-		console.log(`[PRODUCT-SYNC]    - Funnel: "${funnelName}"`);
 		console.log(`[PRODUCT-SYNC]    - FREE apps: ${syncState.successCounts.freeResources}`);
 		console.log(`[PRODUCT-SYNC]    - PAID upsells: ${syncState.successCounts.paidResources}`);
-		console.log(`[PRODUCT-SYNC]    - Assignments: ${syncState.successCounts.assignments}`);
 		
 		if (syncState.errors.length > 0) {
 			console.log(`[PRODUCT-SYNC] ⚠️ Errors encountered (${syncState.errors.length}):`);
