@@ -8,6 +8,7 @@ export interface FunnelBlock {
 	message: string;
 	options: FunnelBlockOption[];
 	resourceName?: string;
+	availableOffers?: string[]; // Array of resource names that this block can lead to
 }
 
 export interface FunnelStage {

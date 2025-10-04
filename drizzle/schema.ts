@@ -201,6 +201,7 @@ export const conversations = pgTable("conversations", {
 	whopUserId: text("whop_user_id").notNull(),
 	phase2StartTime: timestamp("phase2_start_time", { mode: 'string' }),
 	membershipId: text("membership_id"),
+	whopProductId: text("whop_product_id"),
 	myAffiliateLink: text("my_affiliate_link"),
 }, (table) => [
 	index("conversations_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),

@@ -242,6 +242,7 @@ export const conversations = pgTable(
 			.references(() => funnels.id, { onDelete: "cascade" }),
 		whopUserId: text("whop_user_id").notNull(), // Direct Whop user ID for user identification
 		membershipId: text("membership_id"), // Whop membership ID for DM operations
+		whopProductId: text("whop_product_id"), // Whop product ID for product-specific conversations
 		status: conversationStatusEnum("status").default("active").notNull(),
 		currentBlockId: text("current_block_id"),
 		userPath: jsonb("user_path"), // Track user's path through funnel
