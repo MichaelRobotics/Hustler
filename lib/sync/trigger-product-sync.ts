@@ -398,48 +398,10 @@ export async function triggerProductSyncForNewAdmin(
 					continue;
 				}
 				
-				// Get app category from Whop SDK - SIMPLIFIED FLOW
-				try {
-					console.log(`🔍 DEBUG: Using appId "${app.id}" for app "${app.name}" in company ${companyId}`);
-					
-					// We already have the correct appId from listExperiences, use it directly
-					const appResult = await whopSdk.apps.getApp({
-						appId: app.id,
-						companyId: companyId
-					});
-					
-					console.log(`🔍 DEBUG: App "${app.name}" getApp result:`, JSON.stringify(appResult, null, 2));
-					
-					// Check if the API call returned null (failed)
-					if (!appResult) {
-						console.log(`❌ getApp returned null for app "${app.name}" - API call failed`);
-						app.category = classifyAppByName(app.name);
-						console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
-						availableApps.push(app);
-						continue;
-					}
-					
-					// Extract marketplaceCategory from accessPass
-					const accessPass = appResult?.app?.accessPass;
-					console.log(`🔍 DEBUG: App "${app.name}" accessPass:`, JSON.stringify(accessPass, null, 2));
-					
-					if (accessPass && accessPass.marketplaceCategory) {
-						app.category = accessPass.marketplaceCategory.name.toLowerCase();
-						console.log(`📱 App "${app.name}" category from marketplace: ${app.category}`);
-						availableApps.push(app);
-					} else {
-						console.log(`⚠️ App "${app.name}" has no marketplace category, using name-based classification`);
-						app.category = classifyAppByName(app.name);
-						console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
-						availableApps.push(app);
-					}
-				} catch (error) {
-					console.log(`❌ Error getting app category for "${app.name}":`, error);
-					console.log(`🔍 DEBUG: Using name-based classification as fallback`);
-					app.category = classifyAppByName(app.name);
-					console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
-					availableApps.push(app);
-				}
+				// Classify app using name-based keywords
+				app.category = classifyAppByName(app.name);
+				console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
+				availableApps.push(app);
 			}
 			
 			console.log(`🔍 Found ${availableApps.length} apps with valid categories (excluding current app)`);
