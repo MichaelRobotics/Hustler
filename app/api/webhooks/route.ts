@@ -129,7 +129,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
 /**
  * Handle user join event with company fallback
- * Uses company_buyer_id to get the actual user ID (company owner) when user_id is null
+ * Gets the admin member who made the company purchase
  */
 async function handleUserJoinEventWithCompanyFallback(
 	company_buyer_id: string,
@@ -138,57 +138,25 @@ async function handleUserJoinEventWithCompanyFallback(
 	membership_id?: string,
 ): Promise<void> {
 	try {
-		console.log(`Company buyer ID provided: ${company_buyer_id}, fetching actual user ID...`);
+		console.log(`Company buyer ID provided: ${company_buyer_id}, getting company members...`);
 
-		// Get company information to find the owner
-		const company = await whopSdk.companies.getCompany({
-			companyId: company_buyer_id,
+		// Get company members
+		const companyMembers = await whopSdk.companies.listMembers({
+			companyId: company_buyer_id
 		});
 
-		if (!company) {
-			console.error(`Company not found for company_buyer_id: ${company_buyer_id}`);
+		// Find the admin member (only admin can make company purchases)
+		const adminMember = companyMembers?.members?.nodes?.find(member => 
+			member?.accessLevel === 'admin'
+		);
+
+		if (adminMember?.user) {
+			console.log(`✅ Found admin member user: ${adminMember.user.id} (${adminMember.user.name})`);
+			await handleUserJoinEvent(adminMember.user.id, product_id, webhookData, membership_id);
+		} else {
+			console.error(`❌ No admin member found for company ${company_buyer_id} - cannot process company purchase`);
 			return;
 		}
-
-		// The company object should contain owner information
-		// Let's check what fields are available
-		console.log(`Company found: ${company.title} (${company.id})`);
-		console.log(`Company data:`, JSON.stringify(company, null, 2));
-
-		// Try to get the owner user ID from the company data
-		let ownerUserId: string | null = null;
-
-		// Check if company has an owner field
-		if ((company as any).owner?.id) {
-			ownerUserId = (company as any).owner.id;
-			console.log(`Found owner from company.owner.id: ${ownerUserId}`);
-		}
-		// Check if company has a user field
-		else if ((company as any).user?.id) {
-			ownerUserId = (company as any).user.id;
-			console.log(`Found owner from company.user.id: ${ownerUserId}`);
-		}
-		// Check if company has a createdBy field
-		else if ((company as any).createdBy?.id) {
-			ownerUserId = (company as any).createdBy.id;
-			console.log(`Found owner from company.createdBy.id: ${ownerUserId}`);
-		}
-		// Check if company has a userId field
-		else if ((company as any).userId) {
-			ownerUserId = (company as any).userId;
-			console.log(`Found owner from company.userId: ${ownerUserId}`);
-		}
-
-		if (!ownerUserId) {
-			console.error(`Could not find owner user ID for company ${company_buyer_id}`);
-			console.error(`Available company fields:`, Object.keys(company));
-			return;
-		}
-
-		console.log(`✅ Found company owner user ID: ${ownerUserId} for company: ${company_buyer_id}`);
-
-		// Now use the actual user ID for the user join event
-		await handleUserJoinEvent(ownerUserId, product_id, webhookData, membership_id);
 
 	} catch (error) {
 		console.error(`Error handling company_buyer_id ${company_buyer_id}:`, error);
