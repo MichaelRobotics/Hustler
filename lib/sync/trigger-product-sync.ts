@@ -398,11 +398,11 @@ export async function triggerProductSyncForNewAdmin(
 					continue;
 				}
 				
-				// Get app category from Whop SDK
+				// Get app category from Whop SDK - SIMPLIFIED FLOW
 				try {
-					console.log(`🔍 DEBUG: Calling getApp for app "${app.name}" (${app.id}) in company ${companyId}`);
+					console.log(`🔍 DEBUG: Using appId "${app.id}" for app "${app.name}" in company ${companyId}`);
 					
-					// Use the app.id directly (it's already the correct app ID from listExperiences)
+					// We already have the correct appId from listExperiences, use it directly
 					const appResult = await whopSdk.apps.getApp({
 						appId: app.id,
 						companyId: companyId
@@ -419,7 +419,7 @@ export async function triggerProductSyncForNewAdmin(
 						continue;
 					}
 					
-					// Check if accessPass exists and has marketplaceCategory
+					// Extract marketplaceCategory from accessPass
 					const accessPass = appResult?.app?.accessPass;
 					console.log(`🔍 DEBUG: App "${app.name}" accessPass:`, JSON.stringify(accessPass, null, 2));
 					
