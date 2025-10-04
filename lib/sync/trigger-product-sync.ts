@@ -1,6 +1,6 @@
 import { db } from "@/lib/supabase/db-server";
 import { resources, users, experiences } from "@/lib/supabase/schema";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, sql } from "drizzle-orm";
 import { getWhopApiClient } from "@/lib/whop-api-client";
 import { createResource } from "@/lib/actions/resource-actions";
 import { whopSdk } from "@/lib/whop-sdk";
@@ -546,39 +546,55 @@ export async function triggerProductSyncForNewAdmin(
 							const accessPasses = accessPassesResult?.accessPasses || [];
 							console.log(`📋 Found ${accessPasses.length} access passes for app ${app.name}:`, accessPasses.map(ap => ap.id));
 							
-							// For each access pass, find the corresponding resource and add this app name to product_id array
+							// For each access pass, find resources in current experience that have this access pass in their product_id
 							for (const accessPass of accessPasses) {
 								try {
-									// Find the resource that represents this access pass
-									const accessPassResource = await db.select()
-										.from(resources)
-										.where(eq(resources.whopProductId, accessPass.id))
-										.limit(1);
+									console.log(`🔍 Looking for resources in current experience with product_id containing ${accessPass.id}`);
 									
-									if (accessPassResource.length > 0) {
-										const resource = accessPassResource[0];
-										const currentProductIds = resource.product_id || [];
-										
-										// Add app name to product_id array if not already present
-										if (!currentProductIds.includes(app.name)) {
-											const updatedProductIds = [...currentProductIds, app.name];
+									// Find resources in current experience that have this access pass ID in their productApps array
+									const experienceResources = await db.select()
+										.from(resources)
+										.where(
+											and(
+												eq(resources.experienceId, experienceId),
+												// Check if productApps array contains the access pass ID
+												// This is a JSONB contains query
+												sql`${resources.productApps} @> ${JSON.stringify([accessPass.id])}`
+											)
+										);
+									
+									console.log(`📋 Found ${experienceResources.length} resources in current experience with product_id containing ${accessPass.id}`);
+									
+									// For each matching resource, add the app name to productApps array
+									for (const resource of experienceResources) {
+										try {
+											const currentProductApps = resource.productApps || [];
 											
-											await db.update(resources)
-												.set({
-													product_id: updatedProductIds,
-													updatedAt: new Date()
-												})
-												.where(eq(resources.id, resource.id));
-											
-											console.log(`✅ Added "${app.name}" to access pass resource ${resource.name} (${accessPass.id})`);
-										} else {
-											console.log(`ℹ️ App "${app.name}" already in access pass resource ${resource.name}`);
+											// Add app name to productApps array if not already present
+											if (!currentProductApps.includes(app.name)) {
+												const updatedProductApps = [...currentProductApps, app.name];
+												
+												await db.update(resources)
+													.set({
+														productApps: updatedProductApps,
+														updatedAt: new Date()
+													})
+													.where(eq(resources.id, resource.id));
+												
+												console.log(`✅ Added "${app.name}" to productApps for resource ${resource.name} (access pass: ${accessPass.id})`);
+											} else {
+												console.log(`ℹ️ App "${app.name}" already in productApps for resource ${resource.name}`);
+											}
+										} catch (error) {
+											console.error(`❌ Error updating productApps for resource ${resource.id}:`, error);
 										}
-									} else {
-										console.log(`⚠️ No resource found for access pass ${accessPass.id} (${accessPass.title || 'Unknown'})`);
+									}
+									
+									if (experienceResources.length === 0) {
+										console.log(`⚠️ No resources found in current experience with product_id containing ${accessPass.id}`);
 									}
 								} catch (error) {
-									console.error(`❌ Error updating access pass resource for ${accessPass.id}:`, error);
+									console.error(`❌ Error finding resources for access pass ${accessPass.id}:`, error);
 								}
 							}
 						} catch (error) {
