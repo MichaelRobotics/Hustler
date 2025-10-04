@@ -403,15 +403,26 @@ export class WhopApiClient {
       
       if (accessPassPlans.length > 0) {
         accessPassPlans.forEach(plan => {
-          const price = plan.rawInitialPrice || 0;
-          if (price < minPrice) {
-            minPrice = price;
+          const initialPrice = plan.rawInitialPrice || 0;
+          const renewalPrice = plan.rawRenewalPrice || 0;
+          
+          // For pricing display, use the minimum price (what user pays upfront)
+          const planPrice = Math.min(initialPrice, renewalPrice);
+          
+          if (planPrice < minPrice) {
+            minPrice = planPrice;
             currency = plan.baseCurrency || 'usd';
           }
         });
       }
       
-      const isFree = minPrice === 0 || minPrice === Infinity;
+      // A product is free only if BOTH initial AND renewal prices are 0
+      // If either price > 0, it's considered a paid product
+      const hasPaidPlans = accessPassPlans.some(plan => 
+        (plan.rawInitialPrice || 0) > 0 || (plan.rawRenewalPrice || 0) > 0
+      );
+      
+      const isFree = !hasPaidPlans && (minPrice === 0 || minPrice === Infinity);
       const price = isFree ? 0 : minPrice;
       
       // Generate URLs
