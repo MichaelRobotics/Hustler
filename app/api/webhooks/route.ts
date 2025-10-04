@@ -140,12 +140,14 @@ async function handleUserJoinEventWithCompanyFallback(
 	try {
 		console.log(`Company buyer ID provided: ${company_buyer_id}, getting company members...`);
 
-		// Get company authorized users (includes owners and admins)
+		// Try multiple approaches to find the company owner
+		console.log(`🔍 Attempting to find company owner for ${company_buyer_id}...`);
+
+		// Approach 1: Get company authorized users (explicitly added team members)
 		const companyAuthorizedUsers = await whopSdk.companies.listAuthorizedUsers({
 			companyId: company_buyer_id
 		});
 
-		// Debug: Log all authorized users and their roles
 		console.log(`🔍 Company authorized users for ${company_buyer_id}:`, {
 			totalUsers: companyAuthorizedUsers?.authorizedUsers?.length || 0,
 			users: companyAuthorizedUsers?.authorizedUsers?.map(user => ({
@@ -156,40 +158,84 @@ async function handleUserJoinEventWithCompanyFallback(
 			}))
 		});
 
-		// Handle empty companies (no authorized users)
-		if (!companyAuthorizedUsers?.authorizedUsers || companyAuthorizedUsers.authorizedUsers.length === 0) {
-			console.log(`⚠️ Company ${company_buyer_id} has no authorized users - this is a valid scenario for company purchases`);
-			console.log(`📝 Company purchase processed but no user credits added (company has no authorized users to credit)`);
-			return;
-		}
+		// Approach 2: Get company members (includes customers and members)
+		const companyMembers = await whopSdk.companies.listMembers({
+			companyId: company_buyer_id
+		});
 
-		// Find the owner (only owner can make company purchases)
+		console.log(`🔍 Company members for ${company_buyer_id}:`, {
+			totalMembers: companyMembers?.members?.nodes?.length || 0,
+			members: companyMembers?.members?.nodes?.map(member => ({
+				id: member?.id,
+				accessLevel: member?.accessLevel,
+				status: member?.status,
+				hasUser: !!member?.user,
+				userId: member?.user?.id
+			}))
+		});
+
+		// Approach 3: Get company info to see if we can find owner there
+		const companyInfo = await whopSdk.companies.getCompany({
+			companyId: company_buyer_id
+		});
+
+		console.log(`🔍 Company info for ${company_buyer_id}:`, {
+			id: companyInfo?.id,
+			title: companyInfo?.title
+		});
+
+		// Try to find owner from authorized users first
 		const ownerUser = companyAuthorizedUsers?.authorizedUsers?.find(user => 
 			user?.role === 'owner'
 		);
 
 		if (ownerUser?.userId) {
-			console.log(`✅ Found owner user: ${ownerUser.userId} (${ownerUser.name})`);
+			console.log(`✅ Found owner user from authorized users: ${ownerUser.userId} (${ownerUser.name})`);
 			await handleUserJoinEvent(ownerUser.userId, product_id, webhookData, membership_id);
-		} else {
-			// Fallback: Try to find any admin user
-			const adminUser = companyAuthorizedUsers?.authorizedUsers?.find(user => 
-				user?.role === 'admin'
-			);
-			
-			if (adminUser?.userId) {
-				console.log(`⚠️ No owner found, using fallback admin: ${adminUser.userId} (${adminUser.name}) with role: ${adminUser.role}`);
-				await handleUserJoinEvent(adminUser.userId, product_id, webhookData, membership_id);
-			} else {
-				console.error(`❌ No owner or admin found for company ${company_buyer_id} - cannot process company purchase`);
-				console.error(`Available authorized users:`, companyAuthorizedUsers?.authorizedUsers?.map(u => ({
-					id: u?.id,
-					userId: u?.userId,
-					role: u?.role,
-					name: u?.name
-				})));
-			}
+			return;
 		}
+
+		// Try to find admin from authorized users
+		const adminUser = companyAuthorizedUsers?.authorizedUsers?.find(user => 
+			user?.role === 'admin'
+		);
+
+		if (adminUser?.userId) {
+			console.log(`⚠️ No owner found, using admin from authorized users: ${adminUser.userId} (${adminUser.name})`);
+			await handleUserJoinEvent(adminUser.userId, product_id, webhookData, membership_id);
+			return;
+		}
+
+		// Try to find admin from company members
+		const adminMember = companyMembers?.members?.nodes?.find(member => 
+			member?.accessLevel === 'admin' && member?.user
+		);
+
+		if (adminMember?.user?.id) {
+			console.log(`⚠️ No owner found in authorized users, using admin from members: ${adminMember.user.id} (${adminMember.user.name})`);
+			await handleUserJoinEvent(adminMember.user.id, product_id, webhookData, membership_id);
+			return;
+		}
+
+		// Try to find any member with a user
+		const anyMemberWithUser = companyMembers?.members?.nodes?.find(member => 
+			member?.user && member?.accessLevel !== 'no_access'
+		);
+
+		if (anyMemberWithUser?.user?.id) {
+			console.log(`⚠️ No admin found, using any member with user: ${anyMemberWithUser.user.id} (${anyMemberWithUser.user.name}) with access level: ${anyMemberWithUser.accessLevel}`);
+			await handleUserJoinEvent(anyMemberWithUser.user.id, product_id, webhookData, membership_id);
+			return;
+		}
+
+		// If we get here, we couldn't find any user
+		console.log(`⚠️ Company ${company_buyer_id} has no users we can identify - this is a valid scenario for company purchases`);
+		console.log(`📝 Company purchase processed but no user credits added (company has no identifiable users to credit)`);
+		console.log(`Available data:`, {
+			authorizedUsers: companyAuthorizedUsers?.authorizedUsers?.length || 0,
+			members: companyMembers?.members?.nodes?.length || 0,
+			companyInfo: !!companyInfo
+		});
 
 	} catch (error) {
 		console.error(`Error handling company_buyer_id ${company_buyer_id}:`, error);
