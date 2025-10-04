@@ -400,12 +400,24 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Get app category from Whop SDK
 				try {
+					console.log(`🔍 DEBUG: Calling getApp for app "${app.name}" (${app.id}) in company ${companyId}`);
+					
+					// Use the app.id directly (it's already the correct app ID from listExperiences)
 					const appResult = await whopSdk.apps.getApp({
 						appId: app.id,
 						companyId: companyId
 					});
 					
 					console.log(`🔍 DEBUG: App "${app.name}" getApp result:`, JSON.stringify(appResult, null, 2));
+					
+					// Check if the API call returned null (failed)
+					if (!appResult) {
+						console.log(`❌ getApp returned null for app "${app.name}" - API call failed`);
+						app.category = classifyAppByName(app.name);
+						console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
+						availableApps.push(app);
+						continue;
+					}
 					
 					// Check if accessPass exists and has marketplaceCategory
 					const accessPass = appResult?.app?.accessPass;
@@ -416,18 +428,17 @@ export async function triggerProductSyncForNewAdmin(
 						console.log(`📱 App "${app.name}" category from marketplace: ${app.category}`);
 						availableApps.push(app);
 					} else {
-						console.log(`⚠️ App "${app.name}" has no marketplace category, skipping`);
-						console.log(`🔍 DEBUG: accessPass exists: ${!!accessPass}`);
-						console.log(`🔍 DEBUG: marketplaceCategory exists: ${!!(accessPass && accessPass.marketplaceCategory)}`);
-						if (accessPass) {
-							console.log(`🔍 DEBUG: accessPass keys:`, Object.keys(accessPass));
-						}
-						continue;
+						console.log(`⚠️ App "${app.name}" has no marketplace category, using name-based classification`);
+						app.category = classifyAppByName(app.name);
+						console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
+						availableApps.push(app);
 					}
 				} catch (error) {
-					console.log(`⚠️ Error getting app category for "${app.name}":`, error);
-					console.log(`⚠️ App "${app.name}" has no marketplace category, skipping`);
-					continue;
+					console.log(`❌ Error getting app category for "${app.name}":`, error);
+					console.log(`🔍 DEBUG: Using name-based classification as fallback`);
+					app.category = classifyAppByName(app.name);
+					console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
+					availableApps.push(app);
 				}
 			}
 			
