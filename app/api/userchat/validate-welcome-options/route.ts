@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { resources } from "@/lib/supabase/schema";
+import { resources, experiences } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import {
   type AuthContext,
@@ -40,11 +40,21 @@ async function validateWelcomeOptionsHandler(
 
     console.log(`[validate-welcome-options] Validating options for conversation ${conversationId} with productId ${whopProductId}`);
 
+    // Get the experience record to get the UUID
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, experienceId),
+    });
+
+    if (!experience) {
+      console.warn(`[validate-welcome-options] No experience found with whopExperienceId: ${experienceId} - returning all options`);
+      return NextResponse.json({ success: true, filteredOptions: options });
+    }
+
     // Find the resource that matches the conversation's whop_product_id
     const matchingResource = await db.query.resources.findFirst({
       where: and(
         eq(resources.whopProductId, whopProductId),
-        eq(resources.experienceId, experienceId)
+        eq(resources.experienceId, experience.id)
       ),
       columns: {
         id: true,
