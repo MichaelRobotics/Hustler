@@ -530,93 +530,6 @@ export async function triggerProductSyncForNewAdmin(
 						
 						console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
 						
-						// Get access passes for this app and update related resources
-						try {
-							if (!app.experienceId) {
-								console.log(`⚠️ App "${app.name}" has no experienceId, skipping access pass lookup`);
-								return;
-							}
-							
-							console.log(`🔍 Getting access passes for app: ${app.name} (experienceId: ${app.experienceId})`);
-							
-							const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
-								experienceId: app.experienceId
-							});
-							
-							const accessPasses = accessPassesResult?.accessPasses || [];
-							console.log(`📋 Found ${accessPasses.length} access passes for app ${app.name}:`, accessPasses.map(ap => ap.id));
-							
-							// Get all resources in current experience and find matches with access passes
-							try {
-								console.log(`🔍 Getting all resources in current experience to match with access passes`);
-								
-								// Get all resources in current experience
-								const allExperienceResources = await db.select()
-									.from(resources)
-									.where(eq(resources.experienceId, experienceId));
-								
-								console.log(`📋 Found ${allExperienceResources.length} total resources in current experience`);
-								
-								// Find the resource for this FREE app (whopProductId = app.id)
-								console.log(`🔍 Looking for FREE app resource with whopProductId = ${app.id}`);
-								
-								const appResource = allExperienceResources.find(
-									(resource: any) => resource.whopProductId === app.id
-								);
-								
-								if (appResource) {
-									console.log(`📋 Found FREE app resource: ${appResource.name}`);
-									
-									// For each access pass, find resources that match those access pass IDs
-									for (const accessPass of accessPasses) {
-										console.log(`🔍 Looking for resources matching access pass ${accessPass.id}`);
-										
-										// Find resources that have this access pass as their whopProductId
-										const matchingResources = allExperienceResources.filter(
-											(resource: any) => resource.whopProductId === accessPass.id
-										);
-										
-										console.log(`📋 Found ${matchingResources.length} resources matching access pass ${accessPass.id}`);
-										
-										// For each matching resource, add the app name to productApps array
-										for (const resource of matchingResources) {
-											try {
-												const currentProductApps = resource.productApps || [];
-												
-												// Add app name to productApps array if not already present
-												if (!currentProductApps.includes(app.name)) {
-													const updatedProductApps = [...currentProductApps, app.name];
-													
-													await db.update(resources)
-														.set({
-															productApps: updatedProductApps,
-															updatedAt: new Date()
-														})
-														.where(eq(resources.id, resource.id));
-													
-													console.log(`✅ Added app "${app.name}" to productApps for resource ${resource.name} (access pass: ${accessPass.id})`);
-												} else {
-													console.log(`ℹ️ App "${app.name}" already in productApps for resource ${resource.name}`);
-												}
-											} catch (error) {
-												console.error(`❌ Error updating productApps for resource ${resource.id}:`, error);
-											}
-										}
-										
-										if (matchingResources.length === 0) {
-											console.log(`⚠️ No resources found matching access pass ${accessPass.id}`);
-										}
-									}
-								} else {
-									console.log(`⚠️ No FREE app resource found with whopProductId = ${app.id}`);
-								}
-							} catch (error) {
-								console.error(`❌ Error getting resources for current experience:`, error);
-							}
-						} catch (error) {
-							console.error(`❌ Error getting access passes for app ${app.name}:`, error);
-						}
-						
 						successCount++;
 						syncState.successCounts.freeResources++;
 					} catch (error) {
@@ -650,6 +563,110 @@ export async function triggerProductSyncForNewAdmin(
 			}
 			
 			console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
+			
+			// Efficiently process access passes for all selected FREE apps
+			console.log(`🔍 Processing access passes for ${selectedApps.length} FREE apps efficiently...`);
+			
+			// Get all resources in current experience once (instead of per app)
+			const allExperienceResources = await db.select()
+				.from(resources)
+				.where(eq(resources.experienceId, experienceId));
+			
+			console.log(`📋 Found ${allExperienceResources.length} total resources in current experience`);
+			
+			// Process all apps in parallel for access passes
+			const accessPassPromises = selectedApps.map(async (app) => {
+				try {
+					if (!app.experienceId) {
+						console.log(`⚠️ App "${app.name}" has no experienceId, skipping access pass lookup`);
+						return { app, accessPasses: [], appResource: null };
+					}
+					
+					console.log(`🔍 Getting access passes for app: ${app.name} (experienceId: ${app.experienceId})`);
+					
+					// Get access passes for this app's experience
+					const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
+						experienceId: app.experienceId
+					});
+					
+					const accessPasses = accessPassesResult?.accessPasses || [];
+					console.log(`📋 Found ${accessPasses.length} access passes for app ${app.name}:`, accessPasses.map(ap => ap.id));
+					
+					return {
+						app,
+						accessPasses,
+						appResource: allExperienceResources.find((resource: any) => resource.whopProductId === app.id)
+					};
+				} catch (error) {
+					console.error(`❌ Error getting access passes for app ${app.name}:`, error);
+					return { app, accessPasses: [], appResource: null };
+				}
+			});
+			
+			// Wait for all access pass queries to complete
+			const appAccessPassResults = await Promise.all(accessPassPromises);
+			
+			// Now process all matches efficiently
+			const updatePromises: Promise<void>[] = [];
+			
+			for (const { app, accessPasses, appResource } of appAccessPassResults) {
+				if (!appResource) {
+					console.log(`⚠️ No FREE app resource found with whopProductId = ${app.id}`);
+					continue;
+				}
+				
+				console.log(`📋 Found FREE app resource: ${appResource.name}`);
+				
+				// For each access pass, find resources that match those access pass IDs
+				for (const accessPass of accessPasses) {
+					console.log(`🔍 Looking for resources matching access pass ${accessPass.id}`);
+					
+					// Find resources that have this access pass as their whopProductId
+					const matchingResources = allExperienceResources.filter(
+						(resource: any) => resource.whopProductId === accessPass.id
+					);
+					
+					console.log(`📋 Found ${matchingResources.length} resources matching access pass ${accessPass.id}`);
+					
+					// For each matching resource, add the app name to productApps array
+					for (const resource of matchingResources) {
+						const currentProductApps = resource.productApps || [];
+						
+						// Add app name to productApps array if not already present
+						if (!currentProductApps.includes(app.name)) {
+							const updatedProductApps = [...currentProductApps, app.name];
+							
+							updatePromises.push(
+								db.update(resources)
+									.set({
+										productApps: updatedProductApps,
+										updatedAt: new Date()
+									})
+									.where(eq(resources.id, resource.id))
+									.then(() => {
+										console.log(`✅ Added app "${app.name}" to productApps for resource ${resource.name} (access pass: ${accessPass.id})`);
+									})
+									.catch((error: any) => {
+										console.error(`❌ Error updating productApps for resource ${resource.id}:`, error);
+									})
+							);
+						} else {
+							console.log(`ℹ️ App "${app.name}" already in productApps for resource ${resource.name}`);
+						}
+					}
+					
+					if (matchingResources.length === 0) {
+						console.log(`⚠️ No resources found matching access pass ${accessPass.id}`);
+					}
+				}
+			}
+			
+			// Execute all database updates in parallel
+			if (updatePromises.length > 0) {
+				console.log(`🔄 Executing ${updatePromises.length} database updates in parallel...`);
+				await Promise.all(updatePromises);
+			}
+			
 			updateProgress("free_resources_completed", true);
 		} else {
 			console.log(`⚠️ No apps found with valid categories`);
