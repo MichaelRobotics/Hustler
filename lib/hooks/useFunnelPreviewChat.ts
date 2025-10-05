@@ -9,6 +9,7 @@ export const useFunnelPreviewChat = (
 	funnelFlow: FunnelFlow | null,
 	selectedOffer?: string | null,
 	conversation?: any,
+	experienceId?: string,
 ) => {
 	const [history, setHistory] = useState<ChatMessage[]>([]);
 	const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
@@ -196,17 +197,14 @@ export const useFunnelPreviewChat = (
 		}
 
 		try {
-			// Call the validation API to get filtered options
-			const response = await fetch('/api/userchat/validate-welcome-options', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					conversationId: conversation.id,
-					whopProductId: conversation.whopProductId,
-					options: options,
-					funnelFlow: funnelFlow
-				})
-			});
+			// Use apiPost to include proper authentication headers
+			const { apiPost } = await import('../utils/api-client');
+			const response = await apiPost('/api/userchat/validate-welcome-options', {
+				conversationId: conversation.id,
+				whopProductId: conversation.whopProductId,
+				options: options,
+				funnelFlow: funnelFlow
+			}, experienceId);
 
 			if (response.ok) {
 				const result = await response.json();

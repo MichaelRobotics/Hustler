@@ -278,7 +278,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		handleCustomInput: previewHandleCustomInput,
 		options: filteredOptions,
 		isValidatingOptions,
-	} = useFunnelPreviewChat(funnelFlow, undefined, conversation);
+	} = useFunnelPreviewChat(funnelFlow, undefined, conversation, experienceId);
 
 	// Get options for current block from funnel flow
 	const currentBlock = currentBlockId ? funnelFlow?.blocks[currentBlockId] : null;
