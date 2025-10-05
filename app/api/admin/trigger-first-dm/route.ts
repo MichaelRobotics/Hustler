@@ -70,19 +70,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 3: Find a live (deployed) funnel for this experience and product - REQUIRED
+    // Step 3: Find a live (deployed) funnel for this experience - REQUIRED
     const liveFunnel = await db.query.funnels.findFirst({
       where: and(
         eq(funnels.experienceId, experience.id),
-        productId ? eq(funnels.whopProductId, productId) : undefined, // Product-specific if provided
         eq(funnels.isDeployed, true) // Only use deployed funnels for admin DM triggering
       ),
     });
 
     if (!liveFunnel) {
-      const errorMessage = productId 
-        ? `No deployed funnel found for experience ${experienceId} and product ${productId}. Please deploy a funnel for this product first.`
-        : `No deployed funnel found for experience ${experienceId}. Please deploy a funnel first.`;
+      const errorMessage = `No deployed funnel found for experience ${experienceId}. Please deploy a funnel first.`;
         
       return NextResponse.json(
         { 
@@ -207,6 +204,7 @@ export async function POST(request: NextRequest) {
         experienceId: experience.id,
         funnelId: liveFunnel.id,
         whopUserId: whopUserId, // Direct Whop user ID for faster lookups
+        whopProductId: productId, // Include product ID for tracking
         status: "active",
         currentBlockId: funnelFlow.startBlockId,
         userPath: [funnelFlow.startBlockId],

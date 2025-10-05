@@ -573,23 +573,20 @@ export async function deleteFunnel(
 }
 
 /**
- * Check if any other funnel is currently deployed for the same product
+ * Check if any other funnel is currently deployed for the experience
  */
 export async function checkForOtherLiveFunnels(
 	user: AuthenticatedUser,
-	productId: string,
 	excludeFunnelId?: string,
 ): Promise<{ hasLiveFunnel: boolean; liveFunnelName?: string }> {
 	try {
 		console.log(`🔍 [DATABASE QUERY] Checking for live funnels with:`);
 		console.log(`🔍 [DATABASE QUERY] - experienceId: ${user.experience.id}`);
-		console.log(`🔍 [DATABASE QUERY] - whopProductId: ${productId}`);
 		console.log(`🔍 [DATABASE QUERY] - excludeFunnelId: ${excludeFunnelId}`);
 		
 		const liveFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.experienceId, user.experience.id),
-				eq(funnels.whopProductId, productId), // 🔑 KEY: Check same product
 				eq(funnels.isDeployed, true),
 				excludeFunnelId ? sql`${funnels.id} != ${excludeFunnelId}` : sql`1=1`,
 			),
@@ -611,37 +608,6 @@ export async function checkForOtherLiveFunnels(
 	}
 }
 
-/**
- * Check for live funnels across all products for an experience
- */
-export async function checkForAnyLiveFunnels(
-	user: AuthenticatedUser,
-	excludeFunnelId?: string,
-): Promise<{ hasLiveFunnel: boolean; liveFunnelName?: string; productId?: string }> {
-	try {
-		const liveFunnel = await db.query.funnels.findFirst({
-			where: and(
-				eq(funnels.experienceId, user.experience.id),
-				eq(funnels.isDeployed, true),
-				excludeFunnelId ? sql`${funnels.id} != ${excludeFunnelId}` : sql`1=1`,
-			),
-			columns: {
-				id: true,
-				name: true,
-				whopProductId: true,
-			},
-		});
-
-		return {
-			hasLiveFunnel: !!liveFunnel,
-			liveFunnelName: liveFunnel?.name,
-			productId: liveFunnel?.whopProductId || undefined,
-		};
-	} catch (error) {
-		console.error("Error checking for live funnels:", error);
-		return { hasLiveFunnel: false };
-	}
-}
 
 /**
  * Deploy funnel
@@ -673,12 +639,10 @@ export async function deployFunnel(
 			throw new Error("Cannot deploy funnel without a flow");
 		}
 
-		// Check if any other funnel is currently live for the same product
-		if (existingFunnel.whopProductId) {
-			const liveFunnelCheck = await checkForOtherLiveFunnels(user, existingFunnel.whopProductId, funnelId);
-			if (liveFunnelCheck.hasLiveFunnel) {
-				throw new Error(`Funnel "${liveFunnelCheck.liveFunnelName}" is currently live for this product.`);
-			}
+		// Check if any other funnel is currently live for this experience
+		const liveFunnelCheck = await checkForOtherLiveFunnels(user, funnelId);
+		if (liveFunnelCheck.hasLiveFunnel) {
+			throw new Error(`Funnel "${liveFunnelCheck.liveFunnelName}" is currently live for this experience.`);
 		}
 
 		// Update funnel deployment status

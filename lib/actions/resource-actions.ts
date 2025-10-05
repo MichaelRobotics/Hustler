@@ -13,6 +13,7 @@ export interface CreateResourceInput {
 	code?: string;
 	description?: string;
 	whopProductId?: string; // For MY_PRODUCTS sync
+	productApps?: string[]; // Array of app names associated with this product
 }
 
 export interface UpdateResourceInput {
@@ -70,6 +71,22 @@ export async function createResource(
 	input: CreateResourceInput,
 ): Promise<ResourceWithFunnels> {
 	try {
+		// Trim whitespace from name
+		const trimmedName = input.name.trim();
+		
+		// Check for duplicate name within the same experience
+		const existingResourceWithSameName = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.experienceId, user.experience.id),
+				eq(resources.name, trimmedName)
+			),
+		});
+
+		if (existingResourceWithSameName) {
+			console.log(`⚠️ Skipping resource creation: Resource with name "${trimmedName}" already exists in experience ${user.experience.id}`);
+			throw new Error(`Resource with name "${trimmedName}" already exists in this experience`);
+		}
+
 		// Check global product limit before creating
 		const existingResourcesCount = await db
 			.select({ count: count() })
@@ -102,13 +119,14 @@ export async function createResource(
 			.values({
 				experienceId: user.experience.id,
 				userId: user.id,
-				name: input.name,
+				name: trimmedName,
 				type: input.type,
 				category: input.category,
 				link: input.link,
 				code: input.code || null,
 				description: input.description || null,
 				whopProductId: input.whopProductId || null,
+				productApps: input.productApps || null,
 			})
 			.returning();
 

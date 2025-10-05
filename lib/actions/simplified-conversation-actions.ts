@@ -111,6 +111,7 @@ export async function createConversation(
 	whopUserId: string,
 	startBlockId: string,
 	membershipId?: string,
+	whopProductId?: string,
 ): Promise<string> {
 	try {
 		console.log(`[CREATE-CONVERSATION] Starting conversation creation for whopUserId ${whopUserId} in experience ${experienceId}`);
@@ -146,12 +147,13 @@ export async function createConversation(
 		}
 
 		// Create new conversation
-		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}`);
+		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}, whopProductId ${whopProductId}`);
 		const [newConversation] = await db.insert(conversations).values({
 			experienceId,
 			funnelId,
 			whopUserId,
 			membershipId,
+			whopProductId,
 			status: "active",
 			currentBlockId: startBlockId,
 			userPath: [startBlockId],

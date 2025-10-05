@@ -321,16 +321,23 @@ export async function triggerProductSyncForNewAdmin(
 							console.log(`✅ Using fallback checkout link: ${trackingUrl}`);
 						}
 						
+						// For FREE discovery products, add the product name to its own product_apps array
+						const productApps = productCategory === "FREE_VALUE" ? [product.title.trim()] : undefined;
+						if (productApps) {
+							console.log(`🔗 Adding product name "${product.title.trim()}" to its own product_apps array for FREE discovery product`);
+						}
+						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
-								name: product.title,
+								name: product.title.trim(),
 								type: "MY_PRODUCTS",
 								category: productCategory,
 								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
 								description: product.description,
-								whopProductId: product.id
+								whopProductId: product.id,
+								productApps: productApps
 							}),
-							`createResource-${productCategory}-${product.title}`
+							`createResource-${productCategory}-${product.title.trim()}`
 						);
 						
 						console.log(`✅ Created ${productCategory} resource for product: ${product.title}`);
@@ -341,6 +348,12 @@ export async function triggerProductSyncForNewAdmin(
 							syncState.successCounts.paidResources++;
 						}
 					} catch (error) {
+						// Handle duplicate name errors gracefully
+						if (error instanceof Error && error.message.includes('already exists in this experience')) {
+							console.log(`⚠️ Skipping ${productCategory} product "${product.title}" - already exists in experience`);
+							return null; // Skip this product, don't count as error
+						}
+						
 						console.error(`❌ Error creating ${productCategory} resource for product ${product.id}:`, error);
 						errorCount++;
 						return null;
@@ -513,17 +526,17 @@ export async function triggerProductSyncForNewAdmin(
 						
 						const resource = await retryDatabaseOperation(
 							() => {
-								console.log(`🔍 Executing createResource for ${app.name}...`);
+								console.log(`🔍 Executing createResource for ${app.name.trim()}...`);
 								return createResource({ id: userId, experience: { id: experienceId } } as any, {
-									name: app.name,
+									name: app.name.trim(),
 									type: "MY_PRODUCTS",
 									category: "FREE_VALUE",
 									link: directUrl,
-									description: app.description || `Free access to ${app.name}`,
+									description: app.description || `Free access to ${app.name.trim()}`,
 									whopProductId: app.id
 								});
 							},
-							`createResource-FREE-${app.name}`,
+							`createResource-FREE-${app.name.trim()}`,
 							3, // maxRetries
 							15000 // 15 second timeout
 						);
@@ -533,6 +546,12 @@ export async function triggerProductSyncForNewAdmin(
 						successCount++;
 						syncState.successCounts.freeResources++;
 					} catch (error) {
+						// Handle duplicate name errors gracefully
+						if (error instanceof Error && error.message.includes('already exists in this experience')) {
+							console.log(`⚠️ Skipping FREE app "${app.name}" - already exists in experience`);
+							return null; // Skip this app, don't count as error
+						}
+						
 						console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
 						errorCount++;
 						return null;

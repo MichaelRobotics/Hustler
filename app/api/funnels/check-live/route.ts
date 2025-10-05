@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { checkForAnyLiveFunnels, checkForOtherLiveFunnels } from "../../../../lib/actions/funnel-actions";
+import { checkForOtherLiveFunnels } from "../../../../lib/actions/funnel-actions";
 import {
 	createErrorResponse,
 	createSuccessResponse,
@@ -55,16 +55,10 @@ async function checkLiveFunnelsHandler(request: NextRequest, context: AuthContex
 		console.log(`🔍 [BACKEND API] User ID: ${userContext.user.id}`);
 		console.log(`🔍 [BACKEND API] Access level: ${userContext.user.accessLevel}`);
 		
-		const liveFunnelCheck = productId 
-			? await checkForOtherLiveFunnels(
-				userContext.user,
-				productId,
-				excludeFunnelId || undefined,
-			)
-			: await checkForAnyLiveFunnels(
-				userContext.user,
-				excludeFunnelId || undefined,
-			);
+		const liveFunnelCheck = await checkForOtherLiveFunnels(
+			userContext.user,
+			excludeFunnelId || undefined,
+		);
 			
 		console.log(`🔍 [BACKEND API] Live funnel check result:`, JSON.stringify(liveFunnelCheck, null, 2));
 

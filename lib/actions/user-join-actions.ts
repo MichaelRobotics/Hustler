@@ -295,11 +295,10 @@ export async function handleUserJoinEvent(
 			console.log(`User ${userId} already exists in experience ${experience.id}`);
 		}
 
-		// Step 3: Find deployed funnel for this experience AND product
+		// Step 3: Find deployed funnel for this experience (no product filtering)
 		const liveFunnel = await db.query.funnels.findFirst({
 			where: and(
 				eq(funnels.experienceId, experience.id),
-				eq(funnels.whopProductId, productId),
 				eq(funnels.isDeployed, true)
 			),
 			columns: {
@@ -311,7 +310,7 @@ export async function handleUserJoinEvent(
 		});
 
 		if (!liveFunnel || !liveFunnel.flow) {
-			console.log(`✅ Correctly handled: No deployed funnel found for experience ${experience.id} and product ${productId} - user joined but no DM needed`);
+			console.log(`✅ Correctly handled: No deployed funnel found for experience ${experience.id} - user joined but no DM needed`);
 			return;
 		}
 
@@ -380,6 +379,7 @@ export async function handleUserJoinEvent(
 			userId, // Use actual whopUserId
 			liveFunnel.flow.startBlockId, // This should be TRANSITION block
 			membershipId, // Pass membershipId separately
+			productId, // Pass whop_product_id
 		);
 		console.log(`[USER-JOIN] Created conversation ${conversationId} for user ${userId}`);
 
