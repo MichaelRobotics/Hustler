@@ -244,6 +244,15 @@ export const useFunnelPreviewChat = (
 	// Validate options when they change
 	useEffect(() => {
 		const validateAndSetOptions = async () => {
+			console.log('[Frontend] Options validation check:', {
+				hasOptions: !!options && options.length > 0,
+				optionsCount: options?.length || 0,
+				hasConversation: !!conversation,
+				hasWhopProductId: !!conversation?.whopProductId,
+				whopProductId: conversation?.whopProductId,
+				currentBlockId: currentBlock?.id
+			});
+
 			if (!options || options.length === 0) {
 				setFilteredOptions([]);
 				return;
@@ -254,16 +263,29 @@ export const useFunnelPreviewChat = (
 				stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlock?.id || '')
 			);
 
+			console.log('[Frontend] WELCOME stage check:', {
+				isWelcomeBlock,
+				hasWhopProductId: !!conversation?.whopProductId,
+				willValidate: isWelcomeBlock && conversation?.whopProductId
+			});
+
 			if (!isWelcomeBlock || !conversation?.whopProductId) {
 				// Not a WELCOME block or no conversation - show all options
+				console.log('[Frontend] Skipping validation - not WELCOME or no whopProductId');
 				setFilteredOptions(options);
 				return;
 			}
 
 			// Validate options for WELCOME stage
+			console.log('[Frontend] Starting option validation...');
 			setIsValidatingOptions(true);
 			try {
 				const validatedOptions = await validateOptionsAgainstProduct(options);
+				console.log('[Frontend] Validation result:', {
+					originalCount: options.length,
+					filteredCount: validatedOptions.length,
+					filteredOptions: validatedOptions.map(opt => opt.text)
+				});
 				setFilteredOptions(validatedOptions);
 			} catch (error) {
 				console.warn('[Frontend] Option validation failed, showing all options:', error);

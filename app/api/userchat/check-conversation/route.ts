@@ -392,6 +392,7 @@ async function checkConversationHandler(
         id: activeConversation.id,
         currentBlockId: activeConversation.currentBlockId,
         status: activeConversation.status,
+        whopProductId: activeConversation.whopProductId,
         createdAt: activeConversation.createdAt,
         updatedAt: activeConversation.updatedAt,
       },
