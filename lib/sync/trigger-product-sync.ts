@@ -47,19 +47,19 @@ export async function triggerProductSyncForNewAdmin(
 	experienceId: string,
 	companyId: string
 ): Promise<void> {
-		// Enhanced progress tracking
-		const syncState = {
-			startTime: Date.now(),
-			phase: 'initializing',
-			progress: 0,
+	// Enhanced progress tracking
+	const syncState = {
+		startTime: Date.now(),
+		phase: 'initializing',
+		progress: 0,
 			totalSteps: 5,
-			completedSteps: 0,
-			errors: [] as string[],
-			successCounts: {
-				freeResources: 0,
-				paidResources: 0
-			}
-		};
+		completedSteps: 0,
+		errors: [] as string[],
+		successCounts: {
+			freeResources: 0,
+			paidResources: 0
+		}
+	};
 
 	// Enhanced keepalive with progress reporting
 	const globalKeepAlive = setInterval(() => {
@@ -392,61 +392,61 @@ export async function triggerProductSyncForNewAdmin(
 			console.log(`🔍 Found ${installedApps.length} installed apps`);
 			
 			// Filter out current app and get app categories from Whop SDK
-			console.log(`🔍 Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
-			
-			const availableApps: typeof installedApps = [];
-			
-			for (const app of installedApps) {
-				if (!app.experienceId) {
-					console.log(`⚠️ App "${app.name}" has no experienceId, skipping`);
-					continue;
-				}
+				console.log(`🔍 Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
 				
-				// Skip apps that have the same Whop experience ID as the current app
-				if (app.experienceId === currentWhopExperienceId) {
-					console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
-					
-					// Generate and store the app link for the current experience
-					try {
-						const appLink = whopClient.generateAppUrl(app, undefined, true);
-						console.log(`🔗 Generated app link for current experience: ${appLink}`);
-						
-						// Store the link in the experience table
-						await db.update(experiences)
-							.set({
-								link: appLink,
-								updatedAt: new Date()
-							})
-							.where(eq(experiences.id, experienceId));
-						
-						console.log(`✅ Stored app link in experience table: ${appLink}`);
-					} catch (error) {
-						console.error(`❌ Error generating/storing app link for current experience:`, error);
+				const availableApps: typeof installedApps = [];
+				
+				for (const app of installedApps) {
+					if (!app.experienceId) {
+						console.log(`⚠️ App "${app.name}" has no experienceId, skipping`);
+						continue;
 					}
 					
-					continue;
-				}
-				
+					// Skip apps that have the same Whop experience ID as the current app
+					if (app.experienceId === currentWhopExperienceId) {
+						console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
+						
+						// Generate and store the app link for the current experience
+						try {
+							const appLink = whopClient.generateAppUrl(app, undefined, true);
+							console.log(`🔗 Generated app link for current experience: ${appLink}`);
+							
+							// Store the link in the experience table
+							await db.update(experiences)
+								.set({
+									link: appLink,
+									updatedAt: new Date()
+								})
+								.where(eq(experiences.id, experienceId));
+							
+							console.log(`✅ Stored app link in experience table: ${appLink}`);
+						} catch (error) {
+							console.error(`❌ Error generating/storing app link for current experience:`, error);
+						}
+						
+						continue;
+					}
+					
 				// Classify app using name-based keywords
 				app.category = classifyAppByName(app.name);
 				console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
-				availableApps.push(app);
-			}
-			
+						availableApps.push(app);
+				}
+				
 			console.log(`🔍 Found ${availableApps.length} apps with valid categories (excluding current app)`);
-			
+				
 			// Classify apps by categories
-			const classifiedApps = {
+				const classifiedApps = {
 				learn: availableApps.filter(app => app.category === 'learn'),
 				earn: availableApps.filter(app => app.category === 'earn'),
 				community: availableApps.filter(app => app.category === 'community'),
 				other: availableApps.filter(app => app.category === 'other')
-			};
-		
-			console.log(`📊 App classification results:`);
-			console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
-			console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
-			console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
+				};
+			
+				console.log(`📊 App classification results:`);
+				console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
+				console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
+				console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
 			console.log(`  - Other: ${classifiedApps.other.length} apps`);
 			
 			// Calculate remaining FREE slots after FREE discovery products
@@ -496,92 +496,92 @@ export async function triggerProductSyncForNewAdmin(
 		}
 		
 		console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with category-based selection`);
-		
-		if (selectedApps.length > 0) {
-			// Create FREE resources for each selected app (with batching for performance)
-			const batchSize = 10; // Process 10 apps at a time (increased for better performance)
-			let successCount = 0;
-			let errorCount = 0;
 			
-			for (let i = 0; i < selectedApps.length; i += batchSize) {
-				const batch = selectedApps.slice(i, i + batchSize);
-				console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
+			if (selectedApps.length > 0) {
+				// Create FREE resources for each selected app (with batching for performance)
+				const batchSize = 10; // Process 10 apps at a time (increased for better performance)
+				let successCount = 0;
+				let errorCount = 0;
 				
-				// Process batch in parallel with individual error handling and retry logic
-				const batchPromises = batch.map(async (app) => {
-					try {
-						console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
-						// Use app URL with company route and experience ID
-						// FREE apps don't need ref or affiliate parameters
-						const directUrl = whopClient.generateAppUrl(app, undefined, true);
-						
-						console.log(`🔍 Resource data:`, {
-							name: app.name,
-							type: "MY_PRODUCTS",
-							category: "FREE_VALUE",
-							link: directUrl,
-							description: app.description || `Free access to ${app.name}`,
-							whopProductId: app.id
-						});
-						
-						const resource = await retryDatabaseOperation(
-							() => {
+				for (let i = 0; i < selectedApps.length; i += batchSize) {
+					const batch = selectedApps.slice(i, i + batchSize);
+					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
+					
+					// Process batch in parallel with individual error handling and retry logic
+					const batchPromises = batch.map(async (app) => {
+						try {
+							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
+          // Use app URL with company route and experience ID
+          // FREE apps don't need ref or affiliate parameters
+          const directUrl = whopClient.generateAppUrl(app, undefined, true);
+							
+							console.log(`🔍 Resource data:`, {
+								name: app.name,
+								type: "MY_PRODUCTS",
+								category: "FREE_VALUE",
+								link: directUrl,
+								description: app.description || `Free access to ${app.name}`,
+								whopProductId: app.id
+							});
+							
+							const resource = await retryDatabaseOperation(
+								() => {
 								console.log(`🔍 Executing createResource for ${app.name.trim()}...`);
-								return createResource({ id: userId, experience: { id: experienceId } } as any, {
+									return createResource({ id: userId, experience: { id: experienceId } } as any, {
 									name: app.name.trim(),
-									type: "MY_PRODUCTS",
-									category: "FREE_VALUE",
-									link: directUrl,
+						type: "MY_PRODUCTS",
+						category: "FREE_VALUE",
+										link: directUrl,
 									description: app.description || `Free access to ${app.name.trim()}`,
-									whopProductId: app.id
-								});
-							},
+										whopProductId: app.id
+									});
+								},
 							`createResource-FREE-${app.name.trim()}`,
-							3, // maxRetries
-							15000 // 15 second timeout
-						);
+								3, // maxRetries
+								15000 // 15 second timeout
+							);
+							
+							console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
 						
-						console.log(`✅ Created FREE resource for app: ${app.name} (ID: ${resource.id})`);
-						
-						successCount++;
-						syncState.successCounts.freeResources++;
-					} catch (error) {
+							successCount++;
+							syncState.successCounts.freeResources++;
+						} catch (error) {
 						// Handle duplicate name errors gracefully
 						if (error instanceof Error && error.message.includes('already exists in this experience')) {
 							console.log(`⚠️ Skipping FREE app "${app.name}" - already exists in experience`);
 							return null; // Skip this app, don't count as error
 						}
 						
-						console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
-						errorCount++;
-						return null;
-					}
-				});
-				
-				console.log(`🔍 Waiting for ${batch.length} FREE resource creations to complete...`);
-				
-				// Add timeout to entire batch processing
-				const batchTimeout = 60000; // 60 seconds for entire batch
-				const batchResults = await Promise.race([
-					Promise.all(batchPromises),
-					new Promise<null[]>((_, reject) => 
-						setTimeout(() => reject(new Error(`FREE resources batch timeout after ${batchTimeout}ms`)), batchTimeout)
-					)
-				]).catch((error) => {
-					console.error(`❌ FREE resources batch failed:`, error);
-					return new Array(batch.length).fill(null); // Return nulls for failed batch
-				});
-				
-				const successfulResults = batchResults.filter(id => id !== null);
-				console.log(`✅ Completed FREE resources batch: ${successfulResults.length}/${batch.length} successful`);
-				
-				// Small delay between batches to prevent overwhelming the system
+							console.error(`❌ Error creating FREE resource for app ${app.name}:`, error);
+							errorCount++;
+							return null;
+						}
+					});
+					
+					console.log(`🔍 Waiting for ${batch.length} FREE resource creations to complete...`);
+					
+					// Add timeout to entire batch processing
+					const batchTimeout = 60000; // 60 seconds for entire batch
+					const batchResults = await Promise.race([
+						Promise.all(batchPromises),
+						new Promise<null[]>((_, reject) => 
+							setTimeout(() => reject(new Error(`FREE resources batch timeout after ${batchTimeout}ms`)), batchTimeout)
+						)
+					]).catch((error) => {
+						console.error(`❌ FREE resources batch failed:`, error);
+						return new Array(batch.length).fill(null); // Return nulls for failed batch
+					});
+					
+					const successfulResults = batchResults.filter(id => id !== null);
+					console.log(`✅ Completed FREE resources batch: ${successfulResults.length}/${batch.length} successful`);
+					
+					// Small delay between batches to prevent overwhelming the system
 				if (i + batchSize < selectedApps.length) {
-					await new Promise(resolve => setTimeout(resolve, 100));
+						await new Promise(resolve => setTimeout(resolve, 100));
+					}
 				}
-			}
-			
-			console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
+				
+				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
 			
 			// Efficiently process access passes for all selected FREE apps
 			console.log(`🔍 Processing access passes for ${selectedApps.length} FREE apps efficiently...`);
@@ -704,11 +704,11 @@ export async function triggerProductSyncForNewAdmin(
 				await Promise.all(updatePromises);
 			}
 			
-			updateProgress("free_resources_completed", true);
+				updateProgress("free_resources_completed", true);
 		} else {
 			console.log(`⚠️ No apps found with valid categories`);
-			updateProgress("free_resources_skipped", true);
-		}
+				updateProgress("free_resources_skipped", true);
+			}
 		} catch (error) {
 			console.error(`❌ Error fetching installed apps:`, error);
 			syncState.errors.push(`Installed apps fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

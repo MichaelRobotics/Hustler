@@ -405,6 +405,85 @@ const validateAndFixFunnel = (
 };
 
 /**
+ * Validates that the generated funnel only uses provided resources with exceptions for converted resources
+ * @param generatedJson - The generated funnel JSON
+ * @param originalResources - Array of original resources for validation
+ * @param processedResources - Array of processed resources to identify converted ones
+ * @throws {ValidationError} If funnel uses non-existing resources
+ */
+const validateGeneratedFunnelResourcesWithExceptions = (
+	generatedJson: FunnelFlow, 
+	originalResources: Resource[], 
+	processedResources: Resource[]
+): void => {
+	const validResourceNames = new Set(originalResources.map(r => r.name));
+	const validResourceIds = new Set(originalResources.map(r => r.id));
+	
+	// Identify resources that had their category changed for AI display
+	const convertedResources = new Set<string>();
+	processedResources.forEach(processed => {
+		const original = originalResources.find(r => r.id === processed.id);
+		if (original && original.category !== processed.category) {
+			convertedResources.add(processed.name);
+		}
+	});
+	
+	// Check all blocks that have resourceName fields
+	Object.values(generatedJson.blocks).forEach(block => {
+		if (block.resourceName) {
+			// Check if the resourceName exists in our valid resources
+			if (!validResourceNames.has(block.resourceName)) {
+				throw new ValidationError(
+					`Generated funnel uses non-existing resource: "${block.resourceName}". Valid resources: ${Array.from(validResourceNames).join(', ')}`
+				);
+			}
+			
+			// Find the corresponding resource to validate category placement
+			const correspondingResource = originalResources.find(r => r.name === block.resourceName);
+			if (correspondingResource) {
+				// Skip category validation for resources that were converted for AI display
+				if (convertedResources.has(block.resourceName)) {
+					console.log(`⚠️ Skipping category validation for converted resource: "${block.resourceName}"`);
+					return; // Skip category validation for this resource
+				}
+				
+				// Check if the block is in the correct stage based on resource category
+				const isValueDelivery = generatedJson.stages.some(
+					stage => stage.name === "VALUE_DELIVERY" && stage.blockIds.includes(block.id)
+				);
+				const isOffer = generatedJson.stages.some(
+					stage => stage.name === "OFFER" && stage.blockIds.includes(block.id)
+				);
+				
+				if (correspondingResource.category === "FREE_VALUE" && !isValueDelivery) {
+					throw new ValidationError(
+						`FREE_VALUE resource "${block.resourceName}" is incorrectly placed in ${isOffer ? 'OFFER' : 'other'} stage instead of VALUE_DELIVERY`
+					);
+				}
+				
+				if (correspondingResource.category === "PAID" && !isOffer) {
+					throw new ValidationError(
+						`PAID resource "${block.resourceName}" is incorrectly placed in ${isValueDelivery ? 'VALUE_DELIVERY' : 'other'} stage instead of OFFER`
+					);
+				}
+			}
+		}
+	});
+	
+	// Ensure all provided resources are used in the funnel
+	const usedResourceNames = new Set(
+		Object.values(generatedJson.blocks)
+			.filter(block => block.resourceName)
+			.map(block => block.resourceName!)
+	);
+	
+	const unusedResources = originalResources.filter(r => !usedResourceNames.has(r.name));
+	if (unusedResources.length > 0) {
+		console.warn(`⚠️ Some resources were not used in the funnel: ${unusedResources.map(r => r.name).join(', ')}`);
+	}
+};
+
+/**
  * Validates that the generated funnel only uses provided resources
  * @param generatedJson - The generated funnel JSON
  * @param resources - Array of valid resources
@@ -1085,14 +1164,15 @@ export const generateFunnelFlow = async (
 
 			const generatedJson = JSON.parse(textToProcess);
 
-			// Validate and auto-fix the generated funnel
-			const validatedJson = validateAndFixFunnel(generatedJson, resources);
+			// Validate and auto-fix the generated funnel using processed resources
+			const validatedJson = validateAndFixFunnel(generatedJson, processedResources);
 			
 			// Calculate available offers for each block
 			const jsonWithOffers = calculateAvailableOffers(validatedJson);
 			
 			// CRITICAL: Final validation to ensure no non-existing resources are used
-			validateGeneratedFunnelResources(jsonWithOffers, resources);
+			// Use original resources for validation, but skip category checks for converted resources
+			validateGeneratedFunnelResourcesWithExceptions(jsonWithOffers, resources, processedResources);
 			
 			// CRITICAL: Additional check for any imaginary resources that might have slipped through
 			const allResourceNames = Object.values(jsonWithOffers.blocks)
