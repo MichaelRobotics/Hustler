@@ -9,7 +9,6 @@ export const useFunnelPreviewChat = (
 	funnelFlow: FunnelFlow | null,
 	selectedOffer?: string | null,
 	conversation?: any,
-	experienceId?: string,
 ) => {
 	const [history, setHistory] = useState<ChatMessage[]>([]);
 	const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
@@ -186,45 +185,9 @@ export const useFunnelPreviewChat = (
 	}, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
 
 	// Memoize current block to prevent unnecessary re-computations
-	// Use conversation's currentBlockId if available, otherwise use hook's currentBlockId
-	const effectiveCurrentBlockId = conversation?.currentBlockId || currentBlockId;
 	const currentBlock = useMemo(() => {
-		return funnelFlow?.blocks[effectiveCurrentBlockId || ""];
-	}, [funnelFlow, effectiveCurrentBlockId]);
-
-	// Helper function to validate options against conversation's whopProductId
-	const validateOptionsAgainstProduct = useCallback(async (options: FunnelBlockOption[]): Promise<FunnelBlockOption[]> => {
-		if (!conversation?.whopProductId || !funnelFlow) {
-			return options; // No validation if no conversation or product ID
-		}
-
-		try {
-			// Use apiPost to include proper authentication headers
-			const { apiPost } = await import('../utils/api-client');
-			const response = await apiPost('/api/userchat/validate-welcome-options', {
-				conversationId: conversation.id,
-				whopProductId: conversation.whopProductId,
-				options: options,
-				funnelFlow: funnelFlow
-			}, experienceId);
-
-			if (response.ok) {
-				const result = await response.json();
-				if (result.success && result.filteredOptions) {
-					console.log(`[Frontend] Filtered options: ${result.filteredOptions.length}/${options.length} valid`);
-					return result.filteredOptions;
-				}
-			}
-		} catch (error) {
-			console.warn('[Frontend] Option validation failed, showing all options:', error);
-		}
-
-		return options; // Fallback to original options
-	}, [conversation, funnelFlow]);
-
-	// State for filtered options
-	const [filteredOptions, setFilteredOptions] = useState<FunnelBlockOption[]>([]);
-	const [isValidatingOptions, setIsValidatingOptions] = useState(false);
+		return funnelFlow?.blocks[currentBlockId || ""];
+	}, [funnelFlow, currentBlockId]);
 
 	// Memoize options to prevent unnecessary re-computations
 	const options = useMemo(() => {
@@ -241,81 +204,18 @@ export const useFunnelPreviewChat = (
 		return currentBlock.options;
 	}, [currentBlock, funnelFlow]);
 
-	// Validate options when they change - ONLY for WELCOME stage
-	useEffect(() => {
-		const validateAndSetOptions = async () => {
-			console.log('[Frontend] Options validation check:', {
-				hasOptions: !!options && options.length > 0,
-				optionsCount: options?.length || 0,
-				hasConversation: !!conversation,
-				hasWhopProductId: !!conversation?.whopProductId,
-				whopProductId: conversation?.whopProductId,
-				currentBlockId: currentBlock?.id,
-				effectiveCurrentBlockId
-			});
-
-			if (!options || options.length === 0) {
-				setFilteredOptions([]);
-				return;
-			}
-
-			// Check if this is a WELCOME stage block
-			const isWelcomeBlock = funnelFlow?.stages.some(
-				stage => stage.name === "WELCOME" && stage.blockIds.includes(effectiveCurrentBlockId || '')
-			);
-
-			console.log('[Frontend] WELCOME stage check:', {
-				isWelcomeBlock,
-				hasWhopProductId: !!conversation?.whopProductId,
-				willValidate: isWelcomeBlock && conversation?.whopProductId,
-				effectiveCurrentBlockId
-			});
-
-			// Only validate for WELCOME stage blocks with whopProductId
-			if (!isWelcomeBlock || !conversation?.whopProductId) {
-				// Not a WELCOME block or no conversation - show all options without validation
-				console.log('[Frontend] Skipping validation - not WELCOME or no whopProductId');
-				setFilteredOptions(options);
-				return;
-			}
-
-			// Validate options for WELCOME stage only
-			console.log('[Frontend] Starting WELCOME stage option validation...');
-			setIsValidatingOptions(true);
-			try {
-				const validatedOptions = await validateOptionsAgainstProduct(options);
-				console.log('[Frontend] WELCOME validation result:', {
-					originalCount: options.length,
-					filteredCount: validatedOptions.length,
-					filteredOptions: validatedOptions.map(opt => opt.text)
-				});
-				setFilteredOptions(validatedOptions);
-			} catch (error) {
-				console.warn('[Frontend] WELCOME option validation failed, showing all options:', error);
-				setFilteredOptions(options);
-			} finally {
-				setIsValidatingOptions(false);
-			}
-		};
-
-		validateAndSetOptions();
-	}, [options, currentBlock, funnelFlow, conversation, validateOptionsAgainstProduct, effectiveCurrentBlockId]);
-
-	// Use filtered options instead of original options
-	const displayOptions = filteredOptions;
-
 	// Helper function to check if input matches a valid option
 	const isValidOption = useCallback(
 		(
 			input: string,
 			currentBlock: any,
 		): { isValid: boolean; optionIndex?: number } => {
-			if (!displayOptions || displayOptions.length === 0) return { isValid: false };
+			if (!currentBlock?.options) return { isValid: false };
 
 			const normalizedInput = input.toLowerCase().trim();
 
 			// Check for exact text match
-			const exactMatch = displayOptions.findIndex(
+			const exactMatch = currentBlock.options.findIndex(
 				(opt: any) => opt.text.toLowerCase() === normalizedInput,
 			);
 			if (exactMatch !== -1) return { isValid: true, optionIndex: exactMatch };
@@ -325,13 +225,13 @@ export const useFunnelPreviewChat = (
 			if (
 				!isNaN(numberMatch) &&
 				numberMatch >= 1 &&
-				numberMatch <= displayOptions.length
+				numberMatch <= currentBlock.options.length
 			) {
 				return { isValid: true, optionIndex: numberMatch - 1 };
 			}
 
 			// Check for fuzzy matching (partial text match)
-			const fuzzyMatch = displayOptions.findIndex((opt: any) => {
+			const fuzzyMatch = currentBlock.options.findIndex((opt: any) => {
 				const optionText = opt.text.toLowerCase();
 				// Check if input is contained in option text or vice versa
 				return (
@@ -525,7 +425,6 @@ export const useFunnelPreviewChat = (
 		handleOptionClick,
 		handleCustomInput,
 		currentBlock,
-		options: displayOptions,
-		isValidatingOptions,
+		options,
 	};
 };

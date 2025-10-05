@@ -261,6 +261,10 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Get current block ID from conversation state or local state
 	const currentBlockId = localCurrentBlockId || conversation?.currentBlockId || null;
+	
+	// Get options for current block from funnel flow
+	const currentBlock = currentBlockId ? funnelFlow?.blocks[currentBlockId] : null;
+	const options = currentBlock?.options || [];
 
 	// Update local current block ID when conversation changes
 	useEffect(() => {
@@ -272,20 +276,11 @@ const UserChat: React.FC<UserChatProps> = ({
 	// Handle different conversation states (simplified to match preview)
 	const isExperienceQualificationStage = stageInfo?.isExperienceQualificationStage || false;
 
-	// Get funnel navigation functions and filtered options
+	// Get funnel navigation functions (only for option handling)
 	const {
 		handleOptionClick: previewHandleOptionClick,
 		handleCustomInput: previewHandleCustomInput,
-		options: filteredOptions,
-		isValidatingOptions,
-	} = useFunnelPreviewChat(funnelFlow, undefined, conversation, experienceId);
-
-	// Get options for current block from funnel flow
-	const currentBlock = currentBlockId ? funnelFlow?.blocks[currentBlockId] : null;
-	const originalOptions = currentBlock?.options || [];
-	
-	// Use filtered options from useFunnelPreviewChat hook (for WELCOME stage filtering)
-	const options = filteredOptions || originalOptions;
+	} = useFunnelPreviewChat(funnelFlow, undefined, conversation);
 
 	// Direct handlers - no callbacks for maximum performance
 	const handleSubmit = async (e?: React.FormEvent) => {

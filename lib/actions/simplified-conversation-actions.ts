@@ -34,7 +34,6 @@ export interface Message {
 }
 
 export interface ConversationWithMessages extends Conversation {
-	whopProductId?: string;
 	messages: Message[];
 	funnel: {
 		id: string;
@@ -78,7 +77,6 @@ export async function getConversationById(
 			experienceId: conversation.experienceId,
 			funnelId: conversation.funnelId,
 			whopUserId: conversation.whopUserId,
-			whopProductId: conversation.whopProductId,
 			status: conversation.status,
 			currentBlockId: conversation.currentBlockId,
 			userPath: conversation.userPath as string[],
