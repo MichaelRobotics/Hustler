@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, funnels } from "@/lib/supabase/schema";
+import { conversations, experiences, funnels, resources } from "@/lib/supabase/schema";
 import { eq, and, or } from "drizzle-orm";
 import { getUserContext } from "@/lib/context/user-context";
 import {
@@ -10,6 +10,126 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
+
+/**
+ * Validate WELCOME stage options against product_apps from conversation's whop_product_id
+ * This ensures that options in WELCOME stage only lead to blocks with resourceName
+ * that matches one of the app names from the product_apps field of the resource
+ * that matches the conversation's whop_product_id
+ */
+async function validateWelcomeOptions(
+  funnelFlow: FunnelFlow,
+  conversation: any,
+  experienceId: string
+): Promise<{ isValid: boolean; filteredOptions?: any[]; validationLog?: string[] }> {
+  const validationLog: string[] = [];
+  
+  try {
+    // Check if we have a whop_product_id in the conversation
+    if (!conversation.whopProductId) {
+      validationLog.push("⚠️ No whop_product_id found in conversation - skipping validation");
+      return { isValid: true, validationLog };
+    }
+
+    // Find the resource that matches the conversation's whop_product_id
+    const matchingResource = await db.query.resources.findFirst({
+      where: and(
+        eq(resources.whopProductId, conversation.whopProductId),
+        eq(resources.experienceId, experienceId)
+      ),
+      columns: {
+        id: true,
+        name: true,
+        productApps: true,
+        whopProductId: true
+      }
+    });
+
+    if (!matchingResource) {
+      validationLog.push(`⚠️ No resource found with whop_product_id: ${conversation.whopProductId} - skipping validation`);
+      return { isValid: true, validationLog };
+    }
+
+    validationLog.push(`✅ Found matching resource: ${matchingResource.name} (ID: ${matchingResource.id})`);
+    validationLog.push(`📱 Product apps: ${JSON.stringify(matchingResource.productApps)}`);
+
+    // Get product_apps array from the resource
+    const productApps = matchingResource.productApps as string[] || [];
+    if (productApps.length === 0) {
+      validationLog.push("⚠️ No product_apps found in resource - skipping validation");
+      return { isValid: true, validationLog };
+    }
+
+    // Find WELCOME stage blocks
+    const welcomeStage = funnelFlow.stages.find(stage => stage.name === "WELCOME");
+    if (!welcomeStage) {
+      validationLog.push("⚠️ No WELCOME stage found in funnel flow - skipping validation");
+      return { isValid: true, validationLog };
+    }
+
+    validationLog.push(`🎯 WELCOME stage blocks: ${welcomeStage.blockIds.join(', ')}`);
+
+    // Check each WELCOME block's options
+    const filteredOptions: any[] = [];
+    let hasValidOptions = false;
+
+    for (const blockId of welcomeStage.blockIds) {
+      const block = funnelFlow.blocks[blockId];
+      if (!block || !block.options) continue;
+
+      validationLog.push(`🔍 Checking block ${blockId} with ${block.options.length} options`);
+
+      for (const option of block.options) {
+        const targetBlockId = option.nextBlockId;
+        
+        if (!targetBlockId) {
+          validationLog.push(`❌ Option "${option.text}" has no nextBlockId`);
+          continue;
+        }
+        
+        const targetBlock = funnelFlow.blocks[targetBlockId];
+        
+        if (!targetBlock) {
+          validationLog.push(`❌ Option "${option.text}" leads to non-existent block: ${targetBlockId}`);
+          continue;
+        }
+
+        // Check if target block has resourceName
+        if (!targetBlock.resourceName) {
+          validationLog.push(`⚠️ Option "${option.text}" leads to block ${targetBlockId} without resourceName - allowing`);
+          filteredOptions.push(option);
+          hasValidOptions = true;
+          continue;
+        }
+
+        // Check if resourceName matches any of the product_apps
+        const resourceNameMatches = productApps.some(appName => 
+          appName.toLowerCase().trim() === (targetBlock.resourceName || '').toLowerCase().trim()
+        );
+
+        if (resourceNameMatches) {
+          validationLog.push(`✅ Option "${option.text}" -> "${targetBlock.resourceName}" matches product_apps`);
+          filteredOptions.push(option);
+          hasValidOptions = true;
+        } else {
+          validationLog.push(`❌ Option "${option.text}" -> "${targetBlock.resourceName}" does NOT match product_apps: [${productApps.join(', ')}]`);
+        }
+      }
+    }
+
+    validationLog.push(`📊 Validation result: ${hasValidOptions ? 'VALID' : 'INVALID'} (${filteredOptions.length} valid options)`);
+    
+    return {
+      isValid: hasValidOptions,
+      filteredOptions: hasValidOptions ? filteredOptions : undefined,
+      validationLog
+    };
+
+  } catch (error) {
+    validationLog.push(`❌ Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return { isValid: false, validationLog };
+  }
+}
 
 async function checkConversationHandler(
   request: NextRequest,
@@ -237,6 +357,33 @@ async function checkConversationHandler(
         isOfferStage
       }
     });
+
+    // Validate WELCOME stage options if we're in WELCOME stage
+    let validatedFunnelFlow = funnelFlow;
+    let validationLog: string[] = [];
+    
+    if (isWelcomeStage && funnelFlow && activeConversation) {
+      console.log(`[check-conversation] Validating WELCOME stage options for conversation ${activeConversation.id}`);
+      
+      const validationResult = await validateWelcomeOptions(
+        funnelFlow,
+        activeConversation,
+        experience.id
+      );
+      
+      validationLog = validationResult.validationLog || [];
+      console.log(`[check-conversation] WELCOME validation log:`, validationLog);
+      
+      if (!validationResult.isValid) {
+        console.warn(`[check-conversation] WELCOME validation failed - no valid options found`);
+        // For now, we'll still return the original funnel flow
+        // In the future, we might want to handle this differently
+      } else if (validationResult.filteredOptions && validationResult.filteredOptions.length > 0) {
+        console.log(`[check-conversation] WELCOME validation passed with ${validationResult.filteredOptions.length} valid options`);
+        // Note: We're not modifying the funnel flow here, just logging the validation
+        // The actual filtering would need to be implemented in the frontend or a different approach
+      }
+    }
 
     return NextResponse.json({
       success: true,
