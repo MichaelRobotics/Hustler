@@ -417,6 +417,14 @@ export const useFunnelPreviewChat = (
 				const botMessage: ChatMessage = { type: "bot", text: completeMessage };
 				setHistory((prev) => [...prev, botMessage]);
 				setCurrentBlockId(option.nextBlockId);
+				
+				// Clear filtered options when navigating to non-WELCOME stages
+				const nextBlockStage = funnelFlow?.stages.find(stage => 
+					stage.blockIds.includes(option.nextBlockId!)
+				);
+				if (nextBlockStage?.name !== "WELCOME") {
+					setFilteredOptions([]);
+				}
 			} else {
 				// If the next block ID is invalid, end the conversation
 				const errorMessage: ChatMessage = {
