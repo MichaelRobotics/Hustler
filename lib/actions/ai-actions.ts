@@ -517,6 +517,118 @@ const validateResourcesForGeneration = (resources: Resource[]): void => {
 };
 
 /**
+ * Process resources for AI based on PAID offer count
+ * IMPORTANT: This function only modifies the display category for AI processing.
+ * It does NOT change the actual database records - only the list sent to AI.
+ * @param resources - Array of resources to process
+ * @returns Processed resources with category adjustments for AI display only
+ */
+const processResourcesForAI = (resources: Resource[]): Resource[] => {
+	const paidResources = resources.filter(r => r.category === "PAID");
+	const freeResources = resources.filter(r => r.category === "FREE_VALUE");
+	
+	console.log(`🔍 Resource Analysis: ${paidResources.length} PAID, ${freeResources.length} FREE_VALUE`);
+	
+	// Check if there are 2 or more PAID offers
+	if (paidResources.length >= 2) {
+		console.log("✅ Sufficient PAID offers found, using resources as-is");
+		return resources;
+	}
+	
+	// If there are no PAID offers or only 1 PAID offer
+	if (paidResources.length <= 1) {
+		console.log(`⚠️ Insufficient PAID offers (${paidResources.length}), processing for category adjustments`);
+		
+		// Create a copy of resources to modify for AI processing only
+		// NOTE: This does NOT change the actual database records, only the list sent to AI
+		const processedResources = [...resources];
+		
+		if (paidResources.length === 0) {
+			// No PAID offers - check for free products first
+			if (freeResources.length >= 2) {
+				console.log("🔄 No PAID offers found, converting first 2 FREE_VALUE products to PAID");
+				// Convert first 2 free products to PAID
+				const freeProducts = freeResources.filter(r => r.type === "MY_PRODUCTS");
+				const productsToConvert = freeProducts.slice(0, 2);
+				
+				productsToConvert.forEach((resource, index) => {
+					const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
+					if (resourceIndex !== -1) {
+						processedResources[resourceIndex] = {
+							...processedResources[resourceIndex],
+							category: "PAID" as const
+						};
+						console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (for AI processing only)`);
+					}
+				});
+			} else if (freeResources.length === 1) {
+				console.log("🔄 Only 1 FREE_VALUE product found, converting to PAID");
+				// Convert the single free product to PAID
+				const resourceIndex = processedResources.findIndex(r => r.id === freeResources[0].id);
+				if (resourceIndex !== -1) {
+					processedResources[resourceIndex] = {
+						...processedResources[resourceIndex],
+						category: "PAID" as const
+					};
+					console.log(`✅ AI Display: Converted "${freeResources[0].name}" from FREE_VALUE to PAID (for AI processing only)`);
+				}
+			} else {
+				console.log("🔄 No FREE_VALUE products found, checking free apps in hierarchy");
+				// Check free apps in hierarchy: 1. Learn 2. Community 3. Earn 4. Others
+				const hierarchy = ['learn', 'community', 'earn', 'other'];
+				let appsFound = 0;
+				
+				for (const category of hierarchy) {
+					// This would need to be implemented based on how apps are categorized
+					// For now, we'll look for any resources that might be apps
+					const appResources = freeResources.filter(r => 
+						r.name.toLowerCase().includes(category) || 
+						r.type === "AFFILIATE" // Assuming affiliate resources might be apps
+					);
+					
+					if (appResources.length > 0 && appsFound < 2) {
+						const appsToConvert = appResources.slice(0, 2 - appsFound);
+						appsToConvert.forEach(resource => {
+							const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
+							if (resourceIndex !== -1) {
+								processedResources[resourceIndex] = {
+									...processedResources[resourceIndex],
+									category: "PAID" as const
+								};
+								console.log(`✅ AI Display: Converted app "${resource.name}" from FREE_VALUE to PAID (${category} category, for AI processing only)`);
+								appsFound++;
+							}
+						});
+					}
+				}
+			}
+		} else if (paidResources.length === 1) {
+			// 1 PAID offer - search for only 1 free product or 1 app
+			console.log("🔄 1 PAID offer found, looking for 1 additional FREE_VALUE resource");
+			
+			if (freeResources.length >= 1) {
+				// Convert first free product to PAID
+				const resourceToConvert = freeResources[0];
+				const resourceIndex = processedResources.findIndex(r => r.id === resourceToConvert.id);
+				if (resourceIndex !== -1) {
+					processedResources[resourceIndex] = {
+						...processedResources[resourceIndex],
+						category: "PAID" as const
+					};
+					console.log(`✅ AI Display: Converted "${resourceToConvert.name}" from FREE_VALUE to PAID (for AI processing only)`);
+				}
+			} else {
+				console.log("⚠️ No FREE_VALUE resources found to convert");
+			}
+		}
+		
+		return processedResources;
+	}
+	
+	return resources;
+};
+
+/**
  * Generates a funnel flow using AI based on provided resources
  * @param resources - Array of resources to include in the funnel
  * @returns Promise with the generated funnel flow
@@ -534,7 +646,10 @@ export const generateFunnelFlow = async (
 		try {
 			console.log(`Funnel generation attempt ${attempt}/${maxTries}`);
 			
-			const resourceList = resources
+			// Process resources based on PAID offer count
+			const processedResources = processResourcesForAI(resources);
+			
+			const resourceList = processedResources
 				.map((r) => {
 					const categoryLabel = r.category; // Use exact category: "PAID" or "FREE_VALUE"
 					let details = `${r.name} (name: ${r.name}, ID: ${r.id}, Category: ${categoryLabel}, Type: ${r.type})`;
@@ -555,7 +670,7 @@ export const generateFunnelFlow = async (
 	
 	**🚨 CRITICAL RESOURCE VALIDATION RULE 🚨**
 	**YOU MUST ONLY USE THESE EXACT RESOURCE NAMES:**
-	${resources.map(r => `- "${r.name}" (${r.category})`).join('\n')}
+	${processedResources.map(r => `- "${r.name}" (${r.category})`).join('\n')}
 	**🚨 ZERO TOLERANCE FOR IMAGINARY RESOURCES 🚨**
 	**FORBIDDEN: Do not create, modify, or imagine any resource names not in this list**
 	**FORBIDDEN: Do not use abbreviations, variations, or similar names**
