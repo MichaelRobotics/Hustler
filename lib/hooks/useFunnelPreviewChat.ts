@@ -270,7 +270,7 @@ export const useFunnelPreviewChat = (
 			if (!isWelcomeBlock || !conversation?.whopProductId) {
 				// Not a WELCOME block or no conversation - show all options
 				console.log('[Frontend] Skipping validation - not WELCOME or no whopProductId');
-				setFilteredOptions(options);
+				setFilteredOptions([]); // Clear filtered options for non-WELCOME stages
 				return;
 			}
 
@@ -296,8 +296,11 @@ export const useFunnelPreviewChat = (
 		validateAndSetOptions();
 	}, [options, currentBlock, funnelFlow, conversation, validateOptionsAgainstProduct]);
 
-	// Use filtered options instead of original options
-	const displayOptions = filteredOptions;
+	// Use filtered options for WELCOME stage, original options for other stages
+	const isWelcomeBlock = funnelFlow?.stages.some(
+		stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlock?.id || '')
+	);
+	const displayOptions = isWelcomeBlock ? filteredOptions : options;
 
 	// Helper function to check if input matches a valid option
 	const isValidOption = useCallback(
