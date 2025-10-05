@@ -606,8 +606,8 @@ export async function triggerProductSyncForNewAdmin(
 			// Wait for all access pass queries to complete
 			const appAccessPassResults = await Promise.all(accessPassPromises);
 			
-			// Now process all matches efficiently
-			const updatePromises: Promise<void>[] = [];
+			// Collect all app-resource mappings to avoid race conditions
+			const appResourceMappings: { [resourceId: string]: string[] } = {};
 			
 			for (const { app, accessPasses, appResource } of appAccessPassResults) {
 				if (!appResource) {
@@ -628,36 +628,54 @@ export async function triggerProductSyncForNewAdmin(
 					
 					console.log(`📋 Found ${matchingResources.length} resources matching access pass ${accessPass.id}`);
 					
-					// For each matching resource, add the app name to productApps array
+					// For each matching resource, collect the app name
 					for (const resource of matchingResources) {
-						const currentProductApps = resource.productApps || [];
+						if (!appResourceMappings[resource.id]) {
+							appResourceMappings[resource.id] = [];
+						}
 						
-						// Add app name to productApps array if not already present
-						if (!currentProductApps.includes(app.name)) {
-							const updatedProductApps = [...currentProductApps, app.name];
-							
-							updatePromises.push(
-								db.update(resources)
-									.set({
-										productApps: updatedProductApps,
-										updatedAt: new Date()
-									})
-									.where(eq(resources.id, resource.id))
-									.then(() => {
-										console.log(`✅ Added app "${app.name}" to productApps for resource ${resource.name} (access pass: ${accessPass.id})`);
-									})
-									.catch((error: any) => {
-										console.error(`❌ Error updating productApps for resource ${resource.id}:`, error);
-									})
-							);
-						} else {
-							console.log(`ℹ️ App "${app.name}" already in productApps for resource ${resource.name}`);
+						// Add app name if not already present
+						if (!appResourceMappings[resource.id].includes(app.name)) {
+							appResourceMappings[resource.id].push(app.name);
+							console.log(`📝 Collected app "${app.name}" for resource ${resource.name} (access pass: ${accessPass.id})`);
 						}
 					}
 					
 					if (matchingResources.length === 0) {
 						console.log(`⚠️ No resources found matching access pass ${accessPass.id}`);
 					}
+				}
+			}
+			
+			// Now update each resource with all its collected apps
+			const updatePromises: Promise<void>[] = [];
+			
+			for (const [resourceId, appNames] of Object.entries(appResourceMappings)) {
+				const resource = allExperienceResources.find((r: any) => r.id === resourceId);
+				if (!resource) continue;
+				
+				const currentProductApps = resource.productApps || [];
+				const newAppNames = appNames.filter(appName => !currentProductApps.includes(appName));
+				
+				if (newAppNames.length > 0) {
+					const updatedProductApps = [...currentProductApps, ...newAppNames];
+					
+					updatePromises.push(
+						db.update(resources)
+							.set({
+								productApps: updatedProductApps,
+								updatedAt: new Date()
+							})
+							.where(eq(resources.id, resourceId))
+							.then(() => {
+								console.log(`✅ Added apps [${newAppNames.join(', ')}] to productApps for resource ${resource.name}`);
+							})
+							.catch((error: any) => {
+								console.error(`❌ Error updating productApps for resource ${resourceId}:`, error);
+							})
+					);
+				} else {
+					console.log(`ℹ️ No new apps to add to resource ${resource.name}`);
 				}
 			}
 			
