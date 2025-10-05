@@ -186,9 +186,11 @@ export const useFunnelPreviewChat = (
 	}, [selectedOffer, currentBlockId, findOptionsLeadingToOffer]);
 
 	// Memoize current block to prevent unnecessary re-computations
+	// Use conversation's currentBlockId if available, otherwise use hook's currentBlockId
+	const effectiveCurrentBlockId = conversation?.currentBlockId || currentBlockId;
 	const currentBlock = useMemo(() => {
-		return funnelFlow?.blocks[currentBlockId || ""];
-	}, [funnelFlow, currentBlockId]);
+		return funnelFlow?.blocks[effectiveCurrentBlockId || ""];
+	}, [funnelFlow, effectiveCurrentBlockId]);
 
 	// Helper function to validate options against conversation's whopProductId
 	const validateOptionsAgainstProduct = useCallback(async (options: FunnelBlockOption[]): Promise<FunnelBlockOption[]> => {
@@ -239,7 +241,7 @@ export const useFunnelPreviewChat = (
 		return currentBlock.options;
 	}, [currentBlock, funnelFlow]);
 
-	// Validate options when they change
+	// Validate options when they change - ONLY for WELCOME stage
 	useEffect(() => {
 		const validateAndSetOptions = async () => {
 			console.log('[Frontend] Options validation check:', {
@@ -248,7 +250,8 @@ export const useFunnelPreviewChat = (
 				hasConversation: !!conversation,
 				hasWhopProductId: !!conversation?.whopProductId,
 				whopProductId: conversation?.whopProductId,
-				currentBlockId: currentBlock?.id
+				currentBlockId: currentBlock?.id,
+				effectiveCurrentBlockId
 			});
 
 			if (!options || options.length === 0) {
@@ -258,35 +261,37 @@ export const useFunnelPreviewChat = (
 
 			// Check if this is a WELCOME stage block
 			const isWelcomeBlock = funnelFlow?.stages.some(
-				stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlock?.id || '')
+				stage => stage.name === "WELCOME" && stage.blockIds.includes(effectiveCurrentBlockId || '')
 			);
 
 			console.log('[Frontend] WELCOME stage check:', {
 				isWelcomeBlock,
 				hasWhopProductId: !!conversation?.whopProductId,
-				willValidate: isWelcomeBlock && conversation?.whopProductId
+				willValidate: isWelcomeBlock && conversation?.whopProductId,
+				effectiveCurrentBlockId
 			});
 
+			// Only validate for WELCOME stage blocks with whopProductId
 			if (!isWelcomeBlock || !conversation?.whopProductId) {
-				// Not a WELCOME block or no conversation - show all options
+				// Not a WELCOME block or no conversation - show all options without validation
 				console.log('[Frontend] Skipping validation - not WELCOME or no whopProductId');
-				setFilteredOptions([]); // Clear filtered options for non-WELCOME stages
+				setFilteredOptions(options);
 				return;
 			}
 
-			// Validate options for WELCOME stage
-			console.log('[Frontend] Starting option validation...');
+			// Validate options for WELCOME stage only
+			console.log('[Frontend] Starting WELCOME stage option validation...');
 			setIsValidatingOptions(true);
 			try {
 				const validatedOptions = await validateOptionsAgainstProduct(options);
-				console.log('[Frontend] Validation result:', {
+				console.log('[Frontend] WELCOME validation result:', {
 					originalCount: options.length,
 					filteredCount: validatedOptions.length,
 					filteredOptions: validatedOptions.map(opt => opt.text)
 				});
 				setFilteredOptions(validatedOptions);
 			} catch (error) {
-				console.warn('[Frontend] Option validation failed, showing all options:', error);
+				console.warn('[Frontend] WELCOME option validation failed, showing all options:', error);
 				setFilteredOptions(options);
 			} finally {
 				setIsValidatingOptions(false);
@@ -294,13 +299,10 @@ export const useFunnelPreviewChat = (
 		};
 
 		validateAndSetOptions();
-	}, [options, currentBlock, funnelFlow, conversation, validateOptionsAgainstProduct]);
+	}, [options, currentBlock, funnelFlow, conversation, validateOptionsAgainstProduct, effectiveCurrentBlockId]);
 
-	// Use filtered options for WELCOME stage, original options for other stages
-	const isWelcomeBlock = funnelFlow?.stages.some(
-		stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlock?.id || '')
-	);
-	const displayOptions = isWelcomeBlock ? filteredOptions : options;
+	// Use filtered options instead of original options
+	const displayOptions = filteredOptions;
 
 	// Helper function to check if input matches a valid option
 	const isValidOption = useCallback(
@@ -417,14 +419,6 @@ export const useFunnelPreviewChat = (
 				const botMessage: ChatMessage = { type: "bot", text: completeMessage };
 				setHistory((prev) => [...prev, botMessage]);
 				setCurrentBlockId(option.nextBlockId);
-				
-				// Clear filtered options when navigating to non-WELCOME stages
-				const nextBlockStage = funnelFlow?.stages.find(stage => 
-					stage.blockIds.includes(option.nextBlockId!)
-				);
-				if (nextBlockStage?.name !== "WELCOME") {
-					setFilteredOptions([]);
-				}
 			} else {
 				// If the next block ID is invalid, end the conversation
 				const errorMessage: ChatMessage = {
