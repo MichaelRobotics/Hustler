@@ -10,7 +10,6 @@ interface Funnel {
 	isDeployed?: boolean;
 	wasEverDeployed?: boolean;
 	resources?: Resource[];
-	whopProductId?: string; // Discovery page product ID
 }
 
 interface Resource {
@@ -39,7 +38,6 @@ export const useFunnelDeployment = (
 	console.log(`🔍 [USE FUNNEL DEPLOYMENT] Hook initialized with funnel:`, {
 		id: currentFunnel.id,
 		name: currentFunnel.name,
-		whopProductId: currentFunnel.whopProductId,
 		userExperienceId: user?.experienceId
 	});
 	const [isDeploying, setIsDeploying] = React.useState(false);
@@ -60,7 +58,6 @@ export const useFunnelDeployment = (
 		console.log(`🔍 [VALIDATE DEPLOYMENT] Starting validation with funnel:`, {
 			id: currentFunnel.id,
 			name: currentFunnel.name,
-			whopProductId: currentFunnel.whopProductId,
 			hasFlow: !!currentFunnel.flow,
 			hasResources: !!currentFunnel.resources,
 			userExperienceId: user?.experienceId
@@ -148,7 +145,6 @@ export const useFunnelDeployment = (
 		console.log(`🔍 [HANDLE DEPLOY] Starting deployment for funnel:`, {
 			id: currentFunnel.id,
 			name: currentFunnel.name,
-			whopProductId: currentFunnel.whopProductId,
 			hasFlow: !!currentFunnel.flow,
 			hasResources: !!currentFunnel.resources,
 			userExperienceId: user?.experienceId

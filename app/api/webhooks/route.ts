@@ -62,6 +62,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 	}
 
 	// Handle the webhook event
+	console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhookData.action}`);
+	console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhookData, null, 2));
+	
 	if (webhookData.action === "payment.succeeded") {
 		const { id, final_amount, amount_after_fees, currency, user_id, metadata, plan_id, company_id } =
 			webhookData.data;
@@ -99,11 +102,20 @@ export async function POST(request: NextRequest): Promise<Response> {
 			);
 		}
 	} else if (webhookData.action === "membership.went_valid") {
+		console.log(`[WEBHOOK DEBUG] Processing membership.went_valid webhook`);
 		const { user_id, product_id, membership_id, plan_id, company_buyer_id } = webhookData.data;
 
 		console.log(
-			`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
+			`[WEBHOOK DEBUG] Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
 		);
+		console.log(`[WEBHOOK DEBUG] Webhook data fields:`, {
+			user_id,
+			product_id,
+			membership_id,
+			plan_id,
+			company_buyer_id,
+			page_id: webhookData.data.page_id
+		});
 
 		// Handle user join event asynchronously
 		// Pass product_id to find matching live funnel

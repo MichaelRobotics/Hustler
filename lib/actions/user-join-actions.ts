@@ -212,7 +212,8 @@ export async function handleUserJoinEvent(
 	membershipId?: string,
 ): Promise<void> {
 	try {
-		console.log(`Processing user join event: ${userId} for product ${productId}`);
+		console.log(`[USER-JOIN DEBUG] Processing user join event: ${userId} for product ${productId}`);
+		console.log(`[USER-JOIN DEBUG] Webhook data:`, JSON.stringify(webhookData, null, 2));
 
 		// Validate required fields
 		if (!userId || !productId) {
@@ -222,15 +223,18 @@ export async function handleUserJoinEvent(
 
 		// Step 1: Find the experience by page_id (company ID)
 		// This is the most reliable way since page_id is the company that owns the app
+		console.log(`[USER-JOIN DEBUG] Looking for experience with whopCompanyId: ${webhookData.data.page_id}`);
+		
 		const experience = await db.query.experiences.findFirst({
 			where: eq(experiences.whopCompanyId, webhookData.data.page_id),
 		});
 
 		if (!experience) {
-			console.error(`No experience found for page_id ${webhookData.data.page_id}`);
-			console.error(`Available experiences:`, await db.query.experiences.findMany({
+			console.error(`[USER-JOIN DEBUG] No experience found for page_id ${webhookData.data.page_id}`);
+			const availableExperiences = await db.query.experiences.findMany({
 				columns: { whopCompanyId: true, whopExperienceId: true, name: true }
-			}));
+			});
+			console.error(`[USER-JOIN DEBUG] Available experiences:`, availableExperiences);
 			return;
 		}
 
@@ -305,7 +309,6 @@ export async function handleUserJoinEvent(
 				id: true,
 				flow: true,
 				experienceId: true,
-				whopProductId: true,
 			},
 		});
 
