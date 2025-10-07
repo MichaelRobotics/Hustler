@@ -75,6 +75,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 			webhookData.data;
 
 		// Check if this is an app installation link (plan_id indicates app installation)
+		// Only skip payment processing for app installations, not membership processing
 		if (plan_id) {
 			console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping payment webhook processing`);
 			return new Response("OK", { status: 200 });
@@ -122,6 +123,11 @@ export async function POST(request: NextRequest): Promise<Response> {
 			page_id: webhookData.data.page_id
 		});
 
+		// Log if this is an app installation membership
+		if (plan_id) {
+			console.log(`[WEBHOOK DEBUG] App installation membership detected (plan_id: ${plan_id}) - processing user join event`);
+		}
+
 		// Handle user join event asynchronously
 		// Pass product_id to find matching live funnel
 		if (user_id && product_id) {
@@ -137,7 +143,17 @@ export async function POST(request: NextRequest): Promise<Response> {
 			);
 		} else {
 			console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
+			console.log(`[WEBHOOK DEBUG] Membership event logged but not processed - missing required fields:`, {
+				has_user_id: !!user_id,
+				has_company_buyer_id: !!company_buyer_id,
+				has_product_id: !!product_id,
+				plan_id: plan_id || 'N/A'
+			});
 		}
+	} else {
+		// Log any other webhook events for debugging
+		console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhookData.action}`);
+		console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhookData, null, 2));
 	}
 
 	// Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
