@@ -240,8 +240,8 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 									? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25 border-3 border-blue-400 dark:border-blue-500"
 									: "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
 								: message.text.includes('animated-gold-button')
-									? "bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
-									: "bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-200/50 dark:shadow-gray-800/50"
+									? "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
+									: "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50"
 						}`}
 						style={{
 							userSelect: "text",
@@ -427,7 +427,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 							<button
 								onClick={handleSendMessage}
 								disabled={!newMessage.trim() || isSendingMessage}
-								className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed touch-manipulation active:from-blue-600 active:to-blue-700 active:scale-95 transition-all duration-150 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 disabled:shadow-none"
+								className="p-3 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed touch-manipulation active:from-gray-200 active:to-gray-300 dark:active:from-gray-700 dark:active:to-gray-800 active:scale-95 transition-all duration-150 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50 hover:shadow-gray-400/60 dark:hover:shadow-gray-700/60 disabled:shadow-none"
 								style={{
 									WebkitTapHighlightColor: "transparent",
 									transform: "translateZ(0)",
@@ -441,7 +441,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 									userSelect: "none",
 								}}
 							>
-								<Send size={18} className="text-white dark:text-gray-100" />
+								<Send size={18} className="text-gray-700 dark:text-gray-100" />
 							</button>
 						</div>
 					</div>

@@ -106,7 +106,31 @@ const FunnelsDashboard = React.memo(
 			}
 		}, [editingFunnelId, funnels]);
 
+		// Wrapper function to handle timeout for setIsRenaming (matches mobile keyboard close animation)
+		const handleSetIsRenaming = useCallback((isRenaming: boolean) => {
+			if (isRenaming) {
+				// Immediately hide sidebar when starting to rename
+				setIsRenaming(true);
+			} else {
+				// Add delay before showing sidebar when canceling rename (matches mobile keyboard close animation)
+				setTimeout(() => {
+					setIsRenaming(false);
+				}, 250); // 250ms delay to match mobile keyboard close animation
+			}
+		}, [setIsRenaming]);
 
+		// Wrapper function to handle timeout for setIsCreatingNewFunnel (matches mobile keyboard close animation)
+		const handleSetIsCreatingNewFunnel = useCallback((isCreating: boolean) => {
+			if (isCreating) {
+				// Immediately hide sidebar when starting to create
+				setIsCreatingNewFunnel(true);
+			} else {
+				// Add delay before showing sidebar when canceling creation (matches mobile keyboard close animation)
+				setTimeout(() => {
+					setIsCreatingNewFunnel(false);
+				}, 250); // 250ms delay to match mobile keyboard close animation
+			}
+		}, [setIsCreatingNewFunnel]);
 
 		// Memoized handler for creating a new funnel
 		const handleCreateNewFunnel = useCallback(
@@ -141,7 +165,7 @@ const FunnelsDashboard = React.memo(
 					setFunnels([...funnels, newFunnel]);
 
 					// Reset states
-					setIsCreatingNewFunnel(false);
+					handleSetIsCreatingNewFunnel(false);
 					handleSetIsRenaming(false);
 					setEditingFunnelId(null);
 					setNewFunnelName("");
@@ -162,8 +186,8 @@ const FunnelsDashboard = React.memo(
 			[
 				funnels,
 				setFunnels,
-				setIsCreatingNewFunnel,
-				setIsRenaming,
+				handleSetIsCreatingNewFunnel,
+				handleSetIsRenaming,
 				setEditingFunnelId,
 				setNewFunnelName,
 				isFunnelNameAvailable,
@@ -174,19 +198,6 @@ const FunnelsDashboard = React.memo(
 
 		// Memoized computed values for better performance
 		const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
-
-		// Wrapper function to handle timeout for setIsRenaming (matches mobile keyboard close animation)
-		const handleSetIsRenaming = useCallback((isRenaming: boolean) => {
-			if (isRenaming) {
-				// Immediately hide sidebar when starting to rename
-				setIsRenaming(true);
-			} else {
-				// Add delay before showing sidebar when canceling rename (matches mobile keyboard close animation)
-				setTimeout(() => {
-					setIsRenaming(false);
-				}, 250); // 250ms delay to match mobile keyboard close animation
-			}
-		}, [setIsRenaming]);
 
 		const funnelCards = useMemo(
 			() =>
@@ -288,7 +299,7 @@ const FunnelsDashboard = React.memo(
 												setEditingFunnelId(null);
 												setNewFunnelName("");
 												handleSetIsRenaming(false);
-												setIsCreatingNewFunnel(false);
+												handleSetIsCreatingNewFunnel(false);
 											}}
 											disabled={isSaving}
 											className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
