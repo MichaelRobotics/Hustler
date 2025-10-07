@@ -123,7 +123,15 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 					<Text size="3" weight="medium" className="text-gray-900 dark:text-white">
 						{progressPercentage >= 100 ? "Complete" : getStageDisplayName(activeStage)}
 					</Text>
-					<Text size="3" weight="semi-bold" className="text-violet-600 dark:text-violet-400">
+					<Text 
+						size="3" 
+						weight="semi-bold" 
+						className={`transition-all duration-500 ${
+							progressPercentage >= 100 
+								? 'text-yellow-600 dark:text-yellow-400 drop-shadow-sm' 
+								: 'text-yellow-600 dark:text-yellow-400'
+						}`}
+					>
 						{Math.round(progressPercentage)}%
 					</Text>
 				</div>
@@ -133,13 +141,18 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 					{/* Background Track - Thicker for desktop */}
 					<div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 md:h-4">
 						<div
-							className={`h-3 md:h-4 rounded-full transition-all duration-500 ease-out ${
+							className={`h-3 md:h-4 rounded-full transition-all duration-500 ease-out relative overflow-hidden ${
 								progressPercentage >= 100 
-									? 'bg-gradient-to-r from-green-500 to-emerald-500' 
-									: 'bg-gradient-to-r from-violet-500 to-purple-500'
+									? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600' 
+									: 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
 							}`}
 							style={{ width: `${progressPercentage}%` }}
-						/>
+						>
+							{/* Shine effect when finished */}
+							{progressPercentage >= 100 && (
+								<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-pulse"></div>
+							)}
+						</div>
 					</div>
 
 
@@ -165,7 +178,7 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 								{/* Content */}
 								<span className="relative flex items-center space-x-1.5 md:space-x-2 z-10">
 									<span>✨</span>
-									<span>Get Exclusive Access</span>
+									<span>Exclusive</span>
 								</span>
 								
 								{/* Glow effect */}
