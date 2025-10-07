@@ -12,11 +12,26 @@ import { experiences, users } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 
+// Debug webhook secret configuration
+const webhookSecret = process.env.WHOP_WEBHOOK_SECRET ?? "fallback";
+console.log(`[WEBHOOK SECRET DEBUG] ==========================================`);
+console.log(`[WEBHOOK SECRET DEBUG] WHOP_WEBHOOK_SECRET from env: ${process.env.WHOP_WEBHOOK_SECRET ? 'SET' : 'NOT_SET'}`);
+console.log(`[WEBHOOK SECRET DEBUG] Using webhook secret: ${webhookSecret === "fallback" ? 'FALLBACK (NOT SET)' : 'CUSTOM_SECRET'}`);
+console.log(`[WEBHOOK SECRET DEBUG] Secret length: ${webhookSecret.length} characters`);
+console.log(`[WEBHOOK SECRET DEBUG] ==========================================`);
+
 const validateWebhook = makeWebhookValidator({
-	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
+	webhookSecret: webhookSecret,
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
+	console.log(`[WEBHOOK ENDPOINT DEBUG] ==========================================`);
+	console.log(`[WEBHOOK ENDPOINT DEBUG] 🎯 Webhook endpoint hit at ${new Date().toISOString()}`);
+	console.log(`[WEBHOOK ENDPOINT DEBUG] Request URL: ${request.url}`);
+	console.log(`[WEBHOOK ENDPOINT DEBUG] Request method: ${request.method}`);
+	console.log(`[WEBHOOK ENDPOINT DEBUG] Request headers:`, Object.fromEntries(request.headers.entries()));
+	console.log(`[WEBHOOK ENDPOINT DEBUG] ==========================================`);
+	
 	// Store the original body for validation before parsing
 	const originalBody = await request.text();
 	
@@ -43,6 +58,13 @@ export async function POST(request: NextRequest): Promise<Response> {
 	
 	if (!isTestRequest) {
 		// Validate the webhook signature for production requests
+		console.log(`[WEBHOOK VALIDATION DEBUG] ==========================================`);
+		console.log(`[WEBHOOK VALIDATION DEBUG] Attempting webhook signature validation`);
+		console.log(`[WEBHOOK VALIDATION DEBUG] Using secret: ${webhookSecret === "fallback" ? 'FALLBACK (NOT SET)' : 'CUSTOM_SECRET'}`);
+		console.log(`[WEBHOOK VALIDATION DEBUG] Request headers:`, Object.fromEntries(request.headers.entries()));
+		console.log(`[WEBHOOK VALIDATION DEBUG] Body length: ${originalBody.length} characters`);
+		console.log(`[WEBHOOK VALIDATION DEBUG] ==========================================`);
+		
 		try {
 			// Create a new request with the original body for validation
 			const validationRequest = new Request(request.url, {
@@ -52,13 +74,19 @@ export async function POST(request: NextRequest): Promise<Response> {
 			});
 			
 			await validateWebhook(validationRequest);
-			console.log("Webhook signature validation passed");
+			console.log(`[WEBHOOK VALIDATION DEBUG] ✅ Webhook signature validation passed`);
 		} catch (error) {
-			console.error("Webhook signature validation failed:", error);
+			console.error(`[WEBHOOK VALIDATION DEBUG] ❌ Webhook signature validation failed:`, error);
+			console.error(`[WEBHOOK VALIDATION DEBUG] Error details:`, {
+				message: error.message,
+				name: error.name,
+				stack: error.stack
+			});
+			console.error(`[WEBHOOK VALIDATION DEBUG] This usually means WHOP_WEBHOOK_SECRET is not set or incorrect`);
 			return new Response("Invalid webhook signature", { status: 401 });
 		}
 	} else {
-		console.log("Skipping signature validation for test request");
+		console.log(`[WEBHOOK VALIDATION DEBUG] ⏭️ Skipping signature validation for test request`);
 	}
 
 	// Handle the webhook event
