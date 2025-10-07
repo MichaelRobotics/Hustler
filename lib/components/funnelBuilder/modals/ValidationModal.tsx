@@ -89,7 +89,7 @@ export const ValidationModal: React.FC<ValidationModalProps> = ({
 									weight="semi-bold"
 									className="text-amber-800 dark:text-amber-200"
 								>
-									Add these products to "Assigned Products":
+									Add these products to "Library":
 								</Text>
 							</div>
 							<div className="space-y-2">
@@ -135,7 +135,7 @@ export const ValidationModal: React.FC<ValidationModalProps> = ({
 									weight="semi-bold"
 									className="text-red-800 dark:text-red-200"
 								>
-									Remove these products from "Assigned Products":
+									Remove these products from "Library":
 								</Text>
 							</div>
 							<div className="space-y-2">
@@ -191,7 +191,7 @@ export const ValidationModal: React.FC<ValidationModalProps> = ({
 								onClick={onGoToProducts}
 								className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:bg-violet-500/60"
 							>
-								Go to Assigned Products
+								Go to Library
 							</Button>
 						)}
 					</div>

@@ -182,6 +182,7 @@ async function createUserContext(
 			console.log(`✅ Found existing user: id=${user.id}, experienceId=${user.experienceId}, accessLevel=${user.accessLevel}`);
 		} else {
 			console.log(`❌ No user found for whopUserId=${whopUserId} in experience=${experience.id}`);
+			console.log(`🔍 Experience details: id=${experience.id}, whopExperienceId=${experience.whopExperienceId}`);
 		}
 
 		if (!user) {
@@ -257,18 +258,33 @@ async function createUserContext(
 				}
 
 				// Create user in our database
-				const [newUser] = await db
-					.insert(users)
-					.values({
+				console.log(`🔍 Creating new user with: whopUserId=${whopUser.id}, experienceId=${experience.id}, accessLevel=${initialAccessLevel}`);
+				let newUser;
+				try {
+					[newUser] = await db
+						.insert(users)
+						.values({
+							whopUserId: whopUser.id,
+							experienceId: experience.id, // Link to experience
+							email: "", // Email is not available in public profile
+							name: whopUser.name || whopUser.username || "Unknown User",
+							avatar: whopUser.profilePicture?.sourceUrl || null,
+							credits: initialCredits,
+							accessLevel: initialAccessLevel,
+						})
+						.returning();
+
+					console.log(`✅ New user created: id=${newUser.id}, whopUserId=${newUser.whopUserId}, experienceId=${newUser.experienceId}`);
+				} catch (error) {
+					console.error(`❌ Failed to create user:`, error);
+					console.error(`❌ Error details:`, {
 						whopUserId: whopUser.id,
-						experienceId: experience.id, // Link to experience
-						email: "", // Email is not available in public profile
-						name: whopUser.name || whopUser.username || "Unknown User",
-						avatar: whopUser.profilePicture?.sourceUrl || null,
-						credits: initialCredits,
+						experienceId: experience.id,
 						accessLevel: initialAccessLevel,
-					})
-					.returning();
+						error: error instanceof Error ? error.message : error
+					});
+					throw error; // Re-throw to be caught by outer try-catch
+				}
 
 				// Fetch the user with experience relation
 				user = await db.query.users.findFirst({
@@ -277,6 +293,8 @@ async function createUserContext(
 						experience: true,
 					},
 				});
+
+				console.log(`🔍 Fetched user after creation: id=${user?.id}, whopUserId=${user?.whopUserId}, experienceId=${user?.experienceId}`);
 
 				// Trigger product sync for new admin users via API route
 				if (initialAccessLevel === "admin") {
@@ -381,6 +399,7 @@ async function createUserContext(
 			return null;
 		}
 
+		console.log(`🔍 Creating AuthenticatedUser object with: user.id=${user.id}, experience.id=${experience.id}`);
 		const authenticatedUser: AuthenticatedUser = {
 			id: user.id,
 			whopUserId: user.whopUserId,
@@ -400,6 +419,7 @@ async function createUserContext(
 				logo: experience.logo || undefined,
 			},
 		};
+		console.log(`✅ AuthenticatedUser created: id=${authenticatedUser.id}, whopUserId=${authenticatedUser.whopUserId}, experience.id=${authenticatedUser.experience.id}`);
 
 		return {
 			user: authenticatedUser,

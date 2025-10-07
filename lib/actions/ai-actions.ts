@@ -582,12 +582,11 @@ const validateResourcesForGeneration = (resources: Resource[]): void => {
 		throw new ValidationError("Duplicate resource names found. Each resource must have a unique name.");
 	}
 
-	// Ensure we have at least one resource of each category for proper funnel generation
-	const paidResources = resources.filter(r => r.category === "PAID");
+	// Ensure we have at least 3 resources and at least one FREE resource for proper funnel generation
 	const freeResources = resources.filter(r => r.category === "FREE_VALUE");
 
-	if (paidResources.length === 0) {
-		throw new ValidationError("At least one PAID resource is required for funnel generation");
+	if (resources.length < 3) {
+		throw new ValidationError("At least 3 resources are required for funnel generation");
 	}
 
 	if (freeResources.length === 0) {
@@ -623,26 +622,102 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 		const processedResources = [...resources];
 		
 		if (paidResources.length === 0) {
-			// No PAID offers - check for free products first
+			// No PAID offers - check for free resources
 			if (freeResources.length >= 2) {
-				console.log("🔄 No PAID offers found, converting first 2 FREE_VALUE products to PAID");
-				// Convert first 2 free products to PAID
-				const freeProducts = freeResources.filter(r => r.type === "MY_PRODUCTS");
-				const productsToConvert = freeProducts.slice(0, 2);
+				console.log("🔄 No PAID offers found, converting first 2 FREE_VALUE resources to PAID");
 				
-				productsToConvert.forEach((resource, index) => {
-					const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
-					if (resourceIndex !== -1) {
-						processedResources[resourceIndex] = {
-							...processedResources[resourceIndex],
-							category: "PAID" as const
-						};
-						console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (for AI processing only)`);
+				// FIRST PRIORITY: FREE apps with product_apps (regardless of category)
+				const freeAppsWithProductApps = freeResources.filter(r => 
+					(r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") && 
+					r.productApps && 
+					Object.keys(r.productApps).length > 0
+				);
+				
+				let totalConverted = 0;
+				const maxToConvert = 2;
+				
+				// Convert FREE apps with product_apps first (up to 2)
+				if (freeAppsWithProductApps.length > 0) {
+					const appsToConvert = freeAppsWithProductApps.slice(0, maxToConvert);
+					appsToConvert.forEach(resource => {
+						const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
+						if (resourceIndex !== -1) {
+							processedResources[resourceIndex] = {
+								...processedResources[resourceIndex],
+								category: "PAID" as const
+							};
+							console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (has product_apps, for AI processing only)`);
+							totalConverted++;
+						}
+					});
+				}
+				
+				// SECOND PRIORITY: If still need more, use hierarchy for remaining resources
+				if (totalConverted < maxToConvert) {
+					console.log("🔄 Converting additional FREE apps by category hierarchy");
+					const hierarchy = ['learn', 'community', 'earn', 'other'];
+					
+					for (const category of hierarchy) {
+						if (totalConverted >= maxToConvert) break;
+						
+						// Look for remaining free resources that match category
+						const remainingResources = freeResources.filter(r => {
+							const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
+							return !alreadyConverted && 
+								   (r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") &&
+								   (r.name.toLowerCase().includes(category) || 
+								    (r.productApps && typeof r.productApps === 'object' && 
+								     Object.values(r.productApps).some((app: any) => 
+								     	app && typeof app === 'object' && 
+								     	app.category && app.category.toLowerCase() === category
+								     )
+								    ))
+						});
+						
+						if (remainingResources.length > 0) {
+							const remainingSlots = maxToConvert - totalConverted;
+							const resourcesToConvert = remainingResources.slice(0, remainingSlots);
+							
+							resourcesToConvert.forEach(resource => {
+								const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
+								if (resourceIndex !== -1) {
+									processedResources[resourceIndex] = {
+										...processedResources[resourceIndex],
+										category: "PAID" as const
+									};
+									console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (${category} category, for AI processing only)`);
+									totalConverted++;
+								}
+							});
+						}
 					}
-				});
+					
+					// FINAL FALLBACK: If still need more, convert any remaining FREE resources
+					if (totalConverted < maxToConvert) {
+						console.log("🔄 Using final fallback: converting any remaining FREE resources");
+						const remainingSlots = maxToConvert - totalConverted;
+						const remainingFreeResources = freeResources.filter(r => {
+							const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
+							return !alreadyConverted && (r.type === "MY_PRODUCTS" || r.type === "AFFILIATE");
+						});
+						
+						const resourcesToConvert = remainingFreeResources.slice(0, remainingSlots);
+						resourcesToConvert.forEach(resource => {
+							const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
+							if (resourceIndex !== -1) {
+								processedResources[resourceIndex] = {
+									...processedResources[resourceIndex],
+									category: "PAID" as const
+								};
+								console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (final fallback, for AI processing only)`);
+								totalConverted++;
+							}
+						});
+					}
+				}
 			} else if (freeResources.length === 1) {
-				console.log("🔄 Only 1 FREE_VALUE product found, converting to PAID");
-				// Convert the single free product to PAID
+				console.log("🔄 Only 1 FREE_VALUE resource found, converting to PAID");
+				// Convert the single free resource to PAID
 				const resourceIndex = processedResources.findIndex(r => r.id === freeResources[0].id);
 				if (resourceIndex !== -1) {
 					processedResources[resourceIndex] = {
@@ -651,50 +726,64 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 					};
 					console.log(`✅ AI Display: Converted "${freeResources[0].name}" from FREE_VALUE to PAID (for AI processing only)`);
 				}
-			} else {
-				console.log("🔄 No FREE_VALUE products found, checking free apps in hierarchy");
-				// Check free apps in hierarchy: 1. Learn 2. Community 3. Earn 4. Others
-				const hierarchy = ['learn', 'community', 'earn', 'other'];
-				let appsFound = 0;
-				
-				for (const category of hierarchy) {
-					// This would need to be implemented based on how apps are categorized
-					// For now, we'll look for any resources that might be apps
-					const appResources = freeResources.filter(r => 
-						r.name.toLowerCase().includes(category) || 
-						r.type === "AFFILIATE" // Assuming affiliate resources might be apps
-					);
-					
-					if (appResources.length > 0 && appsFound < 2) {
-						const appsToConvert = appResources.slice(0, 2 - appsFound);
-						appsToConvert.forEach(resource => {
-							const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
-							if (resourceIndex !== -1) {
-								processedResources[resourceIndex] = {
-									...processedResources[resourceIndex],
-									category: "PAID" as const
-								};
-								console.log(`✅ AI Display: Converted app "${resource.name}" from FREE_VALUE to PAID (${category} category, for AI processing only)`);
-								appsFound++;
-							}
-						});
-					}
-				}
 			}
 		} else if (paidResources.length === 1) {
-			// 1 PAID offer - search for only 1 free product or 1 app
+			// 1 PAID offer - search for only 1 additional free resource
 			console.log("🔄 1 PAID offer found, looking for 1 additional FREE_VALUE resource");
 			
 			if (freeResources.length >= 1) {
-				// Convert first free product to PAID
-				const resourceToConvert = freeResources[0];
-				const resourceIndex = processedResources.findIndex(r => r.id === resourceToConvert.id);
-				if (resourceIndex !== -1) {
-					processedResources[resourceIndex] = {
-						...processedResources[resourceIndex],
-						category: "PAID" as const
-					};
-					console.log(`✅ AI Display: Converted "${resourceToConvert.name}" from FREE_VALUE to PAID (for AI processing only)`);
+				// FIRST PRIORITY: FREE apps with product_apps
+				const freeAppsWithProductApps = freeResources.filter(r => 
+					(r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") && 
+					r.productApps && 
+					Object.keys(r.productApps).length > 0
+				);
+				
+				let resourceToConvert = null;
+				
+				// Try to find a FREE app with product_apps first
+				if (freeAppsWithProductApps.length > 0) {
+					resourceToConvert = freeAppsWithProductApps[0];
+					console.log(`✅ AI Display: Found FREE app with product_apps: "${resourceToConvert.name}"`);
+				} else {
+					// SECOND PRIORITY: Use hierarchy for remaining resources
+					const hierarchy = ['learn', 'community', 'earn', 'other'];
+					
+					for (const category of hierarchy) {
+						const categoryResources = freeResources.filter(r => 
+							(r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") &&
+							(r.name.toLowerCase().includes(category) || 
+							 (r.productApps && typeof r.productApps === 'object' && 
+							  Object.values(r.productApps).some((app: any) => 
+							  	app && typeof app === 'object' && 
+							  	app.category && app.category.toLowerCase() === category
+							  )
+							))
+						);
+						
+						if (categoryResources.length > 0) {
+							resourceToConvert = categoryResources[0];
+							console.log(`✅ AI Display: Found FREE app by category (${category}): "${resourceToConvert.name}"`);
+							break;
+						}
+					}
+					
+					// FALLBACK: Any remaining free resource
+					if (!resourceToConvert) {
+						resourceToConvert = freeResources[0];
+						console.log(`✅ AI Display: Using fallback FREE resource: "${resourceToConvert.name}"`);
+					}
+				}
+					
+				if (resourceToConvert) {
+					const resourceIndex = processedResources.findIndex(r => r.id === resourceToConvert.id);
+					if (resourceIndex !== -1) {
+						processedResources[resourceIndex] = {
+							...processedResources[resourceIndex],
+							category: "PAID" as const
+						};
+						console.log(`✅ AI Display: Converted "${resourceToConvert.name}" from FREE_VALUE to PAID (for AI processing only)`);
+					}
 				}
 			} else {
 				console.log("⚠️ No FREE_VALUE resources found to convert");

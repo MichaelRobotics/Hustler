@@ -120,7 +120,6 @@ export const funnels = pgTable(
 		description: text("description"),
 		flow: jsonb("flow"), // The complete funnel flow JSON
 		visualizationState: jsonb("visualization_state").default("{}"), // User visualization preferences and layout
-		whopProductId: text("whop_product_id"), // Discovery page product ID (accessPass.id)
 		isDeployed: boolean("is_deployed").default(false).notNull(),
 		wasEverDeployed: boolean("was_ever_deployed").default(false).notNull(),
 		generationStatus: generationStatusEnum("generation_status")
@@ -133,7 +132,6 @@ export const funnels = pgTable(
 	(table) => ({
 		experienceIdIdx: index("funnels_experience_id_idx").on(table.experienceId),
 		userIdIdx: index("funnels_user_id_idx").on(table.userId),
-		whopProductIdIdx: index("funnels_whop_product_id_idx").on(table.whopProductId),
 		isDeployedIdx: index("funnels_is_deployed_idx").on(table.isDeployed),
 		generationStatusIdx: index("funnels_generation_status_idx").on(
 			table.generationStatus,
@@ -149,11 +147,6 @@ export const funnels = pgTable(
 		),
 		experienceDeployedIdx: index("funnels_experience_deployed_idx").on(
 			table.experienceId,
-			table.isDeployed,
-		),
-		experienceProductDeployedIdx: index("funnels_experience_product_deployed_idx").on(
-			table.experienceId,
-			table.whopProductId,
 			table.isDeployed,
 		),
 	}),
@@ -246,6 +239,7 @@ export const conversations = pgTable(
 		whopProductId: text("whop_product_id"), // Whop product ID for product-specific conversations
 		status: conversationStatusEnum("status").default("active").notNull(),
 		currentBlockId: text("current_block_id"),
+		flow: jsonb("flow"), // Customized funnel flow for this conversation
 		userPath: jsonb("user_path"), // Track user's path through funnel
 		phase2StartTime: timestamp("phase2_start_time"), // When Phase 2 (VALUE_DELIVERY) begins
 		myAffiliateLink: text("my_affiliate_link"), // Affiliate link for this conversation

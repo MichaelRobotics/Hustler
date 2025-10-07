@@ -7,7 +7,7 @@
 
 import { and, eq, desc, asc, sql, inArray } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences, users } from "../supabase/schema";
+import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences, users, resources } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
@@ -40,6 +40,7 @@ export interface ConversationWithMessages extends Conversation {
 		name: string;
 		isDeployed: boolean;
 	};
+	flow?: FunnelFlow | null; // Custom flow for this conversation
 }
 
 
@@ -94,6 +95,7 @@ export async function getConversationById(
 				name: conversation.funnel.name,
 				isDeployed: conversation.funnel.isDeployed,
 			},
+			flow: conversation.flow as FunnelFlow | null, // Include the custom flow
 		};
 	} catch (error) {
 		console.error("Error getting conversation by ID:", error);
@@ -103,7 +105,7 @@ export async function getConversationById(
 
 
 /**
- * Create a new conversation
+ * Create a new conversation with customized flow based on whopProductId
  */
 export async function createConversation(
 	experienceId: string,
@@ -146,7 +148,29 @@ export async function createConversation(
 			console.log(`[CREATE-CONVERSATION] No existing conversations found for whopUserId ${whopUserId}`);
 		}
 
-		// Create new conversation
+		// Get the original funnel flow
+		const funnel = await db.query.funnels.findFirst({
+			where: eq(funnels.id, funnelId),
+		});
+
+		if (!funnel?.flow) {
+			throw new Error(`Funnel flow not found for funnelId ${funnelId}`);
+		}
+
+		const originalFlow = funnel.flow as FunnelFlow;
+		console.log(`[CREATE-CONVERSATION] Retrieved original funnel flow with ${Object.keys(originalFlow.blocks).length} blocks`);
+
+		// Customize the flow based on whopProductId if provided
+		let customizedFlow = originalFlow;
+		if (whopProductId) {
+			console.log(`[CREATE-CONVERSATION] Customizing flow for whopProductId: ${whopProductId}`);
+			customizedFlow = await customizeFlowForProduct(originalFlow, whopProductId, experienceId);
+			console.log(`[CREATE-CONVERSATION] Flow customized with ${Object.keys(customizedFlow.blocks).length} blocks`);
+		} else {
+			console.log(`[CREATE-CONVERSATION] No whopProductId provided, using original flow`);
+		}
+
+		// Create new conversation with customized flow
 		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}, whopProductId ${whopProductId}`);
 		const [newConversation] = await db.insert(conversations).values({
 			experienceId,
@@ -157,13 +181,169 @@ export async function createConversation(
 			status: "active",
 			currentBlockId: startBlockId,
 			userPath: [startBlockId],
+			flow: customizedFlow, // Store the customized flow
 		}).returning();
 
-		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId}`);
+		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId} with customized flow`);
 		return newConversation.id;
 	} catch (error) {
 		console.error("Error creating conversation:", error);
 		throw error;
+	}
+}
+
+/**
+ * Customize funnel flow for a specific product based on whopProductId
+ * This function:
+ * 1. Filters WELCOME stage options to only show those that match the product's apps
+ * 2. Removes blocks that have ONLY the product resource in their availableOffers
+ * 3. Removes options that lead to blocks containing ONLY the product resource
+ */
+async function customizeFlowForProduct(
+	originalFlow: FunnelFlow,
+	whopProductId: string,
+	experienceId: string
+): Promise<FunnelFlow> {
+	try {
+		console.log(`[CUSTOMIZE-FLOW] Customizing flow for whopProductId: ${whopProductId}`);
+		
+		// Find the resource that matches the whopProductId
+		const matchingResource = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.whopProductId, whopProductId),
+				eq(resources.experienceId, experienceId)
+			),
+			columns: {
+				id: true,
+				name: true,
+				productApps: true,
+				whopProductId: true
+			}
+		});
+
+		if (!matchingResource) {
+			console.log(`[CUSTOMIZE-FLOW] No resource found with whopProductId: ${whopProductId} - using original flow`);
+			return originalFlow;
+		}
+
+		const productApps = matchingResource.productApps as string[] || [];
+		if (productApps.length === 0) {
+			console.log(`[CUSTOMIZE-FLOW] No product_apps found in resource - using original flow`);
+			return originalFlow;
+		}
+
+		console.log(`[CUSTOMIZE-FLOW] Found matching resource: ${matchingResource.name} with apps: ${JSON.stringify(productApps)}`);
+
+		// Deep clone the original flow
+		const customizedFlow: FunnelFlow = JSON.parse(JSON.stringify(originalFlow));
+
+		// Step 1: Find WELCOME stage blocks and filter options
+		const welcomeStage = customizedFlow.stages.find(stage => stage.name === "WELCOME");
+		if (!welcomeStage) {
+			console.log(`[CUSTOMIZE-FLOW] No WELCOME stage found - using original flow`);
+			return originalFlow;
+		}
+
+		console.log(`[CUSTOMIZE-FLOW] Processing WELCOME stage blocks: ${welcomeStage.blockIds.join(', ')}`);
+
+		// Filter options in each WELCOME block
+		let totalOptionsBefore = 0;
+		let totalOptionsAfter = 0;
+
+		for (const blockId of welcomeStage.blockIds) {
+			const block = customizedFlow.blocks[blockId];
+			if (!block || !block.options) continue;
+
+			const originalOptionsCount = block.options.length;
+			totalOptionsBefore += originalOptionsCount;
+
+			// Filter options to only include those that lead to blocks with resourceName matching product_apps
+			const filteredOptions = block.options.filter(option => {
+				const targetBlockId = option.nextBlockId;
+				if (!targetBlockId) return true; // Keep options without nextBlockId
+
+				const targetBlock = customizedFlow.blocks[targetBlockId];
+				if (!targetBlock) return true; // Keep options with invalid target blocks
+
+				// If target block has no resourceName, keep the option
+				if (!targetBlock.resourceName) return true;
+
+				// Check if resourceName matches any of the product_apps
+				const resourceNameMatches = productApps.some(appName => 
+					appName.toLowerCase().trim() === (targetBlock.resourceName || '').toLowerCase().trim()
+				);
+
+				if (resourceNameMatches) {
+					console.log(`[CUSTOMIZE-FLOW] ✅ Keeping option "${option.text}" -> "${targetBlock.resourceName}"`);
+				} else {
+					console.log(`[CUSTOMIZE-FLOW] ❌ Filtering out option "${option.text}" -> "${targetBlock.resourceName}" (not in product_apps)`);
+				}
+
+				return resourceNameMatches;
+			});
+
+			block.options = filteredOptions;
+			totalOptionsAfter += filteredOptions.length;
+
+			console.log(`[CUSTOMIZE-FLOW] Block ${blockId}: ${originalOptionsCount} -> ${filteredOptions.length} options`);
+		}
+
+		console.log(`[CUSTOMIZE-FLOW] WELCOME stage total options: ${totalOptionsBefore} -> ${totalOptionsAfter}`);
+
+		// Step 2: Remove blocks that have ONLY the product resource in their availableOffers
+		const blocksToRemove: string[] = [];
+		for (const [blockId, block] of Object.entries(customizedFlow.blocks)) {
+			if (!block.availableOffers || block.availableOffers.length === 0) continue;
+
+			// Check if this block has ONLY the product resource
+			const hasOnlyProductResource = block.availableOffers.length === 1 && 
+				block.availableOffers[0].toLowerCase().trim() === matchingResource.name.toLowerCase().trim();
+
+			if (hasOnlyProductResource) {
+				console.log(`[CUSTOMIZE-FLOW] 🗑️ Removing block "${blockId}" - has only product resource "${block.availableOffers[0]}"`);
+				blocksToRemove.push(blockId);
+			}
+		}
+
+		// Step 3: Remove options that lead to blocks containing ONLY the product resource
+		for (const [blockId, block] of Object.entries(customizedFlow.blocks)) {
+			if (!block.options) continue;
+
+			// Filter out options that lead to blocks with only the product resource
+			block.options = block.options.filter(option => {
+				const targetBlockId = option.nextBlockId;
+				if (!targetBlockId) return true; // Keep options without nextBlockId
+
+				// Check if target block is in the removal list
+				if (blocksToRemove.includes(targetBlockId)) {
+					console.log(`[CUSTOMIZE-FLOW] 🗑️ Removing option "${option.text}" -> block "${targetBlockId}" (has only product resource)`);
+					return false;
+				}
+
+				return true;
+			});
+		}
+
+		// Step 4: Remove the identified blocks from the flow
+		for (const blockId of blocksToRemove) {
+			delete customizedFlow.blocks[blockId];
+			console.log(`[CUSTOMIZE-FLOW] 🗑️ Deleted block "${blockId}" from flow`);
+		}
+
+		// Step 5: Update stage blockIds to remove deleted blocks
+		for (const stage of customizedFlow.stages) {
+			stage.blockIds = stage.blockIds.filter(blockId => !blocksToRemove.includes(blockId));
+		}
+
+		console.log(`[CUSTOMIZE-FLOW] Removed ${blocksToRemove.length} blocks with only product resource`);
+		console.log(`[CUSTOMIZE-FLOW] Flow customization completed`);
+
+		return customizedFlow;
+
+	} catch (error) {
+		console.error(`[CUSTOMIZE-FLOW] Error customizing flow:`, error);
+		// Return original flow if customization fails
+		return originalFlow;
 	}
 }
 
@@ -268,12 +448,18 @@ export async function processUserMessage(
 			return { success: false, error: "Conversation not found" };
 		}
 
-		if (!conversation.funnel?.flow) {
-			console.error(`[processUserMessage] Funnel flow not found for conversation ${conversationId}`);
+		// Use conversation's custom flow if available, otherwise use original funnel flow
+		let funnelFlow: FunnelFlow;
+		if (conversation.flow) {
+			console.log(`[processUserMessage] Using conversation's custom flow for conversation ${conversationId}`);
+			funnelFlow = conversation.flow as FunnelFlow;
+		} else if (conversation.funnel?.flow) {
+			console.log(`[processUserMessage] Using original funnel flow for conversation ${conversationId}`);
+			funnelFlow = conversation.funnel.flow as FunnelFlow;
+		} else {
+			console.error(`[processUserMessage] No flow found for conversation ${conversationId}`);
 			return { success: false, error: "Funnel flow not found" };
 		}
-
-		const funnelFlow = conversation.funnel.flow as FunnelFlow;
 		const currentBlockId = conversation.currentBlockId;
 
 		if (!currentBlockId) {

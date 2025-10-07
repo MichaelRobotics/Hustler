@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { ThemeToggle } from "../common/ThemeToggle";
-import { ProductSelectionModal } from "./ProductSelectionModal";
 
 interface Funnel {
 	id: string;
@@ -47,6 +46,7 @@ interface FunnelsDashboardProps {
 	onFunnelClick: (funnel: Funnel) => void;
 	handleDuplicateFunnel: (funnel: Funnel) => void;
 	handleManageResources: (funnel: Funnel) => void;
+	onGoToLibrary?: (funnel: Funnel) => void; // New: Navigate to Library in funnel context
 	isRenaming: boolean;
 	setIsRenaming: (isRenaming: boolean) => void;
 	isCreatingNewFunnel: boolean;
@@ -58,30 +58,8 @@ interface FunnelsDashboardProps {
 	isDeleting: boolean;
 	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
 	user?: { experienceId?: string } | null;
-	// Product selection props
-	isProductSelectionOpen: boolean;
-	setIsProductSelectionOpen: (open: boolean) => void;
-	isProductSelectionActive: boolean;
-	setIsProductSelectionActive: (active: boolean) => void;
-	discoveryProducts: any[];
-	setDiscoveryProducts: (products: any[]) => void;
-	productsLoading: boolean;
-	setProductsLoading: (loading: boolean) => void;
-	selectedProduct: any | null;
-	setSelectedProduct: (product: any | null) => void;
-	fetchDiscoveryProducts: () => Promise<void>;
 }
 
-interface DiscoveryProduct {
-	id: string;
-	title: string;
-	description?: string;
-	price: number;
-	currency: string;
-	isFree: boolean;
-	route: string;
-	discoveryPageUrl?: string;
-}
 
 const FunnelsDashboard = React.memo(
 	({
@@ -97,6 +75,7 @@ const FunnelsDashboard = React.memo(
 		onFunnelClick,
 		handleDuplicateFunnel,
 		handleManageResources,
+		onGoToLibrary,
 		isRenaming,
 		setIsRenaming,
 		isCreatingNewFunnel,
@@ -108,18 +87,6 @@ const FunnelsDashboard = React.memo(
 		isDeleting,
 		isFunnelNameAvailable,
 		user,
-	// Product selection props
-	isProductSelectionOpen,
-	setIsProductSelectionOpen,
-	isProductSelectionActive,
-	setIsProductSelectionActive,
-	discoveryProducts,
-	setDiscoveryProducts,
-	productsLoading,
-	setProductsLoading,
-	selectedProduct,
-	setSelectedProduct,
-	fetchDiscoveryProducts,
 	}: FunnelsDashboardProps) => {
 		// State to track which dropdown is open and which button is highlighted
 		const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -140,24 +107,6 @@ const FunnelsDashboard = React.memo(
 		}, [editingFunnelId, funnels]);
 
 
-		// Handle product selection
-		const handleProductSelect = useCallback((product: DiscoveryProduct) => {
-			setSelectedProduct(product);
-			setNewFunnelName(product.title); // 🔑 Auto-fill funnel name
-			setIsProductSelectionOpen(false);
-			setIsProductSelectionActive(false); // Show sidebar again
-			setIsCreatingNewFunnel(true); // Show name input
-			setIsRenaming(true); // Hide sidebar during funnel creation (same as rename)
-		}, [setSelectedProduct, setNewFunnelName, setIsProductSelectionOpen, setIsProductSelectionActive, setIsCreatingNewFunnel, setIsRenaming]);
-
-		// Handle opening product selection
-		const handleOpenProductSelection = useCallback(() => {
-			setIsProductSelectionOpen(true);
-			setIsProductSelectionActive(true); // Hide sidebar during product selection
-			if (discoveryProducts.length === 0) {
-				fetchDiscoveryProducts();
-			}
-		}, [setIsProductSelectionOpen, setIsProductSelectionActive, discoveryProducts.length, fetchDiscoveryProducts]);
 
 		// Memoized handler for creating a new funnel
 		const handleCreateNewFunnel = useCallback(
@@ -178,7 +127,6 @@ const FunnelsDashboard = React.memo(
 				try {
 					const response = await apiPost("/api/funnels", {
 						name: funnelName.trim(),
-						whopProductId: selectedProduct?.id, // 🔑 Product association
 					}, user.experienceId);
 
 					if (!response.ok) {
@@ -194,11 +142,14 @@ const FunnelsDashboard = React.memo(
 
 					// Reset states
 					setIsCreatingNewFunnel(false);
-					setIsProductSelectionActive(false); // Show sidebar again
 					handleSetIsRenaming(false);
 					setEditingFunnelId(null);
 					setNewFunnelName("");
-					setSelectedProduct(null); // 🔑 Clear selected product
+
+					// Automatically navigate to Library view for the new funnel
+					if (onGoToLibrary) {
+						onGoToLibrary(newFunnel);
+					}
 
 					return newFunnel;
 				} catch (error) {
@@ -217,7 +168,7 @@ const FunnelsDashboard = React.memo(
 				setNewFunnelName,
 				isFunnelNameAvailable,
 				user?.experienceId,
-				selectedProduct, // 🔑 Include selected product
+				onGoToLibrary,
 			],
 		);
 
@@ -338,7 +289,6 @@ const FunnelsDashboard = React.memo(
 												setNewFunnelName("");
 												handleSetIsRenaming(false);
 												setIsCreatingNewFunnel(false);
-												setIsProductSelectionActive(false); // Show sidebar again
 											}}
 											disabled={isSaving}
 											className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -501,7 +451,6 @@ const FunnelsDashboard = React.memo(
 													setEditingName("");
 													handleSetIsRenaming(false); // Show sidebar after cancelling with timeout
 													setIsCreatingNewFunnel(false); // Reset creation state
-													setIsProductSelectionActive(false); // Show sidebar again
 												}}
 												disabled={isSaving}
 												className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -624,7 +573,7 @@ const FunnelsDashboard = React.memo(
 												onClick={(e) => {
 													e.preventDefault();
 													e.stopPropagation();
-													handleManageResources(funnel);
+													onGoToLibrary?.(funnel);
 													setOpenDropdownId(null);
 													setHighlightedButtonId(null);
 												}}
@@ -643,14 +592,19 @@ const FunnelsDashboard = React.memo(
 														d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 													/>
 												</svg>
-												<span>Products</span>
+												<span>Resources</span>
 											</DropdownMenu.Item>
 
 											<DropdownMenu.Item
 												onClick={(e) => {
 													e.preventDefault();
 													e.stopPropagation();
-													handleEditFunnel(funnel);
+													// If funnel is not generated, go to Library; otherwise go to FunnelBuilder
+													if (!hasValidFlow(funnel)) {
+														onGoToLibrary?.(funnel);
+													} else {
+														handleEditFunnel(funnel);
+													}
 													setOpenDropdownId(null);
 													setHighlightedButtonId(null);
 												}}
@@ -692,17 +646,6 @@ const FunnelsDashboard = React.memo(
 					})}
 				</div>
 
-				{/* Product Selection Modal */}
-				<ProductSelectionModal
-					isOpen={isProductSelectionOpen}
-					products={discoveryProducts}
-					onClose={() => {
-						setIsProductSelectionOpen(false);
-						setIsProductSelectionActive(false); // Show sidebar again
-					}}
-					onProductSelect={handleProductSelect}
-					loading={productsLoading}
-				/>
 			</div>
 		);
 	},

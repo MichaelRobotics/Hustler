@@ -63,8 +63,16 @@ async function deployFunnelHandler(request: NextRequest, context: AuthContext) {
 			"Funnel deployed successfully",
 		);
 	} catch (error) {
-		console.error("Error deploying funnel:", error);
-		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+		const errorMessage = (error as Error).message;
+		
+		// Check if this is a live funnel conflict (expected behavior)
+		if (errorMessage.includes("is currently live for this experience")) {
+			console.log(`ℹ️ [DEPLOYMENT INFO] Deployment blocked - another funnel is live: ${errorMessage}`);
+		} else {
+			console.error("Error deploying funnel:", error);
+		}
+		
+		return createErrorResponse("INTERNAL_ERROR", errorMessage);
 	}
 }
 

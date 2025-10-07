@@ -8,6 +8,7 @@ export interface Resource {
 	category: "PAID" | "FREE_VALUE";
 	description?: string;
 	promoCode?: string;
+	productApps?: any; // JSON field for product apps data
 }
 
 export interface ResourceFormData {
@@ -41,35 +42,28 @@ export interface ResourceLibraryProps {
 	setAllResources: (resources: Resource[]) => void;
 	onBack?: () => void;
 	onAddToFunnel?: (resource: Resource) => void;
+	onRemoveFromFunnel?: (resource: Resource) => void;
 	onEdit?: () => void;
 	onGoToPreview?: (funnel: Funnel) => void;
 	onGlobalGeneration: () => Promise<void>;
-	isGenerating: boolean;
+	isGenerating: boolean | ((funnelId: string) => boolean);
 	isAnyFunnelGenerating?: () => boolean;
 	onGoToFunnelProducts: () => void;
+	onOpenOfflineConfirmation?: () => void;
+	onDeploy?: (funnelId: string) => Promise<void>;
 	context: "global" | "funnel";
 	onModalStateChange?: (isModalOpen: boolean) => void;
 	user?: AuthenticatedUser | null;
+	// Generation props for funnel context
+	isGeneratingFunnel?: (funnelId: string) => boolean;
+	onGlobalGenerationFunnel?: (funnelId: string) => Promise<void>;
+	// Auto-navigation callback
+	onNavigate?: (funnel: Funnel) => void;
+	// Deployment state
+	isDeploying?: boolean;
+	hasAnyLiveFunnel?: boolean;
 }
 
-export interface ResourcePageProps {
-	funnel: Funnel;
-	user: AuthenticatedUser | null;
-	onBack: () => void;
-	onUpdateFunnel: (updatedFunnel: Funnel) => void;
-	onEdit: () => void;
-	onGoToBuilder: (updatedFunnel?: Funnel) => void;
-	onGoToPreview: (funnel: Funnel) => void;
-	onOpenResourceLibrary: () => void;
-	onGlobalGeneration: (funnelId: string) => Promise<void>;
-	isGenerating: (funnelId: string) => boolean;
-	isAnyFunnelGenerating: () => boolean;
-	onGoToFunnelProducts: () => void;
-	removeResourceFromFunnel: (
-		funnelId: string,
-		resourceId: string,
-	) => Promise<void>;
-}
 
 export interface DeleteConfirmation {
 	show: boolean;

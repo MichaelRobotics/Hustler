@@ -3,6 +3,7 @@
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import React, { useEffect } from "react";
 import { useResourceLibrary } from "../../hooks/useResourceLibrary";
+import { useAutoNavigation } from "../../hooks/useAutoNavigation";
 import type { ResourceLibraryProps } from "../../types/resource";
 import UnifiedNavigation from "../common/UnifiedNavigation";
 import { LibraryEmptyState } from "./LibraryEmptyState";
@@ -11,6 +12,14 @@ import { ResourceLibraryHeader } from "./ResourceLibraryHeader";
 import { LibraryResourceDeleteModal } from "./modals/LibraryResourceDeleteModal";
 import { LibraryResourceModal } from "./modals/LibraryResourceModal";
 import { validateFunnelProducts } from "../../helpers/funnel-product-validation";
+import { FunnelGenerationSection } from "./FunnelGenerationSection";
+import { InsufficientProductsValidation } from "./InsufficientProductsValidation";
+
+// Helper function to check if there's at least 1 free resource
+const hasAtLeastOneFreeResource = (funnel: any) => {
+	if (!funnel?.resources) return false;
+	return funnel.resources.some((resource: any) => resource.category === "FREE_VALUE");
+};
 
 const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	funnel,
@@ -19,16 +28,48 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	setAllResources,
 	onBack,
 	onAddToFunnel,
+	onRemoveFromFunnel,
 	onEdit,
 	onGoToPreview,
 	onGlobalGeneration,
 	isGenerating,
 	isAnyFunnelGenerating,
 	onGoToFunnelProducts,
+	onOpenOfflineConfirmation,
+	onDeploy,
 	context,
 	onModalStateChange,
 	user,
+	// Generation props for funnel context
+	isGeneratingFunnel,
+	onGlobalGenerationFunnel,
+	// Auto-navigation callback
+	onNavigate,
+	// Deployment state
+	isDeploying = false,
+	hasAnyLiveFunnel = false,
 }) => {
+	// Auto-navigation to funnel builder when generation completes (only in funnel context)
+	useAutoNavigation({
+		funnel: funnel || { id: "", name: "", flow: null },
+		isGenerating: isGeneratingFunnel || (() => false),
+		onNavigate: onNavigate || (() => {}),
+		enabled: context === "funnel" && !!funnel, // Only enable auto-navigation in funnel context
+	});
+
+	// Check product validation for navigation visibility
+	const productValidation = funnel
+		? validateFunnelProducts(funnel)
+		: { isValid: false, hasPaidProducts: false, hasFreeProducts: false, hasMinimumResources: false, missingTypes: [] };
+
+	// Convert isGenerating to boolean for display logic
+	const currentlyGenerating =
+		typeof isGenerating === "function"
+			? funnel
+				? isGenerating(funnel.id)
+				: false
+			: isGenerating;
+	
 	const {
 		selectedCategory,
 		isAddingResource,
@@ -79,6 +120,18 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	const isResourceInFunnel = (resourceId: string) => {
 		return funnel?.resources?.some((r) => r.id === resourceId) || false;
 	};
+
+	// Filter resources based on funnel generation status
+	const getDisplayResources = () => {
+		// If funnel is generated (has valid flow), show only assigned resources
+		if (context === "funnel" && funnel && hasValidFlow(funnel)) {
+			return filteredResources.filter(resource => isResourceInFunnel(resource.id));
+		}
+		// Otherwise, show all filtered resources
+		return filteredResources;
+	};
+
+	const displayResources = getDisplayResources();
 
 	// Handle inline product creation
 	const handleCreateNewProductInline = () => {
@@ -165,9 +218,13 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						context={context}
 						onBack={onBack}
 						onAddProduct={handleCreateNewProductInline}
+						onOpenOfflineConfirmation={onOpenOfflineConfirmation}
+						onDeploy={onDeploy}
 						filteredResourcesCount={filteredResources.length}
 						funnel={funnel}
 						allResourcesCount={allResources.length}
+						isDeploying={isDeploying}
+						hasAnyLiveFunnel={hasAnyLiveFunnel}
 					/>
 
 					{/* Resources Counter Section */}
@@ -202,9 +259,36 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						</div>
 					)}
 
+					{/* Generation Sections - Only show in funnel context */}
+					{context === "funnel" && funnel && (
+						<>
+							{/* Generate Section or Validation Message */}
+							{/* Generate section - only visible when there's at least 1 free resource AND at least 3 resources */}
+							{hasAtLeastOneFreeResource(funnel) && (funnel.resources?.length || 0) >= 3 ? (
+								<div className="mb-8">
+									<FunnelGenerationSection
+										funnel={funnel}
+										user={user ?? null}
+										currentResources={funnel.resources || []}
+										isGenerating={isGeneratingFunnel || (() => false)}
+										isAnyFunnelGenerating={isAnyFunnelGenerating || (() => false)}
+										onGlobalGeneration={onGlobalGenerationFunnel || (async () => {})}
+										totalFunnels={allFunnels.length}
+										onDeploy={onDeploy}
+									/>
+								</div>
+							) : /* Choose section - visible when there's NOT at least 1 free resource OR NOT at least 3 resources */
+							!hasAtLeastOneFreeResource(funnel) || (funnel.resources?.length || 0) < 3 ? (
+								<div className="mb-8">
+									<InsufficientProductsValidation funnel={funnel} />
+								</div>
+							) : null}
+						</>
+					)}
+
 					{/* Resources Grid */}
 					{!error && (
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-products-section>
 							{/* New Product Creation Card */}
 							{isCreatingNewProduct && (
 								<div className="group bg-gradient-to-br from-violet-50/80 via-violet-100/60 to-violet-200/40 dark:from-violet-900/80 dark:via-violet-800/60 dark:to-indigo-900/30 p-4 rounded-xl border-2 border-violet-500/60 dark:border-violet-400/70 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
@@ -225,7 +309,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 											>
 												{newResource.category === "PAID"
 													? "Paid"
-													: "Free Value"}
+													: "Gift"}
 											</span>
 										</div>
 										<div className="flex items-center gap-1">
@@ -278,7 +362,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 												className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 											>
 												<option value="AFFILIATE">Affiliate</option>
-												<option value="MY_PRODUCTS">My Product</option>
+												<option value="MY_PRODUCTS">Owned</option>
 											</select>
 											<select
 												value={newResource.category || "FREE_VALUE"}
@@ -291,7 +375,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 												disabled={isSaving}
 												className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 											>
-												<option value="FREE_VALUE">Free Value</option>
+												<option value="FREE_VALUE">Gift</option>
 												<option value="PAID">Paid</option>
 											</select>
 										</div>
@@ -307,7 +391,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 													setError(null);
 												}
 											}}
-											placeholder="Product name..."
+											placeholder="Resource name..."
 											disabled={isSaving}
 											className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
 												newResource.name && !isNameAvailable(newResource.name)
@@ -329,7 +413,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 											onChange={(e) =>
 												setNewResource({ ...newResource, link: e.target.value })
 											}
-											placeholder="Product URL..."
+											placeholder="Resource URL..."
 											disabled={isSaving}
 											className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 										/>
@@ -352,7 +436,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 								</div>
 							)}
 
-							{filteredResources.map((resource) => (
+
+							{displayResources.map((resource) => (
 								<ResourceCard
 									key={resource.id}
 									resource={resource}
@@ -362,15 +447,18 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 									isResourceInFunnel={isResourceInFunnel}
 									isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
 									onAddToFunnel={onAddToFunnel}
+									onRemoveFromFunnel={onRemoveFromFunnel}
 									onEdit={openEditModal}
 									onDelete={handleDeleteResource}
 									onUpdate={updateResource}
 									isRemoving={removingResourceId === resource.id}
 									onEditingChange={handleEditingChange}
+									hideAssignmentOptions={context === "funnel" && funnel && hasValidFlow(funnel)}
 								/>
 							))}
 						</div>
 					)}
+
 
 					{/* Empty State */}
 					{!error && filteredResources.length === 0 && (
@@ -379,13 +467,14 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 				</div>
 			</div>
 
-			{/* Unified Navigation - Only show in funnel context, with preview functionality, and hide when generating, when no resources and no funnel generated, or when missing PAID or FREE products */}
+
+			{/* Unified Navigation - Hide when funnel is generating, when no resources and no funnel generated, or when missing FREE products or minimum resources */}
 			{context === "funnel" &&
-				!isGenerating &&
+				!currentlyGenerating &&
 				funnel &&
 				((funnel.resources?.length || 0) > 0 || hasValidFlow(funnel)) &&
-				validateFunnelProducts(funnel).hasPaidProducts &&
-				validateFunnelProducts(funnel).hasFreeProducts && (
+				(funnel.resources?.length || 0) >= 3 &&
+				productValidation.hasFreeProducts && (
 					<UnifiedNavigation
 						onPreview={() => {
 							if (funnel && onGoToPreview) {
@@ -400,19 +489,21 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 							}
 						}}
 						onGeneration={async () => {
-							if (funnel) {
-								// Switch to ResourcePage first to show generation progress
+							if (funnel && onGlobalGenerationFunnel) {
+								// Start generation directly in ResourceLibrary
+								await onGlobalGenerationFunnel(funnel.id);
+							} else if (funnel) {
+								// Fallback to original behavior
 								onGoToFunnelProducts();
-								// Start generation
 								await onGlobalGeneration();
 							}
 						}}
 						isGenerated={funnel ? hasValidFlow(funnel) : false}
-						isGenerating={isGenerating}
+						isGenerating={currentlyGenerating}
 						isAnyFunnelGenerating={isAnyFunnelGenerating}
 						isDeployed={funnel?.isDeployed}
 						funnel={funnel}
-						showOnPage="resources"
+						showOnPage="aibuilder"
 					/>
 				)}
 		</div>

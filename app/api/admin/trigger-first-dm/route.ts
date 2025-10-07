@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { getTransitionMessage, updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
 import { findOrCreateUserForConversation, deleteExistingConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
+import { createConversation } from "@/lib/actions/simplified-conversation-actions";
 import { headers } from "next/headers";
 import type { FunnelFlow } from "@/lib/types/funnel";
 
@@ -197,21 +198,16 @@ export async function POST(request: NextRequest) {
     // Step 9: Delete any existing conversations for this admin user
     await deleteExistingConversationsByWhopUserId(whopUserId, experience.id);
 
-    // Step 10: Create DM conversation record (EXACT SAME as real customers)
-    const [newConversation] = await db
-      .insert(conversations)
-      .values({
-        experienceId: experience.id,
-        funnelId: liveFunnel.id,
-        whopUserId: whopUserId, // Direct Whop user ID for faster lookups
-        whopProductId: productId, // Include product ID for tracking
-        status: "active",
-        currentBlockId: funnelFlow.startBlockId,
-        userPath: [funnelFlow.startBlockId],
-      })
-      .returning();
-
-    const conversationId = newConversation.id;
+    // Step 10: Create DM conversation record using createConversation function (EXACT SAME as real customers)
+    // This ensures the conversation gets a customized flow based on whopProductId
+    const conversationId = await createConversation(
+      experience.id,
+      liveFunnel.id,
+      whopUserId,
+      funnelFlow.startBlockId,
+      undefined, // membershipId
+      productId  // whopProductId for flow customization
+    );
 
     // Step 11: Record transition message in database (DM was sent successfully)
     await db.insert(messages).values({

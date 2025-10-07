@@ -36,6 +36,7 @@ export interface ResourceWithFunnels {
 	promoCode?: string; // Frontend compatibility field
 	description?: string;
 	whopProductId?: string;
+	productApps?: any; // JSON field for product apps data
 	createdAt: Date;
 	updatedAt: Date;
 	funnels: Array<{
@@ -192,6 +193,7 @@ export async function getResourceById(
 			promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: resource.description || undefined,
 			whopProductId: resource.whopProductId || undefined,
+			productApps: resource.productApps || undefined,
 			createdAt: resource.createdAt,
 			updatedAt: resource.updatedAt,
 			funnels: resource.funnelResources.map((fr: any) => ({
@@ -294,6 +296,7 @@ export async function getResources(
 					promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 					description: resource.description || undefined,
 					whopProductId: resource.whopProductId || undefined,
+					productApps: resource.productApps || undefined,
 					createdAt: resource.createdAt,
 					updatedAt: resource.updatedAt,
 					funnels: [],

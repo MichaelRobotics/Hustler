@@ -74,7 +74,6 @@ export interface CreateFunnelInput {
 	name: string;
 	description?: string;
 	resources?: string[]; // Resource IDs
-	whopProductId?: string; // Discovery page product ID
 }
 
 export interface UpdateFunnelInput {
@@ -93,10 +92,9 @@ export interface FunnelWithResources {
 	wasEverDeployed: boolean;
 	generationStatus: "idle" | "generating" | "completed" | "failed";
 	sends: number;
-	createdAt: Date;
-	updatedAt: Date;
-	whopProductId?: string; // 🔑 Discovery page product ID
-	resources: Array<{
+		createdAt: Date;
+		updatedAt: Date;
+		resources: Array<{
 		id: string;
 		name: string;
 		type: "AFFILIATE" | "MY_PRODUCTS";
@@ -104,6 +102,7 @@ export interface FunnelWithResources {
 		link: string;
 		code?: string;
 		description?: string;
+		productApps?: any;
 	}>;
 }
 
@@ -147,7 +146,6 @@ export async function createFunnel(
 				userId: user.id,
 				name: input.name,
 				description: input.description || null,
-				whopProductId: input.whopProductId || null, // 🔑 NEW: Product association
 				flow: null,
 				isDeployed: false,
 				wasEverDeployed: false,
@@ -285,6 +283,7 @@ export async function getFunnelById(
 			link: string;
 			code?: string;
 			description?: string;
+			productApps?: any;
 		}>();
 		funnelWithResourcesRaw.forEach((row: any) => {
 			if (row.resource && !resourcesMap.has(row.resource.id)) {
@@ -296,6 +295,7 @@ export async function getFunnelById(
 					link: row.resource.link,
 					code: row.resource.code || undefined,
 					description: row.resource.description || undefined,
+					productApps: row.resource.productApps || undefined,
 				});
 			}
 		});
@@ -311,7 +311,6 @@ export async function getFunnelById(
 			sends: funnel.sends,
 			createdAt: funnel.createdAt,
 			updatedAt: funnel.updatedAt,
-			whopProductId: funnel.whopProductId || undefined, // 🔑 Include whopProductId
 			resources: Array.from(resourcesMap.values()),
 		};
 	} catch (error) {
@@ -397,7 +396,6 @@ export async function getFunnels(
 					sends: funnel.sends,
 					createdAt: funnel.createdAt,
 					updatedAt: funnel.updatedAt,
-					whopProductId: funnel.whopProductId || undefined, // 🔑 Include whopProductId
 					resources: [],
 				});
 			}
@@ -415,6 +413,7 @@ export async function getFunnels(
 					link: resource.link,
 					code: resource.code || undefined,
 					description: resource.description || undefined,
+					productApps: resource.productApps || undefined,
 				});
 			}
 		});
@@ -580,9 +579,8 @@ export async function checkForOtherLiveFunnels(
 	excludeFunnelId?: string,
 ): Promise<{ hasLiveFunnel: boolean; liveFunnelName?: string }> {
 	try {
-		console.log(`🔍 [DATABASE QUERY] Checking for live funnels with:`);
-		console.log(`🔍 [DATABASE QUERY] - experienceId: ${user.experience.id}`);
-		console.log(`🔍 [DATABASE QUERY] - excludeFunnelId: ${excludeFunnelId}`);
+		console.log(`ℹ️ [DEPLOYMENT CHECK] Checking for existing live funnels in experience: ${user.experience.id}`);
+		console.log(`ℹ️ [DEPLOYMENT CHECK] Excluding funnel ID: ${excludeFunnelId || 'none'}`);
 		
 		const liveFunnel = await db.query.funnels.findFirst({
 			where: and(
@@ -596,7 +594,11 @@ export async function checkForOtherLiveFunnels(
 			},
 		});
 
-		console.log(`🔍 [DATABASE QUERY] Found live funnel:`, liveFunnel);
+		if (liveFunnel) {
+			console.log(`ℹ️ [DEPLOYMENT CHECK] Found existing live funnel: "${liveFunnel.name}" (ID: ${liveFunnel.id})`);
+		} else {
+			console.log(`ℹ️ [DEPLOYMENT CHECK] No existing live funnels found - deployment can proceed`);
+		}
 
 		return {
 			hasLiveFunnel: !!liveFunnel,
@@ -642,6 +644,7 @@ export async function deployFunnel(
 		// Check if any other funnel is currently live for this experience
 		const liveFunnelCheck = await checkForOtherLiveFunnels(user, funnelId);
 		if (liveFunnelCheck.hasLiveFunnel) {
+			console.log(`ℹ️ [DEPLOYMENT BLOCKED] Cannot deploy funnel - another funnel is already live: "${liveFunnelCheck.liveFunnelName}"`);
 			throw new Error(`Funnel "${liveFunnelCheck.liveFunnelName}" is currently live for this experience.`);
 		}
 
@@ -726,7 +729,19 @@ export async function regenerateFunnelFlow(
 			with: {
 				funnelResources: {
 					with: {
-						resource: true,
+						resource: {
+							columns: {
+								id: true,
+								name: true,
+								type: true,
+								category: true,
+								link: true,
+								code: true,
+								description: true,
+								whopProductId: true,
+								productApps: true, // Explicitly select productApps
+							},
+						},
 					},
 				},
 			},
@@ -760,6 +775,15 @@ export async function regenerateFunnelFlow(
 
 		try {
 			// Prepare resources for AI generation
+			console.log(`🔍 [DEBUG] Raw funnel resources from DB:`, existingFunnel.funnelResources.map((fr: any) => ({
+				name: fr.resource.name,
+				hasProductApps: !!fr.resource.productApps,
+				productAppsValue: fr.resource.productApps,
+				productAppsType: typeof fr.resource.productApps,
+				productAppsKeys: fr.resource.productApps ? Object.keys(fr.resource.productApps) : 'none',
+				productAppsLength: fr.resource.productApps ? (Array.isArray(fr.resource.productApps) ? fr.resource.productApps.length : Object.keys(fr.resource.productApps).length) : 0
+			})));
+			
 			const resourcesForAI = existingFunnel.funnelResources.map((fr: any) => ({
 				id: fr.resource.id,
 				name: fr.resource.name,
@@ -767,6 +791,7 @@ export async function regenerateFunnelFlow(
 				category: fr.resource.category,
 				link: fr.resource.link,
 				code: fr.resource.code || "",
+				productApps: fr.resource.productApps || undefined,
 			}));
 
 			// Send progress update

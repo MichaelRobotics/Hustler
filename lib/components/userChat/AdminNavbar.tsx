@@ -82,15 +82,38 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 	};
 
 	// Handle DM trigger with product selection
-	const handleTriggerDM = () => {
-		if (discoveryProducts.length > 0) {
-			setIsProductSelectionOpen(true);
-			if (discoveryProducts.length === 0) {
-				fetchDiscoveryProducts();
+	const handleTriggerDM = async () => {
+		console.log("🔧 [AdminNavbar] DM button clicked, fetching products...");
+		// Always fetch products first to get the latest list
+		setProductsLoading(true);
+		try {
+			const response = await fetch(`/api/products/discovery?experienceId=${experienceId}`);
+			if (response.ok) {
+				const data = await response.json();
+				const products = data.data || [];
+				console.log("🔧 [AdminNavbar] Fetched products:", products.length, products);
+				setDiscoveryProducts(products);
+				
+				// If we have products, show selection modal
+				if (products.length > 0) {
+					console.log("🔧 [AdminNavbar] Opening product selection modal");
+					setIsProductSelectionOpen(true);
+				} else {
+					console.log("🔧 [AdminNavbar] No products available, triggering DM without product");
+					// No products available, trigger DM without product
+					onTriggerDM();
+				}
+			} else {
+				console.log("🔧 [AdminNavbar] Error fetching products, triggering DM without product");
+				// Error fetching products, trigger DM without product
+				onTriggerDM();
 			}
-		} else {
-			// No products available, trigger DM without product
+		} catch (error) {
+			console.error("🔧 [AdminNavbar] Error fetching discovery products:", error);
+			// Error fetching products, trigger DM without product
 			onTriggerDM();
+		} finally {
+			setProductsLoading(false);
 		}
 	};
 

@@ -61,9 +61,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Load funnel flow if available
+    // Use conversation's custom flow if available, otherwise use original funnel flow
     let funnelFlow = null;
-    if (conversation.funnel?.flow) {
+    if (conversation.flow) {
+      console.log(`[find-user-conversation] Using conversation's custom flow for conversation ${conversation.id}`);
+      funnelFlow = conversation.flow;
+    } else if (conversation.funnel?.flow) {
+      console.log(`[find-user-conversation] Using original funnel flow for conversation ${conversation.id}`);
       funnelFlow = conversation.funnel.flow;
     }
 

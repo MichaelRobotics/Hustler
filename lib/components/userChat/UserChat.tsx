@@ -757,10 +757,12 @@ const UserChat: React.FC<UserChatProps> = ({
 		// Handle animated button HTML in bot messages (processed by backend)
 		const renderMessageWithLinks = (text: string) => {
 			// Debug logging
+			const hasButton = text.includes('animated-gold-button');
 			console.log(`[UserChat] Rendering message:`, { 
 				type: msg.type, 
-				hasAnimatedButton: text.includes('animated-gold-button'),
-				text: text.substring(0, 200) + '...'
+				hasAnimatedButton: hasButton,
+				text: text.substring(0, 200) + '...',
+				willApplySpecialStyling: hasButton && msg.type === 'bot'
 			});
 			
 			// Check for animated button HTML first
@@ -849,8 +851,10 @@ const UserChat: React.FC<UserChatProps> = ({
 					<div
 						className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
 							msg.type === "user"
-								? "bg-blue-500 text-white"
-								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
+								? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
+								: msg.text.includes('animated-gold-button')
+									? "bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
+									: "bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-200/50 dark:shadow-gray-800/50"
 						}`}
 						style={{
 							userSelect: "text",
@@ -880,9 +884,9 @@ const UserChat: React.FC<UserChatProps> = ({
 			<button
 				key={`option-${index}`}
 				onClick={() => onClick(option, index)}
-				className="chat-optimized inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-blue-500 text-white text-left touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+				className="chat-optimized inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-left touch-manipulation active:from-blue-600 active:to-blue-700 active:scale-95 transition-all duration-150 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
 			>
-				<span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+				<span className="flex-shrink-0 w-7 h-7 bg-blue-700 rounded-full flex items-center justify-center text-sm font-medium shadow-md">
 					{index + 1}
 				</span>
 				<Text size="2" className="text-white leading-relaxed">
@@ -1136,7 +1140,7 @@ const UserChat: React.FC<UserChatProps> = ({
 							<button
 								onClick={handleSubmit}
 								disabled={!message.trim()}
-								className="chat-optimized p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+								className="chat-optimized p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed touch-manipulation active:from-blue-600 active:to-blue-700 active:scale-95 transition-all duration-150 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 disabled:shadow-none"
 							>
 								<Send size={18} className="text-white dark:text-gray-100" />
 							</button>
@@ -1152,3 +1156,5 @@ const UserChat: React.FC<UserChatProps> = ({
 UserChat.displayName = "UserChat";
 
 export default UserChat;
+
+

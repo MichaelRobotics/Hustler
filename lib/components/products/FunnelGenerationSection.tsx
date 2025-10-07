@@ -6,7 +6,7 @@ import { useCredits } from "../../hooks/useCredits";
 import type { Funnel, Resource } from "../../types/resource";
 import type { AuthenticatedUser } from "../../types/user";
 import { CreditPackModal } from "../payments/CreditPackModal";
-import { shouldDisableGeneration, validateFunnelProducts } from "../../helpers/funnel-product-validation";
+// Removed product validation imports
 
 interface FunnelGenerationSectionProps {
 	funnel: Funnel;
@@ -15,6 +15,8 @@ interface FunnelGenerationSectionProps {
 	isGenerating: (funnelId: string) => boolean;
 	isAnyFunnelGenerating: () => boolean;
 	onGlobalGeneration: (funnelId: string) => Promise<void>;
+	totalFunnels?: number;
+	onDeploy?: (funnelId: string) => Promise<void>;
 }
 
 export const FunnelGenerationSection: React.FC<
@@ -26,40 +28,14 @@ export const FunnelGenerationSection: React.FC<
 	isGenerating,
 	isAnyFunnelGenerating,
 	onGlobalGeneration,
+	totalFunnels = 0,
+	onDeploy,
 }) => {
 	const { canGenerate, consumeCredit, refresh: refreshCredits } = useCredits(user);
 	const [showCreditModal, setShowCreditModal] = useState(false);
 
 	const handleGeneration = async () => {
-		// Check if funnel has required PAID products (at least 1 PAID)
-		const productValidation = validateFunnelProducts(funnel);
-		if (!productValidation.hasPaidProducts) {
-			// Show notification to user
-			const showNotification = (message: string) => {
-				const notification = document.createElement("div");
-				notification.className =
-					"fixed top-4 right-4 z-50 px-4 py-3 bg-amber-500 text-white rounded-lg border border-amber-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
-				notification.textContent = message;
-
-				const closeBtn = document.createElement("button");
-				closeBtn.innerHTML = "×";
-				closeBtn.className =
-					"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
-				closeBtn.onclick = () => notification.remove();
-				notification.appendChild(closeBtn);
-
-				document.body.appendChild(notification);
-
-				setTimeout(() => {
-					if (notification.parentNode) {
-						notification.remove();
-					}
-				}, 4000);
-			};
-
-			showNotification("Add at least 1 PAID product to generate");
-			return;
-		}
+		// Removed PAID product validation - no longer checking for specific product types
 
 		// CREDIT VALIDATION - Check credits BEFORE any other checks
 		try {
@@ -189,9 +165,8 @@ export const FunnelGenerationSection: React.FC<
 		setShowCreditModal(false);
 	};
 
-	// Check if generation should be disabled (only for PAID products)
-	const productValidation = validateFunnelProducts(funnel);
-	const isGenerationDisabled = !productValidation.hasPaidProducts;
+	// Removed product validation - generation is no longer disabled based on product types
+	const isGenerationDisabled = false;
 
 	if (funnel.flow || currentResources.length === 0) {
 		return null;
@@ -235,14 +210,10 @@ export const FunnelGenerationSection: React.FC<
 					<div className="mb-8">
 						<div className="text-center space-y-4">
 							<Text size="2" color="gray" className="text-muted-foreground">
-								{currentResources.length} product
+								{currentResources.length} resource
 								{currentResources.length !== 1 ? "s" : ""} selected
 							</Text>
-							{isGenerationDisabled && productValidation.missingTypes.includes("PAID") && (
-								<Text size="2" color="amber" className="text-amber-600 dark:text-amber-400 font-medium">
-									Need at least 1 PAID product
-								</Text>
-							)}
+							{/* Removed PAID product validation message */}
 							<Heading
 								size="5"
 								weight="bold"
@@ -254,7 +225,7 @@ export const FunnelGenerationSection: React.FC<
 										? "Generated"
 										: funnel.generationStatus === "failed"
 											? "Generation Failed"
-											: "Generate"}
+											: totalFunnels === 1 ? "Generate & Go Live" : "Generate"}
 							</Heading>
 							{funnel.generationStatus === "failed" &&
 								funnel.generationError && (

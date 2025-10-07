@@ -38,7 +38,7 @@ export const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({
 						strokeWidth={2.5}
 					/>
 				),
-				title: "No Free Value Products",
+				title: "No Gift Products",
 			};
 		}
 	};

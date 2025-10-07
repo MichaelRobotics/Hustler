@@ -19,7 +19,6 @@ interface Funnel {
 type View =
 	| "dashboard"
 	| "analytics"
-	| "resources"
 	| "resourceLibrary"
 	| "funnelBuilder"
 	| "preview"
@@ -35,33 +34,37 @@ export function useViewNavigation() {
 		setLibraryContext: (context: "global" | "funnel") => void,
 		setSelectedFunnelForLibrary: (funnel: Funnel | null) => void,
 	) => {
+		console.log("🔍 [HANDLE VIEW CHANGE] view:", view);
+		console.log("🔍 [HANDLE VIEW CHANGE] selectedFunnel:", selectedFunnel);
+		console.log("🔍 [HANDLE VIEW CHANGE] currentView:", currentView);
+		
 		if (view === "resourceLibrary") {
-			if (
-				selectedFunnel &&
-				(currentView === "resources" ||
-					currentView === "analytics" ||
-					currentView === "funnelBuilder")
-			) {
+			if (selectedFunnel) {
+				// If we have a selected funnel, always go to funnel context
+				console.log("🔍 [HANDLE VIEW CHANGE] Setting library context to funnel");
 				setLibraryContext("funnel");
 				setSelectedFunnelForLibrary(selectedFunnel);
 			} else {
+				// No selected funnel, go to global context
+				console.log("🔍 [HANDLE VIEW CHANGE] Setting library context to global");
 				setSelectedFunnelForLibrary(null);
 				setLibraryContext("global");
 			}
 		}
+		console.log("🔍 [HANDLE VIEW CHANGE] Setting currentView to:", view);
 		setCurrentView(view);
 	};
 
 	const onFunnelClick = (funnel: Funnel) => {
 		if (!hasValidFlow(funnel)) {
-			return "resources";
+			return "resourceLibrary";
 		} else {
 			return "analytics";
 		}
 	};
 
 	const handleManageResources = (funnel: Funnel) => {
-		return "resources";
+		return "resourceLibrary";
 	};
 
 	const handleBackToDashboard = () => {

@@ -18,7 +18,6 @@ interface AdminSidebarProps {
 	currentView:
 		| "dashboard"
 		| "analytics"
-		| "resources"
 		| "resourceLibrary"
 		| "funnelBuilder"
 		| "preview"
@@ -27,7 +26,6 @@ interface AdminSidebarProps {
 		view:
 			| "dashboard"
 			| "analytics"
-			| "resources"
 			| "resourceLibrary"
 			| "funnelBuilder"
 			| "preview"
@@ -67,7 +65,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 				isDashboardView: currentView === "dashboard",
 				isLibraryView: currentView === "resourceLibrary",
 				isAnalyticsView: currentView === "analytics",
-				isResourcesView: currentView === "resources",
 				isFunnelBuilderView: currentView === "funnelBuilder",
 				isLiveChatView: currentView === "liveChat",
 			}),
@@ -79,7 +76,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 				view:
 					| "dashboard"
 					| "analytics"
-					| "resources"
 					| "resourceLibrary"
 					| "funnelBuilder"
 					| "preview"

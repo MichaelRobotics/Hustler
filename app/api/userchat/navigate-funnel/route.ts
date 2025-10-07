@@ -257,14 +257,20 @@ async function navigateFunnelHandler(
       );
     }
 
-    if (!conversation.funnel?.flow) {
+    // Use conversation's custom flow if available, otherwise use original funnel flow
+    let funnelFlow: FunnelFlow;
+    if (conversation.flow) {
+      console.log(`[navigate-funnel] Using conversation's custom flow for conversation ${conversationId}`);
+      funnelFlow = conversation.flow as FunnelFlow;
+    } else if (conversation.funnel?.flow) {
+      console.log(`[navigate-funnel] Using original funnel flow for conversation ${conversationId}`);
+      funnelFlow = conversation.funnel.flow as FunnelFlow;
+    } else {
       return NextResponse.json(
         { error: "Funnel flow not found" },
         { status: 404 }
       );
     }
-
-    const funnelFlow = conversation.funnel.flow as FunnelFlow;
 
     // Process the navigation
     const result = await processFunnelNavigation(

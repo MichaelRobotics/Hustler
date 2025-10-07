@@ -30,6 +30,7 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 	onProductSelect,
 	loading = false,
 }) => {
+	console.log("🔧 [ProductSelectionModal] Render:", { isOpen, productsCount: products.length, loading });
 	if (!isOpen) return null;
 
 	return (
@@ -141,4 +142,5 @@ export const ProductSelectionModal: React.FC<ProductSelectionModalProps> = ({
 		</div>
 	);
 };
+
 

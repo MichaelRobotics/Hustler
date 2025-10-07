@@ -234,6 +234,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 						isGenerating={false}
 						isDeployed={currentFunnel.isDeployed}
 						showOnPage="aibuilder"
+						isFunnelBuilder={true}
 					/>
 				</div>
 			</div>

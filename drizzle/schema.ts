@@ -60,17 +60,14 @@ export const funnels = pgTable("funnels", {
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 	experienceId: uuid("experience_id").notNull(),
 	visualizationState: jsonb("visualization_state").default({}),
-	whopProductId: text("whop_product_id"),
 }, (table) => [
 	index("funnels_experience_deployed_idx").using("btree", table.experienceId.asc().nullsLast().op("bool_ops"), table.isDeployed.asc().nullsLast().op("uuid_ops")),
 	index("funnels_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
-	index("funnels_experience_product_deployed_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.whopProductId.asc().nullsLast().op("uuid_ops"), table.isDeployed.asc().nullsLast().op("uuid_ops")),
 	index("funnels_experience_user_updated_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops"), table.updatedAt.asc().nullsLast().op("timestamp_ops")),
 	index("funnels_generation_status_idx").using("btree", table.generationStatus.asc().nullsLast().op("enum_ops")),
 	index("funnels_is_deployed_idx").using("btree", table.isDeployed.asc().nullsLast().op("bool_ops")),
 	index("funnels_user_id_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 	index("funnels_visualization_state_idx").using("gin", table.visualizationState.asc().nullsLast().op("jsonb_ops")),
-	index("funnels_whop_product_id_idx").using("btree", table.whopProductId.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.experienceId],
 			foreignColumns: [experiences.id],
@@ -98,6 +95,7 @@ export const resources = pgTable("resources", {
 	experienceId: uuid("experience_id").notNull(),
 	whopAppId: text("whop_app_id"),
 	whopMembershipId: text("whop_membership_id"),
+	productApps: jsonb("product_apps"), // JSON field for product apps data
 }, (table) => [
 	index("resources_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
 	index("resources_experience_user_updated_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops"), table.updatedAt.asc().nullsLast().op("timestamp_ops")),

@@ -5,21 +5,23 @@ import AIFunnelBuilderPage from "../funnelBuilder/AIFunnelBuilderPage";
 import { LiveChatPage } from "../liveChat";
 import PreviewPage from "../preview/PreviewPage";
 import ResourceLibrary from "../products/ResourceLibrary";
-import ResourcePage from "../products/ResourcePage";
 import AdminHeader from "./AdminHeader";
 import AdminSidebar from "./AdminSidebar";
 import FunnelAnalyticsPage from "./FunnelAnalyticsPage";
 import FunnelsDashboard from "./FunnelsDashboard";
 import AddFunnelModal from "./modals/AddFunnelModal";
 import DeleteFunnelModal from "./modals/DeleteFunnelModal";
-import DeploymentModal from "./modals/DeploymentModal";
+import { DeploymentModal } from "../funnelBuilder/modals/DeploymentModal";
 import EditFunnelModal from "./modals/EditFunnelModal";
-
+import { OfflineConfirmationModal } from "../funnelBuilder/modals/OfflineConfirmationModal";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { useFunnelManagement } from "@/lib/hooks/useFunnelManagement";
+import { useFunnelDeployment } from "@/lib/hooks/useFunnelDeployment";
 import { useResourceManagement } from "@/lib/hooks/useResourceManagement";
 import { useAnalyticsManagement } from "@/lib/hooks/useAnalyticsManagement";
+import { useModalManagement } from "@/lib/hooks/useModalManagement";
 import { useViewNavigation } from "@/lib/hooks/useViewNavigation";
+import { useAutoDeployment } from "@/lib/hooks/useAutoDeployment";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import { apiPut } from "@/lib/utils/api-client";
 import type { Resource } from "@/lib/types/resource";
@@ -45,7 +47,6 @@ interface Funnel {
 type View =
 	| "dashboard"
 	| "analytics"
-	| "resources"
 	| "resourceLibrary"
 	| "funnelBuilder"
 	| "preview"
@@ -72,8 +73,6 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	// State for tracking if we're creating a new funnel inline
 	const [isCreatingNewFunnel, setIsCreatingNewFunnel] = React.useState(false);
 
-	// State for tracking if product selection is active (to hide sidebar)
-	const [isProductSelectionActive, setIsProductSelectionActive] = React.useState(false);
 
 	// State for tracking when modals are open (to disable sidebar)
 	const [isLibraryModalOpen, setIsLibraryModalOpen] = React.useState(false);
@@ -113,17 +112,8 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleGenerationComplete,
 		handleGenerationError,
 		isFunnelNameAvailable,
-		// Product selection variables
-		isProductSelectionOpen,
-		setIsProductSelectionOpen,
-		discoveryProducts,
-		setDiscoveryProducts,
-		productsLoading,
-		setProductsLoading,
-		selectedProduct,
-		setSelectedProduct,
-		fetchDiscoveryProducts,
 		isDeleting,
+		isAutoCreated,
 	} = useFunnelManagement(user);
 
 	const {
@@ -150,6 +140,58 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		clearAllAnalyticsData,
 		isAnalyticsDataStale,
 	} = useAnalyticsManagement(user);
+
+	// Modal management for offline confirmation
+	const {
+		offlineConfirmation,
+		openOfflineConfirmation,
+		closeOfflineConfirmation,
+	} = useModalManagement();
+
+	// Auto-deployment hook for single funnels
+	const { handleAutoDeploy, isDeploying: isAutoDeploying, deploymentLog: autoDeploymentLog, deploymentAction: autoDeploymentAction } = useAutoDeployment({
+		user,
+		onFunnelUpdate: (updatedFunnel) => {
+			setSelectedFunnelForLibrary(updatedFunnel);
+		},
+		onFunnelsUpdate: (updatedFunnels) => {
+			setFunnels(updatedFunnels);
+		},
+		onNavigateToAnalytics: (funnel) => {
+			console.log("📊 [AUTO-DEPLOY] Navigating to Analytics view for funnel:", funnel.id);
+			setSelectedFunnel(funnel);
+			setCurrentView("analytics");
+		},
+	});
+
+	// Deployment management for Library funnel context
+	const deployment = useFunnelDeployment(
+		selectedFunnelForLibrary ? {
+			...selectedFunnelForLibrary,
+			resources: selectedFunnelForLibrary.resources?.map(r => ({
+				...r,
+				type: r.type as "AFFILIATE" | "MY_PRODUCTS" | "CONTENT" | "TOOL"
+			}))
+		} : { id: "", name: "", flow: null },
+		(updatedFunnel) => {
+			// Convert back to the expected type and update state
+			const convertedFunnel = {
+				...updatedFunnel,
+				resources: updatedFunnel.resources?.map(r => ({
+					...r,
+					type: r.type as "AFFILIATE" | "MY_PRODUCTS",
+					category: (r.category as "PAID" | "FREE_VALUE") || "FREE_VALUE"
+				}))
+			};
+			setSelectedFunnelForLibrary(convertedFunnel);
+			// Also update the main funnels array
+			setFunnels(prevFunnels => 
+				prevFunnels.map(f => f.id === convertedFunnel.id ? convertedFunnel : f)
+			);
+		},
+		undefined, // No enableCalculationsForGoLive callback needed for Library
+		user,
+	);
 
 	// State synchronization: Update funnel resources when allResources changes
 	React.useEffect(() => {
@@ -214,7 +256,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	const handleAddFunnelWithNavigation = useCallback(async () => {
 		const newFunnel = await handleAddFunnel();
 		if (newFunnel) {
-			setCurrentView("resources");
+			setCurrentView("resourceLibrary");
 		}
 	}, [handleAddFunnel, setCurrentView]);
 
@@ -230,12 +272,21 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 
 	const handleFunnelClickWithNavigation = useCallback(
 		(funnel: Funnel) => {
-			const targetView = onFunnelClick(funnel);
+			const targetView = navigationOnFunnelClick(funnel);
 			if (targetView) {
-				setCurrentView(targetView as View);
+				// Set the selected funnel first
+				setSelectedFunnel(funnel);
+				// Use navigationHandleViewChange directly with the funnel
+				navigationHandleViewChange(
+					targetView as View,
+					funnel, // Pass the funnel directly
+					currentView,
+					setLibraryContext,
+					setSelectedFunnelForLibrary,
+				);
 			}
 		},
-		[onFunnelClick, setCurrentView],
+		[navigationOnFunnelClick, navigationHandleViewChange, currentView, setLibraryContext, setSelectedFunnelForLibrary],
 	);
 
 	const handleManageResourcesWithNavigation = useCallback(
@@ -268,21 +319,154 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		[handleAddToFunnel, selectedFunnel, funnels, setFunnels, setSelectedFunnel],
 	);
 
+	// Handle adding resources to funnel in Library (funnel context)
+	const handleAddToFunnelInLibrary = useCallback(
+		async (resource: Resource) => {
+			if (selectedFunnelForLibrary) {
+				await handleAddToFunnel(
+					resource,
+					selectedFunnelForLibrary,
+					funnels,
+					setFunnels,
+					(updatedFunnel) => {
+						// Update both selectedFunnel and selectedFunnelForLibrary
+						setSelectedFunnel(updatedFunnel);
+						setSelectedFunnelForLibrary(updatedFunnel);
+					},
+				);
+			}
+		},
+		[handleAddToFunnel, selectedFunnelForLibrary, funnels, setFunnels, setSelectedFunnel, setSelectedFunnelForLibrary],
+	);
+
+	// Auto-navigate to Library when a new funnel is auto-created
+	React.useEffect(() => {
+		console.log("🔍 [AUTO-NAV DEBUG] Checking auto-navigation conditions:", {
+			funnelsLength: funnels.length,
+			currentView,
+			selectedFunnelForLibrary: !!selectedFunnelForLibrary,
+			isAutoCreated,
+			conditions: {
+				hasOneFunnel: funnels.length === 1,
+				isOnDashboard: currentView === "dashboard",
+				noSelectedFunnel: !selectedFunnelForLibrary,
+				wasAutoCreated: isAutoCreated
+			}
+		});
+		
+		// Only navigate if:
+		// 1. We have exactly one funnel
+		// 2. We're on the dashboard
+		// 3. No funnel is currently selected for library
+		// 4. The funnel was auto-created (not manually created)
+		if (funnels.length === 1 && currentView === "dashboard" && !selectedFunnelForLibrary && isAutoCreated) {
+			const newFunnel = funnels[0];
+			console.log("🚀 [AUTO-NAV] Auto-created funnel detected, navigating to Library view:", newFunnel);
+			
+			// Navigate to Library view in funnel context
+			setLibraryContext("funnel");
+			setSelectedFunnelForLibrary(newFunnel);
+			setCurrentView("resourceLibrary");
+		}
+	}, [funnels.length, currentView, selectedFunnelForLibrary, isAutoCreated, setLibraryContext, setSelectedFunnelForLibrary, setCurrentView]);
+
+	// Sync selectedFunnelForLibrary with funnels array when funnel updates (e.g., after generation)
+	React.useEffect(() => {
+		if (selectedFunnelForLibrary) {
+			const updatedFunnel = funnels.find((f) => f.id === selectedFunnelForLibrary.id);
+			if (updatedFunnel) {
+				// Check if the flow has changed (more reliable than object reference comparison)
+				const hasFlowChanged = !!updatedFunnel.flow !== !!selectedFunnelForLibrary.flow;
+				const hasGenerationStatusChanged = updatedFunnel.generationStatus !== selectedFunnelForLibrary.generationStatus;
+				
+				if (hasFlowChanged || hasGenerationStatusChanged) {
+					console.log("🔄 [SYNC] Updating selectedFunnelForLibrary with latest funnel data:", {
+						funnelId: updatedFunnel.id,
+						hasFlow: !!updatedFunnel.flow,
+						generationStatus: updatedFunnel.generationStatus,
+						oldFlow: !!selectedFunnelForLibrary.flow,
+						newFlow: !!updatedFunnel.flow,
+						hasFlowChanged,
+						hasGenerationStatusChanged,
+					});
+					setSelectedFunnelForLibrary(updatedFunnel);
+					
+					// If generation just completed and we have a valid flow, trigger auto-navigation
+					// BUT ONLY if we're currently in ResourceLibrary funnel context
+					if (hasFlowChanged && !!updatedFunnel.flow && hasValidFlow(updatedFunnel) && 
+						currentView === "resourceLibrary" && libraryContext === "funnel" && 
+						selectedFunnelForLibrary?.id === updatedFunnel.id) {
+						console.log("🚀 [SYNC] Generation completed with valid flow - triggering auto-navigation from ResourceLibrary funnel context");
+						
+						// Auto-deploy if there's only 1 funnel - do this BEFORE view switch
+						if (funnels.length === 1) {
+							console.log("🚀 [AUTO-DEPLOY] Single funnel detected, auto-deploying after generation completion");
+							// Use the auto-deployment hook for clean separation of concerns
+							handleAutoDeploy(updatedFunnel).catch((error) => {
+								console.error("❌ [AUTO-DEPLOY] Auto-deployment failed:", error);
+								// Error handling is already done in the hook
+							});
+						}
+						
+						// For single funnels, auto-deployment will handle navigation to Analytics
+						// For multiple funnels, navigate to FunnelBuilder as usual
+						if (funnels.length > 1) {
+							// Small delay to ensure state is updated, then switch to FunnelBuilder
+							setTimeout(() => {
+								if (hasValidFlow(updatedFunnel)) {
+									console.log("🚀 [SYNC] Auto-navigating to funnelBuilder from ResourceLibrary");
+									setSelectedFunnel(updatedFunnel);
+									setCurrentView("funnelBuilder");
+								}
+							}, 100);
+						} else {
+							console.log("📊 [SYNC] Single funnel detected - auto-deployment will handle navigation to Analytics");
+						}
+					}
+				}
+			}
+		}
+	}, [funnels, selectedFunnelForLibrary, setSelectedFunnelForLibrary, currentView, libraryContext]);
+
 	const handleBackToDashboard = useCallback(() => {
 		setCurrentView("dashboard");
 		setSelectedFunnel(null);
 	}, [setCurrentView, setSelectedFunnel]);
 
-	// Handle inline funnel creation - now opens product selection modal
+	// Handle inline funnel creation - show funnel creation card in dashboard
 	const handleCreateNewFunnelInline = useCallback(() => {
-		// Open product selection modal instead of direct creation
-		setIsProductSelectionOpen(true);
-		setIsProductSelectionActive(true); // Hide sidebar during product selection
-		// Fetch products if not already loaded
-		if (discoveryProducts.length === 0) {
-			fetchDiscoveryProducts();
+		// Show funnel creation card in FunnelsDashboard
+		setIsCreatingNewFunnel(true);
+		setCurrentView("dashboard");
+	}, [setIsCreatingNewFunnel, setCurrentView]);
+
+	// Handle taking funnel offline - use deployment hook for proper offline flow
+	const handleTakeFunnelOffline = useCallback(async () => {
+		if (selectedFunnelForLibrary) {
+			try {
+				// Use the deployment hook's handleUndeploy for proper offline flow
+				await deployment.handleUndeploy();
+				closeOfflineConfirmation();
+			} catch (error) {
+				console.error("Failed to take funnel offline:", error);
+			}
 		}
-	}, [setIsProductSelectionOpen, setIsProductSelectionActive, discoveryProducts.length, fetchDiscoveryProducts]);
+	}, [selectedFunnelForLibrary, deployment, closeOfflineConfirmation]);
+
+	// Handle navigation to Library in funnel context (always goes to Library regardless of generation status)
+	const handleGoToLibrary = useCallback((funnel: Funnel) => {
+		console.log("🔍 [GO TO LIBRARY] funnel:", funnel);
+		console.log("🔍 [GO TO LIBRARY] funnel.isDeployed:", funnel.isDeployed);
+		console.log("🔍 [GO TO LIBRARY] funnel.resources:", funnel.resources);
+		console.log("🔍 [GO TO LIBRARY] funnel.flow:", funnel.flow);
+		console.log("🔍 [GO TO LIBRARY] hasValidFlow:", hasValidFlow(funnel));
+		
+		// Always go to Library in funnel context, regardless of generation status
+		console.log("🔍 [GO TO LIBRARY] Navigating to Library in funnel context");
+		setLibraryContext("funnel");
+		setSelectedFunnelForLibrary(funnel);
+		setCurrentView("resourceLibrary");
+	}, [setLibraryContext, setSelectedFunnelForLibrary, setCurrentView]);
 
 	// Handle library modal state changes
 	const handleLibraryModalStateChange = useCallback((isModalOpen: boolean) => {
@@ -350,65 +534,17 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		);
 	}
 
-	if (currentView === "resources" && selectedFunnel) {
-		const currentFunnel =
-			funnels.find((f) => f.id === selectedFunnel.id) || selectedFunnel;
 
-		return (
-			<ResourcePage
-				funnel={currentFunnel}
-				user={user}
-				onBack={() => {
-					if (hasValidFlow(selectedFunnel)) {
-						setCurrentView("analytics");
-					} else {
-						setCurrentView("dashboard");
-					}
-				}}
-				onGoToBuilder={(updatedFunnel?: Funnel) => {
-					const targetFunnel = updatedFunnel || selectedFunnel;
-					if (targetFunnel && hasValidFlow(targetFunnel)) {
-						setSelectedFunnel(targetFunnel);
-						setCurrentView("funnelBuilder");
-					} else {
-						setCurrentView("resources");
-					}
-				}}
-				onGoToPreview={(funnel) => {
-					if (funnel && hasValidFlow(funnel)) {
-						setSelectedFunnel(funnel);
-						setPreviewSource("resources");
-						setCurrentView("preview");
-					} else {
-						alert(
-							"This funnel needs to be generated first. Please generate the funnel before previewing.",
-						);
-					}
-				}}
-				onUpdateFunnel={(updatedFunnel) => {
-					setFunnels(
-						funnels.map((f) => (f.id === updatedFunnel.id ? updatedFunnel : f)),
-					);
-					if (selectedFunnel && selectedFunnel.id === updatedFunnel.id) {
-						setSelectedFunnel(updatedFunnel);
-					}
-				}}
-				onOpenResourceLibrary={handleOpenResourceLibraryWithNavigation}
-				onGlobalGeneration={handleGlobalGeneration}
-				isGenerating={isFunnelGenerating}
-				isAnyFunnelGenerating={isAnyFunnelGenerating}
-				onEdit={() => {}}
-				onGoToFunnelProducts={() => {}}
-				removeResourceFromFunnel={removeResourceFromFunnel}
-			/>
-		);
-	}
-
+	console.log("🔍 [ADMIN PANEL] currentView:", currentView);
+	console.log("🔍 [ADMIN PANEL] libraryContext:", libraryContext);
+	console.log("🔍 [ADMIN PANEL] selectedFunnelForLibrary:", selectedFunnelForLibrary);
+	
 	if (currentView === "resourceLibrary") {
+		console.log("🔍 [ADMIN PANEL] Rendering resourceLibrary view");
 		if (libraryContext === "global") {
 			return (
 				<div className="flex h-screen">
-					{!isLibraryModalOpen && !isProductSelectionActive && (
+					{!isLibraryModalOpen && (
 						<AdminSidebar
 							currentView={currentView}
 							onViewChange={handleViewChange}
@@ -428,11 +564,13 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							onBack={undefined}
 							user={user}
 							onAddToFunnel={undefined}
+							onRemoveFromFunnel={undefined}
 							onEdit={undefined}
 							onGlobalGeneration={() => handleGlobalGeneration("")}
 							isGenerating={false}
 							isAnyFunnelGenerating={isAnyFunnelGenerating}
-							onGoToFunnelProducts={() => setCurrentView("resources")}
+							onGoToFunnelProducts={() => setCurrentView("resourceLibrary")}
+							onOpenOfflineConfirmation={undefined}
 							context={libraryContext}
 							onModalStateChange={handleLibraryModalStateChange}
 						/>
@@ -441,43 +579,107 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			);
 		} else {
 			return (
-				<ResourceLibrary
-					funnel={selectedFunnel || undefined}
-					allResources={allResources}
-					allFunnels={funnels}
-					setAllResources={setAllResources}
-					onBack={() => setCurrentView("resources")}
-					user={user}
-					onAddToFunnel={handleAddToFunnelWithState}
-					onEdit={() => {
-						if (selectedFunnel && hasValidFlow(selectedFunnel)) {
-							setCurrentView("funnelBuilder");
-						} else {
-							setCurrentView("resources");
+				<>
+					<ResourceLibrary
+						funnel={selectedFunnelForLibrary || undefined}
+						allResources={allResources}
+						allFunnels={funnels}
+						setAllResources={setAllResources}
+						onBack={() => setCurrentView("dashboard")}
+						user={user}
+						onAddToFunnel={handleAddToFunnelInLibrary}
+						onRemoveFromFunnel={(resource) => {
+							if (selectedFunnelForLibrary) {
+								removeResourceFromFunnel(selectedFunnelForLibrary.id, resource.id);
+								// Update the selectedFunnelForLibrary state
+								const updatedFunnel = {
+									...selectedFunnelForLibrary,
+									resources: selectedFunnelForLibrary.resources?.filter(r => r.id !== resource.id) || []
+								};
+								setSelectedFunnelForLibrary(updatedFunnel);
+							}
+						}}
+						onEdit={() => {
+							console.log("🔍 [LIBRARY EDIT] selectedFunnelForLibrary:", selectedFunnelForLibrary);
+							console.log("🔍 [LIBRARY EDIT] hasValidFlow:", selectedFunnelForLibrary ? hasValidFlow(selectedFunnelForLibrary) : false);
+							if (selectedFunnelForLibrary && hasValidFlow(selectedFunnelForLibrary)) {
+								console.log("🔍 [LIBRARY EDIT] Setting selectedFunnel and navigating to funnelBuilder");
+								setSelectedFunnel(selectedFunnelForLibrary);
+								setCurrentView("funnelBuilder");
+							} else {
+								console.log("🔍 [LIBRARY EDIT] Navigating to dashboard (no valid flow)");
+								setCurrentView("dashboard");
+							}
+						}}
+						onGoToPreview={(funnel) => {
+							console.log("🔍 [LIBRARY PREVIEW] funnel:", funnel);
+							console.log("🔍 [LIBRARY PREVIEW] hasValidFlow:", funnel ? hasValidFlow(funnel) : false);
+							if (funnel && hasValidFlow(funnel)) {
+								console.log("🔍 [LIBRARY PREVIEW] Setting selectedFunnel and navigating to preview");
+								setSelectedFunnel(funnel);
+								setPreviewSource("resourceLibrary");
+								setCurrentView("preview");
+							} else {
+								console.log("🔍 [LIBRARY PREVIEW] Showing alert - no valid flow");
+								alert(
+									"This funnel needs to be generated first. Please generate the funnel before previewing.",
+								);
+							}
+						}}
+						onGlobalGeneration={() =>
+							handleGlobalGeneration(selectedFunnelForLibrary?.id || "")
 						}
-					}}
-					onGoToPreview={(funnel) => {
-						if (funnel && hasValidFlow(funnel)) {
-							setSelectedFunnel(funnel);
-							setPreviewSource("resourceLibrary");
-							setCurrentView("preview");
-						} else {
-							alert(
-								"This funnel needs to be generated first. Please generate the funnel before previewing.",
-							);
-						}
-					}}
-					onGlobalGeneration={() =>
-						handleGlobalGeneration(selectedFunnel?.id || "")
-					}
-					isGenerating={
-						selectedFunnel ? isFunnelGenerating(selectedFunnel.id) : false
-					}
-					isAnyFunnelGenerating={isAnyFunnelGenerating}
-					onGoToFunnelProducts={() => setCurrentView("resources")}
-					context={libraryContext}
-					onModalStateChange={handleLibraryModalStateChange}
-				/>
+						isGenerating={isFunnelGenerating}
+						isAnyFunnelGenerating={isAnyFunnelGenerating}
+						onGoToFunnelProducts={() => setCurrentView("resourceLibrary")}
+						onOpenOfflineConfirmation={openOfflineConfirmation}
+						onDeploy={deployment.handleDeploy}
+						context={libraryContext}
+						onModalStateChange={handleLibraryModalStateChange}
+						// Generation props for funnel context
+						isGeneratingFunnel={isFunnelGenerating}
+						onGlobalGenerationFunnel={handleGlobalGeneration}
+						// Deployment state
+						isDeploying={deployment.isDeploying}
+						hasAnyLiveFunnel={funnels.some(f => f.isDeployed)}
+						// Auto-navigation callback
+						onNavigate={(funnel) => {
+							console.log("🚀 [AUTO-NAV] onNavigate called:", {
+								funnelId: funnel?.id,
+								hasValidFlow: funnel ? hasValidFlow(funnel) : false,
+								hasFlow: !!funnel?.flow,
+							});
+							if (funnel && hasValidFlow(funnel)) {
+								console.log("🚀 [AUTO-NAV] Navigating to funnelBuilder");
+								setSelectedFunnel(funnel);
+								setCurrentView("funnelBuilder");
+							} else {
+								console.log("🚀 [AUTO-NAV] Navigation blocked - invalid funnel or no valid flow");
+							}
+						}}
+					/>
+					
+					{/* Deployment Modal for Library in funnel context */}
+					<DeploymentModal
+						isDeploying={deployment.isDeploying}
+						deploymentLog={deployment.deploymentLog}
+						action={deployment.deploymentAction}
+					/>
+
+					{/* Auto-Deployment Modal for single funnels */}
+					<DeploymentModal
+						isDeploying={isAutoDeploying}
+						deploymentLog={autoDeploymentLog}
+						action={autoDeploymentAction}
+					/>
+
+					{/* Offline Confirmation Modal for Library in funnel context */}
+					<OfflineConfirmationModal
+						isOpen={offlineConfirmation}
+						onClose={closeOfflineConfirmation}
+						onConfirm={handleTakeFunnelOffline}
+					/>
+				</>
 			);
 		}
 	}
@@ -544,7 +746,15 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						}, 100);
 					}
 				}}
-				onGoToFunnelProducts={() => setCurrentView("resources")}
+				onGoToFunnelProducts={() => {
+					// Navigate to Library in funnel context
+					console.log("🔍 [FUNNELBUILDER -> LIBRARY] selectedFunnel:", selectedFunnel);
+					console.log("🔍 [FUNNELBUILDER -> LIBRARY] selectedFunnel.id:", selectedFunnel?.id);
+					console.log("🔍 [FUNNELBUILDER -> LIBRARY] selectedFunnel.resources:", selectedFunnel?.resources);
+					setLibraryContext("funnel");
+					setSelectedFunnelForLibrary(selectedFunnel);
+					setCurrentView("resourceLibrary");
+				}}
 				onGoToPreview={() => {
 					setPreviewSource("funnelBuilder");
 					setCurrentView("preview");
@@ -563,7 +773,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 				<div className="flex h-screen">
-					{!isProductSelectionActive && (
+					{(
 						<AdminSidebar
 							currentView={currentView}
 							onViewChange={handleViewChange}
@@ -609,7 +819,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			} else if (previewSource === "resourceLibrary") {
 				setCurrentView("resourceLibrary");
 			} else {
-				setCurrentView("resources");
+				setCurrentView("dashboard");
 			}
 		};
 
@@ -646,7 +856,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 			<div className="flex h-screen">
-				{!isRenaming && !isProductSelectionActive && (
+					{!isRenaming && (
 					<AdminSidebar
 						currentView={currentView}
 						onViewChange={handleViewChange}
@@ -679,26 +889,15 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								handleSaveFunnelName={handleSaveFunnelName}
 								onFunnelClick={handleFunnelClickWithNavigation}
 								handleDuplicateFunnel={handleDuplicateFunnel}
-								// Product selection props
-								isProductSelectionOpen={isProductSelectionOpen}
-								setIsProductSelectionOpen={setIsProductSelectionOpen}
-								isProductSelectionActive={isProductSelectionActive}
-								setIsProductSelectionActive={setIsProductSelectionActive}
-								discoveryProducts={discoveryProducts}
-								setDiscoveryProducts={setDiscoveryProducts}
-								productsLoading={productsLoading}
-								setProductsLoading={setProductsLoading}
-								selectedProduct={selectedProduct}
-								setSelectedProduct={setSelectedProduct}
-								fetchDiscoveryProducts={fetchDiscoveryProducts}
-									handleManageResources={handleManageResourcesWithNavigation}
-									isRenaming={isRenaming}
-									setIsRenaming={setIsRenaming}
-									isCreatingNewFunnel={isCreatingNewFunnel}
-									setIsCreatingNewFunnel={setIsCreatingNewFunnel}
-									isDeleting={isDeleting}
-									newFunnelName={newFunnelName}
-									setNewFunnelName={setNewFunnelName}
+								handleManageResources={handleManageResourcesWithNavigation}
+								onGoToLibrary={handleGoToLibrary}
+								isRenaming={isRenaming}
+								setIsRenaming={setIsRenaming}
+								isCreatingNewFunnel={isCreatingNewFunnel}
+								setIsCreatingNewFunnel={setIsCreatingNewFunnel}
+								isDeleting={isDeleting}
+								newFunnelName={newFunnelName}
+								setNewFunnelName={setNewFunnelName}
 								funnelToDelete={funnelToDelete}
 								isDeleteDialogOpen={isDeleteDialogOpen}
 								isFunnelNameAvailable={isFunnelNameAvailable}
@@ -713,6 +912,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								funnelToDelete={funnelToDelete}
 								onConfirmDelete={handleConfirmDelete}
 								isDeleting={isDeleting}
+							/>
+							<OfflineConfirmationModal
+								isOpen={offlineConfirmation}
+								onClose={closeOfflineConfirmation}
+								onConfirm={handleTakeFunnelOffline}
 							/>
 						</div>
 					</div>

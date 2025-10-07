@@ -39,8 +39,8 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 				<div className="flex items-center justify-between mb-6">
 					<Heading size="4" weight="bold" className="text-foreground">
 						{context === "global" && resource.name
-							? "Edit Product"
-							: "Add New Product"}
+							? "Edit Resource"
+							: "Add New Resource"}
 					</Heading>
 					<Button
 						size="1"
@@ -132,7 +132,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
 						>
 							<option value="AFFILIATE">Affiliate Resource</option>
-							<option value="MY_PRODUCTS">My Product</option>
+							<option value="MY_PRODUCTS">Owned</option>
 						</select>
 					</div>
 
@@ -150,7 +150,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							onChange={(e) => handleInputChange("category", e.target.value)}
 							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
 						>
-							<option value="FREE_VALUE">Free Value</option>
+							<option value="FREE_VALUE">Gift</option>
 							<option value="PAID">Paid</option>
 						</select>
 					</div>
@@ -163,7 +163,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 						>
 							<Plus size={18} strokeWidth={2.5} className="mr-2" />
-							{resource.id ? "Update Product" : "Add Product"}
+							{resource.id ? "Update Resource" : "Create Resource"}
 						</Button>
 						<Button
 							variant="soft"

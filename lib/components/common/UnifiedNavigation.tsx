@@ -20,8 +20,9 @@ interface UnifiedNavigationProps {
 	isDeployed?: boolean; // New: Check if funnel is deployed/live
 	funnel?: Funnel; // New: Funnel object for validation
 	className?: string;
-	showOnPage?: "resources" | "aibuilder" | "preview" | "all" | "analytics";
+	showOnPage?: "aibuilder" | "preview" | "all" | "analytics";
 	user?: AuthenticatedUser | null; // New: User context for credits
+	isFunnelBuilder?: boolean; // New: Distinguish between Funnel Builder and Library contexts
 }
 
 const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
@@ -37,6 +38,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	className = "",
 	showOnPage = "all",
 	user = null,
+	isFunnelBuilder = false,
 }) => {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const { canGenerate, refresh: refreshCredits } = useCredits(user);
@@ -47,33 +49,40 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	};
 
 	const handleGeneration = async () => {
-		// Check if funnel has required PAID products (at least 1 PAID)
-		if (funnel && !validateFunnelProducts(funnel).hasPaidProducts) {
-			// Show notification to user
-			const showNotification = (message: string) => {
-				const notification = document.createElement("div");
-				notification.className =
-					"fixed top-4 right-4 z-50 px-4 py-3 bg-amber-500 text-white rounded-lg border border-amber-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
-				notification.textContent = message;
+		// Check if funnel has required FREE products and minimum resources
+		if (funnel) {
+			const validation = validateFunnelProducts(funnel);
+			if (!validation.hasFreeProducts || !validation.hasMinimumResources) {
+				// Show notification to user
+				const showNotification = (message: string) => {
+					const notification = document.createElement("div");
+					notification.className =
+						"fixed top-4 right-4 z-50 px-4 py-3 bg-amber-500 text-white rounded-lg border border-amber-600 shadow-lg backdrop-blur-sm text-sm font-medium max-w-xs";
+					notification.textContent = message;
 
-				const closeBtn = document.createElement("button");
-				closeBtn.innerHTML = "×";
-				closeBtn.className =
-					"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
-				closeBtn.onclick = () => notification.remove();
-				notification.appendChild(closeBtn);
+					const closeBtn = document.createElement("button");
+					closeBtn.innerHTML = "×";
+					closeBtn.className =
+						"ml-3 text-white/80 hover:text-white transition-colors text-lg font-bold";
+					closeBtn.onclick = () => notification.remove();
+					notification.appendChild(closeBtn);
 
-				document.body.appendChild(notification);
+					document.body.appendChild(notification);
 
-				setTimeout(() => {
-					if (notification.parentNode) {
-						notification.remove();
-					}
-				}, 4000);
-			};
+					setTimeout(() => {
+						if (notification.parentNode) {
+							notification.remove();
+						}
+					}, 4000);
+				};
 
-			showNotification("Add at least 1 PAID product to generate");
-			return;
+				if (!validation.hasFreeProducts) {
+					showNotification("Add at least 1 FREE product to generate");
+				} else if (!validation.hasMinimumResources) {
+					showNotification("Add at least 3 resources to generate");
+				}
+				return;
+			}
 		}
 
 		// CREDIT VALIDATION - Check credits BEFORE any other checks
@@ -184,7 +193,6 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	if (
 		showOnPage === "analytics" ||
 		(showOnPage !== "all" &&
-			showOnPage !== "resources" &&
 			showOnPage !== "aibuilder" &&
 			showOnPage !== "preview")
 	) {
@@ -194,10 +202,10 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	return (
 		<div className={`fixed bottom-6 right-6 z-50 ${className}`}>
 			<div className="flex flex-col items-center gap-3">
-				{/* Preview Button - Show on resources and aibuilder pages, only if funnel is generated */}
+				{/* Preview Button - Show on aibuilder pages, only if funnel is generated */}
 				{isExpanded &&
 					onPreview &&
-					(showOnPage === "resources" || showOnPage === "aibuilder") &&
+					showOnPage === "aibuilder" &&
 					isGenerated && (
 						<button
 							data-accent-color="blue"
@@ -214,29 +222,41 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 						</button>
 					)}
 
-				{/* Assigned Products Button - Show on aibuilder and preview pages */}
+				{/* Assigned Products Button - Show on aibuilder and preview pages, but show Edit icon only in Library context with generated funnel */}
 				{isExpanded &&
 					onFunnelProducts &&
 					(showOnPage === "aibuilder" || showOnPage === "preview") && (
 						<button
-							data-accent-color="violet"
-							aria-label="Assigned Products"
-							className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-violet-500 text-white"
-							onClick={onFunnelProducts}
-							title="Assigned Products"
+							data-accent-color={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "orange" : "violet"}
+							aria-label={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
+							className={`fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface text-white ${
+								isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder
+									? "shadow-orange-500/25 hover:shadow-orange-500/40 bg-orange-500"
+									: "shadow-violet-500/25 hover:shadow-violet-500/40 bg-violet-500"
+							}`}
+							onClick={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? onEdit : onFunnelProducts}
+							title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
 						>
-							<Library
-								size={20}
-								strokeWidth={2.5}
-								className="group-hover:scale-110 transition-transform duration-200"
-							/>
+							{isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? (
+								<Edit3
+									size={20}
+									strokeWidth={2.5}
+									className="group-hover:scale-110 transition-transform duration-200"
+								/>
+							) : (
+								<Library
+									size={20}
+									strokeWidth={2.5}
+									className="group-hover:scale-110 transition-transform duration-200"
+								/>
+							)}
 						</button>
 					)}
 
-				{/* Edit Button - Show on resources and preview pages, only if funnel is generated */}
+				{/* Edit Button - Show on preview pages, only if funnel is generated */}
 				{isExpanded &&
 					onEdit &&
-					(showOnPage === "resources" || showOnPage === "preview") &&
+					showOnPage === "preview" &&
 					isGenerated && (
 						<button
 							data-accent-color="orange"
@@ -253,8 +273,8 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 						</button>
 					)}
 
-				{/* Generation Button - Hide when funnel is live, generating, already generated, or missing PAID or FREE products */}
-				{isExpanded && !isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasPaidProducts && validateFunnelProducts(funnel).hasFreeProducts)) && (
+				{/* Generation Button - Hide when funnel is live, generating, already generated, or missing FREE products or minimum resources */}
+				{isExpanded && !isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasFreeProducts && validateFunnelProducts(funnel).hasMinimumResources)) && (
 					<button
 						onClick={handleGeneration}
 						disabled={isGenerating}
@@ -275,14 +295,38 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 					data-accent-color="violet"
 					aria-label={isExpanded ? "Collapse navigation" : "Expand navigation"}
 					className="fui-reset fui-BaseButton fui-Button w-14 h-14 rounded-full shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 dark:shadow-lg group fui-r-size-3 fui-variant-surface bg-violet-500 text-white"
-					onClick={toggleExpanded}
-					title={isExpanded ? "Collapse navigation" : "Expand navigation"}
+					onClick={isExpanded ? toggleExpanded : (() => {
+						// If generation conditions are met, trigger generation directly
+						const validation = funnel ? validateFunnelProducts(funnel) : null;
+						const canGenerate = !isDeployed && !isGenerated && (!funnel || (validation?.hasFreeProducts && validation?.hasMinimumResources));
+						
+						if (canGenerate) {
+							handleGeneration();
+						} else {
+							toggleExpanded();
+						}
+					})}
+					title={isExpanded ? "Collapse navigation" : (!isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasFreeProducts && validateFunnelProducts(funnel).hasMinimumResources))) ? "Generate funnel" : "Expand navigation"}
 				>
-					<Plus
-						size={24}
-						strokeWidth={2.5}
-						className={`transition-transform duration-300 ${isExpanded ? "rotate-45" : "rotate-0"}`}
-					/>
+					{isExpanded ? (
+						<Plus
+							size={24}
+							strokeWidth={2.5}
+							className="transition-transform duration-300 rotate-45"
+						/>
+					) : (!isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasFreeProducts && validateFunnelProducts(funnel).hasMinimumResources))) ? (
+						<Zap
+							size={24}
+							strokeWidth={2.5}
+							className="transition-transform duration-200"
+						/>
+					) : (
+						<Plus
+							size={24}
+							strokeWidth={2.5}
+							className="transition-transform duration-300 rotate-0"
+						/>
+					)}
 				</button>
 			</div>
 

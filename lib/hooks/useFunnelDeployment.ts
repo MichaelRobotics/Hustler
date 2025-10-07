@@ -78,63 +78,7 @@ export const useFunnelDeployment = (
 			};
 		}
 
-		// Check if any other funnel is currently live for the same product
-		// Only check if this funnel has a whopProductId (product-specific validation)
-		if (currentFunnel.whopProductId) {
-			console.log(`🔍 [FRONTEND VALIDATION] Checking for live funnels for product: ${currentFunnel.whopProductId}`);
-			console.log(`🔍 [FRONTEND VALIDATION] Funnel ID: ${currentFunnel.id}`);
-			console.log(`🔍 [FRONTEND VALIDATION] User experience ID: ${user?.experienceId}`);
-			
-			try {
-				// Check if user context is available
-				if (!user?.experienceId) {
-					console.error(`🔍 [FRONTEND VALIDATION] No experience ID found for user`);
-					throw new Error("Experience ID is required");
-				}
-
-				// Use product-specific live funnel check
-				const apiUrl = `/api/funnels/check-live?excludeFunnelId=${currentFunnel.id}&productId=${currentFunnel.whopProductId}`;
-				console.log(`🔍 [FRONTEND VALIDATION] API URL: ${apiUrl}`);
-				console.log(`🔍 [FRONTEND VALIDATION] Experience ID being sent: ${user.experienceId}`);
-				
-				const response = await apiGet(apiUrl, user.experienceId);
-				console.log(`🔍 [FRONTEND VALIDATION] Response status: ${response.status}, ok: ${response.ok}`);
-				
-				if (response.ok) {
-					const data = await response.json();
-					console.log(`🔍 [FRONTEND VALIDATION] Response data:`, JSON.stringify(data, null, 2));
-					
-					if (data.success && data.data.hasLiveFunnel) {
-						console.log(`🔍 [FRONTEND VALIDATION] Found live funnel: ${data.data.liveFunnelName}`);
-						// Return early - don't continue with product validation if there's a live funnel conflict
-						return {
-							isValid: false,
-							message: `Funnel "${data.data.liveFunnelName}" is currently live for this product.`,
-							missingProducts: [],
-							extraProducts: [],
-							liveFunnelName: data.data.liveFunnelName,
-						};
-					} else {
-						console.log(`🔍 [FRONTEND VALIDATION] No live funnel found, continuing with deployment`);
-					}
-				} else {
-					console.error(`🔍 [FRONTEND VALIDATION] API call failed with status: ${response.status}`);
-					const errorText = await response.text();
-					console.error(`🔍 [FRONTEND VALIDATION] Error response:`, errorText);
-					// If API call fails, we should be more cautious and let backend handle it
-					console.warn(`🔍 [FRONTEND VALIDATION] API validation failed, backend will perform final validation`);
-				}
-			} catch (error) {
-				console.error(`🔍 [FRONTEND VALIDATION] Error checking for live funnels:`, error);
-				// Continue with deployment if check fails - backend will catch conflicts
-				console.warn(`🔍 [FRONTEND VALIDATION] Frontend validation failed, backend will perform final validation`);
-			}
-		} else {
-			console.log(`🔍 [FRONTEND VALIDATION] No whopProductId found for funnel: ${currentFunnel.id}`);
-			console.log(`🔍 [FRONTEND VALIDATION] This means the funnel was not created with a product association`);
-			console.log(`🔍 [FRONTEND VALIDATION] Frontend validation will skip live funnel check and proceed with deployment`);
-			console.log(`🔍 [FRONTEND VALIDATION] Backend will catch the live funnel conflict and throw an error`);
-		}
+		// Frontend live funnel check removed - backend validation is sufficient and more reliable
 
 		// Extract product names from the generated funnel flow (what the AI actually offers)
 		const generatedProductNames = new Set<string>();
@@ -156,7 +100,7 @@ export const useFunnelDeployment = (
 			}
 		});
 
-		// Check which generated products are missing from "Assigned Products"
+		// Check which generated products are missing from "Library"
 		const missingProducts: string[] = [];
 		const extraProducts: string[] = [];
 

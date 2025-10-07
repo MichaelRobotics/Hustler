@@ -63,9 +63,15 @@ async function loadConversationHandler(
     console.log(`[load-conversation] Debug - currentBlockId: ${conversation.currentBlockId}`);
     console.log(`[load-conversation] Debug - experienceId: ${conversation.experienceId}`);
 
-    // Get the funnel flow to check stages
-    const funnelFlow = conversation.funnel?.flow as FunnelFlow;
-    if (!funnelFlow) {
+    // Use conversation's custom flow if available, otherwise use original funnel flow
+    let funnelFlow: FunnelFlow;
+    if (conversation.flow) {
+      console.log(`[load-conversation] Using conversation's custom flow for conversation ${conversationId}`);
+      funnelFlow = conversation.flow as FunnelFlow;
+    } else if (conversation.funnel?.flow) {
+      console.log(`[load-conversation] Using original funnel flow for conversation ${conversationId}`);
+      funnelFlow = conversation.funnel.flow as FunnelFlow;
+    } else {
       return NextResponse.json(
         { success: false, error: "Funnel flow not found" },
         { status: 404 }

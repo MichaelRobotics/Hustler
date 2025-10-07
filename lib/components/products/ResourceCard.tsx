@@ -21,6 +21,7 @@ interface ResourceCardProps {
 	isResourceInFunnel: (resourceId: string) => boolean;
 	isResourceAssignedToAnyFunnel: (resourceId: string) => boolean;
 	onAddToFunnel?: (resource: Resource) => void;
+	onRemoveFromFunnel?: (resource: Resource) => void;
 	onEdit: (resource: Resource) => void;
 	onDelete: (resourceId: string, resourceName: string) => void;
 	onUpdate?: (
@@ -29,6 +30,7 @@ interface ResourceCardProps {
 	) => Promise<void>;
 	isRemoving?: boolean;
 	onEditingChange?: (isEditing: boolean) => void;
+	hideAssignmentOptions?: boolean;
 }
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({
@@ -39,25 +41,29 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	isResourceInFunnel,
 	isResourceAssignedToAnyFunnel,
 	onAddToFunnel,
+	onRemoveFromFunnel,
 	onEdit,
 	onDelete,
 	onUpdate,
 	isRemoving = false,
 	onEditingChange,
+	hideAssignmentOptions = false,
 }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [isAssigning, setIsAssigning] = useState(false);
 	const [editedResource, setEditedResource] =
 		useState<Partial<Resource>>(resource);
-	const getTypeIcon = (type: string) => {
-		switch (type) {
-			case "AFFILIATE":
+	const getCategoryIcon = (category: string) => {
+		switch (category) {
+			case "PAID":
 				return (
-					<Sparkles className="w-5 h-5 text-violet-400" strokeWidth={2.5} />
+					<span className="text-2xl">💰</span>
 				);
-			case "MY_PRODUCTS":
-				return <Target className="w-5 h-5 text-green-400" strokeWidth={2.5} />;
+			case "FREE_VALUE":
+				return (
+					<span className="text-2xl">🎁</span>
+				);
 			default:
 				return <Sparkles className="w-5 h-5" strokeWidth={2.5} />;
 		}
@@ -68,7 +74,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			case "AFFILIATE":
 				return "Affiliate";
 			case "MY_PRODUCTS":
-				return "My Product";
+				return "Owned";
 			default:
 				return "Product";
 		}
@@ -141,6 +147,20 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 		}
 	};
 
+	const handleUnassignFromFunnel = () => {
+		if (!onRemoveFromFunnel || !funnel) return;
+
+		setIsAssigning(true);
+		try {
+			onRemoveFromFunnel(resource);
+			// Reset assigning state after a short delay
+			setTimeout(() => setIsAssigning(false), 1000);
+		} catch (error) {
+			// Silently handle errors - no user feedback
+			setIsAssigning(false);
+		}
+	};
+
 	if (isEditing) {
 		return (
 			<div className="group bg-gradient-to-br from-violet-50/80 via-violet-100/60 to-violet-200/40 dark:from-violet-900/80 dark:via-violet-800/60 dark:to-indigo-900/30 p-4 rounded-xl border-2 border-violet-500/60 dark:border-violet-400/70 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
@@ -157,7 +177,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									: "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
 							}`}
 						>
-							{editedResource.category === "PAID" ? "Paid" : "Free Value"}
+							{editedResource.category === "PAID" ? "Paid" : "Gift"}
 						</span>
 					</div>
 					<div className="flex items-center gap-1">
@@ -203,7 +223,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 							className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<option value="AFFILIATE">Affiliate</option>
-							<option value="MY_PRODUCTS">My Product</option>
+							<option value="MY_PRODUCTS">Owned</option>
 						</select>
 						<select
 							value={editedResource.category || "FREE_VALUE"}
@@ -216,7 +236,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 							disabled={isSaving}
 							className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							<option value="FREE_VALUE">Free Value</option>
+							<option value="FREE_VALUE">Gift</option>
 							<option value="PAID">Paid</option>
 						</select>
 					</div>
@@ -228,7 +248,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						onChange={(e) =>
 							setEditedResource({ ...editedResource, name: e.target.value })
 						}
-						placeholder="Product name..."
+						placeholder="Resource name..."
 						disabled={isSaving}
 						className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
 							editedResource.name && 
@@ -262,7 +282,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						onChange={(e) =>
 							setEditedResource({ ...editedResource, link: e.target.value })
 						}
-						placeholder="Product URL..."
+						placeholder="Resource URL..."
 						disabled={isSaving}
 						className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 					/>
@@ -290,7 +310,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 		<div className="group bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-800/80 dark:via-gray-700/60 dark:to-indigo-900/30 p-4 rounded-xl border border-border/50 dark:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
 			<div className="flex items-start justify-between mb-3">
 				<div className="flex items-center gap-2">
-					{getTypeIcon(resource.type)}
+					{getCategoryIcon(resource.category)}
 					<span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
 						{getTypeLabel(resource.type)}
 					</span>
@@ -301,7 +321,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 								: "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
 						}`}
 					>
-						{resource.category === "PAID" ? "Paid" : "Free Value"}
+						{resource.category === "PAID" ? "Paid" : "Gift"}
 					</span>
 				</div>
 				<div className="flex items-center gap-1">
@@ -313,12 +333,18 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						</span>
 					) : (
 						<>
-							{context === "funnel" &&
+							{context === "funnel" && !hideAssignmentOptions &&
 								(isResourceInFunnel(resource.id) ? (
-									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-										<Check size={12} strokeWidth={2.5} />
-										Assigned
-									</div>
+									<Button
+										size="1"
+										color="red"
+										onClick={handleUnassignFromFunnel}
+										disabled={isAssigning}
+										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<X size={12} strokeWidth={2.5} className="mr-1" />
+										{isAssigning ? "Removing..." : "Remove"}
+									</Button>
 								) : funnel && !canAssignResource(funnel, resource) ? (
 									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
 										<span className="font-bold">MAX</span>
@@ -332,7 +358,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										<Plus size={12} strokeWidth={2.5} className="mr-1" />
-										{isAssigning ? "Assigning..." : "Assign"}
+										{isAssigning ? "Adding..." : "Add"}
 									</Button>
 								))}
 
@@ -358,8 +384,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									</Button>
 								))}
 
-							{/* Delete Button - Only show when resource is not assigned to any funnel and not currently assigning */}
-							{!isResourceAssignedToAnyFunnel(resource.id) && !isAssigning && (
+							{/* Delete Button - Only show when resource is not assigned to any funnel, not currently assigning, and not in funnel context */}
+							{!isResourceAssignedToAnyFunnel(resource.id) && !isAssigning && context === "global" && (
 								<Button
 									size="1"
 									variant="ghost"

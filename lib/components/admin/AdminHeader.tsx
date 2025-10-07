@@ -58,7 +58,7 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels }: Ad
 								strokeWidth={2.5}
 								className="group-hover:rotate-12 transition-transform duration-300"
 							/>
-							<span className="ml-2">Add New Funnel</span>
+							<span className="ml-1">Create New Funnel</span>
 						</Button>
 					)}
 				</div>

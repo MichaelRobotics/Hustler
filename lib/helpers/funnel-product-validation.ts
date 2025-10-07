@@ -9,6 +9,7 @@ export function validateFunnelProducts(funnel: Funnel): {
 	isValid: boolean;
 	hasPaidProducts: boolean;
 	hasFreeProducts: boolean;
+	hasMinimumResources: boolean;
 	missingTypes: string[];
 } {
 	const resources = funnel.resources || [];
@@ -18,16 +19,18 @@ export function validateFunnelProducts(funnel: Funnel): {
 	
 	const hasPaidProducts = paidCount >= 1;
 	const hasFreeProducts = freeCount >= 1;
-	const isValid = hasPaidProducts && hasFreeProducts;
+	const hasMinimumResources = resources.length >= 3;
+	const isValid = hasFreeProducts && hasMinimumResources;
 	
 	const missingTypes: string[] = [];
-	if (!hasPaidProducts) missingTypes.push("PAID");
 	if (!hasFreeProducts) missingTypes.push("FREE");
+	if (!hasMinimumResources) missingTypes.push("MINIMUM");
 	
 	return {
 		isValid,
 		hasPaidProducts,
 		hasFreeProducts,
+		hasMinimumResources,
 		missingTypes,
 	};
 }
@@ -54,16 +57,16 @@ export function getValidationMessage(funnel: Funnel): string {
 		return "";
 	}
 	
-	if (validation.missingTypes.length === 2) {
-		return "Add at least 1 PAID product and 1 FREE product to generate your funnel.";
+	if (validation.missingTypes.includes("MINIMUM") && validation.missingTypes.includes("FREE")) {
+		return "Add at least 3 resources and 1 FREE resource to generate your funnel.";
 	}
 	
-	if (validation.missingTypes.includes("PAID")) {
-		return "Add at least 1 PAID product to generate your funnel.";
+	if (validation.missingTypes.includes("MINIMUM")) {
+		return "Add at least 3 resources to generate your funnel.";
 	}
 	
 	if (validation.missingTypes.includes("FREE")) {
-		return "Add at least 1 FREE product to generate your funnel.";
+		return "Add at least 1 FREE resource to generate your funnel.";
 	}
 	
 	return "";

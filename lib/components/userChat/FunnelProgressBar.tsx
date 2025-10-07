@@ -154,10 +154,10 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 							{/* Desktop-optimized button */}
 							<button
 								onClick={scrollToOffer}
-								className="relative inline-flex items-center justify-center px-4 py-1.5 md:px-6 md:py-2 text-xs md:text-sm font-medium text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 rounded-full shadow-md hover:shadow-lg active:scale-95 overflow-hidden group"
+								className="relative inline-flex items-center justify-center px-4 py-1.5 md:px-6 md:py-2 text-xs md:text-sm font-medium text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full shadow-md hover:shadow-lg active:scale-95 overflow-hidden group"
 							>
 								{/* Animated background overlay */}
-								<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-amber-500 via-yellow-600 to-amber-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+								<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-500 via-amber-600 to-yellow-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
 								
 								{/* Shimmer effect */}
 								<span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
@@ -169,7 +169,7 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 								</span>
 								
 								{/* Glow effect */}
-								<span className="absolute inset-0 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
+								<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 							</button>
 						</div>
 					)}

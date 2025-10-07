@@ -1,28 +1,36 @@
 import { Button, Heading, Text } from "frosted-ui";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Play } from "lucide-react";
 import type React from "react";
-import { getLimitInfo } from "../../helpers/product-limits";
 import { GLOBAL_LIMITS } from "../../types/resource";
 import type { Funnel, ResourceLibraryProps } from "../../types/resource";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 
 interface ResourceLibraryHeaderProps
 	extends Pick<ResourceLibraryProps, "context" | "onBack"> {
 	onAddProduct: () => void;
+	onOpenOfflineConfirmation?: () => void;
+	onDeploy?: (funnelId: string) => Promise<void>;
 	filteredResourcesCount: number;
 	funnel?: Funnel;
 	allResourcesCount: number;
+	// Deployment state
+	isDeploying?: boolean;
+	hasAnyLiveFunnel?: boolean;
 }
 
 export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 	context,
 	onBack,
 	onAddProduct,
+	onOpenOfflineConfirmation,
+	onDeploy,
 	filteredResourcesCount,
 	funnel,
 	allResourcesCount,
+	isDeploying = false,
+	hasAnyLiveFunnel = false,
 }) => {
-	const limitInfo = funnel ? getLimitInfo(funnel) : null;
 	const isAtGlobalLimit = allResourcesCount >= GLOBAL_LIMITS.PRODUCTS;
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
@@ -47,7 +55,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 						weight="bold"
 						className="text-black dark:text-white"
 					>
-						Library
+						{context === "funnel" ? "Resources" : "Library"}
 					</Heading>
 				</div>
 			</div>
@@ -55,35 +63,6 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 			{/* Subtle Separator Line */}
 			<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
 
-			{/* Limit Information - Only show in funnel context */}
-			{context === "funnel" && limitInfo && (
-				<div className="mb-4 p-3 bg-gradient-to-r from-violet-50/50 to-purple-50/30 dark:from-violet-900/20 dark:to-purple-900/10 rounded-lg border border-violet-200/30 dark:border-violet-700/30">
-					<div className="flex flex-wrap gap-4 text-sm">
-						<div className="flex items-center gap-2">
-							<div className="w-2 h-2 rounded-full bg-orange-400"></div>
-							<Text size="2" className="text-muted-foreground">
-								Paid: {limitInfo.paid.current}/{limitInfo.paid.limit}
-							</Text>
-							{limitInfo.paid.isAtLimit && (
-								<span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-									MAX
-								</span>
-							)}
-						</div>
-						<div className="flex items-center gap-2">
-							<div className="w-2 h-2 rounded-full bg-green-400"></div>
-							<Text size="2" className="text-muted-foreground">
-								Free: {limitInfo.freeValue.current}/{limitInfo.freeValue.limit}
-							</Text>
-							{limitInfo.freeValue.isAtLimit && (
-								<span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-									MAX
-								</span>
-							)}
-						</div>
-					</div>
-				</div>
-			)}
 
 			{/* Bottom Section: Action Buttons - Always Horizontal Layout */}
 			<div className="flex justify-between items-center gap-2 sm:gap-3">
@@ -94,10 +73,62 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 					</div>
 				</div>
 
-				{/* Right Side: Add Product Button */}
+				{/* Right Side: Create Resource Button, Go Live Button, or Live Status */}
 				<div className="flex-shrink-0">
 					{(context === "funnel" || context === "global") && (
-						isAtGlobalLimit ? (
+						funnel?.isDeployed ? (
+							/* Live Status Button - When funnel is deployed */
+							<button
+								data-accent-color="red"
+								onClick={onOpenOfflineConfirmation}
+								className="fui-reset fui-BaseButton fui-Button px-4 sm:px-6 py-3 shadow-lg shadow-red-500/25 group bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 transition-all duration-200 fui-r-size-3 fui-variant-surface cursor-pointer"
+							>
+								<svg
+									className="w-4 h-4 sm:w-5 sm:h-5 mr-2"
+									fill="red"
+									viewBox="0 0 24 24"
+								>
+									<circle cx="12" cy="12" r="10" fill="red"></circle>
+									<circle cx="12" cy="12" r="3" fill="white"></circle>
+								</svg>
+								<span className="font-semibold text-sm sm:text-base text-red-600 dark:text-red-400">
+									Live
+								</span>
+							</button>
+						) : context === "funnel" && funnel && hasValidFlow(funnel) && onDeploy ? (
+							/* Go Live Button - When funnel is generated but not deployed */
+							<Button
+								size="3"
+								color="green"
+								onClick={() => onDeploy?.(funnel.id)}
+								disabled={isDeploying}
+								className={`px-4 sm:px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 ${
+									!hasAnyLiveFunnel && hasValidFlow(funnel) && !isDeploying
+										? "animate-pulse animate-bounce"
+										: ""
+								}`}
+								title={
+									isDeploying
+										? "Deploying funnel..."
+										: !hasValidFlow(funnel)
+											? "Generate funnel first"
+											: ""
+								}
+							>
+								<Play
+									size={18}
+									strokeWidth={2.5}
+									className={`transition-transform duration-300 ${
+										!hasAnyLiveFunnel && hasValidFlow(funnel) && !isDeploying
+											? "animate-spin"
+											: "group-hover:scale-110"
+									}`}
+								/>
+								<span className="ml-2 font-semibold text-sm sm:text-base">
+									{isDeploying ? "Going Live..." : "Go Live"}
+								</span>
+							</Button>
+						) : isAtGlobalLimit ? (
 							<div className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
 								<span className="text-gray-500 dark:text-gray-400 font-medium">
 									Product Limit: {allResourcesCount}/{GLOBAL_LIMITS.PRODUCTS}
@@ -107,6 +138,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 								</span>
 							</div>
 						) : (
+							/* Create Resource Button - When funnel is not deployed and not at limit */
 							<Button
 								size="3"
 								color="violet"
@@ -126,7 +158,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 											: "group-hover:rotate-12"
 									}`}
 								/>
-								Add Product
+								Create Resource
 							</Button>
 						)
 					)}
