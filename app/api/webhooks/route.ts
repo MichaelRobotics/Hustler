@@ -1,7 +1,7 @@
 import { addCredits } from "@/lib/actions/credit-actions";
 import type { CreditPackId } from "@/lib/types/credit";
-import { waitUntil } from "@vercel/functions";
-import { makeWebhookValidator } from "@whop/api";
+import { after } from "next/server";
+import { makeWebhookValidator, type PaymentWebhookData, type MembershipWebhookData } from "@whop/api";
 import type { NextRequest } from "next/server";
 import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
@@ -22,142 +22,160 @@ const validateWebhook = makeWebhookValidator({
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
-	// Store the original body for validation before parsing
-	const originalBody = await request.text();
-	
-	// Parse the request body
-	let webhookData;
-	try {
-		webhookData = JSON.parse(originalBody);
-		console.log("Received webhook data:", webhookData);
-	} catch (parseError) {
-		console.error("Failed to parse request body:", parseError);
-		return new Response("Invalid webhook request", { status: 400 });
-	}
-
-	// Extract experience ID from X-Experience-ID header for multi-tenancy
-	const experienceId = request.headers.get('X-Experience-ID');
-	if (experienceId && webhookData.data) {
-		// Don't override company_id - let the experience context system handle the lookup
-		// The company_id should remain as the Whop company ID from the webhook
-		console.log(`[Webhook] Processing webhook for experience: ${experienceId}`);
-	}
-
 	// Check if this is a test request (bypass validation)
 	const isTestRequest = request.headers.get('X-Test-Bypass') === 'true';
 	
 	if (!isTestRequest) {
-		// Validate the webhook signature for production requests
+		// Validate the webhook to ensure it's from Whop
 		try {
-			// Create a new request with the original body for validation
-			const validationRequest = new Request(request.url, {
-				method: request.method,
-				headers: request.headers,
-				body: originalBody,
-			});
-			
-			await validateWebhook(validationRequest);
+			const webhook = await validateWebhook(request);
 			console.log("Webhook signature validation passed");
+			
+			// Handle the webhook event with type safety
+			console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhook.action}`);
+			console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhook, null, 2));
+			
+			// Extract experience ID from X-Experience-ID header for multi-tenancy
+			const experienceId = request.headers.get('X-Experience-ID');
+			if (experienceId && webhook.data) {
+				console.log(`[Webhook] Processing webhook for experience: ${experienceId}`);
+			}
+			
+			// Handle different webhook actions
+			if (webhook.action === "payment.succeeded") {
+				after(handlePaymentSucceededWebhook(webhook.data as PaymentWebhookData));
+			} else if (webhook.action === "membership.went_valid") {
+				after(handleMembershipWentValidWebhook(webhook.data as MembershipWebhookData));
+			} else {
+				// Log any other webhook events for debugging
+				console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhook.action}`);
+				console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhook, null, 2));
+			}
 		} catch (error) {
 			console.error("Webhook signature validation failed:", error);
-			return new Response("Invalid webhook signature", { status: 401 });
+			return new Response(
+				JSON.stringify({ error: "Invalid webhook signature" }), 
+				{ 
+					status: 401,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			);
 		}
 	} else {
 		console.log("Skipping signature validation for test request");
+		
+		// For test requests, parse manually
+		let webhookData;
+		try {
+			webhookData = await request.json();
+			console.log("Received test webhook data:", webhookData);
+		} catch (parseError) {
+			console.error("Failed to parse test request body:", parseError);
+			return new Response(
+				JSON.stringify({ error: "Invalid webhook request" }), 
+				{ 
+					status: 400,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			);
+		}
+		
+		// Handle test webhook events
+		if (webhookData.action === "payment.succeeded") {
+			after(handlePaymentSucceededWebhook(webhookData.data));
+		} else if (webhookData.action === "membership.went_valid") {
+			after(handleMembershipWentValidWebhook(webhookData.data));
+		}
 	}
-
-	// Handle the webhook event
-	console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhookData.action}`);
-	console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhookData, null, 2));
-	
-	if (webhookData.action === "payment.succeeded") {
-		const { id, final_amount, amount_after_fees, currency, user_id, metadata, plan_id, company_id } =
-			webhookData.data;
-
-		// Check if this is an app installation link (plan_id indicates app installation)
-		// Only skip payment processing for app installations, not membership processing
-		if (plan_id) {
-			console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping payment webhook processing`);
-			return new Response("OK", { status: 200 });
-		}
-
-		// final_amount is the amount the user paid
-		// amount_after_fees is the amount that is received by you, after card fees and processing fees are taken out
-
-		console.log(
-			`Payment ${id} succeeded for user ${user_id} from company ${company_id} with amount ${final_amount} ${currency}`,
-		);
-
-		// Check if this is a credit pack purchase via chargeUser (metadata-based method)
-		if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
-			console.log(`Credit pack purchase detected via chargeUser: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
-			
-			waitUntil(
-				handleCreditPackPurchaseWithCompany(
-					user_id,
-					company_id,
-					metadata.packId as CreditPackId,
-					metadata.credits as number,
-					id,
-				),
-			);
-		} else {
-			// Handle other payment types with scenario detection and analytics
-			waitUntil(
-				handlePaymentWithAnalytics(webhookData.data),
-			);
-		}
-	} else if (webhookData.action === "membership.went_valid") {
-		console.log(`[WEBHOOK DEBUG] Processing membership.went_valid webhook`);
-		const { user_id, product_id, membership_id, plan_id, company_buyer_id } = webhookData.data;
-
-		console.log(
-			`[WEBHOOK DEBUG] Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
-		);
-		console.log(`[WEBHOOK DEBUG] Webhook data fields:`, {
-			user_id,
-			product_id,
-			membership_id,
-			plan_id,
-			company_buyer_id,
-			page_id: webhookData.data.page_id
-		});
-
-		// Log if this is an app installation membership
-		if (plan_id) {
-			console.log(`[WEBHOOK DEBUG] App installation membership detected (plan_id: ${plan_id}) - processing user join event`);
-		}
-
-		// Handle user join event asynchronously
-		// Pass product_id to find matching live funnel
-		if (user_id && product_id) {
-			waitUntil(
-				handleUserJoinEvent(user_id, product_id, webhookData, membership_id),
-			);
-		} else if (company_buyer_id && product_id) {
-			// Fallback: Get actual user ID (company owner) from company_buyer_id
-			console.log(`user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
-			console.log(`Using company ID to fetch company owner user ID through WHOP API`);
-			waitUntil(
-				handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, webhookData, membership_id),
-			);
-		} else {
-			console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
-			console.log(`[WEBHOOK DEBUG] Membership event logged but not processed - missing required fields:`, {
-				has_user_id: !!user_id,
-				has_company_buyer_id: !!company_buyer_id,
-				has_product_id: !!product_id,
-				plan_id: plan_id || 'N/A'
-			});
-		}
-	} else {
-		// Log any other webhook events for debugging
-		console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhookData.action}`);
-		console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhookData, null, 2));
-	}
-
 	// Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
-	return new Response("OK", { status: 200 });
+	return new Response(
+		JSON.stringify({ received: true, status: "success" }), 
+		{ 
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		}
+	);
+}
+
+/**
+ * Handle payment succeeded webhook with type safety
+ */
+async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
+	const { id, final_amount, amount_after_fees, currency, user_id, metadata, plan_id, company_id } = data;
+
+	// Check if this is an app installation link (plan_id indicates app installation)
+	// Only skip payment processing for app installations, not membership processing
+	if (plan_id) {
+		console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping payment webhook processing`);
+		return;
+	}
+
+	// final_amount is the amount the user paid
+	// amount_after_fees is the amount that is received by you, after card fees and processing fees are taken out
+	console.log(
+		`Payment ${id} succeeded for user ${user_id} from company ${company_id} with amount ${final_amount} ${currency}`,
+	);
+
+	// Check if this is a credit pack purchase via chargeUser (metadata-based method)
+	if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
+		console.log(`Credit pack purchase detected via chargeUser: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
+		
+		await handleCreditPackPurchaseWithCompany(
+			user_id,
+			company_id,
+			metadata.packId as CreditPackId,
+			metadata.credits as number,
+			id,
+		);
+	} else {
+		// Handle other payment types with scenario detection and analytics
+		await handlePaymentWithAnalytics(data);
+	}
+}
+
+/**
+ * Handle membership went valid webhook with type safety
+ */
+async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
+	const { user_id, product_id, plan_id, company_buyer_id, page_id } = data;
+	const membership_id = (data as any).membership_id; // Type assertion for additional field
+
+	console.log(`[WEBHOOK DEBUG] Processing membership.went_valid webhook`);
+	console.log(
+		`[WEBHOOK DEBUG] Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
+	);
+	console.log(`[WEBHOOK DEBUG] Webhook data fields:`, {
+		user_id,
+		product_id,
+		membership_id,
+		plan_id,
+		company_buyer_id,
+		page_id
+	});
+
+	// Log if this is an app installation membership
+	if (plan_id) {
+		console.log(`[WEBHOOK DEBUG] App installation membership detected (plan_id: ${plan_id}) - processing user join event`);
+	}
+
+	// Handle user join event asynchronously
+	// Pass product_id to find matching live funnel
+	if (user_id && product_id) {
+		await handleUserJoinEvent(user_id, product_id, { data }, membership_id);
+	} else if (company_buyer_id && product_id) {
+		// Fallback: Get actual user ID (company owner) from company_buyer_id
+		console.log(`user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
+		console.log(`Using company ID to fetch company owner user ID through WHOP API`);
+		await handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, { data }, membership_id);
+	} else {
+		console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
+		console.log(`[WEBHOOK DEBUG] Membership event logged but not processed - missing required fields:`, {
+			has_user_id: !!user_id,
+			has_company_buyer_id: !!company_buyer_id,
+			has_product_id: !!product_id,
+			plan_id: plan_id || 'N/A'
+		});
+	}
 }
 
 /**
