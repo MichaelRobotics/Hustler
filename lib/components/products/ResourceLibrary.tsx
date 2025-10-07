@@ -453,7 +453,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 									onUpdate={updateResource}
 									isRemoving={removingResourceId === resource.id}
 									onEditingChange={handleEditingChange}
-									hideAssignmentOptions={context === "funnel" && funnel && hasValidFlow(funnel)}
+									hideAssignmentOptions={context === "funnel" && funnel && (hasValidFlow(funnel) || currentlyGenerating)}
 								/>
 							))}
 						</div>

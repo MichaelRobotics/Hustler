@@ -343,7 +343,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										<X size={12} strokeWidth={2.5} className="mr-1" />
-										{isAssigning ? "Removing..." : "Remove"}
+										{isAssigning ? "Update" : "Remove"}
 									</Button>
 								) : funnel && !canAssignResource(funnel, resource) ? (
 									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
@@ -358,7 +358,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										<Plus size={12} strokeWidth={2.5} className="mr-1" />
-										{isAssigning ? "Adding..." : "Add"}
+										{isAssigning ? "Update" : "Add"}
 									</Button>
 								))}
 
