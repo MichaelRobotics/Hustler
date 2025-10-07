@@ -7,14 +7,23 @@
 
 import { WhopServerSdk } from "@whop/api";
 
+// Validate required environment variables
+if (!process.env.NEXT_PUBLIC_WHOP_APP_ID) {
+	throw new Error("NEXT_PUBLIC_WHOP_APP_ID environment variable is required");
+}
+
+if (!process.env.WHOP_API_KEY) {
+	throw new Error("WHOP_API_KEY environment variable is required");
+}
+
 // Unified Whop SDK instance
 export const whopSdk = WhopServerSdk({
 	// This is the appId of your app. You can find this in the "App Settings" section of your app's Whop dashboard.
-	appId: process.env.NEXT_PUBLIC_WHOP_APP_ID ?? "fallback",
+	appId: process.env.NEXT_PUBLIC_WHOP_APP_ID,
 
 	// Add your app api key here - this is required.
 	// You can get this from the Whop dashboard after creating an app in the "API Keys" section.
-	appApiKey: process.env.WHOP_API_KEY ?? "fallback",
+	appApiKey: process.env.WHOP_API_KEY,
 
 	// This will make api requests on behalf of this user.
 	// This is optional, however most api requests need to be made on behalf of a user.

@@ -6,8 +6,13 @@ import {
 } from "../../../../lib/middleware/whop-auth";
 import { whopProductSync } from "../../../../lib/sync/whop-product-sync";
 
+// Validate webhook secret
+if (!process.env.WHOP_WEBHOOK_SECRET) {
+	throw new Error("WHOP_WEBHOOK_SECRET environment variable is required");
+}
+
 const validateWebhook = makeWebhookValidator({
-	webhookSecret: process.env.WHOP_WEBHOOK_SECRET ?? "fallback",
+	webhookSecret: process.env.WHOP_WEBHOOK_SECRET,
 });
 
 /**

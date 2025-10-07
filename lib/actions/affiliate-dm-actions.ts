@@ -143,7 +143,7 @@ https://whop.com/profit-pulse-ai/profittest/
 
 2. Install app 
 
-https://whop.com/apps/app_FInBMCJGyVdD9T/install/
+https://whop.com/apps/${process.env.NEXT_PUBLIC_WHOP_APP_ID}/install/
 
 3. Copy this link
 
@@ -151,7 +151,7 @@ ${affiliateLink}
 
 4. Quick 3-click setup: 
 
-https://whop.com/apps/app_FInBMCJGyVdD9T/install/
+https://whop.com/apps/${process.env.NEXT_PUBLIC_WHOP_APP_ID}/install/
 
 LETS GO!`;
 

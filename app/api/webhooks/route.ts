@@ -12,26 +12,16 @@ import { experiences, users } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 
-// Debug webhook secret configuration
-const webhookSecret = process.env.WHOP_WEBHOOK_SECRET ?? "fallback";
-console.log(`[WEBHOOK SECRET DEBUG] ==========================================`);
-console.log(`[WEBHOOK SECRET DEBUG] WHOP_WEBHOOK_SECRET from env: ${process.env.WHOP_WEBHOOK_SECRET ? 'SET' : 'NOT_SET'}`);
-console.log(`[WEBHOOK SECRET DEBUG] Using webhook secret: ${webhookSecret === "fallback" ? 'FALLBACK (NOT SET)' : 'CUSTOM_SECRET'}`);
-console.log(`[WEBHOOK SECRET DEBUG] Secret length: ${webhookSecret.length} characters`);
-console.log(`[WEBHOOK SECRET DEBUG] ==========================================`);
+// Validate webhook secret
+if (!process.env.WHOP_WEBHOOK_SECRET) {
+	throw new Error("WHOP_WEBHOOK_SECRET environment variable is required");
+}
 
 const validateWebhook = makeWebhookValidator({
-	webhookSecret: webhookSecret,
+	webhookSecret: process.env.WHOP_WEBHOOK_SECRET,
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
-	console.log(`[WEBHOOK ENDPOINT DEBUG] ==========================================`);
-	console.log(`[WEBHOOK ENDPOINT DEBUG] 🎯 Webhook endpoint hit at ${new Date().toISOString()}`);
-	console.log(`[WEBHOOK ENDPOINT DEBUG] Request URL: ${request.url}`);
-	console.log(`[WEBHOOK ENDPOINT DEBUG] Request method: ${request.method}`);
-	console.log(`[WEBHOOK ENDPOINT DEBUG] Request headers:`, Object.fromEntries(request.headers.entries()));
-	console.log(`[WEBHOOK ENDPOINT DEBUG] ==========================================`);
-	
 	// Store the original body for validation before parsing
 	const originalBody = await request.text();
 	
@@ -58,13 +48,6 @@ export async function POST(request: NextRequest): Promise<Response> {
 	
 	if (!isTestRequest) {
 		// Validate the webhook signature for production requests
-		console.log(`[WEBHOOK VALIDATION DEBUG] ==========================================`);
-		console.log(`[WEBHOOK VALIDATION DEBUG] Attempting webhook signature validation`);
-		console.log(`[WEBHOOK VALIDATION DEBUG] Using secret: ${webhookSecret === "fallback" ? 'FALLBACK (NOT SET)' : 'CUSTOM_SECRET'}`);
-		console.log(`[WEBHOOK VALIDATION DEBUG] Request headers:`, Object.fromEntries(request.headers.entries()));
-		console.log(`[WEBHOOK VALIDATION DEBUG] Body length: ${originalBody.length} characters`);
-		console.log(`[WEBHOOK VALIDATION DEBUG] ==========================================`);
-		
 		try {
 			// Create a new request with the original body for validation
 			const validationRequest = new Request(request.url, {
@@ -74,67 +57,39 @@ export async function POST(request: NextRequest): Promise<Response> {
 			});
 			
 			await validateWebhook(validationRequest);
-			console.log(`[WEBHOOK VALIDATION DEBUG] ✅ Webhook signature validation passed`);
+			console.log("Webhook signature validation passed");
 		} catch (error) {
-			console.error(`[WEBHOOK VALIDATION DEBUG] ❌ Webhook signature validation failed:`, error);
-			console.error(`[WEBHOOK VALIDATION DEBUG] Error details:`, {
-				message: error.message,
-				name: error.name,
-				stack: error.stack
-			});
-			console.error(`[WEBHOOK VALIDATION DEBUG] This usually means WHOP_WEBHOOK_SECRET is not set or incorrect`);
+			console.error("Webhook signature validation failed:", error);
 			return new Response("Invalid webhook signature", { status: 401 });
 		}
 	} else {
-		console.log(`[WEBHOOK VALIDATION DEBUG] ⏭️ Skipping signature validation for test request`);
+		console.log("Skipping signature validation for test request");
 	}
 
 	// Handle the webhook event
-	console.log(`[WEBHOOK DEBUG] ==========================================`);
 	console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhookData.action}`);
-	console.log(`[WEBHOOK DEBUG] Timestamp: ${new Date().toISOString()}`);
-	console.log(`[WEBHOOK DEBUG] Experience ID: ${experienceId || 'Not provided'}`);
-	console.log(`[WEBHOOK DEBUG] Test request: ${isTestRequest}`);
 	console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhookData, null, 2));
-	console.log(`[WEBHOOK DEBUG] ==========================================`);
 	
 	if (webhookData.action === "payment.succeeded") {
-		console.log(`[PAYMENT DEBUG] ==========================================`);
-		console.log(`[PAYMENT DEBUG] Processing payment.succeeded webhook`);
-		
 		const { id, final_amount, amount_after_fees, currency, user_id, metadata, plan_id, company_id } =
 			webhookData.data;
 
-		console.log(`[PAYMENT DEBUG] Payment details:`, {
-			id,
-			final_amount,
-			amount_after_fees,
-			currency,
-			user_id,
-			plan_id,
-			company_id,
-			metadata: metadata ? JSON.stringify(metadata) : 'None'
-		});
-
 		// Check if this is an app installation link (plan_id indicates app installation)
 		if (plan_id) {
-			console.log(`[PAYMENT DEBUG] ✅ App installation link detected (plan_id: ${plan_id}) - skipping payment webhook processing`);
+			console.log(`✅ App installation link detected (plan_id: ${plan_id}) - skipping payment webhook processing`);
 			return new Response("OK", { status: 200 });
 		}
 
 		// final_amount is the amount the user paid
 		// amount_after_fees is the amount that is received by you, after card fees and processing fees are taken out
 
-		console.log(`[PAYMENT DEBUG] Payment ${id} succeeded for user ${user_id} from company ${company_id} with amount ${final_amount} ${currency}`);
+		console.log(
+			`Payment ${id} succeeded for user ${user_id} from company ${company_id} with amount ${final_amount} ${currency}`,
+		);
 
 		// Check if this is a credit pack purchase via chargeUser (metadata-based method)
 		if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
-			console.log(`[PAYMENT DEBUG] 💳 Credit pack purchase detected via chargeUser: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
-			console.log(`[PAYMENT DEBUG] Credit pack details:`, {
-				packId: metadata.packId,
-				credits: metadata.credits,
-				paymentId: id
-			});
+			console.log(`Credit pack purchase detected via chargeUser: ${metadata.credits} credits for user ${user_id} from company ${company_id}`);
 			
 			waitUntil(
 				handleCreditPackPurchaseWithCompany(
@@ -146,23 +101,19 @@ export async function POST(request: NextRequest): Promise<Response> {
 				),
 			);
 		} else {
-			console.log(`[PAYMENT DEBUG] 📊 Processing payment with scenario detection and analytics`);
-			console.log(`[PAYMENT DEBUG] Payment metadata:`, metadata || 'No metadata');
-			
 			// Handle other payment types with scenario detection and analytics
 			waitUntil(
 				handlePaymentWithAnalytics(webhookData.data),
 			);
 		}
-		
-		console.log(`[PAYMENT DEBUG] ==========================================`);
 	} else if (webhookData.action === "membership.went_valid") {
-		console.log(`[MEMBERSHIP DEBUG] ==========================================`);
-		console.log(`[MEMBERSHIP DEBUG] Processing membership.went_valid webhook`);
-		
+		console.log(`[WEBHOOK DEBUG] Processing membership.went_valid webhook`);
 		const { user_id, product_id, membership_id, plan_id, company_buyer_id } = webhookData.data;
 
-		console.log(`[MEMBERSHIP DEBUG] Membership details:`, {
+		console.log(
+			`[WEBHOOK DEBUG] Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
+		);
+		console.log(`[WEBHOOK DEBUG] Webhook data fields:`, {
 			user_id,
 			product_id,
 			membership_id,
@@ -171,39 +122,22 @@ export async function POST(request: NextRequest): Promise<Response> {
 			page_id: webhookData.data.page_id
 		});
 
-		console.log(`[MEMBERSHIP DEBUG] 🎉 Membership went valid: User ${user_id} joined product ${product_id}`);
-		console.log(`[MEMBERSHIP DEBUG] Additional info: membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`);
-
 		// Handle user join event asynchronously
 		// Pass product_id to find matching live funnel
 		if (user_id && product_id) {
-			console.log(`[MEMBERSHIP DEBUG] 👤 Processing user join event for user ${user_id} and product ${product_id}`);
 			waitUntil(
 				handleUserJoinEvent(user_id, product_id, webhookData, membership_id),
 			);
 		} else if (company_buyer_id && product_id) {
 			// Fallback: Get actual user ID (company owner) from company_buyer_id
-			console.log(`[MEMBERSHIP DEBUG] 🏢 user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
-			console.log(`[MEMBERSHIP DEBUG] Using company ID to fetch company owner user ID through WHOP API`);
+			console.log(`user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
+			console.log(`Using company ID to fetch company owner user ID through WHOP API`);
 			waitUntil(
 				handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, webhookData, membership_id),
 			);
 		} else {
-			console.error(`[MEMBERSHIP DEBUG] ❌ Missing user_id/company_buyer_id or product_id in membership webhook`);
-			console.error(`[MEMBERSHIP DEBUG] Available fields:`, {
-				user_id: user_id || 'MISSING',
-				product_id: product_id || 'MISSING',
-				company_buyer_id: company_buyer_id || 'MISSING'
-			});
+			console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
 		}
-		
-		console.log(`[MEMBERSHIP DEBUG] ==========================================`);
-	} else {
-		console.log(`[WEBHOOK DEBUG] ==========================================`);
-		console.log(`[WEBHOOK DEBUG] ❓ Unrecognized webhook action: ${webhookData.action}`);
-		console.log(`[WEBHOOK DEBUG] Full webhook data:`, JSON.stringify(webhookData, null, 2));
-		console.log(`[WEBHOOK DEBUG] Supported actions: payment.succeeded, membership.went_valid`);
-		console.log(`[WEBHOOK DEBUG] ==========================================`);
 	}
 
 	// Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
