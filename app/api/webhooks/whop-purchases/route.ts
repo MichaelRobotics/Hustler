@@ -30,7 +30,11 @@ async function handleWhopPurchaseWebhook(request: NextRequest) {
 		}
 
 		const body = await request.json();
-		console.log("Purchase webhook received:", body.type, body.data);
+		console.log(`[WHOP-PURCHASES DEBUG] ==========================================`);
+		console.log(`[WHOP-PURCHASES DEBUG] Purchase webhook received:`, body.type);
+		console.log(`[WHOP-PURCHASES DEBUG] Timestamp: ${new Date().toISOString()}`);
+		console.log(`[WHOP-PURCHASES DEBUG] Test request: ${isTestRequest}`);
+		console.log(`[WHOP-PURCHASES DEBUG] Purchase data:`, JSON.stringify(body.data, null, 2));
 
 		// Extract experience ID from X-Experience-ID header for multi-tenancy
 		const experienceId = request.headers.get('X-Experience-ID');
@@ -41,15 +45,26 @@ async function handleWhopPurchaseWebhook(request: NextRequest) {
 		}
 
 		// Handle different purchase events
+		console.log(`[WHOP-PURCHASES DEBUG] Processing purchase event: ${body.type}`);
 		switch (body.type) {
 			case "plan.purchased":
+				console.log(`[WHOP-PURCHASES DEBUG] 📋 Plan purchased event`);
+				await trackPurchase(body.data);
+				break;
 			case "access_pass.purchased":
+				console.log(`[WHOP-PURCHASES DEBUG] 🎫 Access pass purchased event`);
+				await trackPurchase(body.data);
+				break;
 			case "product.purchased":
+				console.log(`[WHOP-PURCHASES DEBUG] 🛍️ Product purchased event`);
 				await trackPurchase(body.data);
 				break;
 			default:
-				console.log("Unhandled webhook type:", body.type);
+				console.log(`[WHOP-PURCHASES DEBUG] ❓ Unhandled webhook type: ${body.type}`);
+				console.log(`[WHOP-PURCHASES DEBUG] Supported types: plan.purchased, access_pass.purchased, product.purchased`);
 		}
+		
+		console.log(`[WHOP-PURCHASES DEBUG] ==========================================`);
 
 		return NextResponse.json({ received: true, type: body.type });
 
