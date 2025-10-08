@@ -22,89 +22,48 @@ const validateWebhook = makeWebhookValidator({
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
-	// Check if this is a test request (bypass validation)
-	const isTestRequest = request.headers.get('X-Test-Bypass') === 'true';
-	
-	if (!isTestRequest) {
-		// Validate the webhook to ensure it's from Whop
-		try {
-			const webhook = await validateWebhook(request);
-			console.log("Webhook signature validation passed");
-			
-			// Handle the webhook event with type safety
-			console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhook.action}`);
-			console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhook, null, 2));
-			
-			// Extract experience ID from X-Experience-ID header for multi-tenancy
-			const experienceId = request.headers.get('X-Experience-ID');
-			if (experienceId && webhook.data) {
-				console.log(`[Webhook] Processing webhook for experience: ${experienceId}`);
-			}
-			
-			// Handle different webhook actions
-			if (webhook.action === "payment.succeeded") {
-				console.log(`[WEBHOOK DEBUG] 🟢 Processing payment.succeeded webhook`);
-				after(handlePaymentSucceededWebhook(webhook.data as PaymentWebhookData));
-			} else if (webhook.action === "membership.went_valid") {
-				console.log(`[WEBHOOK DEBUG] 🔵 Processing membership.went_valid webhook - STARTING`);
-				console.log(`[WEBHOOK DEBUG] 🔵 Membership webhook data:`, JSON.stringify(webhook.data, null, 2));
-				
-				// Add wait to ensure logging is visible
-				await new Promise(resolve => setTimeout(resolve, 1000));
-				console.log(`[WEBHOOK DEBUG] 🔵 About to call handleMembershipWentValidWebhook`);
-				
-				after(handleMembershipWentValidWebhook(webhook.data as MembershipWebhookData));
-				
-				console.log(`[WEBHOOK DEBUG] 🔵 handleMembershipWentValidWebhook called successfully`);
-			} else {
-				// Log any other webhook events for debugging
-				console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhook.action}`);
-				console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhook, null, 2));
-			}
-		} catch (error) {
-			console.error("Webhook signature validation failed:", error);
-			return new Response(
-				JSON.stringify({ error: "Invalid webhook signature" }), 
-				{ 
-					status: 401,
-					headers: { 'Content-Type': 'application/json' }
-				}
-			);
-		}
-	} else {
-		console.log("Skipping signature validation for test request");
+	// Validate the webhook to ensure it's from Whop
+	try {
+		const webhook = await validateWebhook(request);
+		console.log("Webhook signature validation passed");
 		
-		// For test requests, parse manually
-		let webhookData;
-		try {
-			webhookData = await request.json();
-			console.log("Received test webhook data:", webhookData);
-		} catch (parseError) {
-			console.error("Failed to parse test request body:", parseError);
-			return new Response(
-				JSON.stringify({ error: "Invalid webhook request" }), 
-				{ 
-					status: 400,
-					headers: { 'Content-Type': 'application/json' }
-				}
-			);
+		// Handle the webhook event with type safety
+		console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhook.action}`);
+		console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhook, null, 2));
+		
+		// Extract experience ID from X-Experience-ID header for multi-tenancy
+		const experienceId = request.headers.get('X-Experience-ID');
+		if (experienceId && webhook.data) {
+			console.log(`[Webhook] Processing webhook for experience: ${experienceId}`);
 		}
 		
-		// Handle test webhook events
-		if (webhookData.action === "payment.succeeded") {
-			after(handlePaymentSucceededWebhook(webhookData.data));
-		} else if (webhookData.action === "membership.went_valid") {
-			after(handleMembershipWentValidWebhook(webhookData.data));
+		// Handle different webhook actions
+		if (webhook.action === "payment.succeeded") {
+			console.log(`[WEBHOOK DEBUG] 🟢 Processing payment.succeeded webhook`);
+			after(handlePaymentSucceededWebhook(webhook.data as PaymentWebhookData));
+		} else if (webhook.action === "membership.went_valid") {
+			console.log(`[WEBHOOK DEBUG] 🔵 Processing membership.went_valid webhook - STARTING`);
+			console.log(`[WEBHOOK DEBUG] 🔵 Membership webhook data:`, JSON.stringify(webhook.data, null, 2));
+			
+			// Add wait to ensure logging is visible
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			console.log(`[WEBHOOK DEBUG] 🔵 About to call handleMembershipWentValidWebhook`);
+			
+			after(handleMembershipWentValidWebhook(webhook.data as MembershipWebhookData));
+			
+			console.log(`[WEBHOOK DEBUG] 🔵 handleMembershipWentValidWebhook called successfully`);
+		} else {
+			// Log any other webhook events for debugging
+			console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhook.action}`);
+			console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhook, null, 2));
 		}
+	} catch (error) {
+		console.error("Webhook signature validation failed:", error);
+		return new Response("Invalid webhook signature", { status: 401 });
 	}
+
 	// Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
-	return new Response(
-		JSON.stringify({ received: true, status: "success" }), 
-		{ 
-			status: 200,
-			headers: { 'Content-Type': 'application/json' }
-		}
-	);
+	return new Response("OK", { status: 200 });
 }
 
 /**
