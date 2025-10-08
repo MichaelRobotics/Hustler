@@ -43,9 +43,19 @@ export async function POST(request: NextRequest): Promise<Response> {
 			
 			// Handle different webhook actions
 			if (webhook.action === "payment.succeeded") {
+				console.log(`[WEBHOOK DEBUG] 🟢 Processing payment.succeeded webhook`);
 				after(handlePaymentSucceededWebhook(webhook.data as PaymentWebhookData));
 			} else if (webhook.action === "membership.went_valid") {
+				console.log(`[WEBHOOK DEBUG] 🔵 Processing membership.went_valid webhook - STARTING`);
+				console.log(`[WEBHOOK DEBUG] 🔵 Membership webhook data:`, JSON.stringify(webhook.data, null, 2));
+				
+				// Add wait to ensure logging is visible
+				await new Promise(resolve => setTimeout(resolve, 1000));
+				console.log(`[WEBHOOK DEBUG] 🔵 About to call handleMembershipWentValidWebhook`);
+				
 				after(handleMembershipWentValidWebhook(webhook.data as MembershipWebhookData));
+				
+				console.log(`[WEBHOOK DEBUG] 🔵 handleMembershipWentValidWebhook called successfully`);
 			} else {
 				// Log any other webhook events for debugging
 				console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhook.action}`);
@@ -137,14 +147,20 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
  * Handle membership went valid webhook with type safety
  */
 async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
+	console.log(`[MEMBERSHIP HANDLER] 🔵 STARTING handleMembershipWentValidWebhook`);
+	
+	// Add initial wait to ensure function is called
+	await new Promise(resolve => setTimeout(resolve, 500));
+	console.log(`[MEMBERSHIP HANDLER] 🔵 Function called successfully, processing data...`);
+	
 	const { user_id, product_id, plan_id, company_buyer_id, page_id } = data;
 	const membership_id = (data as any).membership_id; // Type assertion for additional field
 
-	console.log(`[WEBHOOK DEBUG] Processing membership.went_valid webhook`);
+	console.log(`[MEMBERSHIP HANDLER] 🔵 Processing membership.went_valid webhook`);
 	console.log(
-		`[WEBHOOK DEBUG] Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
+		`[MEMBERSHIP HANDLER] 🔵 Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`,
 	);
-	console.log(`[WEBHOOK DEBUG] Webhook data fields:`, {
+	console.log(`[MEMBERSHIP HANDLER] 🔵 Webhook data fields:`, {
 		user_id,
 		product_id,
 		membership_id,
@@ -160,22 +176,32 @@ async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
 
 	// Handle user join event asynchronously
 	// Pass product_id to find matching live funnel
+	console.log(`[MEMBERSHIP HANDLER] 🔵 About to check user conditions...`);
+	await new Promise(resolve => setTimeout(resolve, 300));
+	
 	if (user_id && product_id) {
+		console.log(`[MEMBERSHIP HANDLER] 🔵 Calling handleUserJoinEvent with user_id: ${user_id}, product_id: ${product_id}`);
+		await new Promise(resolve => setTimeout(resolve, 200));
 		await handleUserJoinEvent(user_id, product_id, { data }, membership_id);
+		console.log(`[MEMBERSHIP HANDLER] 🔵 handleUserJoinEvent completed`);
 	} else if (company_buyer_id && product_id) {
 		// Fallback: Get actual user ID (company owner) from company_buyer_id
-		console.log(`user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
-		console.log(`Using company ID to fetch company owner user ID through WHOP API`);
+		console.log(`[MEMBERSHIP HANDLER] 🔵 user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
+		console.log(`[MEMBERSHIP HANDLER] 🔵 Using company ID to fetch company owner user ID through WHOP API`);
+		await new Promise(resolve => setTimeout(resolve, 200));
 		await handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, { data }, membership_id);
+		console.log(`[MEMBERSHIP HANDLER] 🔵 handleUserJoinEventWithCompanyFallback completed`);
 	} else {
-		console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
-		console.log(`[WEBHOOK DEBUG] Membership event logged but not processed - missing required fields:`, {
+		console.error("[MEMBERSHIP HANDLER] 🔵 Missing user_id/company_buyer_id or product_id in membership webhook");
+		console.log(`[MEMBERSHIP HANDLER] 🔵 Membership event logged but not processed - missing required fields:`, {
 			has_user_id: !!user_id,
 			has_company_buyer_id: !!company_buyer_id,
 			has_product_id: !!product_id,
 			plan_id: plan_id || 'N/A'
 		});
 	}
+	
+	console.log(`[MEMBERSHIP HANDLER] 🔵 FINISHED handleMembershipWentValidWebhook`);
 }
 
 /**
