@@ -224,6 +224,10 @@ export async function handleUserJoinEvent(
 		// Step 1: Find the experience by page_id (company ID)
 		// This is the most reliable way since page_id is the company that owns the app
 		console.log(`[USER-JOIN DEBUG] Looking for experience with whopCompanyId: ${webhookData.data.page_id}`);
+		console.log(`[USER-JOIN DEBUG] Full webhook data structure:`, JSON.stringify(webhookData.data, null, 2));
+		console.log(`[USER-JOIN DEBUG] page_id: ${webhookData.data.page_id}`);
+		console.log(`[USER-JOIN DEBUG] company_buyer_id: ${webhookData.data.company_buyer_id}`);
+		console.log(`[USER-JOIN DEBUG] product_id: ${webhookData.data.product_id}`);
 		
 		const experience = await db.query.experiences.findFirst({
 			where: eq(experiences.whopCompanyId, webhookData.data.page_id),
@@ -235,6 +239,13 @@ export async function handleUserJoinEvent(
 				columns: { whopCompanyId: true, whopExperienceId: true, name: true }
 			});
 			console.error(`[USER-JOIN DEBUG] Available experiences:`, availableExperiences);
+			console.error(`[USER-JOIN DEBUG] Looking for exact match: ${webhookData.data.page_id}`);
+			console.error(`[USER-JOIN DEBUG] Available whopCompanyIds:`, availableExperiences.map((e: any) => e.whopCompanyId));
+			
+			// Handle missing experience gracefully
+			console.log(`[USER-JOIN DEBUG] ⚠️ Company ${webhookData.data.page_id} has no experience in database`);
+			console.log(`[USER-JOIN DEBUG] ⚠️ This means the app is not installed on this company yet`);
+			console.log(`[USER-JOIN DEBUG] ⚠️ Webhook received but no processing needed - company needs to install the app first`);
 			return;
 		}
 

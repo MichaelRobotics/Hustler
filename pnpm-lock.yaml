@@ -108,8 +108,8 @@ importers:
         specifier: 0.0.1-canary.117
         version: 0.0.1-canary.117(react@19.1.0)
       '@whop/api':
-        specifier: ^0.0.51
-        version: 0.0.51(@auth/core@0.40.0)
+        specifier: ^0.0.49
+        version: 0.0.49(@auth/core@0.40.0)
       '@whop/react':
         specifier: 0.2.36
         version: 0.2.36(@auth/core@0.40.0)(@types/react-dom@19.1.5(@types/react@19.1.4))(@types/react@19.1.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -2619,8 +2619,8 @@ packages:
     peerDependencies:
       '@auth/core': ^0.40.0
 
-  '@whop/api@0.0.51':
-    resolution: {integrity: sha512-9BcMNeJQBPMyOP2AIwBZmOVgkcEvVUqFZkK+sFM0UxjuTmSy1+AA4IcBHM+sUf6LW6SSTN3Ez8ZLphm2CoQMig==}
+  '@whop/api@0.0.49':
+    resolution: {integrity: sha512-jpH7r9cemAF7K2oxNwtclLzlAOg0yWD/LWG85BRi5dVweu6d93W/PAtaMh3ja4LOnFGzd7NrM8QREzvLy9Uqhg==}
     engines: {node: 22.x, pnpm: 9.15.9}
     peerDependencies:
       '@auth/core': ^0.40.0
@@ -6278,7 +6278,7 @@ snapshots:
       js-md5: 0.8.3
       tiny-typed-emitter: 2.1.0
 
-  '@whop/api@0.0.51(@auth/core@0.40.0)':
+  '@whop/api@0.0.49(@auth/core@0.40.0)':
     dependencies:
       '@auth/core': 0.40.0
       graphql: 16.11.0

@@ -344,8 +344,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		if (userType === "admin") {
 			return (
 				<div className="h-screen w-full relative">
-					{/* Admin Navbar - Layered overlay - HIDDEN FOR NOW */}
-					{/* <div className="absolute top-0 left-0 right-0 z-50">
+					{/* Admin Navbar - Layered overlay */}
+					<div className="absolute top-0 left-0 right-0 z-50">
 						<AdminNavbar
 							conversationId={conversationId}
 							stageInfo={stageInfo}
@@ -356,7 +356,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							onTriggerDM={triggerDMForAdmin}
 							onResetConversations={resetConversations}
 						/>
-					</div> */}
+					</div>
 
 					{/* Main Content - No Conversation Message */}
 					<div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
@@ -430,8 +430,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// Render UserChat with real data
 	return (
 		<div className="h-screen w-full relative">
-			{/* Admin Navbar - Layered overlay for admins - HIDDEN FOR NOW */}
-			{/* {userType === "admin" && (
+			{/* Admin Navbar - Layered overlay for admins */}
+			{userType === "admin" && (
 				<div className="absolute top-0 left-0 right-0 z-50">
 					<AdminNavbar
 						conversationId={conversationId}
@@ -448,7 +448,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						company_id={userContext?.company_id}
 					/>
 				</div>
-			)} */}
+			)}
 
 			{/* Main Content Area - Full height, no scrollbars */}
 			<div className="h-full w-full">
