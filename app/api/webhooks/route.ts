@@ -35,33 +35,48 @@ export async function POST(request: NextRequest): Promise<Response> {
 		
 		// Handle the webhook event with type safety
 		console.log(`[WEBHOOK DEBUG] Processing webhook with action: ${webhook.action}`);
-		console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhook, null, 2));
-		
-		// Extract experience ID from X-Experience-ID header for multi-tenancy
-		const experienceId = request.headers.get('X-Experience-ID');
-		if (experienceId && webhook.data) {
-			console.log(`[Webhook] Processing webhook for experience: ${experienceId}`);
+		try {
+			console.log(`[WEBHOOK DEBUG] Webhook data:`, JSON.stringify(webhook, null, 2));
+		} catch (error) {
+			console.log(`[WEBHOOK DEBUG] Webhook data (circular reference detected):`, Object.keys(webhook));
 		}
 		
 		// Handle different webhook actions
 		if (webhook.action === "payment.succeeded" || webhook.action === "app_payment.succeeded") {
 			console.log(`[WEBHOOK DEBUG] 🟢 Processing payment.succeeded webhook`);
-			after(handlePaymentSucceededWebhook(webhook.data as PaymentWebhookData));
+			after(handlePaymentSucceededWebhook(webhook.data as PaymentWebhookData).catch(error => {
+				console.error(`[WEBHOOK ERROR] Payment webhook handler failed:`, error);
+			}));
 		} else if (webhook.action === "membership.went_valid" || webhook.action === "app_membership.went_valid") {
 			console.log(`[WEBHOOK DEBUG] 🔵 Processing membership.went_valid webhook - STARTING`);
-			console.log(`[WEBHOOK DEBUG] 🔵 Membership webhook data:`, JSON.stringify(webhook.data, null, 2));
+			try {
+				console.log(`[WEBHOOK DEBUG] 🔵 Membership webhook data:`, JSON.stringify(webhook.data, null, 2));
+			} catch (error) {
+				console.log(`[WEBHOOK DEBUG] 🔵 Membership webhook data (circular reference detected):`, Object.keys(webhook.data));
+			}
 			
-			after(handleMembershipWentValidWebhook(webhook.data as MembershipWebhookData));
-			
+			// Log before calling after() to ensure it appears in Vercel logs
+			console.log(`[WEBHOOK DEBUG] 🔵 About to call handleMembershipWentValidWebhook`);
+			after(handleMembershipWentValidWebhook(webhook.data as MembershipWebhookData).catch(error => {
+				console.error(`[WEBHOOK ERROR] Membership webhook handler failed:`, error);
+			}));
 			console.log(`[WEBHOOK DEBUG] 🔵 handleMembershipWentValidWebhook called successfully`);
 		} else if (webhook.action === "membership.went_invalid") {
 			console.log(`[WEBHOOK DEBUG] 🔴 Processing membership.went_invalid webhook - User left`);
-			console.log(`[WEBHOOK DEBUG] 🔴 Membership invalid data:`, JSON.stringify(webhook.data, null, 2));
+			try {
+				console.log(`[WEBHOOK DEBUG] 🔴 Membership invalid data:`, JSON.stringify(webhook.data, null, 2));
+			} catch (error) {
+				console.log(`[WEBHOOK DEBUG] 🔴 Membership invalid data (circular reference detected):`, Object.keys(webhook.data));
+			}
 			// Handle user leaving if needed
 		} else {
 			// Log any other webhook events for debugging
 			console.log(`[WEBHOOK DEBUG] Unhandled webhook action: ${webhook.action}`);
-			console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhook, null, 2));
+			try {
+				console.log(`[WEBHOOK DEBUG] Unhandled webhook data:`, JSON.stringify(webhook, null, 2));
+			} catch (error) {
+				console.log(`[WEBHOOK DEBUG] Unhandled webhook data (circular reference detected):`, Object.keys(webhook));
+			}
 		}
 	} catch (error) {
 		console.error("Webhook signature validation failed:", error);
@@ -112,8 +127,8 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
  * Handle membership went valid webhook with type safety
  */
 async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
+	// CRITICAL: Log immediately when function starts to ensure it appears in Vercel logs
 	console.log(`[MEMBERSHIP HANDLER] 🔵 STARTING handleMembershipWentValidWebhook`);
-	
 	console.log(`[MEMBERSHIP HANDLER] 🔵 Function called successfully, processing data...`);
 	
 	const { user_id, product_id, plan_id, company_buyer_id, page_id } = data;
