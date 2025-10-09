@@ -197,9 +197,9 @@ export const FunnelGenerationSection: React.FC<
 										: "animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 cursor-pointer"
 								}`}
 							>
-								<div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 via-green-500 to-emerald-500 dark:from-green-300 dark:via-green-400 dark:to-emerald-400 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-green-400/50 transition-all duration-300 relative">
+								<div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 dark:from-orange-300 dark:via-orange-400 dark:to-orange-500 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-orange-400/50 transition-all duration-300 relative">
 									<Zap
-										className="w-6 h-6 text-orange-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300"
+										className="w-6 h-6 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300"
 										strokeWidth={2.5}
 									/>
 								</div>
