@@ -7,6 +7,8 @@ import {
 	Target,
 	Trash2,
 	X,
+	DollarSign,
+	Gift,
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
@@ -58,11 +60,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 		switch (category) {
 			case "PAID":
 				return (
-					<span className="text-2xl">💰</span>
+					<DollarSign className="w-6 h-6 text-orange-600 dark:text-orange-400" strokeWidth={2.5} />
 				);
 			case "FREE_VALUE":
 				return (
-					<span className="text-2xl">🎁</span>
+					<Gift className="w-6 h-6 text-green-600 dark:text-green-400" strokeWidth={2.5} />
 				);
 			default:
 				return <Sparkles className="w-5 h-5" strokeWidth={2.5} />;
