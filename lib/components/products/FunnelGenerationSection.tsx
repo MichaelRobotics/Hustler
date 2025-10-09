@@ -194,7 +194,7 @@ export const FunnelGenerationSection: React.FC<
 								className={`group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-orange-300/20 to-gray-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-orange-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-orange-500/15 transition-all duration-500 ease-out ${
 									funnel.generationStatus === "generating" || isGenerationDisabled
 										? "opacity-50 cursor-not-allowed"
-										: "animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 cursor-pointer"
+										: "animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-orange-500/25 cursor-pointer"
 								}`}
 							>
 								<div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 dark:from-orange-300 dark:via-orange-400 dark:to-orange-500 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-orange-400/50 transition-all duration-300 relative">
