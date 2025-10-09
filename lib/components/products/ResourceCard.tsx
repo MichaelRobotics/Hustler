@@ -169,7 +169,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 				<div className="flex items-start justify-between mb-3">
 					<div className="flex items-center gap-2">
 						<div className="w-5 h-5 bg-violet-400 rounded-full animate-pulse" />
-						<span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
+						<span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300">
 							{getTypeLabel(editedResource.type || "AFFILIATE")}
 						</span>
 						<span
@@ -313,7 +313,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			<div className="flex items-start justify-between mb-3">
 				<div className="flex items-center gap-2">
 					{getCategoryIcon(resource.category)}
-					<span className="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
+					<span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300">
 						{getTypeLabel(resource.type)}
 					</span>
 					<span
@@ -354,7 +354,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 								) : (
 									<Button
 										size="1"
-										color="violet"
+										color={resource.category === "PAID" ? "orange" : "green"}
 										onClick={handleAssignToFunnel}
 										disabled={isAssigning}
 										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
