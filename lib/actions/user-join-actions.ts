@@ -16,7 +16,7 @@ import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
 
 // Type definition for webhook data passed to handleUserJoinEvent
-interface UserJoinWebhookData {
+export interface UserJoinWebhookData {
 	user_id: string;
 	product_id: string;
 	page_id: string;
