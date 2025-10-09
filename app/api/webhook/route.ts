@@ -1,6 +1,6 @@
 import { makeWebhookValidator, type PaymentWebhookData, type MembershipWebhookData } from "@whop/api";
 import { after } from "next/server";
-import { handleUserJoinEvent, convertWebhookData } from "@/lib/actions/user-join-actions";
+import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
 import { addCredits } from "@/lib/actions/credit-actions";
 import type { CreditPackId } from "@/lib/types/credit";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
@@ -25,10 +25,11 @@ export async function POST(request: Request) {
   const webhook = await validateWebhook(request);
 
   // Handle the webhook event
-  if (webhook.action === "payment.succeeded") {
+  if (webhook.action === "membership.went_valid") {
+	after(handleMembershipWentValidWebhook(webhook.data));
+ }
+  else if (webhook.action === "payment.succeeded") {
     after(handlePaymentSucceededWebhook(webhook.data));
-  } else if (webhook.action === "membership.went_valid") {
-    after(handleMembershipWentValidWebhook(webhook.data));
   }
 
   // Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
@@ -56,134 +57,26 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
 }
 
 async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
-  const { user_id, product_id, plan_id, company_buyer_id, page_id } = data;
-  const membership_id = (data as any).membership_id; // Type assertion for additional field
+  const { user_id, product_id } = data;
+  const membership_id = (data as any).membership_id;
 
-  console.log(`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}, plan_id: ${plan_id || 'N/A'}`);
-
-  // Extract company context from webhook data for multi-company support
-  const companyId = company_buyer_id || page_id;
-  
-  // Create company-specific SDK instance
-  const whopSdkWithCompany = whopSdk.withCompany(companyId);
+  console.log(`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}`);
   
   // Handle user join event asynchronously
   if (user_id && product_id) {
-    await handleUserJoinEvent(user_id, product_id, convertWebhookData(data), membership_id, whopSdkWithCompany);
-  } else if (company_buyer_id && product_id) {
-    // Fallback: Get actual user ID (company owner) from company_buyer_id
-    await handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, data, membership_id, whopSdkWithCompany);
+    await handleUserJoinEvent(user_id, product_id, {
+      user_id,
+      product_id,
+      page_id: data.page_id,
+      company_buyer_id: data.company_buyer_id || undefined,
+      membership_id,
+      plan_id: data.plan_id,
+    }, membership_id);
   } else {
-    console.error("Missing user_id/company_buyer_id or product_id in membership webhook");
+    console.error("Missing user_id or product_id in membership webhook");
   }
 }
 
-/**
- * Handle user join event with company fallback
- * Gets the admin member who made the company purchase
- */
-async function handleUserJoinEventWithCompanyFallback(
-	company_buyer_id: string,
-	product_id: string,
-	webhookData: MembershipWebhookData,
-	membership_id?: string,
-	whopSdkWithCompany?: any,
-): Promise<void> {
-	try {
-		console.log(`Company buyer ID provided: ${company_buyer_id}, getting company members...`);
-
-		// Try multiple approaches to find the company owner
-		console.log(`🔍 Attempting to find company owner for ${company_buyer_id}...`);
-
-		// Use company-specific SDK if provided, otherwise fall back to global SDK
-		const sdk = whopSdkWithCompany || whopSdk;
-		
-		// Approach 1: Get company authorized users (explicitly added team members)
-		const companyAuthorizedUsers = await sdk.companies.listAuthorizedUsers({
-			companyId: company_buyer_id
-		});
-
-		console.log(`🔍 Company authorized users for ${company_buyer_id}:`, {
-			totalUsers: companyAuthorizedUsers?.authorizedUsers?.length || 0,
-			users: companyAuthorizedUsers?.authorizedUsers?.map((user: any) => ({
-				id: user?.id,
-				userId: user?.userId,
-				role: user?.role,
-				name: user?.name
-			}))
-		});
-
-		// Approach 2: Get company members (includes customers and members)
-		const companyMembers = await sdk.companies.listMembers({
-			companyId: company_buyer_id
-		});
-
-		console.log(`🔍 Company members for ${company_buyer_id}:`, {
-			totalMembers: companyMembers?.members?.nodes?.length || 0,
-			members: companyMembers?.members?.nodes?.map((member: any) => ({
-				id: member?.id,
-				status: member?.status,
-				hasUser: !!member?.user,
-				userId: member?.user?.id
-			}))
-		});
-
-		// Approach 3: Get company info to see if we can find owner there
-		const companyInfo = await sdk.companies.getCompany({
-			companyId: company_buyer_id
-		});
-
-		console.log(`🔍 Company info for ${company_buyer_id}:`, {
-			id: companyInfo?.id,
-			title: companyInfo?.title
-		});
-
-		// Try to find owner from authorized users first
-		const ownerUser = companyAuthorizedUsers?.authorizedUsers?.find((user: any) => 
-			user?.role === 'owner'
-		);
-
-		if (ownerUser?.userId) {
-			console.log(`✅ Found owner user from authorized users: ${ownerUser.userId} (${ownerUser.name})`);
-			await handleUserJoinEvent(ownerUser.userId, product_id, convertWebhookData(webhookData), membership_id, whopSdkWithCompany);
-			return;
-		}
-
-		// Try to find admin from authorized users
-		const adminUser = companyAuthorizedUsers?.authorizedUsers?.find((user: any) => 
-			user?.role === 'admin'
-		);
-
-		if (adminUser?.userId) {
-			console.log(`⚠️ No owner found, using admin from authorized users: ${adminUser.userId} (${adminUser.name})`);
-			await handleUserJoinEvent(adminUser.userId, product_id, convertWebhookData(webhookData), membership_id, whopSdkWithCompany);
-			return;
-		}
-
-		// Try to find any member with a user
-		const anyMemberWithUser = companyMembers?.members?.nodes?.find((member: any) => 
-			member?.user
-		);
-
-		if (anyMemberWithUser?.user?.id) {
-			console.log(`⚠️ No admin found, using any member with user: ${anyMemberWithUser.user.id} (${anyMemberWithUser.user.name})`);
-			await handleUserJoinEvent(anyMemberWithUser.user.id, product_id, convertWebhookData(webhookData), membership_id, whopSdkWithCompany);
-			return;
-		}
-
-		// If we get here, we couldn't find any user
-		console.log(`⚠️ Company ${company_buyer_id} has no users we can identify - this is a valid scenario for company purchases`);
-		console.log(`📝 Company purchase processed but no user credits added (company has no identifiable users to credit)`);
-		console.log(`Available data:`, {
-			authorizedUsers: companyAuthorizedUsers?.authorizedUsers?.length || 0,
-			members: companyMembers?.members?.nodes?.length || 0,
-			companyInfo: !!companyInfo
-		});
-
-	} catch (error) {
-		console.error(`Error handling company_buyer_id ${company_buyer_id}:`, error);
-	}
-}
 
 async function handleCreditPackPurchaseWithCompany(
 	user_id: string | null | undefined,
