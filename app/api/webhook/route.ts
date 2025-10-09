@@ -1,6 +1,5 @@
 import { makeWebhookValidator, type PaymentWebhookData, type MembershipWebhookData } from "@whop/api";
 import { after } from "next/server";
-import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
 import { addCredits } from "@/lib/actions/credit-actions";
 import type { CreditPackId } from "@/lib/types/credit";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
@@ -26,8 +25,10 @@ export async function POST(request: Request) {
 
   // Handle the webhook event
   if (webhook.action === "membership.went_valid") {
-	after(handleMembershipWentValidWebhook(webhook.data));
- }
+    // DISABLED: Conversation creation moved to user creation flow
+    console.log(`[WEBHOOK] Membership webhook received but disabled - conversation creation now handled in user creation`);
+    // after(handleMembershipWentValidWebhook(webhook.data));
+  }
   else if (webhook.action === "payment.succeeded") {
     after(handlePaymentSucceededWebhook(webhook.data));
   }
@@ -56,26 +57,8 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
   }
 }
 
-async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
-  const { user_id, product_id } = data;
-  const membership_id = (data as any).membership_id;
-
-  console.log(`Membership went valid: User ${user_id} joined product ${product_id}, membership ${membership_id || 'N/A'}`);
-  
-  // Handle user join event asynchronously
-  if (user_id && product_id) {
-    await handleUserJoinEvent(user_id, product_id, {
-      user_id,
-      product_id,
-      page_id: data.page_id,
-      company_buyer_id: data.company_buyer_id || undefined,
-      membership_id,
-      plan_id: data.plan_id,
-    }, membership_id);
-  } else {
-    console.error("Missing user_id or product_id in membership webhook");
-  }
-}
+// DISABLED: handleMembershipWentValidWebhook function removed
+// Conversation creation is now handled in user creation flow (createUserContext)
 
 
 async function handleCreditPackPurchaseWithCompany(

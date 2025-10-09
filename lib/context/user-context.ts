@@ -1,10 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { experiences, users } from "../supabase/schema";
+import { experiences, users, funnels } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 // Removed direct import - now using API routes for product sync
 import { cleanupAbandonedExperiences, checkIfCleanupNeeded } from "../sync/experience-cleanup";
 import type { AuthenticatedUser, UserContext } from "../types/user";
+import { createConversation } from "../actions/simplified-conversation-actions";
+import { updateConversationToWelcomeStage } from "../actions/user-join-actions";
+import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
 
 // Re-export types for backward compatibility
 export type { AuthenticatedUser, UserContext };
@@ -275,6 +278,20 @@ async function createUserContext(
 						.returning();
 
 					console.log(`✅ New user created: id=${newUser.id}, whopUserId=${newUser.whopUserId}, experienceId=${newUser.experienceId}`);
+				
+				// Create conversation for new CUSTOMER users (not admins)
+				if (initialAccessLevel === "customer") {
+					console.log(`🎯 Creating conversation for new customer user ${newUser.id}`);
+					try {
+						await createConversationForNewCustomer(newUser.id, whopUser.id, experience.id);
+					} catch (conversationError) {
+						console.error(`❌ Failed to create conversation for new customer:`, conversationError);
+						// Don't fail user creation if conversation creation fails
+					}
+				} else {
+					console.log(`👤 Admin user created, skipping conversation creation`);
+				}
+				
 				} catch (error) {
 					console.error(`❌ Failed to create user:`, error);
 					console.error(`❌ Error details:`, {
@@ -597,6 +614,64 @@ export function invalidateUserCache(cacheKey: string): void {
 			}
 		}
 		keysToDelete.forEach((key) => userContextCache.delete(key));
+	}
+}
+
+/**
+ * Create conversation for new customer users
+ * This handles the conversation creation logic that was previously in webhooks
+ */
+async function createConversationForNewCustomer(
+	userId: string,
+	whopUserId: string,
+	experienceId: string
+): Promise<void> {
+	try {
+		console.log(`[CONVERSATION-CREATION] Starting conversation creation for customer user ${userId}`);
+		
+		// Step 1: Find deployed funnel for this experience
+		const liveFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.experienceId, experienceId),
+				eq(funnels.isDeployed, true)
+			),
+		});
+
+		if (!liveFunnel) {
+			console.log(`[CONVERSATION-CREATION] No deployed funnel found for experience ${experienceId} - skipping conversation creation`);
+			return;
+		}
+
+		if (!liveFunnel.flow) {
+			console.log(`[CONVERSATION-CREATION] Funnel ${liveFunnel.id} has no flow - skipping conversation creation`);
+			return;
+		}
+
+		console.log(`[CONVERSATION-CREATION] Found deployed funnel ${liveFunnel.id} for experience ${experienceId}`);
+
+		// Step 2: Create conversation using the same logic as webhooks
+		const conversationId = await createConversation(
+			experienceId,
+			liveFunnel.id,
+			whopUserId,
+			liveFunnel.flow.startBlockId,
+			undefined, // membershipId
+			undefined  // whopProductId
+		);
+
+		console.log(`[CONVERSATION-CREATION] Created conversation ${conversationId} for customer user ${userId}`);
+
+		// Step 3: Update conversation to WELCOME stage
+		await updateConversationToWelcomeStage(conversationId, liveFunnel.flow);
+
+		// Step 4: Track awareness (starts) - BACKGROUND PROCESSING
+		console.log(`🚀 [CONVERSATION-CREATION] About to track awareness for experience ${experienceId}, funnel ${liveFunnel.id}`);
+		safeBackgroundTracking(() => trackAwarenessBackground(experienceId, liveFunnel.id));
+
+		console.log(`[CONVERSATION-CREATION] Successfully created conversation ${conversationId} for customer user ${userId}`);
+	} catch (error) {
+		console.error(`[CONVERSATION-CREATION] Error creating conversation for customer user ${userId}:`, error);
+		throw error;
 	}
 }
 
