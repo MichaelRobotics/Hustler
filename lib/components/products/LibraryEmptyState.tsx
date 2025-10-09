@@ -46,9 +46,9 @@ export const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({
 	const content = getEmptyStateContent();
 
 	return (
-		<div className="text-center py-16 px-8 bg-gradient-to-br from-gray-50/50 via-gray-100/30 to-violet-50/20 dark:from-gray-800/50 dark:via-gray-700/30 dark:to-indigo-900/20 rounded-2xl border border-border/30 dark:border-border/20 shadow-lg backdrop-blur-sm">
+		<div className="text-center py-16 px-8 bg-gradient-to-br from-orange-50/50 via-orange-100/30 to-gray-200/20 dark:from-orange-900/50 dark:via-gray-800/30 dark:to-gray-700/20 rounded-2xl border border-border/30 dark:border-border/20 shadow-lg backdrop-blur-sm">
 			<div className="mb-8">
-				<div className="w-20 h-20 mx-auto mb-6 p-4 rounded-full bg-gradient-to-br from-violet-100/80 to-purple-100/60 dark:from-violet-900/40 dark:to-purple-900/30 border border-violet-200/50 dark:border-violet-700/30 flex items-center justify-center">
+				<div className="w-20 h-20 mx-auto mb-6 p-4 rounded-full bg-gradient-to-br from-orange-100/80 to-gray-200/60 dark:from-orange-900/40 dark:to-gray-800/30 border border-orange-200/50 dark:border-orange-700/30 flex items-center justify-center">
 					{content.icon}
 				</div>
 			</div>

@@ -12,7 +12,7 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 	const getValidationMessage = () => {
 		// Always show validation (no product type checks)
 		return {
-			title: "Choose what to offer new users:",
+			title: "Offer New Members",
 			message: "🎁 Apps and free memberships\n💰 Paid memberships",
 			icon: null, // No icon - will use dollar button instead
 			iconBg: "from-orange-100/80 to-red-100/60 dark:from-orange-900/40 dark:to-red-900/30",
@@ -86,17 +86,17 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 
 	return (
 		<div className="mt-8 mb-8">
-			<div className="text-center py-12 px-8 bg-gradient-to-br from-violet-50/30 via-purple-50/20 to-indigo-50/15 dark:from-gray-800/40 dark:via-gray-700/30 dark:to-gray-600/20 rounded-2xl border border-violet-200/30 dark:border-gray-600/30 shadow-xl backdrop-blur-sm relative overflow-hidden">
+			<div className="text-center py-12 px-8 bg-gradient-to-br from-orange-50/30 via-orange-100/20 to-gray-200/15 dark:from-orange-900/40 dark:via-gray-800/30 dark:to-gray-700/20 rounded-2xl border border-orange-200/30 dark:border-gray-600/30 shadow-xl backdrop-blur-sm relative overflow-hidden">
 				{/* Subtle animated background elements */}
-				<div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_80%,rgba(139,92,246,0.12)_0%,transparent_50%)]" />
-				<div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.12)_0%,transparent_50%)]" />
+				<div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(251,146,60,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_80%,rgba(251,146,60,0.12)_0%,transparent_50%)]" />
+				<div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(156,163,175,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_80%_20%,rgba(156,163,175,0.12)_0%,transparent_50%)]" />
 
 				<div className="relative z-10">
 					{/* Dollar Button - Same animation as Generate button */}
 					<div className="mb-6">
 						<button
 							onClick={handleDollarButtonClick}
-							className="group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-violet-300/20 to-purple-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-violet-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-violet-500/15 transition-all duration-500 ease-out animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 cursor-pointer"
+							className="group w-24 h-24 mx-auto mb-4 p-5 rounded-full bg-gradient-to-br from-orange-300/20 to-gray-400/25 dark:from-gray-700/30 dark:to-gray-600/25 border border-orange-200/30 dark:border-gray-500/30 flex items-center justify-center shadow-lg shadow-orange-500/15 transition-all duration-500 ease-out animate-pulse hover:scale-110 hover:shadow-2xl hover:shadow-green-500/25 cursor-pointer"
 						>
 							<div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 via-green-500 to-emerald-500 dark:from-green-300 dark:via-green-400 dark:to-emerald-400 animate-ping group-hover:animate-none group-hover:scale-125 group-hover:shadow-lg group-hover:shadow-green-400/50 transition-all duration-300 relative">
 								<DollarSign
@@ -108,7 +108,7 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 					</div>
 
 					<div className="mb-8">
-						<Heading size="5" weight="bold" className="mb-3 text-violet-600 dark:text-violet-400">
+						<Heading size="5" weight="bold" className="mb-3 text-orange-600 dark:text-orange-400">
 							{validation.title}
 						</Heading>
 						<Text

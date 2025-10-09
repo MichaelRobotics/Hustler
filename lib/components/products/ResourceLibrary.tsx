@@ -291,7 +291,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-products-section>
 							{/* New Product Creation Card */}
 							{isCreatingNewProduct && (
-								<div className="group bg-gradient-to-br from-violet-50/80 via-violet-100/60 to-violet-200/40 dark:from-violet-900/80 dark:via-violet-800/60 dark:to-indigo-900/30 p-4 rounded-xl border-2 border-violet-500/60 dark:border-violet-400/70 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
+								<div className="group bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 p-4 rounded-xl border-2 border-orange-500/60 dark:border-orange-400/70 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300">
 									<div className="flex items-start justify-between mb-3">
 										<div className="flex items-center gap-2">
 											<div className="w-5 h-5 bg-violet-400 rounded-full animate-pulse" />
