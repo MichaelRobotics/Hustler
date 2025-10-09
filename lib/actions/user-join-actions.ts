@@ -232,6 +232,7 @@ export async function handleUserJoinEvent(
 	productId: string,
 	webhookData: UserJoinWebhookData,
 	membershipId?: string,
+	whopSdkWithCompany?: any,
 ): Promise<void> {
 	try {
 		console.log(`[USER-JOIN DEBUG] Processing user join event: ${userId} for product ${productId}`);
@@ -282,8 +283,11 @@ export async function handleUserJoinEvent(
 		});
 
 		if (!existingUser) {
+			// Use company-specific SDK if provided, otherwise fall back to global SDK
+			const sdk = whopSdkWithCompany || whopSdk;
+			
 			// Fetch user data from WHOP API (same strategy as user-context)
-			const whopUser = await whopSdk.users.getUser({ userId: userId });
+			const whopUser = await sdk.users.getUser({ userId: userId });
 
 			if (!whopUser) {
 				console.error("User not found in WHOP API:", userId);
@@ -294,7 +298,7 @@ export async function handleUserJoinEvent(
 			let accessLevel = "customer"; // Default fallback
 			
 			try {
-				const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+				const accessResult = await sdk.access.checkIfUserHasAccessToExperience({
 					userId: userId,
 					experienceId: experience.whopExperienceId,
 				});
@@ -428,7 +432,7 @@ export async function handleUserJoinEvent(
 
 	// Send transition DM and record it
 	const dmUserId = membershipId || userId; // Use membershipId for DM operations
-	const dmSent = await sendTransitionDM(dmUserId, resolvedTransitionMessage, conversationId);
+	const dmSent = await sendTransitionDM(dmUserId, resolvedTransitionMessage, conversationId, whopSdkWithCompany);
 	if (!dmSent) {
 		console.error(`Failed to send DM to user ${userId}`);
 		return;
@@ -544,11 +548,15 @@ export async function sendTransitionDM(
 	whopUserId: string,
 	message: string,
 	conversationId?: string,
+	whopSdkWithCompany?: any,
 ): Promise<boolean> {
 	try {
 		console.log(`Sending DM to user ${whopUserId}: ${message}`);
 
-		const result = await whopSdk.messages.sendDirectMessageToUser({
+		// Use company-specific SDK if available, otherwise fall back to global SDK
+		const sdk = whopSdkWithCompany || whopSdk;
+		
+		const result = await sdk.messages.sendDirectMessageToUser({
 			toUserIdOrUsername: whopUserId,
 			message: message,
 		});

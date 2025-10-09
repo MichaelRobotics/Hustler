@@ -12,7 +12,7 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 	const getValidationMessage = () => {
 		// Always show validation (no product type checks)
 		return {
-			title: "Recommend New Members",
+			title: "Recommend to New Members",
 			message: "📱 Apps and free memberships\n💳 Paid memberships",
 			icon: null, // No icon - will use dollar button instead
 			iconBg: "from-orange-100/80 to-red-100/60 dark:from-orange-900/40 dark:to-red-900/30",
