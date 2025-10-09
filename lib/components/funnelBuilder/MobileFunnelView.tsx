@@ -3,6 +3,7 @@
 import type React from "react";
 import CollapsibleText from "../common/CollapsibleText";
 import BlockEditor from "./BlockEditor";
+import { formatStageName, formatBlockName } from "../../utils/format-names";
 
 interface FunnelBlockOption {
 	text: string;
@@ -68,7 +69,7 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 									<div className="text-center mb-6">
 										<div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200/50 dark:border-violet-700/30 rounded-xl p-4 mb-3">
 											<h3 className="text-lg font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-2">
-												{stage.name}
+												{formatStageName(stage.name)}
 											</h3>
 											<p className="text-sm text-muted-foreground leading-relaxed">
 												{stage.explanation}
@@ -103,7 +104,7 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 																<div className="flex-1 min-w-0 mr-2">
 																	<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
 																		<CollapsibleText
-																			text={block.id}
+																			text={formatBlockName(block.id)}
 																			maxLength={20}
 																		/>
 																	</span>

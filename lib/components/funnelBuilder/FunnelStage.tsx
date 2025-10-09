@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { formatStageName } from "../../utils/format-names";
 
 interface FunnelStageProps {
 	stageLayouts: Array<{
@@ -39,7 +40,7 @@ const FunnelStage: React.FC<FunnelStageProps> = ({
 					>
 						<div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200/50 dark:border-violet-700/30 rounded-xl p-3">
 							<h3 className="text-lg font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-2">
-								{layout.name}
+								{formatStageName(layout.name)}
 							</h3>
 							<p className="text-sm text-muted-foreground leading-relaxed">
 								{layout.explanation}

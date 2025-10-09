@@ -142,37 +142,37 @@ ${badJson}
     {
       "id": "stage-transition",
       "name": "TRANSITION",
-      "explanation": "Webhook triggered message with chat link.",
+      "explanation": "DM in whop native chat with link to this conversation.",
       "blockIds": ["transition_1"]
     },
     {
       "id": "stage-welcome",
       "name": "WELCOME",
-      "explanation": "Initial greeting and user segmentation in chat.",
+      "explanation": "Friendly greeting to help customer choose interests.",
       "blockIds": ["welcome_1"]
     },
     {
       "id": "stage-value-delivery",
       "name": "VALUE_DELIVERY",
-      "explanation": "Deliver free resources to build trust.",
+      "explanation": "Give customer free helpful content.",
       "blockIds": ["value_trading_guide"]
     },
     {
       "id": "stage-experience",
       "name": "EXPERIENCE_QUALIFICATION",
-      "explanation": "Qualify user's skill level based on VALUE_DELIVERY choice.",
+      "explanation": "Ask about customer's experience level.",
       "blockIds": ["experience_qual_1"]
     },
     {
       "id": "stage-pain-point",
       "name": "PAIN_POINT_QUALIFICATION",
-      "explanation": "Identify user's primary challenge.",
+      "explanation": "Find out customer's main problems.",
       "blockIds": ["pain_point_1"]
     },
     {
       "id": "stage-offer",
       "name": "OFFER",
-      "explanation": "Present paid resources as solution.",
+      "explanation": "Show products that solve problems.",
       "blockIds": ["offer_risk_management"]
     }
   ],
@@ -1143,37 +1143,37 @@ export const generateFunnelFlow = async (
 		 {
 			"id": "stage-transition",
 			"name": "TRANSITION",
-			"explanation": "Webhook triggered message with chat link.",
+			"explanation": "DM in whop native chat with link to this conversation.",
 			"blockIds": ["transition_1"]
 		 },
 		 {
 			"id": "stage-welcome",
 			"name": "WELCOME",
-			"explanation": "Initial greeting and user segmentation in chat.",
+			"explanation": "Friendly greeting to help customer choose interests.",
 			"blockIds": ["welcome_1"]
 		 },
 		 {
 			"id": "stage-value-delivery",
 			"name": "VALUE_DELIVERY",
-			"explanation": "Deliver free resources to build trust.",
+			"explanation": "Give customer free helpful content.",
 			"blockIds": ["value_trading_guide"]
 		 },
 		 {
 			"id": "stage-experience",
 			"name": "EXPERIENCE_QUALIFICATION",
-			"explanation": "Qualify user's skill level based on VALUE_DELIVERY choice.",
+			"explanation": "Ask about customer's experience level.",
 			"blockIds": ["experience_qual_1"]
 		 },
 		 {
 			"id": "stage-pain-point",
 			"name": "PAIN_POINT_QUALIFICATION",
-			"explanation": "Identify user's primary challenge.",
+			"explanation": "Find out customer's main problems.",
 			"blockIds": ["pain_point_1"]
 		 },
 		 {
 			"id": "stage-offer",
 			"name": "OFFER",
-			"explanation": "Present paid resources as solution.",
+			"explanation": "Show products that solve problems.",
 			"blockIds": ["offer_risk_management"]
 		 }
 	  ],

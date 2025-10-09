@@ -3,6 +3,7 @@
 import type React from "react";
 import CollapsibleText from "../common/CollapsibleText";
 import BlockEditor from "./BlockEditor";
+import { formatBlockName } from "../../utils/format-names";
 
 interface FunnelBlockOption {
 	text: string;
@@ -81,7 +82,7 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 					<div className="border-b border-border/30 dark:border-border/20 p-3 bg-gradient-to-r from-violet-500/5 to-purple-500/5 dark:from-violet-900/10 dark:to-purple-900/10 rounded-t-2xl flex justify-between items-center">
 						<div className="flex-1 min-w-0 mr-2">
 							<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
-								<CollapsibleText text={block.id} maxLength={20} />
+								<CollapsibleText text={formatBlockName(block.id)} maxLength={20} />
 							</span>
 						</div>
 						{!isDeployed && (
