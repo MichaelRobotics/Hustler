@@ -108,7 +108,7 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 					</div>
 
 					<div className="mb-8">
-						<Heading size="5" weight="bold" className="mb-3 text-violet-600 dark:text-violet-400">
+						<Heading size="5" weight="bold" className="mb-3 text-orange-600 dark:text-orange-400">
 							{validation.title}
 						</Heading>
 						<Text
