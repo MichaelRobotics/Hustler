@@ -15,6 +15,28 @@ import type { FunnelFlow } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
 
+// Type definition for webhook data passed to handleUserJoinEvent
+interface UserJoinWebhookData {
+	user_id: string;
+	product_id: string;
+	page_id: string;
+	company_buyer_id?: string;
+	membership_id?: string;
+	plan_id?: string;
+}
+
+// Convert MembershipWebhookData to UserJoinWebhookData
+export function convertWebhookData(data: any): UserJoinWebhookData {
+	return {
+		user_id: data.user_id || '',
+		product_id: data.product_id || '',
+		page_id: data.page_id || '',
+		company_buyer_id: data.company_buyer_id,
+		membership_id: data.membership_id,
+		plan_id: data.plan_id,
+	};
+}
+
 /**
  * Generate app link for the current experience
  * Based on Whop documentation: https://whop.com/joined/tooler/tooler-kWyK3oMAwIYyMf/app/
@@ -208,7 +230,7 @@ async function resolvePlaceholders(message: string, experienceId: string, conver
 export async function handleUserJoinEvent(
 	userId: string,
 	productId: string,
-	webhookData?: any,
+	webhookData: UserJoinWebhookData,
 	membershipId?: string,
 ): Promise<void> {
 	try {
@@ -223,27 +245,27 @@ export async function handleUserJoinEvent(
 
 		// Step 1: Find the experience by page_id (company ID)
 		// This is the most reliable way since page_id is the company that owns the app
-		console.log(`[USER-JOIN DEBUG] Looking for experience with whopCompanyId: ${webhookData.data.page_id}`);
-		console.log(`[USER-JOIN DEBUG] Full webhook data structure:`, JSON.stringify(webhookData.data, null, 2));
-		console.log(`[USER-JOIN DEBUG] page_id: ${webhookData.data.page_id}`);
-		console.log(`[USER-JOIN DEBUG] company_buyer_id: ${webhookData.data.company_buyer_id}`);
-		console.log(`[USER-JOIN DEBUG] product_id: ${webhookData.data.product_id}`);
+		console.log(`[USER-JOIN DEBUG] Looking for experience with whopCompanyId: ${webhookData.page_id}`);
+		console.log(`[USER-JOIN DEBUG] Full webhook data structure:`, JSON.stringify(webhookData, null, 2));
+		console.log(`[USER-JOIN DEBUG] page_id: ${webhookData.page_id}`);
+		console.log(`[USER-JOIN DEBUG] company_buyer_id: ${webhookData.company_buyer_id}`);
+		console.log(`[USER-JOIN DEBUG] product_id: ${webhookData.product_id}`);
 		
 		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopCompanyId, webhookData.data.page_id),
+			where: eq(experiences.whopCompanyId, webhookData.page_id),
 		});
 
 		if (!experience) {
-			console.error(`[USER-JOIN DEBUG] No experience found for page_id ${webhookData.data.page_id}`);
+			console.error(`[USER-JOIN DEBUG] No experience found for page_id ${webhookData.page_id}`);
 			const availableExperiences = await db.query.experiences.findMany({
 				columns: { whopCompanyId: true, whopExperienceId: true, name: true }
 			});
 			console.error(`[USER-JOIN DEBUG] Available experiences:`, availableExperiences);
-			console.error(`[USER-JOIN DEBUG] Looking for exact match: ${webhookData.data.page_id}`);
+			console.error(`[USER-JOIN DEBUG] Looking for exact match: ${webhookData.page_id}`);
 			console.error(`[USER-JOIN DEBUG] Available whopCompanyIds:`, availableExperiences.map((e: any) => e.whopCompanyId));
 			
 			// Handle missing experience gracefully
-			console.log(`[USER-JOIN DEBUG] ⚠️ Company ${webhookData.data.page_id} has no experience in database`);
+			console.log(`[USER-JOIN DEBUG] ⚠️ Company ${webhookData.page_id} has no experience in database`);
 			console.log(`[USER-JOIN DEBUG] ⚠️ This means the app is not installed on this company yet`);
 			console.log(`[USER-JOIN DEBUG] ⚠️ Webhook received but no processing needed - company needs to install the app first`);
 			return;

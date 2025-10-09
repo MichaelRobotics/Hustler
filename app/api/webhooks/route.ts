@@ -3,7 +3,7 @@ import type { CreditPackId } from "@/lib/types/credit";
 import { after } from "next/server";
 import { makeWebhookValidator, type PaymentWebhookData, type MembershipWebhookData } from "@whop/api";
 import type { NextRequest } from "next/server";
-import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
+import { handleUserJoinEvent, convertWebhookData } from "@/lib/actions/user-join-actions";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
 import { getExperienceContextFromWebhook, validateExperienceContext } from "@/lib/analytics/experience-context";
 import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tracking";
@@ -158,13 +158,13 @@ async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
 	
 	if (user_id && product_id) {
 		console.log(`[MEMBERSHIP HANDLER] 🔵 Calling handleUserJoinEvent with user_id: ${user_id}, product_id: ${product_id}`);
-		await handleUserJoinEvent(user_id, product_id, { data }, membership_id);
+		await handleUserJoinEvent(user_id, product_id, convertWebhookData(data), membership_id);
 		console.log(`[MEMBERSHIP HANDLER] 🔵 handleUserJoinEvent completed`);
 	} else if (company_buyer_id && product_id) {
 		// Fallback: Get actual user ID (company owner) from company_buyer_id
 		console.log(`[MEMBERSHIP HANDLER] 🔵 user_id is null, attempting to get actual user ID from company_buyer_id: ${company_buyer_id}`);
 		console.log(`[MEMBERSHIP HANDLER] 🔵 Using company ID to fetch company owner user ID through WHOP API`);
-		await handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, { data }, membership_id);
+		await handleUserJoinEventWithCompanyFallback(company_buyer_id, product_id, data, membership_id);
 		console.log(`[MEMBERSHIP HANDLER] 🔵 handleUserJoinEventWithCompanyFallback completed`);
 	} else {
 		console.error("[MEMBERSHIP HANDLER] 🔵 Missing user_id/company_buyer_id or product_id in membership webhook");
@@ -186,7 +186,7 @@ async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
 async function handleUserJoinEventWithCompanyFallback(
 	company_buyer_id: string,
 	product_id: string,
-	webhookData: any,
+	webhookData: MembershipWebhookData,
 	membership_id?: string,
 ): Promise<void> {
 	try {
@@ -242,7 +242,7 @@ async function handleUserJoinEventWithCompanyFallback(
 
 		if (ownerUser?.userId) {
 			console.log(`✅ Found owner user from authorized users: ${ownerUser.userId} (${ownerUser.name})`);
-			await handleUserJoinEvent(ownerUser.userId, product_id, webhookData, membership_id);
+			await handleUserJoinEvent(ownerUser.userId, product_id, convertWebhookData(webhookData), membership_id);
 			return;
 		}
 
@@ -253,7 +253,7 @@ async function handleUserJoinEventWithCompanyFallback(
 
 		if (adminUser?.userId) {
 			console.log(`⚠️ No owner found, using admin from authorized users: ${adminUser.userId} (${adminUser.name})`);
-			await handleUserJoinEvent(adminUser.userId, product_id, webhookData, membership_id);
+			await handleUserJoinEvent(adminUser.userId, product_id, convertWebhookData(webhookData), membership_id);
 			return;
 		}
 
@@ -264,7 +264,7 @@ async function handleUserJoinEventWithCompanyFallback(
 
 		if (anyMemberWithUser?.user?.id) {
 			console.log(`⚠️ No admin found, using any member with user: ${anyMemberWithUser.user.id} (${anyMemberWithUser.user.name})`);
-			await handleUserJoinEvent(anyMemberWithUser.user.id, product_id, webhookData, membership_id);
+			await handleUserJoinEvent(anyMemberWithUser.user.id, product_id, convertWebhookData(webhookData), membership_id);
 			return;
 		}
 
