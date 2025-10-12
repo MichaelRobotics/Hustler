@@ -15,6 +15,7 @@ import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import { ChatRestartButton } from "../funnelBuilder/components/ChatRestartButton";
+import FunnelProgressBar from "../userChat/FunnelProgressBar";
 
 interface PreviewChatProps {
 	funnelFlow: FunnelFlow;
@@ -159,9 +160,17 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 					<div
 						className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
 							msg.type === "user"
-								? "bg-blue-500 text-white"
-								: "bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm"
+								? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
+								: msg.text.includes('animated-gold-button')
+									? "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
+									: "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50"
 						}`}
+						style={{
+							userSelect: "text",
+							WebkitUserSelect: "text",
+							MozUserSelect: "text",
+							msUserSelect: "text",
+						}}
 					>
 						<Text
 							size="2"
@@ -189,9 +198,9 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 			<button
 				key={`option-${index}`}
 				onClick={() => onClick(option, index)}
-				className="chat-optimized inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-blue-500 text-white text-left touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+				className="chat-optimized inline-flex items-center gap-3 pl-4 pr-4 py-3 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-left touch-manipulation active:from-blue-600 active:to-blue-700 active:scale-95 transition-all duration-150 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
 			>
-				<span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+				<span className="flex-shrink-0 w-7 h-7 bg-blue-700 rounded-full flex items-center justify-center text-sm font-medium shadow-md">
 					{index + 1}
 				</span>
 				<Text size="2" className="text-white leading-relaxed">
@@ -271,10 +280,10 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				WebkitOverflowScrolling: "touch",
 			}}
 		>
-			{/* Header - Visible on all screen sizes */}
-			<div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+			{/* Header - Hidden on desktop */}
+			<div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
 				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3">
+					<div className="flex items-center gap-4">
 						{onBack && (
 							<button
 								onClick={onBack}
@@ -287,8 +296,21 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 
 						{/* Avatar Icon - only show if not hidden */}
 						{!hideAvatar && (
-							<div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-								<User size={16} className="text-white" />
+							<div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
+								<img 
+									src="https://img-v2-prod.whop.com/unsafe/rs:fit:256:0/plain/https%3A%2F%2Fassets.whop.com%2Fuploads%2F2025-10-02%2Fuser_16843562_c991d27a-feaa-4318-ab44-2aaa27937382.jpeg@avif?w=256&q=75"
+									alt="User Avatar"
+									className="w-20 h-20 object-cover"
+									onError={(e) => {
+										// Fallback to default icon if image fails to load
+										const target = e.target as HTMLImageElement;
+										target.style.display = 'none';
+										const parent = target.parentElement;
+										if (parent) {
+											parent.innerHTML = '<div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
+										}
+									}}
+								/>
 							</div>
 						)}
 
@@ -298,7 +320,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 								weight="semi-bold"
 								className="text-black dark:text-white"
 							>
-								Hustler Preview
+								Hustler
 							</Text>
 							<div className="flex items-center gap-2 mt-1">
 								<div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -340,6 +362,18 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mt-3" />
 			</div>
 
+			{/* Funnel Progress Bar */}
+			{funnelFlow && (
+				<FunnelProgressBar
+					currentStage="WELCOME"
+					stages={funnelFlow.stages}
+					onStageUpdate={(newStage) => {
+						// Handle stage updates in preview
+						console.log("Preview progress bar stage update:", newStage);
+					}}
+				/>
+			)}
+
 			{/* Chat Container */}
 			<div className="flex-1 flex flex-col min-h-0">
 				{/* Messages */}
@@ -370,7 +404,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				</div>
 
 				{/* Input Area - Now below the overflow container */}
-				{options.length > 0 && currentBlockId && (
+				{currentBlockId && (
 					<div className="flex-shrink-0 chat-input-container safe-area-bottom">
 						<div className="flex items-end gap-3">
 							<div className="flex-1">
@@ -394,10 +428,10 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							<button
 								onClick={handleSubmit}
 								disabled={!message.trim()}
-								className="chat-optimized p-3 rounded-xl bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation active:bg-blue-600 active:scale-95 transition-all duration-150"
+								className="chat-optimized p-3 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed touch-manipulation active:from-gray-200 active:to-gray-300 dark:active:from-gray-700 dark:active:to-gray-800 active:scale-95 transition-all duration-150 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50 hover:shadow-gray-400/60 dark:hover:shadow-gray-700/60 disabled:shadow-none"
 								title="Send message"
 							>
-								<Send size={18} className="text-white dark:text-gray-100" />
+								<Send size={18} className="text-gray-700 dark:text-gray-100" />
 							</button>
 						</div>
 					</div>

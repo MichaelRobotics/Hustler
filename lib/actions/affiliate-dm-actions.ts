@@ -139,7 +139,7 @@ Monetize instantly: Sell Whop's hottest products.
 
 1. Create whop 
 
-https://whop.com/profit-pulse-ai/profittest/
+https://whop.com/joined/profit-pulse-ai/courses-9WprApn8XKvQFW/app/
 
 2. Install app 
 
@@ -149,9 +149,9 @@ https://whop.com/apps/${process.env.NEXT_PUBLIC_WHOP_APP_ID}/install/
 
 ${affiliateLink}
 
-4. Quick 3-click setup: 
+4. Quick 3-click setup & start earning grind: 
 
-https://whop.com/apps/${process.env.NEXT_PUBLIC_WHOP_APP_ID}/install/
+https://whop.com/joined/profit-pulse-ai/courses-9WprApn8XKvQFW/app/
 
 LETS GO!`;
 
