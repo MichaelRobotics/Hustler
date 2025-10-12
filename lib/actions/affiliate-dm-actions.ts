@@ -149,7 +149,7 @@ https://whop.com/apps/${process.env.NEXT_PUBLIC_WHOP_APP_ID}/install/
 
 ${affiliateLink}
 
-4. Quick 3-click setup & start earning grind: 
+4. Quick Business setup & start earning grind: 
 
 https://whop.com/joined/profit-pulse-ai/courses-9WprApn8XKvQFW/app/
 
