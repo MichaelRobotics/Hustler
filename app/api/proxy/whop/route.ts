@@ -63,32 +63,50 @@ export async function GET(request: NextRequest) {
       .replace(/<meta[^>]*http-equiv="Content-Security-Policy"[^>]*frame-ancestors[^>]*>/gi, '')
       // Add base tag to ensure proper resource loading
       .replace(/<head>/i, '<head><base href="https://whop.com/">')
-      // Override document.baseURI to force absolute URLs
-      .replace(/<head>/i, `<head>
+          // Override document.baseURI to force absolute URLs
+          .replace(/<head>/i, `<head>
         <script>
           // Override document.baseURI immediately
-          Object.defineProperty(document, 'baseURI', {
-            get: function() { return 'https://whop.com/'; },
-            configurable: true
-          });
+          try {
+            Object.defineProperty(document, 'baseURI', {
+              get: function() { return 'https://whop.com/'; },
+              configurable: true
+            });
+            console.log('✅ Document baseURI overridden');
+          } catch (e) {
+            console.log('⚠️ Could not override document.baseURI:', e.message);
+          }
           
-          // Override location.origin
-          Object.defineProperty(location, 'origin', {
-            get: function() { return 'https://whop.com'; },
-            configurable: true
-          });
+          // Override location properties safely
+          try {
+            Object.defineProperty(location, 'origin', {
+              get: function() { return 'https://whop.com'; },
+              configurable: true
+            });
+            console.log('✅ Location origin overridden');
+          } catch (e) {
+            console.log('⚠️ Could not override location.origin:', e.message);
+          }
           
-          // Override location.host
-          Object.defineProperty(location, 'host', {
-            get: function() { return 'whop.com'; },
-            configurable: true
-          });
+          try {
+            Object.defineProperty(location, 'host', {
+              get: function() { return 'whop.com'; },
+              configurable: true
+            });
+            console.log('✅ Location host overridden');
+          } catch (e) {
+            console.log('⚠️ Could not override location.host:', e.message);
+          }
           
-          // Override location.hostname
-          Object.defineProperty(location, 'hostname', {
-            get: function() { return 'whop.com'; },
-            configurable: true
-          });
+          try {
+            Object.defineProperty(location, 'hostname', {
+              get: function() { return 'whop.com'; },
+              configurable: true
+            });
+            console.log('✅ Location hostname overridden');
+          } catch (e) {
+            console.log('⚠️ Could not override location.hostname:', e.message);
+          }
           
           console.log('🌐 Document base URI overrides installed');
         </script>`)
@@ -121,8 +139,10 @@ export async function GET(request: NextRequest) {
                   '/api/v3/track/',
                   '/messages?',
                   '/_static/worker/',
+                  '/_static/fonts/',
                   '/site.webmanifest',
-                  '/schemaFilter.'
+                  '/schemaFilter.',
+                  '/api/graphql/GenerateWebsocketJwt'
                 ];
                 
                 const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
@@ -191,8 +211,10 @@ export async function GET(request: NextRequest) {
                   '/api/v3/track/',
                   '/messages?',
                   '/_static/worker/',
+                  '/_static/fonts/',
                   '/site.webmanifest',
-                  '/schemaFilter.'
+                  '/schemaFilter.',
+                  '/api/graphql/GenerateWebsocketJwt'
                 ];
                 
                 const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
@@ -324,14 +346,14 @@ export async function GET(request: NextRequest) {
               const delay = (index / visibleElements.length) * 4000; // Spread over 4 seconds
               
               // Initially hide element
-              (element as HTMLElement).style.opacity = '0';
-              (element as HTMLElement).style.transform = 'translateY(20px)';
-              (element as HTMLElement).style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+              element.style.opacity = '0';
+              element.style.transform = 'translateY(20px)';
+              element.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
               
               // Reveal element with delay
               setTimeout(() => {
-                (element as HTMLElement).style.opacity = '1';
-                (element as HTMLElement).style.transform = 'translateY(0)';
+                element.style.opacity = '1';
+                element.style.transform = 'translateY(0)';
               }, delay);
             });
             
