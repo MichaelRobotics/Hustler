@@ -56,6 +56,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [showIframe, setShowIframe] = useState(true); // Start with iframe visible
 	const [showChat, setShowChat] = useState(false); // Start with iframe only (no chat)
 	const [iframeError, setIframeError] = useState(false); // Track iframe loading errors
+	const [iframeLoaded, setIframeLoaded] = useState(false); // Track iframe load completion
+	const [overlayTransitioning, setOverlayTransitioning] = useState(false); // Track overlay transition
 	
 	// Auto-scroll reveal state (removed - now handled by iframe content)
 	
@@ -403,6 +405,24 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		fetchUserContext();
 	}, [loadFunnelAndConversation, fetchUserContext]);
 
+	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
+	useEffect(() => {
+		const fallbackTimer = setTimeout(() => {
+			if (!iframeLoaded) {
+				setOverlayTransitioning(true);
+				console.log('🎭 Fallback: Starting fast blur transition...');
+				
+				setTimeout(() => {
+					setIframeLoaded(true);
+					setOverlayTransitioning(false);
+					console.log('🎭 Fallback: Fancy overlay removed after timeout');
+				}, 500);
+			}
+		}, 8000);
+
+		return () => clearTimeout(fallbackTimer);
+	}, [iframeLoaded]);
+
 	const handleMessageSentInternal = (message: string, convId?: string) => {
 		console.log("Customer message:", {
 			message,
@@ -478,6 +498,41 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// Render UserChat with real data
 	return (
 		<div className="h-screen w-full relative">
+			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads */}
+			{(!iframeLoaded || overlayTransitioning) && (
+				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
+					overlayTransitioning ? 'transition-all duration-500 filter blur-[20px] opacity-0' : ''
+				}`}>
+					{/* Main content */}
+					<div className="text-center relative z-10">
+						{/* Whop-style loading spinner */}
+						<div className="relative mb-6">
+							<div className="w-8 h-8 mx-auto relative">
+								<div className="absolute inset-0 border-2 border-gray-200 dark:border-gray-700 rounded-full"></div>
+								<div className="absolute inset-0 border-2 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+							</div>
+						</div>
+						
+						{/* Whop-style loading text */}
+						<div className="space-y-2">
+							<h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+								Calling for Merchant
+							</h2>
+							<p className="text-sm text-gray-500 dark:text-gray-400">
+								Preparing showcase items...
+							</p>
+						</div>
+						
+						{/* Loading dots animation */}
+						<div className="flex justify-center space-x-2 mt-6">
+							<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+							<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+							<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Admin Navbar - Movable overlay positioned at top navbar */}
 			{userType === "admin" && (
 			<div 
@@ -826,6 +881,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						onLoad={() => {
 							console.log('Discovery page loaded successfully via proxy');
 							setIframeError(false);
+							// Start fast blur transition
+							setTimeout(() => {
+								setOverlayTransitioning(true);
+								console.log('🎭 Starting fast blur transition...');
+								
+								// Complete the transition after blur effect
+								setTimeout(() => {
+									setIframeLoaded(true);
+									setOverlayTransitioning(false);
+									console.log('🎭 Fancy overlay removed - content fully revealed');
+								}, 500); // Fast 500ms blur transition
+							}, 2000); // 2 second delay for content to stabilize
 						}}
 						onError={(e) => {
 							console.log('Discovery page failed to load:', e);

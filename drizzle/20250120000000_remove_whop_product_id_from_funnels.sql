@@ -24,3 +24,4 @@ ALTER TABLE funnels DROP COLUMN IF EXISTS whop_product_id;
 
 
 
+

@@ -125,6 +125,50 @@ export async function GET(request: NextRequest) {
             }
           });
           
+          // Intercept all resource loading to prevent problematic requests
+          const originalCreateElement = document.createElement;
+          document.createElement = function(tagName) {
+            const element = originalCreateElement.call(this, tagName);
+            
+            if (tagName.toLowerCase() === 'link' || tagName.toLowerCase() === 'script') {
+              const originalSetAttribute = element.setAttribute;
+              element.setAttribute = function(name, value) {
+                if (name === 'href' || name === 'src') {
+                  // Block problematic resources
+                  const blockedPatterns = [
+                    'FFF-AcidGrotesk-Bold.woff2',
+                    '/_static/fonts/',
+                    '/_vercel/speed-insights/',
+                    '/_next/static/chunks/ajs-destination',
+                    '/_static/worker/',
+                    '/api/auth/token',
+                    '/core/api/flags/experiment/',
+                    '/api/v3/track/',
+                    '/messages?',
+                    '/site.webmanifest',
+                    '/schemaFilter.',
+                    '/api/graphql/GenerateWebsocketJwt'
+                  ];
+                  
+                  const isBlocked = blockedPatterns.some(pattern => value.includes(pattern));
+                  if (isBlocked) {
+                    console.log('🚫 Blocked resource loading:', value);
+                    return; // Don't set the attribute
+                  }
+                  
+                  // Convert relative URLs to absolute
+                  if (value.startsWith('/')) {
+                    value = 'https://whop.com' + value;
+                    console.log('✅ Resource converted to absolute URL:', value);
+                  }
+                }
+                return originalSetAttribute.call(this, name, value);
+              };
+            }
+            
+            return element;
+          };
+          
           // Override fetch to handle API calls properly - IMMEDIATE EXECUTION
           (function() {
             const originalFetch = window.fetch;
@@ -142,7 +186,10 @@ export async function GET(request: NextRequest) {
                   '/_static/fonts/',
                   '/site.webmanifest',
                   '/schemaFilter.',
-                  '/api/graphql/GenerateWebsocketJwt'
+                  '/api/graphql/GenerateWebsocketJwt',
+                  'FFF-AcidGrotesk-Bold.woff2',
+                  '/_vercel/speed-insights/',
+                  '/_next/static/chunks/ajs-destination'
                 ];
                 
                 const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
@@ -214,7 +261,10 @@ export async function GET(request: NextRequest) {
                   '/_static/fonts/',
                   '/site.webmanifest',
                   '/schemaFilter.',
-                  '/api/graphql/GenerateWebsocketJwt'
+                  '/api/graphql/GenerateWebsocketJwt',
+                  'FFF-AcidGrotesk-Bold.woff2',
+                  '/_vercel/speed-insights/',
+                  '/_next/static/chunks/ajs-destination'
                 ];
                 
                 const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
@@ -411,6 +461,36 @@ export async function GET(request: NextRequest) {
             }
           });
           
+          // Remove problematic CSS rules that cause font loading
+          function removeProblematicCSS() {
+            const styleSheets = document.styleSheets;
+            for (let i = 0; i < styleSheets.length; i++) {
+              try {
+                const rules = styleSheets[i].cssRules || styleSheets[i].rules;
+                if (rules) {
+                  for (let j = rules.length - 1; j >= 0; j--) {
+                    const rule = rules[j];
+                    if (rule.type === CSSRule.FONT_FACE_RULE) {
+                      const fontFamily = rule.style.fontFamily;
+                      if (fontFamily && fontFamily.includes('AcidGrotesk')) {
+                        console.log('🚫 Removing problematic font-face rule:', fontFamily);
+                        styleSheets[i].deleteRule(j);
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                // Cross-origin stylesheets can't be accessed
+                console.log('Cannot access stylesheet:', e.message);
+              }
+            }
+          }
+          
+          // Run CSS cleanup immediately and on DOM changes
+          removeProblematicCSS();
+          setTimeout(removeProblematicCSS, 1000);
+          setTimeout(removeProblematicCSS, 3000);
+          
           // Auto-start scroll immediately when iframe loads
           console.log('Iframe loaded, starting auto-scroll immediately');
           console.log('Document height:', document.documentElement.scrollHeight);
@@ -434,37 +514,7 @@ export async function GET(request: NextRequest) {
             setTimeout(startAutoScroll, 200);
           }
           
-          // Add manual test button for debugging
-          setTimeout(function() {
-            const testButton = document.createElement('button');
-            testButton.textContent = 'Test Scroll';
-            testButton.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; background: red; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;';
-            testButton.onclick = function() {
-              console.log('Manual scroll test triggered');
-              console.log('Button clicked - starting scroll test');
-              startAutoScroll();
-            };
-            document.body.appendChild(testButton);
-            
-            // Add a simple scroll indicator
-            const scrollIndicator = document.createElement('div');
-            scrollIndicator.id = 'scroll-indicator';
-            scrollIndicator.style.cssText = 'position: fixed; top: 50px; right: 10px; z-index: 9999; background: blue; color: white; padding: 5px; border-radius: 3px; font-size: 12px;';
-            scrollIndicator.textContent = 'Scroll: 0px';
-            document.body.appendChild(scrollIndicator);
-            
-            // Update scroll indicator
-            let lastScrollY = 0;
-            function updateScrollIndicator() {
-              const currentScrollY = window.scrollY;
-              if (currentScrollY !== lastScrollY) {
-                scrollIndicator.textContent = 'Scroll: ' + Math.round(currentScrollY) + 'px';
-                lastScrollY = currentScrollY;
-              }
-              requestAnimationFrame(updateScrollIndicator);
-            }
-            updateScrollIndicator();
-          }, 1000);
+          // Debug elements removed - no test button or scroll indicator
           
           // Handle load timeouts
           setTimeout(function() {
@@ -472,6 +522,14 @@ export async function GET(request: NextRequest) {
               console.log('Page load timeout, showing fallback');
             }
           }, 10000);
+          
+          // Fallback: Remove blur after 6 seconds regardless of animation state
+          setTimeout(function() {
+            if (!document.body.classList.contains('revealed')) {
+              document.body.classList.add('revealed');
+              console.log('🎭 Fallback: Blur effect removed after timeout');
+            }
+          }, 6000);
         </script>`)
              // Add inline styles to ensure basic styling works and prevent scrollbars
              .replace(/<head>/i, `<head>
@@ -517,6 +575,19 @@ export async function GET(request: NextRequest) {
                  html {
                    scrollbar-width: none;
                  }
+                 
+                 /* Block problematic font loading */
+                 @font-face {
+                   font-family: 'FFF-AcidGrotesk-Bold';
+                   src: none !important;
+                 }
+                 
+                 /* Override any font-face declarations */
+                 @font-face {
+                   font-display: none !important;
+                 }
+                 
+                 /* No blur effect - using solid overlay instead */
                </style>`);
 
     console.log('Modified HTML length:', modifiedHtml.length);
