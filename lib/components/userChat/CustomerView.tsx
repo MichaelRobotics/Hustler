@@ -194,6 +194,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				pathname = pathname.substring(8); // Remove '/joined'
 			}
 			
+			// Ensure pathname starts with /
+			if (!pathname.startsWith('/')) {
+				pathname = '/' + pathname;
+			}
+			
 			// Find and remove everything from /upsell onwards
 			const upsellIndex = pathname.indexOf('/upsell');
 			if (upsellIndex !== -1) {
@@ -215,7 +220,39 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	}, []);
 
 
-	// Fetch user context for admin features and experience data for iframe URL
+	// Fetch experience link for iframe URL
+	const fetchExperienceLink = useCallback(async () => {
+		if (!experienceId) return;
+		
+		try {
+			console.log(`[CustomerView] Fetching experience link for: ${experienceId}`);
+			const response = await apiGet(`/api/experience/link?experienceId=${experienceId}`, experienceId);
+			if (response.ok) {
+				const data = await response.json();
+				console.log(`[CustomerView] Experience link response:`, data);
+				
+				if (data.experience?.link) {
+					console.log(`[CustomerView] Found experience link: ${data.experience.link}`);
+					console.log(`[CustomerView] Link type:`, typeof data.experience.link);
+					console.log(`[CustomerView] Link length:`, data.experience.link.length);
+					const extractedUrl = extractBaseUrl(data.experience.link);
+					setIframeUrl(extractedUrl);
+					setUrlLoaded(true);
+					console.log(`[CustomerView] Set iframe URL from database: ${extractedUrl}`);
+				} else {
+					console.log(`[CustomerView] No experience link found in response:`, data.experience);
+					console.log(`[CustomerView] Full response data:`, data);
+					setUrlLoaded(true); // Mark as loaded even if no link found
+				}
+			} else {
+				console.error(`[CustomerView] Failed to fetch experience link: ${response.status}`);
+			}
+		} catch (error) {
+			console.error("Error fetching experience link:", error);
+		}
+	}, [experienceId, extractBaseUrl]);
+
+	// Fetch user context for admin features
 	const fetchUserContext = useCallback(async () => {
 		if (!experienceId) return;
 		
@@ -233,29 +270,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						company_id: data.user.experience.whopCompanyId
 					});
 				}
-				
-				// Extract iframe URL from experience link for all users
-				console.log(`[CustomerView] Checking for experience link in response:`, data.experience);
-				if (data.experience?.link) {
-					console.log(`[CustomerView] Found experience link: ${data.experience.link}`);
-					console.log(`[CustomerView] Link type:`, typeof data.experience.link);
-					console.log(`[CustomerView] Link length:`, data.experience.link.length);
-					const extractedUrl = extractBaseUrl(data.experience.link);
-					setIframeUrl(extractedUrl);
-					setUrlLoaded(true);
-					console.log(`[CustomerView] Set iframe URL from database: ${extractedUrl}`);
-				} else {
-					console.log(`[CustomerView] No experience link found in response:`, data.experience);
-					console.log(`[CustomerView] Full response data:`, data);
-					setUrlLoaded(true); // Mark as loaded even if no link found
-				}
 			} else {
 				console.error(`[CustomerView] Failed to fetch user context: ${response.status}`);
 			}
 		} catch (error) {
 			console.error("Error fetching user context:", error);
 		}
-	}, [experienceId, userType, extractBaseUrl]);
+	}, [experienceId, userType]);
 
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
@@ -470,7 +491,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	useEffect(() => {
 		loadFunnelAndConversation();
 		fetchUserContext();
-	}, [loadFunnelAndConversation, fetchUserContext]);
+		fetchExperienceLink(); // Get experience link for iframe
+	}, [loadFunnelAndConversation, fetchUserContext, fetchExperienceLink]);
 
 	// Monitor iframeUrl changes
 	useEffect(() => {
