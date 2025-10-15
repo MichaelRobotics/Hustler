@@ -58,6 +58,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [iframeError, setIframeError] = useState(false); // Track iframe loading errors
 	const [iframeLoaded, setIframeLoaded] = useState(false); // Track iframe load completion
 	const [overlayTransitioning, setOverlayTransitioning] = useState(false); // Track overlay transition
+	const [iframeUrl, setIframeUrl] = useState<string>('https://whop.com/profit-pulse-ai/'); // Default URL, will be updated from experience
 	
 	// Auto-scroll reveal state (removed - now handled by iframe content)
 	
@@ -190,6 +191,43 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, [experienceId, userType]);
 
+	// Function to extract base URL from experience link
+	const extractBaseUrl = useCallback((link: string): string => {
+		if (!link) return 'https://whop.com/profit-pulse-ai/';
+		
+		try {
+			// Remove /joined and everything with upsell and after it
+			// Example: https://whop.com/joined/the-main-character-a2c9/upsell-ELPFt5vK9Ezshm/app/
+			// Should become: https://whop.com/the-main-character-a2c9/
+			
+			const url = new URL(link);
+			let pathname = url.pathname;
+			
+			// Remove /joined from the beginning
+			if (pathname.startsWith('/joined/')) {
+				pathname = pathname.substring(8); // Remove '/joined'
+			}
+			
+			// Find and remove everything from /upsell onwards
+			const upsellIndex = pathname.indexOf('/upsell');
+			if (upsellIndex !== -1) {
+				pathname = pathname.substring(0, upsellIndex);
+			}
+			
+			// Ensure pathname ends with /
+			if (!pathname.endsWith('/')) {
+				pathname += '/';
+			}
+			
+			const baseUrl = `${url.protocol}//${url.host}${pathname}`;
+			console.log(`[CustomerView] Extracted base URL from ${link}: ${baseUrl}`);
+			return baseUrl;
+		} catch (error) {
+			console.error('Error extracting base URL:', error);
+			return 'https://whop.com/profit-pulse-ai/';
+		}
+	}, []);
+
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
 		if (!experienceId) {
@@ -205,7 +243,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			// Debug logging for CustomerView
 			console.log(`[CustomerView] Debug - Loading conversation for experienceId: ${experienceId}, whopUserId: ${whopUserId}`);
 
-			// Step 1: Check if there's an active conversation
+			// Step 1: Get experience data to extract iframe URL
+			const experienceResponse = await apiPost('/api/user/context', {}, experienceId);
+			if (experienceResponse.ok) {
+				const experienceData = await experienceResponse.json();
+				if (experienceData.success && experienceData.experience?.link) {
+					const extractedUrl = extractBaseUrl(experienceData.experience.link);
+					setIframeUrl(extractedUrl);
+					console.log(`[CustomerView] Set iframe URL to: ${extractedUrl}`);
+				}
+			}
+
+			// Step 2: Check if there's an active conversation
 			const checkResponse = await apiPost('/api/userchat/check-conversation', {
 				whopUserId: whopUserId,
 			}, experienceId);
@@ -613,11 +662,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							setShowIframe(true); // Half-and-half
 						}
 					}}
-					className="relative inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group animate-pulse"
+					className="relative inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group animate-pulse"
 					style={{ WebkitTapHighlightColor: "transparent" }}
 				>
 					{/* Animated background overlay */}
-					<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+					<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-600 via-amber-600 to-yellow-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
 					
 					{/* Shimmer effect */}
 					<span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
@@ -665,7 +714,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					</span>
 					
 					{/* Glow effect */}
-					<span className="absolute inset-0 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
+					<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 				</button>
 			</div>
 		)}
@@ -871,7 +920,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						<div className={`${showIframe && !showChat ? 'h-screen' : 'h-full'}`}>
 							{/* Proxy iframe to bypass same-origin restrictions */}
 					<iframe
-						src={`/api/proxy/whop?url=${encodeURIComponent('https://whop.com/profit-pulse-ai/')}`}
+						src={`/api/proxy/whop?url=${encodeURIComponent(iframeUrl)}`}
 						className="w-full h-full border-0"
 						title="ProfitPulse AI"
 						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-modals allow-downloads"
@@ -936,7 +985,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									
 									{/* Open in new tab button */}
 									<button
-										onClick={() => window.open("https://whop.com/profit-pulse-ai/", "_blank", "noopener,noreferrer")}
+										onClick={() => window.open(iframeUrl, "_blank", "noopener,noreferrer")}
 										className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-1.5 px-2 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 text-xs"
 									>
 										<div className="flex items-center justify-center space-x-1">
@@ -955,12 +1004,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							<div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
 								<button
 									onClick={toggleView}
-									className="relative w-10 h-10 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group"
+									className="relative w-10 h-10 bg-gradient-to-r from-yellow-500 via-amber-600 to-yellow-700 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group"
 									title="Switch to Half-and-Half"
 									style={{ WebkitTapHighlightColor: "transparent" }}
 								>
 									{/* Animated background overlay */}
-									<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+									<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-600 via-amber-700 to-yellow-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
 									
 									{/* Shimmer effect */}
 									<span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
@@ -969,7 +1018,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									<MessageCircle className="w-5 h-5 text-white relative z-10" />
 									
 									{/* Glow effect */}
-									<span className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
+									<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-700 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 								</button>
 							</div>
 						)}
