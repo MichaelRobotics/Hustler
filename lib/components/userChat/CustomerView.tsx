@@ -172,6 +172,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		};
 	}, [isDragging, handleDragMove, handleDragEnd]);
 
+
 	// Function to extract base URL from experience link
 	const extractBaseUrl = useCallback((link: string): string => {
 		if (!link) return 'https://whop.com/profit-pulse-ai/';
@@ -479,6 +480,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			console.log(`[CustomerView] Rendering iframe with URL: ${iframeUrl}`);
 		}
 	}, [urlLoaded, iframeUrl]);
+
 
 	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
 	useEffect(() => {
