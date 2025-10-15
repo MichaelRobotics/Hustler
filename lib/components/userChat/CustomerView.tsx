@@ -58,7 +58,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [iframeError, setIframeError] = useState(false); // Track iframe loading errors
 	const [iframeLoaded, setIframeLoaded] = useState(false); // Track iframe load completion
 	const [overlayTransitioning, setOverlayTransitioning] = useState(false); // Track overlay transition
-	const [iframeUrl, setIframeUrl] = useState<string>('https://whop.com/profit-pulse-ai/'); // Default URL, will be updated from experience
+	const [iframeUrl, setIframeUrl] = useState<string>(''); // Will be set from experience
 	const [urlLoaded, setUrlLoaded] = useState(false); // Track if URL has been loaded from database
 	
 	// Auto-scroll reveal state (removed - now handled by iframe content)
@@ -175,7 +175,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// Function to extract base URL from experience link
 	const extractBaseUrl = useCallback((link: string): string => {
-		if (!link) return 'https://whop.com/profit-pulse-ai/';
+		console.log(`[CustomerView] extractBaseUrl called with link:`, link);
+		if (!link) {
+			console.log(`[CustomerView] No link provided to extractBaseUrl`);
+			return '';
+		}
 		
 		try {
 			// Remove /joined and everything with upsell and after it
@@ -206,7 +210,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			return baseUrl;
 		} catch (error) {
 			console.error('Error extracting base URL:', error);
-			return 'https://whop.com/profit-pulse-ai/';
+			return '';
 		}
 	}, []);
 
@@ -230,8 +234,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				}
 				
 				// Extract iframe URL from experience link for all users
+				console.log(`[CustomerView] Checking for experience link in response:`, data.experience);
 				if (data.experience?.link) {
 					console.log(`[CustomerView] Found experience link: ${data.experience.link}`);
+					console.log(`[CustomerView] Link type:`, typeof data.experience.link);
+					console.log(`[CustomerView] Link length:`, data.experience.link.length);
 					const extractedUrl = extractBaseUrl(data.experience.link);
 					setIframeUrl(extractedUrl);
 					setUrlLoaded(true);
@@ -947,14 +954,15 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						{/* Discovery Page Content - Using Proxy */}
 						<div className={`${showIframe && !showChat ? 'h-screen' : 'h-full'}`}>
 							{/* Proxy iframe to bypass same-origin restrictions */}
-					<iframe
-						src={`/api/proxy/whop?url=${encodeURIComponent(iframeUrl)}`}
-						className="w-full h-full border-0"
-						title="ProfitPulse AI"
-						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-modals allow-downloads"
-						loading="lazy"
-						referrerPolicy="no-referrer"
-						allow="payment; microphone; camera; fullscreen; autoplay; clipboard-write; cross-origin-isolated"
+					{iframeUrl ? (
+						<iframe
+							src={`/api/proxy/whop?url=${encodeURIComponent(iframeUrl)}`}
+							className="w-full h-full border-0"
+							title="ProfitPulse AI"
+							sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-modals allow-downloads"
+							loading="lazy"
+							referrerPolicy="no-referrer"
+							allow="payment; microphone; camera; fullscreen; autoplay; clipboard-write; cross-origin-isolated"
 						onLoad={() => {
 							console.log('Discovery page loaded successfully via proxy');
 							setIframeError(false);
@@ -976,6 +984,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							setIframeError(true);
 						}}
 					/>
+					) : (
+						<div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+							<div className="text-center">
+								<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+								<p className="text-gray-600 dark:text-gray-300">Loading experience...</p>
+							</div>
+						</div>
+					)}
 							
 							{/* Fallback content when iframe fails */}
 							<div className={`absolute inset-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center ${iframeError ? 'flex' : 'hidden'}`}>
