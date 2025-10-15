@@ -213,9 +213,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		if (!experienceId) return;
 		
 		try {
+			console.log(`[CustomerView] Fetching user context for experienceId: ${experienceId}`);
 			const response = await fetch(`/api/user/context?experienceId=${experienceId}`);
 			if (response.ok) {
 				const data = await response.json();
+				console.log(`[CustomerView] User context response:`, data);
 				
 				// Set user context for admin users
 				if (data.user && userType === "admin") {
@@ -227,10 +229,16 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				
 				// Extract iframe URL from experience link for all users
 				if (data.experience?.link) {
+					console.log(`[CustomerView] Found experience link: ${data.experience.link}`);
 					const extractedUrl = extractBaseUrl(data.experience.link);
 					setIframeUrl(extractedUrl);
 					console.log(`[CustomerView] Set iframe URL from database: ${extractedUrl}`);
+				} else {
+					console.log(`[CustomerView] No experience link found in response:`, data.experience);
+					console.log(`[CustomerView] Full response data:`, data);
 				}
+			} else {
+				console.error(`[CustomerView] Failed to fetch user context: ${response.status}`);
 			}
 		} catch (error) {
 			console.error("Error fetching user context:", error);
@@ -451,6 +459,16 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		loadFunnelAndConversation();
 		fetchUserContext();
 	}, [loadFunnelAndConversation, fetchUserContext]);
+
+	// Monitor iframeUrl changes
+	useEffect(() => {
+		console.log(`[CustomerView] Iframe URL changed to: ${iframeUrl}`);
+	}, [iframeUrl]);
+
+	// Debug iframe URL on render
+	useEffect(() => {
+		console.log(`[CustomerView] Current iframe URL: ${iframeUrl}`);
+	});
 
 	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
 	useEffect(() => {
