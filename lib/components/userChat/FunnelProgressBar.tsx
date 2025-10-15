@@ -118,25 +118,7 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 	return (
 		<div className="w-full border-b border-gray-200 dark:border-gray-700 px-4 py-3">
 			<div className="max-w-6xl mx-auto">
-				{/* Desktop-optimized Progress Header */}
-				<div className="flex items-center justify-between mb-4">
-					<Text size="3" weight="medium" className="text-gray-900 dark:text-white">
-						{progressPercentage >= 100 ? "Complete" : getStageDisplayName(activeStage)}
-					</Text>
-					<Text 
-						size="3" 
-						weight="semi-bold" 
-						className={`transition-all duration-500 ${
-							progressPercentage >= 100 
-								? 'text-yellow-600 dark:text-yellow-400 drop-shadow-sm' 
-								: 'text-yellow-600 dark:text-yellow-400'
-						}`}
-					>
-						{Math.round(progressPercentage)}%
-					</Text>
-				</div>
-
-				{/* Desktop-optimized Progress Bar */}
+				{/* Desktop-optimized Progress Bar - No stage indicator */}
 				<div className="relative w-full">
 					{/* Background Track - Thicker for desktop */}
 					<div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 md:h-4">
@@ -154,7 +136,6 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 							)}
 						</div>
 					</div>
-
 
 					{/* Completion Button - Centered with Faded Background */}
 					{progressPercentage >= 100 && (

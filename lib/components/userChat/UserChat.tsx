@@ -20,7 +20,6 @@ import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "./AnimatedGoldButton";
 import { renderTextWithLinks } from "../../utils/link-utils";
-import FunnelProgressBar from "./FunnelProgressBar";
 
 /**
  * Track intent by calling the API endpoint
@@ -982,7 +981,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	return (
 		<div
-			className="h-screen w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 touch-manipulation"
+			className="h-full w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 touch-manipulation"
 			style={{
 				// Mobile performance optimizations
 				transform: "translateZ(0)", // Force hardware acceleration
@@ -997,101 +996,7 @@ const UserChat: React.FC<UserChatProps> = ({
 				overscrollBehavior: "contain",
 			}}
 		>
-			{/* Header - Hidden on desktop */}
-			<div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
-				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-4">
-						{onBack && (
-							<button
-								onClick={onBack}
-								className="p-2 rounded-lg touch-manipulation text-muted-foreground hover:text-foreground hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
-								style={{ WebkitTapHighlightColor: "transparent" }}
-							>
-								<ArrowLeft size={20} strokeWidth={2.5} />
-							</button>
-						)}
 
-						{/* Avatar Icon - only show if not hidden */}
-						{!hideAvatar && (
-							<div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
-								<img 
-									src="https://img-v2-prod.whop.com/unsafe/rs:fit:256:0/plain/https%3A%2F%2Fassets.whop.com%2Fuploads%2F2025-10-02%2Fuser_16843562_c991d27a-feaa-4318-ab44-2aaa27937382.jpeg@avif?w=256&q=75"
-									alt="User Avatar"
-									className="w-20 h-20 object-cover"
-									onError={(e) => {
-										// Fallback to default icon if image fails to load
-										const target = e.target as HTMLImageElement;
-										target.style.display = 'none';
-										const parent = target.parentElement;
-										if (parent) {
-											parent.innerHTML = '<div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
-										}
-									}}
-								/>
-							</div>
-						)}
-
-						<div>
-							<Text
-								size="3"
-								weight="semi-bold"
-								className="text-black dark:text-white"
-							>
-								Hustler
-							</Text>
-							{conversationId && (
-								<div className="flex items-center gap-2 mt-1">
-									<div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-									<span className="text-xs text-gray-500 dark:text-gray-400">
-										{isConnected ? 'Connected' : 'Disconnected'}
-									</span>
-								</div>
-							)}
-						</div>
-					</div>
-
-					{/* Theme Toggle Button */}
-					<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-						<button
-							onClick={toggleTheme}
-							className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
-							style={{ WebkitTapHighlightColor: "transparent" }}
-							title={
-								appearance === "dark"
-									? "Switch to light mode"
-									: "Switch to dark mode"
-							}
-						>
-							{appearance === "dark" ? (
-								<Sun
-									size={20}
-									className="text-foreground/70 dark:text-foreground/70"
-								/>
-							) : (
-								<Moon
-									size={20}
-									className="text-foreground/70 dark:text-foreground/70"
-								/>
-							)}
-						</button>
-					</div>
-				</div>
-
-				{/* Subtle Separator Line */}
-				<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mt-3" />
-			</div>
-
-			{/* Funnel Progress Bar */}
-			{funnelFlow && (
-				<FunnelProgressBar
-					currentStage={stageInfo?.currentStage || "WELCOME"}
-					stages={funnelFlow.stages}
-					onStageUpdate={(newStage) => {
-						// Handle stage updates from WebSocket
-						console.log("Progress bar stage update:", newStage);
-					}}
-				/>
-			)}
 
 			{/* Chat Container */}
 			<div className="flex-1 flex flex-col min-h-0">
