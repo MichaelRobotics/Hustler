@@ -59,6 +59,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [iframeLoaded, setIframeLoaded] = useState(false); // Track iframe load completion
 	const [overlayTransitioning, setOverlayTransitioning] = useState(false); // Track overlay transition
 	const [iframeUrl, setIframeUrl] = useState<string>('https://whop.com/profit-pulse-ai/'); // Default URL, will be updated from experience
+	const [urlLoaded, setUrlLoaded] = useState(false); // Track if URL has been loaded from database
 	
 	// Auto-scroll reveal state (removed - now handled by iframe content)
 	
@@ -232,10 +233,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					console.log(`[CustomerView] Found experience link: ${data.experience.link}`);
 					const extractedUrl = extractBaseUrl(data.experience.link);
 					setIframeUrl(extractedUrl);
+					setUrlLoaded(true);
 					console.log(`[CustomerView] Set iframe URL from database: ${extractedUrl}`);
 				} else {
 					console.log(`[CustomerView] No experience link found in response:`, data.experience);
 					console.log(`[CustomerView] Full response data:`, data);
+					setUrlLoaded(true); // Mark as loaded even if no link found
 				}
 			} else {
 				console.error(`[CustomerView] Failed to fetch user context: ${response.status}`);
@@ -469,6 +472,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	useEffect(() => {
 		console.log(`[CustomerView] Current iframe URL: ${iframeUrl}`);
 	});
+
+	// Debug iframe rendering
+	useEffect(() => {
+		if (urlLoaded) {
+			console.log(`[CustomerView] Rendering iframe with URL: ${iframeUrl}`);
+		}
+	}, [urlLoaded, iframeUrl]);
 
 	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
 	useEffect(() => {
