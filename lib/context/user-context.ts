@@ -434,6 +434,7 @@ async function createUserContext(
 				name: experience.name,
 				description: experience.description || undefined,
 				logo: experience.logo || undefined,
+				link: experience.link || undefined, // Include link field from database
 			},
 		};
 		console.log(`✅ AuthenticatedUser created: id=${authenticatedUser.id}, whopUserId=${authenticatedUser.whopUserId}, experience.id=${authenticatedUser.experience.id}`);

@@ -20,6 +20,7 @@ export interface AuthenticatedUser {
 		name: string;
 		description?: string;
 		logo?: string;
+		link?: string;
 	};
 }
 
