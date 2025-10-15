@@ -6,7 +6,7 @@ import UserChat from "./UserChat";
 import { AdminNavbar } from "./AdminNavbar";
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
-import { apiPost } from "../../utils/api-client";
+import { apiGet, apiPost } from "../../utils/api-client";
 import { Text } from "frosted-ui";
 import { MessageSquare, Play, RotateCcw, Settings, User, MessageCircle, Sun, Moon } from "lucide-react";
 import FunnelProgressBar from "./FunnelProgressBar";
@@ -220,7 +220,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		
 		try {
 			console.log(`[CustomerView] Fetching user context for experienceId: ${experienceId}`);
-			const response = await apiPost('/api/user/context', {}, experienceId);
+			const response = await apiGet('/api/user/context', experienceId);
 			if (response.ok) {
 				const data = await response.json();
 				console.log(`[CustomerView] User context response:`, data);
