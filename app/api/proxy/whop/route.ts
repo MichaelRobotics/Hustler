@@ -345,7 +345,7 @@ export async function GET(request: NextRequest) {
             console.log('🚀 API overrides installed successfully');
           })();
           
-          // Handle product clicks - open in new window
+          // Handle product clicks - open in new window and clean URLs
           document.addEventListener('click', function(e) {
             const target = e.target.closest('a');
             if (target && target.href) {
@@ -355,7 +355,15 @@ export async function GET(request: NextRequest) {
                   url.pathname.includes('/profit-pulse-ai/') ||
                   url.hostname !== 'whop.com') {
                 e.preventDefault();
-                window.open(target.href, '_blank', 'noopener,noreferrer');
+                
+                // Clean the URL by removing the problematic subdomain
+                let cleanUrl = target.href;
+                if (cleanUrl.includes('ut0jno2kq2s3xmlimb2g.apps.')) {
+                  cleanUrl = cleanUrl.replace('ut0jno2kq2s3xmlimb2g.apps.', '');
+                  console.log('🧹 Cleaned URL:', cleanUrl);
+                }
+                
+                window.open(cleanUrl, '_blank', 'noopener,noreferrer');
               }
             }
           });
