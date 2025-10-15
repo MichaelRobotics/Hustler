@@ -171,26 +171,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		};
 	}, [isDragging, handleDragMove, handleDragEnd]);
 
-	// Fetch user context for admin features
-	const fetchUserContext = useCallback(async () => {
-		if (!experienceId || userType !== "admin") return;
-		
-		try {
-			const response = await fetch(`/api/user/context?experienceId=${experienceId}`);
-			if (response.ok) {
-				const data = await response.json();
-				if (data.user) {
-					setUserContext({
-						user_id: data.user.whopUserId,
-						company_id: data.user.experience.whopCompanyId
-					});
-				}
-			}
-		} catch (error) {
-			console.error("Error fetching user context:", error);
-		}
-	}, [experienceId, userType]);
-
 	// Function to extract base URL from experience link
 	const extractBaseUrl = useCallback((link: string): string => {
 		if (!link) return 'https://whop.com/profit-pulse-ai/';
@@ -228,6 +208,35 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, []);
 
+	// Fetch user context for admin features and experience data for iframe URL
+	const fetchUserContext = useCallback(async () => {
+		if (!experienceId) return;
+		
+		try {
+			const response = await fetch(`/api/user/context?experienceId=${experienceId}`);
+			if (response.ok) {
+				const data = await response.json();
+				
+				// Set user context for admin users
+				if (data.user && userType === "admin") {
+					setUserContext({
+						user_id: data.user.whopUserId,
+						company_id: data.user.experience.whopCompanyId
+					});
+				}
+				
+				// Extract iframe URL from experience link for all users
+				if (data.experience?.link) {
+					const extractedUrl = extractBaseUrl(data.experience.link);
+					setIframeUrl(extractedUrl);
+					console.log(`[CustomerView] Set iframe URL from database: ${extractedUrl}`);
+				}
+			}
+		} catch (error) {
+			console.error("Error fetching user context:", error);
+		}
+	}, [experienceId, userType, extractBaseUrl]);
+
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
 		if (!experienceId) {
@@ -243,18 +252,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			// Debug logging for CustomerView
 			console.log(`[CustomerView] Debug - Loading conversation for experienceId: ${experienceId}, whopUserId: ${whopUserId}`);
 
-			// Step 1: Get experience data to extract iframe URL
-			const experienceResponse = await apiPost('/api/user/context', {}, experienceId);
-			if (experienceResponse.ok) {
-				const experienceData = await experienceResponse.json();
-				if (experienceData.success && experienceData.experience?.link) {
-					const extractedUrl = extractBaseUrl(experienceData.experience.link);
-					setIframeUrl(extractedUrl);
-					console.log(`[CustomerView] Set iframe URL to: ${extractedUrl}`);
-				}
-			}
-
-			// Step 2: Check if there's an active conversation
+			// Step 1: Check if there's an active conversation
 			const checkResponse = await apiPost('/api/userchat/check-conversation', {
 				whopUserId: whopUserId,
 			}, experienceId);
