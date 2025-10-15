@@ -220,7 +220,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		
 		try {
 			console.log(`[CustomerView] Fetching user context for experienceId: ${experienceId}`);
-			const response = await apiGet('/api/user/context', experienceId);
+			const response = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
 			if (response.ok) {
 				const data = await response.json();
 				console.log(`[CustomerView] User context response:`, data);
