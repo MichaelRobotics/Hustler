@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
 
 		return NextResponse.json({
 			user: userContext.user,
+			experience: userContext.user.experience, // Include experience data with link field
 			isAuthenticated: userContext.isAuthenticated,
 			hasAccess: userContext.user.accessLevel !== "no_access",
 			// Add view selection logic to response
