@@ -214,34 +214,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, []);
 
-	// Debug: Check experience link in database
-	const debugExperienceLink = useCallback(async () => {
-		if (!experienceId) return;
-		
-		try {
-			console.log(`[CustomerView] Debug: Checking experience link in database for: ${experienceId}`);
-			const response = await apiGet(`/api/debug/experience-link?experienceId=${experienceId}`, experienceId);
-			if (response.ok) {
-				const data = await response.json();
-				console.log(`[CustomerView] Debug: Database experience data:`, data);
-				
-				if (data.experience?.link) {
-					console.log(`[CustomerView] Debug: Found link in database: ${data.experience.link}`);
-					const extractedUrl = extractBaseUrl(data.experience.link);
-					setIframeUrl(extractedUrl);
-					setUrlLoaded(true);
-					console.log(`[CustomerView] Debug: Set iframe URL from database: ${extractedUrl}`);
-				} else {
-					console.log(`[CustomerView] Debug: No link found in database`);
-					setUrlLoaded(true);
-				}
-			} else {
-				console.error(`[CustomerView] Debug: Failed to check database: ${response.status}`);
-			}
-		} catch (error) {
-			console.error("Debug: Error checking database:", error);
-		}
-	}, [experienceId, extractBaseUrl]);
 
 	// Fetch user context for admin features and experience data for iframe URL
 	const fetchUserContext = useCallback(async () => {
@@ -498,8 +470,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	useEffect(() => {
 		loadFunnelAndConversation();
 		fetchUserContext();
-		debugExperienceLink(); // Debug: Check database directly
-	}, [loadFunnelAndConversation, fetchUserContext, debugExperienceLink]);
+	}, [loadFunnelAndConversation, fetchUserContext]);
 
 	// Monitor iframeUrl changes
 	useEffect(() => {
