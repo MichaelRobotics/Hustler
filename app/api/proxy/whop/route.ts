@@ -113,8 +113,34 @@ export async function GET(request: NextRequest) {
             window.fetch = function(url, options) {
               console.log('🔍 Fetch intercepted:', url);
               
-              // Convert relative URLs to absolute
+              // Block problematic API calls that cause white flashes
               if (typeof url === 'string') {
+                const blockedPatterns = [
+                  '/api/auth/token',
+                  '/core/api/flags/experiment/',
+                  '/api/v3/track/',
+                  '/messages?',
+                  '/_static/worker/',
+                  '/site.webmanifest',
+                  '/schemaFilter.'
+                ];
+                
+                const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
+                if (isBlocked) {
+                  console.log('🚫 Blocked problematic API call:', url);
+                  // Return immediate mock response to prevent white flash
+                  return Promise.resolve(new Response(JSON.stringify({ 
+                    success: true, 
+                    data: null,
+                    message: 'Blocked for iframe compatibility'
+                  }), {
+                    status: 200,
+                    statusText: 'OK',
+                    headers: { 'Content-Type': 'application/json' }
+                  }));
+                }
+                
+                // Convert relative URLs to absolute for allowed requests
                 if (url.startsWith('/')) {
                   url = 'https://whop.com' + url;
                   console.log('✅ Fetch converted to absolute URL:', url);
@@ -157,19 +183,61 @@ export async function GET(request: NextRequest) {
             XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
               console.log('🔍 XHR intercepted:', method, url);
               
-              // Convert relative URLs to absolute
-              if (typeof url === 'string' && url.startsWith('/')) {
-                url = 'https://whop.com' + url;
-                console.log('✅ XHR converted to absolute URL:', url);
+              // Block problematic API calls that cause white flashes
+              if (typeof url === 'string') {
+                const blockedPatterns = [
+                  '/api/auth/token',
+                  '/core/api/flags/experiment/',
+                  '/api/v3/track/',
+                  '/messages?',
+                  '/_static/worker/',
+                  '/site.webmanifest',
+                  '/schemaFilter.'
+                ];
+                
+                const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
+                if (isBlocked) {
+                  console.log('🚫 Blocked problematic XHR call:', url);
+                  // Store the blocked state for later handling
+                  this._isBlocked = true;
+                  return originalXHROpen.call(this, method, url, async, user, password);
+                }
+                
+                // Convert relative URLs to absolute for allowed requests
+                if (url.startsWith('/')) {
+                  url = 'https://whop.com' + url;
+                  console.log('✅ XHR converted to absolute URL:', url);
+                }
               }
               
               return originalXHROpen.call(this, method, url, async, user, password);
             };
             
-            // Override XHR send to handle 404s gracefully
+            // Override XHR send to handle blocked requests and 404s gracefully
             XMLHttpRequest.prototype.send = function(data) {
               const xhr = this;
               const originalOnReadyStateChange = xhr.onreadystatechange;
+              
+              // Handle blocked requests immediately
+              if (xhr._isBlocked) {
+                console.log('🚫 XHR blocked, returning mock response immediately');
+                // Simulate successful response for blocked requests
+                setTimeout(() => {
+                  Object.defineProperty(xhr, 'readyState', { value: 4, writable: false });
+                  Object.defineProperty(xhr, 'status', { value: 200, writable: false });
+                  Object.defineProperty(xhr, 'statusText', { value: 'OK', writable: false });
+                  Object.defineProperty(xhr, 'responseText', { value: JSON.stringify({ 
+                    success: true, 
+                    data: null,
+                    message: 'Blocked for iframe compatibility'
+                  }), writable: false });
+                  
+                  if (originalOnReadyStateChange) {
+                    originalOnReadyStateChange.call(xhr);
+                  }
+                }, 10); // Small delay to simulate network request
+                return;
+              }
               
               xhr.onreadystatechange = function() {
                 if (xhr.readyState === 4 && xhr.status === 404) {
