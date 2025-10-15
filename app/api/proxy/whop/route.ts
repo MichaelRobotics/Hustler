@@ -63,6 +63,35 @@ export async function GET(request: NextRequest) {
       .replace(/<meta[^>]*http-equiv="Content-Security-Policy"[^>]*frame-ancestors[^>]*>/gi, '')
       // Add base tag to ensure proper resource loading
       .replace(/<head>/i, '<head><base href="https://whop.com/">')
+      // Override document.baseURI to force absolute URLs
+      .replace(/<head>/i, `<head>
+        <script>
+          // Override document.baseURI immediately
+          Object.defineProperty(document, 'baseURI', {
+            get: function() { return 'https://whop.com/'; },
+            configurable: true
+          });
+          
+          // Override location.origin
+          Object.defineProperty(location, 'origin', {
+            get: function() { return 'https://whop.com'; },
+            configurable: true
+          });
+          
+          // Override location.host
+          Object.defineProperty(location, 'host', {
+            get: function() { return 'whop.com'; },
+            configurable: true
+          });
+          
+          // Override location.hostname
+          Object.defineProperty(location, 'hostname', {
+            get: function() { return 'whop.com'; },
+            configurable: true
+          });
+          
+          console.log('🌐 Document base URI overrides installed');
+        </script>`)
       // Add comprehensive error handling and fallback script
       .replace(/<head>/i, `<head>
         <script>
@@ -77,6 +106,59 @@ export async function GET(request: NextRequest) {
               e.target.href = 'https://whop.com' + e.target.href;
             }
           });
+          
+          // Override fetch to handle API calls properly - IMMEDIATE EXECUTION
+          (function() {
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+              console.log('🔍 Fetch intercepted:', url);
+              
+              // Convert relative URLs to absolute
+              if (typeof url === 'string') {
+                if (url.startsWith('/')) {
+                  url = 'https://whop.com' + url;
+                  console.log('✅ Fetch converted to absolute URL:', url);
+                } else if (url.includes('whop.com')) {
+                  console.log('✅ Fetch already absolute URL:', url);
+                } else {
+                  console.log('✅ Fetch external URL:', url);
+                }
+              }
+              
+              return originalFetch.call(this, url, options);
+            };
+            
+            // Override XMLHttpRequest to handle older API calls
+            const originalXHROpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+              console.log('🔍 XHR intercepted:', method, url);
+              
+              // Convert relative URLs to absolute
+              if (typeof url === 'string' && url.startsWith('/')) {
+                url = 'https://whop.com' + url;
+                console.log('✅ XHR converted to absolute URL:', url);
+              }
+              
+              return originalXHROpen.call(this, method, url, async, user, password);
+            };
+            
+            // Override sendBeacon for analytics
+            const originalSendBeacon = navigator.sendBeacon;
+            if (originalSendBeacon) {
+              navigator.sendBeacon = function(url, data) {
+                console.log('🔍 SendBeacon intercepted:', url);
+                
+                if (typeof url === 'string' && url.startsWith('/')) {
+                  url = 'https://whop.com' + url;
+                  console.log('✅ SendBeacon converted to absolute URL:', url);
+                }
+                
+                return originalSendBeacon.call(this, url, data);
+              };
+            }
+            
+            console.log('🚀 API overrides installed successfully');
+          })();
           
           // Handle product clicks - open in new window
           document.addEventListener('click', function(e) {
