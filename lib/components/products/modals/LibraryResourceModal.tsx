@@ -67,7 +67,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							type="text"
 							value={resource.name || ""}
 							onChange={(e) => handleInputChange("name", e.target.value)}
-							placeholder="Enter resource name..."
+							placeholder="Digital Asset name"
 							className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
 								resource.name && !isNameAvailable(resource.name, resource.id)
 									? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
@@ -94,7 +94,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							type="url"
 							value={resource.link || ""}
 							onChange={(e) => handleInputChange("link", e.target.value)}
-							placeholder="https://example.com"
+							placeholder="Digital asset URL"
 							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
 						/>
 					</div>
@@ -163,7 +163,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 						>
 							<Plus size={18} strokeWidth={2.5} className="mr-2" />
-							{resource.id ? "Update Resource" : "Create Resource"}
+							{resource.id ? "Update Digital Asset" : "Create Digital Asset"}
 						</Button>
 						<Button
 							variant="soft"

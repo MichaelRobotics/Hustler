@@ -45,8 +45,8 @@ interface AdminSidebarProps {
  * --- Admin Sidebar Component ---
  * This component provides navigation between different admin views:
  * - Automations (Default dashboard view)
- * - Library (Library without funnel context)
- * - Live Chat (Pro version upgrade prompt)
+ * - Warehouse (Warehouse without funnel context)
+ * - Merchants Conversations (Pro version upgrade prompt)
  *
  * Following Whop's design patterns for clean, organized navigation.
  */
@@ -112,7 +112,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Automations - Manage funnels & analytics"
+									title="Automations - Manage merchants & analytics"
 								>
 									<div className="relative">
 										<Zap size={20} strokeWidth={2} />
@@ -134,7 +134,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Library - All available products"
+									title="Warehouse - All available digital assets"
 								>
 									<div className="relative">
 										<Library size={20} strokeWidth={2} />
@@ -170,7 +170,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Live Chat - Monitor conversations"
+									title="Merchants Conversations - Monitor merchant conversations"
 								>
 									<div className="relative">
 										<MessageCircle size={20} strokeWidth={2} />
@@ -192,7 +192,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Store - Manage products and sales"
+									title="Store - Manage digital assets and sales"
 								>
 									<div className="relative">
 										<Store size={20} strokeWidth={2} />
@@ -252,7 +252,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
-									Library
+									Warehouse
 								</Text>
 
 								{/* Mobile Context Indicator */}

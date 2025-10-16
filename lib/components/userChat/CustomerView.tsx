@@ -654,8 +654,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	});
 
 	// Render UserChat with real data
-	return (
-		<div className="h-screen w-full relative">
+			return (
+				<div className="h-screen w-full relative">
 			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads */}
 			{(!iframeLoaded || overlayTransitioning) && (
 				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
@@ -712,21 +712,21 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						<div className="w-8 h-1 bg-white/50 rounded-full"></div>
 					</div>
 					
-					<AdminNavbar
-						conversationId={conversationId}
-						stageInfo={stageInfo}
-						adminLoading={adminLoading}
-						adminError={adminError}
-						adminSuccess={adminSuccess}
-						onCheckStatus={checkConversationStatus}
-						onTriggerDM={triggerDMForAdmin}
-						onResetConversations={resetConversations}
+						<AdminNavbar
+							conversationId={conversationId}
+							stageInfo={stageInfo}
+							adminLoading={adminLoading}
+							adminError={adminError}
+							adminSuccess={adminSuccess}
+							onCheckStatus={checkConversationStatus}
+							onTriggerDM={triggerDMForAdmin}
+							onResetConversations={resetConversations}
 						experienceId={experienceId}
 						funnelFlow={funnelFlow}
 						user_id={userContext?.user_id}
 						company_id={userContext?.company_id}
-					/>
-				</div>
+						/>
+					</div>
 			</div>
 		)}
 
@@ -814,12 +814,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					{/* Glow effect */}
 					<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 				</button>
-			</div>
+							</div>
 		)}
 
 			{/* Right Side: Theme Toggle Button - Icon Only */}
 			<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-				<button
+							<button
 					onClick={toggleTheme}
 					className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
 					style={{ WebkitTapHighlightColor: "transparent" }}
@@ -840,10 +840,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							className="text-foreground/70 dark:text-foreground/70"
 						/>
 					)}
-				</button>
-			</div>
+							</button>
+						</div>
+					</div>
 				</div>
-			</div>
 
 		{/* Integrated Progress Bar - Custom with WebSocket updates */}
 		{isFunnelActive && (
@@ -910,10 +910,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									{/* Lava-like bubbling effect */}
 									<div className="absolute top-0 left-1/3 w-1 h-full bg-gradient-to-b from-orange-300 via-yellow-200 to-transparent opacity-40 animate-bounce" style={{ animationDelay: '0.3s', animationDuration: '1.2s' }}></div>
 									<div className="absolute top-0 left-2/3 w-1 h-full bg-gradient-to-b from-red-300 via-yellow-300 to-transparent opacity-35 animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '1.6s' }}></div>
-									
-									{/* Glowing particles */}
-									<div className="absolute top-0 left-1/5 w-0.5 h-full bg-white opacity-90 animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '0.8s' }}></div>
-									<div className="absolute top-0 left-4/5 w-0.5 h-full bg-white opacity-75 animate-pulse" style={{ animationDelay: '0.7s', animationDuration: '1.1s' }}></div>
 								</div>
 							</div>
 						</div>
@@ -1060,8 +1056,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									<div className="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg">
 										<svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-										</svg>
-									</div>
+						</svg>
+					</div>
 									
 									{/* Content */}
 									<h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1">
@@ -1088,7 +1084,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									</div>
 									
 									{/* Open in new tab button */}
-									<button
+					<button
 										onClick={() => window.open(iframeUrl, "_blank", "noopener,noreferrer")}
 										className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-1.5 px-2 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 text-xs"
 									>
@@ -1098,9 +1094,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 											</svg>
 											<span>Open ProfitPulse AI</span>
 										</div>
-									</button>
-								</div>
-							</div>
+					</button>
+				</div>
+			</div>
 						</div>
 
 						{/* Chat Icon - Above bottom of iframe page */}
@@ -1124,8 +1120,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									{/* Glow effect */}
 									<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-700 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 								</button>
-							</div>
-						)}
+				</div>
+			)}
 					</div>
 				</div>
 

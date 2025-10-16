@@ -112,7 +112,7 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 								weight="bold"
 								className="text-black dark:text-white"
 							>
-								Live Chat
+								Merchants Conversations
 							</Heading>
 						</div>
 					</div>

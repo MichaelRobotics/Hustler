@@ -144,7 +144,7 @@ export function useAutoDeployment({
 				}, 8000);
 			};
 
-			showNotification("Generation completed! Please manually deploy the funnel from the Funnel Builder.");
+			showNotification("Generation completed! Please manually deploy the funnel from the Merchant Conversation Editor.");
 			
 			// Re-throw error for any additional error handling
 			throw error;

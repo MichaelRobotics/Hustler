@@ -55,7 +55,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 						weight="bold"
 						className="text-black dark:text-white"
 					>
-						{context === "funnel" ? "Resources" : "Library"}
+						{context === "funnel" ? "Merchant Market Stall" : "Warehouse"}
 					</Heading>
 				</div>
 			</div>
@@ -158,7 +158,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 											: "group-hover:rotate-12"
 									}`}
 								/>
-								Create Resource
+								Create Digital Asset
 							</Button>
 						)
 					)}

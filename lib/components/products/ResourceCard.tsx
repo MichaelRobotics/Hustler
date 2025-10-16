@@ -250,7 +250,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						onChange={(e) =>
 							setEditedResource({ ...editedResource, name: e.target.value })
 						}
-						placeholder="Resource name..."
+						placeholder="Digital Asset name"
 						disabled={isSaving}
 						className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
 							editedResource.name && 
@@ -284,7 +284,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						onChange={(e) =>
 							setEditedResource({ ...editedResource, link: e.target.value })
 						}
-						placeholder="Resource URL..."
+						placeholder="Digital asset URL"
 						disabled={isSaving}
 						className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 					/>

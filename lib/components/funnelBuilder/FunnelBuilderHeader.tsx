@@ -49,7 +49,7 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 						weight="bold"
 						className="text-black dark:text-white"
 					>
-						Funnel Builder
+						Merchant Conversation Editor
 					</Heading>
 				</div>
 			</div>

@@ -22,7 +22,7 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels }: Ad
 						weight="bold"
 						className="text-black dark:text-white"
 					>
-						My Funnels
+						My Merchants
 					</Heading>
 				</div>
 			</div>
@@ -58,7 +58,7 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels }: Ad
 								strokeWidth={2.5}
 								className="group-hover:rotate-12 transition-transform duration-300"
 							/>
-							<span className="ml-1">Create New Funnel</span>
+							<span className="ml-1">Create Merchant</span>
 						</Button>
 					)}
 				</div>

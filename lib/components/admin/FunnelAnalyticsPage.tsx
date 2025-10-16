@@ -128,7 +128,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 										weight="bold"
 										className="text-black dark:text-white"
 									>
-										Analytics
+										Merchant Analytics
 									</Heading>
 								</div>
 							</div>
@@ -159,7 +159,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 												strokeWidth={2.5}
 												className="group-hover:rotate-12 transition-transform duration-300"
 											/>
-											<span className="ml-2">Edit</span>
+											<span className="ml-2">Edit Merchant</span>
 										</Button>
 									</div>
 								)}
@@ -210,7 +210,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 										weight="bold"
 										className="text-red-800 dark:text-red-200 mb-2"
 									>
-										Error Loading Analytics
+										Error Loading Merchant Analytics
 									</Heading>
 									<Text
 										size="3"
@@ -233,7 +233,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 										weight="bold"
 										className="text-gray-800 dark:text-gray-200 mb-2"
 									>
-										No Analytics Available
+										No Merchant Analytics Available
 									</Heading>
 									<Text
 										size="3"
@@ -248,14 +248,14 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 										color="gray"
 										className="text-gray-600 dark:text-gray-400"
 									>
-										Go to the Funnel Builder and click "Go Live" to start
+										Go to the Merchant Conversation Editor and click "Go Live" to start
 										collecting data.
 									</Text>
 								</div>
 							</div>
 						) : (
 							<>
-								{/* Analytics Components - Show if funnel was ever live OR if we have mock data */}
+								{/* Merchant Analytics Components - Show if funnel was ever live OR if we have mock data */}
 								{funnelStats && <FunnelAnalytics stats={funnelStats} />}
 
 								{/* Live Sales Indicator */}

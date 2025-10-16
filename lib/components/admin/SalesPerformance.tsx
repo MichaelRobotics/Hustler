@@ -24,8 +24,8 @@ const SalesPerformance: React.FC<SalesPerformanceProps> = ({ salesStats, isRefre
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				{/* My Product Sales Section */}
 				<SalesSection
-					title="My Products"
-					subtitle="Direct product sales"
+					title="My Digital Assets"
+					subtitle="My digital assets sales"
 					icon={<Package strokeWidth={2.5} />}
 					products={salesStats.myProducts}
 					total={salesStats.myProductsTotal}
@@ -35,8 +35,8 @@ const SalesPerformance: React.FC<SalesPerformanceProps> = ({ salesStats, isRefre
 
 				{/* Affiliate Sales Section */}
 				<SalesSection
-					title="Affiliate Sales"
-					subtitle="Partner product commissions"
+					title="Affiliate Digital Assets"
+					subtitle="Affiliate commissions on digital assets"
 					icon={<ExternalLink strokeWidth={2.5} />}
 					products={salesStats.affiliate}
 					total={salesStats.affiliateTotal}

@@ -180,7 +180,7 @@ const SalesSection: React.FC<SalesSectionProps> = ({
 				) : (
 					<div className={`bg-gradient-to-br ${colors.productBg} p-4 rounded-lg border ${colors.productBorder} text-center`}>
 						<Text size="1" color="gray" className="text-muted-foreground">
-							No products yet
+							No digital assets yet
 						</Text>
 					</div>
 				)}

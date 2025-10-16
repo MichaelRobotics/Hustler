@@ -28,7 +28,7 @@ export default function AddFunnelModal({
 					<div className="flex justify-between items-center mb-6">
 						<Dialog.Title asChild>
 							<Heading size="4" weight="bold" className="text-foreground">
-								Create New Funnel
+								Create Merchant
 							</Heading>
 						</Dialog.Title>
 						<Dialog.Close asChild>
