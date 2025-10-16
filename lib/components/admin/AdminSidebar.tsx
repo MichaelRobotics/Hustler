@@ -8,6 +8,7 @@ import {
 	Library,
 	MessageCircle,
 	Sparkles,
+	Store,
 	Users,
 	X,
 	Zap,
@@ -21,7 +22,8 @@ interface AdminSidebarProps {
 		| "resourceLibrary"
 		| "funnelBuilder"
 		| "preview"
-		| "liveChat";
+		| "liveChat"
+		| "store";
 	onViewChange: (
 		view:
 			| "dashboard"
@@ -29,7 +31,8 @@ interface AdminSidebarProps {
 			| "resourceLibrary"
 			| "funnelBuilder"
 			| "preview"
-			| "liveChat",
+			| "liveChat"
+			| "store",
 	) => void;
 	className?: string;
 	libraryContext?: "global" | "funnel";
@@ -67,6 +70,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 				isAnalyticsView: currentView === "analytics",
 				isFunnelBuilderView: currentView === "funnelBuilder",
 				isLiveChatView: currentView === "liveChat",
+				isStoreView: currentView === "store",
 			}),
 			[currentView],
 		);
@@ -79,7 +83,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 					| "resourceLibrary"
 					| "funnelBuilder"
 					| "preview"
-					| "liveChat",
+					| "liveChat"
+					| "store",
 			) => {
 				if (disabled) return; // Prevent navigation when disabled
 				onViewChange(view);
@@ -175,6 +180,28 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</Button>
 							</div>
+
+							{/* Store */}
+							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+								<Button
+									variant="ghost"
+									color={viewStates.isStoreView ? "violet" : "gray"}
+									onClick={() => handleViewChange("store")}
+									className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
+										viewStates.isStoreView
+											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
+											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
+									}`}
+									title="Store - Manage products and sales"
+								>
+									<div className="relative">
+										<Store size={20} strokeWidth={2} />
+									</div>
+									{viewStates.isStoreView && (
+										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
+									)}
+								</Button>
+							</div>
 						</div>
 					</div>
 				)}
@@ -259,6 +286,28 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
 									Chat
+								</Text>
+							</Button>
+
+							{/* Store */}
+							<Button
+								variant="ghost"
+								color={viewStates.isStoreView ? "violet" : "gray"}
+								onClick={() => handleViewChange("store")}
+								className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 min-h-[60px] ${
+									viewStates.isStoreView
+										? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
+										: "text-muted-foreground active:text-foreground active:bg-surface/80 dark:active:bg-surface/60"
+								}`}
+							>
+								<div className="relative mb-1">
+									<Store size={20} strokeWidth={2} />
+									{viewStates.isStoreView && (
+										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
+									)}
+								</div>
+								<Text size="1" weight="semi-bold" className="text-xs">
+									Store
 								</Text>
 							</Button>
 						</div>

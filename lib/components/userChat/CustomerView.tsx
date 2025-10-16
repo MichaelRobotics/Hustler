@@ -52,9 +52,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [adminError, setAdminError] = useState<string | null>(null);
 	const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
 	
-	// Iframe toggle state
-	const [showIframe, setShowIframe] = useState(true); // Start with iframe visible
-	const [showChat, setShowChat] = useState(false); // Start with iframe only (no chat)
+	// View mode state - single source of truth
+	type ViewMode = 'iframe-only' | 'chat-only' | 'split-view';
+	const [viewMode, setViewMode] = useState<ViewMode>('iframe-only'); // Start with iframe only
+	const [isTransitioning, setIsTransitioning] = useState(false); // Track view transitions
+	const [isMobile, setIsMobile] = useState(false); // Track mobile view
 	const [iframeError, setIframeError] = useState(false); // Track iframe loading errors
 	const [iframeLoaded, setIframeLoaded] = useState(false); // Track iframe load completion
 	const [overlayTransitioning, setOverlayTransitioning] = useState(false); // Track overlay transition
@@ -114,20 +116,69 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		},
 	});
 
-	// Toggle between iframe and chat
-	const toggleView = () => {
-		if (showIframe && showChat) {
-			// Currently half-and-half, toggle to show only iframe
-			setShowChat(false);
-		} else if (showIframe && !showChat) {
-			// Currently showing only iframe, toggle to show only chat
-			setShowIframe(false);
-			setShowChat(true);
-		} else if (!showIframe && showChat) {
-			// Currently showing only chat, toggle to half-and-half
-			setShowIframe(true);
-		}
-	};
+	// Unified view mode handler with predictable transitions
+	const handleViewToggle = useCallback(() => {
+		setIsTransitioning(true);
+		setViewMode(prev => {
+			if (isMobile) {
+				// Mobile: Chat icon switches directly to full UserChat
+				switch (prev) {
+					case 'iframe-only': return 'chat-only';        // Direct to full UserChat
+					case 'chat-only': return 'iframe-only';      // Back to iframe
+					default: return 'chat-only';
+				}
+			} else {
+				// Desktop: Normal 3-step cycle
+				switch (prev) {
+					case 'iframe-only': return 'split-view';
+					case 'split-view': return 'chat-only';
+					case 'chat-only': return 'split-view';
+					default: return 'split-view';
+				}
+			}
+		});
+		// Reset transition state after animation completes
+		setTimeout(() => setIsTransitioning(false), 300);
+	}, [isMobile]);
+
+	// Button click handler for VIP/GIFT buttons - 3-step cycle (2-step on mobile)
+	const handleButtonClick = useCallback(() => {
+		setIsTransitioning(true);
+		const currentMode = viewMode;
+		setViewMode(prev => {
+			if (isMobile) {
+				// Mobile: Skip half view, go directly to full UserChat
+				switch (prev) {
+					case 'iframe-only': return 'chat-only';        // 1st click: full UserChat
+					case 'chat-only': return 'iframe-only';      // 2nd click: collapse UserChat, reveal iframe
+					default: return 'chat-only';
+				}
+			} else {
+				// Desktop: Full 3-step cycle
+				switch (prev) {
+					case 'iframe-only': return 'split-view';      // 1st click: half view
+					case 'split-view': return 'chat-only';        // 2nd click: full UserChat
+					case 'chat-only': return 'iframe-only';      // 3rd click: collapse UserChat, reveal iframe
+					default: return 'split-view';
+				}
+			}
+		});
+		
+		// Longer transition for the collapse effect (3rd click on desktop, 2nd click on mobile)
+		const transitionDuration = currentMode === 'chat-only' ? 500 : 300;
+		setTimeout(() => setIsTransitioning(false), transitionDuration);
+	}, [viewMode, isMobile]);
+
+	// Mobile detection
+	useEffect(() => {
+		const checkMobile = () => {
+			setIsMobile(window.innerWidth < 768); // md breakpoint
+		};
+		
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+		return () => window.removeEventListener('resize', checkMobile);
+	}, []);
 
 	// Auto-scroll is now handled by iframe content
 
@@ -708,18 +759,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		{isFunnelActive && (
 		<div className="flex-1 flex justify-center">
 			<button
-					onClick={() => {
-						if (!showChat) {
-							setShowChat(true);
-							if (!showIframe) {
-								setShowIframe(true); // Half-and-half view
-							}
-						} else if (showIframe) {
-							setShowIframe(false); // Chat only
-						} else {
-							setShowIframe(true); // Half-and-half
-						}
-					}}
+					onClick={handleButtonClick}
 					className="relative inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group animate-pulse"
 					style={{ WebkitTapHighlightColor: "transparent" }}
 				>
@@ -852,30 +892,29 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 											? ((currentStageIndex + 1) / availableStages.length) * 100 
 											: 0;
 										return progressPercentage;
-									})()}%` 
+									})()}%`
 								}}
 							>
-								{/* Shine effect when finished */}
-								{(() => {
-									const stageOrder = [
-										{ key: "TRANSITION", name: "Getting Started" },
-										{ key: "WELCOME", name: "Welcome" },
-										{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-										{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-										{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-										{ key: "OFFER", name: "Offer" },
-									];
-									const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
-									const availableStages = stageOrder.filter(stage => 
-										funnelFlow.stages.some(s => s.name === stage.key)
-									);
-									const progressPercentage = availableStages.length > 0 
-										? ((currentStageIndex + 1) / availableStages.length) * 100 
-										: 0;
-									return progressPercentage >= 100;
-								})() && (
+								{/* Multiple Random Shining Spots - Sun/Lava Effect */}
+								<div className="absolute inset-0 overflow-hidden">
+									{/* Main shimmer wave */}
 									<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-pulse"></div>
-								)}
+									
+									{/* Random light spots - like sun rays */}
+									<div className="absolute top-0 left-1/4 w-2 h-full bg-gradient-to-b from-yellow-200 via-white to-yellow-200 opacity-60 animate-ping" style={{ animationDelay: '0s', animationDuration: '2s' }}></div>
+									<div className="absolute top-0 left-1/2 w-1 h-full bg-gradient-to-b from-amber-200 via-white to-amber-200 opacity-80 animate-ping" style={{ animationDelay: '0.5s', animationDuration: '1.5s' }}></div>
+									<div className="absolute top-0 left-3/4 w-1.5 h-full bg-gradient-to-b from-yellow-300 via-white to-yellow-300 opacity-70 animate-ping" style={{ animationDelay: '1s', animationDuration: '2.5s' }}></div>
+									<div className="absolute top-0 left-1/6 w-1 h-full bg-gradient-to-b from-amber-300 via-white to-amber-300 opacity-50 animate-ping" style={{ animationDelay: '1.5s', animationDuration: '1.8s' }}></div>
+									<div className="absolute top-0 left-5/6 w-1.5 h-full bg-gradient-to-b from-yellow-400 via-white to-yellow-400 opacity-60 animate-ping" style={{ animationDelay: '2s', animationDuration: '2.2s' }}></div>
+									
+									{/* Lava-like bubbling effect */}
+									<div className="absolute top-0 left-1/3 w-1 h-full bg-gradient-to-b from-orange-300 via-yellow-200 to-transparent opacity-40 animate-bounce" style={{ animationDelay: '0.3s', animationDuration: '1.2s' }}></div>
+									<div className="absolute top-0 left-2/3 w-1 h-full bg-gradient-to-b from-red-300 via-yellow-300 to-transparent opacity-35 animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '1.6s' }}></div>
+									
+									{/* Glowing particles */}
+									<div className="absolute top-0 left-1/5 w-0.5 h-full bg-white opacity-90 animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '0.8s' }}></div>
+									<div className="absolute top-0 left-4/5 w-0.5 h-full bg-white opacity-75 animate-pulse" style={{ animationDelay: '0.7s', animationDuration: '1.1s' }}></div>
+								</div>
 							</div>
 						</div>
 
@@ -958,24 +997,22 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		</div>
 
 		{/* Main Content Area with Toggle Functionality */}
-		<div className="h-[calc(100vh-120px)] w-full relative flex flex-col">
-				{/* Iframe Section */}
-				<div className={`transition-all duration-300 ease-in-out ${
-					showIframe ? (showChat ? 'h-1/2' : 'h-full') : 'h-20 overflow-hidden'
-				} ${showIframe && !showChat ? 'fixed top-0 left-0 w-full h-screen z-10' : 'relative'}`}>
+		<div className="h-[calc(100vh-120px)] w-full relative flex flex-col overflow-hidden">
+			{/* Iframe Section - Enhanced reveal animation */}
+			<div className={`transition-all duration-500 ease-in-out ${
+				viewMode === 'iframe-only' ? 'h-full transform scale-y-100 origin-top' :
+				viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-top' : 'h-0 overflow-hidden transform scale-y-0 origin-top'
+			} ${viewMode === 'iframe-only' ? 'fixed top-0 left-0 w-full h-screen z-10' : 'relative z-0'}`}>
 					<div 
-						className={`h-full w-full relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 cursor-pointer ${showIframe && !showChat ? 'h-screen' : ''}`}
+						className={`h-full w-full relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 cursor-pointer ${viewMode === 'iframe-only' ? 'h-screen' : ''}`}
 						onClick={() => {
-							if (!showIframe) {
-								setShowIframe(true);
-								if (!showChat) {
-									setShowChat(true); // Half-and-half view
-								}
+							if (viewMode === 'chat-only') {
+								setViewMode('split-view');
 							}
 						}}
 					>
 						{/* Discovery Page Content - Using Proxy */}
-						<div className={`${showIframe && !showChat ? 'h-screen' : 'h-full'}`}>
+						<div className={`${viewMode === 'iframe-only' ? 'h-screen' : 'h-full'}`}>
 							{/* Proxy iframe to bypass same-origin restrictions */}
 					{iframeUrl ? (
 						<iframe
@@ -1067,10 +1104,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						</div>
 
 						{/* Chat Icon - Above bottom of iframe page */}
-						{!showChat && isFunnelActive && (
+						{viewMode === 'iframe-only' && isFunnelActive && (
 							<div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
 								<button
-									onClick={toggleView}
+									onClick={handleViewToggle}
 									className="relative w-10 h-10 bg-gradient-to-r from-yellow-500 via-amber-600 to-yellow-700 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group"
 									title="Switch to Half-and-Half"
 									style={{ WebkitTapHighlightColor: "transparent" }}
@@ -1093,21 +1130,25 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				</div>
 
 			{/* Toggle Button - Line only (no chat icon) */}
-			{isFunnelActive && (
-			<div className="absolute left-1/2 transform -translate-x-1/2 z-10">
-				<div 
-					className="h-1 w-16 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 cursor-pointer hover:bg-gradient-to-r hover:from-blue-200 hover:to-blue-300 dark:hover:from-blue-700 dark:hover:to-blue-600 transition-all duration-200"
-					onClick={toggleView}
-				></div>
-			</div>
-			)}
 
-			{/* Chat Section */}
-			<div className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
-				showChat ? (showIframe ? 'h-1/2' : 'h-full') : 'h-0 overflow-hidden'
-			} overflow-hidden`}>
+			{/* Chat Section - Enhanced collapse animation */}
+			<div className={`transition-all duration-500 ease-in-out flex-shrink-0 ${
+				viewMode === 'iframe-only' ? 'h-0 overflow-hidden transform scale-y-0 origin-top' :
+				viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-top' : 'h-full transform scale-y-100 origin-top'
+			} ${isTransitioning ? 'overflow-hidden' : 'overflow-hidden'} relative z-10`}>
+				{/* Beautiful Golden Separator Line - Only on desktop */}
+				{viewMode === 'split-view' && !isMobile && (
+					<div className="absolute top-0 left-0 right-0 z-20">
+						{/* Main golden line */}
+						<div className="h-1 bg-gradient-to-r from-transparent via-yellow-400 via-amber-500 to-transparent shadow-lg shadow-yellow-500/30"></div>
+						{/* Subtle glow effect */}
+						<div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-300 via-amber-400 to-transparent opacity-60 blur-sm"></div>
+						{/* Animated shimmer effect */}
+						<div className="h-0.5 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-pulse"></div>
+					</div>
+				)}
 				{shouldShowUserChat && funnelFlow ? (
-						<div className="relative h-full w-full">
+						<div className={`relative h-full w-full ${isTransitioning ? 'pointer-events-none' : ''} ${viewMode === 'split-view' && !isMobile ? 'border-t border-yellow-500/20' : ''}`}>
 					<UserChat
 						funnelFlow={funnelFlow}
 						conversationId={conversationId || undefined}
