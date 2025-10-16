@@ -101,7 +101,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 					>
 						{/* Desktop Navigation - Icons Only */}
 						<div className="pt-12 px-4 space-y-8">
-							{/* Automations - Default Dashboard */}
+							{/* Merchants - Default Dashboard */}
 							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 								<Button
 									variant="ghost"
@@ -212,7 +212,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 						className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? "hidden" : "block"}`}
 					>
 						<div className="flex items-center justify-around px-4 py-3">
-							{/* Automations */}
+							{/* Merchants */}
 							<Button
 								variant="ghost"
 								color={viewStates.isDashboardView ? "violet" : "gray"}
@@ -230,7 +230,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
-									Automations
+									Merchants
 								</Text>
 							</Button>
 
