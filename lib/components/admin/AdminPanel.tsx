@@ -50,7 +50,8 @@ type View =
 	| "resourceLibrary"
 	| "funnelBuilder"
 	| "preview"
-	| "liveChat";
+	| "liveChat"
+	| "store";
 
 interface AdminPanelProps {
 	user: AuthenticatedUser | null;

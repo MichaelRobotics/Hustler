@@ -22,7 +22,8 @@ type View =
 	| "resourceLibrary"
 	| "funnelBuilder"
 	| "preview"
-	| "liveChat";
+	| "liveChat"
+	| "store";
 
 export function useViewNavigation() {
 	const [currentView, setCurrentView] = useState<View>("dashboard");
