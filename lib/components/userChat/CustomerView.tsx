@@ -80,14 +80,55 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// Theme and WebSocket state
 	const { appearance, toggleTheme } = useTheme();
 	
-	// Programmatic theme switch during loading
+	// Programmatic theme switch during loading - use multiple approaches
 	useEffect(() => {
 		if (isLoading && !urlLoaded) {
 			// Trigger theme switch once during "Calling for Merchant" loading
 			const timer = setTimeout(() => {
 				console.log("🎨 [CustomerView] Programmatic theme switch triggered during loading");
+				
+				// Method 1: Direct toggleTheme call
 				toggleTheme();
-			}, 1000); // 1 second delay to ensure loading screen is visible
+				
+				// Method 2: Find and click theme toggle button with multiple selectors
+				const selectors = [
+					'[data-theme-toggle="true"]',
+					'button[title*="Switch to"]',
+					'button[title*="mode"]',
+					'button[aria-label*="theme"]',
+					'button[aria-label*="dark"]',
+					'button[aria-label*="light"]'
+				];
+				
+				for (const selector of selectors) {
+					const themeButton = document.querySelector(selector);
+					if (themeButton) {
+						console.log("🎨 [CustomerView] Found theme button with selector:", selector);
+						(themeButton as HTMLButtonElement).click();
+						break;
+					}
+				}
+				
+				// Method 3: Try to find button by icon content
+				const buttons = document.querySelectorAll('button');
+				for (const button of buttons) {
+					const hasSunIcon = button.querySelector('svg[data-lucide="sun"]') || button.innerHTML.includes('sun');
+					const hasMoonIcon = button.querySelector('svg[data-lucide="moon"]') || button.innerHTML.includes('moon');
+					if (hasSunIcon || hasMoonIcon) {
+						console.log("🎨 [CustomerView] Found theme button by icon");
+						button.click();
+						break;
+					}
+				}
+				
+				// Method 4: Force theme change via localStorage
+				const currentTheme = localStorage.getItem('theme') || 'light';
+				const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+				localStorage.setItem('theme', newTheme);
+				document.documentElement.classList.toggle('dark', newTheme === 'dark');
+				console.log("🎨 [CustomerView] Forced theme change via localStorage:", newTheme);
+				
+			}, 300); // Even faster response
 			
 			return () => clearTimeout(timer);
 		}
