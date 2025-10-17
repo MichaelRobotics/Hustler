@@ -79,6 +79,20 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// Theme and WebSocket state
 	const { appearance, toggleTheme } = useTheme();
+	
+	// Programmatic theme switch during loading
+	useEffect(() => {
+		if (isLoading && !urlLoaded) {
+			// Trigger theme switch once during "Calling for Merchant" loading
+			const timer = setTimeout(() => {
+				console.log("🎨 [CustomerView] Programmatic theme switch triggered during loading");
+				toggleTheme();
+			}, 1000); // 1 second delay to ensure loading screen is visible
+			
+			return () => clearTimeout(timer);
+		}
+	}, [isLoading, urlLoaded, toggleTheme]);
+	
 	const { isConnected } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
