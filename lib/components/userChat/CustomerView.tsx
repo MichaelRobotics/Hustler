@@ -79,54 +79,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// Theme and WebSocket state
 	const { appearance, toggleTheme } = useTheme();
-	
-	// Programmatic theme switch during loading - use React state only
-	useEffect(() => {
-		if (isLoading && !urlLoaded) {
-			// Trigger theme switch once during "Calling for Merchant" loading
-			const timer = setTimeout(() => {
-				console.log("🎨 [CustomerView] Programmatic theme switch triggered during loading");
-				
-				// Method 1: Direct toggleTheme call (React state)
-				toggleTheme();
-				
-				// Method 2: Find and click theme toggle button with multiple selectors
-				const selectors = [
-					'[data-theme-toggle="true"]',
-					'button[title*="Switch to"]',
-					'button[title*="mode"]',
-					'button[aria-label*="theme"]',
-					'button[aria-label*="dark"]',
-					'button[aria-label*="light"]'
-				];
-				
-				for (const selector of selectors) {
-					const themeButton = document.querySelector(selector);
-					if (themeButton) {
-						console.log("🎨 [CustomerView] Found theme button with selector:", selector);
-						(themeButton as HTMLButtonElement).click();
-						break;
-					}
-				}
-				
-				// Method 3: Try to find button by icon content
-				const buttons = document.querySelectorAll('button');
-				for (const button of buttons) {
-					const hasSunIcon = button.querySelector('svg[data-lucide="sun"]') || button.innerHTML.includes('sun');
-					const hasMoonIcon = button.querySelector('svg[data-lucide="moon"]') || button.innerHTML.includes('moon');
-					if (hasSunIcon || hasMoonIcon) {
-						console.log("🎨 [CustomerView] Found theme button by icon");
-						button.click();
-						break;
-					}
-				}
-				
-			}, 300); // Fast response
-			
-			return () => clearTimeout(timer);
-		}
-	}, [isLoading, urlLoaded, toggleTheme]);
-	
 	const { isConnected } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
@@ -958,6 +910,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									{/* Lava-like bubbling effect */}
 									<div className="absolute top-0 left-1/3 w-1 h-full bg-gradient-to-b from-orange-300 via-yellow-200 to-transparent opacity-40 animate-bounce" style={{ animationDelay: '0.3s', animationDuration: '1.2s' }}></div>
 									<div className="absolute top-0 left-2/3 w-1 h-full bg-gradient-to-b from-red-300 via-yellow-300 to-transparent opacity-35 animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '1.6s' }}></div>
+									
+									{/* Glowing particles */}
+									<div className="absolute top-0 left-1/5 w-0.5 h-full bg-white opacity-90 animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '0.8s' }}></div>
+									<div className="absolute top-0 left-4/5 w-0.5 h-full bg-white opacity-75 animate-pulse" style={{ animationDelay: '0.7s', animationDuration: '1.1s' }}></div>
 								</div>
 							</div>
 						</div>
@@ -1070,6 +1026,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						onLoad={() => {
 							console.log('Discovery page loaded successfully via proxy');
 							setIframeError(false);
+							
+							// Trigger theme switch click after iframe loads
+							setTimeout(() => {
+								console.log('🎨 Triggering theme switch click...');
+								toggleTheme();
+							}, 500); // Small delay to ensure iframe is fully loaded
+							
 							// Start fast blur transition
 							setTimeout(() => {
 								setOverlayTransitioning(true);

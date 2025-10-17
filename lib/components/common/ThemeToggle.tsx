@@ -17,7 +17,6 @@ export function ThemeToggle() {
 			title={
 				appearance === "dark" ? "Switch to light mode" : "Switch to dark mode"
 			}
-			data-theme-toggle="true"
 		>
 			{appearance === "dark" ? (
 				<Sun className="h-5 w-5" />
