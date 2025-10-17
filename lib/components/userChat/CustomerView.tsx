@@ -80,14 +80,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// Theme and WebSocket state
 	const { appearance, toggleTheme } = useTheme();
 	
-	// Programmatic theme switch during loading - use multiple approaches
+	// Programmatic theme switch during loading - use React state only
 	useEffect(() => {
 		if (isLoading && !urlLoaded) {
 			// Trigger theme switch once during "Calling for Merchant" loading
 			const timer = setTimeout(() => {
 				console.log("🎨 [CustomerView] Programmatic theme switch triggered during loading");
 				
-				// Method 1: Direct toggleTheme call
+				// Method 1: Direct toggleTheme call (React state)
 				toggleTheme();
 				
 				// Method 2: Find and click theme toggle button with multiple selectors
@@ -121,14 +121,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					}
 				}
 				
-				// Method 4: Force theme change via localStorage
-				const currentTheme = localStorage.getItem('theme') || 'light';
-				const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-				localStorage.setItem('theme', newTheme);
-				document.documentElement.classList.toggle('dark', newTheme === 'dark');
-				console.log("🎨 [CustomerView] Forced theme change via localStorage:", newTheme);
-				
-			}, 300); // Even faster response
+			}, 300); // Fast response
 			
 			return () => clearTimeout(timer);
 		}
