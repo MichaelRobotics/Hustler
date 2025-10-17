@@ -1124,7 +1124,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									<span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
 									
 									{/* Content */}
-									<MessageCircle className="w-5 h-5 text-white relative z-10" />
+									{/* MessageCircle with 3 dots inside */}
+									<div className="w-5 h-5 text-white relative z-10">
+										<MessageCircle className="w-5 h-5 text-white" />
+										{/* 3 Dots inside the circle */}
+										<div className="absolute inset-0 flex items-center justify-center">
+											<div className="flex space-x-0.5">
+												<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+												<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+												<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+											</div>
+										</div>
+									</div>
 									
 									{/* Glow effect */}
 									<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-700 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
