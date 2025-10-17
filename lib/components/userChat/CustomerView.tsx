@@ -128,11 +128,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					default: return 'chat-only';
 				}
 			} else {
-				// Desktop: Normal 3-step cycle
+				// Desktop: Only switch between iframe and half view
 				switch (prev) {
 					case 'iframe-only': return 'split-view';
-					case 'split-view': return 'chat-only';
-					case 'chat-only': return 'split-view';
+					case 'split-view': return 'iframe-only';
 					default: return 'split-view';
 				}
 			}
@@ -154,18 +153,17 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					default: return 'chat-only';
 				}
 			} else {
-				// Desktop: Full 3-step cycle
+				// Desktop: Only switch between iframe and half view
 				switch (prev) {
 					case 'iframe-only': return 'split-view';      // 1st click: half view
-					case 'split-view': return 'chat-only';        // 2nd click: full UserChat
-					case 'chat-only': return 'iframe-only';      // 3rd click: collapse UserChat, reveal iframe
+					case 'split-view': return 'iframe-only';      // 2nd click: back to iframe
 					default: return 'split-view';
 				}
 			}
 		});
 		
-		// Longer transition for the collapse effect (3rd click on desktop, 2nd click on mobile)
-		const transitionDuration = currentMode === 'chat-only' ? 500 : 300;
+		// Transition duration - match CSS animation duration
+		const transitionDuration = 300;
 		setTimeout(() => setIsTransitioning(false), transitionDuration);
 	}, [viewMode, isMobile]);
 
@@ -1139,10 +1137,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			{/* Toggle Button - Line only (no chat icon) */}
 
 			{/* Chat Section - Enhanced collapse animation */}
-			<div className={`transition-all duration-500 ease-in-out flex-shrink-0 ${
-				viewMode === 'iframe-only' ? 'h-0 overflow-hidden transform scale-y-0 origin-top' :
-				viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-top' : 'h-full transform scale-y-100 origin-top'
-			} ${isTransitioning ? 'overflow-hidden' : 'overflow-hidden'} relative z-10`}>
+			<div className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
+				viewMode === 'iframe-only' ? 'h-0 overflow-hidden transform scale-y-0 origin-bottom' :
+				viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-bottom' : 'h-full transform scale-y-100 origin-bottom'
+			} ${isTransitioning ? 'overflow-hidden' : 'overflow-hidden'} ${
+				viewMode === 'iframe-only' ? 'absolute bottom-0 left-0 right-0 z-10' : 'relative z-10'
+			}`}>
 				{/* Beautiful Golden Separator Line - Only on desktop */}
 				{viewMode === 'split-view' && !isMobile && (
 					<div className="absolute top-0 left-0 right-0 z-20">
