@@ -229,6 +229,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		currentView,
 		setCurrentView,
 		handleViewChange: navigationHandleViewChange,
+		handleLibraryIconClick: navigationHandleLibraryIconClick,
 		onFunnelClick: navigationOnFunnelClick,
 		handleManageResources: navigationHandleManageResources,
 		handleBackToDashboard: navigationBackToDashboard,
@@ -252,6 +253,17 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			setLibraryContext,
 			setSelectedFunnelForLibrary,
 		],
+	);
+
+	const handleLibraryIconClick = useCallback(
+		() => {
+			navigationHandleLibraryIconClick(
+				currentView,
+				setLibraryContext,
+				setSelectedFunnelForLibrary,
+			);
+		},
+		[navigationHandleLibraryIconClick, currentView, setLibraryContext, setSelectedFunnelForLibrary],
 	);
 
 	const handleAddFunnelWithNavigation = useCallback(async () => {
@@ -294,10 +306,13 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		(funnel: Funnel) => {
 			const targetView = handleManageResources(funnel);
 			if (targetView) {
+				// Set funnel context for resource library
+				setLibraryContext("funnel");
+				setSelectedFunnelForLibrary(funnel);
 				setCurrentView(targetView as View);
 			}
 		},
-		[handleManageResources, setCurrentView],
+		[handleManageResources, setCurrentView, setLibraryContext, setSelectedFunnelForLibrary],
 	);
 
 	const handleOpenResourceLibraryWithNavigation = useCallback(() => {
@@ -549,6 +564,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						<AdminSidebar
 							currentView={currentView}
 							onViewChange={handleViewChange}
+							onLibraryIconClick={handleLibraryIconClick}
 							className="flex-shrink-0 h-full"
 							libraryContext={libraryContext}
 							currentFunnelForLibrary={selectedFunnelForLibrary}
@@ -778,6 +794,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						<AdminSidebar
 							currentView={currentView}
 							onViewChange={handleViewChange}
+							onLibraryIconClick={handleLibraryIconClick}
 							className="flex-shrink-0 h-full"
 							libraryContext={libraryContext}
 							currentFunnelForLibrary={selectedFunnelForLibrary}
@@ -827,6 +844,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		return (
 			<PreviewPage
 				funnel={selectedFunnel}
+				experienceId={user?.experienceId}
 				onBack={handleBackFromPreview}
 				sourcePage={previewSource}
 			/>
@@ -861,6 +879,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 					<AdminSidebar
 						currentView={currentView}
 						onViewChange={handleViewChange}
+						onLibraryIconClick={handleLibraryIconClick}
 						className="flex-shrink-0 h-full"
 						libraryContext={libraryContext}
 						currentFunnelForLibrary={selectedFunnelForLibrary}

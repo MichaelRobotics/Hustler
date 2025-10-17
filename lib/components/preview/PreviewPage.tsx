@@ -15,6 +15,7 @@ interface Funnel {
 
 interface PreviewPageProps {
 	funnel: Funnel;
+	experienceId?: string;
 	onBack: () => void;
 	sourcePage?: "resources" | "funnelBuilder" | "analytics" | "resourceLibrary";
 }
@@ -28,6 +29,7 @@ interface PreviewPageProps {
  */
 const PreviewPage: React.FC<PreviewPageProps> = ({
 	funnel,
+	experienceId,
 	onBack,
 	sourcePage = "resources",
 }) => {
@@ -51,6 +53,8 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
 	return (
 		<PreviewChat
 			funnelFlow={funnelFlow}
+			resources={funnel.resources || []}
+			experienceId={experienceId}
 			onMessageSent={handleMessageSent}
 			onBack={onBack}
 			hideAvatar={false}

@@ -25,12 +25,14 @@ interface FunnelProgressBarProps {
 		blockIds: string[];
 	}>;
 	onStageUpdate?: (newStage: string) => void;
+	isCompleted?: boolean;
 }
 
 export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 	currentStage,
 	stages,
 	onStageUpdate,
+	isCompleted = false,
 }) => {
 	// Define stage order with simple, clear names
 	const stageOrder = [
@@ -77,9 +79,11 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 	);
 
 	// Calculate progress percentage
-	const progressPercentage = availableStages.length > 0 
-		? ((currentStageIndex + 1) / availableStages.length) * 100 
-		: 0;
+	const progressPercentage = isCompleted 
+		? 100 // Show full completion when conversation is done
+		: availableStages.length > 0 
+			? ((currentStageIndex + 1) / availableStages.length) * 100 
+			: 0;
 
 	// Get stage display name
 	const getStageDisplayName = (stageKey: string) => {

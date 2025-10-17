@@ -279,7 +279,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const {
 		handleOptionClick: previewHandleOptionClick,
 		handleCustomInput: previewHandleCustomInput,
-	} = useFunnelPreviewChat(funnelFlow, undefined, conversation);
+	} = useFunnelPreviewChat(funnelFlow, undefined, undefined, conversation);
 
 	// Direct handlers - no callbacks for maximum performance
 	const handleSubmit = async (e?: React.FormEvent) => {
@@ -1019,6 +1019,178 @@ const UserChat: React.FC<UserChatProps> = ({
 
 					<div ref={chatEndRef} />
 				</div>
+
+				{/* Progress Bar - Separate element like separation line */}
+				{userType === "admin" && stageInfo && funnelFlow && (
+					<div className="px-4 py-3 border-t border-border/20 dark:border-border/10">
+						{/* Completion Percentage - Above progress bar */}
+						<div className="flex justify-center mb-3">
+							<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
+								{(() => {
+									const stageOrder = [
+										{ key: "TRANSITION", name: "Getting Started" },
+										{ key: "WELCOME", name: "Welcome" },
+										{ key: "VALUE_DELIVERY", name: "Value Delivery" },
+										{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
+										{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
+										{ key: "OFFER", name: "Offer" },
+									];
+									const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
+									const availableStages = stageOrder.filter(stage => 
+										funnelFlow.stages.some(s => s.name === stage.key)
+									);
+									const progressPercentage = availableStages.length > 0 
+										? ((currentStageIndex + 1) / availableStages.length) * 100 
+										: 0;
+									return Math.round(progressPercentage);
+								})()}%
+							</span>
+						</div>
+						<div className="relative w-full">
+							{/* Background Track - Smooth and subtle */}
+							<div className="w-full bg-gray-200/30 dark:bg-gray-600/30 rounded-full h-1">
+								<div
+									className={`h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden ${
+										(() => {
+											const stageOrder = [
+												{ key: "TRANSITION", name: "Getting Started" },
+												{ key: "WELCOME", name: "Welcome" },
+												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
+												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
+												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
+												{ key: "OFFER", name: "Offer" },
+											];
+											const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
+											const availableStages = stageOrder.filter(stage => 
+												funnelFlow.stages.some(s => s.name === stage.key)
+											);
+											const progressPercentage = availableStages.length > 0 
+												? ((currentStageIndex + 1) / availableStages.length) * 100 
+												: 0;
+											return progressPercentage >= 100;
+										})()
+											? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600' 
+											: 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
+									}`}
+									style={{ 
+										width: `${(() => {
+											const stageOrder = [
+												{ key: "TRANSITION", name: "Getting Started" },
+												{ key: "WELCOME", name: "Welcome" },
+												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
+												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
+												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
+												{ key: "OFFER", name: "Offer" },
+											];
+											const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
+											const availableStages = stageOrder.filter(stage => 
+												funnelFlow.stages.some(s => s.name === stage.key)
+											);
+											const progressPercentage = availableStages.length > 0 
+												? ((currentStageIndex + 1) / availableStages.length) * 100 
+												: 0;
+											return progressPercentage;
+										})()}%`
+									}}
+								>
+									{/* Multiple Random Shining Spots - Sun/Lava Effect */}
+									<div className="absolute inset-0 overflow-hidden">
+										{/* Main shimmer wave */}
+										<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-pulse"></div>
+										
+										{/* Random light spots - like sun rays */}
+										<div className="absolute top-0 left-1/4 w-2 h-full bg-gradient-to-b from-yellow-200 via-white to-yellow-200 opacity-60 animate-ping" style={{ animationDelay: '0s', animationDuration: '2s' }}></div>
+										<div className="absolute top-0 left-1/2 w-1 h-full bg-gradient-to-b from-amber-200 via-white to-amber-200 opacity-80 animate-ping" style={{ animationDelay: '0.5s', animationDuration: '1.5s' }}></div>
+										<div className="absolute top-0 left-3/4 w-1.5 h-full bg-gradient-to-b from-yellow-300 via-white to-yellow-300 opacity-70 animate-ping" style={{ animationDelay: '1s', animationDuration: '2.5s' }}></div>
+										<div className="absolute top-0 left-1/6 w-1 h-full bg-gradient-to-b from-amber-300 via-white to-amber-300 opacity-50 animate-ping" style={{ animationDelay: '1.5s', animationDuration: '1.8s' }}></div>
+										<div className="absolute top-0 left-5/6 w-1.5 h-full bg-gradient-to-b from-yellow-400 via-white to-yellow-400 opacity-60 animate-ping" style={{ animationDelay: '2s', animationDuration: '2.2s' }}></div>
+										
+										{/* Lava-like bubbling effect */}
+										<div className="absolute top-0 left-1/3 w-1 h-full bg-gradient-to-b from-orange-300 via-yellow-200 to-transparent opacity-40 animate-bounce" style={{ animationDelay: '0.3s', animationDuration: '1.2s' }}></div>
+										<div className="absolute top-0 left-2/3 w-1 h-full bg-gradient-to-b from-red-300 via-yellow-300 to-transparent opacity-35 animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '1.6s' }}></div>
+										
+										{/* Glowing particles */}
+										<div className="absolute top-0 left-1/5 w-0.5 h-full bg-white opacity-90 animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '0.8s' }}></div>
+										<div className="absolute top-0 left-4/5 w-0.5 h-full bg-white opacity-75 animate-pulse" style={{ animationDelay: '0.7s', animationDuration: '1.1s' }}></div>
+									</div>
+								</div>
+							</div>
+
+							{/* Completion Button - Centered with Faded Background (when progress is 100%) */}
+							{(() => {
+								const stageOrder = [
+									{ key: "TRANSITION", name: "Getting Started" },
+									{ key: "WELCOME", name: "Welcome" },
+									{ key: "VALUE_DELIVERY", name: "Value Delivery" },
+									{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
+									{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
+									{ key: "OFFER", name: "Offer" },
+								];
+								const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
+								const availableStages = stageOrder.filter(stage => 
+									funnelFlow.stages.some(s => s.name === stage.key)
+								);
+								const progressPercentage = availableStages.length > 0 
+									? ((currentStageIndex + 1) / availableStages.length) * 100 
+									: 0;
+								return progressPercentage >= 100;
+							})() && (
+								<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+									{/* Faded Background Line */}
+									<div className="absolute inset-0 flex items-center">
+										<div className="w-full h-px bg-gray-200/50 dark:bg-gray-600/50 opacity-50"></div>
+									</div>
+									
+									{/* Smooth completion button */}
+									<button
+										onClick={() => {
+											// Scroll to offer button with better detection
+											const selectors = [
+												'[data-href*="app="]', // Affiliate links
+												'.animated-gold-button', // Gold offer buttons
+												'[class*="Get Started"]', // Get Started buttons
+												'[class*="Claim"]', // Claim buttons
+												'button[class*="gold"]', // Gold buttons
+												'a[href*="app="]', // Affiliate links
+												'[class*="offer-button"]', // Offer buttons
+												'[class*="cta"]', // Call-to-action buttons
+											];
+											
+											let offerButton = null;
+											for (const selector of selectors) {
+												offerButton = document.querySelector(selector);
+												if (offerButton) break;
+											}
+											
+											if (offerButton) {
+												offerButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+											} else {
+												// Fallback: scroll to bottom of chat
+												window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+											}
+										}}
+										className="relative inline-flex items-center justify-center px-3 py-1 text-xs font-medium text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full shadow-md hover:shadow-lg active:scale-95 overflow-hidden group"
+									>
+										{/* Animated background overlay */}
+										<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-500 via-amber-600 to-yellow-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+										
+										{/* Shimmer effect */}
+										<span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
+										
+										{/* Content */}
+										<span className="relative flex items-center space-x-1 z-10">
+											<span>✨</span>
+											<span>Exclusive</span>
+										</span>
+										
+										{/* Glow effect */}
+										<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
+									</button>
+								</div>
+							)}
+						</div>
+					</div>
+				)}
 
 				{/* Input Area - Now below the overflow container */}
 				{currentBlockId && (

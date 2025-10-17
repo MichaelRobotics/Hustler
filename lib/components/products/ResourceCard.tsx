@@ -9,9 +9,11 @@ import {
 	X,
 	DollarSign,
 	Gift,
+	CheckCircle,
 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { canAssignResource } from "../../helpers/product-limits";
 import type { Funnel, Resource } from "../../types/resource";
 
@@ -53,7 +55,12 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
-	const [isAssigning, setIsAssigning] = useState(false);
+	const [isAdding, setIsAdding] = useState(false);
+	const [isRemovingState, setIsRemovingState] = useState(false);
+	const [isJustAdded, setIsJustAdded] = useState(false);
+	const [isJustRemoved, setIsJustRemoved] = useState(false);
+	const [showAddPopup, setShowAddPopup] = useState(false);
+	const [showRemovePopup, setShowRemovePopup] = useState(false);
 	const [editedResource, setEditedResource] =
 		useState<Partial<Resource>>(resource);
 	const getCategoryIcon = (category: string) => {
@@ -138,28 +145,54 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			return; // Silently return if limit reached
 		}
 
-		setIsAssigning(true);
+		setIsAdding(true);
 		try {
 			onAddToFunnel(resource);
-			// Reset assigning state after a short delay
-			setTimeout(() => setIsAssigning(false), 1000);
+			
+			// Show success animation and popup
+			setIsJustAdded(true);
+			setShowAddPopup(true);
+			
+			// Reset states after animations
+			setTimeout(() => {
+				setIsAdding(false);
+				setIsJustAdded(false);
+			}, 2000);
+			
+			// Hide popup after 3 seconds
+			setTimeout(() => {
+				setShowAddPopup(false);
+			}, 3000);
 		} catch (error) {
 			// Silently handle errors - no user feedback
-			setIsAssigning(false);
+			setIsAdding(false);
 		}
 	};
 
 	const handleUnassignFromFunnel = () => {
 		if (!onRemoveFromFunnel || !funnel) return;
 
-		setIsAssigning(true);
+		setIsRemovingState(true);
 		try {
 			onRemoveFromFunnel(resource);
-			// Reset assigning state after a short delay
-			setTimeout(() => setIsAssigning(false), 1000);
+			
+			// Show success animation and popup for removal
+			setIsJustRemoved(true);
+			setShowRemovePopup(true);
+			
+			// Reset states after animations
+			setTimeout(() => {
+				setIsRemovingState(false);
+				setIsJustRemoved(false);
+			}, 2000);
+			
+			// Hide popup after 3 seconds
+			setTimeout(() => {
+				setShowRemovePopup(false);
+			}, 3000);
 		} catch (error) {
 			// Silently handle errors - no user feedback
-			setIsAssigning(false);
+			setIsRemovingState(false);
 		}
 	};
 
@@ -309,7 +342,13 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	}
 
 	return (
-		<div className="group bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 p-4 rounded-xl border border-border/50 dark:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300">
+		<div className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 p-4 rounded-xl border transition-all duration-300 ${
+			isJustAdded 
+				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40" 
+				: isJustRemoved
+				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40"
+				: "border-border/50 dark:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10"
+		}`}>
 			<div className="flex items-start justify-between mb-3">
 				<div className="flex items-center gap-2">
 					{getCategoryIcon(resource.category)}
@@ -339,13 +378,19 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 								(isResourceInFunnel(resource.id) ? (
 									<Button
 										size="1"
-										color="red"
+										color={isJustRemoved ? "green" : "red"}
 										onClick={handleUnassignFromFunnel}
-										disabled={isAssigning}
-										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+										disabled={isRemovingState}
+										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${
+											isJustRemoved ? "animate-pulse shadow-lg shadow-green-500/30" : ""
+										}`}
 									>
-										<X size={12} strokeWidth={2.5} className="mr-1" />
-										{isAssigning ? "Update" : "Remove"}
+										{isJustRemoved ? (
+											<CheckCircle size={12} strokeWidth={2.5} className="mr-1 animate-bounce" />
+										) : (
+											<X size={12} strokeWidth={2.5} className="mr-1" />
+										)}
+										{isJustRemoved ? "Removed!" : (isRemovingState ? "Removing..." : "Remove")}
 									</Button>
 								) : funnel && !canAssignResource(funnel, resource) ? (
 									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
@@ -354,13 +399,19 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 								) : (
 									<Button
 										size="1"
-										color={resource.category === "PAID" ? "orange" : "green"}
+										color={isJustAdded ? "green" : (resource.category === "PAID" ? "orange" : "green")}
 										onClick={handleAssignToFunnel}
-										disabled={isAssigning}
-										className="px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+										disabled={isAdding}
+										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${
+											isJustAdded ? "animate-pulse shadow-lg shadow-green-500/30" : ""
+										}`}
 									>
-										<Plus size={12} strokeWidth={2.5} className="mr-1" />
-										{isAssigning ? "Update" : "Add"}
+										{isJustAdded ? (
+											<CheckCircle size={12} strokeWidth={2.5} className="mr-1 animate-bounce" />
+										) : (
+											<Plus size={12} strokeWidth={2.5} className="mr-1" />
+										)}
+										{isJustAdded ? "Added!" : (isAdding ? "Adding..." : "Add")}
 									</Button>
 								))}
 
@@ -386,8 +437,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									</Button>
 								))}
 
-							{/* Delete Button - Only show when resource is not assigned to any funnel, not currently assigning, and not in funnel context */}
-							{!isResourceAssignedToAnyFunnel(resource.id) && !isAssigning && context === "global" && (
+							{/* Delete Button - Only show when resource is not assigned to any funnel, not currently adding/removing, and not in funnel context */}
+							{!isResourceAssignedToAnyFunnel(resource.id) && !isAdding && !isRemovingState && context === "global" && (
 								<Button
 									size="1"
 									variant="ghost"
@@ -430,6 +481,36 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 					</div>
 				)}
 			</div>
+
+			{/* Success Notification Popup - Top Right Corner - Portal to Body */}
+			{showAddPopup && createPortal(
+				<div className="fixed top-4 right-4 z-[99999] animate-in slide-in-from-right-4 fade-in duration-300" style={{ zIndex: 99999 }}>
+					<div className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-green-600 backdrop-blur-sm">
+						<CheckCircle size={18} className="animate-bounce text-green-100" />
+						<div className="flex flex-col">
+							<span className="font-semibold">Added to Market Stall!</span>
+							<span className="text-xs text-green-100">{resource.name}</span>
+						</div>
+						<div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+					</div>
+				</div>,
+				document.body
+			)}
+
+			{/* Remove Notification Popup - Top Right Corner - Portal to Body */}
+			{showRemovePopup && createPortal(
+				<div className="fixed top-4 right-4 z-[99999] animate-in slide-in-from-right-4 fade-in duration-300" style={{ zIndex: 99999 }}>
+					<div className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-green-600 backdrop-blur-sm">
+						<X size={18} className="animate-bounce text-green-100" />
+						<div className="flex flex-col">
+							<span className="font-semibold">Removed from Market Stall!</span>
+							<span className="text-xs text-green-100">{resource.name}</span>
+						</div>
+						<div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+					</div>
+				</div>,
+				document.body
+			)}
 		</div>
 	);
 };

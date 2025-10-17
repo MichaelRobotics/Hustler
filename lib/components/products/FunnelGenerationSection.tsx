@@ -220,12 +220,12 @@ export const FunnelGenerationSection: React.FC<
 								className="text-orange-600 dark:text-orange-400"
 							>
 								{funnel.generationStatus === "generating"
-									? "Generating..."
+									? "Merchant is learning..."
 									: funnel.generationStatus === "completed"
-										? "Generated"
+										? "Merchant Taught"
 										: funnel.generationStatus === "failed"
-											? "Generation Failed"
-											: totalFunnels === 1 ? "Generate & Go Live" : "Generate"}
+											? "Teaching Failed"
+											: totalFunnels === 1 ? "Teach Merchant & Go Live" : "Teach Merchant"}
 							</Heading>
 							{funnel.generationStatus === "failed" &&
 								funnel.generationError && (

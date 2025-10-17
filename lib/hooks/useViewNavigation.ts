@@ -73,6 +73,16 @@ export function useViewNavigation() {
 		return "dashboard";
 	};
 
+	const handleLibraryIconClick = (
+		currentView: View,
+		setLibraryContext: (context: "global" | "funnel") => void,
+		setSelectedFunnelForLibrary: (funnel: Funnel | null) => void,
+	) => {
+		setSelectedFunnelForLibrary(null);
+		setLibraryContext("global");
+		setCurrentView("resourceLibrary");
+	};
+
 	return {
 		// State
 		currentView,
@@ -85,5 +95,14 @@ export function useViewNavigation() {
 		onFunnelClick,
 		handleManageResources,
 		handleBackToDashboard,
+		handleLibraryIconClick,
+	} as {
+		currentView: View;
+		setCurrentView: (view: View) => void;
+		handleViewChange: (view: View, selectedFunnel: Funnel | null, currentView: View, setLibraryContext: (context: "global" | "funnel") => void, setSelectedFunnelForLibrary: (funnel: Funnel | null) => void) => void;
+		onFunnelClick: (funnel: Funnel) => View;
+		handleManageResources: (funnel: Funnel) => View;
+		handleBackToDashboard: () => View;
+		handleLibraryIconClick: (currentView: View, setLibraryContext: (context: "global" | "funnel") => void, setSelectedFunnelForLibrary: (funnel: Funnel | null) => void) => void;
 	};
 }

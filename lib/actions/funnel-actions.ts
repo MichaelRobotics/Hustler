@@ -9,10 +9,117 @@ import {
 	funnelResources,
 	funnels,
 	resources,
+	users,
 } from "../supabase/schema";
 import { generateFunnelFlow } from "./ai-actions";
 import { PRODUCT_LIMITS, GLOBAL_LIMITS } from "../types/resource";
 import { resourceAssignmentQueue } from "../queue/ResourceAssignmentQueue";
+import type { FunnelFlow } from "../types/funnel";
+
+/**
+ * Look up admin user by experience ID
+ * Returns the admin's first name if found, null otherwise
+ */
+async function lookupAdminUser(experienceId: string): Promise<string | null> {
+	try {
+		console.log(`[Admin Lookup] Looking up admin user for experience: ${experienceId}`);
+		
+		const adminUser = await db.query.users.findFirst({
+			where: and(
+				eq(users.experienceId, experienceId),
+				eq(users.accessLevel, "admin")
+			),
+		});
+
+		if (adminUser?.name) {
+			// Return first word of admin name
+			const firstName = adminUser.name.split(' ')[0];
+			console.log(`[Admin Lookup] Found admin user: ${adminUser.name} -> firstName: ${firstName}`);
+			return firstName;
+		} else {
+			console.log(`[Admin Lookup] No admin user found for experience: ${experienceId}`);
+			return null;
+		}
+	} catch (error) {
+		console.error(`[Admin Lookup] Error looking up admin user for experience ${experienceId}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Look up company name by experience ID
+ * Returns the experience name (company name) if found, null otherwise
+ */
+async function lookupCompanyName(experienceId: string): Promise<string | null> {
+	try {
+		console.log(`[Company Lookup] Looking up experience name for experience: ${experienceId}`);
+		
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, experienceId),
+			columns: { name: true }
+		});
+
+		if (experience?.name) {
+			console.log(`[Company Lookup] Found experience name: ${experience.name}`);
+			return experience.name;
+		} else {
+			console.log(`[Company Lookup] No experience name found for experience: ${experienceId}`);
+			return null;
+		}
+	} catch (error) {
+		console.error(`[Company Lookup] Error looking up experience name for experience ${experienceId}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Resolve placeholders in funnel flow
+ * Handles [WHOP_OWNER] and [WHOP] placeholders in all block messages
+ */
+async function resolveFunnelFlowPlaceholders(flow: FunnelFlow, experienceId: string): Promise<FunnelFlow> {
+	console.log(`[Funnel Resolution] Starting placeholder resolution for experience: ${experienceId}`);
+	
+	// Get admin name and company name once
+	const adminName = await lookupAdminUser(experienceId);
+	const companyName = await lookupCompanyName(experienceId);
+	
+	console.log(`[Funnel Resolution] Admin name: ${adminName}, Company name: ${companyName}`);
+	
+	// Create a deep copy of the flow to avoid mutating the original
+	const resolvedFlow: FunnelFlow = JSON.parse(JSON.stringify(flow));
+	
+	// Resolve placeholders in all block messages
+	Object.keys(resolvedFlow.blocks).forEach(blockId => {
+		const block = resolvedFlow.blocks[blockId];
+		let resolvedMessage = block.message;
+		
+		// Resolve [WHOP_OWNER] placeholder
+		if (resolvedMessage.includes('[WHOP_OWNER]')) {
+			if (adminName) {
+				resolvedMessage = resolvedMessage.replace(/\[WHOP_OWNER\]/g, adminName);
+				console.log(`[Funnel Resolution] Replaced [WHOP_OWNER] with: ${adminName} in block ${blockId}`);
+			} else {
+				console.log(`[Funnel Resolution] Admin user not found, keeping [WHOP_OWNER] placeholder in block ${blockId}`);
+			}
+		}
+		
+		// Resolve [WHOP] placeholder
+		if (resolvedMessage.includes('[WHOP]')) {
+			if (companyName) {
+				resolvedMessage = resolvedMessage.replace(/\[WHOP\]/g, companyName);
+				console.log(`[Funnel Resolution] Replaced [WHOP] with: ${companyName} in block ${blockId}`);
+			} else {
+				console.log(`[Funnel Resolution] Company name not found, keeping [WHOP] placeholder in block ${blockId}`);
+			}
+		}
+		
+		// Update the block with resolved message
+		block.message = resolvedMessage;
+	});
+	
+	console.log(`[Funnel Resolution] Completed placeholder resolution`);
+	return resolvedFlow;
+}
 
 // Helper function to calculate percentage growth
 function calculateGrowthPercent(current: number, previous: number): number {
@@ -800,6 +907,9 @@ export async function regenerateFunnelFlow(
 			// Generate new flow using AI
 			const generatedFlow = await generateFunnelFlow(resourcesForAI);
 
+			// Resolve placeholders in the generated flow
+			const resolvedFlow = await resolveFunnelFlowPlaceholders(generatedFlow, user.experience.id);
+
 			// Send progress update
 			// Real-time notifications moved to React hooks
 
@@ -807,7 +917,7 @@ export async function regenerateFunnelFlow(
 			const [updatedFunnel] = await db
 				.update(funnels)
 				.set({
-					flow: generatedFlow,
+					flow: resolvedFlow,
 					generationStatus: "completed",
 					isDeployed: false, // Reset deployment status
 					updatedAt: new Date(),

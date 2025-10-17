@@ -34,6 +34,7 @@ interface AdminSidebarProps {
 			| "liveChat"
 			| "store",
 	) => void;
+	onLibraryIconClick?: () => void;
 	className?: string;
 	libraryContext?: "global" | "funnel";
 	currentFunnelForLibrary?: { id: string; name: string } | null;
@@ -54,6 +55,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 	({
 		currentView,
 		onViewChange,
+		onLibraryIconClick,
 		className = "",
 		libraryContext = "global",
 		currentFunnelForLibrary = null,
@@ -128,7 +130,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 								<Button
 									variant="ghost"
 									color={viewStates.isLibraryView ? "violet" : "gray"}
-									onClick={() => handleViewChange("resourceLibrary")}
+									onClick={onLibraryIconClick || (() => handleViewChange("resourceLibrary"))}
 									className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
 										viewStates.isLibraryView
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
@@ -238,7 +240,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 							<Button
 								variant="ghost"
 								color={viewStates.isLibraryView ? "violet" : "gray"}
-								onClick={() => handleViewChange("resourceLibrary")}
+								onClick={onLibraryIconClick || (() => handleViewChange("resourceLibrary"))}
 								className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 min-h-[60px] ${
 									viewStates.isLibraryView
 										? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"

@@ -7,27 +7,129 @@ import type {
 
 export const useFunnelPreviewChat = (
 	funnelFlow: FunnelFlow | null,
+	resources: any[] = [],
 	selectedOffer?: string | null,
 	conversation?: any,
+	experienceId?: string,
 ) => {
 	const [history, setHistory] = useState<ChatMessage[]>([]);
 	const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
+	const [experienceLink, setExperienceLink] = useState<string | null>(null);
+	const [whopCompanyId, setWhopCompanyId] = useState<string | null>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const chatContainerRef = useRef<HTMLDivElement>(null);
 	const lastProcessedInputRef = useRef<string>("");
 	const lastProcessedTimeRef = useRef<number>(0);
 
+	// Fetch experience link on mount
+	useEffect(() => {
+		if (!experienceId) return;
+		
+		const fetchExperienceData = async () => {
+			try {
+				const response = await fetch(`/api/experience/link?experienceId=${experienceId}`);
+				if (response.ok) {
+					const data = await response.json();
+					if (data.experience) {
+						if (data.experience.link) {
+							setExperienceLink(data.experience.link);
+						}
+						if (data.experience.whopCompanyId) {
+							setWhopCompanyId(data.experience.whopCompanyId);
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Error fetching experience data:", error);
+			}
+		};
+		
+		fetchExperienceData();
+	}, [experienceId]);
+
+	// Helper function to resolve [LINK] placeholders based on stage
+	const resolveLinkPlaceholder = useCallback((message: string, block: any, blockId: string): string => {
+		// Check if this block is in VALUE_DELIVERY stage
+		const isValueDelivery = funnelFlow?.stages.some(
+			stage => stage.name === 'VALUE_DELIVERY' && stage.blockIds.includes(blockId)
+		);
+		
+		// Check if this block is in OFFER stage
+		const isOfferBlock = funnelFlow?.stages.some(
+			stage => stage.name === 'OFFER' && stage.blockIds.includes(blockId)
+		);
+		
+		// Check if this block is in TRANSITION stage
+		const isTransitionBlock = funnelFlow?.stages.some(
+			stage => stage.name === 'TRANSITION' && stage.blockIds.includes(blockId)
+		);
+		
+		if (isOfferBlock && block.resourceName) {
+			// For OFFER stage, lookup the resource and create "Get Started!" button
+			const resource = resources.find(r => r.name === block.resourceName);
+			if (resource && resource.link) {
+				const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
+				return message.replace('[LINK]', buttonHtml);
+			} else {
+				// Fallback if resource not found
+				return message.replace('[LINK]', '[Resource not found]');
+			}
+		} else if (isValueDelivery && block.resourceName) {
+			// For VALUE_DELIVERY stage, lookup the resource and create "Claim!" button
+			const resource = resources.find(r => r.name === block.resourceName);
+			if (resource && resource.link) {
+				const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Claim!</div>`;
+				return message.replace('[LINK]', buttonHtml);
+			} else {
+				// Fallback if resource not found
+				return message.replace('[LINK]', '[Resource not found]');
+			}
+		} else if (isTransitionBlock) {
+			// For TRANSITION stage, use the same app link logic as DM messages
+			if (experienceLink) {
+				// Use the stored experience link (same as in generateAppLink)
+				return message.replace('[LINK]', experienceLink);
+			} else if (whopCompanyId && experienceId) {
+				// Fallback: construct app link using the correct format
+				// Format: https://whop.com/joined/{whopCompanyId}/{appName}/app/
+				// Transform experience ID from exp_ to upsell- format
+				const appName = experienceId.replace(/^exp_/, 'upsell-');
+				const appLink = `https://whop.com/joined/${whopCompanyId}/${appName}/app/`;
+				return message.replace('[LINK]', appLink);
+			} else if (experienceId) {
+				// Fallback without company ID
+				const appName = experienceId.replace(/^exp_/, 'upsell-');
+				const appLink = `https://whop.com/joined/${experienceId}/${appName}/app/`;
+				return message.replace('[LINK]', appLink);
+			} else {
+				// Final fallback (same as generateAppLink)
+				return message.replace('[LINK]', 'https://whop.com/apps/');
+			}
+		}
+		
+		// For other stages, just replace with a simple link
+		return message.replace('[LINK]', 'https://example.com/link');
+	}, [funnelFlow, resources, experienceLink, experienceId, whopCompanyId]);
+
 	// Helper function to construct complete message with numbered options
 	const constructCompleteMessage = useCallback((block: any): string => {
-		if (!block || !block.options || block.options.length === 0) {
-			return block.message;
+		if (!block) {
+			return "";
+		}
+
+		// First resolve [LINK] placeholders based on stage
+		let resolvedMessage = resolveLinkPlaceholder(block.message, block, block.id);
+
+		if (!block.options || block.options.length === 0) {
+			return resolvedMessage;
 		}
 
 		// Check if this block is in a stage that should not show numbered options
-		// Stages without numbered options: VALUE_DELIVERY, TRANSITION, PAIN_POINT_QUALIFICATION, EXPERIENCE_QUALIFICATION, OFFER
+		// Stages without numbered options: WELCOME, VALUE_DELIVERY, TRANSITION, PAIN_POINT_QUALIFICATION, EXPERIENCE_QUALIFICATION, OFFER
 		const shouldHideOptions = funnelFlow?.stages.some(
 			stage => 
-				(stage.name === "VALUE_DELIVERY" ||
+				(stage.name === "WELCOME" ||
+				 stage.name === "VALUE_DELIVERY" ||
 				 stage.name === "TRANSITION" || 
 				 stage.name === "PAIN_POINT_QUALIFICATION" || 
 				 stage.name === "EXPERIENCE_QUALIFICATION" ||
@@ -36,15 +138,15 @@ export const useFunnelPreviewChat = (
 		);
 
 		if (shouldHideOptions) {
-			return block.message; // Don't include options for specified stages
+			return resolvedMessage; // Don't include options for specified stages
 		}
 
 		const numberedOptions = block.options
 			.map((opt: any, index: number) => `${index + 1}. ${opt.text}`)
 			.join("\n");
 
-		return `${block.message}\n\n${numberedOptions}`;
-	}, [funnelFlow]);
+		return `${resolvedMessage}\n\n${numberedOptions}`;
+	}, [funnelFlow, resolveLinkPlaceholder]);
 
 	// Function to start or restart the conversation
 	const startConversation = useCallback(() => {
@@ -59,7 +161,7 @@ export const useFunnelPreviewChat = (
 				setCurrentBlockId(startBlockId);
 			}
 		}
-	}, [funnelFlow, constructCompleteMessage, conversation?.currentBlockId]);
+	}, [funnelFlow, conversation?.currentBlockId]);
 
 	// Start the conversation when the component mounts or the funnelFlow changes
 	useEffect(() => {
@@ -83,13 +185,14 @@ export const useFunnelPreviewChat = (
 						(lastMessage.type === "user" && lastMessage.metadata?.blockId !== startBlockId);
 					
 					if (needsBotMessage) {
+						// Call constructCompleteMessage directly without including it in dependencies
 						const completeMessage = constructCompleteMessage(currentBlock);
 						setHistory(prev => [...prev, { type: "bot", text: completeMessage }]);
 					}
 				}
 			}
 		}
-	}, [startConversation, conversation?.messages, conversation?.currentBlockId, funnelFlow, constructCompleteMessage]);
+	}, [startConversation, conversation?.messages, conversation?.currentBlockId, funnelFlow]);
 
 	// Effect to handle auto-scrolling as new messages are added (optimized)
 	useEffect(() => {
@@ -382,7 +485,7 @@ export const useFunnelPreviewChat = (
 				setHistory((prev) => [...prev, userMessage, botMessage]);
 			}
 		},
-		[currentBlockId, funnelFlow, isValidOption, handleOptionClick],
+		[currentBlockId, funnelFlow, isValidOption],
 	);
 
 	// Effect to handle blocks with no options (dead-end paths) and TRANSITION blocks
@@ -402,6 +505,7 @@ export const useFunnelPreviewChat = (
 				if (firstOption.nextBlockId) {
 					// Use shorter timeout for TRANSITION blocks to reduce flickering
 					setTimeout(() => {
+						// Call handleOptionClick directly without including it in dependencies
 						handleOptionClick(firstOption, 0);
 					}, 50);
 				}
@@ -413,7 +517,7 @@ export const useFunnelPreviewChat = (
 				setCurrentBlockId(null);
 			}
 		}
-	}, [currentBlockId, funnelFlow, handleOptionClick]);
+	}, [currentBlockId, funnelFlow]);
 
 	return {
 		history,

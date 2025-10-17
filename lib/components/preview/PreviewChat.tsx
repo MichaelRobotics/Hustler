@@ -10,15 +10,19 @@ import React, {
 	useMemo,
 } from "react";
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
+import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 // No WebSocket imports - this is preview only
 import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import { ChatRestartButton } from "../funnelBuilder/components/ChatRestartButton";
 import FunnelProgressBar from "../userChat/FunnelProgressBar";
+import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
 
 interface PreviewChatProps {
 	funnelFlow: FunnelFlow;
+	resources?: any[];
+	experienceId?: string;
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
@@ -32,15 +36,48 @@ interface PreviewChatProps {
  */
 const PreviewChat: React.FC<PreviewChatProps> = ({
 	funnelFlow,
+	resources = [],
+	experienceId,
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
 }) => {
 	const [message, setMessage] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
+	const [currentStage, setCurrentStage] = useState("WELCOME");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const { appearance, toggleTheme } = useTheme();
+	const { iframeSdk, isInIframe } = useSafeIframeSdk();
+
+	/**
+	 * Handle external link navigation according to Whop best practices
+	 * Uses iframe SDK when available, falls back to window.location for standalone
+	 */
+	const handleExternalLink = useCallback((href: string): void => {
+		try {
+			// Check if it's a Whop internal link (should stay in iframe)
+			const isWhopInternalLink = href.includes('whop.com') && !href.includes('whop.com/checkout') && !href.includes('whop.com/hub');
+			
+			if (isInIframe && iframeSdk && iframeSdk.openExternalUrl) {
+				// Use Whop iframe SDK for external links (best practice)
+				console.log(`🔗 [PreviewChat] Opening external link via Whop iframe SDK: ${href}`);
+				iframeSdk.openExternalUrl({ url: href });
+			} else if (isWhopInternalLink) {
+				// For Whop internal links, use window.location to stay in iframe
+				console.log(`🔗 [PreviewChat] Opening Whop internal link: ${href}`);
+				window.location.href = href;
+			} else {
+				// For external links outside iframe, open in new tab
+				console.log(`🔗 [PreviewChat] Opening external link in new tab: ${href}`);
+				window.open(href, '_blank', 'noopener,noreferrer');
+			}
+		} catch (error) {
+			console.error("❌ [PreviewChat] Error handling external link:", error);
+			// Fallback to window.location
+			window.location.href = href;
+		}
+	}, [iframeSdk, isInIframe]);
 
 	// Use the preview chat hook (no WebSocket)
 	const {
@@ -50,7 +87,30 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		startConversation,
 		handleOptionClick,
 		handleCustomInput,
-	} = useFunnelPreviewChat(funnelFlow);
+	} = useFunnelPreviewChat(funnelFlow, resources, undefined, undefined, experienceId);
+
+	// Function to determine current stage based on currentBlockId
+	const determineCurrentStage = useCallback(() => {
+		if (!currentBlockId || !funnelFlow) {
+			return "WELCOME";
+		}
+
+		// Find which stage contains the current block
+		const currentStage = funnelFlow.stages.find(stage => 
+			stage.blockIds.includes(currentBlockId)
+		);
+
+		return currentStage?.name || "WELCOME";
+	}, [currentBlockId, funnelFlow]);
+
+	// Update current stage when currentBlockId changes
+	useEffect(() => {
+		const newStage = determineCurrentStage();
+		setCurrentStage(newStage);
+	}, [determineCurrentStage]);
+
+	// Determine if conversation is completed (Start Over button shown)
+	const isConversationCompleted = history.length > 0 && options.length === 0 && !currentBlockId;
 
 	// Auto-scroll to bottom when new messages arrive
 	useEffect(() => {
@@ -110,6 +170,98 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		},
 		[handleSubmit],
 	);
+
+	// Function to render messages with [LINK] resolution for different stages
+	const renderMessageWithLinks = useCallback((text: string, currentBlockId: string | null) => {
+		// Check for animated button HTML first
+		if (text.includes('animated-gold-button')) {
+			// Parse the HTML and extract the button data
+			const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
+			const parts = text.split(buttonRegex);
+			
+			// Separate text and buttons
+			const textParts: React.ReactNode[] = [];
+			const buttons: React.ReactNode[] = [];
+			
+			parts.forEach((part, partIndex) => {
+				if (partIndex % 3 === 1) {
+					// This is the href
+					const href = part;
+					const buttonText = parts[partIndex + 1] || "Get Started!";
+					
+					// Determine if this is a VALUE_DELIVERY button (free resource) or OFFER button (paid resource)
+					const isValueDeliveryButton = buttonText === "Claim!";
+					const buttonIcon = isValueDeliveryButton ? "gift" : "sparkles";
+					
+					buttons.push(
+						<AnimatedGoldButton 
+							key={partIndex} 
+							href={href}
+							text={buttonText}
+							icon={buttonIcon}
+							onClick={() => {
+								// Handle link navigation according to Whop best practices
+								handleExternalLink(href);
+							}}
+						/>
+					);
+				} else if (partIndex % 3 === 0) {
+					// This is text content
+					if (part.trim()) {
+						textParts.push(
+							<Text key={partIndex} size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+								{part}
+							</Text>
+						);
+					}
+				}
+			});
+			
+			return (
+				<div className="space-y-3">
+					{textParts}
+					{buttons.length > 0 && (
+						<div className="flex justify-center">
+							{buttons}
+						</div>
+					)}
+				</div>
+			);
+		}
+		
+		// Handle regular links (like TRANSITION stage experience links)
+		if (text.includes('http')) {
+			// Split text by URLs and create clickable links
+			const urlRegex = /(https?:\/\/[^\s]+)/g;
+			const parts = text.split(urlRegex);
+			
+			return (
+				<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+					{parts.map((part, index) => {
+						if (urlRegex.test(part)) {
+							return (
+								<button
+									key={index}
+									onClick={() => handleExternalLink(part)}
+									className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline cursor-pointer transition-colors duration-200"
+								>
+									{part}
+								</button>
+							);
+						}
+						return part;
+					})}
+				</Text>
+			);
+		}
+		
+		// Regular text message
+		return (
+			<Text size="2" className="whitespace-pre-wrap leading-relaxed text-base">
+				{text}
+			</Text>
+		);
+	}, [handleExternalLink]);
 
 	// Memoized message component for better performance
 	const MessageComponent = React.memo(
@@ -172,12 +324,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							msUserSelect: "text",
 						}}
 					>
-						<Text
-							size="2"
-							className="whitespace-pre-wrap leading-relaxed text-base"
-						>
-							{msg.text}
-						</Text>
+						{renderMessageWithLinks(msg.text, currentBlockId)}
 					</div>
 				</div>
 			);
@@ -280,8 +427,8 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				WebkitOverflowScrolling: "touch",
 			}}
 		>
-			{/* Header - Hidden on desktop */}
-			<div className="lg:hidden flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
+			{/* Header - Visible on all screen sizes */}
+			<div className="flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg px-4 py-3 safe-area-top">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-4">
 						{onBack && (
@@ -365,11 +512,13 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 			{/* Funnel Progress Bar */}
 			{funnelFlow && (
 				<FunnelProgressBar
-					currentStage="WELCOME"
+					currentStage={currentStage}
 					stages={funnelFlow.stages}
+					isCompleted={isConversationCompleted || currentStage === "OFFER"}
 					onStageUpdate={(newStage) => {
 						// Handle stage updates in preview
 						console.log("Preview progress bar stage update:", newStage);
+						setCurrentStage(newStage);
 					}}
 				/>
 			)}
