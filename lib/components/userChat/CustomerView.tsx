@@ -769,7 +769,24 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					
 					{/* Content */}
 					<span className="relative flex items-center space-x-2 z-10">
-						{stageInfo?.currentStage === "VALUE_DELIVERY" || 
+						{/* Show HIDE CHAT when UserChat is visible (half view or mobile full view) */}
+						{(viewMode === 'split-view' || (viewMode === 'chat-only' && isMobile)) ? (
+							<>
+								{/* Chat Icon with 3 dots for Hide Chat - same as chat button */}
+								<div className="w-5 h-5 text-white relative z-10">
+									<MessageCircle className="w-5 h-5 text-white" />
+									{/* 3 Dots inside the circle */}
+									<div className="absolute inset-0 flex items-center justify-center">
+										<div className="flex space-x-0.5">
+											<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+											<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+											<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+										</div>
+									</div>
+								</div>
+								<span>HIDE CHAT</span>
+							</>
+						) : stageInfo?.currentStage === "VALUE_DELIVERY" || 
 						 stageInfo?.currentStage === "EXPERIENCE_QUALIFICATION" ||
 						 stageInfo?.currentStage === "PAIN_POINT_QUALIFICATION" ||
 						 stageInfo?.currentStage === "OFFER" ? (
