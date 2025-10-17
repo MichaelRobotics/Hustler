@@ -45,7 +45,7 @@ interface AdminSidebarProps {
  * --- Admin Sidebar Component ---
  * This component provides navigation between different admin views:
  * - Automations (Default dashboard view)
- * - Warehouse (Warehouse without funnel context)
+ * - Library (Library without funnel context)
  * - Merchants Conversations (Pro version upgrade prompt)
  *
  * Following Whop's design patterns for clean, organized navigation.
@@ -101,7 +101,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 					>
 						{/* Desktop Navigation - Icons Only */}
 						<div className="pt-12 px-4 space-y-8">
-							{/* Merchants - Default Dashboard */}
+							{/* Automations - Default Dashboard */}
 							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 								<Button
 									variant="ghost"
@@ -112,7 +112,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Automations - Manage merchants & analytics"
+									title="Automations - Manage funnels & analytics"
 								>
 									<div className="relative">
 										<Zap size={20} strokeWidth={2} />
@@ -134,7 +134,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Warehouse - All available digital assets"
+									title="Library - All available products"
 								>
 									<div className="relative">
 										<Library size={20} strokeWidth={2} />
@@ -170,7 +170,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Merchants Conversations - Monitor merchant conversations"
+									title="Merchants Conversations - Monitor conversations"
 								>
 									<div className="relative">
 										<MessageCircle size={20} strokeWidth={2} />
@@ -192,7 +192,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Store - Manage digital assets and sales"
+									title="Store - Manage products and sales"
 								>
 									<div className="relative">
 										<Store size={20} strokeWidth={2} />
@@ -212,7 +212,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 						className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/95 dark:bg-surface/90 border-t border-border/50 dark:border-border/30 backdrop-blur-sm shadow-2xl transition-all duration-200 ${isUserTyping ? "hidden" : "block"}`}
 					>
 						<div className="flex items-center justify-around px-4 py-3">
-							{/* Merchants */}
+							{/* Automations */}
 							<Button
 								variant="ghost"
 								color={viewStates.isDashboardView ? "violet" : "gray"}
@@ -230,7 +230,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
-									Merchants
+									Automations
 								</Text>
 							</Button>
 
@@ -252,7 +252,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
-									Warehouse
+									Library
 								</Text>
 
 								{/* Mobile Context Indicator */}

@@ -22,7 +22,7 @@ interface UnifiedNavigationProps {
 	className?: string;
 	showOnPage?: "aibuilder" | "preview" | "all" | "analytics";
 	user?: AuthenticatedUser | null; // New: User context for credits
-	isFunnelBuilder?: boolean; // New: Distinguish between Funnel Builder and Warehouse contexts
+	isFunnelBuilder?: boolean; // New: Distinguish between Funnel Builder and Library contexts
 }
 
 const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
@@ -222,20 +222,20 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 						</button>
 					)}
 
-				{/* Assigned Products Button - Show on aibuilder and preview pages, but show Edit icon only in Warehouse context with generated funnel */}
+				{/* Assigned Products Button - Show on aibuilder and preview pages, but show Edit icon only in Library context with generated funnel */}
 				{isExpanded &&
 					onFunnelProducts &&
 					(showOnPage === "aibuilder" || showOnPage === "preview") && (
 						<button
 							data-accent-color={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "orange" : "violet"}
-							aria-label={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Merchant" : "Assigned Digital Assets"}
+							aria-label={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
 							className={`fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface text-white ${
 								isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder
 									? "shadow-orange-500/25 hover:shadow-orange-500/40 bg-orange-500"
 									: "shadow-violet-500/25 hover:shadow-violet-500/40 bg-violet-500"
 							}`}
 							onClick={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? onEdit : onFunnelProducts}
-							title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Merchant" : "Assigned Digital Assets"}
+							title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
 						>
 							{isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? (
 								<Edit3
@@ -260,10 +260,10 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 					isGenerated && (
 						<button
 							data-accent-color="orange"
-							aria-label="Edit Merchant"
+							aria-label="Edit Funnel"
 							className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-orange-500/25 hover:shadow-orange-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-orange-500 text-white"
 							onClick={onEdit}
-							title="Edit Merchant"
+							title="Edit Funnel"
 						>
 							<Edit3
 								size={20}
@@ -279,8 +279,8 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 						onClick={handleGeneration}
 						disabled={isGenerating}
 						className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-violet-500 text-white"
-						aria-label="Generate merchant"
-						title="Generate merchant"
+						aria-label="Generate funnel"
+						title="Generate funnel"
 					>
 						<Zap
 							size={20}
@@ -306,7 +306,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 							toggleExpanded();
 						}
 					})}
-					title={isExpanded ? "Collapse navigation" : (!isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasFreeProducts && validateFunnelProducts(funnel).hasMinimumResources))) ? "Generate merchant" : "Expand navigation"}
+					title={isExpanded ? "Collapse navigation" : (!isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasFreeProducts && validateFunnelProducts(funnel).hasMinimumResources))) ? "Generate funnel" : "Expand navigation"}
 				>
 					{isExpanded ? (
 						<Plus

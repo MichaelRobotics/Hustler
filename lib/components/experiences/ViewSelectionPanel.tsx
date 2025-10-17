@@ -93,7 +93,7 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 							</div>
 							<div className="flex items-center gap-2 text-sm text-gray-400">
 								<div className="w-2 h-2 bg-violet-500 rounded-full"></div>
-								<span>Resource Warehouse</span>
+								<span>Resource Library</span>
 							</div>
 						</div>
 					</div>

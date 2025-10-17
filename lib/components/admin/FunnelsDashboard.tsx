@@ -46,7 +46,7 @@ interface FunnelsDashboardProps {
 	onFunnelClick: (funnel: Funnel) => void;
 	handleDuplicateFunnel: (funnel: Funnel) => void;
 	handleManageResources: (funnel: Funnel) => void;
-	onGoToLibrary?: (funnel: Funnel) => void; // New: Navigate to Warehouse in funnel context
+	onGoToLibrary?: (funnel: Funnel) => void; // New: Navigate to Library in funnel context
 	isRenaming: boolean;
 	setIsRenaming: (isRenaming: boolean) => void;
 	isCreatingNewFunnel: boolean;
@@ -170,7 +170,7 @@ const FunnelsDashboard = React.memo(
 					setEditingFunnelId(null);
 					setNewFunnelName("");
 
-					// Automatically navigate to Warehouse view for the new funnel
+					// Automatically navigate to Library view for the new funnel
 					if (onGoToLibrary) {
 						onGoToLibrary(newFunnel);
 					}
@@ -603,14 +603,14 @@ const FunnelsDashboard = React.memo(
 														d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 													/>
 												</svg>
-												<span>Digital Assets</span>
+												<span>Resources</span>
 											</DropdownMenu.Item>
 
 											<DropdownMenu.Item
 												onClick={(e) => {
 													e.preventDefault();
 													e.stopPropagation();
-													// If funnel is not generated, go to Warehouse; otherwise go to FunnelBuilder
+													// If funnel is not generated, go to Library; otherwise go to FunnelBuilder
 													if (!hasValidFlow(funnel)) {
 														onGoToLibrary?.(funnel);
 													} else {
@@ -622,7 +622,7 @@ const FunnelsDashboard = React.memo(
 												className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-violet-300/60 dark:hover:border-violet-600/60"
 											>
 												<Edit className="h-4 w-4" strokeWidth={2.5} />
-												<span>Edit Merchant</span>
+												<span>Edit</span>
 											</DropdownMenu.Item>
 
 

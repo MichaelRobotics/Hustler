@@ -13,7 +13,6 @@ import FunnelProgressBar from "./FunnelProgressBar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
 import { useTheme } from "../common/ThemeProvider";
-import { Theme } from "frosted-ui";
 
 /**
  * --- Customer View Component ---
@@ -78,21 +77,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 	const navbarRef = useRef<HTMLDivElement>(null);
 
-	// Theme and WebSocket state - Initialize with dark theme for UserChat
-	const [userChatTheme, setUserChatTheme] = useState<"light" | "dark">("dark");
-	const [themeInitialized, setThemeInitialized] = useState(false);
+	// Theme and WebSocket state
 	const { appearance, toggleTheme } = useTheme();
-
-	// Sync UserChat theme with user's theme settings after initial load
-	useEffect(() => {
-		if (!themeInitialized && appearance) {
-			// After initial dark theme load, sync with user's actual theme preference
-			setTimeout(() => {
-				setUserChatTheme(appearance);
-				setThemeInitialized(true);
-			}, 1000); // 1 second delay to allow dark theme to show initially
-		}
-	}, [appearance, themeInitialized]);
 	const { isConnected } = useWhopWebSocket({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
@@ -834,11 +820,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			{/* Right Side: Theme Toggle Button - Icon Only */}
 			<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 							<button
-					onClick={() => {
-						toggleTheme();
-						// Also update UserChat theme
-						setUserChatTheme(appearance === "dark" ? "light" : "dark");
-					}}
+					onClick={toggleTheme}
 					className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
 					style={{ WebkitTapHighlightColor: "transparent" }}
 					title={
@@ -928,10 +910,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									{/* Lava-like bubbling effect */}
 									<div className="absolute top-0 left-1/3 w-1 h-full bg-gradient-to-b from-orange-300 via-yellow-200 to-transparent opacity-40 animate-bounce" style={{ animationDelay: '0.3s', animationDuration: '1.2s' }}></div>
 									<div className="absolute top-0 left-2/3 w-1 h-full bg-gradient-to-b from-red-300 via-yellow-300 to-transparent opacity-35 animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '1.6s' }}></div>
-									
-									{/* Glowing particles */}
-									<div className="absolute top-0 left-1/5 w-0.5 h-full bg-white opacity-90 animate-pulse" style={{ animationDelay: '0.2s', animationDuration: '0.8s' }}></div>
-									<div className="absolute top-0 left-4/5 w-0.5 h-full bg-white opacity-75 animate-pulse" style={{ animationDelay: '0.7s', animationDuration: '1.1s' }}></div>
 								</div>
 							</div>
 						</div>
@@ -1167,26 +1145,16 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				)}
 				{shouldShowUserChat && funnelFlow ? (
 						<div className={`relative h-full w-full ${isTransitioning ? 'pointer-events-none' : ''} ${viewMode === 'split-view' && !isMobile ? 'border-t border-yellow-500/20' : ''}`}>
-					<Theme
-						appearance={userChatTheme}
-						grayColor="gray"
-						accentColor="violet"
-						infoColor="sky"
-						successColor="green"
-						warningColor="amber"
-						dangerColor="red"
-					>
-						<UserChat
-							funnelFlow={funnelFlow}
-							conversationId={conversationId || undefined}
-							conversation={conversation || undefined}
-							experienceId={experienceId}
-							onMessageSent={handleMessageSentInternal}
-							userType={userType}
-							stageInfo={stageInfo || undefined}
-						/>
-					</Theme>
-				</div>
+					<UserChat
+						funnelFlow={funnelFlow}
+						conversationId={conversationId || undefined}
+						conversation={conversation || undefined}
+						experienceId={experienceId}
+						onMessageSent={handleMessageSentInternal}
+						userType={userType}
+						stageInfo={stageInfo || undefined}
+					/>
+						</div>
 				) : (
 					<div className="h-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">
 						<div className="text-center max-w-md mx-auto p-6">
