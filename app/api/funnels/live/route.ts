@@ -44,7 +44,7 @@ async function getLiveFunnelHandler(
         eq(funnels.experienceId, experience.id),
         eq(funnels.isDeployed, true)
       ),
-      orderBy: (funnels, { desc }) => [desc(funnels.updatedAt)], // Get most recently updated
+      orderBy: (funnels: any, { desc }: any) => [desc(funnels.updatedAt)], // Get most recently updated
     });
 
     console.log(`[get-live-funnel] Found ${deployedFunnels.length} deployed funnels`);
@@ -72,7 +72,7 @@ async function getLiveFunnelHandler(
       }
     });
 
-    const resourcesList = funnelResourcesList.map(fr => fr.resource);
+    const resourcesList = funnelResourcesList.map((fr: any) => fr.resource);
 
     console.log(`[get-live-funnel] Found ${resourcesList.length} resources for funnel ${liveFunnel.id}`);
 
