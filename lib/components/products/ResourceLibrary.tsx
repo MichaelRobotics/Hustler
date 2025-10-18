@@ -628,6 +628,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 			{context === "funnel" &&
 				!currentlyGenerating &&
 				funnel &&
+				hasValidFlow(funnel) &&
 				((funnel.resources?.length || 0) > 0 || hasValidFlow(funnel)) &&
 				(funnel.resources?.length || 0) >= 3 &&
 				productValidation.hasFreeProducts && (
