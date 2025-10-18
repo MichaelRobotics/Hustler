@@ -12,6 +12,8 @@ interface StorePreviewProps {
 	experienceId?: string;
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
+	onEditMerchant?: () => void;
+	onLiveFunnelLoaded?: (funnel: any) => void;
 }
 
 /**
@@ -25,6 +27,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	experienceId,
 	onMessageSent,
 	onBack,
+	onEditMerchant,
+	onLiveFunnelLoaded,
 }) => {
 	const [liveFunnel, setLiveFunnel] = useState<any>(null);
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
@@ -146,15 +150,22 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 				
 				if (data.success && data.hasLiveFunnel && data.funnelFlow) {
 					// We have a live funnel
-					setFunnelFlow(data.funnelFlow);
-					setLiveFunnel({
+					const funnelData = {
 						id: data.funnel.id,
 						name: data.funnel.name,
 						flow: data.funnelFlow,
 						isDeployed: data.funnel.isDeployed,
 						resources: data.resources || []
-					});
+					};
+					setFunnelFlow(data.funnelFlow);
+					setLiveFunnel(funnelData);
 					setIsFunnelActive(true);
+					
+					// Notify parent component about the live funnel
+					if (onLiveFunnelLoaded) {
+						onLiveFunnelLoaded(funnelData);
+					}
+					
 					console.log(`[StorePreview] ✅ Found live funnel for experience ${experienceId}`);
 					console.log(`[StorePreview] Funnel:`, data.funnel);
 					console.log(`[StorePreview] Funnel flow:`, data.funnelFlow);
@@ -614,6 +625,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 								experienceId={experienceId}
 								onMessageSent={handleMessageSentInternal}
 								hideAvatar={true} // Hide avatar as requested
+								onEditMerchant={onEditMerchant}
 							/>
 						</div>
 					) : (

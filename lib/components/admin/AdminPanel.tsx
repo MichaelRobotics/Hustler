@@ -160,9 +160,9 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			setFunnels(updatedFunnels);
 		},
 		onNavigateToAnalytics: (funnel) => {
-			console.log("📊 [AUTO-DEPLOY] Navigating to Analytics view for funnel:", funnel.id);
+			console.log("🏪 [AUTO-DEPLOY] Navigating to Store view for funnel:", funnel.id);
 			setSelectedFunnel(funnel);
-			setCurrentView("analytics");
+			setCurrentView("store");
 		},
 	});
 
@@ -771,9 +771,9 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 					}
 
 					if (updatedFunnel.isDeployed && hasValidFlow(updatedFunnel)) {
-						console.log("Redirecting to analytics...");
+						console.log("Redirecting to store...");
 						setTimeout(() => {
-							setCurrentView("analytics");
+							setCurrentView("store");
 						}, 100);
 					}
 				}}
@@ -900,6 +900,21 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							});
 						}}
 						onBack={handleBackToResourceLibrary}
+						onLiveFunnelLoaded={(funnel) => {
+							console.log("🏪 [STORE] Live funnel loaded:", funnel);
+							setSelectedFunnel(funnel);
+						}}
+						onEditMerchant={() => {
+							console.log("🏪 [STORE] onEditMerchant called");
+							console.log("🏪 [STORE] selectedFunnel:", selectedFunnel);
+							console.log("🏪 [STORE] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
+							if (selectedFunnel && hasValidFlow(selectedFunnel)) {
+								console.log("🏪 [STORE] Navigating to funnel builder for editing:", selectedFunnel.id);
+								setCurrentView("funnelBuilder");
+							} else {
+								console.log("🏪 [STORE] No valid funnel to edit");
+							}
+						}}
 					/>
 				</div>
 			</div>

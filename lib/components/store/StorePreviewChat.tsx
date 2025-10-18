@@ -1,7 +1,7 @@
 "use client";
 
-import { Text } from "frosted-ui";
-import { ArrowLeft, Moon, Send, Sun } from "lucide-react";
+import { Text, Button } from "frosted-ui";
+import { ArrowLeft, Moon, Send, Sun, Pencil } from "lucide-react";
 import React, {
 	useState,
 	useRef,
@@ -25,6 +25,7 @@ interface StorePreviewChatProps {
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
+	onEditMerchant?: () => void;
 }
 
 /**
@@ -44,6 +45,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
+	onEditMerchant,
 }) => {
 	const [message, setMessage] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
@@ -686,7 +688,32 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 
 				{/* Start Over Button - Show when conversation has ended (no more options) */}
 				{history.length > 0 && options.length === 0 && !currentBlockId && (
-					<ChatRestartButton onRestart={startConversation} />
+					<div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
+						<div className="flex justify-center gap-3 py-4">
+							{onEditMerchant && (
+								<Button
+									size="2"
+									color="violet"
+									onClick={() => {
+										console.log("🏪 [STORE PREVIEW CHAT] Edit Merchant button clicked");
+										onEditMerchant();
+									}}
+									className="px-6 py-2 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
+								>
+									<Pencil size={16} className="mr-2" />
+									Edit Merchant
+								</Button>
+							)}
+							<Button
+								size="2"
+								color="violet"
+								onClick={startConversation}
+								className="px-6 py-2 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
+							>
+								Start Over
+							</Button>
+						</div>
+					</div>
 				)}
 
 			</div>
