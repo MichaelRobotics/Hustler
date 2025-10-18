@@ -145,6 +145,34 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 		}
 	}, [history]);
 
+	// Function to scroll to offer button with better detection
+	const scrollToOffer = () => {
+		// Look for offer button with more specific selectors
+		const selectors = [
+			'[data-href*="app="]', // Affiliate links
+			'.animated-gold-button', // Gold offer buttons
+			'[class*="Get Started"]', // Get Started buttons
+			'[class*="Claim"]', // Claim buttons
+			'button[class*="gold"]', // Gold buttons
+			'a[href*="app="]', // Affiliate links
+			'[class*="offer-button"]', // Offer buttons
+			'[class*="cta"]', // Call-to-action buttons
+		];
+		
+		let offerButton = null;
+		for (const selector of selectors) {
+			offerButton = document.querySelector(selector);
+			if (offerButton) break;
+		}
+		
+		if (offerButton) {
+			offerButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		} else {
+			// Fallback: scroll to bottom of chat
+			window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+		}
+	};
+
 	// Auto-resize textarea
 	const handleTextareaInput = useCallback(() => {
 		const textarea = textareaRef.current;
@@ -604,27 +632,36 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 									{/* Smooth completion button */}
 									<button
 										onClick={() => {
-											// Scroll to offer button with better detection
-											const selectors = [
-												'[data-href*="app="]', // Affiliate links
-												'.animated-gold-button', // Gold offer buttons
-												'[class*="Get Started"]', // Get Started buttons
-												'[class*="Claim"]', // Claim buttons
-												'button[class*="gold"]', // Gold buttons
-												'a[href*="app="]', // Affiliate links
-												'[class*="offer-button"]', // Offer buttons
-												'[class*="cta"]', // Call-to-action buttons
-											];
+											console.log("🎯 [EXCLUSIVE] Button clicked - searching for OFFER elements");
 											
-											let offerButton = null;
-											for (const selector of selectors) {
-												offerButton = document.querySelector(selector);
-												if (offerButton) break;
+											// Simple: find element containing "Get Started" text
+											console.log("🎯 [EXCLUSIVE] Searching for 'Get Started' text...");
+											
+											// Get all elements in the chat container
+											const chatContainer = document.querySelector('.chat-messages-container');
+											if (!chatContainer) {
+												console.log("🎯 [EXCLUSIVE] No chat container found");
+												window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+												return;
 											}
 											
-											if (offerButton) {
-												offerButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+											// Find all elements and check their text content
+											const allElements = chatContainer.querySelectorAll('*');
+											let getStartedElement = null;
+											
+											for (const element of allElements) {
+												if (element.textContent && element.textContent.includes('Get Started')) {
+													getStartedElement = element;
+													console.log("🎯 [EXCLUSIVE] Found 'Get Started' element:", element);
+													break;
+												}
+											}
+											
+											if (getStartedElement) {
+												console.log("🎯 [EXCLUSIVE] Scrolling to 'Get Started' element:", getStartedElement);
+												getStartedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 											} else {
+												console.log("🎯 [EXCLUSIVE] No 'Get Started' element found, scrolling to bottom");
 												// Fallback: scroll to bottom of chat
 												window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 											}

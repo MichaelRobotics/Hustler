@@ -7,6 +7,7 @@ interface FunnelCanvasProps {
 	itemCanvasWidth: number;
 	totalCanvasHeight: number;
 	EXPLANATION_AREA_WIDTH: number;
+	editingBlockId?: string | null;
 }
 
 const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
@@ -14,6 +15,7 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 	itemCanvasWidth,
 	totalCanvasHeight,
 	EXPLANATION_AREA_WIDTH,
+	editingBlockId,
 }) => {
 	return (
 		<div className="hidden md:flex items-start justify-center p-6 md:p-8 h-full overflow-auto relative">
@@ -24,9 +26,14 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 					height: `${totalCanvasHeight}px`,
 					minWidth: "fit-content",
 					minHeight: "fit-content",
-					cursor: "grab",
+					cursor: editingBlockId ? "default" : "grab",
 				}}
 				onMouseDown={(e) => {
+					// Disable horizontal scrolling when editing any block
+					if (editingBlockId) {
+						return;
+					}
+					
 					if (e.button === 0 && e.currentTarget) {
 						// Left mouse button only
 						const target = e.currentTarget;

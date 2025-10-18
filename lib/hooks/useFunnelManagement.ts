@@ -128,7 +128,7 @@ export function useFunnelManagement(user?: { experienceId?: string; name?: strin
 			console.log("🔄 [AUTO-CREATE] No funnels found, creating default funnel for user:", user.name);
 			
 			// Create default funnel name
-			const defaultFunnelName = `${user.name} Funnel`;
+			const defaultFunnelName = `${user.name} Merchant`;
 			
 			// Auto-create the funnel
 			const autoCreateFunnel = async () => {

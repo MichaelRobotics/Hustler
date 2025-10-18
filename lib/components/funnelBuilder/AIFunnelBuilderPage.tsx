@@ -49,6 +49,7 @@ interface AIFunnelBuilderPageProps {
 	onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
 	user?: { experienceId?: string } | null;
 	hasAnyLiveFunnel?: boolean; // New: indicates if any funnel is live globally
+	isSingleMerchant?: boolean; // New: indicates if there's only 1 merchant card
 }
 
 /**
@@ -70,6 +71,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	onGenerationError,
 	user,
 	hasAnyLiveFunnel = false, // Default to false if not provided
+	isSingleMerchant = false, // Default to false if not provided
 }) => {
 	// State Management
 	const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
@@ -235,6 +237,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 						isDeployed={currentFunnel.isDeployed}
 						showOnPage="aibuilder"
 						isFunnelBuilder={true}
+						isSingleMerchant={isSingleMerchant}
 					/>
 				</div>
 			</div>

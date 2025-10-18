@@ -450,18 +450,12 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		setSelectedFunnel(null);
 	}, [setCurrentView, setSelectedFunnel]);
 
-	// Handle back to ResourceLibrary with funnel context
+	// Handle back to My Merchants (dashboard) view
 	const handleBackToResourceLibrary = useCallback(() => {
-		if (selectedFunnel) {
-			// Navigate to ResourceLibrary with funnel context
-			setLibraryContext("funnel");
-			setSelectedFunnelForLibrary(selectedFunnel);
-			setCurrentView("resourceLibrary");
-		} else {
-			// Fallback to dashboard if no funnel selected
-			setCurrentView("dashboard");
-		}
-	}, [selectedFunnel, setLibraryContext, setSelectedFunnelForLibrary, setCurrentView]);
+		// Always navigate to My Merchants (dashboard) view
+		setCurrentView("dashboard");
+		setSelectedFunnel(null);
+	}, [setCurrentView, setSelectedFunnel]);
 
 	// Handle inline funnel creation - show funnel creation card in dashboard
 	const handleCreateNewFunnelInline = useCallback(() => {
@@ -794,6 +788,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				onGenerationError={handleGenerationError}
 				user={user}
 				hasAnyLiveFunnel={hasAnyLiveFunnel}
+				isSingleMerchant={funnels.length === 1}
 			/>
 		);
 	}

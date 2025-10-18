@@ -1,8 +1,7 @@
 "use client";
 
 import { Edit3, Eye, Library, Plus, Zap } from "lucide-react";
-import type React from "react";
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCredits } from "../../hooks/useCredits";
 import { CreditPackModal } from "../payments/CreditPackModal";
 import { shouldDisableGeneration, validateFunnelProducts } from "../../helpers/funnel-product-validation";
@@ -23,6 +22,7 @@ interface UnifiedNavigationProps {
 	showOnPage?: "aibuilder" | "preview" | "all" | "analytics";
 	user?: AuthenticatedUser | null; // New: User context for credits
 	isFunnelBuilder?: boolean; // New: Distinguish between Funnel Builder and Library contexts
+	isSingleMerchant?: boolean; // New: Detect if there's only 1 merchant card
 }
 
 const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
@@ -39,14 +39,51 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	showOnPage = "all",
 	user = null,
 	isFunnelBuilder = false,
+	isSingleMerchant = false,
 }) => {
-	const [isExpanded, setIsExpanded] = useState(false);
+	const [isExpanded, setIsExpanded] = useState(isSingleMerchant); // Open at start for single merchant
+	const [showLibraryExplanation, setShowLibraryExplanation] = useState(false);
+	const [showPreviewExplanation, setShowPreviewExplanation] = useState(false);
 	const { canGenerate, refresh: refreshCredits } = useCredits(user);
 	const [showCreditModal, setShowCreditModal] = useState(false);
 
 	const toggleExpanded = () => {
 		setIsExpanded(!isExpanded);
 	};
+
+	// Show explanations for single merchant - continuous loop
+	useEffect(() => {
+		if (isSingleMerchant && isExpanded) {
+			let isLibraryTurn = true;
+			
+			const showNextExplanation = () => {
+				if (isLibraryTurn) {
+					setShowLibraryExplanation(true);
+					setShowPreviewExplanation(false);
+					setTimeout(() => {
+						setShowLibraryExplanation(false);
+						isLibraryTurn = false;
+						setTimeout(showNextExplanation, 500);
+					}, 3000);
+				} else {
+					setShowPreviewExplanation(true);
+					setShowLibraryExplanation(false);
+					setTimeout(() => {
+						setShowPreviewExplanation(false);
+						isLibraryTurn = true;
+						setTimeout(showNextExplanation, 500);
+					}, 3000);
+				}
+			};
+			
+			// Start the loop after initial delay
+			setTimeout(showNextExplanation, 1000);
+		} else {
+			// Reset when not single merchant or not expanded
+			setShowLibraryExplanation(false);
+			setShowPreviewExplanation(false);
+		}
+	}, [isSingleMerchant, isExpanded]);
 
 	const handleGeneration = async () => {
 		// Check if funnel has required FREE products and minimum resources
@@ -207,50 +244,70 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 					onPreview &&
 					showOnPage === "aibuilder" &&
 					isGenerated && (
-						<button
-							data-accent-color="blue"
-							aria-label="Preview view"
-							className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-blue-500 text-white"
-							onClick={onPreview}
-							title="Preview view"
-						>
-							<Eye
-								size={20}
-								strokeWidth={2.5}
-								className="group-hover:scale-110 transition-transform duration-200"
-							/>
-						</button>
+						<div className="relative">
+							<button
+								data-accent-color="blue"
+								aria-label="Preview view"
+								className="fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface bg-blue-500 text-white"
+								onClick={onPreview}
+								title="Preview view"
+							>
+								<Eye
+									size={20}
+									strokeWidth={2.5}
+									className="group-hover:scale-110 transition-transform duration-200"
+								/>
+							</button>
+							
+							{/* Preview Explanation Tooltip */}
+							{showPreviewExplanation && (
+								<div className="absolute right-16 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg animate-in slide-in-from-right-2 duration-300">
+									Preview Merchant Conversation
+									<div className="absolute right-0 top-1/2 transform translate-x-1 -translate-y-1/2 w-0 h-0 border-l-4 border-l-blue-500 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+								</div>
+							)}
+						</div>
 					)}
 
 				{/* Assigned Products Button - Show on aibuilder and preview pages, but show Edit icon only in Library context with generated funnel */}
 				{isExpanded &&
 					onFunnelProducts &&
 					(showOnPage === "aibuilder" || showOnPage === "preview") && (
-						<button
-							data-accent-color={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "orange" : "violet"}
-							aria-label={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
-							className={`fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface text-white ${
-								isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder
-									? "shadow-orange-500/25 hover:shadow-orange-500/40 bg-orange-500"
-									: "shadow-violet-500/25 hover:shadow-violet-500/40 bg-violet-500"
-							}`}
-							onClick={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? onEdit : onFunnelProducts}
-							title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
-						>
-							{isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? (
-								<Edit3
-									size={20}
-									strokeWidth={2.5}
-									className="group-hover:scale-110 transition-transform duration-200"
-								/>
-							) : (
-								<Library
-									size={20}
-									strokeWidth={2.5}
-									className="group-hover:scale-110 transition-transform duration-200"
-								/>
+						<div className="relative">
+							<button
+								data-accent-color={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "orange" : "violet"}
+								aria-label={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
+								className={`fui-reset fui-BaseButton fui-Button w-12 h-12 rounded-full shadow-2xl hover:scale-110 transition-all duration-300 group fui-r-size-2 fui-variant-surface text-white ${
+									isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder
+										? "shadow-orange-500/25 hover:shadow-orange-500/40 bg-orange-500"
+										: "shadow-violet-500/25 hover:shadow-violet-500/40 bg-violet-500"
+								}`}
+								onClick={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? onEdit : onFunnelProducts}
+								title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
+							>
+								{isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? (
+									<Edit3
+										size={20}
+										strokeWidth={2.5}
+										className="group-hover:scale-110 transition-transform duration-200"
+									/>
+								) : (
+									<Library
+										size={20}
+										strokeWidth={2.5}
+										className="group-hover:scale-110 transition-transform duration-200"
+									/>
+								)}
+							</button>
+							
+							{/* Library Explanation Tooltip */}
+							{showLibraryExplanation && (
+								<div className="absolute right-16 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg animate-in slide-in-from-right-2 duration-300">
+									Check Merchant Market Stall
+									<div className="absolute right-0 top-1/2 transform translate-x-1 -translate-y-1/2 w-0 h-0 border-l-4 border-l-blue-500 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+								</div>
 							)}
-						</button>
+						</div>
 					)}
 
 				{/* Edit Button - Show on preview pages, only if funnel is generated */}
@@ -312,7 +369,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 						<Plus
 							size={24}
 							strokeWidth={2.5}
-							className="transition-transform duration-300 rotate-45"
+							className={`transition-transform duration-300 ${isSingleMerchant ? 'rotate-45' : 'rotate-45'}`}
 						/>
 					) : (!isDeployed && !isGenerated && (!funnel || (validateFunnelProducts(funnel).hasFreeProducts && validateFunnelProducts(funnel).hasMinimumResources))) ? (
 						<Zap

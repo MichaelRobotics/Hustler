@@ -85,27 +85,59 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 								<CollapsibleText text={formatBlockName(block.id)} maxLength={20} />
 							</span>
 						</div>
-						{!isDeployed && (
-							<button
-								onClick={() => setEditingBlockId(block.id)}
-								className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-violet-100 dark:hover:bg-violet-800/50 transition-colors duration-200 flex-shrink-0"
+						<button
+							onClick={() => {
+								if (isDeployed) {
+									// Show notification when funnel is live
+									const notification = document.createElement('div');
+									notification.className = 'fixed top-4 right-4 z-50 bg-red-500 text-white rounded-lg shadow-lg p-4 max-w-sm animate-in slide-in-from-right-5 duration-300';
+									notification.innerHTML = `
+										<div class="flex items-start gap-3">
+											<div class="flex-shrink-0 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+												</svg>
+											</div>
+											<div class="flex-1">
+												<h4 class="font-semibold text-sm mb-1">Cannot Edit Live Merchant</h4>
+												<p class="text-xs text-red-100 mb-2">
+													You cannot edit Merchant Conversation when he is live
+												</p>
+											</div>
+										</div>
+									`;
+									document.body.appendChild(notification);
+									
+									// Auto-remove after 4 seconds
+									setTimeout(() => {
+										notification.remove();
+									}, 4000);
+								} else {
+									// Allow editing when not deployed
+									setEditingBlockId(block.id);
+								}
+							}}
+							className={`p-1.5 rounded-lg transition-colors duration-200 flex-shrink-0 ${
+								isDeployed 
+									? "text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50" 
+									: "text-muted-foreground hover:text-foreground hover:bg-violet-100 dark:hover:bg-violet-800/50"
+							}`}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								className="h-4 w-4"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									className="h-4 w-4"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z"
-									/>
-								</svg>
-							</button>
-						)}
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z"
+								/>
+							</svg>
+						</button>
 					</div>
 					<div className="p-4">
 						<p className="text-sm text-foreground text-left whitespace-pre-wrap leading-relaxed">

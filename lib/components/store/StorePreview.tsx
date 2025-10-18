@@ -46,6 +46,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	const [isTransitioning, setIsTransitioning] = useState(false); // Track view transitions
 	const [isMobile, setIsMobile] = useState(false); // Track mobile view
 	const [iframeError, setIframeError] = useState(false); // Track iframe loading errors
+	const [showNoFunnelPopup, setShowNoFunnelPopup] = useState(false); // Track no funnel popup
+	const [popupShown, setPopupShown] = useState(false); // Track if popup was already shown
 	
 	// Theme state
 	const { appearance, toggleTheme } = useTheme();
@@ -175,6 +177,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 					setLiveFunnel(null);
 					setFunnelFlow(null);
 					setIsFunnelActive(false);
+					// Don't show popup immediately - wait for loading to complete
 					console.log(`[StorePreview] ❌ No live funnel found for experience ${experienceId}`);
 					console.log(`[StorePreview] Response data:`, data);
 				}
@@ -256,6 +259,20 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		loadLiveFunnel();
 		fetchExperienceLink();
 	}, [loadLiveFunnel, fetchExperienceLink]);
+
+	// Show popup after loading overlay disappears and no funnel is active
+	useEffect(() => {
+		if (!isLoading && iframeLoaded && !isFunnelActive && !showNoFunnelPopup && !popupShown) {
+			// Show popup after loading overlay is completely gone
+			setShowNoFunnelPopup(true);
+			setPopupShown(true); // Mark as shown to prevent re-appearing
+			
+			// Auto-hide popup after 5 seconds
+			setTimeout(() => {
+				setShowNoFunnelPopup(false);
+			}, 5000);
+		}
+	}, [isLoading, iframeLoaded, isFunnelActive, showNoFunnelPopup, popupShown]);
 
 	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
 	useEffect(() => {
@@ -653,6 +670,37 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 					)}
 				</div>
 			</div>
+
+			{/* Green Popup - No Funnel is Live */}
+			{showNoFunnelPopup && !isFunnelActive && (
+				<div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right-5 duration-300">
+					<div className="bg-green-500 text-white rounded-lg shadow-lg p-4 max-w-sm">
+						<div className="flex items-start gap-3">
+							{/* Green check icon */}
+							<div className="flex-shrink-0 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+								</svg>
+							</div>
+							
+							<div className="flex-1">
+								<h4 className="font-semibold text-sm mb-1">No Funnel is Live</h4>
+								<p className="text-xs text-green-100 mb-2">
+									My Merchants → Select Merchant → Edit Merchant → Go Live!
+								</p>
+								
+								{/* Close button */}
+								<button
+									onClick={() => setShowNoFunnelPopup(false)}
+									className="text-green-100 hover:text-white transition-colors text-xs underline"
+								>
+									Dismiss
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
