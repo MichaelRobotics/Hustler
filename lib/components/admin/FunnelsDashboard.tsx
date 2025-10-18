@@ -603,7 +603,7 @@ const FunnelsDashboard = React.memo(
 														d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 													/>
 												</svg>
-												<span>Resources</span>
+												<span>Market Stall</span>
 											</DropdownMenu.Item>
 
 											<DropdownMenu.Item
@@ -622,7 +622,7 @@ const FunnelsDashboard = React.memo(
 												className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg cursor-pointer transition-all duration-200 text-foreground hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 border-2 border-transparent hover:border-violet-300/60 dark:hover:border-violet-600/60"
 											>
 												<Edit className="h-4 w-4" strokeWidth={2.5} />
-												<span>Edit</span>
+												<span>Edit Merchant</span>
 											</DropdownMenu.Item>
 
 

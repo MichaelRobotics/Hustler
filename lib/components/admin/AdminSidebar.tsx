@@ -45,8 +45,8 @@ interface AdminSidebarProps {
 /**
  * --- Admin Sidebar Component ---
  * This component provides navigation between different admin views:
- * - Automations (Default dashboard view)
- * - Library (Library without funnel context)
+ * - Merchants (Default dashboard view)
+ * - Warehouse (Warehouse without funnel context)
  * - Merchants Conversations (Pro version upgrade prompt)
  *
  * Following Whop's design patterns for clean, organized navigation.
@@ -114,7 +114,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Automations - Manage funnels & analytics"
+									title="Merchants - Manage funnels & analytics"
 								>
 									<div className="relative">
 										<Zap size={20} strokeWidth={2} />
@@ -125,7 +125,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 								</Button>
 							</div>
 
-							{/* Library */}
+							{/* Warehouse */}
 							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 								<Button
 									variant="ghost"
@@ -136,7 +136,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Library - All available products"
+									title="Warehouse - All available products"
 								>
 									<div className="relative">
 										<Library size={20} strokeWidth={2} />
@@ -232,11 +232,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
-									Automations
+									Merchants
 								</Text>
 							</Button>
 
-							{/* Library */}
+							{/* Warehouse */}
 							<Button
 								variant="ghost"
 								color={viewStates.isLibraryView ? "violet" : "gray"}
@@ -254,7 +254,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									)}
 								</div>
 								<Text size="1" weight="semi-bold" className="text-xs">
-									Library
+									Warehouse
 								</Text>
 
 								{/* Mobile Context Indicator */}

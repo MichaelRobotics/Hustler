@@ -676,15 +676,15 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 				<div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right-5 duration-300">
 					<div className="bg-green-500 text-white rounded-lg shadow-lg p-4 max-w-sm">
 						<div className="flex items-start gap-3">
-							{/* Green check icon */}
+							{/* Green play icon */}
 							<div className="flex-shrink-0 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
 								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
 								</svg>
 							</div>
 							
 							<div className="flex-1">
-								<h4 className="font-semibold text-sm mb-1">No Funnel is Live</h4>
+								<h4 className="font-semibold text-sm mb-1">No Funnel is Live. Go to</h4>
 								<p className="text-xs text-green-100 mb-2">
 									My Merchants → Select Merchant → Edit Merchant → Go Live!
 								</p>

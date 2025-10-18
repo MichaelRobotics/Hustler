@@ -55,7 +55,7 @@ export default function DeploymentModal({
 							</div>
 							<Dialog.Title asChild>
 								<Heading size="4" weight="bold" className="text-foreground">
-									{actionText} Funnel
+									{actionText} Merchant
 								</Heading>
 							</Dialog.Title>
 						</div>
@@ -65,8 +65,8 @@ export default function DeploymentModal({
 						<Dialog.Description asChild>
 							<Text color="gray" className="text-gray-600 dark:text-gray-300">
 								{isDeployed
-									? `Are you sure you want to undeploy "${funnel.name}"? This will stop the funnel from being active.`
-									: `Are you sure you want to deploy "${funnel.name}"? This will make the funnel active and available to users.`}
+									? `Are you sure you want to take "${funnel.name}" offline? This will make your Merchant unavailable for new customers.`
+									: `Are you sure you want to go live with "${funnel.name}"? This will make your Merchant available to customers.`}
 							</Text>
 						</Dialog.Description>
 

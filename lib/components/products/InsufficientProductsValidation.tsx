@@ -164,7 +164,7 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 		// Always show validation (no product type checks)
 		return {
 			title: "Add digital assets Merchant will learn to sell.",
-			message: "Add Gifts Merchant will use to increase the chance of a sale!",
+			message: "and Add Gifts that Merchant will use to increase the chance of a sale!",
 			icon: null, // No icon - will use dollar button instead
 			iconBg: "from-orange-100/80 to-red-100/60 dark:from-orange-900/40 dark:to-red-900/30",
 			iconBorder: "border-orange-200/50 dark:border-orange-700/30"

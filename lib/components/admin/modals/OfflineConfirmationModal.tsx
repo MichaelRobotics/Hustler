@@ -18,7 +18,7 @@ export const OfflineConfirmationModal: React.FC<
 			<div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-sm p-6 sm:p-8 animate-in zoom-in-95 duration-300 dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900 dark:border-gray-600 dark:shadow-2xl dark:shadow-black/60">
 				<div className="flex justify-between items-center mb-6">
 					<Heading size="4" weight="bold" className="text-foreground">
-						Take Funnel Offline?
+						Take Merchant Offline?
 					</Heading>
 					<Button
 						size="1"
@@ -34,7 +34,7 @@ export const OfflineConfirmationModal: React.FC<
 				<div className="space-y-5">
 					<div>
 						<Text size="3" className="text-muted-foreground text-center">
-							This will make your funnel unavailable to customers.
+							This will make your Merchant unavailable for new customers.
 						</Text>
 					</div>
 

@@ -424,6 +424,31 @@ const FunnelVisualizer = React.memo(
 																	`;
 																	document.body.appendChild(notification);
 																	
+																	// Add eye-catching but controlled animation to Live button
+																	const liveButton = document.querySelector('[data-accent-color="red"]') as HTMLElement;
+																	if (liveButton) {
+																		// Add controlled dramatic effects
+																		liveButton.classList.add('animate-pulse', 'ring-4', 'ring-red-500', 'ring-opacity-100', 'shadow-xl', 'shadow-red-500/60');
+																		liveButton.style.transform = 'scale(1.05)';
+																		liveButton.style.transition = 'all 0.3s ease-in-out';
+																		liveButton.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.4), 0 0 15px rgba(239, 68, 68, 0.5), 0 0 25px rgba(239, 68, 68, 0.3)';
+																		
+																		// Create a subtle pulsing glow effect
+																		const glowInterval = setInterval(() => {
+																			liveButton.style.boxShadow = `0 0 0 6px rgba(239, 68, 68, 0.5), 0 0 20px rgba(239, 68, 68, 0.7), 0 0 35px rgba(239, 68, 68, 0.4)`;
+																			setTimeout(() => {
+																				liveButton.style.boxShadow = `0 0 0 4px rgba(239, 68, 68, 0.4), 0 0 15px rgba(239, 68, 68, 0.5), 0 0 25px rgba(239, 68, 68, 0.3)`;
+																			}, 400);
+																		}, 800);
+																		
+																		setTimeout(() => {
+																			clearInterval(glowInterval);
+																			liveButton.classList.remove('animate-pulse', 'ring-4', 'ring-red-500', 'ring-opacity-100', 'shadow-xl', 'shadow-red-500/60');
+																			liveButton.style.transform = 'scale(1)';
+																			liveButton.style.boxShadow = '';
+																		}, 3000);
+																	}
+																	
 																	// Auto-remove after 4 seconds
 																	setTimeout(() => {
 																		notification.remove();

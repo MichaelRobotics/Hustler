@@ -511,14 +511,14 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 													})
 												}
 												disabled={isSaving}
-												className={`flex-1 px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+												className={`flex-1 px-3 py-2 text-sm border rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
 													isSingleFunnel 
 														? "border-2 border-orange-500 dark:border-orange-400 bg-orange-50 dark:bg-orange-900/30 shadow-xl shadow-orange-500/40 animate-pulse ring-2 ring-orange-500/30" 
 														: "border-violet-300 dark:border-violet-600"
 												}`}
 											>
-												<option value="FREE_VALUE">Gift</option>
-												<option value="PAID">Paid</option>
+												<option value="FREE_VALUE" className="bg-white dark:bg-black text-gray-900 dark:text-white">Gift</option>
+												<option value="PAID" className="bg-white dark:bg-black text-gray-900 dark:text-white">Paid</option>
 											</select>
 										</div>
 
@@ -660,6 +660,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						isDeployed={funnel?.isDeployed}
 						funnel={funnel}
 						showOnPage="aibuilder"
+						isSingleMerchant={allFunnels.length === 1}
 					/>
 				)}
 

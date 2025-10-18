@@ -54,24 +54,24 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	// Show explanations for single merchant - continuous loop
 	useEffect(() => {
 		if (isSingleMerchant && isExpanded) {
-			let isLibraryTurn = true;
+			let isPreviewTurn = true;
 			
 			const showNextExplanation = () => {
-				if (isLibraryTurn) {
-					setShowLibraryExplanation(true);
-					setShowPreviewExplanation(false);
-					setTimeout(() => {
-						setShowLibraryExplanation(false);
-						isLibraryTurn = false;
-						setTimeout(showNextExplanation, 500);
-					}, 3000);
-				} else {
+				if (isPreviewTurn) {
 					setShowPreviewExplanation(true);
 					setShowLibraryExplanation(false);
 					setTimeout(() => {
 						setShowPreviewExplanation(false);
-						isLibraryTurn = true;
-						setTimeout(showNextExplanation, 500);
+						isPreviewTurn = false;
+						showNextExplanation();
+					}, 3000);
+				} else {
+					setShowLibraryExplanation(true);
+					setShowPreviewExplanation(false);
+					setTimeout(() => {
+						setShowLibraryExplanation(false);
+						isPreviewTurn = true;
+						showNextExplanation();
 					}, 3000);
 				}
 			};
@@ -283,7 +283,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 										: "shadow-violet-500/25 hover:shadow-violet-500/40 bg-violet-500"
 								}`}
 								onClick={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? onEdit : onFunnelProducts}
-								title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Funnel" : "Assigned Products"}
+								title={isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Merchant" : "Market Stall"}
 							>
 								{isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? (
 									<Edit3
@@ -303,7 +303,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 							{/* Library Explanation Tooltip */}
 							{showLibraryExplanation && (
 								<div className="absolute right-16 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg animate-in slide-in-from-right-2 duration-300">
-									Check Merchant Market Stall
+									{isGenerated && showOnPage === "aibuilder" && !isFunnelBuilder ? "Edit Merchant conversation" : "Check Merchant Market Stall"}
 									<div className="absolute right-0 top-1/2 transform translate-x-1 -translate-y-1/2 w-0 h-0 border-l-4 border-l-blue-500 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
 								</div>
 							)}

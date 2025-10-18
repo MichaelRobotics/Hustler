@@ -67,8 +67,8 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({
 
 					<Text size="2" className="text-gray-600 dark:text-gray-300">
 						{action === 'deploy' 
-							? 'Setting up your funnel for customers...'
-							: 'Taking your funnel offline...'
+							? 'Setting up your Merchant for customers...'
+							: 'Taking your Merchant offline...'
 						}
 					</Text>
 				</div>
