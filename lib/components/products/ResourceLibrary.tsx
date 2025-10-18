@@ -2,6 +2,7 @@
 
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import React, { useEffect } from "react";
+import { CheckCircle, DollarSign, Gift } from "lucide-react";
 import { useResourceLibrary } from "../../hooks/useResourceLibrary";
 import { useAutoNavigation } from "../../hooks/useAutoNavigation";
 import type { ResourceLibraryProps } from "../../types/resource";
@@ -101,6 +102,16 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	const [isCreatingNewProduct, setIsCreatingNewProduct] = React.useState(false);
 	const [isSaving, setIsSaving] = React.useState(false);
 	
+	// State for newly created resource animation
+	const [newlyCreatedResourceId, setNewlyCreatedResourceId] = React.useState<string | null>(null);
+	const [showCreateSuccessPopup, setShowCreateSuccessPopup] = React.useState(false);
+	const [newlyCreatedResource, setNewlyCreatedResource] = React.useState<any>(null);
+	
+	// State for edited resource animation
+	const [newlyEditedResourceId, setNewlyEditedResourceId] = React.useState<string | null>(null);
+	const [showEditSuccessPopup, setShowEditSuccessPopup] = React.useState(false);
+	const [newlyEditedResource, setNewlyEditedResource] = React.useState<any>(null);
+	
 	// State for tracking if any resource is being edited
 	const [isEditingResource, setIsEditingResource] = React.useState(false);
 
@@ -160,7 +171,34 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 		setIsSaving(true);
 		try {
-			await createResource(newResource as any);
+			const createdResource = await createResource(newResource as any);
+			
+			// Trigger green animation for newly created resource
+			if (createdResource?.id) {
+				setNewlyCreatedResourceId(createdResource.id);
+				setNewlyCreatedResource(createdResource);
+				setShowCreateSuccessPopup(true);
+				
+				// Scroll to newly created resource on mobile
+				setTimeout(() => {
+					const resourceElement = document.querySelector(`[data-resource-id="${createdResource.id}"]`);
+					if (resourceElement) {
+						resourceElement.scrollIntoView({ 
+							behavior: 'smooth', 
+							block: 'center',
+							inline: 'nearest'
+						});
+					}
+				}, 100);
+				
+				// Reset animation states after 3 seconds
+				setTimeout(() => {
+					setNewlyCreatedResourceId(null);
+					setNewlyCreatedResource(null);
+					setShowCreateSuccessPopup(false);
+				}, 3000);
+			}
+			
 			setIsCreatingNewProduct(false);
 			setNewResource({
 				name: "",
@@ -203,6 +241,44 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 			setTimeout(() => {
 				setIsEditingResource(false);
 			}, 250); // 250ms delay to match mobile keyboard close animation
+		}
+	};
+
+	// Wrapper for updateResource that triggers green animation
+	const handleUpdateResourceWithAnimation = async (resourceId: string, updatedResource: Partial<any>) => {
+		try {
+			const result = await updateResource(resourceId, updatedResource);
+			
+			// Trigger green animation for edited resource
+			if (result?.id) {
+				setNewlyEditedResourceId(result.id);
+				setNewlyEditedResource(result);
+				setShowEditSuccessPopup(true);
+				
+				// Scroll to edited resource on mobile
+				setTimeout(() => {
+					const resourceElement = document.querySelector(`[data-resource-id="${result.id}"]`);
+					if (resourceElement) {
+						resourceElement.scrollIntoView({ 
+							behavior: 'smooth', 
+							block: 'center',
+							inline: 'nearest'
+						});
+					}
+				}, 100);
+				
+				// Reset animation states after 3 seconds
+				setTimeout(() => {
+					setNewlyEditedResourceId(null);
+					setNewlyEditedResource(null);
+					setShowEditSuccessPopup(false);
+				}, 3000);
+			}
+			
+			return result;
+		} catch (error) {
+			console.error("Failed to update resource:", error);
+			throw error;
 		}
 	};
 
@@ -438,23 +514,30 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 
 							{displayResources.map((resource) => (
-								<ResourceCard
+								<div 
 									key={resource.id}
-									resource={resource}
-									funnel={funnel}
-									context={context}
-									allResources={allResources}
-									isResourceInFunnel={isResourceInFunnel}
-									isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
-									onAddToFunnel={onAddToFunnel}
-									onRemoveFromFunnel={onRemoveFromFunnel}
-									onEdit={openEditModal}
-									onDelete={handleDeleteResource}
-									onUpdate={updateResource}
-									isRemoving={removingResourceId === resource.id}
-									onEditingChange={handleEditingChange}
-									hideAssignmentOptions={context === "funnel" && funnel && (hasValidFlow(funnel) || currentlyGenerating)}
-								/>
+									data-resource-id={resource.id}
+									className={newlyCreatedResourceId === resource.id ? "animate-pulse" : ""}
+								>
+									<ResourceCard
+										resource={resource}
+										funnel={funnel}
+										context={context}
+										allResources={allResources}
+										isResourceInFunnel={isResourceInFunnel}
+										isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
+										onAddToFunnel={onAddToFunnel}
+										onRemoveFromFunnel={onRemoveFromFunnel}
+										onEdit={openEditModal}
+										onDelete={handleDeleteResource}
+										onUpdate={handleUpdateResourceWithAnimation}
+										isRemoving={removingResourceId === resource.id}
+										onEditingChange={handleEditingChange}
+										hideAssignmentOptions={context === "funnel" && funnel && (hasValidFlow(funnel) || currentlyGenerating)}
+										isJustCreated={newlyCreatedResourceId === resource.id}
+										isJustEdited={newlyEditedResourceId === resource.id}
+									/>
+								</div>
 							))}
 						</div>
 					)}
@@ -506,6 +589,52 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						showOnPage="aibuilder"
 					/>
 				)}
+
+			{/* Create Success Notification Popup - Top Right Corner */}
+			{showCreateSuccessPopup && newlyCreatedResource && (
+				<div className="fixed top-4 right-4 z-[99999] animate-in slide-in-from-right-4 fade-in duration-300" style={{ zIndex: 99999 }}>
+					<div className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-green-600 backdrop-blur-sm">
+						<CheckCircle size={18} className="animate-bounce text-green-100" />
+						<div className="flex flex-col">
+							<div className="flex items-center gap-2">
+								{newlyCreatedResource.category === "PAID" ? (
+									<DollarSign size={14} className="text-green-100" strokeWidth={2.5} />
+								) : (
+									<Gift size={14} className="text-green-100" strokeWidth={2.5} />
+								)}
+								<span className="font-semibold">
+									{newlyCreatedResource.category === "PAID" ? "Paid" : "Gift"} Digital Asset Created!
+								</span>
+							</div>
+							<span className="text-xs text-green-100">{newlyCreatedResource.name}</span>
+						</div>
+						<div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+					</div>
+				</div>
+			)}
+
+			{/* Edit Success Notification Popup - Top Right Corner */}
+			{showEditSuccessPopup && newlyEditedResource && (
+				<div className="fixed top-4 right-4 z-[99999] animate-in slide-in-from-right-4 fade-in duration-300" style={{ zIndex: 99999 }}>
+					<div className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-green-600 backdrop-blur-sm">
+						<CheckCircle size={18} className="animate-bounce text-green-100" />
+						<div className="flex flex-col">
+							<div className="flex items-center gap-2">
+								{newlyEditedResource.category === "PAID" ? (
+									<DollarSign size={14} className="text-green-100" strokeWidth={2.5} />
+								) : (
+									<Gift size={14} className="text-green-100" strokeWidth={2.5} />
+								)}
+								<span className="font-semibold">
+									{newlyEditedResource.category === "PAID" ? "Paid" : "Gift"} Digital Asset Updated!
+								</span>
+							</div>
+							<span className="text-xs text-green-100">{newlyEditedResource.name}</span>
+						</div>
+						<div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

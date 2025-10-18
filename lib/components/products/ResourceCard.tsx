@@ -35,6 +35,8 @@ interface ResourceCardProps {
 	isRemoving?: boolean;
 	onEditingChange?: (isEditing: boolean) => void;
 	hideAssignmentOptions?: boolean;
+	isJustCreated?: boolean;
+	isJustEdited?: boolean;
 }
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({
@@ -52,6 +54,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	isRemoving = false,
 	onEditingChange,
 	hideAssignmentOptions = false,
+	isJustCreated = false,
+	isJustEdited = false,
 }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
@@ -346,6 +350,10 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			isJustAdded 
 				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40" 
 				: isJustRemoved
+				? "border-red-500/80 dark:border-red-400/80 shadow-lg shadow-red-500/20 dark:shadow-red-400/20 animate-pulse bg-gradient-to-br from-red-50/90 via-red-100/70 to-red-200/50 dark:from-red-900/90 dark:via-red-800/70 dark:to-red-900/40"
+				: isJustCreated
+				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40"
+				: isJustEdited
 				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40"
 				: "border-border/50 dark:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10"
 		}`}>
@@ -378,11 +386,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 								(isResourceInFunnel(resource.id) ? (
 									<Button
 										size="1"
-										color={isJustRemoved ? "green" : "red"}
+										color={isJustRemoved ? "red" : "red"}
 										onClick={handleUnassignFromFunnel}
 										disabled={isRemovingState}
 										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${
-											isJustRemoved ? "animate-pulse shadow-lg shadow-green-500/30" : ""
+											isJustRemoved ? "animate-pulse shadow-lg shadow-red-500/30" : ""
 										}`}
 									>
 										{isJustRemoved ? (
@@ -500,13 +508,13 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			{/* Remove Notification Popup - Top Right Corner - Portal to Body */}
 			{showRemovePopup && createPortal(
 				<div className="fixed top-4 right-4 z-[99999] animate-in slide-in-from-right-4 fade-in duration-300" style={{ zIndex: 99999 }}>
-					<div className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-green-600 backdrop-blur-sm">
-						<X size={18} className="animate-bounce text-green-100" />
+					<div className="flex items-center gap-3 px-4 py-3 bg-red-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-red-600 backdrop-blur-sm">
+						<X size={18} className="animate-bounce text-red-100" />
 						<div className="flex flex-col">
 							<span className="font-semibold">Removed from Market Stall!</span>
-							<span className="text-xs text-green-100">{resource.name}</span>
+							<span className="text-xs text-red-100">{resource.name}</span>
 						</div>
-						<div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+						<div className="w-2 h-2 bg-red-300 rounded-full animate-pulse"></div>
 					</div>
 				</div>,
 				document.body

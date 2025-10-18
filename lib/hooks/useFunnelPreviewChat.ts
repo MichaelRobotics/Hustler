@@ -146,7 +146,7 @@ export const useFunnelPreviewChat = (
 			.join("\n");
 
 		return `${resolvedMessage}\n\n${numberedOptions}`;
-	}, [funnelFlow, resolveLinkPlaceholder]);
+	}, [funnelFlow]);
 
 	// Function to start or restart the conversation
 	const startConversation = useCallback(() => {
@@ -192,7 +192,7 @@ export const useFunnelPreviewChat = (
 				}
 			}
 		}
-	}, [startConversation, conversation?.messages, conversation?.currentBlockId, funnelFlow]);
+	}, [conversation?.messages, conversation?.currentBlockId, funnelFlow]);
 
 	// Effect to handle auto-scrolling as new messages are added (optimized)
 	useEffect(() => {

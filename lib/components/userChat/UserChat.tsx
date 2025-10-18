@@ -1022,9 +1022,9 @@ const UserChat: React.FC<UserChatProps> = ({
 
 				{/* Progress Bar - Separate element like separation line */}
 				{userType === "admin" && stageInfo && funnelFlow && (
-					<div className="px-4 py-3 border-t border-border/20 dark:border-border/10">
-						{/* Completion Percentage - Above progress bar */}
-						<div className="flex justify-center mb-3">
+					<div className="px-4 py-3 border-t border-border/20 dark:border-border/10 relative">
+						{/* Golden Percentage - Directly above progress bar */}
+						<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full z-50">
 							<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
 								{(() => {
 									const stageOrder = [

@@ -5,6 +5,7 @@ import AIFunnelBuilderPage from "../funnelBuilder/AIFunnelBuilderPage";
 import { LiveChatPage } from "../liveChat";
 import PreviewPage from "../preview/PreviewPage";
 import ResourceLibrary from "../products/ResourceLibrary";
+import StorePreview from "../store/StorePreview";
 import AdminHeader from "./AdminHeader";
 import AdminSidebar from "./AdminSidebar";
 import FunnelAnalyticsPage from "./FunnelAnalyticsPage";
@@ -449,6 +450,19 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		setSelectedFunnel(null);
 	}, [setCurrentView, setSelectedFunnel]);
 
+	// Handle back to ResourceLibrary with funnel context
+	const handleBackToResourceLibrary = useCallback(() => {
+		if (selectedFunnel) {
+			// Navigate to ResourceLibrary with funnel context
+			setLibraryContext("funnel");
+			setSelectedFunnelForLibrary(selectedFunnel);
+			setCurrentView("resourceLibrary");
+		} else {
+			// Fallback to dashboard if no funnel selected
+			setCurrentView("dashboard");
+		}
+	}, [selectedFunnel, setLibraryContext, setSelectedFunnelForLibrary, setCurrentView]);
+
 	// Handle inline funnel creation - show funnel creation card in dashboard
 	const handleCreateNewFunnelInline = useCallback(() => {
 		// Show funnel creation card in FunnelsDashboard
@@ -863,6 +877,29 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						onChatStateChange={setIsInChat}
 						user={user}
 						experienceId={user?.experienceId || ""}
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	if (currentView === "store") {
+		return (
+			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+
+				<div className="h-screen w-full">
+					<StorePreview
+						experienceId={user?.experienceId}
+						onMessageSent={(message, conversationId) => {
+							console.log("Store preview message:", {
+								message,
+								conversationId,
+								experienceId: user?.experienceId,
+								timestamp: new Date().toISOString(),
+							});
+						}}
+						onBack={handleBackToResourceLibrary}
 					/>
 				</div>
 			</div>
