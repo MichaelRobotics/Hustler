@@ -98,6 +98,40 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 		setError,
 	} = useResourceLibrary(allResources, allFunnels, setAllResources, user);
 
+	// Highlighting state for insufficient products validation
+	const [highlightedCards, setHighlightedCards] = React.useState<string[]>([]);
+
+	// Handle highlighting cards from insufficient products validation
+	const handleHighlightCards = (cardIds: string[]) => {
+		setHighlightedCards(cardIds);
+		// Don't auto-clear - let it persist until criteria are met or cards are added
+	};
+
+	// Clear highlighting when criteria are met
+	React.useEffect(() => {
+		if (funnel) {
+			const resources = funnel.resources || [];
+			const totalCount = resources.length;
+			const freeCount = resources.filter(r => r.category === "FREE_VALUE").length;
+			
+			// Clear highlighting if criteria are met (3+ total, 1+ free)
+			if (totalCount >= 3 && freeCount >= 1) {
+				setHighlightedCards([]);
+			}
+		}
+	}, [funnel]);
+
+	// Wrapper for onAddToFunnel that also clears highlighting for the added card
+	const handleAddToFunnelWithHighlighting = (resource: any) => {
+		// Remove this card from highlighted cards
+		setHighlightedCards(prev => prev.filter(id => id !== resource.id));
+		
+		// Call the original onAddToFunnel
+		if (onAddToFunnel) {
+			onAddToFunnel(resource);
+		}
+	};
+
 	// State for inline product creation
 	const [isCreatingNewProduct, setIsCreatingNewProduct] = React.useState(false);
 	const [isSaving, setIsSaving] = React.useState(false);
@@ -356,7 +390,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 							) : /* Choose section - visible when there's NOT at least 1 free resource OR NOT at least 3 resources */
 							!hasAtLeastOneFreeResource(funnel) || (funnel.resources?.length || 0) < 3 ? (
 								<div className="mb-8">
-									<InsufficientProductsValidation funnel={funnel} />
+									<InsufficientProductsValidation 
+										funnel={funnel} 
+										allResources={allResources}
+										onHighlightCards={handleHighlightCards}
+									/>
 								</div>
 							) : null}
 						</>
@@ -526,7 +564,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										allResources={allResources}
 										isResourceInFunnel={isResourceInFunnel}
 										isResourceAssignedToAnyFunnel={isResourceAssignedToAnyFunnel}
-										onAddToFunnel={onAddToFunnel}
+										onAddToFunnel={handleAddToFunnelWithHighlighting}
 										onRemoveFromFunnel={onRemoveFromFunnel}
 										onEdit={openEditModal}
 										onDelete={handleDeleteResource}
@@ -536,6 +574,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										hideAssignmentOptions={context === "funnel" && funnel && (hasValidFlow(funnel) || currentlyGenerating)}
 										isJustCreated={newlyCreatedResourceId === resource.id}
 										isJustEdited={newlyEditedResourceId === resource.id}
+										isHighlighted={highlightedCards.includes(resource.id)}
 									/>
 								</div>
 							))}

@@ -37,6 +37,7 @@ interface ResourceCardProps {
 	hideAssignmentOptions?: boolean;
 	isJustCreated?: boolean;
 	isJustEdited?: boolean;
+	isHighlighted?: boolean;
 }
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({
@@ -56,6 +57,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	hideAssignmentOptions = false,
 	isJustCreated = false,
 	isJustEdited = false,
+	isHighlighted = false,
 }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
@@ -412,6 +414,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										disabled={isAdding}
 										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${
 											isJustAdded ? "animate-pulse shadow-lg shadow-green-500/30" : ""
+										} ${
+											isHighlighted ? "ring-4 ring-blue-500/50 shadow-lg shadow-blue-500/20 animate-pulse bg-gradient-to-r from-blue-500/20 to-blue-400/20 dark:from-blue-400/20 dark:to-blue-300/20" : ""
 										}`}
 									>
 										{isJustAdded ? (
