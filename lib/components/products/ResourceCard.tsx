@@ -253,7 +253,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 					{/* Type and Category Selectors */}
 					<div className="flex gap-2">
 						<select
-							value={editedResource.type || "AFFILIATE"}
+							value={editedResource.type || "MY_PRODUCTS"}
 							onChange={(e) =>
 								setEditedResource({
 									...editedResource,
@@ -512,13 +512,13 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			{/* Remove Notification Popup - Top Right Corner - Portal to Body */}
 			{showRemovePopup && createPortal(
 				<div className="fixed top-4 right-4 z-[99999] animate-in slide-in-from-right-4 fade-in duration-300" style={{ zIndex: 99999 }}>
-					<div className="flex items-center gap-3 px-4 py-3 bg-red-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-red-600 backdrop-blur-sm">
-						<X size={18} className="animate-bounce text-red-100" />
+					<div className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white text-sm font-medium rounded-lg shadow-2xl border border-green-600 backdrop-blur-sm">
+						<X size={18} className="animate-bounce text-green-100" />
 						<div className="flex flex-col">
 							<span className="font-semibold">Removed from Market Stall!</span>
-							<span className="text-xs text-red-100">{resource.name}</span>
+							<span className="text-xs text-green-100">{resource.name}</span>
 						</div>
-						<div className="w-2 h-2 bg-red-300 rounded-full animate-pulse"></div>
+						<div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
 					</div>
 				</div>,
 				document.body

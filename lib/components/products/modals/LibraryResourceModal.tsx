@@ -127,7 +127,7 @@ export const LibraryResourceModal: React.FC<LibraryResourceModalProps> = ({
 							Type
 						</Text>
 						<select
-							value={resource.type || "AFFILIATE"}
+							value={resource.type || "MY_PRODUCTS"}
 							onChange={(e) => handleInputChange("type", e.target.value)}
 							className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
 						>

@@ -19,7 +19,7 @@ export const useResourceLibrary = (
 	const [newResource, setNewResource] = useState<Partial<ResourceFormData>>({
 		name: "",
 		link: "",
-		type: "AFFILIATE",
+		type: "MY_PRODUCTS",
 		category: "FREE_VALUE",
 		description: "",
 		promoCode: "",
@@ -290,7 +290,7 @@ export const useResourceLibrary = (
 		setNewResource({
 			name: "",
 			link: "",
-			type: "AFFILIATE",
+			type: "MY_PRODUCTS",
 			category: "FREE_VALUE",
 			description: "",
 			promoCode: "",

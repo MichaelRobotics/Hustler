@@ -100,11 +100,22 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 	// Highlighting state for insufficient products validation
 	const [highlightedCards, setHighlightedCards] = React.useState<string[]>([]);
+	
+	// State for "Create Digital Assets" scenario
+	const [showCreateAssets, setShowCreateAssets] = React.useState(false);
+	
+	// Check if there's only 1 funnel (for highlighting form fields)
+	const isSingleFunnel = allFunnels.length === 1;
 
 	// Handle highlighting cards from insufficient products validation
 	const handleHighlightCards = (cardIds: string[]) => {
 		setHighlightedCards(cardIds);
 		// Don't auto-clear - let it persist until criteria are met or cards are added
+	};
+
+	// Handle create assets state change
+	const handleCreateAssetsStateChange = (showCreateAssets: boolean) => {
+		setShowCreateAssets(showCreateAssets);
 	};
 
 	// Clear highlighting when criteria are met
@@ -184,11 +195,22 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 		setNewResource({
 			name: "",
 			link: "",
-			type: "AFFILIATE",
+			type: "MY_PRODUCTS",
 			category: "FREE_VALUE",
 			description: "",
 			promoCode: "",
 		});
+		
+		// Scroll to the create form after a short delay to ensure it's rendered
+		setTimeout(() => {
+			const createForm = document.querySelector('[data-create-form]');
+			if (createForm) {
+				createForm.scrollIntoView({ 
+					behavior: 'smooth', 
+					block: 'center' 
+				});
+			}
+		}, 100);
 	};
 
 	// Handle saving new product
@@ -335,6 +357,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						allResourcesCount={allResources.length}
 						isDeploying={isDeploying}
 						hasAnyLiveFunnel={hasAnyLiveFunnel}
+						showCreateAssets={showCreateAssets}
 					/>
 
 					{/* Resources Counter Section */}
@@ -394,6 +417,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										funnel={funnel} 
 										allResources={allResources}
 										onHighlightCards={handleHighlightCards}
+										onCreateAssetsStateChange={handleCreateAssetsStateChange}
 									/>
 								</div>
 							) : null}
@@ -405,7 +429,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-products-section>
 							{/* New Product Creation Card */}
 							{isCreatingNewProduct && (
-								<div className="group bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 p-4 rounded-xl border-2 border-orange-500/60 dark:border-orange-400/70 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300">
+								<div data-create-form className="group bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 p-4 rounded-xl border-2 border-orange-500/60 dark:border-orange-400/70 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300">
 									<div className="flex items-start justify-between mb-3">
 										<div className="flex items-center gap-2">
 											<div className="w-5 h-5 bg-violet-400 rounded-full animate-pulse" />
@@ -465,7 +489,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										{/* Type and Category Selectors */}
 										<div className="flex gap-2">
 											<select
-												value={newResource.type || "AFFILIATE"}
+												value={newResource.type || "MY_PRODUCTS"}
 												onChange={(e) =>
 													setNewResource({
 														...newResource,
@@ -487,7 +511,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 													})
 												}
 												disabled={isSaving}
-												className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+												className={`flex-1 px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+													isSingleFunnel 
+														? "border-2 border-orange-500 dark:border-orange-400 bg-orange-50 dark:bg-orange-900/30 shadow-xl shadow-orange-500/40 animate-pulse ring-2 ring-orange-500/30" 
+														: "border-violet-300 dark:border-violet-600"
+												}`}
 											>
 												<option value="FREE_VALUE">Gift</option>
 												<option value="PAID">Paid</option>
@@ -505,12 +533,14 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 													setError(null);
 												}
 											}}
-											placeholder="Digital Asset name"
+											placeholder={isSingleFunnel ? "Digital Asset name" : "Digital Asset name"}
 											disabled={isSaving}
 											className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
 												newResource.name && !isNameAvailable(newResource.name)
 													? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
-													: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
+													: isSingleFunnel 
+														? "border-2 border-orange-500 dark:border-orange-400 bg-orange-50 dark:bg-orange-900/30 shadow-xl shadow-orange-500/40 animate-pulse ring-2 ring-orange-500/30 focus:ring-orange-500/50 focus:border-orange-500 dark:focus:border-orange-400"
+														: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
 											}`}
 											autoFocus
 										/>
@@ -529,7 +559,11 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 											}
 											placeholder="Digital asset URL"
 											disabled={isSaving}
-											className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+											className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+												isSingleFunnel 
+													? "border-2 border-orange-500 dark:border-orange-400 bg-orange-50 dark:bg-orange-900/30 shadow-xl shadow-orange-500/40 animate-pulse ring-2 ring-orange-500/30 focus:ring-orange-500/50 focus:border-orange-500 dark:focus:border-orange-400"
+													: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
+											}`}
 										/>
 
 										{/* Promo Code Field */}

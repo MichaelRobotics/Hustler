@@ -17,6 +17,7 @@ interface ResourceLibraryHeaderProps
 	// Deployment state
 	isDeploying?: boolean;
 	hasAnyLiveFunnel?: boolean;
+	showCreateAssets?: boolean;
 }
 
 export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
@@ -30,6 +31,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 	allResourcesCount,
 	isDeploying = false,
 	hasAnyLiveFunnel = false,
+	showCreateAssets = false,
 }) => {
 	const isAtGlobalLimit = allResourcesCount >= GLOBAL_LIMITS.PRODUCTS;
 	return (
@@ -144,7 +146,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 								color="violet"
 								onClick={onAddProduct}
 								className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
-									filteredResourcesCount === 0
+									filteredResourcesCount === 0 || showCreateAssets
 										? "animate-pulse animate-bounce"
 										: ""
 								}`}
@@ -153,7 +155,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 									size={20}
 									strokeWidth={2.5}
 									className={`transition-transform duration-300 ${
-										filteredResourcesCount === 0
+										filteredResourcesCount === 0 || showCreateAssets
 											? "animate-spin"
 											: "group-hover:rotate-12"
 									}`}
