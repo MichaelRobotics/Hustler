@@ -16,7 +16,7 @@
 		"db:studio": "drizzle-kit studio"
 	},
 	"dependencies": {
-		"@google/genai": "^1.16.0",
+		"@google/genai": "^1.17.0",
 		"@paralleldrive/cuid2": "^2.2.2",
 		"@radix-ui/colors": "^3.0.0",
 		"@radix-ui/react-accordion": "^1.2.12",

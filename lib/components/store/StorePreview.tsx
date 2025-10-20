@@ -3,10 +3,11 @@
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
 import StorePreviewChat from "./StorePreviewChat";
+import { SeasonalStore } from "./SeasonalStore";
 import { apiGet, apiPost } from "../../utils/api-client";
 import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
-import { ArrowLeft, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Sun, Moon, Store } from "lucide-react";
 
 interface StorePreviewProps {
 	experienceId?: string;
@@ -30,6 +31,9 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	onEditMerchant,
 	onLiveFunnelLoaded,
 }) => {
+	// Store type toggle
+	const [useSeasonalStore, setUseSeasonalStore] = useState(false);
+	
 	const [liveFunnel, setLiveFunnel] = useState<any>(null);
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [isFunnelActive, setIsFunnelActive] = useState(false);
@@ -304,36 +308,22 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		}
 	};
 
-	// Show loading state
-	if (isLoading) {
-		return (
-			<div className="h-screen w-full relative">
-				{/* Whop Native Loading Overlay - Covers entire StorePreview until iframe loads */}
-				<div className="absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden">
-					{/* Main content */}
-					<div className="text-center relative z-10">
-						{/* Whop-style loading spinner */}
-						<div className="relative mb-6">
-							<div className="w-8 h-8 mx-auto relative">
-								<div className="absolute inset-0 border-2 border-gray-200 dark:border-gray-700 rounded-full"></div>
-								<div className="absolute inset-0 border-2 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-							</div>
-						</div>
-						
-						{/* Whop-style loading text */}
-						<div className="space-y-2">
-							<h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-								Calling for Merchant
-							</h2>
-							<p className="text-sm text-gray-500 dark:text-gray-400">
-								Preparing showcase items...
-							</p>
-						</div>
-					</div>
-				</div>
-			</div>
-		);
+	// Show SeasonalStore if enabled
+	if (useSeasonalStore) {
+		return <SeasonalStore onBack={() => {
+			// Switch back to StorePreview immediately
+			setUseSeasonalStore(false);
+			// Trigger loading overlay on top of StorePreview
+			setIsLoading(true);
+			// Match StorePreview loading duration: 2.5 seconds total
+			// (2 seconds content stabilization + 500ms transition)
+			setTimeout(() => {
+				setIsLoading(false);
+			}, 2500);
+		}} />;
 	}
+
+	// Don't show loading state here - it will be an overlay on the main content
 
 	// Show error state
 	if (error) {
@@ -374,6 +364,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	// Render with view modes like CustomerView
 	return (
 		<div className="h-screen w-full relative">
+			
 			{/* Whop Native Loading Overlay - Covers entire StorePreview until iframe loads */}
 			{(!iframeLoaded || overlayTransitioning) && (
 				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
@@ -402,29 +393,74 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 				</div>
 			)}
 
-			{/* Top Navbar - With back arrow and theme switch */}
-			<div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg">
-				<div className="px-4 py-3">
-					<div className="flex items-center justify-between">
-								<div className="flex items-center gap-4">
-									{/* Back Arrow */}
-									{onBack && (
-										<button
-											onClick={onBack}
-											className="p-2 rounded-lg touch-manipulation text-muted-foreground hover:text-foreground hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
-											style={{ WebkitTapHighlightColor: "transparent" }}
-										>
-											<ArrowLeft size={20} strokeWidth={2.5} />
-										</button>
-									)}
-								</div>
+			{/* Back Navigation Loading Overlay - Covers entire StorePreview when navigating back */}
+			{isLoading && (
+				<div className="absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden">
+					{/* Main content */}
+					<div className="text-center relative z-10">
+						{/* Whop-style loading spinner */}
+						<div className="relative mb-6">
+							<div className="w-8 h-8 mx-auto relative">
+								<div className="absolute inset-0 border-2 border-gray-200 dark:border-gray-700 rounded-full"></div>
+								<div className="absolute inset-0 border-2 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+							</div>
+						</div>
+						
+						{/* Whop-style loading text */}
+						<div className="space-y-2">
+							<h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+								Returning to Store Preview
+							</h2>
+							<p className="text-sm text-gray-500 dark:text-gray-400">
+								Preparing your store view...
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
 
-						{/* Center: CLAIM YOUR GIFT Button - only show if funnel is active */}
-						{isFunnelActive && (
-							<div className="flex-1 flex justify-center">
+			{/* Top Navbar - With back arrow, avatar, and theme switch */}
+			{(() => { console.log('[StorePreview] Rendering navbar with grid layout'); return null; })()}
+			<div className="sticky top-0 z-50 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg">
+				<div className="px-4 py-3">
+						<div className="grid grid-cols-3 items-center w-full" data-testid="navbar-grid-layout">
+							<div className="flex items-center gap-4 justify-start">
+								{/* Back Arrow */}
+								<button
+									onClick={onBack || (() => window.history.back())}
+									className="p-2 text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+									title="Go Back to My Merchants"
+								>
+									<ArrowLeft size={20} />
+								</button>
+								
+								{/* Avatar Icon */}
+								<div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 bg-red-500" data-testid="navbar-avatar">
+									<img 
+										src="https://img-v2-prod.whop.com/unsafe/rs:fit:256:0/plain/https%3A%2F%2Fassets.whop.com%2Fuploads%2F2025-10-02%2Fuser_16843562_c991d27a-feaa-4318-ab44-2aaa27937382.jpeg@avif?w=256&q=75"
+										alt="User Avatar"
+										className="w-12 h-12 object-cover"
+										onError={(e) => {
+											// Fallback to default icon if image fails to load
+											const target = e.target as HTMLImageElement;
+											target.style.display = 'none';
+											const parent = target.parentElement;
+											if (parent) {
+												parent.innerHTML = '<div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
+											}
+										}}
+									/>
+								</div>
+							</div>
+
+						{/* Center: CLAIM YOUR GIFT Button - Perfectly Centered */}
+						<div className="flex justify-center">
+							{isFunnelActive && (
 								<button
 									onClick={handleButtonClick}
-									className="relative inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group animate-pulse"
+									className={`relative inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group ${
+										(viewMode === 'split-view' || (viewMode === 'chat-only' && isMobile)) ? '' : 'animate-pulse'
+									}`}
 									style={{ WebkitTapHighlightColor: "transparent" }}
 								>
 									{/* Animated background overlay */}
@@ -480,33 +516,49 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 									{/* Glow effect */}
 									<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 								</button>
-							</div>
-						)}
+							)}
+						</div>
 
-						{/* Right Side: Theme Toggle Button - Icon Only */}
-						<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-							<button
-								onClick={toggleTheme}
-								className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
-								style={{ WebkitTapHighlightColor: "transparent" }}
-								title={
-									appearance === "dark"
-										? "Switch to light mode"
-										: "Switch to dark mode"
-								}
-							>
-								{appearance === "dark" ? (
-									<Sun
-										size={20}
-										className="text-foreground/70 dark:text-foreground/70"
-									/>
-								) : (
-									<Moon
-										size={20}
-										className="text-foreground/70 dark:text-foreground/70"
-									/>
-								)}
-							</button>
+						{/* Right Side: Edit Store and Theme Toggle Buttons */}
+						<div className="flex items-center space-x-2 justify-end">
+							{/* Edit Store Button */}
+							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20" data-testid="edit-store-button">
+								<button
+									onClick={() => setUseSeasonalStore(true)}
+									className="flex items-center space-x-2 px-3 py-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
+									style={{ WebkitTapHighlightColor: "transparent" }}
+									title="Edit Store"
+								>
+									<Store size={14} className="text-foreground/70 dark:text-foreground/70" />
+									<span className="text-xs font-medium text-foreground/70 dark:text-foreground/70">Edit Store</span>
+								</button>
+							</div>
+							
+							{/* Theme Toggle Button - Icon Only */}
+							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+								<button
+									onClick={toggleTheme}
+									className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
+									style={{ WebkitTapHighlightColor: "transparent" }}
+									title={
+										appearance === "dark"
+											? "Switch to light mode"
+											: "Switch to dark mode"
+									}
+								>
+									{appearance === "dark" ? (
+										<Sun
+											size={20}
+											className="text-foreground/70 dark:text-foreground/70"
+										/>
+									) : (
+										<Moon
+											size={20}
+											className="text-foreground/70 dark:text-foreground/70"
+										/>
+									)}
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>
