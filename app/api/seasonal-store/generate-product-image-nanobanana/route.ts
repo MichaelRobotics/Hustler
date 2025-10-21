@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('🎨 [Nano Banana API] Received request body:', JSON.stringify(body, null, 2));
     
-    const { productName, theme, originalImageUrl, dimensions } = body;
+    const { productName, theme, originalImageUrl } = body;
 
     if (!productName || !theme) {
       console.log('🎨 [Nano Banana API] Missing required fields:', { productName: !!productName, theme: !!theme });
@@ -17,17 +17,15 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('🎨 [Nano Banana API] Starting product image generation for:', productName);
-    console.log('🎨 [Nano Banana API] Using dimensions:', dimensions || 'default');
     
-    const imageUrl = await nanoBananaService.generateProductImage(productName, theme, originalImageUrl || '', dimensions);
+    const imageUrl = await nanoBananaService.generateProductImage(productName, theme, originalImageUrl || '');
     
     console.log('🎨 [Nano Banana API] Generated product image URL length:', imageUrl.length);
     
     return NextResponse.json({ 
       success: true,
       imageUrl,
-      message: 'Product image generated successfully using Nano Banana service',
-      dimensions: dimensions || { width: 800, height: 800 }
+      message: 'Product image generated successfully using Nano Banana service'
     });
 
   } catch (error) {

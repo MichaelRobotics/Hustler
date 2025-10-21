@@ -3,7 +3,6 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useSeasonalStore } from '@/lib/hooks/useSeasonalStore';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
-import { useBackgroundDimensions, useProductDimensions } from '@/lib/hooks/usePageDimensions';
 import { useTheme } from '../../common/ThemeProvider';
 import { FloatingAsset as FloatingAssetType, FixedTextStyles } from './types';
 import { ProductCard } from './components/ProductCard';
@@ -26,10 +25,12 @@ import {
   generateProductText, 
   generateProductImage, 
   generateBackgroundImage, 
+  generateResponsiveBackgroundImage,
   generateLogo, 
   generateEmojiMatch,
   fileToBase64 
 } from './services/aiService';
+import { useIframeDimensions } from './utils/iframeDimensions';
 
 interface SeasonalStoreProps {
   onBack?: () => void;
@@ -39,9 +40,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
   // Theme functionality
   const { appearance, toggleTheme } = useTheme();
   
-  // Page dimensions for image generation
-  const backgroundDimensions = useBackgroundDimensions();
-  const productDimensions = useProductDimensions();
+  // Track iframe container dimensions for responsive background generation
+  const iframeDimensions = useIframeDimensions();
   
   const {
     // State
@@ -100,6 +100,25 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
     getStorageUsage,
   } = useSeasonalStore();
 
+  // Regenerate background when iframe dimensions change (for responsive behavior)
+  useEffect(() => {
+    if (iframeDimensions && generatedBackground) {
+      console.log('🎨 [Responsive] Iframe dimensions changed, regenerating background...', iframeDimensions);
+      
+      // Debounce the regeneration to avoid too many calls
+      const timeoutId = setTimeout(async () => {
+        try {
+          const newImageUrl = await generateResponsiveBackgroundImage(theme.themePrompt);
+          setBackground('generated', newImageUrl);
+          console.log('🎨 [Responsive] Background regenerated for new dimensions');
+        } catch (error) {
+          console.error('🎨 [Responsive] Failed to regenerate background:', error);
+        }
+      }, 1000); // 1 second debounce
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [iframeDimensions, generatedBackground, theme.themePrompt, setBackground]);
 
   const appRef = useRef<HTMLDivElement>(null);
   const welcomeMessageRef = useRef<HTMLDivElement>(null);
@@ -127,11 +146,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       console.log('🤖 Generated text:', refinedText);
       
       console.log('🎨 Generating product image for:', refinedText.newName);
-      console.log('🎨 Using product dimensions:', productDimensions);
-      const finalImage = await generateProductImage(refinedText.newName, theme, product.image, {
-        width: productDimensions.width,
-        height: productDimensions.height
-      });
+      const finalImage = await generateProductImage(refinedText.newName, theme, product.image);
       console.log('🎨 Generated product image URL:', finalImage);
 
       updateProduct(product.id, {
@@ -146,7 +161,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       setTextLoading(false);
       setImageLoading(false);
     }
-  }, [theme, productDimensions, updateProduct, setTextLoading, setImageLoading, setError]);
+  }, [theme, updateProduct, setTextLoading, setImageLoading, setError]);
 
   const handleGenerateAssetFromText = useCallback(async (userPrompt: string) => {
     setTextLoading(true);
@@ -181,21 +196,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
     setError(null);
 
     try {
-      console.log('🎨 Generating background with prompt:', theme.themePrompt);
-      console.log('🎨 Using dimensions:', backgroundDimensions);
-      const imageUrl = await generateBackgroundImage(theme.themePrompt, {
-        width: backgroundDimensions.width,
-        height: backgroundDimensions.height
-      });
-      console.log('🎨 Generated background URL:', imageUrl);
+      console.log('🎨 Generating responsive background with prompt:', theme.themePrompt);
+      const imageUrl = await generateResponsiveBackgroundImage(theme.themePrompt);
+      console.log('🎨 Generated responsive background URL:', imageUrl);
       setBackground('generated', imageUrl);
     } catch (error) {
-      console.error('🎨 Background generation failed:', error);
+      console.error('🎨 Responsive background generation failed:', error);
       setError(`Background Generation Failed: ${(error as Error).message}`);
     } finally {
       setImageLoading(false);
     }
-  }, [theme.themePrompt, backgroundDimensions, setImageLoading, setError, setBackground]);
+  }, [theme.themePrompt, setImageLoading, setError, setBackground]);
 
   const handleBgImageUpload = useCallback(async (file: File) => {
     if (!file) return;

@@ -1,6 +1,13 @@
 // AI Service for Seasonal Store
 // This file contains client-side functions that make API calls to server-side endpoints
 
+import { 
+  measureIframeContainer, 
+  validateImageCoverage, 
+  resizeImageToFit,
+  getOptimalImageDimensions 
+} from '../utils/iframeDimensions';
+
 // Utility for exponential backoff retry logic
 const retryFetch = async (url: string, options: RequestInit, maxRetries = 5): Promise<Response> => {
   let lastError: Error | null = null;
@@ -113,8 +120,7 @@ export const generateEmojiMatch = async (prompt: string): Promise<string> => {
 export const generateProductImage = async (
   productName: string, 
   theme: any, 
-  originalImageUrl: string,
-  dimensions?: { width: number; height: number }
+  originalImageUrl: string
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-product-image-nanobanana', {
@@ -125,8 +131,7 @@ export const generateProductImage = async (
       body: JSON.stringify({
         productName,
         theme,
-        originalImageUrl,
-        dimensions
+        originalImageUrl
       }),
     });
 
@@ -145,15 +150,21 @@ export const generateProductImage = async (
   }
 };
 
-// Generate background image using Nano Banana service
-export const generateBackgroundImage = async (themePrompt: string, dimensions?: { width: number; height: number }): Promise<string> => {
+// Generate background image using Nano Banana service with container dimensions
+export const generateBackgroundImage = async (
+  themePrompt: string, 
+  containerDimensions?: { width: number; height: number; aspectRatio: number }
+): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-background-nanobanana', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ themePrompt, dimensions }),
+      body: JSON.stringify({ 
+        themePrompt,
+        containerDimensions 
+      }),
     });
 
     if (!response.ok) {
@@ -202,5 +213,57 @@ export const generateLogo = async (
   } catch (error) {
     console.error('Error generating logo:', error);
     throw new Error(`Failed to generate logo: ${(error as Error).message}`);
+  }
+};
+
+// Responsive background generation with iframe container measurement
+export const generateResponsiveBackgroundImage = async (themePrompt: string): Promise<string> => {
+  try {
+    console.log('🎨 [Responsive AI] Starting responsive background generation...');
+    
+    // Measure iframe container dimensions
+    const containerDimensions = measureIframeContainer();
+    if (!containerDimensions) {
+      console.warn('🎨 [Responsive AI] Could not measure container, using fallback dimensions');
+      // Fallback to standard dimensions
+      return await generateBackgroundImage(themePrompt);
+    }
+    
+    console.log('🎨 [Responsive AI] Container dimensions:', containerDimensions);
+    
+    // Generate image with container dimensions
+    const imageUrl = await generateBackgroundImage(themePrompt, containerDimensions);
+    
+    // Validate image coverage
+    const validation = await validateImageCoverage(imageUrl, containerDimensions);
+    console.log('🎨 [Responsive AI] Image validation:', validation);
+    
+    if (validation.isValid) {
+      console.log('🎨 [Responsive AI] Image fits perfectly, no resizing needed');
+      return imageUrl;
+    }
+    
+    if (validation.needsResize && validation.optimalDimensions) {
+      console.log('🎨 [Responsive AI] Image needs resizing, optimal dimensions:', validation.optimalDimensions);
+      
+      try {
+        const resizedImageUrl = await resizeImageToFit(
+          imageUrl, 
+          validation.optimalDimensions.width, 
+          validation.optimalDimensions.height
+        );
+        console.log('🎨 [Responsive AI] Image successfully resized');
+        return resizedImageUrl;
+      } catch (resizeError) {
+        console.error('🎨 [Responsive AI] Resizing failed, using original image:', resizeError);
+        return imageUrl;
+      }
+    }
+    
+    return imageUrl;
+  } catch (error) {
+    console.error('🎨 [Responsive AI] Error in responsive background generation:', error);
+    // Fallback to standard generation
+    return await generateBackgroundImage(themePrompt);
   }
 };
