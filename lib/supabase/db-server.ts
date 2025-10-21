@@ -59,12 +59,13 @@ export const supabaseAdmin = (() => {
 
 // Postgres connection for Drizzle ORM
 const getConnectionString = () => {
-	const connectionString = process.env.POSTGRES_URL_NON_POOLING;
+	// Use pooled connection for better connection management
+	const connectionString = process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING;
 
 	// Only validate during runtime, not build time
 	if (typeof window === "undefined" && process.env.NODE_ENV !== "production") {
 		if (!connectionString) {
-			throw new Error("Missing POSTGRES_URL_NON_POOLING environment variable");
+			throw new Error("Missing POSTGRES_URL or POSTGRES_URL_NON_POOLING environment variable");
 		}
 	}
 
@@ -79,9 +80,9 @@ const createPostgresClient = () => {
 	}
 
 	return postgres(connectionString, {
-		max: 100, // Maximum number of connections (upgraded for MVP scaling)
-		idle_timeout: 30, // Close idle connections after 30 seconds (increased)
-		connect_timeout: 15, // Connection timeout (increased for reliability)
+		max: 5, // Reduced for Supabase compatibility (free tier: 5 connections)
+		idle_timeout: 20, // Close idle connections after 20 seconds
+		connect_timeout: 10, // Connection timeout
 		prepare: true, // Enable prepared statements for better performance
 		onnotice: (notice) => {
 			console.log("PostgreSQL Notice:", notice);
@@ -146,7 +147,7 @@ export async function getConnectionStats(): Promise<{
 		const active = pool?.totalCount || 0;
 		const idle = pool?.idleCount || 0;
 		const total = active;
-		const max = 100;
+		const max = 5;
 		const usage = `${total}/${max}`;
 		
 		// Determine health status
@@ -171,8 +172,8 @@ export async function getConnectionStats(): Promise<{
 			active: 0,
 			idle: 0,
 			total: 0,
-			max: 100,
-			usage: "0/100",
+			max: 5,
+			usage: "0/5",
 			health: "critical"
 		};
 	}

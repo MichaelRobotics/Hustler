@@ -925,8 +925,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                   />
                 </div>
                 
-                {/* Logo Controls - Visible on Hover */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/50 rounded-full">
+                {/* Logo Controls - Only visible when hovering over Zap button */}
+                <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-2 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
                   {/* Upload Button - Top */}
                   <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-md transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -952,6 +952,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                         : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                     }`}
                     title={logoAsset.src.includes('placehold.co') ? `Generate ${currentSeason} Logo` : `Refine to ${currentSeason}`}
+                    onMouseEnter={() => {
+                      // Show controls when hovering over Zap button
+                      const controls = document.querySelector('.logo-controls') as HTMLElement;
+                      if (controls) controls.style.opacity = '1';
+                    }}
+                    onMouseLeave={() => {
+                      // Hide controls when leaving Zap button
+                      const controls = document.querySelector('.logo-controls') as HTMLElement;
+                      if (controls) controls.style.opacity = '0';
+                    }}
                   >
                     <div className="flex items-center justify-center">
                       <ZapIcon className="w-4 h-4" />

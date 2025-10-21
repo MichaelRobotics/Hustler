@@ -13,7 +13,8 @@
 		"db:pull": "drizzle-kit pull",
 		"db:check": "drizzle-kit check",
 		"db:up": "drizzle-kit up",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"db:studio:safe": "./scripts/run-drizzle-studio.sh"
 	},
 	"dependencies": {
 		"@google/genai": "^1.17.0",
