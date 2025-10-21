@@ -315,11 +315,11 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			setUseSeasonalStore(false);
 			// Trigger loading overlay on top of StorePreview
 			setIsLoading(true);
-			// Match StorePreview loading duration: 2.5 seconds total
-			// (2 seconds content stabilization + 500ms transition)
+			// Match StorePreview loading duration: 3.5 seconds total
+			// (3 seconds content stabilization + 500ms transition)
 			setTimeout(() => {
 				setIsLoading(false);
-			}, 2500);
+			}, 3500);
 		}} />;
 	}
 

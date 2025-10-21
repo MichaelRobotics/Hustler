@@ -98,28 +98,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Delete Product Button */}
           <button
             onClick={() => onDeleteProduct(product.id)}
-            className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
+            className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300 relative group"
             title="Delete Product"
           >
             <TrashIcon className="w-3 h-3" />
+            {/* Tooltip */}
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+              Delete Product
+            </div>
           </button>
 
           {/* Single Combined AI Refine Button */}
           <button
             onClick={() => onRefineProduct(product)}
             disabled={loadingState.isTextLoading || loadingState.isImageLoading}
-            className={`p-2 rounded-full group transition-all duration-300 transform hover:scale-105 ${
+            className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
               (loadingState.isTextLoading || loadingState.isImageLoading) 
-                ? 'bg-gray-500 text-gray-300 cursor-not-allowed' 
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                ? 'bg-gray-500 text-gray-300 cursor-not-allowed shadow-gray-500/25' 
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
             }`}
             title="AI Refine All"
           >
             <div className="flex items-center justify-center">
               <ZapIcon className="w-3 h-3" />
-              <span className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-                AI Refine All
-              </span>
+            </div>
+            {/* Tooltip */}
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+              AI Refine All
             </div>
           </button>
         </div>

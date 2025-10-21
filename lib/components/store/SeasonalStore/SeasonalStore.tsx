@@ -3,6 +3,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useSeasonalStore } from '@/lib/hooks/useSeasonalStore';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
+import { useTheme } from '../../common/ThemeProvider';
 import { FloatingAsset as FloatingAssetType, FixedTextStyles } from './types';
 import { ProductCard } from './components/ProductCard';
 import { FloatingAsset } from './components/FloatingAsset';
@@ -19,6 +20,7 @@ import {
   EyeIcon, 
   EditIcon 
 } from './components/Icons';
+import { Sun, Moon, ArrowLeft } from 'lucide-react';
 import { 
   generateProductText, 
   generateProductImage, 
@@ -33,6 +35,9 @@ interface SeasonalStoreProps {
 }
 
 export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
+  // Theme functionality
+  const { appearance, toggleTheme } = useTheme();
+  
   const {
     // State
     allThemes,
@@ -712,133 +717,155 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       className={`min-h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !theme.backgroundImage ? theme.background : ''}`}
       style={getBackgroundStyle()}
     >
-      {/* Back Arrow */}
-      <button
-        onClick={onBack || (() => window.history.back())}
-        className="absolute top-4 left-4 z-50 p-2 text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200 bg-white/80 dark:bg-black/50 rounded-full backdrop-blur-sm shadow-lg"
-        title="Go Back to Store Preview"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-
-      {/* Admin Theme Selector & View Toggle */}
-      <div className="absolute top-4 right-4 z-50 p-2 rounded-lg bg-black/50 backdrop-blur text-white text-sm shadow-2xl flex items-center space-x-4">
-        {/* View Toggle */}
-        <button 
-          onClick={toggleEditorView}
-          className={`p-2 rounded-full group transition-all duration-300 transform hover:scale-105 ${
-            editorState.isEditorView 
-            ? 'bg-red-600 hover:bg-red-700' 
-            : 'bg-green-600 hover:bg-green-700'
-          } text-white`}
-          title={editorState.isEditorView ? 'Switch to Customer Page View' : 'Switch to Editor View'}
-        >
-          <div className="flex items-center justify-center">
-            {editorState.isEditorView ? (
-              <EyeIcon className="w-4 h-4" />
-            ) : (
-              <EditIcon className="w-4 h-4" />
-            )}
-            <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-              {editorState.isEditorView ? 'Page View' : 'Editor View'}
-            </span>
-          </div>
-        </button>
-
-        {editorState.isEditorView && (
-          <div className='flex items-center space-x-2'>
-            {/* Theme Selector */}
-            <div className="flex items-center space-x-2">
-              <label htmlFor="season" className="font-semibold flex-shrink-0 hidden sm:inline">Theme:</label>
-              <select
-                id="season"
-                value={currentSeason}
-                onChange={(e) => { 
-                  setCurrentSeason(e.target.value);
-                  setBackground('generated', null);
-                }}
-                className="p-1 rounded bg-gray-800 text-white border-none"
+      {/* Top Navbar with Integrated Progress Bar */}
+      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Back Arrow */}
+              <button
+                onClick={onBack || (() => window.history.back())}
+                className="p-2 text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                title="Go Back to Store Preview"
               >
-                {Object.keys(allThemes).map(s => (
-                  <option key={s} value={s}>{allThemes[s].name}</option>
-                ))}
-              </select>
+                <ArrowLeft size={20} />
+              </button>
             </div>
-            
-            {/* Background Controls */}
-            <button 
-              onClick={handleGenerateBgClick}
-              disabled={loadingState.isImageLoading}
-              className={`p-2 rounded-full group transition-all duration-300 transform hover:scale-105 ${
-                loadingState.isImageLoading 
-                  ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed' 
-                  : 'bg-indigo-600 hover:bg-indigo-700'
-              }`}
-              title="Generate AI Background"
-            >
-              <div className="flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-                  Generate Background
-                </span>
-              </div>
-            </button>
-            
-            <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-full group transition-all duration-300 transform hover:scale-105 bg-purple-600 hover:bg-purple-700 text-white shadow-md">
-              <div className="flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-                  Upload Background
-                </span>
-              </div>
-              <input 
-                type="file" 
-                id="bg-upload" 
-                className="hidden" 
-                accept="image/*"
-                onChange={(e) => handleBgImageUpload(e.target.files?.[0]!)}
-                disabled={loadingState.isImageLoading}
-              />
-            </label>
-            
-            <button 
-              onClick={toggleAdminSheet}
-              className="p-2 rounded-full group transition-all duration-300 transform hover:scale-105 bg-cyan-600 hover:bg-cyan-700 text-white"
-              title="Manage Floating Assets"
-            >
-              <div className="flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-                  Asset Manager
-                </span>
-              </div>
-            </button>
-            
-            <button 
-              onClick={openTemplateManager}
-              className="p-2 rounded-full group transition-all duration-300 transform hover:scale-105 bg-orange-600 hover:bg-orange-700 text-white"
-              title="Manage Templates"
-            >
-              <div className="flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-                  Templates
-                </span>
-              </div>
-            </button>
+
+            {/* Center: Empty spacer */}
+            <div className="flex-1 flex justify-center">
+              {/* Center area - empty */}
+            </div>
+
+            {/* Right Side: Admin Controls */}
+            <div className="p-2 rounded-lg bg-black/50 backdrop-blur text-white text-sm shadow-2xl flex items-center space-x-4">
+              {/* View Toggle */}
+              <button 
+                onClick={toggleEditorView}
+                className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg ${
+                  editorState.isEditorView 
+                  ? 'bg-red-600 hover:bg-red-700 shadow-red-500/25 hover:shadow-red-500/40' 
+                  : 'bg-green-600 hover:bg-green-700 shadow-green-500/25 hover:shadow-green-500/40'
+                } text-white relative`}
+                title={editorState.isEditorView ? 'Switch to Customer Page View' : 'Switch to Editor View'}
+              >
+                <div className="flex items-center justify-center">
+                  {editorState.isEditorView ? (
+                    <EyeIcon className="w-4 h-4" />
+                  ) : (
+                    <EditIcon className="w-4 h-4" />
+                  )}
+                </div>
+                {/* Tooltip */}
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                  {editorState.isEditorView ? 'Page View' : 'Editor View'}
+                </div>
+              </button>
+
+              {editorState.isEditorView && (
+                <>
+                  {/* Theme Selector */}
+                  <div className="flex items-center space-x-2">
+                    <label htmlFor="season" className="font-semibold flex-shrink-0 hidden sm:inline text-white">Theme:</label>
+                    <select
+                      id="season"
+                      value={currentSeason}
+                      onChange={(e) => { 
+                        setCurrentSeason(e.target.value);
+                        setBackground('generated', null);
+                      }}
+                      className="px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+                    >
+                      {Object.keys(allThemes).map(s => (
+                        <option key={s} value={s}>{allThemes[s].name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Background Generate */}
+                  <button 
+                    onClick={handleGenerateBgClick}
+                    disabled={loadingState.isImageLoading}
+                    className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
+                      loadingState.isImageLoading 
+                        ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                    }`}
+                    title="Generate AI Background"
+                  >
+                    <div className="flex items-center justify-center">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                      Generate Background
+                    </div>
+                  </button>
+                  
+                  {/* Background Upload */}
+                  <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 relative">
+                    <div className="flex items-center justify-center">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                      Upload Background
+                    </div>
+                    <input 
+                      type="file" 
+                      id="bg-upload" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => handleBgImageUpload(e.target.files?.[0]!)}
+                      disabled={loadingState.isImageLoading}
+                    />
+                  </label>
+                  
+                  {/* Asset Manager */}
+                  <button 
+                    onClick={toggleAdminSheet}
+                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 relative"
+                    title="Manage Floating Assets"
+                  >
+                    <div className="flex items-center justify-center">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                      Asset Manager
+                    </div>
+                  </button>
+                  
+                  {/* Templates */}
+                  <button 
+                    onClick={openTemplateManager}
+                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 relative"
+                    title="Manage Templates"
+                  >
+                    <div className="flex items-center justify-center">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                      Templates
+                    </div>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
+
+
 
       {/* Loading Overlay */}
       {(loadingState.isTextLoading || loadingState.isImageLoading) && (
@@ -906,7 +933,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       
       {/* Main Content Container */}
       <div 
-        className={`relative z-30 flex flex-col items-center pt-24 pb-40 px-4 sm:px-8 max-w-7xl mx-auto transition-all duration-500`}
+        className={`relative z-30 flex flex-col items-center pt-4 pb-40 px-4 sm:px-8 max-w-7xl mx-auto transition-all duration-500`}
         onClick={() => editorState.isEditorView && setSelectedAsset(null)}
         onDragOver={(e) => editorState.isEditorView && e.preventDefault()}
         onDrop={editorState.isEditorView ? handleDropAsset : undefined}
@@ -916,7 +943,19 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
           <div className="w-full max-w-5xl mx-auto mb-10">
             <div className="text-center">
               
-              <div className="relative w-36 h-36 mb-4 shadow-xl mx-auto overflow-hidden group">
+              <div 
+                className="relative w-36 h-36 mb-4 mx-auto overflow-hidden group"
+                onMouseEnter={() => {
+                  // Show controls when hovering over entire logo
+                  const controls = document.querySelector('.logo-controls') as HTMLElement;
+                  if (controls) controls.style.opacity = '1';
+                }}
+                onMouseLeave={() => {
+                  // Hide controls when leaving entire logo
+                  const controls = document.querySelector('.logo-controls') as HTMLElement;
+                  if (controls) controls.style.opacity = '0';
+                }}
+              >
                 <div className={`w-full h-full ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}>
                   <img
                     src={logoAsset.src}
@@ -925,10 +964,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                   />
                 </div>
                 
-                {/* Logo Controls - Only visible when hovering over Zap button */}
+                {/* Logo Controls - Only visible when hovering over entire logo */}
                 <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-2 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
                   {/* Upload Button - Top */}
-                  <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-md transition-colors">
+                  <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
@@ -946,28 +985,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                   <button
                     onClick={() => handleLogoGeneration(logoAsset, logoAsset.shape, theme.name)}
                     disabled={loadingState.isImageLoading || loadingState.isTextLoading}
-                    className={`p-2 rounded-full group transition-all duration-300 shadow-md ${
+                    className={`p-2 rounded-xl group transition-all duration-300 shadow-lg hover:scale-105 ${
                       (loadingState.isImageLoading || loadingState.isTextLoading) 
-                        ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
                     }`}
                     title={logoAsset.src.includes('placehold.co') ? `Generate ${currentSeason} Logo` : `Refine to ${currentSeason}`}
-                    onMouseEnter={() => {
-                      // Show controls when hovering over Zap button
-                      const controls = document.querySelector('.logo-controls') as HTMLElement;
-                      if (controls) controls.style.opacity = '1';
-                    }}
-                    onMouseLeave={() => {
-                      // Hide controls when leaving Zap button
-                      const controls = document.querySelector('.logo-controls') as HTMLElement;
-                      if (controls) controls.style.opacity = '0';
-                    }}
                   >
                     <div className="flex items-center justify-center">
                       <ZapIcon className="w-4 h-4" />
-                      <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs w-0 group-hover:w-auto overflow-hidden">
-                        {logoAsset.src.includes('placehold.co') ? `Generate ${currentSeason} Logo` : `Refine to ${currentSeason}`}
-                      </span>
                     </div>
                   </button>
                   
@@ -977,7 +1003,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                       ...prev, 
                       shape: prev.shape === 'round' ? 'square' : 'round' 
                     }))}
-                    className="px-3 py-1 text-xs font-medium rounded-full transition-colors bg-cyan-500 text-white shadow-inner hover:bg-cyan-600"
+                    className="px-3 py-1 text-xs font-medium rounded-xl transition-all duration-300 bg-cyan-500 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-105 hover:bg-cyan-600"
                     disabled={loadingState.isImageLoading}
                     title={`Switch to ${logoAsset.shape === 'round' ? 'Square' : 'Round'}`}
                   >
@@ -989,7 +1015,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
           </div>
         ) : (
           <div className="w-full max-w-5xl mx-auto mb-10 pt-6">
-            <div className={`w-36 h-36 mx-auto overflow-hidden shadow-xl ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}>
+            <div className={`w-36 h-36 mx-auto overflow-hidden ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}>
               <img
                 src={logoAsset.src}
                 alt={logoAsset.alt}
@@ -1067,12 +1093,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
 
         {/* Floating Add Product Button - Only in Edit View */}
         {editorState.isEditorView && (
-          <button
-            onClick={addProduct}
-            className="fixed top-24 right-6 z-50 flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200 backdrop-blur-sm border border-purple-500/20"
-          >
-            <PlusCircleIcon className="w-4 h-4 mr-2" /> Add New Product
-          </button>
+           <button
+             onClick={addProduct}
+             className="fixed top-24 right-6 z-50 flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:bg-green-500 dark:hover:bg-green-600 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 backdrop-blur-sm border border-green-500/20"
+           >
+             <PlusCircleIcon className="w-4 h-4 mr-2" /> Add New Product
+           </button>
         )}
         
         {/* Product Showcase */}
@@ -1208,9 +1234,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
             role="dialog"
             aria-modal="true"
             aria-label="Edit Text"
-            className={`fixed inset-y-0 right-0 w-80 bg-gray-950/95 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700 overflow-hidden ${textSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            className={`fixed inset-y-0 right-0 w-80 bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${textSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/95">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-transparent backdrop-blur-sm">
               <h3 className="text-sm font-semibold tracking-wide text-gray-100">Edit Text</h3>
               <button
                 onClick={closeTextEditorAnimated}
@@ -1371,7 +1397,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
               <div className="h-24" />
             </div>
 
-            <div className="sticky bottom-0 z-10 px-4 py-3 border-t border-gray-800 bg-gray-950/95 flex justify-end gap-2">
+            <div className="sticky bottom-0 z-10 px-4 py-3 border-t border-gray-800/50 bg-transparent backdrop-blur-sm flex justify-end gap-2">
               <button
                 onClick={closeTextEditorAnimated}
                 className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
@@ -1380,7 +1406,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
               </button>
               <button
                 onClick={closeTextEditorAnimated}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-colors"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:shadow-indigo-500/30 dark:hover:shadow-indigo-500/50"
               >
                 Save
               </button>
@@ -1399,9 +1425,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
             role="dialog"
             aria-modal="true"
             aria-label="Edit Product"
-            className={`fixed inset-y-0 right-0 w-80 bg-gray-950/95 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700 overflow-hidden ${productSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            className={`fixed inset-y-0 right-0 w-80 bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${productSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/95">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-transparent backdrop-blur-sm">
               <h3 className="text-sm font-semibold tracking-wide text-gray-100">{productEditor.target === 'button' ? (productEditor.productId === null ? 'Edit Claim Button' : 'Edit Button') : 'Edit Product'}</h3>
               <button onClick={closeProductEditorAnimated} className="text-gray-300 hover:text-white transition-colors" aria-label="Close">
                 <XIcon className="w-5 h-5" />
@@ -1848,9 +1874,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                 <div className="h-24" />
               </div>
             )}
-            <div className="sticky bottom-0 z-10 px-4 py-3 border-t border-gray-800 bg-gray-950/95 flex justify-end gap-2">
+            <div className="sticky bottom-0 z-10 px-4 py-3 border-t border-gray-800/50 bg-transparent backdrop-blur-sm flex justify-end gap-2">
               <button onClick={closeProductEditorAnimated} className="px-4 py-2 text-gray-300 hover:text-white transition-colors">Cancel</button>
-              <button onClick={closeProductEditorAnimated} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-colors">Done</button>
+              <button onClick={closeProductEditorAnimated} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:shadow-indigo-500/30 dark:hover:shadow-indigo-500/50">Done</button>
             </div>
           </div>
         </div>
@@ -1887,7 +1913,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
             role="dialog"
             aria-modal="true"
             aria-label="Template Manager"
-            className={`w-full max-w-md bg-gray-900 text-white shadow-2xl transform transition-transform duration-300 ${
+            className={`w-full max-w-md bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-300 ${
               templateManagerAnimOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >

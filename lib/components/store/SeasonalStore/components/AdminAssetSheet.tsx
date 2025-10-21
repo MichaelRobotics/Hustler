@@ -317,12 +317,12 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
 
   return (
     <div
-      className={`fixed inset-y-0 right-0 w-80 bg-gray-950/95 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed inset-y-0 right-0 w-80 bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       role="dialog"
       aria-modal="true"
       aria-label="Asset Manager"
     >
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/95">
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-transparent backdrop-blur-sm">
         <h3 className="text-sm font-semibold tracking-wide text-gray-100 flex items-center">
           <SettingsIcon className="w-4 h-4 mr-2 text-cyan-400" />
           Asset Manager
@@ -743,31 +743,27 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         )}
 
         {/* Custom Theme Designer */}
-        <div className="p-3 bg-gray-900 rounded-xl border border-fuchsia-600/50">
-          <h4 className="text-base font-semibold text-fuchsia-400 mb-2 flex items-center">
-            <ZapIcon className="w-4 h-4 mr-2" />
-            AI Custom Theme Designer
+        <div>
+          <h4 className="text-3xl font-extrabold text-fuchsia-400 mb-6 flex items-center">
+            <ZapIcon className="w-8 h-8 mr-3" />
+            Custom Theme Designer
           </h4>
-          <p className="text-xs text-gray-400 mb-3">
-            AI generates complete themes with colors, backgrounds, and styling. Uses Imagen for background generation.
-          </p>
-          
-          <label className="text-xs text-gray-400 block mb-1">Theme Name (e.g., 'Neon Summer')</label>
+          <label className="block text-sm font-semibold text-gray-300 mb-2">Theme name</label>
           <input
             type="text"
             value={newThemeName}
             onChange={(e) => setNewThemeName(e.target.value)}
-            placeholder="Enter a creative theme name"
-            className="w-full p-2 mb-2 text-sm rounded-lg bg-gray-800 text-white placeholder-gray-500 border-none focus:ring-2 focus:ring-fuchsia-500"
+            placeholder="Enter theme name - AI generates complete themes with colors, backgrounds, and styling using Imagen (e.g., 'Neon Summer')"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
           />
 
-          <label className="text-xs text-gray-400 block mb-1">AI Prompt Description (Used for image & color generation)</label>
+          <label className="block text-sm font-semibold text-gray-300 mb-2">Prompt</label>
           <textarea
             value={newThemePrompt}
-            placeholder="e.g., 'An underwater scene with bright bioluminescence, neon blues and purples, glowing sea creatures'"
+            placeholder="Enter AI prompt description for image & color generation (e.g., 'An underwater scene with bright bioluminescence, neon blues and purples, glowing sea creatures')"
             onChange={(e) => setNewThemePrompt(e.target.value)}
             rows={3}
-            className="w-full p-2 mb-4 text-sm rounded-lg bg-gray-800 text-white placeholder-gray-500 border-none focus:ring-2 focus:ring-fuchsia-500 resize-none"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
           />
 
           <button 
@@ -789,26 +785,19 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               </>
             )}
           </button>
-          
-          <div className="mt-2 text-xs text-gray-500">
-            ✨ AI will generate: Colors, Background Image, Typography, & Styling
-          </div>
         </div>
 
         {/* AI Asset Generator (EMOJI MATCH) */}
-        <div className="p-3 bg-gray-900 rounded-xl border border-blue-600/50">
-          <h4 className="text-base font-semibold text-blue-400 mb-2 flex items-center">
-            <ImagePlusIcon className="w-4 h-4 mr-2"/> AI Emoji Match (Text)
+        <div>
+          <h4 className="text-3xl font-extrabold text-blue-400 mb-6 flex items-center">
+            <ImagePlusIcon className="w-8 h-8 mr-3"/> AI Emoji Match (Text)
           </h4>
-          <p className="text-xs text-gray-400 mb-3">
-            The AI finds the best single emoji character for your description.
-          </p>
           <input
             type="text"
-            placeholder={`e.g., 'A gift box' or 'a spooky ghost'`}
+            placeholder="Enter description - The AI finds the best single emoji character for your description (e.g., 'A gift box' or 'a spooky ghost')"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="w-full p-2 mb-2 text-sm rounded-lg bg-gray-800 text-white placeholder-gray-500 border-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
             disabled={isTextLoading}
           />
           <button 
@@ -825,17 +814,17 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         </div>
         
         {/* Manual Emoji Bank */}
-        <div className="p-3 bg-gray-900 rounded-xl border border-cyan-600/50">
-          <h4 className="text-base font-semibold text-cyan-400 mb-2 flex items-center">
-            <SearchIcon className="w-4 h-4 mr-2"/> Manual Emoji Bank
+        <div>
+          <h4 className="text-3xl font-extrabold text-cyan-400 mb-6 flex items-center">
+            <SearchIcon className="w-8 h-8 mr-3"/> Manual Emoji Bank
           </h4>
           
           <input
             type="search"
-            placeholder="Search emojis or categories..."
+            placeholder="Search emojis or categories (e.g., 'gift', 'heart', 'party')"
             value={manualSearch}
             onChange={(e) => setManualSearch(e.target.value)}
-            className="w-full p-2 mb-3 text-sm rounded-lg bg-gray-800 text-white placeholder-gray-500 border-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
           />
 
           <div className="max-h-60 overflow-y-auto space-y-3 p-1 rounded-lg">
