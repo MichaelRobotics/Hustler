@@ -113,7 +113,8 @@ export const generateEmojiMatch = async (prompt: string): Promise<string> => {
 export const generateProductImage = async (
   productName: string, 
   theme: any, 
-  originalImageUrl: string
+  originalImageUrl: string,
+  dimensions?: { width: number; height: number }
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-product-image-nanobanana', {
@@ -124,7 +125,8 @@ export const generateProductImage = async (
       body: JSON.stringify({
         productName,
         theme,
-        originalImageUrl
+        originalImageUrl,
+        dimensions
       }),
     });
 
@@ -144,14 +146,14 @@ export const generateProductImage = async (
 };
 
 // Generate background image using Nano Banana service
-export const generateBackgroundImage = async (themePrompt: string): Promise<string> => {
+export const generateBackgroundImage = async (themePrompt: string, dimensions?: { width: number; height: number }): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-background-nanobanana', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ themePrompt }),
+      body: JSON.stringify({ themePrompt, dimensions }),
     });
 
     if (!response.ok) {

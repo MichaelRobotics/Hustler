@@ -3,6 +3,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useSeasonalStore } from '@/lib/hooks/useSeasonalStore';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
+import { useBackgroundDimensions, useProductDimensions } from '@/lib/hooks/usePageDimensions';
 import { useTheme } from '../../common/ThemeProvider';
 import { FloatingAsset as FloatingAssetType, FixedTextStyles } from './types';
 import { ProductCard } from './components/ProductCard';
@@ -37,6 +38,10 @@ interface SeasonalStoreProps {
 export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
   // Theme functionality
   const { appearance, toggleTheme } = useTheme();
+  
+  // Page dimensions for image generation
+  const backgroundDimensions = useBackgroundDimensions();
+  const productDimensions = useProductDimensions();
   
   const {
     // State
@@ -122,7 +127,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       console.log('🤖 Generated text:', refinedText);
       
       console.log('🎨 Generating product image for:', refinedText.newName);
-      const finalImage = await generateProductImage(refinedText.newName, theme, product.image);
+      console.log('🎨 Using product dimensions:', productDimensions);
+      const finalImage = await generateProductImage(refinedText.newName, theme, product.image, {
+        width: productDimensions.width,
+        height: productDimensions.height
+      });
       console.log('🎨 Generated product image URL:', finalImage);
 
       updateProduct(product.id, {
@@ -137,7 +146,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       setTextLoading(false);
       setImageLoading(false);
     }
-  }, [theme, updateProduct, setTextLoading, setImageLoading, setError]);
+  }, [theme, productDimensions, updateProduct, setTextLoading, setImageLoading, setError]);
 
   const handleGenerateAssetFromText = useCallback(async (userPrompt: string) => {
     setTextLoading(true);
@@ -173,7 +182,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
 
     try {
       console.log('🎨 Generating background with prompt:', theme.themePrompt);
-      const imageUrl = await generateBackgroundImage(theme.themePrompt);
+      console.log('🎨 Using dimensions:', backgroundDimensions);
+      const imageUrl = await generateBackgroundImage(theme.themePrompt, {
+        width: backgroundDimensions.width,
+        height: backgroundDimensions.height
+      });
       console.log('🎨 Generated background URL:', imageUrl);
       setBackground('generated', imageUrl);
     } catch (error) {
@@ -182,7 +195,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
     } finally {
       setImageLoading(false);
     }
-  }, [theme.themePrompt, setImageLoading, setError, setBackground]);
+  }, [theme.themePrompt, backgroundDimensions, setImageLoading, setError, setBackground]);
 
   const handleBgImageUpload = useCallback(async (file: File) => {
     if (!file) return;

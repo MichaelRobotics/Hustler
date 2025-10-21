@@ -49,14 +49,20 @@ export class NanoBananaImageService {
   /**
    * Generate background images for seasonal themes using Imagen 3.0
    */
-  async generateBackgroundImage(themePrompt: string): Promise<string> {
+  async generateBackgroundImage(themePrompt: string, dimensions?: { width: number; height: number }): Promise<string> {
     console.log('🎨 [Nano Banana] Starting background generation with prompt:', themePrompt);
+    console.log('🎨 [Nano Banana] Using dimensions:', dimensions || 'default (1920x1080)');
+    
+    // Use provided dimensions or fallback to standard web resolution
+    const width = dimensions?.width || 1920;
+    const height = dimensions?.height || 1080;
+    const aspectRatio = width / height;
     
     const enhancedPrompt = `Create a stunning, high-resolution background image for an e-commerce store that FULLY COVERS THE ENTIRE SCREEN. 
     Theme: ${themePrompt}. 
     Style: Cinematic, dreamy, ultra-detailed with shallow depth of field and gentle bokeh effects.
     Requirements: 
-    - 1920x1080 resolution (16:9 aspect ratio)
+    - ${width}x${height} resolution (${aspectRatio.toFixed(2)}:1 aspect ratio)
     - FULL SCREEN COVERAGE - image must extend to all edges without empty spaces
     - Full, complete image with rich details and textures covering every pixel
     - NO solid black or white backgrounds - use vibrant, themed colors
@@ -70,7 +76,8 @@ export class NanoBananaImageService {
     - High quality, photorealistic
     - Ensure the ENTIRE IMAGE is filled with thematic content from edge to edge
     - NO empty spaces, borders, or unfilled areas
-    - Background must be seamless and continuous across the full screen`;
+    - Background must be seamless and continuous across the full screen
+    - Optimized for web display and responsive design`;
 
     try {
       const response = await this.genAI.models.generateImages({
@@ -109,16 +116,23 @@ export class NanoBananaImageService {
   async generateProductImage(
     productName: string, 
     theme: any, 
-    originalImageUrl: string
+    originalImageUrl: string,
+    dimensions?: { width: number; height: number }
   ): Promise<string> {
     console.log('🎨 [Nano Banana] Starting product image generation for:', productName);
     console.log('🎨 [Nano Banana] Theme object:', JSON.stringify(theme, null, 2));
+    console.log('🎨 [Nano Banana] Using dimensions:', dimensions || 'default (800x800)');
+    
+    // Use provided dimensions or fallback to square format for products
+    const width = dimensions?.width || 800;
+    const height = dimensions?.height || 800;
+    const aspectRatio = width / height;
     
     const enhancedPrompt = `Create a professional product image for "${productName}" in a ${theme.name} theme.
     Style: Clean, modern, e-commerce ready
     Background: ${theme.themePrompt}
     Requirements:
-    - High resolution (800x800 minimum)
+    - High resolution (${width}x${height} - ${aspectRatio.toFixed(2)}:1 aspect ratio)
     - Full, complete image with rich thematic background
     - NO solid black or white backgrounds - use vibrant, themed colors
     - Themed environment that complements the product
@@ -129,7 +143,8 @@ export class NanoBananaImageService {
     - No text overlays, labels, or captions
     - No logos or symbols
     - E-commerce optimized
-    - Ensure the entire image is filled with thematic content`;
+    - Ensure the entire image is filled with thematic content
+    - Optimized for product display and responsive design`;
 
     try {
       const response = await this.genAI.models.generateImages({

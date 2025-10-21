@@ -3,7 +3,7 @@ import { nanoBananaService } from '@/lib/services/nanobananaService';
 
 export async function POST(request: NextRequest) {
   try {
-    const { themePrompt } = await request.json();
+    const { themePrompt, dimensions } = await request.json();
 
     if (!themePrompt) {
       return NextResponse.json(
@@ -13,15 +13,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('🎨 [Nano Banana API] Starting background generation with prompt:', themePrompt);
+    console.log('🎨 [Nano Banana API] Using dimensions:', dimensions || 'default');
     
-    const imageUrl = await nanoBananaService.generateBackgroundImage(themePrompt);
+    const imageUrl = await nanoBananaService.generateBackgroundImage(themePrompt, dimensions);
     
     console.log('🎨 [Nano Banana API] Generated image URL length:', imageUrl.length);
     
     return NextResponse.json({ 
       success: true,
       imageUrl,
-      message: 'Background image generated successfully using Nano Banana service'
+      message: 'Background image generated successfully using Nano Banana service',
+      dimensions: dimensions || { width: 1920, height: 1080 }
     });
 
   } catch (error) {
