@@ -15,9 +15,4 @@ export default defineConfig({
 	migrations: {
 		prefix: "timestamp",
 	},
-	// Studio-specific configuration
-	studio: {
-		port: 3001, // Use different port to avoid conflicts
-		host: "localhost",
-	},
 });
