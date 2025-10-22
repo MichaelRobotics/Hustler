@@ -906,7 +906,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             <div className="p-2 rounded-lg bg-black/50 backdrop-blur text-white text-sm shadow-2xl flex items-center space-x-4">
               {/* View Toggle */}
               <button 
-                onClick={toggleEditorView}
+                onClick={() => {
+                  toggleEditorView();
+                  // Close chat when switching to editor view
+                  if (!editorState.isEditorView && isChatOpen) {
+                    setIsChatOpen(false);
+                  }
+                }}
                 className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg ${
                   editorState.isEditorView 
                   ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 shadow-red-500/25 hover:shadow-red-500/40' 
