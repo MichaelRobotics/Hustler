@@ -113,7 +113,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     
     // Actions
     setCurrentSeason,
-    setProducts,
     setAvailableAssets,
     setFixedTextStyles,
     setLogoAsset,
@@ -570,9 +569,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     const prevAccent = prevAccentRef.current;
     if (prevAccent !== theme.accent) {
       // Update product buttons that were using previous theme accent
-      setProducts((prev: any[]) => prev.map(p => (
-        p.buttonClass === prevAccent ? { ...p, buttonClass: theme.accent } : p
-      )));
+      products.forEach(product => {
+        if (product.buttonClass === prevAccent) {
+          updateProduct(product.id, { buttonClass: theme.accent });
+        }
+      });
 
       // Update claim button if it matched previous accent (or was empty)
       setPromoButton(prev => ({
@@ -585,7 +586,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
       prevAccentRef.current = theme.accent;
     }
-  }, [theme.accent, setProducts]);
+  }, [theme.accent, products, updateProduct]);
 
   // Map ring class to a safe hover:ring-* class included at build time
   const getHoverRingClass = (ringCls: string) => {
@@ -804,6 +805,58 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     }
   }, [editingText.isOpen]);
 
+  // Close modal when clicking outside the edit panel
+  useEffect(() => {
+    if (!editingText.isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if click is on the edit panel or inside it
+      const editPanel = document.querySelector('[role="dialog"][aria-label="Edit Text"]');
+      if (editPanel && editPanel.contains(target)) {
+        return; // Don't close if clicking inside the edit panel
+      }
+      // Close the modal
+      closeTextEditorAnimated();
+    };
+
+    // Add small delay to prevent immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [editingText.isOpen]);
+
+  // Close product editor modal when clicking outside the edit panel
+  useEffect(() => {
+    if (!productEditor.isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if click is on the product edit panel or inside it
+      const productEditPanel = document.querySelector('[role="dialog"][aria-label="Edit Product"]');
+      if (productEditPanel && productEditPanel.contains(target)) {
+        return; // Don't close if clicking inside the product edit panel
+      }
+      // Close the modal
+      closeProductEditorAnimated();
+    };
+
+    // Add small delay to prevent immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [productEditor.isOpen]);
+
   useEffect(() => {
     if (templateManagerOpen) {
       const id = requestAnimationFrame(() => setTemplateManagerAnimOpen(true));
@@ -886,10 +939,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
   // While in edit mode, clicking any text opens inline editing instead of opening the modal again
   const beginInlineFromPanel = (target: 'headerMessage' | 'subHeader' | 'promoMessage') => {
+    // Close the modal first
+    setEditingText({ isOpen: false, targetId: 'mainHeader' });
+    // Then activate inline editing with a small delay to ensure modal closes first
     setTimeout(() => {
-      setEditingText({ isOpen: false, targetId: 'mainHeader' });
       setInlineEditTarget(target);
-    }, 0);
+    }, 100);
   };
 
   // Show FunnelBuilder if Edit Merchant was clicked
@@ -1051,7 +1106,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       value={currentSeason}
                       onChange={(e) => { 
                         setCurrentSeason(e.target.value);
-                        setBackground('generated', null);
                       }}
                       className="px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
                     >
@@ -1340,11 +1394,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             <p 
               className={`${headerMessage.styleClass} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
               style={{ color: headerMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
-              onClick={() => {
-                if (editorState.isEditorView) {
-                  setEditingText({ isOpen: true, targetId: 'headerMessage' });
-                }
-              }}
+               onClick={() => {
+                 if (editorState.isEditorView) {
+                   // If modal is open for any text, don't handle clicks on page text elements
+                   if (editingText.isOpen) {
+                     return; // Do nothing when modal is open
+                   }
+                   // First click: open modal and immediately activate inline editing
+                   setEditingText({ isOpen: true, targetId: 'headerMessage' });
+                   setTimeout(() => setInlineEditTarget('headerMessage'), 100);
+                 }
+               }}
             >
               {headerMessage.content}
             </p>
@@ -1367,11 +1427,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             <p 
               className={`${subHeader.styleClass} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
               style={{ color: subHeader.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
-              onClick={() => {
-                if (editorState.isEditorView) {
-                  setEditingText({ isOpen: true, targetId: 'subHeader' });
-                }
-              }}
+               onClick={() => {
+                 if (editorState.isEditorView) {
+                   // If modal is open for any text, don't handle clicks on page text elements
+                   if (editingText.isOpen) {
+                     return; // Do nothing when modal is open
+                   }
+                   // First click: open modal and immediately activate inline editing
+                   setEditingText({ isOpen: true, targetId: 'subHeader' });
+                   setTimeout(() => setInlineEditTarget('subHeader'), 100);
+                 }
+               }}
             >
               {subHeader.content}
             </p>
@@ -1495,11 +1561,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                />
              ) : (
                <p
-                 onClick={() => {
-                   if (editorState.isEditorView) {
-                     setEditingText({ isOpen: true, targetId: 'promoMessage' });
-                   }
-                 }}
+                  onClick={() => {
+                    if (editorState.isEditorView) {
+                      // If modal is open for any text, don't handle clicks on page text elements
+                      if (editingText.isOpen) {
+                        return; // Do nothing when modal is open
+                      }
+                      // First click: open modal and immediately activate inline editing
+                      setEditingText({ isOpen: true, targetId: 'promoMessage' });
+                      setTimeout(() => setInlineEditTarget('promoMessage'), 100);
+                    }
+                  }}
                  className={`${promoMessage.styleClass} mb-8 drop-shadow-md ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 rounded-lg p-2 transition-colors duration-200' : ''}`}
                  style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
                >
@@ -1557,12 +1629,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           onClick={(e) => {
             if (e.target === e.currentTarget) closeTextEditorAnimated();
           }}
+          style={{
+            // Remove overlay blocking when modal is open for the same text element
+            pointerEvents: editingText.targetId === 'headerMessage' || editingText.targetId === 'subHeader' || editingText.targetId === 'promoMessage' ? 'none' : 'auto'
+          }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Edit Text"
             className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${textSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            style={{ pointerEvents: 'auto' }}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
               <h3 className={`text-sm font-semibold tracking-wide ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>Edit Text</h3>
@@ -1586,13 +1663,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     ...prev,
                     [editingText.targetId]: { ...prev[editingText.targetId], content: e.target.value }
                   }))}
-                  onFocus={() => {
-                    // When focusing content field: close modal and enable inline editing
-                    const target = editingText.targetId as 'headerMessage' | 'subHeader' | 'promoMessage' | 'mainHeader';
-                    if (target === 'headerMessage' || target === 'subHeader' || target === 'promoMessage') {
-                      beginInlineFromPanel(target);
-                    }
-                  }}
+                  // Removed onFocus handler - textarea should work normally within modal
                   className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
                 />
               </div>
@@ -1748,12 +1819,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         <div
           className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${productSheetAnimOpen ? 'opacity-100' : 'opacity-0'}`}
           onClick={(e) => { if (e.target === e.currentTarget) closeProductEditorAnimated(); }}
+          style={{
+            // Remove overlay blocking when product editor modal is open
+            pointerEvents: 'none'
+          }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Edit Product"
             className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${productSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            style={{ pointerEvents: 'auto' }}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
               <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
@@ -1797,11 +1873,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                         type="text"
                         value={products.find(p => p.id === productEditor.productId)?.name || ''}
                         onChange={(e) => updateProduct(productEditor.productId!, { name: e.target.value })}
-                        onFocus={() => {
-                          closeProductEditorAnimated();
-                          setInlineEditTarget('productName');
-                          setInlineProductId(productEditor.productId!);
-                        }}
+                        // Removed onFocus handler - input should work normally within modal
                         placeholder="Enter name"
                         className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 placeholder-black"
                       />
@@ -1812,11 +1884,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       <textarea
                         value={products.find(p => p.id === productEditor.productId)?.description || ''}
                         onChange={(e) => updateProduct(productEditor.productId!, { description: e.target.value })}
-                        onFocus={() => {
-                          closeProductEditorAnimated();
-                          setInlineEditTarget('productDesc');
-                          setInlineProductId(productEditor.productId!);
-                        }}
+                        // Removed onFocus handler - textarea should work normally within modal
                         placeholder="Enter description"
                         className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 h-24 placeholder-black"
                       />
@@ -1858,7 +1926,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       productId={productEditor.productId!}
                       themeAccent={theme.accent}
                       updateProduct={updateProduct}
-                      setProducts={setProducts}
                       setPromoButton={setPromoButton}
                     />
                     {/* Removed animation color per request */}
@@ -1938,7 +2005,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                           const currentCard = products.find(p => p.id === productEditor.productId!)?.cardClass || theme.card;
                           const currentTitle = products.find(p => p.id === productEditor.productId!)?.titleClass || theme.text;
                           const currentDesc = products.find(p => p.id === productEditor.productId!)?.descClass || theme.text;
-                          setProducts((prev: any[]) => prev.map(p => ({ ...p, cardClass: currentCard, titleClass: currentTitle, descClass: currentDesc })));
+                          products.forEach(p => {
+              updateProduct(p.id, { cardClass: currentCard, titleClass: currentTitle, descClass: currentDesc });
+            });
                         }}
                         className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-200 text-xs"
                       >
@@ -2198,7 +2267,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     <button
                       onClick={() => {
                         const current = promoButton.buttonClass || theme.accent;
-                        setProducts((prev: any[]) => prev.map(p => ({ ...p, buttonClass: current })));
+                        products.forEach(p => {
+                          updateProduct(p.id, { buttonClass: current });
+                        });
                         setPromoButton(prev => ({ ...prev, buttonClass: current }));
                       }}
                       className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-200 text-xs"
@@ -2475,9 +2546,8 @@ const ButtonColorControls: React.FC<{
   productId: number;
   themeAccent: string;
   updateProduct: (id: number, updates: any) => void;
-  setProducts: (updater: any) => void;
   setPromoButton?: React.Dispatch<React.SetStateAction<{ text: string; buttonClass: string; ringClass: string; ringHoverClass: string; icon: string }>>;
-}> = ({ products, productId, themeAccent, updateProduct, setProducts, setPromoButton }) => {
+}> = ({ products, productId, themeAccent, updateProduct, setPromoButton }) => {
   const presets = [
     { class: 'bg-indigo-600 hover:bg-indigo-700 text-white ring-indigo-500', ring: 'ring-indigo-500' },
     { class: 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white ring-fuchsia-500', ring: 'ring-fuchsia-500' },
@@ -2515,7 +2585,9 @@ const ButtonColorControls: React.FC<{
           className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-200 text-xs"
           onClick={() => {
             const current = products.find(p => p.id === productId)?.buttonClass || themeAccent;
-            setProducts((prev: any[]) => prev.map(p => ({ ...p, buttonClass: current })));
+            products.forEach(p => {
+              updateProduct(p.id, { buttonClass: current });
+            });
             if (setPromoButton) setPromoButton(prev => ({ ...prev, buttonClass: current }));
           }}
         >

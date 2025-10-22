@@ -26,7 +26,6 @@ export const useSeasonalStore = () => {
   // Core State
   const [allThemes, setAllThemes] = useState<Record<string, Theme>>(initialThemes);
   const [currentSeason, setCurrentSeason] = useState<string>('Fall');
-  const [products, setProducts] = useState<Product[]>(initialProducts);
   const [floatingAssets, setFloatingAssets] = useState<FloatingAsset[]>([]);
   const [availableAssets, setAvailableAssets] = useState<FloatingAsset[]>([]);
   
@@ -35,6 +34,7 @@ export const useSeasonalStore = () => {
   const [themeLogos, setThemeLogos] = useState<Record<string, LogoAsset>>({});
   const [themeGeneratedBackgrounds, setThemeGeneratedBackgrounds] = useState<Record<string, string | null>>({});
   const [themeUploadedBackgrounds, setThemeUploadedBackgrounds] = useState<Record<string, string | null>>({});
+  const [themeProducts, setThemeProducts] = useState<Record<string, Product[]>>({});
   
   // Current theme's state (computed from theme-specific state)
   const fixedTextStyles = themeTextStyles[currentSeason] || {
@@ -63,6 +63,22 @@ export const useSeasonalStore = () => {
   const logoAsset = themeLogos[currentSeason] || defaultLogo;
   const generatedBackground = themeGeneratedBackgrounds[currentSeason] || null;
   const uploadedBackground = themeUploadedBackgrounds[currentSeason] || null;
+  
+  // Get products for current theme, fallback to default theme products
+  const getDefaultProducts = (season: string): Product[] => {
+    switch (season) {
+      case 'Winter': return winterProducts;
+      case 'Summer': return summerProducts;
+      case 'Fall': return fallProducts;
+      case 'Holiday Cheer': return holidayProducts;
+      case 'Spring Renewal': return springProducts;
+      case 'Cyber Sale': return cyberProducts;
+      case 'Spooky Night': return halloweenProducts;
+      default: return initialProducts;
+    }
+  };
+  
+  const products = themeProducts[currentSeason] || getDefaultProducts(currentSeason);
   
   // Editor State
   const [editorState, setEditorState] = useState<EditorState>({
@@ -165,35 +181,16 @@ export const useSeasonalStore = () => {
     return result;
   };
 
-  // Switch products based on theme
+  // Initialize theme-specific products if not already set
   useEffect(() => {
-    switch (currentSeason) {
-      case 'Winter':
-        setProducts(winterProducts);
-        break;
-      case 'Summer':
-        setProducts(summerProducts);
-        break;
-      case 'Fall':
-        setProducts(fallProducts);
-        break;
-      case 'Holiday Cheer':
-        setProducts(holidayProducts);
-        break;
-      case 'Spring Renewal':
-        setProducts(springProducts);
-        break;
-      case 'Cyber Sale':
-        setProducts(cyberProducts);
-        break;
-      case 'Spooky Night':
-        setProducts(halloweenProducts);
-        break;
-      default:
-        setProducts(initialProducts);
-        break;
+    if (!themeProducts[currentSeason]) {
+      const defaultProducts = getDefaultProducts(currentSeason);
+      setThemeProducts(prev => ({
+        ...prev,
+        [currentSeason]: defaultProducts
+      }));
     }
-  }, [currentSeason]);
+  }, [currentSeason, themeProducts, getDefaultProducts]);
 
   // Update text colors when theme changes
   useEffect(() => {
@@ -252,18 +249,27 @@ export const useSeasonalStore = () => {
       image: `https://placehold.co/200x200/4f46e5/ffffff?text=New+Product`,
       containerAsset: undefined,
     };
-    setProducts(prev => [...prev, newProduct]);
-  }, []);
+    setThemeProducts(prev => ({
+      ...prev,
+      [currentSeason]: [...(prev[currentSeason] || []), newProduct]
+    }));
+  }, [currentSeason]);
 
   const updateProduct = useCallback((id: number, updates: Partial<Product>) => {
-    setProducts(prev => prev.map(product => 
-      product.id === id ? { ...product, ...updates } : product
-    ));
-  }, []);
+    setThemeProducts(prev => ({
+      ...prev,
+      [currentSeason]: (prev[currentSeason] || []).map(product => 
+        product.id === id ? { ...product, ...updates } : product
+      )
+    }));
+  }, [currentSeason]);
 
   const deleteProduct = useCallback((id: number) => {
-    setProducts(prev => prev.filter(product => product.id !== id));
-  }, []);
+    setThemeProducts(prev => ({
+      ...prev,
+      [currentSeason]: (prev[currentSeason] || []).filter(product => product.id !== id)
+    }));
+  }, [currentSeason]);
 
   // Asset Management
   const addFloatingAsset = useCallback((asset: FloatingAsset) => {
@@ -366,6 +372,7 @@ export const useSeasonalStore = () => {
         themeLogos,
         themeGeneratedBackgrounds,
         themeUploadedBackgrounds,
+        themeProducts,
         id: `template_${Date.now()}`,
         createdAt: new Date()
       };
@@ -430,9 +437,15 @@ export const useSeasonalStore = () => {
     if (!template) return;
     
     // Load template data into current state
-    setProducts(template.products);
     setFloatingAssets(template.floatingAssets);
     setCurrentSeason(template.currentSeason);
+    
+    // Load theme-specific products if available, otherwise fallback to legacy format
+    if (template.themeProducts) {
+      setThemeProducts(template.themeProducts);
+    } else {
+      setThemeProducts({ [template.currentSeason]: template.products });
+    }
     
     // Load theme-specific data if available, otherwise fallback to legacy format
     if (template.themeTextStyles) {
@@ -560,7 +573,6 @@ export const useSeasonalStore = () => {
     
     // Actions
     setCurrentSeason,
-    setProducts,
     setAvailableAssets,
     setFixedTextStyles,
     setLogoAsset,

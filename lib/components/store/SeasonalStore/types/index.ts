@@ -127,6 +127,7 @@ export interface StoreTemplate {
   themeLogos?: Record<string, LogoAsset>;
   themeGeneratedBackgrounds?: Record<string, string | null>;
   themeUploadedBackgrounds?: Record<string, string | null>;
+  themeProducts?: Record<string, Product[]>;
 }
 
 export interface SeasonalStoreState {
