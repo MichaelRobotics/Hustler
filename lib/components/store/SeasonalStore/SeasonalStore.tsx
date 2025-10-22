@@ -2238,11 +2238,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           ? 'translate-y-0 opacity-100' 
           : 'translate-y-full opacity-0'
       }`}>
-        <div className={`h-1/2 w-full flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+        <div className={`w-full flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
           isChatOpen 
-            ? 'max-h-[50vh] opacity-100' 
+            ? 'max-h-[45vh] opacity-100' 
             : 'max-h-0 opacity-0'
-        }`} style={{ height: isChatOpen ? '50vh' : '0vh', maxHeight: isChatOpen ? '50vh' : '0vh' }}>
+        }`} style={{ height: isChatOpen ? '45vh' : '0vh', maxHeight: isChatOpen ? '45vh' : '0vh' }}>
             {/* Beautiful Golden Separator Line */}
             <div className="absolute top-0 left-0 right-0 z-20">
               {/* Main golden line */}
