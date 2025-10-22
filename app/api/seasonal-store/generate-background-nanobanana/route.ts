@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { nanoBananaService } from '@/lib/services/nanobananaService';
 
 export async function POST(request: NextRequest) {
+  let themePrompt: string = '';
+  let containerDimensions: any = undefined;
+  
   try {
-    const { themePrompt, containerDimensions } = await request.json();
+    const body = await request.json();
+    themePrompt = body.themePrompt;
+    containerDimensions = body.containerDimensions;
 
     if (!themePrompt) {
       return NextResponse.json(
@@ -29,10 +34,31 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('🎨 [Nano Banana API] Error generating background:', error);
     
+    // Handle quota exceeded error with fallback
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+      console.warn('🎨 [Nano Banana API] API quota exceeded, generating fallback background');
+      
+      try {
+        // Generate fallback background
+        const fallbackImageUrl = nanoBananaService.generateFallbackBackground(themePrompt || 'default theme', 1920, 1080);
+        
+        return NextResponse.json({ 
+          success: true,
+          imageUrl: fallbackImageUrl,
+          message: 'Fallback background generated due to quota limits',
+          isFallback: true,
+          dimensions: containerDimensions
+        });
+      } catch (fallbackError) {
+        console.error('🎨 [Nano Banana API] Fallback generation failed:', fallbackError);
+      }
+    }
+    
     return NextResponse.json(
       { 
         error: 'Background generation failed',
-        details: (error as Error).message 
+        details: errorMessage 
       },
       { status: 500 }
     );

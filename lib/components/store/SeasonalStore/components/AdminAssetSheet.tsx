@@ -11,6 +11,7 @@ import {
   ZapIcon
 } from './Icons';
 import { emojiToSvgDataURL } from '../services/aiService';
+import { useBackgroundAnalysis } from '../utils/backgroundAnalyzer';
 
 interface AdminAssetSheetProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ interface AdminAssetSheetProps {
   // Text editing props
   fixedTextStyles: FixedTextStyles;
   setFixedTextStyles: (styles: FixedTextStyles | ((prev: FixedTextStyles) => FixedTextStyles)) => void;
+  backgroundAnalysis?: { recommendedTextColor: 'black' | 'white' };
 }
 
 
@@ -58,6 +60,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   handleAddFloatingAsset,
   fixedTextStyles,
   setFixedTextStyles,
+  backgroundAnalysis,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -65,7 +68,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   // Early return before any hooks
   if (!isOpen || !isEditorView) return null;
 
-  const [prompt, setPrompt] = useState('');
+  // Use background analysis from parent for dynamic text colors
+
   const [manualSearch, setManualSearch] = useState('');
   const [newThemeName, setNewThemeName] = useState('');
   const [newThemePrompt, setNewThemePrompt] = useState('');
@@ -208,7 +212,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       alt: `Emoji: ${emoji}`,
       type: 'image',
       x: '50%',
-      y: '500px',
+      y: '300px',
       rotation: '0',
       scale: 1.0,
       z: 50
@@ -217,12 +221,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
     setManualSearch('');
   }, [handleAddFloatingAsset]);
 
-  // Handler for AI Emoji Match
-  const handleGenerateClick = useCallback(async () => {
-    if (!prompt.trim()) return;
-    await onGenerateAsset(prompt);
-    setPrompt('');
-  }, [prompt, onGenerateAsset]);
 
   // Handler for Promo Ticket Creation
   const handleCreatePromoTicket = useCallback((style: 'default' | 'premium' | 'sale' | 'new') => {
@@ -317,15 +315,17 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
 
   return (
     <div
-      className={`fixed inset-y-0 right-0 w-80 bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       role="dialog"
       aria-modal="true"
-      aria-label="Asset Manager"
+      aria-label="Assets Manager"
     >
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-transparent backdrop-blur-sm">
-        <h3 className="text-sm font-semibold tracking-wide text-gray-100 flex items-center">
-          <SettingsIcon className="w-4 h-4 mr-2 text-cyan-400" />
-          Asset Manager
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
+        <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis?.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
+          <svg className="w-4 h-4 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+          Assets
         </h3>
         <button onClick={onClose} className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors">
           <XIcon className="w-4 h-4" />
@@ -522,8 +522,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                        selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.styleClass : 
                        selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.styleClass : 
                        fixedTextStyles.promoMessage.styleClass).includes('font-black')
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white' 
+                        : 'bg-gradient-to-r from-gray-600 to-gray-700 text-gray-300 hover:from-gray-500 hover:to-gray-600'
                     }`}
                   >
                     B
@@ -570,8 +570,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                        selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.styleClass : 
                        selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.styleClass : 
                        fixedTextStyles.promoMessage.styleClass).includes('italic')
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white' 
+                        : 'bg-gradient-to-r from-gray-600 to-gray-700 text-gray-300 hover:from-gray-500 hover:to-gray-600'
                     }`}
                   >
                     I
@@ -748,19 +748,20 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             <ZapIcon className="w-8 h-8 mr-3" />
             Custom Theme Designer
           </h4>
+          <div className="mb-8"></div>
           <label className="block text-sm font-semibold text-gray-300 mb-2">Theme name</label>
           <input
             type="text"
             value={newThemeName}
             onChange={(e) => setNewThemeName(e.target.value)}
-            placeholder="Enter theme name - AI generates complete themes with colors, backgrounds, and styling using Imagen (e.g., 'Neon Summer')"
+            placeholder="Theme name (e.g., 'Neon Summer')"
             className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
           />
 
           <label className="block text-sm font-semibold text-gray-300 mb-2">Prompt</label>
           <textarea
             value={newThemePrompt}
-            placeholder="Enter AI prompt description for image & color generation (e.g., 'An underwater scene with bright bioluminescence, neon blues and purples, glowing sea creatures')"
+            placeholder="Enter AI prompt description (e.g., 'An underwater scene with bright bioluminescence')"
             onChange={(e) => setNewThemePrompt(e.target.value)}
             rows={3}
             className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
@@ -769,7 +770,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           <button 
             onClick={handleNewThemeSave} 
             className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
-              (newThemeName.trim() && newThemePrompt.trim() && !isGeneratingTheme) ? 'bg-fuchsia-600 hover:bg-fuchsia-700' : 'bg-gray-500 cursor-not-allowed'
+              (newThemeName.trim() && newThemePrompt.trim() && !isGeneratingTheme) ? 'bg-gradient-to-r from-fuchsia-500 to-pink-600 hover:from-fuchsia-600 hover:to-pink-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
             }`}
             disabled={!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme}
           >
@@ -787,41 +788,17 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </button>
         </div>
 
-        {/* AI Asset Generator (EMOJI MATCH) */}
-        <div>
-          <h4 className="text-3xl font-extrabold text-blue-400 mb-6 flex items-center">
-            <ImagePlusIcon className="w-8 h-8 mr-3"/> AI Emoji Match (Text)
-          </h4>
-          <input
-            type="text"
-            placeholder="Enter description - The AI finds the best single emoji character for your description (e.g., 'A gift box' or 'a spooky ghost')"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
-            disabled={isTextLoading}
-          />
-          <button 
-            onClick={handleGenerateClick} 
-            className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${isTextLoading ? 'bg-blue-800 text-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-            disabled={isTextLoading}
-          >
-            {isTextLoading ? (
-              <><ZapIcon className="w-4 h-4 mr-2 animate-pulse" /> Finding Emoji...</>
-            ) : (
-              <><ImagePlusIcon className="w-4 h-4 mr-2" /> Generate Emoji Asset</>
-            )}
-          </button>
-        </div>
         
         {/* Manual Emoji Bank */}
         <div>
           <h4 className="text-3xl font-extrabold text-cyan-400 mb-6 flex items-center">
-            <SearchIcon className="w-8 h-8 mr-3"/> Manual Emoji Bank
+            <SearchIcon className="w-8 h-8 mr-3"/> Emoji Bank
           </h4>
+          <div className="mb-8"></div>
           
           <input
             type="search"
-            placeholder="Search emojis or categories (e.g., 'gift', 'heart', 'party')"
+            placeholder="Search emojis (e.g., 'gift', 'heart')"
             value={manualSearch}
             onChange={(e) => setManualSearch(e.target.value)}
             className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
@@ -833,14 +810,17 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               if (manualSearch.trim()) {
                 return (
                   <div>
-                    <h4 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">
                       🔍 Search Results ({filteredEmojis.length})
                     </h4>
                     <div className="flex flex-wrap gap-2">
                       {filteredEmojis.map((item, idx) => (
                         <button
                           key={idx}
-                          onClick={() => handleSelectEmoji(item.emoji)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectEmoji(item.emoji);
+                          }}
                           className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
                           title={`${item.name} (${item.keywords.slice(0, 3).join(', ')})`}
                         >
@@ -855,12 +835,15 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               // Show categorized view when not searching
               return Object.entries(groupedEmojis).map(([category, items]) => (
                 <div key={category}>
-                  <h5 className="text-xs font-semibold uppercase text-gray-400 mt-2 mb-1">{category}</h5>
+                  <h5 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">{category}</h5>
                   <div className="flex flex-wrap gap-2">
                     {items.map((item, idx) => (
                       <button
                         key={idx}
-                        onClick={() => handleSelectEmoji(item.emoji)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectEmoji(item.emoji);
+                        }}
                         className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
                         title={item.name}
                       >
@@ -878,17 +861,14 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         {/* Selected Asset Info */}
         {selectedAsset && (
           <div className="p-3 bg-cyan-900/30 rounded-xl border border-cyan-400 shadow-lg sticky top-[5.5rem] z-20">
-            <h4 className="text-base font-semibold text-cyan-300 mb-3">
-              Selected Layer: {selectedAsset.alt}
-            </h4>
             
             <p className="text-sm text-gray-300 mb-3">
-              **Edit on View:** Drag the element for position. Use the corner handle for resize, and the top handle for rotation.
+              Drag to move, corner to resize, top handle to rotate.
             </p>
 
             <button 
               onClick={() => onDeleteFloatingAsset(selectedAsset.id)} 
-              className={`w-full mt-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center font-semibold ${selectedAsset.isLogo ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full mt-4 py-2 text-sm rounded-lg bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 transition-colors flex items-center justify-center font-semibold ${selectedAsset.isLogo ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={selectedAsset.isLogo}
             >
               <TrashIcon className={`w-4 h-4 mr-2`} /> Delete Asset

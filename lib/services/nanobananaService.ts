@@ -47,6 +47,48 @@ export class NanoBananaImageService {
   }
 
   /**
+   * Generate fallback background when API quota is exceeded
+   */
+  public generateFallbackBackground(themePrompt: string, targetWidth: number, targetHeight: number): string {
+    console.log('🎨 [Fallback] Generating fallback background due to quota limits');
+    
+    // Create a themed gradient background based on the prompt
+    const isDark = themePrompt.toLowerCase().includes('dark') || 
+                   themePrompt.toLowerCase().includes('night') || 
+                   themePrompt.toLowerCase().includes('halloween') ||
+                   themePrompt.toLowerCase().includes('forest');
+    
+    const isWarm = themePrompt.toLowerCase().includes('sunset') || 
+                   themePrompt.toLowerCase().includes('autumn') || 
+                   themePrompt.toLowerCase().includes('warm') ||
+                   themePrompt.toLowerCase().includes('cozy');
+    
+    let gradientColors;
+    if (isDark) {
+      gradientColors = '#1a1a2e, #16213e, #0f3460';
+    } else if (isWarm) {
+      gradientColors = '#ff9a9e, #fecfef, #fecfef';
+    } else {
+      gradientColors = '#667eea, #764ba2, #f093fb';
+    }
+    
+    const svg = `
+      <svg width="${targetWidth}" height="${targetHeight}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:${gradientColors.split(',')[0]};stop-opacity:1" />
+            <stop offset="50%" style="stop-color:${gradientColors.split(',')[1]};stop-opacity:1" />
+            <stop offset="100%" style="stop-color:${gradientColors.split(',')[2]};stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grad)"/>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  }
+
+  /**
    * Generate background images for seasonal themes using Imagen 3.0
    */
   async generateBackgroundImage(
@@ -126,10 +168,18 @@ export class NanoBananaImageService {
       console.log('🎨 [Nano Banana] Generated image URL length:', imageUrl.length);
       
       return imageUrl;
-    } catch (error) {
-      console.error("Error in generateBackgroundImage:", error);
-      throw new Error(`Background image generation failed: ${(error as Error).message}`);
-    }
+      } catch (error) {
+        console.error("Error in generateBackgroundImage:", error);
+        
+        // Handle quota exceeded error with fallback
+        const errorMessage = (error as Error).message;
+        if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+          console.warn('🎨 [Nano Banana] API quota exceeded, generating fallback background');
+          return this.generateFallbackBackground(themePrompt, targetWidth, targetHeight);
+        }
+        
+        throw new Error(`Background image generation failed: ${errorMessage}`);
+      }
   }
 
   /**

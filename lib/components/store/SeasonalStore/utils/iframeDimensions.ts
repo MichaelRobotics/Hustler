@@ -17,9 +17,44 @@ export const measureIframeContainer = (): ContainerDimensions | null => {
   if (typeof window === 'undefined') return null;
 
   try {
-    // Try to find the iframe container
-    const iframe = document.getElementById('active-app-container') as HTMLIFrameElement;
-    if (iframe) {
+    // Try multiple selectors for iframe container with more comprehensive search
+    const iframeSelectors = [
+      'active-app-container',
+      'iframe[src*="localhost"]',
+      'iframe[src*="experiences"]',
+      'iframe[src*="3000"]',
+      'iframe[src*="whop"]',
+      'iframe'
+    ];
+    
+    let iframe: HTMLIFrameElement | null = null;
+    
+    console.log('🎨 [Dimension Debug] Searching for iframe container...');
+    
+    for (const selector of iframeSelectors) {
+      if (selector.startsWith('iframe')) {
+        iframe = document.querySelector(selector) as HTMLIFrameElement;
+      } else {
+        iframe = document.getElementById(selector) as HTMLIFrameElement;
+      }
+      
+      if (iframe) {
+        const rect = iframe.getBoundingClientRect();
+        console.log(`🎨 [Dimension Debug] Found iframe with selector "${selector}":`, {
+          element: iframe,
+          rect: rect,
+          src: iframe.src,
+          width: rect.width,
+          height: rect.height
+        });
+        
+        if (rect.width > 0 && rect.height > 0) {
+          break;
+        }
+      }
+    }
+    
+    if (iframe && iframe.getBoundingClientRect().width > 0) {
       const rect = iframe.getBoundingClientRect();
       const dimensions = {
         width: Math.round(rect.width),

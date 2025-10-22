@@ -31,17 +31,35 @@ import {
   fileToBase64 
 } from './services/aiService';
 import { useIframeDimensions } from './utils/iframeDimensions';
+import { useBackgroundAnalysis } from './utils/backgroundAnalyzer';
+import SeasonalStoreChat from './components/SeasonalStoreChat';
+import { apiGet } from '../../../utils/api-client';
+import type { FunnelFlow } from '../../../types/funnel';
 
 interface SeasonalStoreProps {
   onBack?: () => void;
+  experienceId?: string;
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experienceId }) => {
   // Theme functionality
   const { appearance, toggleTheme } = useTheme();
   
   // Track iframe container dimensions for responsive background generation
   const iframeDimensions = useIframeDimensions();
+  
+  // Flag to prevent multiple simultaneous background generations
+  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
+  const isGeneratingRef = useRef(false);
+  
+  // Product navigation state for reel functionality
+  const [currentProductIndex, setCurrentProductIndex] = useState(0);
+  
+  // Chat functionality
+  const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
+  const [liveFunnel, setLiveFunnel] = useState<any>(null);
+  const [isFunnelActive, setIsFunnelActive] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   const {
     // State
@@ -96,23 +114,51 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
     saveTemplate,
     loadTemplate,
     deleteTemplate,
-    clearOldTemplates,
-    getStorageUsage,
   } = useSeasonalStore();
+
+  // Custom add product function that resets index to show new product at front
+  const handleAddProduct = useCallback(() => {
+    addProduct();
+    setCurrentProductIndex(0); // Reset to show the new product at the front
+  }, [addProduct]);
+
+  // Auto-switch products every 10 seconds
+  useEffect(() => {
+    if (products.length <= 2) return; // Don't auto-switch if 2 or fewer products
+    
+    const interval = setInterval(() => {
+      setCurrentProductIndex(prevIndex => {
+        const maxIndex = products.length - 2;
+        return prevIndex >= maxIndex ? 0 : prevIndex + 1;
+      });
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [products.length]);
+
+  // Analyze background brightness for dynamic text colors
+  const backgroundAnalysis = useBackgroundAnalysis(generatedBackground);
 
   // Regenerate background when iframe dimensions change (for responsive behavior)
   useEffect(() => {
-    if (iframeDimensions && generatedBackground) {
+    if (iframeDimensions && generatedBackground && !isGeneratingRef.current) {
       console.log('🎨 [Responsive] Iframe dimensions changed, regenerating background...', iframeDimensions);
       
       // Debounce the regeneration to avoid too many calls
       const timeoutId = setTimeout(async () => {
+        if (isGeneratingRef.current) return; // Prevent multiple simultaneous calls
+        
+        isGeneratingRef.current = true;
+        setIsGeneratingBackground(true);
         try {
           const newImageUrl = await generateResponsiveBackgroundImage(theme.themePrompt);
           setBackground('generated', newImageUrl);
           console.log('🎨 [Responsive] Background regenerated for new dimensions');
         } catch (error) {
           console.error('🎨 [Responsive] Failed to regenerate background:', error);
+        } finally {
+          isGeneratingRef.current = false;
+          setIsGeneratingBackground(false);
         }
       }, 1000); // 1 second debounce
       
@@ -192,8 +238,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
   }, [setTextLoading, setError, setAvailableAssets]);
 
   const handleGenerateBgClick = useCallback(async () => {
+    if (isGeneratingRef.current) {
+      console.log('🎨 Background generation already in progress, skipping...');
+      return;
+    }
+    
     setImageLoading(true);
     setError(null);
+    isGeneratingRef.current = true;
+    setIsGeneratingBackground(true);
 
     try {
       console.log('🎨 Generating responsive background with prompt:', theme.themePrompt);
@@ -205,6 +258,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       setError(`Background Generation Failed: ${(error as Error).message}`);
     } finally {
       setImageLoading(false);
+      isGeneratingRef.current = false;
+      setIsGeneratingBackground(false);
     }
   }, [theme.themePrompt, setImageLoading, setError, setBackground]);
 
@@ -280,6 +335,60 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
     }
   }, [saveTemplate, products, floatingAssets, currentSeason, theme, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, setError]);
 
+  // Load live funnel for chat functionality
+  const loadLiveFunnel = useCallback(async () => {
+    if (!experienceId) {
+      console.log('[SeasonalStore] No experienceId provided, skipping funnel load');
+      return;
+    }
+
+    try {
+      console.log(`[SeasonalStore] Loading live funnel for experienceId: ${experienceId}`);
+
+      // Use the dedicated live funnel endpoint
+      const response = await apiGet(`/api/funnels/live`, experienceId);
+      
+      console.log(`[SeasonalStore] API call made with experienceId: ${experienceId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[SeasonalStore] Live funnel response:`, data);
+        
+        if (data.success && data.hasLiveFunnel && data.funnelFlow) {
+          // We have a live funnel
+          const funnelData = {
+            id: data.funnel.id,
+            name: data.funnel.name,
+            flow: data.funnelFlow,
+            isDeployed: data.funnel.isDeployed,
+            resources: data.resources || []
+          };
+          setFunnelFlow(data.funnelFlow);
+          setLiveFunnel(funnelData);
+          setIsFunnelActive(true);
+          
+          console.log(`[SeasonalStore] ✅ Found live funnel for experience ${experienceId}`);
+          console.log(`[SeasonalStore] Funnel:`, data.funnel);
+          console.log(`[SeasonalStore] Funnel flow:`, data.funnelFlow);
+          console.log(`[SeasonalStore] Resources:`, data.resources);
+        } else {
+          // No live funnel
+          setLiveFunnel(null);
+          setFunnelFlow(null);
+          setIsFunnelActive(false);
+          console.log(`[SeasonalStore] ❌ No live funnel found for experience ${experienceId}`);
+          console.log(`[SeasonalStore] Response data:`, data);
+        }
+      } else {
+        console.error(`[SeasonalStore] Failed to check for live funnel: ${response.status}`);
+        setError(`Failed to load live funnel: ${response.status}`);
+      }
+    } catch (err) {
+      console.error("Error loading live funnel:", err);
+      setError(`Error loading live funnel: ${(err as Error).message}`);
+    }
+  }, [experienceId, setError]);
+
   const openTemplateManager = () => setTemplateManagerOpen(true);
   const closeTemplateManager = () => setTemplateManagerOpen(false);
   const closeTemplateManagerAnimated = () => {
@@ -309,6 +418,23 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [products, floatingAssets, currentSeason, theme, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, saveTemplate]);
+
+  // Load live funnel on mount
+  useEffect(() => {
+    console.log('[SeasonalStore] useEffect triggered, experienceId:', experienceId);
+    loadLiveFunnel();
+  }, [loadLiveFunnel]);
+
+
+  // Debug chat state
+  useEffect(() => {
+    console.log('[SeasonalStore] Chat state changed:', {
+      isChatOpen,
+      funnelFlow: !!funnelFlow,
+      isFunnelActive,
+      experienceId
+    });
+  }, [isChatOpen, funnelFlow, isFunnelActive, experienceId]);
 
   const handleProductImageUpload = useCallback(async (productId: number, file: File) => {
     if (!file) return;
@@ -738,7 +864,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
   return (
     <div 
       ref={appRef} 
-      className={`min-h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !theme.backgroundImage ? theme.background : ''}`}
+      className={`h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !theme.backgroundImage ? theme.background : ''}`}
       style={getBackgroundStyle()}
     >
       {/* Top Navbar with Integrated Progress Bar */}
@@ -756,9 +882,24 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
               </button>
             </div>
 
-            {/* Center: Empty spacer */}
+            {/* Center: Hide Chat Button when chat is open */}
             <div className="flex-1 flex justify-center">
-              {/* Center area - empty */}
+              {isChatOpen && (
+                <button 
+                  onClick={() => setIsChatOpen(false)}
+                  className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25 hover:shadow-red-500/40 text-white relative"
+                  title="Hide Chat"
+                >
+                  <div className="flex items-center justify-center">
+                    <MessageCircleIcon className="w-4 h-4" />
+                    <span className="ml-2 text-xs font-medium">Hide Chat</span>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                    Hide Chat
+                  </div>
+                </button>
+              )}
             </div>
 
             {/* Right Side: Admin Controls */}
@@ -768,8 +909,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                 onClick={toggleEditorView}
                 className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg ${
                   editorState.isEditorView 
-                  ? 'bg-red-600 hover:bg-red-700 shadow-red-500/25 hover:shadow-red-500/40' 
-                  : 'bg-green-600 hover:bg-green-700 shadow-green-500/25 hover:shadow-green-500/40'
+                  ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 shadow-red-500/25 hover:shadow-red-500/40' 
+                  : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40'
                 } text-white relative`}
                 title={editorState.isEditorView ? 'Switch to Customer Page View' : 'Switch to Editor View'}
               >
@@ -812,14 +953,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                     disabled={loadingState.isImageLoading}
                     className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
                       loadingState.isImageLoading 
-                        ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                        ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
                     }`}
                     title="Generate AI Background"
                   >
                     <div className="flex items-center justify-center">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
                     {/* Tooltip */}
@@ -829,7 +970,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                   </button>
                   
                   {/* Background Upload */}
-                  <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 relative">
+                  <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 relative">
                     <div className="flex items-center justify-center">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -849,27 +990,44 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                     />
                   </label>
                   
-                  {/* Asset Manager */}
+                  {/* Save Template */}
                   <button 
-                    onClick={toggleAdminSheet}
-                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 relative"
-                    title="Manage Floating Assets"
+                    onClick={handleSaveTemplate}
+                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 relative"
+                    title="Save Current Store as Template"
                   >
                     <div className="flex items-center justify-center">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                       </svg>
                     </div>
                     {/* Tooltip */}
                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                      Asset Manager
+                      Save
+                    </div>
+                  </button>
+                  
+                  {/* Elements */}
+                  <button 
+                    onClick={toggleAdminSheet}
+                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 relative"
+                    title="Manage Elements & AI Tools"
+                  >
+                    <div className="flex items-center justify-center">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                      </svg>
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                      Assets
                     </div>
                   </button>
                   
                   {/* Templates */}
                   <button 
                     onClick={openTemplateManager}
-                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 relative"
+                    className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 relative"
                     title="Manage Templates"
                   >
                     <div className="flex items-center justify-center">
@@ -884,6 +1042,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                   </button>
                 </>
               )}
+
             </div>
           </div>
         </div>
@@ -893,7 +1052,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
 
       {/* Loading Overlay */}
       {(loadingState.isTextLoading || loadingState.isImageLoading) && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="flex items-center text-white text-2xl p-6 rounded-xl bg-gray-800 shadow-2xl">
             <ZapIcon className="w-8 h-8 mr-4 animate-bounce text-cyan-400" />
             {loadingState.isImageLoading ? '🎨 Generating AI Image (nano-banana)...' : loadingState.isTextLoading ? '🤖 Refining Text/Emoji (Gemini)...' : '✨ Working on AI Magic...'}
@@ -905,17 +1064,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       {/* Admin Asset Management Sheet */}
       {editorState.isEditorView && editorState.isAdminSheetOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${adminSheetAnimOpen ? 'bg-black/50 opacity-100' : 'bg-black/50 opacity-0'}`}
+          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${adminSheetAnimOpen ? 'opacity-100' : 'opacity-0'}`}
           onClick={(e) => {
             if (e.target === e.currentTarget) closeAdminSheetAnimated();
           }}
         >
-          <AdminAssetSheet 
+          <AdminAssetSheet
             isOpen={editorState.isAdminSheetOpen}
             onClose={closeAdminSheetAnimated}
             floatingAssets={floatingAssets}
             availableAssets={availableAssets}
             setAvailableAssets={setAvailableAssets}
+            backgroundAnalysis={backgroundAnalysis}
             onDeleteFloatingAsset={deleteFloatingAsset}
             onGenerateAsset={handleGenerateAssetFromText}
             isTextLoading={loadingState.isTextLoading}
@@ -957,7 +1117,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       
       {/* Main Content Container */}
       <div 
-        className={`relative z-30 flex flex-col items-center pt-4 pb-40 px-4 sm:px-8 max-w-7xl mx-auto transition-all duration-500`}
+        className={`relative z-30 flex flex-col items-center pt-4 pb-20 px-4 sm:px-8 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto h-full`}
         onClick={() => editorState.isEditorView && setSelectedAsset(null)}
         onDragOver={(e) => editorState.isEditorView && e.preventDefault()}
         onDrop={editorState.isEditorView ? handleDropAsset : undefined}
@@ -991,7 +1151,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                 {/* Logo Controls - Only visible when hovering over entire logo */}
                 <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-2 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
                   {/* Upload Button - Top */}
-                  <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300">
+                  <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
@@ -1027,7 +1187,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                       ...prev, 
                       shape: prev.shape === 'round' ? 'square' : 'round' 
                     }))}
-                    className="px-3 py-1 text-xs font-medium rounded-xl transition-all duration-300 bg-cyan-500 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-105 hover:bg-cyan-600"
+                    className="px-3 py-1 text-xs font-medium rounded-xl transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-105"
                     disabled={loadingState.isImageLoading}
                     title={`Switch to ${logoAsset.shape === 'round' ? 'Square' : 'Round'}`}
                   >
@@ -1118,33 +1278,81 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
         {/* Floating Add Product Button - Only in Edit View */}
         {editorState.isEditorView && (
            <button
-             onClick={addProduct}
-             className="fixed top-24 right-6 z-50 flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:bg-green-500 dark:hover:bg-green-600 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 backdrop-blur-sm border border-green-500/20"
+             onClick={handleAddProduct}
+             className="fixed top-24 right-6 z-50 flex items-center px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 backdrop-blur-sm border border-green-500/20"
            >
              <PlusCircleIcon className="w-4 h-4 mr-2" /> Add New Product
            </button>
         )}
         
         {/* Product Showcase */}
-        <div className="w-full max-w-5xl my-4 grid grid-cols-1 md:grid-cols-2 gap-12">
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              theme={theme}
-              isEditorView={editorState.isEditorView}
-              loadingState={loadingState}
-              onUpdateProduct={updateProduct}
-              onDeleteProduct={deleteProduct}
-              onProductImageUpload={handleProductImageUpload}
-              onRefineProduct={handleRefineAll}
-              onRemoveSticker={handleRemoveSticker}
-              onDropAsset={handleDropOnProduct}
-              onOpenEditor={(id, target) => openProductEditor(id, target)}
-              inlineNameActive={inlineEditTarget === 'productName' && inlineProductId === product.id}
-              inlineDescActive={inlineEditTarget === 'productDesc' && inlineProductId === product.id}
-            />
-          ))}
+        <div className="w-full max-w-5xl my-4">
+          {products.length > 0 ? (
+            <div className="flex items-center gap-4">
+              {/* Left Arrow - Only show when there are more than 2 products */}
+              {products.length > 2 && (
+                <button
+                  onClick={() => setCurrentProductIndex(Math.max(0, currentProductIndex - 1))}
+                  disabled={currentProductIndex === 0}
+                  className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
+                  title="Previous products"
+                >
+                  <svg className="w-6 h-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              )}
+              
+              {/* Product Grid - Show only 2 products with fade animation */}
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8">
+                {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
+                  <div 
+                    key={`${product.id}-${currentProductIndex}`}
+                    className="transition-all duration-700 ease-out transform animate-in zoom-in-95 rotate-in-12 fade-in"
+                    style={{ 
+                      animationDelay: `${index * 200}ms`,
+                      animationDuration: '700ms'
+                    }}
+                  >
+                    <ProductCard
+                      product={product}
+                      theme={theme}
+                      isEditorView={editorState.isEditorView}
+                      loadingState={loadingState}
+                      onUpdateProduct={updateProduct}
+                      onDeleteProduct={deleteProduct}
+                      onProductImageUpload={handleProductImageUpload}
+                      onRefineProduct={handleRefineAll}
+                      onRemoveSticker={handleRemoveSticker}
+                      onDropAsset={handleDropOnProduct}
+                      onOpenEditor={(id, target) => openProductEditor(id, target)}
+                      inlineNameActive={inlineEditTarget === 'productName' && inlineProductId === product.id}
+                      inlineDescActive={inlineEditTarget === 'productDesc' && inlineProductId === product.id}
+                    />
+                  </div>
+                ))}
+              </div>
+              
+              {/* Right Arrow - Only show when there are more than 2 products */}
+              {products.length > 2 && (
+                <button
+                  onClick={() => setCurrentProductIndex(Math.min(products.length - 2, currentProductIndex + 1))}
+                  disabled={currentProductIndex >= products.length - 2}
+                  className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
+                  title="Next products"
+                >
+                  <svg className="w-6 h-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              <p>No products yet. Click "Add New Product" to get started!</p>
+            </div>
+          )}
+          
         </div>
 
         {/* Fixed Gift Promotion Block */}
@@ -1183,7 +1391,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
               if (editorState.isEditorView) {
                 openProductEditor(null, 'button');
               } else {
-                toggleSheet();
+                // Open chat when gift button is clicked
+                setIsChatOpen(true);
               }
             }}
               className={`group relative z-10 flex items-center justify-center w-full py-4 text-xl rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass} ${getHoverRingClass(promoButton.ringHoverClass)} ${promoButton.buttonClass} shadow-2xl`}
@@ -1202,54 +1411,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Gift Claim Sheet */}
-      <div
-        className={`fixed inset-x-0 bg-gray-900/95 backdrop-blur-md text-white transition-all duration-700 ease-in-out shadow-2xl border-t-4 border-b-0 border-blue-400 z-50 overflow-hidden`}
-        style={{
-          height: editorState.isSheetOpen ? '33.333vh' : '0',
-          top: editorState.isSheetOpen ? '66.667vh' : '100vh',
-          transform: editorState.isSheetOpen ? 'translateY(0)' : 'translateY(0)',
-        }}
-      >
-        <div className="p-6 h-full flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center">
-              <MessageCircleIcon className="w-6 h-6 mr-3 text-blue-400" />
-              <h3 className="text-2xl font-bold tracking-tight">Seasonal Merchant Chat</h3>
-            </div>
-            <button
-              onClick={toggleSheet}
-              className="p-2 rounded-full hover:bg-gray-700 transition-colors"
-            >
-              <XIcon className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="flex-grow overflow-y-auto space-y-4 mb-6">
-            <div className="max-w-xs bg-blue-500 text-white p-3 rounded-xl rounded-bl-none shadow-md">
-              Welcome, seeker! I see you've found the secret claim spot. I'm the Merchant's Assistant.
-            </div>
-            <div className="max-w-sm bg-gray-700 text-white p-3 rounded-xl rounded-tr-none ml-auto">
-              How do I claim my gift?
-            </div>
-            <div className="max-w-lg bg-blue-500 text-white p-3 rounded-xl rounded-bl-none shadow-md">
-              Excellent question. For this {theme.name} gift, tell me: **What product are you most excited about?** I am an AI, and I'll generate a personalized coupon code based on your answer!
-            </div>
-            <div className="pt-4">
-              <input
-                type="text"
-                placeholder="Type your product interest here..."
-                className="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-400 border-none"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Simple Text Editor Modal */}
       {editingText.isOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${textSheetAnimOpen ? 'bg-black/50 opacity-100' : 'bg-black/50 opacity-0'}`}
+          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${textSheetAnimOpen ? 'opacity-100' : 'opacity-0'}`}
           onClick={(e) => {
             if (e.target === e.currentTarget) closeTextEditorAnimated();
           }}
@@ -1258,10 +1424,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
             role="dialog"
             aria-modal="true"
             aria-label="Edit Text"
-            className={`fixed inset-y-0 right-0 w-80 bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${textSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${textSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-transparent backdrop-blur-sm">
-              <h3 className="text-sm font-semibold tracking-wide text-gray-100">Edit Text</h3>
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
+              <h3 className={`text-sm font-semibold tracking-wide ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>Edit Text</h3>
               <button
                 onClick={closeTextEditorAnimated}
                 className="text-gray-300 hover:text-white transition-colors"
@@ -1442,17 +1608,42 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       {/* Product Slide-over Editor */}
       {productEditor.isOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${productSheetAnimOpen ? 'bg-black/50 opacity-100' : 'bg-black/50 opacity-0'}`}
+          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${productSheetAnimOpen ? 'opacity-100' : 'opacity-0'}`}
           onClick={(e) => { if (e.target === e.currentTarget) closeProductEditorAnimated(); }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Edit Product"
-            className={`fixed inset-y-0 right-0 w-80 bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${productSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${productSheetAnimOpen ? 'translate-x-0' : 'translate-x-full'}`}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-transparent backdrop-blur-sm">
-              <h3 className="text-sm font-semibold tracking-wide text-gray-100">{productEditor.target === 'button' ? (productEditor.productId === null ? 'Edit Claim Button' : 'Edit Button') : 'Edit Product'}</h3>
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
+              <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
+                {productEditor.target === 'button' ? (
+                  productEditor.productId === null ? (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
+                      </svg>
+                      Edit Claim Button
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                      </svg>
+                      Edit Button
+                    </>
+                  )
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Product
+                  </>
+                )}
+              </h3>
               <button onClick={closeProductEditorAnimated} className="text-gray-300 hover:text-white transition-colors" aria-label="Close">
                 <XIcon className="w-5 h-5" />
               </button>
@@ -1611,7 +1802,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                           const currentDesc = products.find(p => p.id === productEditor.productId!)?.descClass || theme.text;
                           setProducts((prev: any[]) => prev.map(p => ({ ...p, cardClass: currentCard, titleClass: currentTitle, descClass: currentDesc })));
                         }}
-                        className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs"
+                        className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-200 text-xs"
                       >
                         Apply to All Cards
                       </button>
@@ -1644,7 +1835,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                   <div className="mb-3">
                     <input
                       type="text"
-                      placeholder="Search emojis (e.g., pumpkin, heart, star)..."
+                      placeholder="Search emojis (e.g., pumpkin, heart)..."
                       value={emojiSearchQuery}
                       onChange={(e) => setEmojiSearchQuery(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
@@ -1813,7 +2004,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                       // Show categorized view when not searching
                       return Object.entries(groupedEmojis).map(([category, items]) => (
                         <div key={category}>
-                          <h4 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">
+                          <h4 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">
                             {category}
                           </h4>
                           <div className="flex flex-wrap gap-1">
@@ -1872,7 +2063,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                         setProducts((prev: any[]) => prev.map(p => ({ ...p, buttonClass: current })));
                         setPromoButton(prev => ({ ...prev, buttonClass: current }));
                       }}
-                      className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs"
+                      className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-200 text-xs"
                     >
                       Apply to All Buttons
                     </button>
@@ -1928,7 +2119,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
       {/* Template Manager Sheet */}
       {templateManagerOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${templateManagerAnimOpen ? 'bg-black/50 opacity-100' : 'bg-black/50 opacity-0'}`}
+          className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${templateManagerAnimOpen ? 'opacity-100' : 'opacity-0'}`}
           onClick={(e) => {
             if (e.target === e.currentTarget) closeTemplateManagerAnimated();
           }}
@@ -1937,13 +2128,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
             role="dialog"
             aria-modal="true"
             aria-label="Template Manager"
-            className={`w-full max-w-md bg-transparent backdrop-blur-md text-white shadow-2xl transform transition-transform duration-300 ${
+            className={`w-full max-w-md bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-300 ${
               templateManagerAnimOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white">Template Manager</h3>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
+              <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Template Manager
+              </h3>
               <button 
                 onClick={closeTemplateManagerAnimated}
                 className="text-gray-300 hover:text-white transition-colors"
@@ -1957,38 +2153,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4">
-              {/* Save Current Template */}
-              <div className="mb-6">
-                <h4 className="text-sm font-semibold text-gray-300 mb-3">Save Current Store</h4>
-                <button
-                  onClick={handleSaveTemplate}
-                  className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-colors"
-                >
-                  Save as New Template
-                </button>
-              </div>
-
-              {/* Storage Management */}
-              <div className="mb-6 p-3 bg-gray-800 rounded-lg border border-gray-700">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">Storage Management</h4>
-                <div className="text-xs text-gray-400 mb-3">
-                  Storage: {getStorageUsage().sizeInMB} MB used
-                </div>
-                <button
-                  onClick={() => {
-                    if (confirm('Clear old templates? This will keep only the 5 most recent templates.')) {
-                      clearOldTemplates();
-                    }
-                  }}
-                  className="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
-                >
-                  Clear Old Templates
-                </button>
-              </div>
-
               {/* Templates List */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-300 mb-3">Saved Templates ({templates.length})</h4>
+                <h4 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">Saved Templates ({templates.length})</h4>
+                {templates.length > 10 && (
+                  <div className="mb-2 text-xs text-gray-400">
+                    Showing first 10 templates
+                  </div>
+                )}
+                <div className="mb-8"></div>
                 {templates.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
                     <svg className="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1998,14 +2171,24 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                     <p className="text-xs mt-1">Create your first template by clicking "Save as New Template"</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {templates.map((template) => (
+                  <div className="max-h-[50rem] overflow-y-auto space-y-3">
+                    {templates.slice(0, 10).map((template) => (
                       <div key={template.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="font-semibold text-white truncate">{template.name}</h5>
-                          <span className="text-xs text-gray-400">
-                            {new Date(template.createdAt).toLocaleDateString()}
-                          </span>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete template "${template.name}"?`)) {
+                                deleteTemplate(template.id);
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-400 hover:bg-gradient-to-r hover:from-red-500 hover:to-pink-600 rounded transition-colors"
+                            title="Delete Template"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                         <div className="text-xs text-gray-400 mb-3">
                           {template.products.length} products • {template.floatingAssets.length} assets • {template.currentSeason} theme
@@ -2016,19 +2199,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
                               loadTemplate(template.id);
                               closeTemplateManagerAnimated();
                             }}
-                            className="flex-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors"
+                            className="flex-1 px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm rounded transition-colors"
                           >
                             Load
                           </button>
                           <button
                             onClick={() => {
-                              if (confirm(`Delete template "${template.name}"?`)) {
-                                deleteTemplate(template.id);
-                              }
+                              // TODO: Implement go live functionality
+                              alert('Go Live feature coming soon!');
                             }}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                            className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm rounded transition-colors flex items-center"
                           >
-                            Delete
+                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                            Go Live
                           </button>
                         </div>
                       </div>
@@ -2040,7 +2225,73 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack }) => {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Seasonal Store Chat - Half View with Unfold/Fold Animation */}
+      <div className={`fixed inset-x-0 bottom-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-md text-gray-900 dark:text-gray-100 shadow-2xl border-t border-b-0 border-white/20 dark:border-gray-700/20 transition-all duration-300 ease-in-out transform ${
+        isChatOpen 
+          ? 'translate-y-0 opacity-100' 
+          : 'translate-y-full opacity-0'
+      }`}>
+        <div className={`h-1/2 w-full flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+          isChatOpen 
+            ? 'max-h-[50vh] opacity-100' 
+            : 'max-h-0 opacity-0'
+        }`} style={{ height: isChatOpen ? '50vh' : '0vh', maxHeight: isChatOpen ? '50vh' : '0vh' }}>
+            {/* Beautiful Golden Separator Line */}
+            <div className="absolute top-0 left-0 right-0 z-20">
+              {/* Main golden line */}
+              <div className="h-1 bg-gradient-to-r from-transparent via-yellow-400 via-amber-500 to-transparent shadow-lg shadow-yellow-500/30"></div>
+              {/* Subtle glow effect */}
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-300 via-amber-400 to-transparent opacity-60 blur-sm"></div>
+              {/* Animated shimmer effect */}
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-pulse"></div>
+            </div>
+            <div className="flex-1 overflow-hidden relative border-t border-yellow-500/20" style={{ height: '100%', maxHeight: '100%' }}>
+              {funnelFlow && isFunnelActive ? (
+                <SeasonalStoreChat
+                  funnelFlow={funnelFlow}
+                  resources={liveFunnel?.resources || []}
+                  experienceId={experienceId}
+                  onMessageSent={(message, conversationId) => {
+                    console.log('Chat message sent:', message, conversationId);
+                  }}
+                  onBack={() => setIsChatOpen(false)}
+                  hideAvatar={false}
+                  onEditMerchant={() => {
+                    console.log('Edit merchant clicked');
+                    setIsChatOpen(false);
+                  }}
+                />
+                 ) : (
+                   <div className="h-full flex items-center justify-center bg-white/40 dark:bg-black/40 backdrop-blur-sm">
+                     <div className="text-center max-w-md mx-auto p-6">
+                       <div className="w-16 h-16 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
+                         <svg className="w-8 h-8 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                         </svg>
+                       </div>
+                       
+                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No Live Funnel</h3>
+                       <p className="text-gray-600 dark:text-gray-400 mb-4">
+                         There's no live funnel to preview yet.
+                       </p>
+                       
+                       <button
+                         onClick={() => {
+                           console.log('[SeasonalStore] Manual refresh triggered');
+                           loadLiveFunnel();
+                         }}
+                         className="px-4 py-2 bg-blue-500/90 dark:bg-blue-600/90 backdrop-blur-sm text-white rounded-lg hover:bg-blue-600/90 dark:hover:bg-blue-700/90 transition-colors border border-blue-400/30 dark:border-blue-500/30 shadow-lg"
+                       >
+                         Refresh
+                       </button>
+                     </div>
+                   </div>
+                 )}
+            </div>
+          </div>
+        </div>
+      </div>
   );
 };
 
@@ -2087,7 +2338,7 @@ const ButtonColorControls: React.FC<{
       </div>
       <div className="flex items-center justify-end">
         <button
-          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs"
+          className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-200 text-xs"
           onClick={() => {
             const current = products.find(p => p.id === productId)?.buttonClass || themeAccent;
             setProducts((prev: any[]) => prev.map(p => ({ ...p, buttonClass: current })));

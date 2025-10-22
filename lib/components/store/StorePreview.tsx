@@ -310,17 +310,20 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 
 	// Show SeasonalStore if enabled
 	if (useSeasonalStore) {
-		return <SeasonalStore onBack={() => {
-			// Switch back to StorePreview immediately
-			setUseSeasonalStore(false);
-			// Trigger loading overlay on top of StorePreview
-			setIsLoading(true);
-			// Match StorePreview loading duration: 3.5 seconds total
-			// (3 seconds content stabilization + 500ms transition)
-			setTimeout(() => {
-				setIsLoading(false);
-			}, 3500);
-		}} />;
+		return <SeasonalStore 
+			experienceId={experienceId}
+			onBack={() => {
+				// Switch back to StorePreview immediately
+				setUseSeasonalStore(false);
+				// Trigger loading overlay on top of StorePreview
+				setIsLoading(true);
+				// Match StorePreview loading duration: 3.5 seconds total
+				// (3 seconds content stabilization + 500ms transition)
+				setTimeout(() => {
+					setIsLoading(false);
+				}, 3500);
+			}} 
+		/>;
 	}
 
 	// Don't show loading state here - it will be an overlay on the main content

@@ -173,11 +173,8 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
           // Don't delete if we just dragged
           return;
         }
-        if (isEditorView && !asset.isLogo) {
-          onDeleteAsset(asset.id);
-        } else {
-          onSelectAsset(asset.id);
-        }
+        // Always select the asset on click, don't auto-delete
+        onSelectAsset(asset.id);
       }}
     >
       {asset.type === 'image' ? (

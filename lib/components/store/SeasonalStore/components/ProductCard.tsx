@@ -98,7 +98,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Delete Product Button */}
           <button
             onClick={() => onDeleteProduct(product.id)}
-            className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300 relative group"
+            className="p-2 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300 relative group"
             title="Delete Product"
           >
             <TrashIcon className="w-3 h-3" />
@@ -114,8 +114,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             disabled={loadingState.isTextLoading || loadingState.isImageLoading}
             className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
               (loadingState.isTextLoading || loadingState.isImageLoading) 
-                ? 'bg-gray-500 text-gray-300 cursor-not-allowed shadow-gray-500/25' 
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-gray-300 cursor-not-allowed shadow-gray-500/25' 
+                : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
             }`}
             title="AI Refine All"
           >
@@ -167,7 +167,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {isEditorView && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity rounded-2xl z-20">
-            <label htmlFor={`upload-${product.id}`} className="cursor-pointer p-2 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg transition-colors">
+            <label htmlFor={`upload-${product.id}`} className="cursor-pointer p-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-full shadow-lg transition-colors">
               <UploadIcon className="w-5 h-5" />
               <input 
                 type="file" 

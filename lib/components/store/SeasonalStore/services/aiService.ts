@@ -263,7 +263,15 @@ export const generateResponsiveBackgroundImage = async (themePrompt: string): Pr
     return imageUrl;
   } catch (error) {
     console.error('🎨 [Responsive AI] Error in responsive background generation:', error);
-    // Fallback to standard generation
+    
+    // Check if it's a quota error - don't retry in that case
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+      console.warn('🎨 [Responsive AI] Quota exceeded, not retrying to avoid double API calls');
+      throw error; // Re-throw the quota error instead of retrying
+    }
+    
+    // Only fallback for non-quota errors
     return await generateBackgroundImage(themePrompt);
   }
 };

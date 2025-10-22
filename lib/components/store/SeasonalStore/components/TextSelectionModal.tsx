@@ -136,9 +136,9 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
   if (!isOpen || !selectedText) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div 
-        className="bg-gray-900 border border-cyan-400 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-gray-800/80 border border-cyan-400 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
@@ -157,7 +157,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
         <div className="p-6 space-y-6">
           {/* Content Editor */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-semibold text-gray-300 mb-2">
               Text Content
             </label>
             <textarea
@@ -178,7 +178,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
 
             {/* Style Presets */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
                 Style Preset
               </label>
               <select
@@ -196,7 +196,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
 
             {/* Font Weight */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
                 Font Weight
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -218,7 +218,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
 
             {/* Bold and Italic Toggles */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
                 Text Style
               </label>
               <div className="flex space-x-4">
@@ -277,7 +277,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
             {/* Color Picker */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
                   Color Picker
                 </label>
                 <div className="flex items-center space-x-2">
@@ -299,7 +299,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
 
               {/* Color Presets */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
                   Quick Colors
                 </label>
                 <div className="grid grid-cols-6 gap-2">
@@ -319,7 +319,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
 
           {/* Preview */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-semibold text-gray-300 mb-2">
               Preview
             </label>
             <div className="p-4 rounded-lg bg-gray-800 border border-gray-600">
