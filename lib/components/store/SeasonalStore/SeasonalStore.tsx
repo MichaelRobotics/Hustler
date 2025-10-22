@@ -54,6 +54,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   
   // Product navigation state for reel functionality
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
+  const autoSwitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Chat functionality
   const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
@@ -154,49 +155,39 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     setCurrentProductIndex(0); // Reset to show the new product at the front
   }, [addProduct]);
 
-  // Auto-switch products every 10 seconds
-  useEffect(() => {
-    if (products.length <= 2) return; // Don't auto-switch if 2 or fewer products
+  // Function to start auto-switch timer
+  const startAutoSwitch = useCallback(() => {
+    if (autoSwitchIntervalRef.current) {
+      clearInterval(autoSwitchIntervalRef.current);
+    }
     
-    const interval = setInterval(() => {
+    if (products.length <= 2) return; // Don't auto-switch if 2 or fewer products
+    if (editorState.isEditorView) return; // Don't auto-switch in edit mode
+    
+    autoSwitchIntervalRef.current = setInterval(() => {
       setCurrentProductIndex(prevIndex => {
         const maxIndex = products.length - 2;
         return prevIndex >= maxIndex ? 0 : prevIndex + 1;
       });
     }, 10000); // 10 seconds
+  }, [products.length, editorState.isEditorView]);
 
-    return () => clearInterval(interval);
-  }, [products.length]);
+  // Auto-switch products every 10 seconds (disabled in edit mode)
+  useEffect(() => {
+    startAutoSwitch();
+    return () => {
+      if (autoSwitchIntervalRef.current) {
+        clearInterval(autoSwitchIntervalRef.current);
+      }
+    };
+  }, [startAutoSwitch]);
 
   // Analyze background brightness for dynamic text colors
   const backgroundAnalysis = useBackgroundAnalysis(generatedBackground);
 
-  // Regenerate background when iframe dimensions change (for responsive behavior)
-  useEffect(() => {
-    if (iframeDimensions && generatedBackground && !isGeneratingRef.current) {
-      console.log('🎨 [Responsive] Iframe dimensions changed, regenerating background...', iframeDimensions);
-      
-      // Debounce the regeneration to avoid too many calls
-      const timeoutId = setTimeout(async () => {
-        if (isGeneratingRef.current) return; // Prevent multiple simultaneous calls
-        
-        isGeneratingRef.current = true;
-        setIsGeneratingBackground(true);
-        try {
-          const newImageUrl = await generateResponsiveBackgroundImage(theme.themePrompt);
-          setBackground('generated', newImageUrl);
-          console.log('🎨 [Responsive] Background regenerated for new dimensions');
-        } catch (error) {
-          console.error('🎨 [Responsive] Failed to regenerate background:', error);
-        } finally {
-          isGeneratingRef.current = false;
-          setIsGeneratingBackground(false);
-        }
-      }, 1000); // 1 second debounce
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [iframeDimensions, generatedBackground, theme.themePrompt, setBackground]);
+  // REMOVED: Responsive background regeneration useEffect
+  // This was causing continuous background generation
+  // Backgrounds are now only generated on manual button click
 
   const appRef = useRef<HTMLDivElement>(null);
   const welcomeMessageRef = useRef<HTMLDivElement>(null);
@@ -279,6 +270,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     setError(null);
     isGeneratingRef.current = true;
     setIsGeneratingBackground(true);
+    // Keep button in navbar during generation
 
     try {
       console.log('🎨 Generating responsive background with prompt:', theme.themePrompt);
@@ -292,6 +284,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       setImageLoading(false);
       isGeneratingRef.current = false;
       setIsGeneratingBackground(false);
+      setShowGenerateBgInNavbar(false); // Move to original location after generation
     }
   }, [theme.themePrompt, setImageLoading, setError, setBackground]);
 
@@ -316,12 +309,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
     try {
       const imageUrl = await generateLogo(theme, shape as 'round' | 'square', currentLogo.src);
-      setLogoAsset(prev => ({ 
-        ...prev, 
+      setLogoAsset({ 
+        ...currentLogo, 
         src: imageUrl, 
         alt: `AI Generated ${themeName} Logo`,
         shape: shape as 'round' | 'square'
-      }));
+      });
     } catch (error) {
       setError(`Logo Image Generation Failed: ${(error as Error).message}`);
     } finally {
@@ -335,7 +328,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       setImageLoading(true);
       const base64Data = await fileToBase64(file);
       const imageUrl = `data:${file.type};base64,${base64Data}`;
-      setLogoAsset(prev => ({ ...prev, src: imageUrl, alt: 'Custom Uploaded Logo' }));
+      setLogoAsset({ ...logoAsset, src: imageUrl, alt: 'Custom Uploaded Logo' });
       setError(null);
     } catch (error) {
       setError(`Logo upload failed: ${(error as Error).message}`);
@@ -861,11 +854,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const headerInputRef = useRef<HTMLInputElement | null>(null);
   const subHeaderInputRef = useRef<HTMLInputElement | null>(null);
   const promoInputRef = useRef<HTMLInputElement | null>(null);
+  
+  // Generate background button location state
+  const [showGenerateBgInNavbar, setShowGenerateBgInNavbar] = useState(true); // Start in navbar
+  
   useEffect(() => {
     if (inlineEditTarget === 'headerMessage') headerInputRef.current?.focus();
     if (inlineEditTarget === 'subHeader') subHeaderInputRef.current?.focus();
     if (inlineEditTarget === 'promoMessage') promoInputRef.current?.focus();
   }, [inlineEditTarget]);
+
 
   // Exit inline editing when clicking outside the active input/textarea
   useEffect(() => {
@@ -929,15 +927,35 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               {/* Back Arrow */}
               <button
                 onClick={onBack || (() => window.history.back())}
-                className="p-1 text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                className="p-1 text-white hover:text-gray-300 transition-colors duration-200"
                 title="Go Back to Store Preview"
               >
                 <ArrowLeft size={16} />
               </button>
             </div>
 
-            {/* Center: Hide Chat Button when chat is open */}
+            {/* Center: Generate Background Button (Page view) or Hide Chat Button */}
             <div className="flex-1 flex justify-center">
+              {/* Generate Background Button in Center (Page view only) */}
+              {!editorState.isEditorView && showGenerateBgInNavbar && !isChatOpen && (
+                <button 
+                  onClick={handleGenerateBgClick}
+                  disabled={loadingState.isImageLoading}
+                  className={`px-4 py-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg flex items-center space-x-2 ${
+                    loadingState.isImageLoading 
+                      ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                      : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                  }`}
+                  title="Generate AI Background"
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className="text-sm font-medium text-white">Generate Background</span>
+                </button>
+              )}
+              
+              {/* Hide Chat Button when chat is open */}
               {isChatOpen && (
                 <div className="relative">
                   <button 
@@ -999,6 +1017,30 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 </div>
               </button>
 
+              {/* Generate Background Button - Icon in theme bar (Editor view only) */}
+              {editorState.isEditorView && showGenerateBgInNavbar && !isChatOpen && (
+                <button 
+                  onClick={handleGenerateBgClick}
+                  disabled={loadingState.isImageLoading}
+                  className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
+                    loadingState.isImageLoading 
+                      ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                      : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                  }`}
+                  title="Generate AI Background"
+                >
+                  <div className="flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                    Generate Background
+                  </div>
+                </button>
+              )}
+
               {editorState.isEditorView && (
                 <div className="flex items-center space-x-2 flex-shrink-0">
                   {/* Theme Selector */}
@@ -1019,27 +1061,30 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     </select>
                   </div>
                   
-                  {/* Background Generate */}
-                  <button 
-                    onClick={handleGenerateBgClick}
-                    disabled={loadingState.isImageLoading}
-                    className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
-                      loadingState.isImageLoading 
-                        ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
-                    }`}
-                    title="Generate AI Background"
-                  >
-                    <div className="flex items-center justify-center">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                    {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                      Generate Background
-                    </div>
-                  </button>
+                  
+                  {/* Background Generate - Icon only when moved from navbar */}
+                  {!showGenerateBgInNavbar && (
+                    <button 
+                      onClick={handleGenerateBgClick}
+                      disabled={loadingState.isImageLoading}
+                      className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
+                        loadingState.isImageLoading 
+                          ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                          : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                      }`}
+                      title="Generate AI Background"
+                    >
+                      <div className="flex items-center justify-center">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      {/* Tooltip */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                        Generate Background
+                      </div>
+                    </button>
+                  )}
                   
                   {/* Background Upload */}
                   <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 relative">
@@ -1159,6 +1204,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             isEditorView={editorState.isEditorView}
             allThemes={allThemes}
             handleAddCustomTheme={(themeData) => addCustomTheme(themeData.data)}
+            handleUpdateTheme={(season, updates) => {
+              // Update the theme in allThemes
+              const updatedThemes = { ...allThemes };
+              if (updatedThemes[season]) {
+                updatedThemes[season] = { ...updatedThemes[season], ...updates };
+                // Note: This would need to be persisted to storage/database in a real app
+                console.log('Theme updated:', season, updates);
+              }
+            }}
             handleUpdateAsset={updateFloatingAsset}
             handleAddFloatingAsset={(assetData) => {
               if (assetData.id && assetData.type) {
@@ -1240,10 +1294,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                   
                   {/* Shape Toggle - Bottom */}
                   <button
-                    onClick={() => setLogoAsset(prev => ({ 
-                      ...prev, 
-                      shape: prev.shape === 'round' ? 'square' : 'round' 
-                    }))}
+                    onClick={() => setLogoAsset({ 
+                      ...logoAsset, 
+                      shape: logoAsset.shape === 'round' ? 'square' : 'round' 
+                    })}
                     className="px-3 py-1 text-xs font-medium rounded-xl transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-105"
                     disabled={loadingState.isImageLoading}
                     title={`Switch to ${logoAsset.shape === 'round' ? 'Square' : 'Round'}`}
@@ -1279,12 +1333,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 headerMessage: { ...prev.headerMessage, content: e.target.value }
               }))}
               onBlur={() => setInlineEditTarget(null)}
-              className={`bg-transparent border-b border-gray-400 outline-none text-center ${headerMessage.styleClass}`}
+              className={`w-full text-center bg-white/20 backdrop-blur-sm border-2 border-blue-400 rounded-lg px-4 py-2 outline-none focus:border-blue-500 focus:bg-white/30 transition-all duration-200 ${headerMessage.styleClass}`}
               style={{ color: headerMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
             />
           ) : (
             <p 
-              className={headerMessage.styleClass}
+              className={`${headerMessage.styleClass} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
               style={{ color: headerMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
               onClick={() => {
                 if (editorState.isEditorView) {
@@ -1306,12 +1360,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 subHeader: { ...prev.subHeader, content: e.target.value }
               }))}
               onBlur={() => setInlineEditTarget(null)}
-              className={`w-full bg-transparent border-b border-gray-400 outline-none text-center resize-none ${subHeader.styleClass}`}
+              className={`w-full text-center bg-white/20 backdrop-blur-sm border-2 border-blue-400 rounded-lg px-4 py-2 outline-none focus:border-blue-500 focus:bg-white/30 transition-all duration-200 resize-none ${subHeader.styleClass}`}
               style={{ color: subHeader.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
             />
           ) : (
             <p 
-              className={subHeader.styleClass}
+              className={`${subHeader.styleClass} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
               style={{ color: subHeader.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
               onClick={() => {
                 if (editorState.isEditorView) {
@@ -1349,7 +1403,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               {/* Left Arrow - Only show when there are more than 2 products */}
               {products.length > 2 && (
                 <button
-                  onClick={() => setCurrentProductIndex(Math.max(0, currentProductIndex - 1))}
+                  onClick={() => {
+                    setCurrentProductIndex(Math.max(0, currentProductIndex - 1));
+                    startAutoSwitch(); // Reset timer on manual navigation
+                  }}
                   disabled={currentProductIndex === 0}
                   className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Previous products"
@@ -1365,10 +1422,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
                   <div 
                     key={`${product.id}-${currentProductIndex}`}
-                    className="transition-all duration-700 ease-out transform animate-in zoom-in-95 rotate-in-12 fade-in"
+                    className={`transition-all duration-700 ease-out transform ${
+                      !editorState.isEditorView 
+                        ? 'animate-in zoom-in-95 rotate-in-12 fade-in'
+                        : ''
+                    }`}
                     style={{ 
-                      animationDelay: `${index * 200}ms`,
-                      animationDuration: '700ms'
+                      animationDelay: !editorState.isEditorView ? `${index * 200}ms` : '0ms',
+                      animationDuration: !editorState.isEditorView ? '700ms' : '0ms'
                     }}
                   >
                     <ProductCard
@@ -1393,7 +1454,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               {/* Right Arrow - Only show when there are more than 2 products */}
               {products.length > 2 && (
                 <button
-                  onClick={() => setCurrentProductIndex(Math.min(products.length - 2, currentProductIndex + 1))}
+                  onClick={() => {
+                    setCurrentProductIndex(Math.min(products.length - 2, currentProductIndex + 1));
+                    startAutoSwitch(); // Reset timer on manual navigation
+                  }}
                   disabled={currentProductIndex >= products.length - 2}
                   className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Next products"
@@ -1425,7 +1489,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                    promoMessage: { ...prev.promoMessage, content: e.target.value }
                  }))}
                  onBlur={() => setInlineEditTarget(null)}
-                 className={`${promoMessage.styleClass} w-full mb-8 drop-shadow-md bg-transparent border-b border-gray-400 outline-none text-center resize-none ${editorState.isEditorView ? 'rounded-lg p-2' : ''}`}
+                 className={`${promoMessage.styleClass} w-full mb-8 drop-shadow-md bg-white/20 backdrop-blur-sm border-2 border-blue-400 rounded-lg px-4 py-2 outline-none focus:border-blue-500 focus:bg-white/30 transition-all duration-200 text-center resize-none`}
                  style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
                  placeholder="Click to edit text..."
                />
@@ -1436,7 +1500,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                      setEditingText({ isOpen: true, targetId: 'promoMessage' });
                    }
                  }}
-                 className={`${promoMessage.styleClass} mb-8 drop-shadow-md cursor-pointer ${editorState.isEditorView ? 'hover:bg-blue-100/20 rounded-lg p-2 transition-colors' : ''}`}
+                 className={`${promoMessage.styleClass} mb-8 drop-shadow-md ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 rounded-lg p-2 transition-colors duration-200' : ''}`}
                  style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
                >
                  {promoMessage.content}

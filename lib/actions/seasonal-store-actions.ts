@@ -159,64 +159,12 @@ export const generateEmojiMatch = async (userPrompt: string): Promise<string> =>
   }
 };
 
-/**
- * AI Image Generation for Products using Nano Banana Service
- */
-export const generateProductImage = async (productName: string, theme: Theme, existingImage?: string): Promise<string> => {
-  // Validate environment before making API calls
-  validateEnvironment();
-  
-  console.log('🎨 [Nano Banana Service] Starting product image generation for:', productName);
-  
-  try {
-    const imageUrl = await nanoBananaService.generateProductImage(productName, theme, existingImage || '');
-    console.log('🎨 [Nano Banana Service] Generated product image URL length:', imageUrl.length);
-    
-    return imageUrl;
-  } catch (error) {
-    console.error("Error in generateProductImage:", error);
-    throw new SeasonalStoreAIError(`Product image generation failed: ${(error as Error).message}`, "UNKNOWN");
-  }
-};
+// REMOVED: generateProductImage - redundant with aiService.ts
+// Product image generation is handled by aiService.ts → API → nanoBananaService.ts
 
-/**
- * AI Background Generation using Nano Banana Service
- */
-export const generateBackgroundImage = async (themePrompt: string): Promise<string> => {
-  // Validate environment before making API calls
-  validateEnvironment();
-  
-  console.log('🎨 [Nano Banana Service] Starting background generation with prompt:', themePrompt);
-  
-  try {
-    const imageUrl = await nanoBananaService.generateBackgroundImage(themePrompt);
-    console.log('🎨 [Nano Banana Service] Generated image URL length:', imageUrl.length);
-    console.log('🎨 [Nano Banana Service] Generated image URL preview:', imageUrl.substring(0, 100) + '...');
-    
-    return imageUrl;
-  } catch (error) {
-    console.error("Error in generateBackgroundImage:", error);
-    throw new SeasonalStoreAIError(`Background image generation failed: ${(error as Error).message}`, "UNKNOWN");
-  }
-};
+// REMOVED: generateBackgroundImage - redundant with aiService.ts
+// Background generation is handled by aiService.ts → API → nanoBananaService.ts
 
-/**
- * AI Logo Generation using Nano Banana Service
- */
-export const generateLogo = async (theme: Theme, shape: 'round' | 'square', existingLogo?: string): Promise<string> => {
-  // Validate environment before making API calls
-  validateEnvironment();
-  
-  console.log('🎨 [Nano Banana Service] Starting logo generation for theme:', theme.name);
-  
-  try {
-    const imageUrl = await nanoBananaService.generateLogo(theme, shape, existingLogo || '');
-    console.log('🎨 [Nano Banana Service] Generated logo URL length:', imageUrl.length);
-    
-    return imageUrl;
-  } catch (error) {
-    console.error("Error in generateLogo:", error);
-    throw new SeasonalStoreAIError(`Logo generation failed: ${(error as Error).message}`, "UNKNOWN");
-  }
-};
+// REMOVED: generateLogo - redundant with aiService.ts
+// Logo generation is handled by aiService.ts → API → nanoBananaService.ts
 

@@ -9,7 +9,18 @@ import {
   LoadingState,
   StoreTemplate 
 } from '@/lib/components/store/SeasonalStore/types';
-import { initialThemes, initialProducts, halloweenProducts, defaultLogo } from '@/lib/components/store/SeasonalStore/services/constants';
+import { 
+  initialThemes, 
+  initialProducts, 
+  winterProducts,
+  summerProducts,
+  fallProducts,
+  holidayProducts,
+  springProducts,
+  cyberProducts,
+  halloweenProducts, 
+  defaultLogo 
+} from '@/lib/components/store/SeasonalStore/services/constants';
 
 export const useSeasonalStore = () => {
   // Core State
@@ -19,8 +30,14 @@ export const useSeasonalStore = () => {
   const [floatingAssets, setFloatingAssets] = useState<FloatingAsset[]>([]);
   const [availableAssets, setAvailableAssets] = useState<FloatingAsset[]>([]);
   
-  // UI State
-  const [fixedTextStyles, setFixedTextStyles] = useState<FixedTextStyles>({
+  // Theme-Specific State
+  const [themeTextStyles, setThemeTextStyles] = useState<Record<string, FixedTextStyles>>({});
+  const [themeLogos, setThemeLogos] = useState<Record<string, LogoAsset>>({});
+  const [themeGeneratedBackgrounds, setThemeGeneratedBackgrounds] = useState<Record<string, string | null>>({});
+  const [themeUploadedBackgrounds, setThemeUploadedBackgrounds] = useState<Record<string, string | null>>({});
+  
+  // Current theme's state (computed from theme-specific state)
+  const fixedTextStyles = themeTextStyles[currentSeason] || {
     mainHeader: { 
       content: 'THE SEASONAL VAULT', 
       color: '#FFFFFF', 
@@ -32,7 +49,7 @@ export const useSeasonalStore = () => {
       styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg' 
     },
     subHeader: { 
-      content: initialThemes['Fall'].aiMessage, 
+      content: initialThemes[currentSeason]?.aiMessage || initialThemes['Fall'].aiMessage, 
       color: '#FFFFFF', 
       styleClass: 'text-lg sm:text-xl font-normal' 
     },
@@ -41,11 +58,11 @@ export const useSeasonalStore = () => {
       color: '#FFFFFF', 
       styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md' 
     },
-  });
+  };
   
-  const [logoAsset, setLogoAsset] = useState<LogoAsset>(defaultLogo);
-  const [generatedBackground, setGeneratedBackground] = useState<string | null>(null);
-  const [uploadedBackground, setUploadedBackground] = useState<string | null>(null);
+  const logoAsset = themeLogos[currentSeason] || defaultLogo;
+  const generatedBackground = themeGeneratedBackgrounds[currentSeason] || null;
+  const uploadedBackground = themeUploadedBackgrounds[currentSeason] || null;
   
   // Editor State
   const [editorState, setEditorState] = useState<EditorState>({
@@ -150,36 +167,73 @@ export const useSeasonalStore = () => {
 
   // Switch products based on theme
   useEffect(() => {
-    if (currentSeason === 'Spooky Night') {
-      setProducts(halloweenProducts);
-    } else {
-      setProducts(initialProducts);
+    switch (currentSeason) {
+      case 'Winter':
+        setProducts(winterProducts);
+        break;
+      case 'Summer':
+        setProducts(summerProducts);
+        break;
+      case 'Fall':
+        setProducts(fallProducts);
+        break;
+      case 'Holiday Cheer':
+        setProducts(holidayProducts);
+        break;
+      case 'Spring Renewal':
+        setProducts(springProducts);
+        break;
+      case 'Cyber Sale':
+        setProducts(cyberProducts);
+        break;
+      case 'Spooky Night':
+        setProducts(halloweenProducts);
+        break;
+      default:
+        setProducts(initialProducts);
+        break;
     }
   }, [currentSeason]);
 
   // Update text colors when theme changes
   useEffect(() => {
     const colors = getThemeTextColors(currentSeason);
-    setFixedTextStyles(prev => ({
-      ...prev,
-      headerMessage: { ...prev.headerMessage, color: colors.header },
-      subHeader: { ...prev.subHeader, color: colors.subHeader },
-      promoMessage: { ...prev.promoMessage, color: colors.promo }
-    }));
+    setThemeTextStyles(prev => {
+      const currentStyles = prev[currentSeason];
+      if (currentStyles) {
+        // Only update colors if we have existing styles for this theme
+        return {
+          ...prev,
+          [currentSeason]: {
+            ...currentStyles,
+            headerMessage: { ...currentStyles.headerMessage, color: colors.header },
+            subHeader: { ...currentStyles.subHeader, color: colors.subHeader },
+            promoMessage: { ...currentStyles.promoMessage, color: colors.promo }
+          }
+        };
+      }
+      return prev;
+    });
   }, [currentSeason]);
 
   // Update subHeader content when theme changes (only if still using a default theme message)
   useEffect(() => {
-    setFixedTextStyles(prev => {
+    setThemeTextStyles(prev => {
+      const currentStyles = prev[currentSeason];
+      if (!currentStyles) return prev;
+      
       const isDefaultSubHeader = Object.values(allThemes).some(theme => 
-        theme.aiMessage === prev.subHeader.content
+        theme.aiMessage === currentStyles.subHeader.content
       );
       if (isDefaultSubHeader) {
         return {
           ...prev,
-          subHeader: {
-            ...prev.subHeader,
-            content: allThemes[currentSeason].aiMessage,
+          [currentSeason]: {
+            ...currentStyles,
+            subHeader: {
+              ...currentStyles.subHeader,
+              content: allThemes[currentSeason].aiMessage,
+            },
           },
         };
       }
@@ -270,11 +324,32 @@ export const useSeasonalStore = () => {
   // Background Management
   const setBackground = useCallback((type: 'generated' | 'uploaded', url: string | null) => {
     if (type === 'generated') {
-      setGeneratedBackground(url);
+      setThemeGeneratedBackgrounds(prev => ({
+        ...prev,
+        [currentSeason]: url
+      }));
     } else {
-      setUploadedBackground(url);
+      setThemeUploadedBackgrounds(prev => ({
+        ...prev,
+        [currentSeason]: url
+      }));
     }
-  }, []);
+  }, [currentSeason]);
+
+  // Theme-Specific Setters
+  const setFixedTextStyles = useCallback((updater: FixedTextStyles | ((prev: FixedTextStyles) => FixedTextStyles)) => {
+    setThemeTextStyles(prev => ({
+      ...prev,
+      [currentSeason]: typeof updater === 'function' ? updater(prev[currentSeason] || fixedTextStyles) : updater
+    }));
+  }, [currentSeason, fixedTextStyles]);
+
+  const setLogoAsset = useCallback((logo: LogoAsset) => {
+    setThemeLogos(prev => ({
+      ...prev,
+      [currentSeason]: logo
+    }));
+  }, [currentSeason]);
 
   // Error Management
   const setError = useCallback((error: string | null) => {
@@ -286,6 +361,11 @@ export const useSeasonalStore = () => {
     try {
       const newTemplate: StoreTemplate = {
         ...templateData,
+        // Include theme-specific data
+        themeTextStyles,
+        themeLogos,
+        themeGeneratedBackgrounds,
+        themeUploadedBackgrounds,
         id: `template_${Date.now()}`,
         createdAt: new Date()
       };
@@ -353,10 +433,31 @@ export const useSeasonalStore = () => {
     setProducts(template.products);
     setFloatingAssets(template.floatingAssets);
     setCurrentSeason(template.currentSeason);
-    setFixedTextStyles(template.fixedTextStyles);
-    setLogoAsset(template.logoAsset);
-    setGeneratedBackground(template.generatedBackground);
-    setUploadedBackground(template.uploadedBackground);
+    
+    // Load theme-specific data if available, otherwise fallback to legacy format
+    if (template.themeTextStyles) {
+      setThemeTextStyles(template.themeTextStyles);
+    } else {
+      setThemeTextStyles({ [template.currentSeason]: template.fixedTextStyles });
+    }
+    
+    if (template.themeLogos) {
+      setThemeLogos(template.themeLogos);
+    } else {
+      setThemeLogos({ [template.currentSeason]: template.logoAsset });
+    }
+    
+    if (template.themeGeneratedBackgrounds) {
+      setThemeGeneratedBackgrounds(template.themeGeneratedBackgrounds);
+    } else {
+      setThemeGeneratedBackgrounds({ [template.currentSeason]: template.generatedBackground });
+    }
+    
+    if (template.themeUploadedBackgrounds) {
+      setThemeUploadedBackgrounds(template.themeUploadedBackgrounds);
+    } else {
+      setThemeUploadedBackgrounds({ [template.currentSeason]: template.uploadedBackground });
+    }
     
     console.log('📂 Template loaded:', template.name);
   }, [templates]);
@@ -415,18 +516,24 @@ export const useSeasonalStore = () => {
 
   // Update header message when theme changes (only if it's still the default message)
   useEffect(() => {
-    setFixedTextStyles(prev => {
+    setThemeTextStyles(prev => {
+      const currentStyles = prev[currentSeason];
+      if (!currentStyles) return prev;
+      
       // Check if the current message is still the default theme message
       const isDefaultMessage = Object.values(allThemes).some(theme => 
-        theme.aiMessage === prev.headerMessage.content
+        theme.aiMessage === currentStyles.headerMessage.content
       );
       
       if (isDefaultMessage) {
         return {
           ...prev,
-          headerMessage: {
-            ...prev.headerMessage,
-            content: allThemes[currentSeason].aiMessage
+          [currentSeason]: {
+            ...currentStyles,
+            headerMessage: {
+              ...currentStyles.headerMessage,
+              content: allThemes[currentSeason].aiMessage
+            }
           }
         };
       }

@@ -101,7 +101,217 @@ export const initialProducts = [
   },
 ];
 
-// Halloween Products for Spooky Night Theme
+// Theme-specific Products
+export const winterProducts = [
+  {
+    id: 1,
+    name: 'Cozy Knit Scarf',
+    description: 'Warm wool scarf for winter.',
+    price: 29.99,
+    image: 'https://placehold.co/200x200/4f46e5/ffffff?text=KNIT+SCARF',
+    containerAsset: undefined,
+  },
+  {
+    id: 2,
+    name: 'Hot Chocolate Set',
+    description: 'Premium cocoa with marshmallows.',
+    price: 24.99,
+    image: 'https://placehold.co/200x200/8b5cf6/ffffff?text=HOT+CHOCO',
+    containerAsset: undefined,
+  },
+  {
+    id: 3,
+    name: 'Fuzzy Slippers',
+    description: 'Comfortable indoor footwear.',
+    price: 39.99,
+    image: 'https://placehold.co/200x200/06b6d4/ffffff?text=FUZZY+SLIPPERS',
+    containerAsset: undefined,
+  },
+  {
+    id: 4,
+    name: 'Winter Blanket',
+    description: 'Extra warm throw blanket.',
+    price: 59.99,
+    image: 'https://placehold.co/200x200/3b82f6/ffffff?text=WINTER+BLANKET',
+    containerAsset: undefined,
+  },
+];
+
+export const summerProducts = [
+  {
+    id: 1,
+    name: 'Beach Towel',
+    description: 'Large colorful beach towel.',
+    price: 19.99,
+    image: 'https://placehold.co/200x200/f59e0b/ffffff?text=BEACH+TOWEL',
+    containerAsset: undefined,
+  },
+  {
+    id: 2,
+    name: 'Sunglasses',
+    description: 'UV protection sunglasses.',
+    price: 34.99,
+    image: 'https://placehold.co/200x200/eab308/ffffff?text=SUNGLASSES',
+    containerAsset: undefined,
+  },
+  {
+    id: 3,
+    name: 'Cooler Bag',
+    description: 'Insulated picnic cooler.',
+    price: 29.99,
+    image: 'https://placehold.co/200x200/10b981/ffffff?text=COOLER+BAG',
+    containerAsset: undefined,
+  },
+  {
+    id: 4,
+    name: 'Sun Hat',
+    description: 'Wide-brim sun protection hat.',
+    price: 24.99,
+    image: 'https://placehold.co/200x200/f97316/ffffff?text=SUN+HAT',
+    containerAsset: undefined,
+  },
+];
+
+export const fallProducts = [
+  {
+    id: 1,
+    name: 'Pumpkin Spice Candle',
+    description: 'Aromatic fall-scented candle.',
+    price: 18.99,
+    image: 'https://placehold.co/200x200/ea580c/ffffff?text=PUMPKIN+CANDLE',
+    containerAsset: undefined,
+  },
+  {
+    id: 2,
+    name: 'Cozy Sweater',
+    description: 'Warm autumn sweater.',
+    price: 49.99,
+    image: 'https://placehold.co/200x200/d97706/ffffff?text=AUTUMN+SWEATER',
+    containerAsset: undefined,
+  },
+  {
+    id: 3,
+    name: 'Apple Cider Mix',
+    description: 'Premium spiced cider blend.',
+    price: 14.99,
+    image: 'https://placehold.co/200x200/c2410c/ffffff?text=APPLE+CIDER',
+    containerAsset: undefined,
+  },
+  {
+    id: 4,
+    name: 'Fall Wreath',
+    description: 'Decorative autumn wreath.',
+    price: 34.99,
+    image: 'https://placehold.co/200x200/b45309/ffffff?text=FALL+WREATH',
+    containerAsset: undefined,
+  },
+];
+
+export const holidayProducts = [
+  {
+    id: 1,
+    name: 'Christmas Ornament Set',
+    description: 'Handcrafted glass ornaments.',
+    price: 29.99,
+    image: 'https://placehold.co/200x200/dc2626/ffffff?text=CHRISTMAS+ORNAMENTS',
+    containerAsset: undefined,
+  },
+  {
+    id: 2,
+    name: 'Holiday Lights',
+    description: 'LED string lights for decoration.',
+    price: 19.99,
+    image: 'https://placehold.co/200x200/16a34a/ffffff?text=HOLIDAY+LIGHTS',
+    containerAsset: undefined,
+  },
+  {
+    id: 3,
+    name: 'Gift Wrapping Kit',
+    description: 'Complete gift wrapping supplies.',
+    price: 24.99,
+    image: 'https://placehold.co/200x200/7c3aed/ffffff?text=GIFT+WRAP',
+    containerAsset: undefined,
+  },
+  {
+    id: 4,
+    name: 'Holiday Mug',
+    description: 'Festive ceramic coffee mug.',
+    price: 16.99,
+    image: 'https://placehold.co/200x200/0891b2/ffffff?text=HOLIDAY+MUG',
+    containerAsset: undefined,
+  },
+];
+
+export const springProducts = [
+  {
+    id: 1,
+    name: 'Garden Seeds Kit',
+    description: 'Organic flower and herb seeds.',
+    price: 19.99,
+    image: 'https://placehold.co/200x200/22c55e/ffffff?text=GARDEN+SEEDS',
+    containerAsset: undefined,
+  },
+  {
+    id: 2,
+    name: 'Spring Scarf',
+    description: 'Light floral print scarf.',
+    price: 24.99,
+    image: 'https://placehold.co/200x200/ec4899/ffffff?text=SPRING+SCARF',
+    containerAsset: undefined,
+  },
+  {
+    id: 3,
+    name: 'Rain Boots',
+    description: 'Colorful waterproof boots.',
+    price: 39.99,
+    image: 'https://placehold.co/200x200/8b5cf6/ffffff?text=RAIN+BOOTS',
+    containerAsset: undefined,
+  },
+  {
+    id: 4,
+    name: 'Flower Pot Set',
+    description: 'Ceramic planters for herbs.',
+    price: 29.99,
+    image: 'https://placehold.co/200x200/06b6d4/ffffff?text=FLOWER+POTS',
+    containerAsset: undefined,
+  },
+];
+
+export const cyberProducts = [
+  {
+    id: 1,
+    name: 'RGB Gaming Mouse',
+    description: 'High-precision gaming mouse.',
+    price: 79.99,
+    image: 'https://placehold.co/200x200/06b6d4/ffffff?text=GAMING+MOUSE',
+    containerAsset: undefined,
+  },
+  {
+    id: 2,
+    name: 'Mechanical Keyboard',
+    description: 'RGB backlit mechanical keyboard.',
+    price: 129.99,
+    image: 'https://placehold.co/200x200/8b5cf6/ffffff?text=KEYBOARD',
+    containerAsset: undefined,
+  },
+  {
+    id: 3,
+    name: 'Gaming Headset',
+    description: 'Surround sound gaming headset.',
+    price: 89.99,
+    image: 'https://placehold.co/200x200/3b82f6/ffffff?text=GAMING+HEADSET',
+    containerAsset: undefined,
+  },
+  {
+    id: 4,
+    name: 'LED Strip Lights',
+    description: 'Smart RGB LED room lighting.',
+    price: 34.99,
+    image: 'https://placehold.co/200x200/10b981/ffffff?text=LED+STRIPS',
+    containerAsset: undefined,
+  },
+];
+
 export const halloweenProducts = [
   {
     id: 1,

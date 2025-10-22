@@ -30,6 +30,7 @@ interface AdminAssetSheetProps {
   isEditorView: boolean;
   allThemes: Record<string, Theme>;
   handleAddCustomTheme: (themeData: { name: string; data: Theme }) => void;
+  handleUpdateTheme: (season: string, updates: Partial<Theme>) => void;
   handleUpdateAsset: (id: string, updates: Partial<FloatingAsset>) => void;
   handleAddFloatingAsset: (assetData: Partial<FloatingAsset>) => void;
   // Text editing props
@@ -56,6 +57,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   isEditorView,
   allThemes,
   handleAddCustomTheme,
+  handleUpdateTheme,
   handleUpdateAsset,
   handleAddFloatingAsset,
   fixedTextStyles,
@@ -74,9 +76,12 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   const [newThemeName, setNewThemeName] = useState('');
   const [newThemePrompt, setNewThemePrompt] = useState('');
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
-
+  
   const selectedAsset = floatingAssets.find(a => a.id === selectedAssetId);
   const theme = allThemes[currentSeason];
+  
+  // Current theme prompt editing
+  const [currentPromptValue, setCurrentPromptValue] = useState(theme?.themePrompt || '');
 
   // Comprehensive emoji database with proper search functionality
   const EMOJI_DATABASE = [
@@ -741,6 +746,37 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             </div>
           </div>
         )}
+
+        {/* Current Theme Prompt Editor */}
+        <div>
+          <h4 className="text-3xl font-extrabold text-blue-400 mb-6 flex items-center">
+            <SettingsIcon className="w-8 h-8 mr-3" />
+            Edit Current Theme Prompt
+          </h4>
+          <div className="mb-8"></div>
+          <label className="block text-sm font-semibold text-gray-300 mb-2">
+            Current Theme: <span className="text-blue-400">{theme?.name || currentSeason}</span>
+          </label>
+          <textarea
+            value={currentPromptValue}
+            onChange={(e) => setCurrentPromptValue(e.target.value)}
+            placeholder="Enter AI prompt description (e.g., 'A mystical forest with glowing mushrooms and ethereal lighting')"
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 mb-4"
+          />
+          <button 
+            onClick={() => {
+              handleUpdateTheme(currentSeason, { themePrompt: currentPromptValue });
+            }}
+            className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
+              currentPromptValue.trim() ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
+            }`}
+            disabled={!currentPromptValue.trim()}
+          >
+            <SettingsIcon className="w-4 h-4 mr-2" /> 
+            Apply Changes
+          </button>
+        </div>
 
         {/* Custom Theme Designer */}
         <div>

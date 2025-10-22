@@ -111,37 +111,34 @@ export class NanoBananaImageService {
       calculatedAspectRatio: targetWidth / targetHeight
     });
     
-    const enhancedPrompt = `Create a stunning, high-resolution background image for an e-commerce store that FULLY COVERS THE ENTIRE SCREEN. 
+    const enhancedPrompt = `Create a beautiful, seamless background image for an e-commerce store.
     Theme: ${themePrompt}. 
     Style: Cinematic, dreamy, ultra-detailed with shallow depth of field and gentle bokeh effects.
     
-    CRITICAL DIMENSION REQUIREMENTS:
-    - EXACT resolution: ${targetWidth} pixels wide by ${targetHeight} pixels tall
-    - EXACT aspect ratio: ${aspectRatio.toFixed(3)}:1 (width:height)
-    - The image MUST be exactly ${targetWidth}x${targetHeight} pixels
-    - NO cropping, NO scaling, NO aspect ratio changes
+    DIMENSION REQUIREMENTS:
+    - Resolution: ${targetWidth} pixels wide by ${targetHeight} pixels tall
+    - Aspect ratio: ${aspectRatio.toFixed(3)}:1 (width:height)
     
-    COVERAGE REQUIREMENTS:
-    - FULL SCREEN COVERAGE - image must extend to all edges without empty spaces
-    - Full, complete image with rich details and textures covering every pixel
-    - NO solid black or white backgrounds - use vibrant, themed colors
-    - Smooth gradient color scheme with multiple color layers filling the entire canvas
-    - Subtle ambient lighting and atmospheric effects across the full image
-    - Rich environmental details (textures, patterns, natural elements) covering the entire background
-    
-    CONTENT RESTRICTIONS:
-    - ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
-    - No logos, symbols, or human figures
-    - No text overlays, labels, or captions
+    DESIGN REQUIREMENTS:
+    - Seamless, continuous background pattern or texture
+    - Rich, vibrant colors that match the theme
+    - Smooth gradient or natural texture covering the entire image
+    - Subtle ambient lighting and atmospheric effects
     - Professional e-commerce aesthetic
     - High quality, photorealistic
     
+    CONTENT RESTRICTIONS:
+    - NO TEXT, WORDS, LETTERS, OR WRITING of any kind
+    - No logos, symbols, or human figures
+    - No text overlays, labels, or captions
+    - No UI elements, buttons, or interface components
+    - Pure background image only
+    
     FINAL REQUIREMENTS:
-    - Ensure the ENTIRE IMAGE is filled with thematic content from edge to edge
-    - NO empty spaces, borders, or unfilled areas
-    - Background must be seamless and continuous across the full screen
-    - Optimized for ${targetWidth}x${targetHeight} display dimensions
-    - The final image must be exactly ${targetWidth} pixels wide and ${targetHeight} pixels tall`;
+    - Seamless background that can be used as a website background
+    - No empty spaces or unfilled areas
+    - Continuous pattern or texture from edge to edge
+    - Optimized for ${targetWidth}x${targetHeight} display dimensions`;
 
     try {
       const response = await this.genAI.models.generateImages({
@@ -251,12 +248,27 @@ export class NanoBananaImageService {
   ): Promise<string> {
     console.log('🎨 [Nano Banana] Starting logo generation for theme:', theme.name);
     
+    // Logo placeholder dimensions: w-24 h-24 = 96px x 96px
+    const logoSize = 96;
+    const targetWidth = logoSize;
+    const targetHeight = logoSize;
+    
+    console.log('🎨 [Nano Banana] Logo dimensions:', {
+      targetWidth,
+      targetHeight,
+      shape,
+      theme: theme.name
+    });
+    
     const enhancedPrompt = `Create a professional logo for a ${theme.name} themed e-commerce store.
     Style: Modern, clean, minimalist
     Shape: ${shape}
     Theme: ${theme.themePrompt}
     Requirements:
-    - High resolution (1024x1024 minimum) - generate large image for better cropping
+    - EXACT resolution: ${targetWidth} pixels wide by ${targetHeight} pixels tall
+    - EXACT aspect ratio: 1:1 (square)
+    - The image MUST be exactly ${targetWidth}x${targetHeight} pixels
+    - NO cropping, NO scaling, NO aspect ratio changes
     - Full, complete logo design with rich thematic elements
     - NO solid black or white backgrounds - use vibrant, themed colors
     - Scalable vector-style design with thematic background
@@ -267,7 +279,7 @@ export class NanoBananaImageService {
     - No logos with text or lettering
     - E-commerce suitable
     - Ensure the entire logo area is filled with thematic content
-    - Generate larger image so it can be properly cropped by circular/square frames`;
+    - Perfect fit for ${targetWidth}x${targetHeight} display dimensions`;
 
     try {
       const response = await this.genAI.models.generateImages({

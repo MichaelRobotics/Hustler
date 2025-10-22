@@ -17,35 +17,40 @@ export const measureIframeContainer = (): ContainerDimensions | null => {
   if (typeof window === 'undefined') return null;
 
   try {
-    // Try multiple selectors for iframe container with more comprehensive search
-    const iframeSelectors = [
+    // Try multiple selectors for main container with comprehensive search
+    const containerSelectors = [
       'active-app-container',
       'iframe[src*="localhost"]',
       'iframe[src*="experiences"]',
       'iframe[src*="3000"]',
       'iframe[src*="whop"]',
-      'iframe'
+      'iframe',
+      'body > div:first-child', // Main app container
+      'body > div', // Any main div
+      'body' // Fallback to body
     ];
     
-    let iframe: HTMLIFrameElement | null = null;
+    let container: HTMLElement | null = null;
     
-    console.log('🎨 [Dimension Debug] Searching for iframe container...');
+    console.log('🎨 [Dimension Debug] Searching for main container...');
     
-    for (const selector of iframeSelectors) {
+    for (const selector of containerSelectors) {
       if (selector.startsWith('iframe')) {
-        iframe = document.querySelector(selector) as HTMLIFrameElement;
+        container = document.querySelector(selector) as HTMLElement;
+      } else if (selector.startsWith('body')) {
+        container = document.querySelector(selector) as HTMLElement;
       } else {
-        iframe = document.getElementById(selector) as HTMLIFrameElement;
+        container = document.querySelector(selector) as HTMLElement;
       }
       
-      if (iframe) {
-        const rect = iframe.getBoundingClientRect();
-        console.log(`🎨 [Dimension Debug] Found iframe with selector "${selector}":`, {
-          element: iframe,
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        console.log(`🎨 [Dimension Debug] Found container with selector "${selector}":`, {
+          element: container,
           rect: rect,
-          src: iframe.src,
           width: rect.width,
-          height: rect.height
+          height: rect.height,
+          tagName: container.tagName
         });
         
         if (rect.width > 0 && rect.height > 0) {
@@ -54,8 +59,8 @@ export const measureIframeContainer = (): ContainerDimensions | null => {
       }
     }
     
-    if (iframe && iframe.getBoundingClientRect().width > 0) {
-      const rect = iframe.getBoundingClientRect();
+    if (container && container.getBoundingClientRect().width > 0) {
+      const rect = container.getBoundingClientRect();
       const dimensions = {
         width: Math.round(rect.width),
         height: Math.round(rect.height),
@@ -63,8 +68,8 @@ export const measureIframeContainer = (): ContainerDimensions | null => {
         devicePixelRatio: window.devicePixelRatio || 1
       };
       
-      console.log('🎨 [Dimension Debug] Iframe container found:', {
-        element: iframe,
+      console.log('🎨 [Dimension Debug] Main container found:', {
+        element: container,
         rect: rect,
         dimensions: dimensions,
         windowSize: { width: window.innerWidth, height: window.innerHeight }
@@ -73,7 +78,7 @@ export const measureIframeContainer = (): ContainerDimensions | null => {
       return dimensions;
     }
 
-    // Fallback to window dimensions if iframe not found
+    // Fallback to window dimensions if container not found
     const fallbackDimensions = {
       width: window.innerWidth,
       height: window.innerHeight,
@@ -81,10 +86,10 @@ export const measureIframeContainer = (): ContainerDimensions | null => {
       devicePixelRatio: window.devicePixelRatio || 1
     };
     
-    console.log('🎨 [Dimension Debug] Iframe not found, using window dimensions:', fallbackDimensions);
+    console.log('🎨 [Dimension Debug] Container not found, using window dimensions:', fallbackDimensions);
     return fallbackDimensions;
   } catch (error) {
-    console.error('Error measuring iframe container:', error);
+    console.error('Error measuring container:', error);
     return null;
   }
 };
