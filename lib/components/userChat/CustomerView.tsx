@@ -653,7 +653,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// Render UserChat with real data
 			return (
-				<div className="h-screen w-full relative">
+				<div className="h-screen w-full relative flex flex-col">
 			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads */}
 			{(!iframeLoaded || overlayTransitioning) && (
 				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
@@ -863,11 +863,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		</div>
 
 		{/* Main Content Area with Toggle Functionality */}
-		<div className="h-[calc(100vh-120px)] w-full relative flex flex-col overflow-hidden">
+		<div className="flex-1 w-full relative flex flex-col overflow-hidden">
 			{/* Iframe Section - Enhanced reveal animation */}
 			<div className={`transition-all duration-500 ease-in-out ${
 				viewMode === 'iframe-only' ? 'h-full transform scale-y-100 origin-top' :
-				viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-top' : 'h-0 overflow-hidden transform scale-y-0 origin-top'
+				viewMode === 'split-view' ? 'h-[calc(100vh-50vh)] transform scale-y-100 origin-top' : 'h-0 overflow-hidden transform scale-y-0 origin-top'
 			} ${viewMode === 'iframe-only' ? 'fixed top-0 left-0 w-full h-screen z-10' : 'relative z-0'}`}>
 					<div 
 						className={`h-full w-full relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 cursor-pointer ${viewMode === 'iframe-only' ? 'h-screen' : ''}`}
@@ -1018,7 +1018,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			{/* Chat Section - Enhanced collapse animation */}
 			<div className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
 				viewMode === 'iframe-only' ? 'h-0 overflow-hidden transform scale-y-0 origin-bottom' :
-				viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-bottom' : 'h-full transform scale-y-100 origin-bottom'
+				viewMode === 'split-view' ? 'h-[50vh] transform scale-y-100 origin-bottom' : 'h-full transform scale-y-100 origin-bottom'
 			} ${isTransitioning ? 'overflow-hidden' : 'overflow-hidden'} ${
 				viewMode === 'iframe-only' ? 'absolute bottom-0 left-0 right-0 z-10' : 'relative z-10'
 			}`}>

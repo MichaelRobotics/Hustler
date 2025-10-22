@@ -271,10 +271,10 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			setShowNoFunnelPopup(true);
 			setPopupShown(true); // Mark as shown to prevent re-appearing
 			
-			// Auto-hide popup after 5 seconds
+			// Auto-hide popup after 7 seconds
 			setTimeout(() => {
 				setShowNoFunnelPopup(false);
-			}, 5000);
+			}, 7000);
 		}
 	}, [isLoading, iframeLoaded, isFunnelActive, showNoFunnelPopup, popupShown]);
 
@@ -308,23 +308,6 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		}
 	};
 
-	// Show SeasonalStore if enabled
-	if (useSeasonalStore) {
-		return <SeasonalStore 
-			experienceId={experienceId}
-			onBack={() => {
-				// Switch back to StorePreview immediately
-				setUseSeasonalStore(false);
-				// Trigger loading overlay on top of StorePreview
-				setIsLoading(true);
-				// Match StorePreview loading duration: 3.5 seconds total
-				// (3 seconds content stabilization + 500ms transition)
-				setTimeout(() => {
-					setIsLoading(false);
-				}, 3500);
-			}} 
-		/>;
-	}
 
 	// Don't show loading state here - it will be an overlay on the main content
 
@@ -364,9 +347,27 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 
 	// isFunnelActive is now a state variable
 
+	// Show SeasonalStore if enabled
+	if (useSeasonalStore) {
+		return <SeasonalStore 
+			experienceId={experienceId}
+			onBack={() => {
+				// Switch back to StorePreview immediately
+				setUseSeasonalStore(false);
+				// Trigger loading overlay on top of StorePreview
+				setIsLoading(true);
+				// Match StorePreview loading duration: 3.5 seconds total
+				// (3 seconds content stabilization + 500ms transition)
+				setTimeout(() => {
+					setIsLoading(false);
+				}, 3500);
+			}} 
+		/>;
+	}
+
 	// Render with view modes like CustomerView
 	return (
-		<div className="h-screen w-full relative">
+		<div className="h-screen w-full relative flex flex-col">
 			
 			{/* Whop Native Loading Overlay - Covers entire StorePreview until iframe loads */}
 			{(!iframeLoaded || overlayTransitioning) && (
@@ -568,11 +569,11 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			</div>
 
 			{/* Main Content Area with Toggle Functionality */}
-			<div className="h-[calc(100vh-80px)] w-full relative flex flex-col overflow-hidden">
+			<div className="flex-1 w-full relative flex flex-col overflow-hidden">
 				{/* Iframe Section - Enhanced reveal animation */}
 				<div className={`transition-all duration-500 ease-in-out ${
 					viewMode === 'iframe-only' ? 'h-full transform scale-y-100 origin-top' :
-					viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-top' : 'h-0 overflow-hidden transform scale-y-0 origin-top'
+					viewMode === 'split-view' ? 'h-[calc(100vh-50vh)] transform scale-y-100 origin-top' : 'h-0 overflow-hidden transform scale-y-0 origin-top'
 				} ${viewMode === 'iframe-only' ? 'fixed top-0 left-0 w-full h-screen z-10' : 'relative z-0'}`}>
 					<div 
 						className={`h-full w-full relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 cursor-pointer ${viewMode === 'iframe-only' ? 'h-screen' : ''}`}
@@ -674,7 +675,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 				{/* Chat Section - Enhanced collapse animation */}
 				<div className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
 					viewMode === 'iframe-only' ? 'h-0 overflow-hidden transform scale-y-0 origin-bottom' :
-					viewMode === 'split-view' ? 'h-1/2 transform scale-y-100 origin-bottom' : 'h-full transform scale-y-100 origin-bottom'
+					viewMode === 'split-view' ? 'h-[50vh] transform scale-y-100 origin-bottom' : 'h-full transform scale-y-100 origin-bottom'
 				} ${isTransitioning ? 'overflow-hidden' : 'overflow-hidden'} ${
 					viewMode === 'iframe-only' ? 'absolute bottom-0 left-0 right-0 z-10' : 'relative z-10'
 				}`}>
@@ -739,7 +740,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 							</div>
 							
 							<div className="flex-1">
-								<h4 className="font-semibold text-sm mb-1">No Funnel is Live. Go to</h4>
+								<h4 className="font-semibold text-sm mb-1">No Merchant is Live. Go to</h4>
 								<p className="text-xs text-green-100 mb-2">
 									My Merchants → Select Merchant → Edit Merchant → Go Live!
 								</p>

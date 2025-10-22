@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { FloatingAsset as FloatingAssetType } from '../types';
-import { PromoMessageContent } from './PromoMessageContent';
 import { emojiToSvgDataURL } from '../services/aiService';
 
 interface FloatingAssetProps {
@@ -206,15 +205,7 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
             height: isPromoCode ? '100px' : 'auto',
           }}
         >
-          {asset.isPromoMessage ? (
-            <PromoMessageContent 
-              message={asset.content || ''} 
-              isEditorView={isAdminSheetOpen} 
-              color={asset.color || '#FFFFFF'} 
-            />
-          ) : (
-            <span style={{ pointerEvents: 'none' }}>{asset.content}</span>
-          )}
+          <span style={{ pointerEvents: 'none' }}>{asset.content}</span>
         </div>
       ) : asset.type === 'promo-ticket' ? (
         <div className="p-2 pointer-events-none">

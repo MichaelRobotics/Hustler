@@ -1022,7 +1022,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
 				{/* Progress Bar - Separate element like separation line */}
 				{userType === "admin" && stageInfo && funnelFlow && (
-					<div className="px-4 py-3 border-t border-border/20 dark:border-border/10 relative">
+					<div className="px-4 py-2 border-t border-border/20 dark:border-border/10 relative">
 						{/* Golden Percentage - Directly above progress bar */}
 						<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full z-50">
 							<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
@@ -1194,7 +1194,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
 				{/* Input Area - Now below the overflow container */}
 				{currentBlockId && (
-					<div className="flex-shrink-0 chat-input-container safe-area-bottom">
+					<div className="flex-shrink-0 chat-input-container safe-area-bottom px-4 py-2">
 						<div className="flex items-end gap-3">
 							<div className="flex-1">
 								<textarea

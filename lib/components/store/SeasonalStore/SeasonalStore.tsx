@@ -4,10 +4,10 @@ import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useSeasonalStore } from '@/lib/hooks/useSeasonalStore';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
 import { useTheme } from '../../common/ThemeProvider';
+import AIFunnelBuilderPage from '../../funnelBuilder/AIFunnelBuilderPage';
 import { FloatingAsset as FloatingAssetType, FixedTextStyles } from './types';
 import { ProductCard } from './components/ProductCard';
 import { FloatingAsset } from './components/FloatingAsset';
-import { PromoMessageContent } from './components/PromoMessageContent';
 import { AdminAssetSheet } from './components/AdminAssetSheet';
 import { 
   PresentIcon, 
@@ -60,6 +60,38 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const [liveFunnel, setLiveFunnel] = useState<any>(null);
   const [isFunnelActive, setIsFunnelActive] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  
+  // FunnelBuilder view state
+  const [showFunnelBuilder, setShowFunnelBuilder] = useState(false);
+  
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Notification state
+  const [showNotification, setShowNotification] = useState(false);
+  
+  // Mobile detection effect
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  // Show notification when no funnel is live
+  useEffect(() => {
+    if (!funnelFlow || !isFunnelActive) {
+      setShowNotification(true);
+      
+      // Auto-hide notification after 7 seconds
+      setTimeout(() => {
+        setShowNotification(false);
+      }, 7000);
+    }
+  }, [funnelFlow, isFunnelActive]);
   
   const {
     // State
@@ -515,6 +547,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
   const { mainHeader, headerMessage, subHeader, promoMessage } = fixedTextStyles;
 
+
   // Claim button local state (text and style)
   const [promoButton, setPromoButton] = useState<{ text: string; buttonClass: string; ringClass: string; ringHoverClass: string; icon: string }>({
     text: 'CLAIM YOUR GIFT!',
@@ -861,49 +894,82 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     }, 0);
   };
 
+  // Show FunnelBuilder if Edit Merchant was clicked
+  if (showFunnelBuilder && liveFunnel) {
+    return (
+      <AIFunnelBuilderPage
+        funnel={liveFunnel}
+        onBack={() => setShowFunnelBuilder(false)}
+        onUpdate={(updatedFunnel) => {
+          setLiveFunnel(updatedFunnel);
+          console.log('Funnel updated:', updatedFunnel);
+        }}
+        onGoToFunnelProducts={() => {
+          console.log('Navigate to funnel products');
+        }}
+        user={{ experienceId }}
+        hasAnyLiveFunnel={isFunnelActive}
+        isSingleMerchant={true}
+      />
+    );
+  }
+
   return (
-    <div 
-      ref={appRef} 
-      className={`h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !theme.backgroundImage ? theme.background : ''}`}
-      style={getBackgroundStyle()}
-    >
+    <>
+      <div 
+        ref={appRef} 
+        className={`h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !theme.backgroundImage ? theme.background : ''}`}
+        style={getBackgroundStyle()}
+      >
       {/* Top Navbar with Integrated Progress Bar */}
-      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
+        <div className="px-3 py-2 h-full flex items-center">
+          <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-4">
               {/* Back Arrow */}
               <button
                 onClick={onBack || (() => window.history.back())}
-                className="p-2 text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                className="p-1 text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
                 title="Go Back to Store Preview"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={16} />
               </button>
             </div>
 
             {/* Center: Hide Chat Button when chat is open */}
             <div className="flex-1 flex justify-center">
               {isChatOpen && (
-                <button 
-                  onClick={() => setIsChatOpen(false)}
-                  className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25 hover:shadow-red-500/40 text-white relative"
-                  title="Hide Chat"
-                >
-                  <div className="flex items-center justify-center">
-                    <MessageCircleIcon className="w-4 h-4" />
-                    <span className="ml-2 text-xs font-medium">Hide Chat</span>
-                  </div>
-                  {/* Tooltip */}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                    Hide Chat
-                  </div>
-                </button>
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsChatOpen(false)}
+                    className={`group relative z-10 flex items-center justify-center px-6 py-3 text-sm rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass} ${getHoverRingClass(promoButton.ringHoverClass)} ${promoButton.buttonClass} shadow-2xl`}
+                    title="Hide Chat"
+                  >
+                    {/* Chat Icon with 3 dots for Hide Chat */}
+                    <div className="w-5 h-5 text-white relative z-10 mr-2">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      {/* 3 Dots inside the circle */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex space-x-0.5">
+                          <div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          <div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          <div className="w-0.5 h-0.5 bg-white rounded-full"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold">HIDE CHAT</span>
+                  </button>
+                  {/* Below-button glow (positioned vertically lower than the button) */}
+                  <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[110%] h-6 opacity-0 group-hover:opacity-60 blur-xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
+                  <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[90%] h-4 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
+                </div>
               )}
             </div>
 
             {/* Right Side: Admin Controls */}
-            <div className="p-2 rounded-lg bg-black/50 backdrop-blur text-white text-sm shadow-2xl flex items-center space-x-4">
+            <div className="p-1 rounded-lg bg-black/50 backdrop-blur text-white text-xs shadow-2xl flex items-center space-x-2 min-h-[2.5rem] h-full flex-shrink-0">
               {/* View Toggle */}
               <button 
                 onClick={() => {
@@ -921,11 +987,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 title={editorState.isEditorView ? 'Switch to Customer Page View' : 'Switch to Editor View'}
               >
                 <div className="flex items-center justify-center">
-                  {editorState.isEditorView ? (
-                    <EyeIcon className="w-4 h-4" />
-                  ) : (
-                    <EditIcon className="w-4 h-4" />
-                  )}
+                    {editorState.isEditorView ? (
+                      <EyeIcon className="w-5 h-5" />
+                    ) : (
+                      <EditIcon className="w-5 h-5" />
+                    )}
                 </div>
                 {/* Tooltip */}
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
@@ -934,7 +1000,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               </button>
 
               {editorState.isEditorView && (
-                <>
+                <div className="flex items-center space-x-2 flex-shrink-0">
                   {/* Theme Selector */}
                   <div className="flex items-center space-x-2">
                     <label htmlFor="season" className="font-semibold flex-shrink-0 hidden sm:inline text-white">Theme:</label>
@@ -1046,7 +1112,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       Templates
                     </div>
                   </button>
-                </>
+                </div>
               )}
 
             </div>
@@ -1106,35 +1172,20 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       )}
 
 
-      {/* Floating Thematic Assets */}
-      {floatingAssets.map(asset => (
-        <FloatingAsset
-          key={asset.id}
-          asset={asset}
-          isAdminSheetOpen={editorState.isAdminSheetOpen && editorState.isEditorView}
-          selectedAssetId={editorState.selectedAssetId}
-          onUpdateAsset={updateFloatingAsset}
-          onSelectAsset={setSelectedAsset}
-          onDeleteAsset={deleteFloatingAsset}
-          appRef={appRef}
-          isEditorView={editorState.isEditorView}
-        />
-      ))}
-      
       {/* Main Content Container */}
       <div 
-        className={`relative z-30 flex flex-col items-center pt-4 pb-20 px-4 sm:px-8 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto h-full`}
+        className={`relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto h-full`}
         onClick={() => editorState.isEditorView && setSelectedAsset(null)}
         onDragOver={(e) => editorState.isEditorView && e.preventDefault()}
         onDrop={editorState.isEditorView ? handleDropAsset : undefined}
       >
         {/* Logo Section */}
         {editorState.isEditorView ? (
-          <div className="w-full max-w-5xl mx-auto mb-10">
+          <div className="w-full max-w-5xl mx-auto mb-4">
             <div className="text-center">
               
               <div 
-                className="relative w-36 h-36 mb-4 mx-auto overflow-hidden group"
+                className="relative w-24 h-24 mb-2 mx-auto overflow-hidden group"
                 onMouseEnter={() => {
                   // Show controls when hovering over entire logo
                   const controls = document.querySelector('.logo-controls') as HTMLElement;
@@ -1158,7 +1209,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-2 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
                   {/* Upload Button - Top */}
                   <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <input 
@@ -1183,7 +1234,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     title={logoAsset.src.includes('placehold.co') ? `Generate ${currentSeason} Logo` : `Refine to ${currentSeason}`}
                   >
                     <div className="flex items-center justify-center">
-                      <ZapIcon className="w-4 h-4" />
+                      <ZapIcon className="w-3 h-3" />
                     </div>
                   </button>
                   
@@ -1204,8 +1255,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             </div>
           </div>
         ) : (
-          <div className="w-full max-w-5xl mx-auto mb-10 pt-6">
-            <div className={`w-36 h-36 mx-auto overflow-hidden ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}>
+          <div className="w-full max-w-5xl mx-auto mb-4 pt-2">
+            <div className={`w-24 h-24 mx-auto overflow-hidden ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}>
               <img
                 src={logoAsset.src}
                 alt={logoAsset.alt}
@@ -1216,7 +1267,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         )}
         
         {/* Store Header - Direct on Background */}
-        <div className="text-center mb-12 relative w-full">
+        <div className="text-center mb-6 relative w-full">
           
           {inlineEditTarget === 'headerMessage' ? (
             <input
@@ -1292,7 +1343,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         )}
         
         {/* Product Showcase */}
-        <div className="w-full max-w-5xl my-4">
+        <div className="w-full max-w-5xl my-12">
           {products.length > 0 ? (
             <div className="flex items-center gap-4">
               {/* Left Arrow - Only show when there are more than 2 products */}
@@ -1310,7 +1361,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               )}
               
               {/* Product Grid - Show only 2 products with fade animation */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
                 {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
                   <div 
                     key={`${product.id}-${currentProductIndex}`}
@@ -1361,60 +1412,77 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           
         </div>
 
-        {/* Fixed Gift Promotion Block */}
-        <div className="w-full max-w-3xl my-10 text-center">
-          {inlineEditTarget === 'promoMessage' ? (
-            <textarea
-              ref={promoInputRef as any}
-              rows={2}
-              value={promoMessage.content}
-              onChange={(e) => setFixedTextStyles(prev => ({
-                ...prev,
-                promoMessage: { ...prev.promoMessage, content: e.target.value }
-              }))}
-              onBlur={() => setInlineEditTarget(null)}
-              className={`${promoMessage.styleClass} w-full mb-8 drop-shadow-md bg-transparent border-b border-gray-400 outline-none text-center resize-none ${editorState.isEditorView ? 'rounded-lg p-2' : ''}`}
-              style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
-              placeholder="Click to edit text..."
-            />
-          ) : (
-            <p
-              onClick={() => {
-                if (editorState.isEditorView) {
-                  setEditingText({ isOpen: true, targetId: 'promoMessage' });
-                }
-              }}
-              className={`${promoMessage.styleClass} mb-8 drop-shadow-md cursor-pointer ${editorState.isEditorView ? 'hover:bg-blue-100/20 rounded-lg p-2 transition-colors' : ''}`}
-              style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
-            >
-              {promoMessage.content}
-            </p>
-          )}
-          
-          <div className="relative w-full mt-8">
-            <button
-            onClick={() => {
-              if (editorState.isEditorView) {
-                openProductEditor(null, 'button');
-              } else {
-                // Open chat when gift button is clicked
-                setIsChatOpen(true);
-              }
-            }}
-              className={`group relative z-10 flex items-center justify-center w-full py-4 text-xl rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass} ${getHoverRingClass(promoButton.ringHoverClass)} ${promoButton.buttonClass} shadow-2xl`}
-          >
-            {promoButton.icon && (
-              <span className="mr-3 text-2xl animate-pulse">
-                {promoButton.icon}
-              </span>
-            )}
-            {promoButton.text}
-          </button>
-            {/* Below-button glow (positioned vertically lower than the button) */}
-            <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-6 w-[110%] h-10 opacity-0 group-hover:opacity-60 blur-2xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
-            <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-4 w-[90%] h-8 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
-          </div>
-        </div>
+         {/* Fixed Gift Promotion Block - Only show when there's a live funnel */}
+         {funnelFlow && isFunnelActive && (
+           <div className="w-full max-w-3xl my-1 text-center">
+             {inlineEditTarget === 'promoMessage' ? (
+               <textarea
+                 ref={promoInputRef as any}
+                 rows={2}
+                 value={promoMessage.content}
+                 onChange={(e) => setFixedTextStyles(prev => ({
+                   ...prev,
+                   promoMessage: { ...prev.promoMessage, content: e.target.value }
+                 }))}
+                 onBlur={() => setInlineEditTarget(null)}
+                 className={`${promoMessage.styleClass} w-full mb-8 drop-shadow-md bg-transparent border-b border-gray-400 outline-none text-center resize-none ${editorState.isEditorView ? 'rounded-lg p-2' : ''}`}
+                 style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+                 placeholder="Click to edit text..."
+               />
+             ) : (
+               <p
+                 onClick={() => {
+                   if (editorState.isEditorView) {
+                     setEditingText({ isOpen: true, targetId: 'promoMessage' });
+                   }
+                 }}
+                 className={`${promoMessage.styleClass} mb-8 drop-shadow-md cursor-pointer ${editorState.isEditorView ? 'hover:bg-blue-100/20 rounded-lg p-2 transition-colors' : ''}`}
+                 style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+               >
+                 {promoMessage.content}
+               </p>
+             )}
+             
+             <div className="relative w-full mt-8">
+               <button
+               onClick={() => {
+                 if (editorState.isEditorView) {
+                   openProductEditor(null, 'button');
+                 } else {
+                   // Open chat when gift button is clicked
+                   setIsChatOpen(true);
+                 }
+               }}
+                 className={`group relative z-10 flex items-center justify-center w-full py-4 text-xl rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass} ${getHoverRingClass(promoButton.ringHoverClass)} ${promoButton.buttonClass} shadow-2xl`}
+             >
+               {promoButton.icon && (
+                 <span className="mr-3 text-2xl animate-pulse">
+                   {promoButton.icon}
+                 </span>
+               )}
+               {promoButton.text}
+             </button>
+               {/* Below-button glow (positioned vertically lower than the button) */}
+               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-6 w-[110%] h-10 opacity-0 group-hover:opacity-60 blur-2xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
+               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-4 w-[90%] h-8 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
+             </div>
+           </div>
+         )}
+
+        {/* Floating Thematic Assets - Now positioned relative to content */}
+        {floatingAssets.map(asset => (
+          <FloatingAsset
+            key={asset.id}
+            asset={asset}
+            isAdminSheetOpen={editorState.isAdminSheetOpen && editorState.isEditorView}
+            selectedAssetId={editorState.selectedAssetId}
+            onUpdateAsset={updateFloatingAsset}
+            onSelectAsset={setSelectedAsset}
+            onDeleteAsset={deleteFloatingAsset}
+            appRef={appRef}
+            isEditorView={editorState.isEditorView}
+          />
+        ))}
       </div>
 
 
@@ -2238,11 +2306,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           ? 'translate-y-0 opacity-100' 
           : 'translate-y-full opacity-0'
       }`}>
-        <div className={`w-full flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
-          isChatOpen 
-            ? 'max-h-[45vh] opacity-100' 
-            : 'max-h-0 opacity-0'
-        }`} style={{ height: isChatOpen ? '45vh' : '0vh', maxHeight: isChatOpen ? '45vh' : '0vh' }}>
+         <div className={`w-full flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+           isChatOpen 
+             ? isMobile ? 'max-h-[100vh] opacity-100' : 'max-h-[50vh] opacity-100'
+             : 'max-h-0 opacity-0'
+         }`} style={{ 
+           height: isChatOpen ? (isMobile ? '100vh' : '50vh') : '0vh', 
+           maxHeight: isChatOpen ? (isMobile ? '100vh' : '50vh') : '0vh' 
+         }}>
             {/* Beautiful Golden Separator Line */}
             <div className="absolute top-0 left-0 right-0 z-20">
               {/* Main golden line */}
@@ -2266,6 +2337,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                   onEditMerchant={() => {
                     console.log('Edit merchant clicked');
                     setIsChatOpen(false);
+                    setShowFunnelBuilder(true);
                   }}
                 />
                  ) : (
@@ -2298,6 +2370,38 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           </div>
         </div>
       </div>
+      
+      {/* Green Popup - No Merchant is Live */}
+      {showNotification && !isFunnelActive && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right-5 duration-300">
+          <div className="bg-green-500 text-white rounded-lg shadow-lg p-4 max-w-sm">
+            <div className="flex items-start gap-3">
+              {/* Green play icon */}
+              <div className="flex-shrink-0 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              
+              <div className="flex-1">
+                <h4 className="font-semibold text-sm mb-1">No Merchant is Live. Go to</h4>
+                <p className="text-xs text-green-100 mb-2">
+                  My Merchants → Select Merchant → Edit Merchant → Go Live!
+                </p>
+                
+                {/* Close button */}
+                <button
+                  onClick={() => setShowNotification(false)}
+                  className="text-green-100 hover:text-white transition-colors text-xs underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

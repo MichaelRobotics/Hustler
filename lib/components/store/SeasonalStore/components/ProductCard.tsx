@@ -71,7 +71,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <div 
-      className={`p-6 rounded-3xl transition-all duration-300 ${cardClass} flex flex-col relative`}
+      className={`px-3 py-4 rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto`}
       onClick={(e) => {
         if (!isEditorView) return;
         const target = e.target as HTMLElement;
@@ -83,7 +83,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     >
       {/* AI/Upload/Delete Controls (Only visible in Editor View) */}
       {isEditorView && (
-        <div className="absolute top-4 right-4 flex space-x-2 z-10">
+        <div className="absolute top-2 right-2 flex space-x-1 z-10">
           {/* Sticker/Overlay Controls */}
           {product.containerAsset && (
             <button
@@ -132,14 +132,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Product Image Container (Drop Zone) */}
       <div 
-        className="relative w-48 h-48 mb-4 mx-auto product-container-drop-zone"
+        className="relative w-40 h-40 mb-2 mx-auto product-container-drop-zone"
         onDragOver={(e) => isEditorView && e.preventDefault()}
         onDrop={(e) => onDropAsset(e, product.id)}
       >
         <img
           src={product.image}
           alt={product.name}
-          className="w-full h-full rounded-2xl object-cover ring-4 ring-transparent hover:ring-8 transition-all duration-500 ring-offset-4 ring-offset-current"
+          className="w-full h-full rounded-xl object-cover ring-2 ring-transparent hover:ring-4 transition-all duration-500 ring-offset-2 ring-offset-current"
           style={{ 
             filter: `drop-shadow(0 10px 10px ${
               theme.name === 'Fall' ? 'rgba(160, 82, 45, 0.5)' : 
@@ -186,7 +186,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="flex flex-col flex-grow text-center">
         {/* Editable Product Name */}
         <h2 
-          className={`text-2xl font-bold mb-2 ${titleClass}`}
+          className={`text-lg font-bold mb-1 ${titleClass}`}
           contentEditable={isEditorView}
           suppressContentEditableWarning={true}
           onBlur={handleNameChange}
@@ -199,8 +199,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         
         {/* Editable Product Description (Fixed min height for alignment) */}
         <p 
-          className={`text-sm mb-4 ${descClass} flex-grow`}
-          style={{ minHeight: '4.5rem', cursor: isEditorView ? 'text' : 'default' }}
+          className={`text-xs mb-2 ${descClass} flex-grow`}
+          style={{ minHeight: '1.5rem', cursor: isEditorView ? 'text' : 'default' }}
           contentEditable={isEditorView}
           suppressContentEditableWarning={true}
           onBlur={handleDescriptionChange}
@@ -211,14 +211,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </p>
         
         {/* Editable Price */}
-        <div className="text-3xl font-extrabold mb-4 mt-auto">
+        <div className="text-xl font-extrabold mb-2 mt-auto">
           {isEditorView ? (
             <input 
               type="number"
               step="0.01"
               value={product.price}
               onChange={handlePriceChange}
-              className={`w-24 text-center bg-transparent border-b border-gray-400 focus:outline-none focus:border-indigo-500 text-3xl font-extrabold ${priceTextColor}`}
+              className={`w-16 text-center bg-transparent border-b border-gray-400 focus:outline-none focus:border-indigo-500 text-xl font-extrabold ${priceTextColor}`}
             />
           ) : (
             <span className={priceTextColor}>{`$${product.price.toFixed(2)}`}</span>
@@ -232,11 +232,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             defaultValue={buttonText}
             onChange={(e) => onInlineButtonSave && onInlineButtonSave(e.target.value)}
             onBlur={() => onInlineButtonEnd && onInlineButtonEnd()}
-            className="w-full max-w-xs mx-auto py-3 px-4 rounded-full bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-center font-bold uppercase tracking-wider"
+            className="w-full max-w-48 mx-auto py-2 px-3 rounded-full bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-center font-bold uppercase tracking-wider"
           />
         ) : (
           <button 
-            className={`w-full max-w-xs py-3 px-6 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.03] ${buttonBaseClass} shadow-xl ring-2 ring-offset-2 ring-offset-white mx-auto`}
+            className={`w-full max-w-48 py-1.5 px-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.03] ${buttonBaseClass} shadow-xl ring-2 ring-offset-2 ring-offset-white mx-auto`}
             onClick={(e) => { 
               if (isEditorView && onOpenEditor) { 
                 e.stopPropagation(); 

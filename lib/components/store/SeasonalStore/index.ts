@@ -4,7 +4,6 @@ export { SeasonalStore } from './SeasonalStore';
 // Components
 export { ProductCard } from './components/ProductCard';
 export { FloatingAsset } from './components/FloatingAsset';
-export { PromoMessageContent } from './components/PromoMessageContent';
 export * from './components/Icons';
 
 // Services
