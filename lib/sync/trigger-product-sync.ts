@@ -526,8 +526,18 @@ export async function triggerProductSyncForNewAdmin(
           // FREE apps don't need ref or affiliate parameters
           const directUrl = whopClient.generateAppUrl(app, undefined, true);
           
-          // Use app icon if available, otherwise fallback to placeholder
-          const appImage = app.icon || `https://placehold.co/400x400/10b981/ffffff?text=${encodeURIComponent(app.name.toUpperCase())}`;
+          // Get app logo or generate placeholder if not available
+          const appImage = app.logo || app.bannerImage || 
+            `https://placehold.co/400x400/10b981/ffffff?text=${encodeURIComponent(app.name.toUpperCase())}`;
+          
+          // Log image source for debugging
+          if (app.logo) {
+            console.log(`✅ Using app logo: ${app.logo}`);
+          } else if (app.bannerImage) {
+            console.log(`✅ Using app banner: ${app.bannerImage}`);
+          } else {
+            console.log(`⚠️ No app image found, using placeholder for ${app.name}`);
+          }
 							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,
