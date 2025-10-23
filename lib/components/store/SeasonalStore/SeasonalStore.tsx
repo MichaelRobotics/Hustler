@@ -58,6 +58,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [isSliding, setIsSliding] = useState(false);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const autoSwitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Chat functionality
@@ -265,6 +267,31 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       startAutoSwitch();
     }
   }, [currentProductIndex, products.length, startAutoSwitch, isSliding]);
+
+  // Touch swipe handlers for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe && currentProductIndex < products.length - 1) {
+      navigateToNext();
+    }
+    if (isRightSwipe && currentProductIndex > 0) {
+      navigateToPrevious();
+    }
+  }, [touchStart, touchEnd, currentProductIndex, products.length, navigateToNext, navigateToPrevious]);
 
   // Auto-switch products every 10 seconds (disabled in edit mode)
   useEffect(() => {
@@ -2115,12 +2142,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         <div className="w-full max-w-5xl my-4">
           {products.length > 0 ? (
             <div className="flex items-center gap-4">
-              {/* Left Arrow - Only show when there are more than 2 products */}
+              {/* Left Arrow - Only show on desktop when there are more than 2 products */}
               {products.length > 2 && (
                 <button
                   onClick={navigateToPrevious}
                   disabled={currentProductIndex === 0}
-                  className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
+                  className="hidden md:flex p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Previous products"
                 >
                   <svg className="w-6 h-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2129,8 +2156,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 </button>
               )}
               
-              {/* Product Grid - Show only 2 products with slide-out and slide-in animation */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden">
+              {/* Product Grid - Show 1 product on mobile, 2 on desktop with slide-out and slide-in animation */}
+              <div 
+                className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
                 {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
                   <div 
                     key={`${product.id}-${currentProductIndex}`}
@@ -2170,12 +2202,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 ))}
               </div>
               
-              {/* Right Arrow - Only show when there are more than 2 products */}
+              {/* Right Arrow - Only show on desktop when there are more than 2 products */}
               {products.length > 2 && (
                 <button
                   onClick={navigateToNext}
                   disabled={currentProductIndex >= products.length - 2}
-                  className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
+                  className="hidden md:flex p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Next products"
                 >
                   <svg className="w-6 h-6 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
