@@ -2210,6 +2210,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 ))}
               </div>
               
+              
               {/* Right Arrow - Only show on desktop when there are more than 2 products */}
               {products.length > 2 && (
                 <button
@@ -2231,6 +2232,31 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           )}
           
         </div>
+
+         {/* Navigation Dots - Only show on mobile when there are multiple products */}
+         {products.length > 1 && (
+           <div className="flex justify-center mt-4 space-x-2 md:hidden">
+             {Array.from({ length: Math.max(1, products.length - 1) }, (_, index) => (
+               <button
+                 key={index}
+                 onClick={() => {
+                   if (index !== currentProductIndex) {
+                     if (index > currentProductIndex) {
+                       navigateToNext();
+                     } else {
+                       navigateToPrevious();
+                     }
+                   }
+                 }}
+                 className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                   index === currentProductIndex
+                     ? 'bg-white scale-125'
+                     : 'bg-white/50 hover:bg-white/75'
+                 }`}
+               />
+             ))}
+           </div>
+         )}
 
          {/* Fixed Gift Promotion Block - Only show when there's a live funnel */}
          {funnelFlow && isFunnelActive && (
@@ -2304,6 +2330,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
              </div>
            </div>
          )}
+
 
         {/* Floating Thematic Assets - Now positioned relative to content */}
         {floatingAssets.map(asset => (
