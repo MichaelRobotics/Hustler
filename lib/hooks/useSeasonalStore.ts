@@ -55,7 +55,7 @@ export const useSeasonalStore = () => {
       styleClass: 'text-lg sm:text-xl font-normal' 
     },
     promoMessage: { 
-      content: 'Our Merchant has Gift for you!', 
+      content: 'Our Merchant has a Gift for you!', 
       color: '#FFFFFF', 
       styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md' 
     },
@@ -68,13 +68,15 @@ export const useSeasonalStore = () => {
   // Get products for current theme, fallback to default theme products
   const getDefaultProducts = (season: string): Product[] => {
     switch (season) {
-      case 'Winter': return winterProducts;
-      case 'Summer': return summerProducts;
-      case 'Fall': return fallProducts;
+      case 'Winter Frost': return winterProducts;
+      case 'Summer Sun': return summerProducts;
+      case 'Fall':
+      case 'Autumn Harvest': return fallProducts;
       case 'Holiday Cheer': return holidayProducts;
       case 'Spring Renewal': return springProducts;
       case 'Cyber Sale': return cyberProducts;
-      case 'Spooky Night': return halloweenProducts;
+      case 'Spooky Night':
+      case 'Halloween Spooky': return halloweenProducts;
       default: return initialProducts;
     }
   };

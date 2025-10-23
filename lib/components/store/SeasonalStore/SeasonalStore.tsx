@@ -2196,7 +2196,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                <textarea
                  ref={promoInputRef as any}
                  rows={2}
-                 value={promoMessage?.content || 'Our Merchant has Gift for you!'}
+                 value={promoMessage?.content || 'Our Merchant has a Gift for you!'}
                  onChange={(e) => setFixedTextStyles(prev => ({
                    ...prev,
                    promoMessage: { 
@@ -2232,7 +2232,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                    textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
                  }}
                >
-                 {promoMessage?.content || 'Our Merchant has Gift for you!'}
+                 {promoMessage?.content || 'Our Merchant has a Gift for you!'}
                </p>
              )}
              
@@ -2318,7 +2318,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                   value={fixedTextStyles[editingText.targetId]?.content || 
                     (editingText.targetId === 'headerMessage' ? 'THE SEASONAL VAULT' :
                      editingText.targetId === 'subHeader' ? 'Discover exclusive seasonal products' :
-                     editingText.targetId === 'promoMessage' ? 'Our Merchant has Gift for you!' : '')}
+                     editingText.targetId === 'promoMessage' ? 'Our Merchant has a Gift for you!' : '')}
                   onChange={(e) => setFixedTextStyles(prev => ({
                     ...prev,
                     [editingText.targetId]: { 
