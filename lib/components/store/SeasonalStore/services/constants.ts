@@ -119,22 +119,6 @@ export const winterProducts = [
     image: 'https://placehold.co/200x200/8b5cf6/ffffff?text=HOT+CHOCO',
     containerAsset: undefined,
   },
-  {
-    id: 3,
-    name: 'Fuzzy Slippers',
-    description: 'Comfortable indoor footwear.',
-    price: 39.99,
-    image: 'https://placehold.co/200x200/06b6d4/ffffff?text=FUZZY+SLIPPERS',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'Winter Blanket',
-    description: 'Extra warm throw blanket.',
-    price: 59.99,
-    image: 'https://placehold.co/200x200/3b82f6/ffffff?text=WINTER+BLANKET',
-    containerAsset: undefined,
-  },
 ];
 
 export const summerProducts = [
@@ -152,22 +136,6 @@ export const summerProducts = [
     description: 'UV protection sunglasses.',
     price: 34.99,
     image: 'https://placehold.co/200x200/eab308/ffffff?text=SUNGLASSES',
-    containerAsset: undefined,
-  },
-  {
-    id: 3,
-    name: 'Cooler Bag',
-    description: 'Insulated picnic cooler.',
-    price: 29.99,
-    image: 'https://placehold.co/200x200/10b981/ffffff?text=COOLER+BAG',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'Sun Hat',
-    description: 'Wide-brim sun protection hat.',
-    price: 24.99,
-    image: 'https://placehold.co/200x200/f97316/ffffff?text=SUN+HAT',
     containerAsset: undefined,
   },
 ];
@@ -189,22 +157,6 @@ export const fallProducts = [
     image: 'https://placehold.co/200x200/d97706/ffffff?text=AUTUMN+SWEATER',
     containerAsset: undefined,
   },
-  {
-    id: 3,
-    name: 'Apple Cider Mix',
-    description: 'Premium spiced cider blend.',
-    price: 14.99,
-    image: 'https://placehold.co/200x200/c2410c/ffffff?text=APPLE+CIDER',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'Fall Wreath',
-    description: 'Decorative autumn wreath.',
-    price: 34.99,
-    image: 'https://placehold.co/200x200/b45309/ffffff?text=FALL+WREATH',
-    containerAsset: undefined,
-  },
 ];
 
 export const holidayProducts = [
@@ -222,22 +174,6 @@ export const holidayProducts = [
     description: 'LED string lights for decoration.',
     price: 19.99,
     image: 'https://placehold.co/200x200/16a34a/ffffff?text=HOLIDAY+LIGHTS',
-    containerAsset: undefined,
-  },
-  {
-    id: 3,
-    name: 'Gift Wrapping Kit',
-    description: 'Complete gift wrapping supplies.',
-    price: 24.99,
-    image: 'https://placehold.co/200x200/7c3aed/ffffff?text=GIFT+WRAP',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'Holiday Mug',
-    description: 'Festive ceramic coffee mug.',
-    price: 16.99,
-    image: 'https://placehold.co/200x200/0891b2/ffffff?text=HOLIDAY+MUG',
     containerAsset: undefined,
   },
 ];
@@ -259,22 +195,6 @@ export const springProducts = [
     image: 'https://placehold.co/200x200/ec4899/ffffff?text=SPRING+SCARF',
     containerAsset: undefined,
   },
-  {
-    id: 3,
-    name: 'Rain Boots',
-    description: 'Colorful waterproof boots.',
-    price: 39.99,
-    image: 'https://placehold.co/200x200/8b5cf6/ffffff?text=RAIN+BOOTS',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'Flower Pot Set',
-    description: 'Ceramic planters for herbs.',
-    price: 29.99,
-    image: 'https://placehold.co/200x200/06b6d4/ffffff?text=FLOWER+POTS',
-    containerAsset: undefined,
-  },
 ];
 
 export const cyberProducts = [
@@ -294,22 +214,6 @@ export const cyberProducts = [
     image: 'https://placehold.co/200x200/8b5cf6/ffffff?text=KEYBOARD',
     containerAsset: undefined,
   },
-  {
-    id: 3,
-    name: 'Gaming Headset',
-    description: 'Surround sound gaming headset.',
-    price: 89.99,
-    image: 'https://placehold.co/200x200/3b82f6/ffffff?text=GAMING+HEADSET',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'LED Strip Lights',
-    description: 'Smart RGB LED room lighting.',
-    price: 34.99,
-    image: 'https://placehold.co/200x200/10b981/ffffff?text=LED+STRIPS',
-    containerAsset: undefined,
-  },
 ];
 
 export const halloweenProducts = [
@@ -327,22 +231,6 @@ export const halloweenProducts = [
     description: 'Spooky miniature haunted mansion.',
     price: 39.99,
     image: 'https://placehold.co/200x200/333333/ffffff?text=HAUNTED+HOUSE',
-    containerAsset: undefined,
-  },
-  {
-    id: 3,
-    name: 'Ghostly Candles',
-    description: 'Flickering LED candles with ghost effects.',
-    price: 19.99,
-    image: 'https://placehold.co/200x200/ffffff/000000?text=GHOST+CANDLES',
-    containerAsset: undefined,
-  },
-  {
-    id: 4,
-    name: 'Bat Wing Cloak',
-    description: 'Dramatic black cape for Halloween.',
-    price: 49.99,
-    image: 'https://placehold.co/200x200/000000/ffffff?text=BAT+CLOAK',
     containerAsset: undefined,
   },
 ];

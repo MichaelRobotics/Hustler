@@ -927,25 +927,13 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </p>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {(() => {
-              // Debug logging
-              console.log('🎨 All themes:', Object.keys(allThemes));
-              console.log('🎨 All themes values:', Object.values(allThemes).map(t => t.name));
-              
-              // Get unique custom themes (deduplicate by theme name)
-              const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky'];
-              const customThemes = Object.values(allThemes).filter(themeData => 
-                !defaultThemeNames.includes(themeData.name)
+              // Get custom themes by checking for custom_ prefix in keys
+              const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => 
+                key.startsWith('custom_')
               );
               
-              console.log('🎨 Custom themes found:', customThemes.map(t => t.name));
-              
-              // Deduplicate by theme name
-              const uniqueCustomThemes = customThemes.reduce((acc, theme) => {
-                if (!acc.find(t => t.name === theme.name)) {
-                  acc.push(theme);
-                }
-                return acc;
-              }, [] as typeof customThemes);
+              // Convert to array of theme objects with their keys
+              const uniqueCustomThemes = customThemeEntries.map(([key, theme]) => ({ ...theme, _key: key }));
               
               if (uniqueCustomThemes.length === 0) {
                 return (
@@ -956,7 +944,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               }
               
               return uniqueCustomThemes.map((themeData, index) => (
-                <div key={`${themeData.name}-${index}`} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-600">
+                <div key={`${themeData._key}-${index}`} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-600">
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-white">{themeData.name}</div>
                     <div className="text-xs text-gray-400 truncate">{themeData.themePrompt || 'No prompt'}</div>
@@ -964,13 +952,9 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                   <button
                     onClick={() => {
                       if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.`)) {
-                        // Remove all instances of this theme from allThemes
+                        // Remove only the specific theme by its unique key
                         const updatedThemes = { ...allThemes };
-                        Object.keys(updatedThemes).forEach(key => {
-                          if (updatedThemes[key].name === themeData.name) {
-                            delete updatedThemes[key];
-                          }
-                        });
+                        delete updatedThemes[themeData._key];
                         setAllThemes(updatedThemes);
                       }
                     }}

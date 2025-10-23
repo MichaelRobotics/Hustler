@@ -137,8 +137,8 @@ async function createTemplateHandler(
       );
     }
 
-    // If themeId is empty, use a default theme ID for development
-    const finalThemeId = themeId || "5dc48fe8-ba78-40db-9fa5-b8acfcb9d199";
+    // Use themeId if provided, otherwise null (for default themes)
+    const finalThemeId = themeId || null;
     console.log("🔍 Templates POST - Using themeId:", finalThemeId);
 
     // Provide default themeSnapshot if undefined
@@ -250,8 +250,8 @@ async function createTemplateDevModeWithBody(body: any) {
       );
     }
 
-    // Use default theme ID if empty
-    const finalThemeId = themeId || "5dc48fe8-ba78-40db-9fa5-b8acfcb9d199";
+    // Use themeId if provided, otherwise null (for default themes)
+    const finalThemeId = themeId || null;
     console.log("🔍 Templates POST (Dev Mode) - Using themeId:", finalThemeId);
 
     // Provide default themeSnapshot if undefined

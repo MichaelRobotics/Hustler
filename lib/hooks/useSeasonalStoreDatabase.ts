@@ -77,6 +77,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   const [liveTemplate, setLiveTemplate] = useState<StoreTemplate | null>(null);
   const [lastEditedTemplate, setLastEditedTemplate] = useState<StoreTemplate | null>(null);
   
+  // Template theme state - when a template is loaded, use its themeSnapshot
+  const [currentTemplateTheme, setCurrentTemplateTheme] = useState<LegacyTheme | null>(null);
+  
   // Helper function to convert Tailwind color classes to hex values
   const getThemeTextColor = (welcomeColor: string | undefined): string => {
     if (!welcomeColor) return '#FFFFFF';
@@ -178,8 +181,15 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   // Floating assets for current theme
   const floatingAssets = themeFloatingAssets[currentSeason] || [];
   
-  // Current theme
-  const theme = allThemes[currentSeason] || initialThemes[currentSeason];
+  // Wrapper for setCurrentSeason that clears template theme when switching to global themes
+  const handleSetCurrentSeason = useCallback((season: string) => {
+    setCurrentSeason(season);
+    // Clear template theme when switching to a global theme
+    setCurrentTemplateTheme(null);
+  }, []);
+  
+  // Current theme - use template theme if loaded, otherwise use global themes
+  const theme = currentTemplateTheme || allThemes[currentSeason] || initialThemes[currentSeason];
   
   // Loading and error states
   const [loadingState, setLoadingState] = useState<LoadingState>({
@@ -255,6 +265,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         // Restore promo button state
         if (state.promoButton) setPromoButton(state.promoButton);
         
+        // Restore template theme state
+        if (state.currentTemplateTheme) setCurrentTemplateTheme(state.currentTemplateTheme);
+        
         console.log('✅ State restored successfully');
       }
     } catch (error) {
@@ -279,6 +292,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         themeLogoAttachmentIds,
         themeLogoAttachmentUrls,
         promoButton,
+        currentTemplateTheme,
         timestamp: Date.now()
       };
       
@@ -345,7 +359,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Convert to legacy theme map and merge with initial themes
       const themesMap: Record<string, LegacyTheme> = { ...initialThemes }; // Start with initial themes
       themesList.forEach(theme => {
-        themesMap[theme.season] = convertThemeToLegacy(theme);
+        // Use unique key for database themes to avoid overriding default themes
+        const dbThemeKey = `db_${theme.id}`;
+        themesMap[dbThemeKey] = convertThemeToLegacy(theme);
       });
       setAllThemes(themesMap);
     } catch (error) {
@@ -389,9 +405,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         // Load live template data
         setCurrentSeason(live.currentSeason);
         
-        // Use template's snapshot theme (complete theme data from template)
-        console.log('🎨 Loading template snapshot theme for live template:', live.themeSnapshot.name);
-        setAllThemes(prev => ({ ...prev, [live.currentSeason]: convertTemplateThemeToLegacy(live.themeSnapshot) }));
+        // Live template uses its own themeSnapshot - no need to modify allThemes
+        console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
         
         setThemeTextStyles(live.templateData.themeTextStyles);
         setThemeLogos(live.templateData.themeLogos);
@@ -399,11 +414,11 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         setThemeUploadedBackgrounds(live.templateData.themeUploadedBackgrounds);
         setThemeProducts(live.templateData.themeProducts);
         
-        // Load current theme styling if available
+        // Load current theme styling if available (but don't override allThemes)
         if (live.templateData.currentTheme) {
-          console.log('🎨 Loading current theme styling from live template:', live.templateData.currentTheme.name);
+          console.log('🎨 Live template has current theme styling:', live.templateData.currentTheme.name);
           console.log('🎨 Current theme data:', live.templateData.currentTheme);
-          setAllThemes(prev => ({ ...prev, [live.currentSeason]: convertTemplateThemeToLegacy(live.templateData.currentTheme) }));
+          // Note: Template uses its own themeSnapshot, no need to modify allThemes
         }
         
         // Load promo button styling if available
@@ -480,7 +495,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     try {
       const newTheme = await createTheme(experienceId, themeData);
       setThemes(prev => [...prev, newTheme]);
-      setAllThemes(prev => ({ ...prev, [newTheme.season]: convertThemeToLegacy(newTheme) }));
+      setAllThemes(prev => ({ ...prev, [`db_${newTheme.id}`]: convertThemeToLegacy(newTheme) }));
       return newTheme;
     } catch (error) {
       console.error('Error creating theme:', error);
@@ -493,7 +508,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     try {
       const updatedTheme = await updateTheme(experienceId, themeId, updates);
       setThemes(prev => prev.map(t => t.id === themeId ? updatedTheme : t));
-      setAllThemes(prev => ({ ...prev, [updatedTheme.season]: convertThemeToLegacy(updatedTheme) }));
+      setAllThemes(prev => ({ ...prev, [`db_${updatedTheme.id}`]: convertThemeToLegacy(updatedTheme) }));
       return updatedTheme;
     } catch (error) {
       console.error('Error updating theme:', error);
@@ -532,9 +547,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Load template data into current state
       setCurrentSeason(template.currentSeason);
       
-      // Use template's snapshot theme (complete theme data from template)
-      console.log('🎨 Loading template snapshot theme:', template.themeSnapshot.name);
-      setAllThemes(prev => ({ ...prev, [template.currentSeason]: convertTemplateThemeToLegacy(template.themeSnapshot) }));
+      // Template uses its own themeSnapshot - no need to modify allThemes
+      console.log('🎨 Loading template with snapshot theme:', template.themeSnapshot.name);
       
       setThemeTextStyles(template.templateData.themeTextStyles);
       setThemeLogos(template.templateData.themeLogos);
@@ -549,21 +563,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         setThemeFloatingAssets({ [template.currentSeason]: template.templateData.floatingAssets || [] });
       }
       
-      // Load current theme styling if available (only if we have space for custom themes)
+      // Set the template's theme for rendering
       if (template.templateData.currentTheme) {
-        console.log('🎨 Loading current theme styling from template:', template.templateData.currentTheme.name);
-        console.log('🎨 Current theme data:', template.templateData.currentTheme);
-        
-        // Check if this is a custom theme and if we have space for it
-        const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky'];
-        const isCustomTheme = !defaultThemeNames.includes(template.templateData.currentTheme.name);
-        
-        if (isCustomTheme && !canAddCustomTheme()) {
-          console.warn('⚠️ Cannot load custom theme from template: Maximum custom themes reached');
-          setApiError(`Cannot load custom theme "${template.templateData.currentTheme.name}": Maximum of ${MAX_CUSTOM_THEMES} custom themes allowed`);
-        } else {
-          setAllThemes(prev => ({ ...prev, [template.currentSeason]: convertTemplateThemeToLegacy(template.templateData.currentTheme) }));
-        }
+        console.log('🎨 Setting template theme for rendering:', template.templateData.currentTheme.name);
+        setCurrentTemplateTheme(template.templateData.currentTheme);
+      } else {
+        // Use themeSnapshot if currentTheme is not available
+        console.log('🎨 Using themeSnapshot for rendering:', template.themeSnapshot.name);
+        setCurrentTemplateTheme(convertTemplateThemeToLegacy(template.themeSnapshot));
       }
       
       // Load promo button styling if available
@@ -788,7 +795,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       // Update local state
       setThemes(prev => [...prev, newTheme]);
-      setAllThemes(prev => ({ ...prev, [theme.name]: theme }));
+      
+      // Create a unique key for custom themes to avoid conflicts with default themes
+      const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
+      setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
       
       return newTheme;
     } catch (error) {
@@ -797,7 +807,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       // Still update local state even if database save fails (only if it's not a limit error)
       if (!(error as Error).message.includes('Maximum of')) {
-        setAllThemes(prev => ({ ...prev, [theme.name]: theme }));
+        // Create a unique key for custom themes to avoid conflicts with default themes
+        const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
+        setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
       }
       throw error;
     }
@@ -854,7 +866,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     allThemes,
     setAllThemes,
     currentSeason,
-    setCurrentSeason,
+    setCurrentSeason: handleSetCurrentSeason,
     floatingAssets,
     availableAssets,
     setAvailableAssets,

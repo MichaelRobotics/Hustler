@@ -71,7 +71,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <div 
-      className={`px-3 py-4 rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto`}
+      className={`rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
       onClick={(e) => {
         if (!isEditorView) return;
         const target = e.target as HTMLElement;
@@ -81,9 +81,46 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         if (onOpenEditor) onOpenEditor(product.id, 'card');
       }}
     >
+      {/* Image Section - Top Half */}
+      <div className="relative h-56 w-full">
+        {/* Background Image - fills top half */}
+        <div 
+          className="absolute inset-0 rounded-t-2xl overflow-hidden"
+          style={{
+            backgroundImage: product.imageAttachmentUrl 
+              ? `url(${product.imageAttachmentUrl})` 
+              : `url(https://placehold.co/400x400/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            filter: `drop-shadow(0 10px 10px ${
+              theme.name === 'Fall' ? 'rgba(160, 82, 45, 0.5)' : 
+              theme.name === 'Winter' ? 'rgba(31, 74, 155, 0.5)' : 
+              'rgba(232, 160, 2, 0.5)'
+            })`
+          }}
+        />
+        
+        {/* Image Upload Overlay - covers image section in editor view */}
+        {isEditorView && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity rounded-t-2xl z-20">
+            <label htmlFor={`upload-${product.id}`} className="cursor-pointer p-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-full shadow-lg transition-colors">
+              <UploadIcon className="w-5 h-5" />
+              <input 
+                type="file" 
+                id={`upload-${product.id}`} 
+                className="hidden" 
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={loadingState.isImageLoading}
+              />
+            </label>
+          </div>
+        )}
+      </div>
       {/* AI/Upload/Delete Controls (Only visible in Editor View) */}
       {isEditorView && (
-        <div className="absolute top-2 right-2 flex space-x-1 z-10">
+        <div className="absolute top-2 right-2 flex space-x-1 z-30">
           {/* Sticker/Overlay Controls */}
           {product.containerAsset && (
             <button
@@ -130,63 +167,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
       )}
 
-      {/* Product Image Container (Drop Zone) */}
+      {/* Drop Zone for Assets - covers entire card */}
       <div 
-        className="relative w-40 h-40 mb-2 mx-auto product-container-drop-zone"
+        className="absolute inset-0 product-container-drop-zone"
         onDragOver={(e) => isEditorView && e.preventDefault()}
         onDrop={(e) => onDropAsset(e, product.id)}
-      >
-        <img
-          src={product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`}
-          alt={product.name}
-          className="w-full h-full rounded-xl object-cover ring-2 ring-transparent hover:ring-4 transition-all duration-500 ring-offset-2 ring-offset-current"
-          style={{ 
-            filter: `drop-shadow(0 10px 10px ${
-              theme.name === 'Fall' ? 'rgba(160, 82, 45, 0.5)' : 
-              theme.name === 'Winter' ? 'rgba(31, 74, 155, 0.5)' : 
-              'rgba(232, 160, 2, 0.5)'
-            })` 
-          }}
-          onError={(e) => { 
-            e.currentTarget.onerror = null; 
-            e.currentTarget.src = "https://placehold.co/200x200/ff0000/ffffff?text=IMG+ERROR"; 
-          }}
-        />
-        
-        {/* Sticker/Container Asset Overlay */}
-        {product.containerAsset && (
-          <img
-            src={product.containerAsset.src}
-            alt={product.containerAsset.alt}
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-            style={{ 
-              transform: `scale(${product.containerAsset.scale || 1.0}) rotate(${product.containerAsset.rotation || 0}deg)`,
-            }}
-          />
-        )}
-
-        {isEditorView && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity rounded-2xl z-20">
-            <label htmlFor={`upload-${product.id}`} className="cursor-pointer p-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-full shadow-lg transition-colors">
-              <UploadIcon className="w-5 h-5" />
-              <input 
-                type="file" 
-                id={`upload-${product.id}`} 
-                className="hidden" 
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={loadingState.isImageLoading}
-              />
-            </label>
-          </div>
-        )}
-      </div>
+      />
       
-      {/* Inner content wrapper to push button to the bottom */}
-      <div className="flex flex-col flex-grow text-center">
+      {/* Text Content Section - Bottom Half */}
+      <div className="px-3 py-2 flex flex-col flex-grow text-center relative z-30">
         {/* Editable Product Name */}
         <h2 
-          className={`text-lg font-bold mb-1 ${titleClass}`}
+          className={`text-lg font-bold mb-0.5 ${titleClass}`}
           contentEditable={isEditorView}
           suppressContentEditableWarning={true}
           onBlur={handleNameChange}
@@ -199,7 +191,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         
         {/* Editable Product Description (Fixed min height for alignment) */}
         <p 
-          className={`text-xs mb-2 ${descClass} flex-grow`}
+          className={`text-xs mb-1 ${descClass} flex-grow`}
           style={{ minHeight: '1.5rem', cursor: isEditorView ? 'text' : 'default' }}
           contentEditable={isEditorView}
           suppressContentEditableWarning={true}
@@ -211,7 +203,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </p>
         
         {/* Editable Price */}
-        <div className="text-xl font-extrabold mb-2 mt-auto">
+        <div className="text-xl font-extrabold mb-1 mt-auto">
           {isEditorView ? (
             <input 
               type="number"

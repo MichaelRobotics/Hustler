@@ -121,7 +121,7 @@ export interface StoreTemplate {
   createdAt: Date;
   experienceId: string;
   userId: string;
-  themeId: string;
+  themeId: string | null;
   themeSnapshot: Theme; // Snapshot of theme at creation time
   currentSeason: string;
   templateData: {

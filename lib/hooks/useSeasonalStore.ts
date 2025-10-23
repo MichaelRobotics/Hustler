@@ -314,7 +314,9 @@ export const useSeasonalStore = () => {
       aiMessage: 'Discover exclusive seasonal products',
       emojiTip: '🎁'
     };
-    setAllThemes(prev => ({ ...prev, [legacyTheme.name]: legacyTheme }));
+    // Create a unique key for custom themes to avoid conflicts with default themes
+    const customThemeKey = `custom_${legacyTheme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
+    setAllThemes(prev => ({ ...prev, [customThemeKey]: legacyTheme }));
   }, []);
 
   // Editor State Management

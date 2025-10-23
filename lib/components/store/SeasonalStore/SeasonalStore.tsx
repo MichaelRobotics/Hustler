@@ -18,7 +18,8 @@ import {
   SettingsIcon, 
   PlusCircleIcon, 
   EyeIcon, 
-  EditIcon 
+  EditIcon,
+  TrashIcon
 } from './components/Icons';
 import { Sun, Moon, ArrowLeft } from 'lucide-react';
 import { 
@@ -55,6 +56,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   
   // Product navigation state for reel functionality
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+  const [isSliding, setIsSliding] = useState(false);
   const autoSwitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Chat functionality
@@ -212,12 +215,56 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     if (editorState.isEditorView) return; // Don't auto-switch in edit mode
     
     autoSwitchIntervalRef.current = setInterval(() => {
-      setCurrentProductIndex(prevIndex => {
-        const maxIndex = products.length - 2;
-        return prevIndex >= maxIndex ? 0 : prevIndex + 1;
-      });
+      if (!isSliding) {
+        setIsSliding(true);
+        setSwipeDirection('left'); // Auto-switch slides left
+        setTimeout(() => {
+          setCurrentProductIndex(prevIndex => {
+            const maxIndex = products.length - 2;
+            return prevIndex >= maxIndex ? 0 : prevIndex + 1;
+          });
+          setSwipeDirection('right'); // Slide in from right
+          setTimeout(() => {
+            setSwipeDirection(null);
+            setIsSliding(false);
+          }, 300);
+        }, 200);
+      }
     }, 10000); // 10 seconds
-  }, [products.length, editorState.isEditorView]);
+  }, [products.length, editorState.isEditorView, isSliding]);
+
+  // Smooth navigation functions
+  const navigateToPrevious = useCallback(() => {
+    if (currentProductIndex > 0 && !isSliding) {
+      setIsSliding(true);
+      setSwipeDirection('right');
+      setTimeout(() => {
+        setCurrentProductIndex(prev => Math.max(0, prev - 1));
+        setSwipeDirection('left'); // Slide in from left
+        setTimeout(() => {
+          setSwipeDirection(null);
+          setIsSliding(false);
+        }, 300);
+      }, 200);
+      startAutoSwitch();
+    }
+  }, [currentProductIndex, startAutoSwitch, isSliding]);
+
+  const navigateToNext = useCallback(() => {
+    if (currentProductIndex < products.length - 2 && !isSliding) {
+      setIsSliding(true);
+      setSwipeDirection('left');
+      setTimeout(() => {
+        setCurrentProductIndex(prev => Math.min(products.length - 2, prev + 1));
+        setSwipeDirection('right'); // Slide in from right
+        setTimeout(() => {
+          setSwipeDirection(null);
+          setIsSliding(false);
+        }, 300);
+      }, 200);
+      startAutoSwitch();
+    }
+  }, [currentProductIndex, products.length, startAutoSwitch, isSliding]);
 
   // Auto-switch products every 10 seconds (disabled in edit mode)
   useEffect(() => {
@@ -439,40 +486,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       const templateName = prompt('Enter template name:');
       if (!templateName) return;
       
-      // Check if current theme matches any default themes
-      const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky'];
-      const isDefaultTheme = defaultThemeNames.includes(legacyTheme.name);
-      
-      let themeId = '';
-      if (!isDefaultTheme) {
-        // Generate theme name based on template name and current theme
-        const themeName = `${templateName} Theme (${legacyTheme.name})`;
-        console.log('🎨 Creating new theme for custom template:', themeName);
-        try {
-          const newTheme = await createTheme({
-            name: themeName,
-            season: currentSeason,
-            themePrompt: legacyTheme.themePrompt,
-            accentColor: legacyTheme.accent,
-            ringColor: legacyTheme.accent,
-            card: legacyTheme.card,
-            text: legacyTheme.text,
-            welcomeColor: legacyTheme.welcomeColor,
-            background: legacyTheme.background,
-            aiMessage: legacyTheme.aiMessage,
-            emojiTip: legacyTheme.emojiTip
-          });
-          themeId = newTheme.id;
-          console.log('✅ New theme created:', newTheme.id);
-        } catch (error) {
-          console.error('❌ Failed to create theme:', error);
-          // Fall back to default theme ID
-          themeId = '5dc48fe8-ba78-40db-9fa5-b8acfcb9d199';
-        }
-      } else {
-        // Use default theme ID for standard themes
-        themeId = '5dc48fe8-ba78-40db-9fa5-b8acfcb9d199';
-      }
+      // Templates should always use themeSnapshot, never create database themes
+      // This keeps templates self-contained and prevents theme dropdown pollution
+      const themeId = null;
+      console.log('🎨 Template will use themeSnapshot for rendering, no database theme needed');
       
       const templateData = {
         name: templateName,
@@ -1539,7 +1556,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       
       <div 
         ref={appRef} 
-        className={`h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
+        className={`min-h-screen font-inter antialiased relative overflow-y-auto transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
         style={getBackgroundStyle}
       >
       {/* Top Navbar with Integrated Progress Bar */}
@@ -1828,22 +1845,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             onSelectAsset={setSelectedAsset}
             currentSeason={currentSeason}
             isEditorView={editorState.isEditorView}
-            allThemes={Object.fromEntries(
-              Object.entries(allThemes).map(([key, theme]) => [
-                key,
-                {
-                  name: legacyTheme.name,
-                  themePrompt: legacyTheme.themePrompt,
-                  accent: legacyTheme.accent,
-                  card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
-                  text: 'text-gray-800',
-                  welcomeColor: 'text-yellow-300',
-                  background: `bg-[url('https://placehold.co/1920x1080/000000/ffffff?text=${legacyTheme.name}')] bg-cover bg-center`,
-                  aiMessage: `Welcome to our ${legacyTheme.name} collection!`,
-                  emojiTip: "✨"
-                }
-              ])
-            )}
+            allThemes={allThemes}
             setAllThemes={setAllThemes}
             handleAddCustomTheme={addCustomTheme}
             handleUpdateTheme={async (season, updates) => {
@@ -2002,13 +2004,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         )}
         
         {/* Store Header - Direct on Background */}
-        <div className="text-center mb-6 relative w-full">
+        <div className="text-center mb-2 relative w-full">
           
           {inlineEditTarget === 'headerMessage' ? (
             <input
               ref={headerInputRef}
               type="text"
-              value={headerMessage?.content || 'THE SEASONAL VAULT'}
+              value={headerMessage?.content || ''}
               onChange={(e) => setFixedTextStyles(prev => ({
                 ...prev,
                 headerMessage: { 
@@ -2043,7 +2045,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                  }
                }}
             >
-              {headerMessage?.content || 'THE SEASONAL VAULT'}
+              {headerMessage?.content || ''}
             </p>
           )}
           
@@ -2051,7 +2053,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             <textarea
               ref={subHeaderInputRef as any}
               rows={2}
-              value={subHeader?.content || 'Discover exclusive seasonal products'}
+              value={subHeader?.content || ''}
               onChange={(e) => setFixedTextStyles(prev => ({
                 ...prev,
                 subHeader: { 
@@ -2086,7 +2088,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                  }
                }}
             >
-              {subHeader?.content || 'Discover exclusive seasonal products'}
+              {subHeader?.content || ''}
             </p>
           )}
         </div>
@@ -2110,16 +2112,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         )}
         
         {/* Product Showcase */}
-        <div className="w-full max-w-5xl my-12">
+        <div className="w-full max-w-5xl my-4">
           {products.length > 0 ? (
             <div className="flex items-center gap-4">
               {/* Left Arrow - Only show when there are more than 2 products */}
               {products.length > 2 && (
                 <button
-                  onClick={() => {
-                    setCurrentProductIndex(Math.max(0, currentProductIndex - 1));
-                    startAutoSwitch(); // Reset timer on manual navigation
-                  }}
+                  onClick={navigateToPrevious}
                   disabled={currentProductIndex === 0}
                   className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Previous products"
@@ -2130,19 +2129,26 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 </button>
               )}
               
-              {/* Product Grid - Show only 2 products with fade animation */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+              {/* Product Grid - Show only 2 products with slide-out and slide-in animation */}
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden">
                 {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
                   <div 
                     key={`${product.id}-${currentProductIndex}`}
-                    className={`transition-all duration-700 ease-out transform ${
+                    className={`transition-all duration-300 ease-in-out transform ${
                       !editorState.isEditorView 
-                        ? 'animate-in zoom-in-95 rotate-in-12 fade-in'
+                        ? 'animate-in zoom-in-95 fade-in'
                         : ''
                     }`}
                     style={{ 
-                      animationDelay: !editorState.isEditorView ? `${index * 200}ms` : '0ms',
-                      animationDuration: !editorState.isEditorView ? '700ms' : '0ms'
+                      animationDelay: !editorState.isEditorView ? `${index * 100}ms` : '0ms',
+                      animationDuration: !editorState.isEditorView ? '300ms' : '0ms',
+                      transform: swipeDirection === 'left' 
+                        ? 'translateX(100%)' 
+                        : swipeDirection === 'right'
+                        ? 'translateX(-100%)'
+                        : 'translateX(0%)',
+                      opacity: swipeDirection === 'left' || swipeDirection === 'right' ? 0 : 1,
+                      transitionDelay: swipeDirection ? `${index * 80}ms` : '0ms'
                     }}
                   >
                     <ProductCard
@@ -2167,10 +2173,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               {/* Right Arrow - Only show when there are more than 2 products */}
               {products.length > 2 && (
                 <button
-                  onClick={() => {
-                    setCurrentProductIndex(Math.min(products.length - 2, currentProductIndex + 1));
-                    startAutoSwitch(); // Reset timer on manual navigation
-                  }}
+                  onClick={navigateToNext}
                   disabled={currentProductIndex >= products.length - 2}
                   className="p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Next products"
@@ -2196,7 +2199,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                <textarea
                  ref={promoInputRef as any}
                  rows={2}
-                 value={promoMessage?.content || 'Our Merchant has a Gift for you!'}
+                 value={promoMessage?.content || ''}
                  onChange={(e) => setFixedTextStyles(prev => ({
                    ...prev,
                    promoMessage: { 
@@ -2232,7 +2235,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                    textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
                  }}
                >
-                 {promoMessage?.content || 'Our Merchant has a Gift for you!'}
+                 {promoMessage?.content || ''}
                </p>
              )}
              
@@ -2276,6 +2279,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             isEditorView={editorState.isEditorView}
           />
         ))}
+        
+        {/* Bottom padding to ensure CLAIM GIFT button is never at the bottom */}
+        <div className="h-20"></div>
       </div>
 
 
@@ -2315,10 +2321,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Content</label>
                 <textarea
                   rows={4}
-                  value={fixedTextStyles[editingText.targetId]?.content || 
-                    (editingText.targetId === 'headerMessage' ? 'THE SEASONAL VAULT' :
-                     editingText.targetId === 'subHeader' ? 'Discover exclusive seasonal products' :
-                     editingText.targetId === 'promoMessage' ? 'Our Merchant has a Gift for you!' : '')}
+                  value={fixedTextStyles[editingText.targetId]?.content || ''}
                   onChange={(e) => setFixedTextStyles(prev => ({
                     ...prev,
                     [editingText.targetId]: { 
@@ -2331,6 +2334,27 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                   // Removed onFocus handler - textarea should work normally within modal
                   className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
                 />
+              </div>
+
+              {/* Delete Button */}
+              <div className="pt-4 border-t border-gray-700">
+                <button
+                  onClick={() => {
+                    setFixedTextStyles(prev => ({
+                      ...prev,
+                      [editingText.targetId]: { 
+                        content: '',
+                        color: prev[editingText.targetId]?.color || '#FFFFFF',
+                        styleClass: prev[editingText.targetId]?.styleClass || ''
+                      }
+                    }));
+                    closeTextEditorAnimated();
+                  }}
+                  className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center"
+                >
+                  <TrashIcon className="w-4 h-4 mr-2" />
+                  Remove Text
+                </button>
               </div>
 
               {/* Color */}
