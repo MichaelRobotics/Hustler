@@ -676,37 +676,49 @@ export class WhopApiClient {
       if (!imageUrl && product.company?.id) {
         console.log(`🔍 No product image found, trying company image for company ${product.company.id}...`);
         
-        try {
-          const companyResponse = await fetch(`https://api.whop.com/api/v5/companies/${product.company.id}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (companyResponse.ok) {
-            const company = await companyResponse.json();
-            console.log(`✅ Company details retrieved:`, {
-              id: company.id,
-              title: company.title,
-              hasLogo: !!company.logo,
-              logo: company.logo,
-              hasBanner: !!company.banner,
-              banner: company.banner,
-              hasImage: !!company.image,
-              image: company.image
+        // Try multiple company API endpoints
+        const companyEndpoints = [
+          `https://api.whop.com/api/v5/company`, // Current company (no ID needed)
+          `https://api.whop.com/api/v5/me/companies/${product.company.id}`, // Me companies
+          `https://api.whop.com/api/v2/company`, // V2 company
+          `https://api.whop.com/api/v5/app/companies/${product.company.id}` // App companies
+        ];
+        
+        for (const endpoint of companyEndpoints) {
+          try {
+            console.log(`🔍 Trying company endpoint: ${endpoint}`);
+            const companyResponse = await fetch(endpoint, {
+              headers: {
+                'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+                'Content-Type': 'application/json'
+              }
             });
 
-            // Try company image fields
-            imageUrl = company.logo || company.banner || company.image;
-            if (imageUrl) {
-              console.log(`✅ Found company image: ${imageUrl}`);
+            if (companyResponse.ok) {
+              const company = await companyResponse.json();
+              console.log(`✅ Company details retrieved from ${endpoint}:`, {
+                id: company.id,
+                title: company.title,
+                hasLogo: !!company.logo,
+                logo: company.logo,
+                hasBanner: !!company.banner,
+                banner: company.banner,
+                hasImage: !!company.image,
+                image: company.image
+              });
+
+              // Try company image fields
+              imageUrl = company.logo || company.banner || company.image;
+              if (imageUrl) {
+                console.log(`✅ Found company image: ${imageUrl}`);
+                break; // Found image, stop trying other endpoints
+              }
+            } else {
+              console.log(`⚠️ Company API request failed for ${endpoint}: ${companyResponse.status} ${companyResponse.statusText}`);
             }
-          } else {
-            console.log(`⚠️ Company API request failed: ${companyResponse.status} ${companyResponse.statusText}`);
+          } catch (companyError) {
+            console.error(`❌ Error getting company details from ${endpoint}:`, companyError);
           }
-        } catch (companyError) {
-          console.error(`❌ Error getting company details:`, companyError);
         }
       }
 
