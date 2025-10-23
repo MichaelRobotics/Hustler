@@ -526,8 +526,8 @@ export async function triggerProductSyncForNewAdmin(
           // FREE apps don't need ref or affiliate parameters
           const directUrl = whopClient.generateAppUrl(app, undefined, true);
           
-          // Generate placeholder image for app (apps don't have direct image data)
-          const appImage = `https://placehold.co/400x400/10b981/ffffff?text=${encodeURIComponent(app.name.toUpperCase())}`;
+          // Use app icon if available, otherwise fallback to placeholder
+          const appImage = app.icon || `https://placehold.co/400x400/10b981/ffffff?text=${encodeURIComponent(app.name.toUpperCase())}`;
 							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,
