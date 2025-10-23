@@ -216,6 +216,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     if (products.length <= 2) return; // Don't auto-switch if 2 or fewer products
     if (editorState.isEditorView) return; // Don't auto-switch in edit mode
     
+    // Shorter timeout for mobile (5 seconds) vs desktop (10 seconds)
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const switchTimeout = isMobile ? 5000 : 10000;
+    
     autoSwitchIntervalRef.current = setInterval(() => {
       if (!isSliding) {
         setIsSliding(true);
@@ -232,7 +236,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
           }, 150); // Faster: 300ms -> 150ms
         }, 100); // Faster: 200ms -> 100ms
       }
-    }, 10000); // 10 seconds
+    }, switchTimeout);
   }, [products.length, editorState.isEditorView, isSliding]);
 
   // Smooth navigation functions
