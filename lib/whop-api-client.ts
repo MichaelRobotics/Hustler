@@ -624,6 +624,46 @@ export class WhopApiClient {
   }
 
   /**
+   * Get individual product details with image_url field
+   * This uses the direct products API to get the image_url field
+   */
+  async getProductDetails(productId: string): Promise<{ image_url?: string; name?: string; description?: string } | null> {
+    try {
+      console.log(`🔍 Getting product details for ${productId}...`);
+      
+      // Use the direct products API
+      const response = await fetch(`https://api.whop.com/api/v1/products/${productId}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.log(`⚠️ Product API request failed: ${response.status} ${response.statusText}`);
+        return null;
+      }
+
+      const productData = await response.json();
+      console.log(`✅ Product details retrieved:`, {
+        id: productData.id,
+        name: productData.name,
+        hasImageUrl: !!productData.image_url,
+        imageUrl: productData.image_url
+      });
+
+      return {
+        image_url: productData.image_url,
+        name: productData.name,
+        description: productData.description
+      };
+    } catch (error) {
+      console.error(`❌ Error getting product details for ${productId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Generate app URL using company route and experience slug
    * Format: https://whop.com/joined/{companyRoute}/{experienceSlug}/app/
    * Falls back to experience ID if slug not available

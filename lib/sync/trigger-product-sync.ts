@@ -337,6 +337,17 @@ export async function triggerProductSyncForNewAdmin(
 							hasLogo: !!product.logo
 						});
 						
+						// Try to get product details with image_url as fallback
+						let productImage = product.bannerImage || product.logo;
+						if (!productImage) {
+							console.log(`🔍 No access pass image found, trying direct product API for ${product.id}...`);
+							const productDetails = await whopClient.getProductDetails(product.id);
+							if (productDetails?.image_url) {
+								productImage = productDetails.image_url;
+								console.log(`✅ Found product image via direct API: ${productImage}`);
+							}
+						}
+						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title.trim(),
@@ -347,7 +358,7 @@ export async function triggerProductSyncForNewAdmin(
 								whopProductId: product.id,
 								productApps: productApps,
 								// NEW: Add image and price from access pass data
-								image: product.bannerImage || undefined, // Use bannerImage for products
+								image: productImage || undefined, // Use bannerImage, logo, or direct API image
 								price: product.price?.toString() || undefined
 							}),
 							`createResource-${productCategory}-${product.title.trim()}`
