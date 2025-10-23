@@ -624,15 +624,15 @@ export class WhopApiClient {
   }
 
   /**
-   * Get individual product details with card_image field using direct API
-   * This uses the direct products API to get the card_image field
+   * Get individual product details using WHOP SDK
+   * This uses the WHOP SDK products.getProduct() method to get product image URLs
    */
-  async getProductDetails(productId: string): Promise<{ card_image?: string; name?: string; description?: string } | null> {
+  async getProductDetails(productId: string): Promise<{ image_url?: string; name?: string; description?: string } | null> {
     try {
       console.log(`🔍 Getting product details for ${productId} using direct API...`);
       console.log(`🔍 Product ID format: ${productId} (length: ${productId.length})`);
       
-      // Use the direct products API (trying v1 first, then v5)
+      // Use the direct products API
       const response = await fetch(`https://api.whop.com/api/v1/products/${productId}`, {
         headers: {
           'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
@@ -645,20 +645,26 @@ export class WhopApiClient {
         return null;
       }
 
-      const productData = await response.json();
+      const product = await response.json();
+      
       console.log(`✅ Product details retrieved:`, {
-        id: productData.id,
-        name: productData.name,
-        hasCardImage: !!productData.card_image,
-        cardImage: productData.card_image,
-        hasImageUrl: !!productData.image_url,
-        imageUrl: productData.image_url
+        id: product.id,
+        name: product.name,
+        hasImageUrl: !!product.image_url,
+        imageUrl: product.image_url,
+        hasBannerImage: !!product.bannerImage,
+        bannerImage: product.bannerImage,
+        hasLogo: !!product.logo,
+        logo: product.logo
       });
 
+      // Try multiple image fields in order of preference
+      const imageUrl = product.image_url || product.bannerImage || product.logo;
+
       return {
-        card_image: productData.card_image || productData.image_url,
-        name: productData.name,
-        description: productData.description
+        image_url: imageUrl,
+        name: product.name,
+        description: product.description
       };
     } catch (error) {
       console.error(`❌ Error getting product details for ${productId}:`, error);

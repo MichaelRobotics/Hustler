@@ -337,13 +337,13 @@ export async function triggerProductSyncForNewAdmin(
 							hasLogo: !!product.logo
 						});
 						
-						// Try to get product details with card_image as fallback
+						// Try to get product details with image_url as fallback
 						let productImage = product.bannerImage || product.logo;
 						if (!productImage) {
 							console.log(`🔍 No access pass image found, trying WHOP SDK for ${product.id}...`);
 							const productDetails = await whopClient.getProductDetails(product.id);
-							if (productDetails?.card_image) {
-								productImage = productDetails.card_image;
+							if (productDetails?.image_url) {
+								productImage = productDetails.image_url;
 								console.log(`✅ Found product image via WHOP SDK: ${productImage}`);
 							}
 						}
