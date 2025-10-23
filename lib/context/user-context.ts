@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../supabase/db-server";
+import { db, checkDatabaseConnection } from "../supabase/db-server";
 import { experiences, users, funnels } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 // Removed direct import - now using API routes for product sync
@@ -79,10 +79,43 @@ async function createUserContext(
 		console.log("Experience ID:", whopExperienceId);
 		console.log("Company ID:", whopCompanyId);
 
-		// Get or create experience
-		let experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, whopExperienceId),
-		});
+		// Check database connection health first
+		console.log("🔍 Checking database connection health...");
+		const isDbHealthy = await checkDatabaseConnection();
+		if (!isDbHealthy) {
+			console.error("❌ Database connection is not healthy");
+			throw new Error("Database connection is not available");
+		}
+		console.log("✅ Database connection is healthy");
+
+		// Get or create experience with retry logic
+		let experience;
+		let retryCount = 0;
+		const maxRetries = 3;
+		
+		while (retryCount < maxRetries) {
+			try {
+				console.log(`🔍 Attempting to find experience (attempt ${retryCount + 1}/${maxRetries})...`);
+				experience = await db.query.experiences.findFirst({
+					where: eq(experiences.whopExperienceId, whopExperienceId),
+				});
+				console.log(`✅ Experience query successful`);
+				break;
+			} catch (error) {
+				retryCount++;
+				console.error(`❌ Database query failed (attempt ${retryCount}/${maxRetries}):`, error);
+				
+				if (retryCount >= maxRetries) {
+					console.error(`❌ Max retries reached, throwing error`);
+					throw error;
+				}
+				
+				// Wait before retrying (exponential backoff)
+				const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+				console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+				await new Promise(resolve => setTimeout(resolve, waitTime));
+			}
+		}
 
 		if (!experience) {
 			console.log("Experience not found, creating new experience...");

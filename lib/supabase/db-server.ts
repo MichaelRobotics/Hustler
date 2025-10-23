@@ -80,10 +80,11 @@ const createPostgresClient = () => {
 	}
 
 	return postgres(connectionString, {
-		max: 5, // Reduced for Supabase compatibility (free tier: 5 connections)
-		idle_timeout: 20, // Close idle connections after 20 seconds
-		connect_timeout: 10, // Connection timeout
-		prepare: true, // Enable prepared statements for better performance
+		max: 3, // Further reduced for Supabase compatibility
+		idle_timeout: 10, // Close idle connections after 10 seconds
+		connect_timeout: 30, // Increased connection timeout to 30 seconds
+		prepare: false, // Disable prepared statements to avoid connection issues
+		ssl: false, // Disable SSL for better compatibility
 		onnotice: (notice) => {
 			console.log("PostgreSQL Notice:", notice);
 		},
