@@ -307,6 +307,10 @@ export class WhopApiClient {
             
             // DEBUG: Check bannerImage structure specifically
             const accessPass = accessPasses[0];
+            const finalBannerImage = accessPass.bannerImage?.sourceUrl || 
+                                   accessPass.logo?.sourceUrl || 
+                                   (accessPass.galleryImages?.nodes?.[0]?.source?.url) ||
+                                   `https://placehold.co/400x200/6366f1/ffffff?text=${encodeURIComponent(accessPass.title || 'Product')}`;
             console.log(`🔍 DEBUG - BannerImage Structure:`, {
               bannerImage: accessPass.bannerImage,
               bannerImageType: typeof accessPass.bannerImage,
@@ -314,7 +318,12 @@ export class WhopApiClient {
               bannerImageSourceUrl: accessPass.bannerImage?.sourceUrl,
               bannerImageSource: accessPass.bannerImage?.source,
               logo: accessPass.logo,
-              logoSourceUrl: accessPass.logo?.sourceUrl
+              logoSourceUrl: accessPass.logo?.sourceUrl,
+              galleryImages: accessPass.galleryImages,
+              galleryImageCount: accessPass.galleryImages?.nodes?.length || 0,
+              firstGalleryImage: accessPass.galleryImages?.nodes?.[0]?.source?.url,
+              finalBannerImage: finalBannerImage,
+              hasAnyImage: !!finalBannerImage
             });
           }
           
@@ -465,7 +474,10 @@ export class WhopApiClient {
         activeUsersCount: accessPass.activeUsersCount,
         reviewsAverage: accessPass.reviewsAverage,
         logo: accessPass.logo?.sourceUrl,
-        bannerImage: accessPass.bannerImage?.sourceUrl,
+        bannerImage: accessPass.bannerImage?.sourceUrl || 
+                    accessPass.logo?.sourceUrl || 
+                    (accessPass.galleryImages?.nodes?.[0]?.source?.url) || 
+                    `https://placehold.co/400x200/6366f1/ffffff?text=${encodeURIComponent(accessPass.title || 'Product')}`, // Default placeholder
         isFree
       };
     });
