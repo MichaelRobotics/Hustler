@@ -652,6 +652,7 @@ export class WhopApiClient {
       
       console.log(`✅ Product details retrieved:`, {
         id: product.id,
+        title: product.title,
         name: product.name,
         hasImageUrl: !!product.image_url,
         imageUrl: product.image_url,
@@ -669,11 +670,49 @@ export class WhopApiClient {
       });
 
       // Try multiple image fields in order of preference
-      const imageUrl = product.image_url || product.card_image || product.bannerImage || product.banner || product.logo || product.image;
+      let imageUrl = product.image_url || product.card_image || product.bannerImage || product.banner || product.logo || product.image;
+
+      // If no product image found, try to get company image as fallback
+      if (!imageUrl && product.company?.id) {
+        console.log(`🔍 No product image found, trying company image for company ${product.company.id}...`);
+        
+        try {
+          const companyResponse = await fetch(`https://api.whop.com/api/v5/companies/${product.company.id}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (companyResponse.ok) {
+            const company = await companyResponse.json();
+            console.log(`✅ Company details retrieved:`, {
+              id: company.id,
+              title: company.title,
+              hasLogo: !!company.logo,
+              logo: company.logo,
+              hasBanner: !!company.banner,
+              banner: company.banner,
+              hasImage: !!company.image,
+              image: company.image
+            });
+
+            // Try company image fields
+            imageUrl = company.logo || company.banner || company.image;
+            if (imageUrl) {
+              console.log(`✅ Found company image: ${imageUrl}`);
+            }
+          } else {
+            console.log(`⚠️ Company API request failed: ${companyResponse.status} ${companyResponse.statusText}`);
+          }
+        } catch (companyError) {
+          console.error(`❌ Error getting company details:`, companyError);
+        }
+      }
 
       return {
         image_url: imageUrl,
-        name: product.name,
+        name: product.title || product.name, // Use title as primary, name as fallback
         description: product.description
       };
     } catch (error) {
