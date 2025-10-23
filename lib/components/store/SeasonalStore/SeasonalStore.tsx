@@ -221,16 +221,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         setIsSliding(true);
         setSwipeDirection('left'); // Auto-switch slides left
         setTimeout(() => {
-          setCurrentProductIndex(prevIndex => {
-            const maxIndex = products.length - 2;
-            return prevIndex >= maxIndex ? 0 : prevIndex + 1;
-          });
+      setCurrentProductIndex(prevIndex => {
+        const maxIndex = products.length - 2;
+        return prevIndex >= maxIndex ? 0 : prevIndex + 1;
+      });
           setSwipeDirection('right'); // Slide in from right
           setTimeout(() => {
             setSwipeDirection(null);
             setIsSliding(false);
-          }, 300);
-        }, 200);
+          }, 150); // Faster: 300ms -> 150ms
+        }, 100); // Faster: 200ms -> 100ms
       }
     }, 10000); // 10 seconds
   }, [products.length, editorState.isEditorView, isSliding]);
@@ -246,8 +246,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         setTimeout(() => {
           setSwipeDirection(null);
           setIsSliding(false);
-        }, 300);
-      }, 200);
+        }, 150); // Faster: 300ms -> 150ms
+      }, 100); // Faster: 200ms -> 100ms
       startAutoSwitch();
     }
   }, [currentProductIndex, startAutoSwitch, isSliding]);
@@ -262,8 +262,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         setTimeout(() => {
           setSwipeDirection(null);
           setIsSliding(false);
-        }, 300);
-      }, 200);
+        }, 150); // Faster: 300ms -> 150ms
+      }, 100); // Faster: 200ms -> 100ms
       startAutoSwitch();
     }
   }, [currentProductIndex, products.length, startAutoSwitch, isSliding]);
@@ -287,7 +287,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
     console.log('Touch swipe detected:', { distance, isLeftSwipe, isRightSwipe, currentProductIndex, productsLength: products.length });
 
-    if (isLeftSwipe && currentProductIndex < products.length - 1) {
+    if (isLeftSwipe && currentProductIndex < products.length - 2) {
       console.log('Navigating to next product');
       navigateToNext();
     }
@@ -2174,21 +2174,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
                   <div 
                     key={`${product.id}-${currentProductIndex}`}
-                    className={`transition-all duration-300 ease-in-out transform ${
+                    className={`transition-all duration-150 ease-in-out transform ${
                       !editorState.isEditorView 
                         ? 'animate-in zoom-in-95 fade-in'
                         : ''
-                    }`}
+                    } ${index === 1 ? 'hidden md:block' : ''}`}
                     style={{ 
-                      animationDelay: !editorState.isEditorView ? `${index * 100}ms` : '0ms',
-                      animationDuration: !editorState.isEditorView ? '300ms' : '0ms',
+                      animationDelay: !editorState.isEditorView ? `${index * 50}ms` : '0ms',
+                      animationDuration: !editorState.isEditorView ? '150ms' : '0ms',
                       transform: swipeDirection === 'left' 
                         ? 'translateX(100%)' 
                         : swipeDirection === 'right'
                         ? 'translateX(-100%)'
                         : 'translateX(0%)',
                       opacity: swipeDirection === 'left' || swipeDirection === 'right' ? 0 : 1,
-                      transitionDelay: swipeDirection ? `${index * 80}ms` : '0ms'
+                      transitionDelay: swipeDirection ? `${index * 40}ms` : '0ms'
                     }}
                   >
                     <ProductCard
