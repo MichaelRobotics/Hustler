@@ -40,6 +40,7 @@ export const messageTypeEnum = pgEnum("message_type", [
 	"bot",
 ]);
 
+
 // ===== CORE WHOP INTEGRATION TABLES =====
 // Experiences represent app installations - the proper way to scope data in WHOP apps
 export const experiences = pgTable(
@@ -414,6 +415,8 @@ export const experiencesRelations = relations(experiences, ({ many }) => ({
 	resources: many(resources),
 	conversations: many(conversations),
 	funnelAnalytics: many(funnelAnalytics),
+	themes: many(themes),
+	templates: many(templates),
 }));
 
 // Companies relations removed - using experiences for multitenancy
@@ -425,6 +428,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 	}),
 	funnels: many(funnels),
 	resources: many(resources),
+	templates: many(templates),
 }));
 
 export const funnelsRelations = relations(funnels, ({ one, many }) => ({
@@ -500,6 +504,75 @@ export const funnelInteractionsRelations = relations(
 	}),
 );
 
+// ===== THEMES & TEMPLATES TABLES =====
+export const themes = pgTable(
+	"themes",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		season: text("season").notNull(),
+		themePrompt: text("theme_prompt"),
+		accentColor: text("accent_color"),
+		ringColor: text("ring_color"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		experienceIdIdx: index("themes_experience_id_idx").on(table.experienceId),
+		seasonIdx: index("themes_season_idx").on(table.season),
+		experienceSeasonIdx: index("themes_experience_season_idx").on(
+			table.experienceId,
+			table.season,
+		),
+	}),
+);
+
+export const templates = pgTable(
+	"templates",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		userId: uuid("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		themeId: uuid("theme_id")
+			.references(() => themes.id, { onDelete: "set null" }),
+		themeSnapshot: jsonb("theme_snapshot").notNull(),
+		currentSeason: text("current_season").notNull(),
+		isLive: boolean("is_live").default(false).notNull(),
+		isLastEdited: boolean("is_last_edited").default(false).notNull(),
+		templateData: jsonb("template_data").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		experienceIdIdx: index("templates_experience_id_idx").on(table.experienceId),
+		userIdIdx: index("templates_user_id_idx").on(table.userId),
+		themeIdIdx: index("templates_theme_id_idx").on(table.themeId),
+		isLiveIdx: index("templates_is_live_idx").on(table.isLive),
+		isLastEditedIdx: index("templates_is_last_edited_idx").on(table.isLastEdited),
+		experienceLiveIdx: index("templates_experience_live_idx").on(
+			table.experienceId,
+			table.isLive,
+		),
+		experienceLastEditedIdx: index("templates_experience_last_edited_idx").on(
+			table.experienceId,
+			table.isLastEdited,
+		),
+		experienceNameUnique: unique("templates_experience_name_unique").on(
+			table.experienceId,
+			table.name,
+		),
+	}),
+);
+
+
 export const funnelAnalyticsRelations = relations(
 	funnelAnalytics,
 	({ one }) => ({
@@ -531,3 +604,27 @@ export const funnelResourceAnalyticsRelations = relations(
 		}),
 	}),
 );
+
+// ===== THEMES & TEMPLATES RELATIONS =====
+export const themesRelations = relations(themes, ({ one, many }) => ({
+	experience: one(experiences, {
+		fields: [themes.experienceId],
+		references: [experiences.id],
+	}),
+	templates: many(templates),
+}));
+
+export const templatesRelations = relations(templates, ({ one }) => ({
+	experience: one(experiences, {
+		fields: [templates.experienceId],
+		references: [experiences.id],
+	}),
+	user: one(users, {
+		fields: [templates.userId],
+		references: [users.id],
+	}),
+	theme: one(themes, {
+		fields: [templates.themeId],
+		references: [themes.id],
+	}),
+}));

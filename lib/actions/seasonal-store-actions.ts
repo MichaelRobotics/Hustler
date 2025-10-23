@@ -168,3 +168,40 @@ export const generateEmojiMatch = async (userPrompt: string): Promise<string> =>
 // REMOVED: generateLogo - redundant with aiService.ts
 // Logo generation is handled by aiService.ts → API → nanoBananaService.ts
 
+/**
+ * Generate AI Custom Theme
+ */
+export const generateCustomTheme = async (themeName: string, themePrompt: string) => {
+  // Validate environment before making API calls
+  validateEnvironment();
+
+  console.log('🎨 [Server Action] Starting custom theme generation for:', themeName);
+  console.log('🎨 [Server Action] Theme prompt:', themePrompt);
+
+  try {
+    const response = await fetch('/api/seasonal-store/generate-custom-theme', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        themeName,
+        themePrompt,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to generate custom theme');
+    }
+
+    const themeData = await response.json();
+    console.log('🎨 [Server Action] Generated theme data:', themeData);
+    
+    return themeData;
+  } catch (error) {
+    console.error("🎨 [Server Action] Error in generateCustomTheme:", error);
+    throw new SeasonalStoreAIError(`Custom theme generation failed: ${(error as Error).message}`, "UNKNOWN");
+  }
+};
+

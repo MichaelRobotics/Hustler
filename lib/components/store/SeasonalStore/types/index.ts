@@ -12,6 +12,9 @@ export interface Product {
   titleClass?: string;
   descClass?: string;
   buttonLink?: string;
+  // WHOP attachment support for product images
+  imageAttachmentId?: string | null;
+  imageAttachmentUrl?: string | null;
 }
 
 export interface ContainerAsset {
@@ -45,9 +48,9 @@ export interface FloatingAsset {
   };
 }
 
-export interface Theme {
+export interface LegacyTheme {
   name: string;
-  themePrompt: string;
+  themePrompt?: string;
   accent: string;
   card: string;
   text: string;
@@ -108,27 +111,77 @@ export interface EditorState {
 export interface LoadingState {
   isTextLoading: boolean;
   isImageLoading: boolean;
+  isUploadingImage: boolean;
+  isGeneratingImage: boolean;
 }
 
 export interface StoreTemplate {
   id: string;
   name: string;
   createdAt: Date;
-  products: Product[];
-  floatingAssets: FloatingAsset[];
+  experienceId: string;
+  userId: string;
+  themeId: string;
+  themeSnapshot: Theme; // Snapshot of theme at creation time
   currentSeason: string;
-  theme: Theme;
-  fixedTextStyles: FixedTextStyles;
-  logoAsset: LogoAsset;
-  generatedBackground: string | null;
-  uploadedBackground: string | null;
-  // Theme-specific data (new)
-  themeTextStyles?: Record<string, FixedTextStyles>;
-  themeLogos?: Record<string, LogoAsset>;
-  themeGeneratedBackgrounds?: Record<string, string | null>;
-  themeUploadedBackgrounds?: Record<string, string | null>;
-  themeProducts?: Record<string, Product[]>;
+  templateData: {
+    // Theme-specific data
+    themeTextStyles: Record<string, FixedTextStyles>;
+    themeLogos: Record<string, LogoAsset>;
+    themeGeneratedBackgrounds: Record<string, string | null>;
+    themeUploadedBackgrounds: Record<string, string | null>;
+    themeProducts: Record<string, Product[]>;
+    themeFloatingAssets: Record<string, FloatingAsset[]>;
+    
+    // Legacy compatibility
+    products: Product[];
+    floatingAssets: FloatingAsset[];
+    fixedTextStyles: FixedTextStyles;
+    logoAsset: LogoAsset;
+    generatedBackground: string | null;
+    uploadedBackground: string | null;
+    
+    // WHOP attachment support
+    backgroundAttachmentId?: string | null;
+    backgroundAttachmentUrl?: string | null;
+    logoAttachmentId?: string | null;
+    logoAttachmentUrl?: string | null;
+    
+    // Current theme styling
+    currentTheme?: LegacyTheme;
+    
+    // Promo button styling
+    promoButton?: {
+      text: string;
+      buttonClass: string;
+      ringClass: string;
+      ringHoverClass: string;
+      icon: string;
+    };
+  };
+  isLive: boolean;
+  isLastEdited: boolean;
+  updatedAt: Date;
 }
+
+export interface Theme {
+  id: string;
+  experienceId: string;
+  name: string;
+  season: string;
+  themePrompt?: string;
+  accentColor?: string;
+  ringColor?: string;
+  card?: string;
+  text?: string;
+  welcomeColor?: string;
+  background?: string;
+  aiMessage?: string;
+  emojiTip?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 
 export interface SeasonalStoreState {
   products: Product[];
@@ -140,6 +193,10 @@ export interface SeasonalStoreState {
   logoAsset: LogoAsset;
   generatedBackground: string | null;
   uploadedBackground: string | null;
+  backgroundAttachmentId: string | null;
+  backgroundAttachmentUrl: string | null;
+  logoAttachmentId: string | null;
+  logoAttachmentUrl: string | null;
   apiError: string | null;
   editorState: EditorState;
   loadingState: LoadingState;

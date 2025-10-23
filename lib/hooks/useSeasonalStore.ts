@@ -3,6 +3,7 @@ import {
   Product, 
   FloatingAsset, 
   Theme, 
+  LegacyTheme,
   FixedTextStyles, 
   LogoAsset, 
   EditorState, 
@@ -24,7 +25,7 @@ import {
 
 export const useSeasonalStore = () => {
   // Core State
-  const [allThemes, setAllThemes] = useState<Record<string, Theme>>(initialThemes);
+  const [allThemes, setAllThemes] = useState<Record<string, LegacyTheme>>(initialThemes);
   const [currentSeason, setCurrentSeason] = useState<string>('Fall');
   const [floatingAssets, setFloatingAssets] = useState<FloatingAsset[]>([]);
   const [availableAssets, setAvailableAssets] = useState<FloatingAsset[]>([]);
@@ -92,6 +93,8 @@ export const useSeasonalStore = () => {
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isTextLoading: false,
     isImageLoading: false,
+    isUploadingImage: false,
+    isGeneratingImage: false,
   });
   
   const [apiError, setApiError] = useState<string | null>(null);
@@ -297,8 +300,21 @@ export const useSeasonalStore = () => {
   }, []);
 
   // Theme Management
-  const addCustomTheme = useCallback((theme: Theme) => {
-    setAllThemes(prev => ({ ...prev, [theme.name]: theme }));
+  const addCustomTheme = useCallback((theme: Theme | LegacyTheme) => {
+    // Convert Theme to LegacyTheme if needed
+    const legacyTheme: LegacyTheme = 'accent' in theme ? theme : {
+      name: theme.name,
+      themePrompt: theme.themePrompt,
+      accent: theme.accentColor || 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400',
+      card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
+      text: 'text-gray-800',
+      welcomeColor: 'text-yellow-300',
+      background: 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900',
+      backgroundImage: null,
+      aiMessage: 'Discover exclusive seasonal products',
+      emojiTip: '🎁'
+    };
+    setAllThemes(prev => ({ ...prev, [legacyTheme.name]: legacyTheme }));
   }, []);
 
   // Editor State Management
@@ -367,12 +383,15 @@ export const useSeasonalStore = () => {
     try {
       const newTemplate: StoreTemplate = {
         ...templateData,
-        // Include theme-specific data
-        themeTextStyles,
-        themeLogos,
-        themeGeneratedBackgrounds,
-        themeUploadedBackgrounds,
-        themeProducts,
+        templateData: {
+          ...templateData.templateData,
+          // Include theme-specific data
+          themeTextStyles,
+          themeLogos,
+          themeGeneratedBackgrounds,
+          themeUploadedBackgrounds,
+          themeProducts,
+        },
         id: `template_${Date.now()}`,
         createdAt: new Date()
       };
@@ -404,23 +423,26 @@ export const useSeasonalStore = () => {
         
         const compressedTemplates = savedTemplates.map((template: StoreTemplate) => ({
           ...template,
-          // Compress large base64 images by reducing quality
-          generatedBackground: template.generatedBackground ? 
-            template.generatedBackground.length > 100000 ? 
-              'COMPRESSED_IMAGE' : template.generatedBackground : null,
-          uploadedBackground: template.uploadedBackground ? 
-            template.uploadedBackground.length > 100000 ? 
-              'COMPRESSED_IMAGE' : template.uploadedBackground : null,
-          // Compress product images
-          products: template.products.map(product => ({
-            ...product,
-            image: product.image.length > 50000 ? 'COMPRESSED_IMAGE' : product.image
-          })),
-          // Compress floating asset images
-          floatingAssets: template.floatingAssets.map(asset => ({
-            ...asset,
-            src: asset.src && asset.src.length > 50000 ? 'COMPRESSED_IMAGE' : asset.src
-          }))
+          templateData: {
+            ...template.templateData,
+            // Compress large base64 images by reducing quality
+            generatedBackground: template.templateData.generatedBackground ? 
+              template.templateData.generatedBackground.length > 100000 ? 
+                'COMPRESSED_IMAGE' : template.templateData.generatedBackground : null,
+            uploadedBackground: template.templateData.uploadedBackground ? 
+              template.templateData.uploadedBackground.length > 100000 ? 
+                'COMPRESSED_IMAGE' : template.templateData.uploadedBackground : null,
+            // Compress product images
+            products: template.templateData.products.map(product => ({
+              ...product,
+              image: product.image.length > 50000 ? 'COMPRESSED_IMAGE' : product.image
+            })),
+            // Compress floating asset images
+            floatingAssets: template.templateData.floatingAssets.map(asset => ({
+              ...asset,
+              src: asset.src && asset.src.length > 50000 ? 'COMPRESSED_IMAGE' : asset.src
+            }))
+          }
         }));
         
         localStorage.setItem('seasonalStoreTemplates', JSON.stringify(compressedTemplates));
@@ -437,39 +459,39 @@ export const useSeasonalStore = () => {
     if (!template) return;
     
     // Load template data into current state
-    setFloatingAssets(template.floatingAssets);
+    setFloatingAssets(template.templateData.floatingAssets);
     setCurrentSeason(template.currentSeason);
     
     // Load theme-specific products if available, otherwise fallback to legacy format
-    if (template.themeProducts) {
-      setThemeProducts(template.themeProducts);
+    if (template.templateData.themeProducts) {
+      setThemeProducts(template.templateData.themeProducts);
     } else {
-      setThemeProducts({ [template.currentSeason]: template.products });
+      setThemeProducts({ [template.currentSeason]: template.templateData.products });
     }
     
     // Load theme-specific data if available, otherwise fallback to legacy format
-    if (template.themeTextStyles) {
-      setThemeTextStyles(template.themeTextStyles);
+    if (template.templateData.themeTextStyles) {
+      setThemeTextStyles(template.templateData.themeTextStyles);
     } else {
-      setThemeTextStyles({ [template.currentSeason]: template.fixedTextStyles });
+      setThemeTextStyles({ [template.currentSeason]: template.templateData.fixedTextStyles });
     }
     
-    if (template.themeLogos) {
-      setThemeLogos(template.themeLogos);
+    if (template.templateData.themeLogos) {
+      setThemeLogos(template.templateData.themeLogos);
     } else {
-      setThemeLogos({ [template.currentSeason]: template.logoAsset });
+      setThemeLogos({ [template.currentSeason]: template.templateData.logoAsset });
     }
     
-    if (template.themeGeneratedBackgrounds) {
-      setThemeGeneratedBackgrounds(template.themeGeneratedBackgrounds);
+    if (template.templateData.themeGeneratedBackgrounds) {
+      setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds);
     } else {
-      setThemeGeneratedBackgrounds({ [template.currentSeason]: template.generatedBackground });
+      setThemeGeneratedBackgrounds({ [template.currentSeason]: template.templateData.generatedBackground });
     }
     
-    if (template.themeUploadedBackgrounds) {
-      setThemeUploadedBackgrounds(template.themeUploadedBackgrounds);
+    if (template.templateData.themeUploadedBackgrounds) {
+      setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds);
     } else {
-      setThemeUploadedBackgrounds({ [template.currentSeason]: template.uploadedBackground });
+      setThemeUploadedBackgrounds({ [template.currentSeason]: template.templateData.uploadedBackground });
     }
     
     console.log('📂 Template loaded:', template.name);

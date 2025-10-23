@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { useSeasonalStore } from '@/lib/hooks/useSeasonalStore';
+import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react';
+import { useSeasonalStoreDatabase } from '@/lib/hooks/useSeasonalStoreDatabase';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
 import { useTheme } from '../../common/ThemeProvider';
 import AIFunnelBuilderPage from '../../funnelBuilder/AIFunnelBuilderPage';
-import { FloatingAsset as FloatingAssetType, FixedTextStyles } from './types';
+import { FloatingAsset as FloatingAssetType, FixedTextStyles, LegacyTheme } from './types';
 import { ProductCard } from './components/ProductCard';
 import { FloatingAsset } from './components/FloatingAsset';
 import { AdminAssetSheet } from './components/AdminAssetSheet';
@@ -30,6 +30,7 @@ import {
   generateEmojiMatch,
   fileToBase64 
 } from './services/aiService';
+import { uploadBase64ToWhop, uploadUrlToWhop } from '../../../utils/whop-image-upload';
 import { useIframeDimensions } from './utils/iframeDimensions';
 import { useBackgroundAnalysis } from './utils/backgroundAnalyzer';
 import SeasonalStoreChat from './components/SeasonalStoreChat';
@@ -97,6 +98,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const {
     // State
     allThemes,
+    setAllThemes,
+    themes,
     currentSeason,
     theme,
     products,
@@ -106,6 +109,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     logoAsset,
     generatedBackground,
     uploadedBackground,
+    backgroundAttachmentId,
+    backgroundAttachmentUrl,
+    logoAttachmentId,
+    logoAttachmentUrl,
     editorState,
     loadingState,
     apiError,
@@ -117,6 +124,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     setFixedTextStyles,
     setLogoAsset,
     setBackground,
+    setBackgroundAttachmentId,
+    setBackgroundAttachmentUrl,
+    setLogoAttachmentId,
+    setLogoAttachmentUrl,
     setError,
     
     // Product Management
@@ -141,12 +152,49 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     // Loading State
     setTextLoading,
     setImageLoading,
+    setUploadingImage,
+    setGeneratingImage,
     
     // Template Management
     saveTemplate,
     loadTemplate,
     deleteTemplate,
-  } = useSeasonalStore();
+    
+    // Theme Management
+    createTheme,
+    updateTheme,
+    
+    // Promo button management
+    promoButton: dbPromoButton,
+    setPromoButton: setDbPromoButton,
+    
+    // Limit helpers
+    canAddCustomTheme,
+    canAddTemplate,
+    MAX_CUSTOM_THEMES,
+    MAX_CUSTOM_TEMPLATES,
+  } = useSeasonalStoreDatabase(experienceId || 'default-experience');
+  
+  // Helper function to convert database Theme to LegacyTheme for UI components
+  const convertThemeToLegacy = useCallback((dbTheme: any): LegacyTheme => {
+    return {
+      name: dbTheme.name,
+      themePrompt: dbTheme.themePrompt,
+      accent: dbTheme.accentColor || 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400',
+      card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
+      text: 'text-gray-800',
+      welcomeColor: 'text-yellow-300',
+      background: `bg-[url('https://placehold.co/1920x1080/000000/ffffff?text=${dbTheme.name}')] bg-cover bg-center`,
+      backgroundImage: null,
+      aiMessage: `Welcome to our ${dbTheme.name} collection!`,
+      emojiTip: "✨"
+    };
+  }, []);
+  
+  // Convert current theme to legacy format for UI components
+  // If theme is already a LegacyTheme (from initialThemes), use it directly
+  // If theme is a database Theme, convert it to LegacyTheme
+  const legacyTheme = theme && 'background' in theme ? theme : convertThemeToLegacy(theme);
 
   // Custom add product function that resets index to show new product at front
   const handleAddProduct = useCallback(() => {
@@ -205,7 +253,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   // AI Generation Handlers
   const handleRefineAll = useCallback(async (product: any) => {
     setTextLoading(true);
-    setImageLoading(true);
+    setGeneratingImage(true);
     setError(null);
 
     try {
@@ -217,19 +265,26 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       const finalImage = await generateProductImage(refinedText.newName, theme, product.image);
       console.log('🎨 Generated product image URL:', finalImage);
 
+      // Upload generated image to WHOP storage
+      console.log('📤 Uploading generated product image to WHOP...');
+      const uploadResult = await uploadUrlToWhop(finalImage);
+      console.log('📤 Upload result:', uploadResult);
+
       updateProduct(product.id, {
         name: refinedText.newName,
         description: refinedText.newDescription,
         image: finalImage,
+        imageAttachmentId: uploadResult.attachmentId,
+        imageAttachmentUrl: uploadResult.url,
       });
     } catch (error) {
       console.error('🤖 Product refinement failed:', error);
       setError(`Refinement Failed: ${(error as Error).message}`);
     } finally {
       setTextLoading(false);
-      setImageLoading(false);
+      setGeneratingImage(false);
     }
-  }, [theme, updateProduct, setTextLoading, setImageLoading, setError]);
+  }, [theme, updateProduct, setTextLoading, setGeneratingImage, setError]);
 
   const handleGenerateAssetFromText = useCallback(async (userPrompt: string) => {
     setTextLoading(true);
@@ -272,12 +327,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     // Keep button in navbar during generation
 
     try {
-      console.log('🎨 Generating responsive background with prompt:', theme.themePrompt);
-      const imageUrl = await generateResponsiveBackgroundImage(theme.themePrompt);
+      console.log('🎨 Generating responsive background with prompt:', legacyTheme.themePrompt);
+      const imageUrl = await generateResponsiveBackgroundImage(legacyTheme.themePrompt || '');
       console.log('🎨 Generated responsive background URL:', imageUrl);
+      
+      // Automatically upload to WHOP storage
+      console.log('🔄 Uploading generated background to WHOP storage...');
+      const uploadedImage = await uploadUrlToWhop(imageUrl, `generated-bg-${Date.now()}.png`);
+      console.log('✅ Background uploaded to WHOP:', uploadedImage);
+      
+      // Set both the original URL and WHOP attachment
       setBackground('generated', imageUrl);
+      setBackgroundAttachmentId(uploadedImage.attachmentId);
+      setBackgroundAttachmentUrl(uploadedImage.url);
     } catch (error) {
-      console.error('🎨 Responsive background generation failed:', error);
+      console.error('🎨 Background generation/upload failed:', error);
       setError(`Background Generation Failed: ${(error as Error).message}`);
     } finally {
       setImageLoading(false);
@@ -285,22 +349,32 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       setIsGeneratingBackground(false);
       setShowGenerateBgInNavbar(false); // Move to original location after generation
     }
-  }, [theme.themePrompt, setImageLoading, setError, setBackground]);
+  }, [legacyTheme.themePrompt, setImageLoading, setError, setBackground]);
 
   const handleBgImageUpload = useCallback(async (file: File) => {
     if (!file) return;
     try {
-      setImageLoading(true);
+      setUploadingImage(true);
       const base64Data = await fileToBase64(file);
       const imageUrl = `data:${file.type};base64,${base64Data}`;
+      
+      // Automatically upload to WHOP storage
+      console.log('🔄 Uploading user background to WHOP storage...');
+      const uploadedImage = await uploadBase64ToWhop(imageUrl, file.name);
+      console.log('✅ User background uploaded to WHOP:', uploadedImage);
+      
+      // Set both the original URL and WHOP attachment
       setBackground('uploaded', imageUrl);
+      setBackgroundAttachmentId(uploadedImage.attachmentId);
+      setBackgroundAttachmentUrl(uploadedImage.url);
       setError(null);
     } catch (error) {
       setError(`Background upload failed: ${(error as Error).message}`);
     } finally {
-      setImageLoading(false);
+      setUploadingImage(false);
     }
-  }, [setImageLoading, setError, setBackground]);
+  }, [setUploadingImage, setError, setBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl]);
+
 
   const handleLogoGeneration = useCallback(async (currentLogo: any, shape: string, themeName: string) => {
     setImageLoading(true);
@@ -308,12 +382,22 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
     try {
       const imageUrl = await generateLogo(theme, shape as 'round' | 'square', currentLogo.src);
+      
+      // Automatically upload logo to WHOP storage
+      console.log('🔄 Uploading generated logo to WHOP storage...');
+      const uploadedImage = await uploadUrlToWhop(imageUrl, `${themeName}-logo-${Date.now()}.png`);
+      console.log('✅ Logo uploaded to WHOP:', uploadedImage);
+      
       setLogoAsset({ 
         ...currentLogo, 
         src: imageUrl, 
         alt: `AI Generated ${themeName} Logo`,
         shape: shape as 'round' | 'square'
       });
+      
+      // Store WHOP attachment data
+      setLogoAttachmentId(uploadedImage.attachmentId);
+      setLogoAttachmentUrl(uploadedImage.url);
     } catch (error) {
       setError(`Logo Image Generation Failed: ${(error as Error).message}`);
     } finally {
@@ -324,40 +408,287 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const handleLogoImageUpload = useCallback(async (file: File) => {
     if (!file) return;
     try {
-      setImageLoading(true);
+      setUploadingImage(true);
       const base64Data = await fileToBase64(file);
       const imageUrl = `data:${file.type};base64,${base64Data}`;
+      
+      // Automatically upload logo to WHOP storage
+      console.log('🔄 Uploading user logo to WHOP storage...');
+      const uploadedImage = await uploadBase64ToWhop(imageUrl, file.name);
+      console.log('✅ User logo uploaded to WHOP:', uploadedImage);
+      
       setLogoAsset({ ...logoAsset, src: imageUrl, alt: 'Custom Uploaded Logo' });
+      
+      // Store WHOP attachment data
+      setLogoAttachmentId(uploadedImage.attachmentId);
+      setLogoAttachmentUrl(uploadedImage.url);
       setError(null);
     } catch (error) {
       setError(`Logo upload failed: ${(error as Error).message}`);
     } finally {
-      setImageLoading(false);
+      setUploadingImage(false);
     }
-  }, [setImageLoading, setError, setLogoAsset]);
+  }, [setUploadingImage, setError, setLogoAsset]);
+
+  // Use promo button state from database hook
+  const promoButton = dbPromoButton;
+  const setPromoButton = setDbPromoButton;
 
   const handleSaveTemplate = useCallback(async () => {
     try {
       const templateName = prompt('Enter template name:');
       if (!templateName) return;
       
-      await saveTemplate({
+      // Check if current theme matches any default themes
+      const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky'];
+      const isDefaultTheme = defaultThemeNames.includes(legacyTheme.name);
+      
+      let themeId = '';
+      if (!isDefaultTheme) {
+        // Generate theme name based on template name and current theme
+        const themeName = `${templateName} Theme (${legacyTheme.name})`;
+        console.log('🎨 Creating new theme for custom template:', themeName);
+        try {
+          const newTheme = await createTheme({
+            name: themeName,
+            season: currentSeason,
+            themePrompt: legacyTheme.themePrompt,
+            accentColor: legacyTheme.accent,
+            ringColor: legacyTheme.accent,
+            card: legacyTheme.card,
+            text: legacyTheme.text,
+            welcomeColor: legacyTheme.welcomeColor,
+            background: legacyTheme.background,
+            aiMessage: legacyTheme.aiMessage,
+            emojiTip: legacyTheme.emojiTip
+          });
+          themeId = newTheme.id;
+          console.log('✅ New theme created:', newTheme.id);
+        } catch (error) {
+          console.error('❌ Failed to create theme:', error);
+          // Fall back to default theme ID
+          themeId = '5dc48fe8-ba78-40db-9fa5-b8acfcb9d199';
+        }
+      } else {
+        // Use default theme ID for standard themes
+        themeId = '5dc48fe8-ba78-40db-9fa5-b8acfcb9d199';
+      }
+      
+      const templateData = {
         name: templateName,
-        products,
-        floatingAssets,
+        experienceId: '', // Will be set by the API
+        userId: '', // Will be set by the API
+        themeId: themeId, // Use the determined theme ID
+        themeSnapshot: {
+          id: `theme_${Date.now()}`, // Create new theme ID for template snapshot
+          experienceId: experienceId || 'default-experience',
+          name: legacyTheme.name,
+          season: currentSeason,
+          themePrompt: legacyTheme.themePrompt,
+          accentColor: legacyTheme.accent,
+          ringColor: legacyTheme.accent,
+          card: legacyTheme.card,
+          text: legacyTheme.text,
+          welcomeColor: legacyTheme.welcomeColor,
+          background: legacyTheme.background,
+          aiMessage: legacyTheme.aiMessage,
+          emojiTip: legacyTheme.emojiTip,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }, // Complete snapshot of current theme
         currentSeason,
-        theme,
-        fixedTextStyles,
-        logoAsset,
-        generatedBackground,
-        uploadedBackground
-      });
+        templateData: {
+          // Theme-specific data
+          themeTextStyles: {
+            [currentSeason]: {
+              mainHeader: {
+                content: fixedTextStyles.mainHeader?.content || '',
+                color: fixedTextStyles.mainHeader?.color || '',
+                styleClass: fixedTextStyles.mainHeader?.styleClass || ''
+              },
+              headerMessage: {
+                content: fixedTextStyles.headerMessage?.content || '',
+                color: fixedTextStyles.headerMessage?.color || '',
+                styleClass: fixedTextStyles.headerMessage?.styleClass || ''
+              },
+              subHeader: {
+                content: fixedTextStyles.subHeader?.content || '',
+                color: fixedTextStyles.subHeader?.color || '',
+                styleClass: fixedTextStyles.subHeader?.styleClass || ''
+              },
+              promoMessage: {
+                content: fixedTextStyles.promoMessage?.content || '',
+                color: fixedTextStyles.promoMessage?.color || '',
+                styleClass: fixedTextStyles.promoMessage?.styleClass || ''
+              }
+            }
+          },
+          themeLogos: {
+            [currentSeason]: logoAttachmentUrl ? {
+              src: logoAttachmentUrl,
+              shape: logoAsset?.shape || 'square',
+              alt: logoAsset?.alt || 'Logo'
+            } : logoAsset
+          },
+          themeGeneratedBackgrounds: {
+            [currentSeason]: backgroundAttachmentUrl
+          },
+          themeUploadedBackgrounds: {
+            [currentSeason]: backgroundAttachmentUrl
+          },
+          themeProducts: {
+            [currentSeason]: products.map(product => ({
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              description: product.description,
+              image: product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`, // Use placeholder if no WHOP storage URL
+              imageAttachmentId: product.imageAttachmentId,
+              imageAttachmentUrl: product.imageAttachmentUrl,
+              containerAsset: product.containerAsset,
+              cardClass: product.cardClass,
+              buttonText: product.buttonText,
+              buttonClass: product.buttonClass,
+              buttonAnimColor: product.buttonAnimColor,
+              titleClass: product.titleClass,
+              descClass: product.descClass,
+              buttonLink: product.buttonLink
+            }))
+          },
+          themeFloatingAssets: {
+            [currentSeason]: floatingAssets.map(asset => ({
+              id: asset.id,
+              type: asset.type,
+              src: asset.src,
+              alt: asset.alt,
+              x: asset.x,
+              y: asset.y,
+              rotation: asset.rotation,
+              scale: asset.scale,
+              z: asset.z,
+              content: asset.content,
+              color: asset.color,
+              styleClass: asset.styleClass,
+              isPromoMessage: asset.isPromoMessage,
+              isPromoCode: asset.isPromoCode,
+              isLogo: asset.isLogo,
+              customData: asset.customData
+            }))
+          },
+          
+          // Current store state
+          products: products.map(product => ({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            description: product.description,
+            image: product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`, // Use placeholder if no WHOP storage URL
+            imageAttachmentId: product.imageAttachmentId,
+            imageAttachmentUrl: product.imageAttachmentUrl,
+            containerAsset: product.containerAsset,
+            cardClass: product.cardClass,
+            buttonText: product.buttonText,
+            buttonClass: product.buttonClass,
+            buttonAnimColor: product.buttonAnimColor,
+            titleClass: product.titleClass,
+            descClass: product.descClass,
+            buttonLink: product.buttonLink
+          })),
+          floatingAssets: floatingAssets.map(asset => ({
+            id: asset.id,
+            type: asset.type,
+            src: asset.src,
+            alt: asset.alt,
+            x: asset.x,
+            y: asset.y,
+            rotation: asset.rotation,
+            scale: asset.scale,
+            z: asset.z,
+            content: asset.content,
+            color: asset.color,
+            styleClass: asset.styleClass,
+            isPromoMessage: asset.isPromoMessage,
+            isPromoCode: asset.isPromoCode,
+            isLogo: asset.isLogo,
+            customData: asset.customData
+          })),
+          fixedTextStyles: {
+            mainHeader: {
+              content: fixedTextStyles.mainHeader?.content || '',
+              color: fixedTextStyles.mainHeader?.color || '',
+              styleClass: fixedTextStyles.mainHeader?.styleClass || ''
+            },
+            headerMessage: {
+              content: fixedTextStyles.headerMessage?.content || '',
+              color: fixedTextStyles.headerMessage?.color || '',
+              styleClass: fixedTextStyles.headerMessage?.styleClass || ''
+            },
+            subHeader: {
+              content: fixedTextStyles.subHeader?.content || '',
+              color: fixedTextStyles.subHeader?.color || '',
+              styleClass: fixedTextStyles.subHeader?.styleClass || ''
+            },
+            promoMessage: {
+              content: fixedTextStyles.promoMessage?.content || '',
+              color: fixedTextStyles.promoMessage?.color || '',
+              styleClass: fixedTextStyles.promoMessage?.styleClass || ''
+            }
+          },
+          logoAsset: logoAttachmentUrl ? {
+            src: logoAttachmentUrl,
+            shape: logoAsset?.shape || 'square',
+            alt: logoAsset?.alt || 'Logo'
+          } : logoAsset,
+          
+          // Background assets (WHOP storage)
+          generatedBackground: backgroundAttachmentUrl,
+          uploadedBackground: backgroundAttachmentUrl,
+          backgroundAttachmentId,
+          backgroundAttachmentUrl,
+          logoAttachmentId,
+          logoAttachmentUrl,
+          
+          // Current theme styling
+          currentTheme: {
+            name: legacyTheme.name,
+            themePrompt: legacyTheme.themePrompt,
+            accent: legacyTheme.accent,
+            card: legacyTheme.card,
+            text: legacyTheme.text,
+            welcomeColor: legacyTheme.welcomeColor,
+            background: legacyTheme.background,
+            backgroundImage: legacyTheme.backgroundImage,
+            aiMessage: legacyTheme.aiMessage,
+            emojiTip: legacyTheme.emojiTip
+          },
+          
+          // Claim button styling
+          promoButton: {
+            text: promoButton.text,
+            buttonClass: promoButton.buttonClass,
+            ringClass: promoButton.ringClass,
+            ringHoverClass: promoButton.ringHoverClass,
+            icon: promoButton.icon
+          }
+        },
+        isLive: false,
+        isLastEdited: false,
+      };
+      
+      console.log('🔍 Frontend - Complete template data being sent:', templateData);
+      console.log('🔍 Frontend - themeSnapshot:', templateData.themeSnapshot);
+      console.log('🔍 Frontend - themeId:', templateData.themeId);
+      console.log('🔍 Frontend - products:', JSON.stringify(templateData.templateData.products, null, 2));
+      console.log('🔍 Frontend - fixedTextStyles:', JSON.stringify(templateData.templateData.fixedTextStyles, null, 2));
+      console.log('🔍 Frontend - floatingAssets:', JSON.stringify(templateData.templateData.floatingAssets, null, 2));
+      
+      await saveTemplate(templateData);
       
       alert('Template saved successfully!');
     } catch (error) {
       setError(`Failed to save template: ${(error as Error).message}`);
     }
-  }, [saveTemplate, products, floatingAssets, currentSeason, theme, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, setError]);
+  }, [saveTemplate, createTheme, products, floatingAssets, currentSeason, theme, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, backgroundAttachmentId, backgroundAttachmentUrl, logoAttachmentId, logoAttachmentUrl, promoButton, setError]);
 
   // Load live funnel for chat functionality
   const loadLiveFunnel = useCallback(async () => {
@@ -427,21 +758,197 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       if (products.length > 0 || floatingAssets.length > 0) {
         saveTemplate({
           name: `Auto-saved ${new Date().toLocaleString()}`,
-          products,
-          floatingAssets,
+          experienceId: '', // Will be set by the API
+          userId: '', // Will be set by the API
+          themeId: '', // Will be set by the API
+          themeSnapshot: {
+            id: `theme_${Date.now()}`, // Create new theme ID for template snapshot
+            experienceId: experienceId || 'default-experience',
+            name: theme.name,
+            season: currentSeason,
+            themePrompt: theme.themePrompt,
+            accentColor: theme.accent,
+            ringColor: theme.accent,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }, // Snapshot of current theme
           currentSeason,
-          theme,
-          fixedTextStyles,
-          logoAsset,
-          generatedBackground,
-          uploadedBackground
+          templateData: {
+            themeTextStyles: {
+              [currentSeason]: {
+                mainHeader: {
+                  content: fixedTextStyles.mainHeader?.content || '',
+                  color: fixedTextStyles.mainHeader?.color || '',
+                  styleClass: fixedTextStyles.mainHeader?.styleClass || ''
+                },
+                headerMessage: {
+                  content: fixedTextStyles.headerMessage?.content || '',
+                  color: fixedTextStyles.headerMessage?.color || '',
+                  styleClass: fixedTextStyles.headerMessage?.styleClass || ''
+                },
+                subHeader: {
+                  content: fixedTextStyles.subHeader?.content || '',
+                  color: fixedTextStyles.subHeader?.color || '',
+                  styleClass: fixedTextStyles.subHeader?.styleClass || ''
+                },
+                promoMessage: {
+                  content: fixedTextStyles.promoMessage?.content || '',
+                  color: fixedTextStyles.promoMessage?.color || '',
+                  styleClass: fixedTextStyles.promoMessage?.styleClass || ''
+                }
+              }
+            },
+            themeLogos: {
+              [currentSeason]: logoAttachmentUrl ? {
+                src: logoAttachmentUrl,
+                shape: logoAsset?.shape || 'square',
+                alt: logoAsset?.alt || 'Logo'
+              } : logoAsset
+            },
+            themeGeneratedBackgrounds: {
+              [currentSeason]: backgroundAttachmentUrl
+            },
+            themeUploadedBackgrounds: {
+              [currentSeason]: backgroundAttachmentUrl
+            },
+            themeProducts: {
+              [currentSeason]: products.map(product => ({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                image: product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`, // Use placeholder if no WHOP storage URL
+                imageAttachmentId: product.imageAttachmentId,
+                imageAttachmentUrl: product.imageAttachmentUrl,
+                containerAsset: product.containerAsset,
+                cardClass: product.cardClass,
+                buttonText: product.buttonText,
+                buttonClass: product.buttonClass,
+                buttonAnimColor: product.buttonAnimColor,
+                titleClass: product.titleClass,
+                descClass: product.descClass,
+                buttonLink: product.buttonLink
+              }))
+            },
+            themeFloatingAssets: {
+              [currentSeason]: floatingAssets.map(asset => ({
+                id: asset.id,
+                type: asset.type,
+                src: asset.src,
+                alt: asset.alt,
+                x: asset.x,
+                y: asset.y,
+                rotation: asset.rotation,
+                scale: asset.scale,
+                z: asset.z,
+                content: asset.content,
+                color: asset.color,
+                styleClass: asset.styleClass,
+                isPromoMessage: asset.isPromoMessage,
+                isPromoCode: asset.isPromoCode,
+                isLogo: asset.isLogo,
+                customData: asset.customData
+              }))
+            },
+            products: products.map(product => ({
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              description: product.description,
+              image: product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`, // Use placeholder if no WHOP storage URL
+              imageAttachmentId: product.imageAttachmentId,
+              imageAttachmentUrl: product.imageAttachmentUrl,
+              containerAsset: product.containerAsset,
+              cardClass: product.cardClass,
+              buttonText: product.buttonText,
+              buttonClass: product.buttonClass,
+              buttonAnimColor: product.buttonAnimColor,
+              titleClass: product.titleClass,
+              descClass: product.descClass,
+              buttonLink: product.buttonLink
+            })),
+            floatingAssets: floatingAssets.map(asset => ({
+              id: asset.id,
+              type: asset.type,
+              src: asset.src,
+              alt: asset.alt,
+              x: asset.x,
+              y: asset.y,
+              rotation: asset.rotation,
+              scale: asset.scale,
+              z: asset.z,
+              content: asset.content,
+              color: asset.color,
+              styleClass: asset.styleClass,
+              isPromoMessage: asset.isPromoMessage,
+              isPromoCode: asset.isPromoCode,
+              isLogo: asset.isLogo,
+              customData: asset.customData
+            })),
+            fixedTextStyles: {
+              mainHeader: {
+                content: fixedTextStyles.mainHeader?.content || '',
+                color: fixedTextStyles.mainHeader?.color || '',
+                styleClass: fixedTextStyles.mainHeader?.styleClass || ''
+              },
+              headerMessage: {
+                content: fixedTextStyles.headerMessage?.content || '',
+                color: fixedTextStyles.headerMessage?.color || '',
+                styleClass: fixedTextStyles.headerMessage?.styleClass || ''
+              },
+              subHeader: {
+                content: fixedTextStyles.subHeader?.content || '',
+                color: fixedTextStyles.subHeader?.color || '',
+                styleClass: fixedTextStyles.subHeader?.styleClass || ''
+              },
+              promoMessage: {
+                content: fixedTextStyles.promoMessage?.content || '',
+                color: fixedTextStyles.promoMessage?.color || '',
+                styleClass: fixedTextStyles.promoMessage?.styleClass || ''
+              }
+            },
+            logoAsset: logoAttachmentUrl ? {
+              src: logoAttachmentUrl,
+              shape: logoAsset?.shape || 'square',
+              alt: logoAsset?.alt || 'Logo'
+            } : logoAsset,
+            // Use WHOP storage URLs instead of base64
+            generatedBackground: backgroundAttachmentUrl,
+            uploadedBackground: backgroundAttachmentUrl,
+            backgroundAttachmentId,
+            backgroundAttachmentUrl,
+            logoAttachmentId,
+            logoAttachmentUrl,
+            
+            // Current theme and promo button
+            currentTheme: {
+              name: theme.name,
+              themePrompt: theme.themePrompt,
+              accent: theme.accent,
+              card: theme.card,
+              text: theme.text,
+              welcomeColor: theme.welcomeColor,
+              background: theme.background,
+              aiMessage: theme.aiMessage,
+              emojiTip: theme.emojiTip
+            },
+            promoButton: {
+              text: promoButton?.text || 'CLAIM YOUR GIFT!',
+              buttonClass: promoButton?.buttonClass || 'bg-indigo-600 hover:bg-indigo-700 text-white ring-indigo-500',
+              ringClass: promoButton?.ringClass || 'ring-indigo-500',
+              ringHoverClass: promoButton?.ringHoverClass || 'ring-indigo-500',
+              icon: promoButton?.icon || '🎁'
+            }
+          },
+          isLive: false,
+          isLastEdited: false,
         });
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [products, floatingAssets, currentSeason, theme, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, saveTemplate]);
+  }, [products, floatingAssets, currentSeason, theme, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, backgroundAttachmentId, backgroundAttachmentUrl, logoAttachmentId, logoAttachmentUrl, saveTemplate]);
 
   // Load live funnel on mount
   useEffect(() => {
@@ -463,17 +970,27 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const handleProductImageUpload = useCallback(async (productId: number, file: File) => {
     if (!file) return;
     try {
-      setImageLoading(true);
+      setUploadingImage(true);
       const base64Data = await fileToBase64(file);
       const imageUrl = `data:${file.type};base64,${base64Data}`;
-      updateProduct(productId, { image: imageUrl });
+      
+      // Automatically upload product image to WHOP storage
+      console.log('🔄 Uploading product image to WHOP storage...');
+      const uploadedImage = await uploadBase64ToWhop(imageUrl, file.name);
+      console.log('✅ Product image uploaded to WHOP:', uploadedImage);
+      
+      updateProduct(productId, { 
+        image: imageUrl,
+        imageAttachmentId: uploadedImage.attachmentId,
+        imageAttachmentUrl: uploadedImage.url
+      });
       setError(null);
     } catch (error) {
       setError(`File upload failed: ${(error as Error).message}`);
     } finally {
-      setImageLoading(false);
+      setUploadingImage(false);
     }
-  }, [setImageLoading, setError, updateProduct]);
+  }, [setUploadingImage, setError, updateProduct]);
 
   const handleRemoveSticker = useCallback((productId: number) => {
     updateProduct(productId, { containerAsset: undefined });
@@ -537,56 +1054,122 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   }, []);
 
 
-  const { mainHeader, headerMessage, subHeader, promoMessage } = fixedTextStyles;
+  const { mainHeader, headerMessage, subHeader, promoMessage } = fixedTextStyles || {};
 
+  // Extract theme colors for text styling
+  const getThemeColors = useMemo(() => {
+    const extractColorFromClass = (className: string, prefix: string) => {
+      const match = className.match(new RegExp(`${prefix}-(\\w+)`));
+      return match ? match[1] : null;
+    };
 
-  // Claim button local state (text and style)
-  const [promoButton, setPromoButton] = useState<{ text: string; buttonClass: string; ringClass: string; ringHoverClass: string; icon: string }>({
-    text: 'CLAIM YOUR GIFT!',
-    buttonClass: theme.accent,
-    ringClass: 'ring-indigo-400',
-    ringHoverClass: 'ring-indigo-400',
-    icon: '🎁'
-  });
+    const extractTextColor = (className: string) => {
+      const match = className.match(/text-(\w+)/);
+      return match ? match[1] : 'gray-800';
+    };
+
+    const extractRingColor = (className: string) => {
+      const match = className.match(/ring-(\w+)/);
+      return match ? match[1] : 'blue-500';
+    };
+
+    // Get the actual color values from the theme
+    const primaryColor = extractColorFromClass(legacyTheme.accent, 'bg') || 'blue-600';
+    const textColor = extractTextColor(legacyTheme.text) || 'gray-800';
+    const welcomeColor = extractTextColor(legacyTheme.welcomeColor) || 'blue-200';
+    const ringColor = extractRingColor(legacyTheme.accent) || 'blue-500';
+
+    return {
+      primary: primaryColor,
+      text: textColor,
+      welcome: welcomeColor,
+      ring: ringColor,
+      // CSS classes for dynamic styling
+      primaryClass: `text-${primaryColor}`,
+      textClass: `text-${textColor}`,
+      welcomeClass: `text-${welcomeColor}`,
+      ringClass: `ring-${ringColor}`,
+      borderClass: `border-${ringColor}`,
+    };
+  }, [legacyTheme]);
+
+  // Get the initial style classes for reference
+  const getInitialStyleClass = useCallback((type: 'header' | 'subheader' | 'promo') => {
+    switch (type) {
+      case 'header':
+        return mainHeader?.styleClass || headerMessage?.styleClass || 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg';
+      case 'subheader':
+        return subHeader?.styleClass || 'text-lg sm:text-xl font-normal';
+      case 'promo':
+        return promoMessage?.styleClass || 'text-2xl sm:text-3xl font-semibold drop-shadow-md';
+      default:
+        return '';
+    }
+  }, [mainHeader, headerMessage, subHeader, promoMessage]);
+
+  // Apply theme colors to text styles
+  const applyThemeColorsToText = useCallback((textStyle: any, type: 'header' | 'subheader' | 'promo') => {
+    const baseStyle = textStyle?.styleClass || getInitialStyleClass(type);
+    let themeColorClass = '';
+    
+    switch (type) {
+      case 'header':
+        themeColorClass = getThemeColors.primaryClass;
+        break;
+      case 'subheader':
+        themeColorClass = getThemeColors.textClass;
+        break;
+      case 'promo':
+        themeColorClass = getThemeColors.welcomeClass;
+        break;
+    }
+    
+    // If no custom color is set, apply theme color
+    if (!textStyle?.color) {
+      return `${baseStyle} ${themeColorClass}`;
+    }
+    
+    return baseStyle;
+  }, [getThemeColors, getInitialStyleClass]);
 
   // Emoji search state
   const [emojiSearchQuery, setEmojiSearchQuery] = useState('');
   useEffect(() => {
     // Always sync Claim button to current theme on theme change
-    const ringToken = theme.accent.split(' ').find(cls => cls.startsWith('ring-') && !cls.startsWith('ring-offset')) || 'ring-indigo-400';
+    const ringToken = legacyTheme.accent.split(' ').find(cls => cls.startsWith('ring-') && !cls.startsWith('ring-offset')) || 'ring-indigo-400';
     setPromoButton(prev => ({
       ...prev,
-      buttonClass: theme.accent,
+      buttonClass: legacyTheme.accent,
       ringClass: ringToken,
       ringHoverClass: ringToken,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme.accent]);
+  }, [legacyTheme.accent]);
 
   // Keep all buttons (including Claim) in sync with theme changes when they still use previous theme accent
-  const prevAccentRef = useRef(theme.accent);
+  const prevAccentRef = useRef(legacyTheme.accent);
   useEffect(() => {
     const prevAccent = prevAccentRef.current;
-    if (prevAccent !== theme.accent) {
+    if (prevAccent !== legacyTheme.accent) {
       // Update product buttons that were using previous theme accent
       products.forEach(product => {
         if (product.buttonClass === prevAccent) {
-          updateProduct(product.id, { buttonClass: theme.accent });
+          updateProduct(product.id, { buttonClass: legacyTheme.accent });
         }
       });
 
       // Update claim button if it matched previous accent (or was empty)
       setPromoButton(prev => ({
         ...prev,
-        buttonClass: (!prev.buttonClass || prev.buttonClass === prevAccent) ? theme.accent : prev.buttonClass,
+        buttonClass: (!prev.buttonClass || prev.buttonClass === prevAccent) ? legacyTheme.accent : prev.buttonClass,
         // If ring was derived from previous accent ring token, try to carry forward
-        ringClass: prev.ringClass && prev.ringClass.includes(prevAccent.split(' ').find(c => c.startsWith('ring-') || '')!) ? (theme.accent.split(' ').find(c => c.startsWith('ring-') && !c.startsWith('ring-offset')) || prev.ringClass) : prev.ringClass,
+        ringClass: prev.ringClass && prev.ringClass.includes(prevAccent.split(' ').find(c => c.startsWith('ring-') || '')!) ? (legacyTheme.accent.split(' ').find(c => c.startsWith('ring-') && !c.startsWith('ring-offset')) || prev.ringClass) : prev.ringClass,
         ringHoverClass: prev.ringHoverClass
       }));
 
-      prevAccentRef.current = theme.accent;
+      prevAccentRef.current = legacyTheme.accent;
     }
-  }, [theme.accent, products, updateProduct]);
+  }, [legacyTheme.accent, products, updateProduct]);
 
   // Map ring class to a safe hover:ring-* class included at build time
   const getHoverRingClass = (ringCls: string) => {
@@ -673,7 +1256,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   };
 
   // Quick text colors with contrast to current theme
-  const getThemeQuickColors = (t: typeof theme): string[] => {
+  const getThemeQuickColors = (t: LegacyTheme): string[] => {
     const parseText = (cls: string) => cls.replace('text-', '').trim();
     const parseBgFamily = (cls: string) => {
       const m = cls.match(/bg-([a-z]+)-\d+/);
@@ -741,15 +1324,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
   // Debug: Log when mainHeader styleClass changes
   useEffect(() => {
+    if (mainHeader) {
     console.log('🎨 MainHeader styleClass changed:', mainHeader.styleClass);
-  }, [mainHeader.styleClass]);
+    }
+  }, [mainHeader?.styleClass]);
 
   // Determine background style
-  const getBackgroundStyle = () => {
-    if (uploadedBackground) {
-      console.log('🎨 Using uploaded background:', uploadedBackground.substring(0, 100) + '...');
+  const getBackgroundStyle = useMemo(() => {
+    // Only use WHOP attachment URL - no base64 fallbacks
+    if (backgroundAttachmentUrl) {
+      console.log('🎨 Using WHOP attachment background:', backgroundAttachmentUrl);
       return {
-        backgroundImage: `url(${uploadedBackground})`,
+        backgroundImage: `url(${backgroundAttachmentUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
@@ -758,32 +1344,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         width: '100%'
       };
     }
-    if (generatedBackground) {
-      console.log('🎨 Using generated background:', generatedBackground.substring(0, 100) + '...');
-      return {
-        backgroundImage: `url(${generatedBackground})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-        minHeight: '100vh',
-        width: '100%'
-      };
-    }
-    if (theme.backgroundImage) {
-      console.log('🎨 Using theme background image:', theme.backgroundImage.substring(0, 100) + '...');
-      return {
-        backgroundImage: `url(${theme.backgroundImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-        minHeight: '100vh',
-        width: '100%'
-      };
-    }
-    return {};
-  };
+    // Return empty object to let CSS classes handle the background
+    // The className already includes legacyTheme.background for gradient backgrounds
+    return {
+      minHeight: '100vh',
+      width: '100%'
+    };
+  }, [backgroundAttachmentUrl]);
 
   // Product editor slide-over state
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });
@@ -969,10 +1536,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
   return (
     <>
+      
       <div 
         ref={appRef} 
-        className={`h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !theme.backgroundImage ? theme.background : ''}`}
-        style={getBackgroundStyle()}
+        className={`h-screen font-inter antialiased relative overflow-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
+        style={getBackgroundStyle}
       >
       {/* Top Navbar with Integrated Progress Bar */}
       <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
@@ -1157,7 +1725,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       className="hidden" 
                       accept="image/*"
                       onChange={(e) => handleBgImageUpload(e.target.files?.[0]!)}
-                      disabled={loadingState.isImageLoading}
+                      disabled={loadingState.isUploadingImage}
                     />
                   </label>
                   
@@ -1222,11 +1790,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
 
       {/* Loading Overlay */}
-      {(loadingState.isTextLoading || loadingState.isImageLoading) && (
+      {(loadingState.isTextLoading || loadingState.isImageLoading || loadingState.isUploadingImage || loadingState.isGeneratingImage) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="flex items-center text-white text-2xl p-6 rounded-xl bg-gray-800 shadow-2xl">
             <ZapIcon className="w-8 h-8 mr-4 animate-bounce text-cyan-400" />
-            {loadingState.isImageLoading ? '🎨 Generating AI Image (nano-banana)...' : loadingState.isTextLoading ? '🤖 Refining Text/Emoji (Gemini)...' : '✨ Working on AI Magic...'}
+            {loadingState.isGeneratingImage ? '🎨 Generating AI Image (nano-banana)...' : 
+             loadingState.isUploadingImage ? '📤 Uploading Image to WHOP...' : 
+             loadingState.isTextLoading ? '🤖 Refining Text/Emoji (Gemini)...' : 
+             loadingState.isImageLoading ? '🎨 Generating AI Image (nano-banana)...' : 
+             '✨ Working on AI Magic...'}
           </div>
         </div>
       )}
@@ -1256,15 +1828,66 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             onSelectAsset={setSelectedAsset}
             currentSeason={currentSeason}
             isEditorView={editorState.isEditorView}
-            allThemes={allThemes}
-            handleAddCustomTheme={(themeData) => addCustomTheme(themeData.data)}
-            handleUpdateTheme={(season, updates) => {
-              // Update the theme in allThemes
-              const updatedThemes = { ...allThemes };
-              if (updatedThemes[season]) {
-                updatedThemes[season] = { ...updatedThemes[season], ...updates };
-                // Note: This would need to be persisted to storage/database in a real app
-                console.log('Theme updated:', season, updates);
+            allThemes={Object.fromEntries(
+              Object.entries(allThemes).map(([key, theme]) => [
+                key,
+                {
+                  name: legacyTheme.name,
+                  themePrompt: legacyTheme.themePrompt,
+                  accent: legacyTheme.accent,
+                  card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
+                  text: 'text-gray-800',
+                  welcomeColor: 'text-yellow-300',
+                  background: `bg-[url('https://placehold.co/1920x1080/000000/ffffff?text=${legacyTheme.name}')] bg-cover bg-center`,
+                  aiMessage: `Welcome to our ${legacyTheme.name} collection!`,
+                  emojiTip: "✨"
+                }
+              ])
+            )}
+            setAllThemes={setAllThemes}
+            handleAddCustomTheme={addCustomTheme}
+            handleUpdateTheme={async (season, updates) => {
+              try {
+                console.log('🎨 Updating theme for season:', season, updates);
+                
+                // Find existing theme for this season
+                const existingTheme = themes.find(t => t.season === season);
+                
+                if (existingTheme) {
+                  // Update existing theme
+                  console.log('📝 Updating existing theme:', existingTheme.id);
+                  await updateTheme(existingTheme.id, {
+                    name: updates.name || existingTheme.name,
+                    themePrompt: updates.themePrompt,
+                    accentColor: updates.accent,
+                    ringColor: updates.accent
+                  });
+                } else {
+                  // Create new theme for this season
+                  console.log('🆕 Creating new theme for season:', season);
+                  const newTheme = await createTheme({
+                    name: updates.name || `${season} Custom Theme`,
+                    season: season,
+                    themePrompt: updates.themePrompt || '',
+                    accentColor: updates.accent || 'bg-blue-600',
+                    ringColor: updates.accent || 'bg-blue-600'
+                  });
+                  console.log('✅ Created new theme:', newTheme.id);
+                }
+                
+                // Update local state
+                setAllThemes(prev => ({
+                  ...prev,
+                  [season]: {
+                    ...prev[season],
+                    ...updates
+                  }
+                }));
+                
+                console.log('✅ Theme updated successfully');
+              } catch (error) {
+                console.error('❌ Failed to update theme:', error);
+                setError(`Failed to update theme: ${(error as Error).message}`);
               }
             }}
             handleUpdateAsset={updateFloatingAsset}
@@ -1275,6 +1898,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             }}
             fixedTextStyles={fixedTextStyles}
             setFixedTextStyles={setFixedTextStyles}
+            canAddCustomTheme={canAddCustomTheme()}
+            canAddTemplate={canAddTemplate()}
+            maxCustomThemes={MAX_CUSTOM_THEMES}
+            maxCustomTemplates={MAX_CUSTOM_TEMPLATES}
           />
         </div>
       )}
@@ -1326,16 +1953,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       className="hidden" 
                       accept="image/*"
                       onChange={(e) => handleLogoImageUpload(e.target.files?.[0]!)}
-                      disabled={loadingState.isImageLoading}
+                      disabled={loadingState.isUploadingImage}
                     />
                   </label>
                   
                   {/* Zap Button - Middle */}
                   <button
-                    onClick={() => handleLogoGeneration(logoAsset, logoAsset.shape, theme.name)}
-                    disabled={loadingState.isImageLoading || loadingState.isTextLoading}
+                    onClick={() => handleLogoGeneration(logoAsset, logoAsset.shape, legacyTheme.name)}
+                    disabled={loadingState.isGeneratingImage || loadingState.isTextLoading}
                     className={`p-2 rounded-xl group transition-all duration-300 shadow-lg hover:scale-105 ${
-                      (loadingState.isImageLoading || loadingState.isTextLoading) 
+                      (loadingState.isGeneratingImage || loadingState.isTextLoading) 
                         ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
                         : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
                     }`}
@@ -1381,19 +2008,29 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             <input
               ref={headerInputRef}
               type="text"
-              value={headerMessage.content}
+              value={headerMessage?.content || 'THE SEASONAL VAULT'}
               onChange={(e) => setFixedTextStyles(prev => ({
                 ...prev,
-                headerMessage: { ...prev.headerMessage, content: e.target.value }
+                headerMessage: { 
+                  content: e.target.value,
+                  color: prev.headerMessage?.color || '#FFFFFF',
+                  styleClass: prev.headerMessage?.styleClass || 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+                }
               }))}
               onBlur={() => setInlineEditTarget(null)}
-              className={`w-full text-center bg-white/20 backdrop-blur-sm border-2 border-blue-400 rounded-lg px-4 py-2 outline-none focus:border-blue-500 focus:bg-white/30 transition-all duration-200 ${headerMessage.styleClass}`}
-              style={{ color: headerMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+              className={`w-full text-center bg-white/20 backdrop-blur-sm border-2 rounded-lg px-4 py-2 outline-none focus:bg-white/30 transition-all duration-200 ${applyThemeColorsToText(headerMessage, 'header')} ${getThemeColors.borderClass}-400 focus:${getThemeColors.borderClass}-500`}
+              style={{ 
+                color: headerMessage?.color, 
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+              }}
             />
           ) : (
             <p 
-              className={`${headerMessage.styleClass} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
-              style={{ color: headerMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+              className={`${applyThemeColorsToText(headerMessage, 'header')} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
+              style={{ 
+                color: headerMessage?.color, 
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+              }}
                onClick={() => {
                  if (editorState.isEditorView) {
                    // If modal is open for any text, don't handle clicks on page text elements
@@ -1406,7 +2043,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                  }
                }}
             >
-              {headerMessage.content}
+              {headerMessage?.content || 'THE SEASONAL VAULT'}
             </p>
           )}
           
@@ -1414,19 +2051,29 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
             <textarea
               ref={subHeaderInputRef as any}
               rows={2}
-              value={subHeader.content}
+              value={subHeader?.content || 'Discover exclusive seasonal products'}
               onChange={(e) => setFixedTextStyles(prev => ({
                 ...prev,
-                subHeader: { ...prev.subHeader, content: e.target.value }
+                subHeader: { 
+                  content: e.target.value,
+                  color: prev.subHeader?.color || '#FFFFFF',
+                  styleClass: prev.subHeader?.styleClass || 'text-lg sm:text-xl font-normal'
+                }
               }))}
               onBlur={() => setInlineEditTarget(null)}
-              className={`w-full text-center bg-white/20 backdrop-blur-sm border-2 border-blue-400 rounded-lg px-4 py-2 outline-none focus:border-blue-500 focus:bg-white/30 transition-all duration-200 resize-none ${subHeader.styleClass}`}
-              style={{ color: subHeader.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+              className={`w-full text-center bg-white/20 backdrop-blur-sm border-2 rounded-lg px-4 py-2 outline-none focus:bg-white/30 transition-all duration-200 resize-none ${applyThemeColorsToText(subHeader, 'subheader')} ${getThemeColors.borderClass}-400 focus:${getThemeColors.borderClass}-500`}
+              style={{ 
+                color: subHeader?.color, 
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+              }}
             />
           ) : (
             <p 
-              className={`${subHeader.styleClass} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
-              style={{ color: subHeader.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+              className={`${applyThemeColorsToText(subHeader, 'subheader')} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
+              style={{ 
+                color: subHeader?.color, 
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+              }}
                onClick={() => {
                  if (editorState.isEditorView) {
                    // If modal is open for any text, don't handle clicks on page text elements
@@ -1439,7 +2086,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                  }
                }}
             >
-              {subHeader.content}
+              {subHeader?.content || 'Discover exclusive seasonal products'}
             </p>
           )}
         </div>
@@ -1500,7 +2147,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                   >
                     <ProductCard
                       product={product}
-                      theme={theme}
+                      theme={legacyTheme}
                       isEditorView={editorState.isEditorView}
                       loadingState={loadingState}
                       onUpdateProduct={updateProduct}
@@ -1549,14 +2196,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                <textarea
                  ref={promoInputRef as any}
                  rows={2}
-                 value={promoMessage.content}
+                 value={promoMessage?.content || 'Our Merchant has Gift for you!'}
                  onChange={(e) => setFixedTextStyles(prev => ({
                    ...prev,
-                   promoMessage: { ...prev.promoMessage, content: e.target.value }
+                   promoMessage: { 
+                     content: e.target.value,
+                     color: prev.promoMessage?.color || '#FFFFFF',
+                     styleClass: prev.promoMessage?.styleClass || 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+                   }
                  }))}
                  onBlur={() => setInlineEditTarget(null)}
-                 className={`${promoMessage.styleClass} w-full mb-8 drop-shadow-md bg-white/20 backdrop-blur-sm border-2 border-blue-400 rounded-lg px-4 py-2 outline-none focus:border-blue-500 focus:bg-white/30 transition-all duration-200 text-center resize-none`}
-                 style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+                 className={`${applyThemeColorsToText(promoMessage, 'promo')} w-full mb-8 drop-shadow-md bg-white/20 backdrop-blur-sm border-2 rounded-lg px-4 py-2 outline-none focus:bg-white/30 transition-all duration-200 text-center resize-none ${getThemeColors.borderClass}-400 focus:${getThemeColors.borderClass}-500`}
+                 style={{ 
+                   color: promoMessage?.color, 
+                   textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+                 }}
                  placeholder="Click to edit text..."
                />
              ) : (
@@ -1572,10 +2226,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       setTimeout(() => setInlineEditTarget('promoMessage'), 100);
                     }
                   }}
-                 className={`${promoMessage.styleClass} mb-8 drop-shadow-md ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 rounded-lg p-2 transition-colors duration-200' : ''}`}
-                 style={{ color: promoMessage.color, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+                 className={`${applyThemeColorsToText(promoMessage, 'promo')} mb-8 drop-shadow-md ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 rounded-lg p-2 transition-colors duration-200' : ''}`}
+                 style={{ 
+                   color: promoMessage?.color, 
+                   textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+                 }}
                >
-                 {promoMessage.content}
+                 {promoMessage?.content || 'Our Merchant has Gift for you!'}
                </p>
              )}
              
@@ -1658,10 +2315,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Content</label>
                 <textarea
                   rows={4}
-                  value={fixedTextStyles[editingText.targetId].content}
+                  value={fixedTextStyles[editingText.targetId]?.content || 
+                    (editingText.targetId === 'headerMessage' ? 'THE SEASONAL VAULT' :
+                     editingText.targetId === 'subHeader' ? 'Discover exclusive seasonal products' :
+                     editingText.targetId === 'promoMessage' ? 'Our Merchant has Gift for you!' : '')}
                   onChange={(e) => setFixedTextStyles(prev => ({
                     ...prev,
-                    [editingText.targetId]: { ...prev[editingText.targetId], content: e.target.value }
+                    [editingText.targetId]: { 
+                      ...prev[editingText.targetId],
+                      content: e.target.value,
+                      color: prev[editingText.targetId]?.color || '#FFFFFF',
+                      styleClass: prev[editingText.targetId]?.styleClass || ''
+                    }
                   }))}
                   // Removed onFocus handler - textarea should work normally within modal
                   className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
@@ -1674,19 +2339,29 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 <div className="flex items-center space-x-2">
                   <input
                     type="color"
-                    value={fixedTextStyles[editingText.targetId].color}
+                    value={fixedTextStyles[editingText.targetId]?.color || '#FFFFFF'}
                     onChange={(e) => setFixedTextStyles(prev => ({
                       ...prev,
-                      [editingText.targetId]: { ...prev[editingText.targetId], color: e.target.value }
+                      [editingText.targetId]: { 
+                        ...prev[editingText.targetId],
+                        color: e.target.value,
+                        content: prev[editingText.targetId]?.content || '',
+                        styleClass: prev[editingText.targetId]?.styleClass || ''
+                      }
                     }))}
                     className="w-10 h-8 rounded border-none cursor-pointer"
                   />
                   <input
                     type="text"
-                    value={fixedTextStyles[editingText.targetId].color}
+                    value={fixedTextStyles[editingText.targetId]?.color || '#FFFFFF'}
                     onChange={(e) => setFixedTextStyles(prev => ({
                       ...prev,
-                      [editingText.targetId]: { ...prev[editingText.targetId], color: e.target.value }
+                      [editingText.targetId]: { 
+                        ...prev[editingText.targetId],
+                        color: e.target.value,
+                        content: prev[editingText.targetId]?.content || '',
+                        styleClass: prev[editingText.targetId]?.styleClass || ''
+                      }
                     }))}
                     className="flex-1 px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
                   />
@@ -1697,10 +2372,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               <div>
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Typography</label>
                 <select
-                  value={fixedTextStyles[editingText.targetId].styleClass}
+                  value={fixedTextStyles[editingText.targetId]?.styleClass || ''}
                   onChange={(e) => setFixedTextStyles(prev => ({
                     ...prev,
-                    [editingText.targetId]: { ...prev[editingText.targetId], styleClass: e.target.value }
+                    [editingText.targetId]: { 
+                      ...prev[editingText.targetId],
+                      styleClass: e.target.value,
+                      content: prev[editingText.targetId]?.content || '',
+                      color: prev[editingText.targetId]?.color || '#FFFFFF'
+                    }
                   }))}
                   className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
                 >
@@ -1725,20 +2405,25 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     <label className="text-sm text-gray-300">Bold:</label>
                     <button
                       onClick={() => {
-                        const currentStyle = fixedTextStyles[editingText.targetId].styleClass;
+                        const currentStyle = fixedTextStyles[editingText.targetId]?.styleClass || '';
                         const isBold = currentStyle.includes('font-bold') || currentStyle.includes('font-extrabold') || currentStyle.includes('font-black');
                         const newStyleClass = isBold 
                           ? currentStyle.replace(/font-\w+/g, 'font-normal')
                           : currentStyle.replace(/font-\w+/g, 'font-bold');
                         setFixedTextStyles(prev => ({
                           ...prev,
-                          [editingText.targetId]: { ...prev[editingText.targetId], styleClass: newStyleClass }
+                          [editingText.targetId]: { 
+                            ...prev[editingText.targetId],
+                            styleClass: newStyleClass,
+                            content: prev[editingText.targetId]?.content || '',
+                            color: prev[editingText.targetId]?.color || '#FFFFFF'
+                          }
                         }));
                       }}
                       className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                        fixedTextStyles[editingText.targetId].styleClass.includes('font-bold') || 
-                        fixedTextStyles[editingText.targetId].styleClass.includes('font-extrabold') || 
-                        fixedTextStyles[editingText.targetId].styleClass.includes('font-black')
+                        fixedTextStyles[editingText.targetId]?.styleClass?.includes('font-bold') || 
+                        fixedTextStyles[editingText.targetId]?.styleClass?.includes('font-extrabold') || 
+                        fixedTextStyles[editingText.targetId]?.styleClass?.includes('font-black')
                           ? 'bg-indigo-600 text-white' 
                           : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                       }`}
@@ -1751,18 +2436,23 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     <label className="text-sm text-gray-300">Italic:</label>
                     <button
                       onClick={() => {
-                        const currentStyle = fixedTextStyles[editingText.targetId].styleClass;
+                        const currentStyle = fixedTextStyles[editingText.targetId]?.styleClass || '';
                         const isItalic = currentStyle.includes('italic');
                         const newStyleClass = isItalic 
                           ? currentStyle.replace(' italic', '').replace('italic', '')
                           : currentStyle + ' italic';
                         setFixedTextStyles(prev => ({
                           ...prev,
-                          [editingText.targetId]: { ...prev[editingText.targetId], styleClass: newStyleClass }
+                          [editingText.targetId]: { 
+                            ...prev[editingText.targetId],
+                            styleClass: newStyleClass,
+                            content: prev[editingText.targetId]?.content || '',
+                            color: prev[editingText.targetId]?.color || '#FFFFFF'
+                          }
                         }));
                       }}
                       className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                        fixedTextStyles[editingText.targetId].styleClass.includes('italic')
+                        fixedTextStyles[editingText.targetId]?.styleClass?.includes('italic')
                           ? 'bg-indigo-600 text-white' 
                           : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                       }`}
@@ -1777,7 +2467,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               <div>
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Quick Colors</label>
                 <div className="flex flex-wrap gap-2">
-                  {getThemeQuickColors(theme).map((color) => (
+                  {getThemeQuickColors(legacyTheme).map((color) => (
                     <button
                       key={color}
                       onClick={() => setFixedTextStyles(prev => ({
@@ -1924,7 +2614,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     <ButtonColorControls 
                       products={products}
                       productId={productEditor.productId!}
-                      themeAccent={theme.accent}
+                      themeAccent={legacyTheme.accent}
                       updateProduct={updateProduct}
                       setPromoButton={setPromoButton}
                     />
@@ -1974,25 +2664,25 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                       <div className="flex items-center gap-3">
                         <input
                           type="range"
-                          min={40}
+                          min={0}
                           max={100}
                           step={5}
                           value={(function(){
-                            const current = products.find(p => p.id === productEditor.productId!)?.cardClass || theme.card;
+                            const current = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
                             const m = current.match(/bg-[^\s/]+(?:\[[^\]]+\])?(?:\/(\d{1,3}))?/);
                             const v = m?.[1] ? parseInt(m[1], 10) : 90;
                             return isNaN(v) ? 90 : Math.max(0, Math.min(100, v));
                           })()}
                           onChange={(e) => {
                             const val = parseInt(e.target.value, 10);
-                            const current = products.find(p => p.id === productEditor.productId!)?.cardClass || theme.card;
+                            const current = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
                             const next = current.replace(/(bg-[^\s/]+(?:\[[^\]]+\])?)(?:\/\d{1,3})?/, `$1/${val}`);
                             updateProduct(productEditor.productId!, { cardClass: next });
                           }}
                           className="w-full"
                         />
                         <span className="text-xs text-gray-400 w-10 text-right">{(function(){
-                          const current = products.find(p => p.id === productEditor.productId!)?.cardClass || theme.card;
+                          const current = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
                           const m = current.match(/bg-[^\s/]+(?:\[[^\]]+\])?(?:\/(\d{1,3}))?/);
                           const v = m?.[1] ? parseInt(m[1], 10) : 90;
                           return isNaN(v) ? 90 : v;
@@ -2002,9 +2692,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     <div className="flex items-center justify-end">
                       <button
                         onClick={() => {
-                          const currentCard = products.find(p => p.id === productEditor.productId!)?.cardClass || theme.card;
-                          const currentTitle = products.find(p => p.id === productEditor.productId!)?.titleClass || theme.text;
-                          const currentDesc = products.find(p => p.id === productEditor.productId!)?.descClass || theme.text;
+                          const currentCard = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
+                          const currentTitle = products.find(p => p.id === productEditor.productId!)?.titleClass || legacyTheme.text;
+                          const currentDesc = products.find(p => p.id === productEditor.productId!)?.descClass || legacyTheme.text;
                           products.forEach(p => {
               updateProduct(p.id, { cardClass: currentCard, titleClass: currentTitle, descClass: currentDesc });
             });
@@ -2243,7 +2933,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Button Style</label>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {[theme.accent,
+                    {[legacyTheme.accent,
                       'bg-indigo-600 hover:bg-indigo-700 text-white',
                       'bg-fuchsia-600 hover:bg-fuchsia-700 text-white',
                       'bg-cyan-600 hover:bg-cyan-700 text-gray-900',
@@ -2266,7 +2956,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={() => {
-                        const current = promoButton.buttonClass || theme.accent;
+                        const current = promoButton.buttonClass || legacyTheme.accent;
                         products.forEach(p => {
                           updateProduct(p.id, { buttonClass: current });
                         });
@@ -2400,7 +3090,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                           </button>
                         </div>
                         <div className="text-xs text-gray-400 mb-3">
-                          {template.products.length} products • {template.floatingAssets.length} assets • {template.currentSeason} theme
+                          {template.templateData.products.length} products • {template.templateData.floatingAssets.length} assets • {template.currentSeason} theme
                         </div>
                         <div className="flex space-x-2">
                           <button

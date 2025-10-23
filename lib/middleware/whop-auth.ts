@@ -25,7 +25,10 @@ export async function authenticateWhopUser(
 ): Promise<AuthContext | null> {
 	try {
 		const headersList = await headers();
+		console.log("🔍 Middleware - Headers:", Object.fromEntries(headersList.entries()));
+		
 		const { userId } = await validateToken({ headers: headersList });
+		console.log("🔍 Middleware - User ID from validateToken:", userId);
 
 		if (!userId) {
 			console.log("No valid WHOP user token found");

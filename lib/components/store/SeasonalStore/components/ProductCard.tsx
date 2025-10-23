@@ -1,10 +1,10 @@
 import React, { useCallback } from 'react';
-import { Product, Theme, LoadingState } from '../types';
+import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, UploadIcon, ZapIcon } from './Icons';
 
 interface ProductCardProps {
   product: Product;
-  theme: Theme;
+  theme: LegacyTheme;
   isEditorView: boolean;
   loadingState: LoadingState;
   onUpdateProduct: (id: number, updates: Partial<Product>) => void;
@@ -137,7 +137,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         onDrop={(e) => onDropAsset(e, product.id)}
       >
         <img
-          src={product.image}
+          src={product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`}
           alt={product.name}
           className="w-full h-full rounded-xl object-cover ring-2 ring-transparent hover:ring-4 transition-all duration-500 ring-offset-2 ring-offset-current"
           style={{ 

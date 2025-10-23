@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FloatingAsset, Theme, FixedTextStyles } from '../types';
+import { FloatingAsset, LegacyTheme, FixedTextStyles } from '../types/index';
 import { 
   SettingsIcon, 
   XIcon, 
@@ -28,15 +28,21 @@ interface AdminAssetSheetProps {
   onSelectAsset: (id: string | null) => void;
   currentSeason: string;
   isEditorView: boolean;
-  allThemes: Record<string, Theme>;
-  handleAddCustomTheme: (themeData: { name: string; data: Theme }) => void;
-  handleUpdateTheme: (season: string, updates: Partial<Theme>) => void;
+  allThemes: Record<string, LegacyTheme>;
+  setAllThemes: (themes: Record<string, LegacyTheme> | ((prev: Record<string, LegacyTheme>) => Record<string, LegacyTheme>)) => void;
+  handleAddCustomTheme: (themeData: LegacyTheme) => Promise<any>;
+  handleUpdateTheme: (season: string, updates: Partial<LegacyTheme>) => void;
   handleUpdateAsset: (id: string, updates: Partial<FloatingAsset>) => void;
   handleAddFloatingAsset: (assetData: Partial<FloatingAsset>) => void;
   // Text editing props
   fixedTextStyles: FixedTextStyles;
   setFixedTextStyles: (styles: FixedTextStyles | ((prev: FixedTextStyles) => FixedTextStyles)) => void;
   backgroundAnalysis?: { recommendedTextColor: 'black' | 'white' };
+  // Limit props
+  canAddCustomTheme?: boolean;
+  canAddTemplate?: boolean;
+  maxCustomThemes?: number;
+  maxCustomTemplates?: number;
 }
 
 
@@ -56,6 +62,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   currentSeason,
   isEditorView,
   allThemes,
+  setAllThemes,
   handleAddCustomTheme,
   handleUpdateTheme,
   handleUpdateAsset,
@@ -63,6 +70,10 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   fixedTextStyles,
   setFixedTextStyles,
   backgroundAnalysis,
+  canAddCustomTheme = true,
+  canAddTemplate = true,
+  maxCustomThemes = 10,
+  maxCustomTemplates = 10,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -253,15 +264,30 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
 
 
   const handleNewThemeSave = useCallback(async () => {
-    if (!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme) return;
+    console.log('🎨 [AdminAssetSheet] handleNewThemeSave called!', { 
+      newThemeName: newThemeName.trim(), 
+      newThemePrompt: newThemePrompt.trim(), 
+      isGeneratingTheme 
+    });
+    
+    if (!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme) {
+      console.log('🎨 [AdminAssetSheet] Early return due to validation:', { 
+        hasName: !!newThemeName.trim(), 
+        hasPrompt: !!newThemePrompt.trim(), 
+        isGenerating: isGeneratingTheme 
+      });
+      return;
+    }
 
     const formattedName = newThemeName.trim().replace(/\s+/g, ' ');
     const themeKey = formattedName;
 
+    console.log('🎨 [AdminAssetSheet] Starting AI theme generation:', { formattedName, prompt: newThemePrompt.trim() });
     setIsGeneratingTheme(true);
 
     try {
       // Generate AI-powered theme colors and background
+      console.log('🎨 [AdminAssetSheet] Calling API endpoint...');
       const themeResponse = await fetch('/api/seasonal-store/generate-custom-theme', {
         method: 'POST',
         headers: {
@@ -273,11 +299,16 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         }),
       });
 
+      console.log('🎨 [AdminAssetSheet] API response status:', themeResponse.status);
+      
       if (!themeResponse.ok) {
-        throw new Error('Failed to generate custom theme');
+        const errorText = await themeResponse.text();
+        console.error('🎨 [AdminAssetSheet] API error response:', errorText);
+        throw new Error(`Failed to generate custom theme: ${themeResponse.status} - ${errorText}`);
       }
 
       const themeData = await themeResponse.json();
+      console.log('🎨 [AdminAssetSheet] Generated theme data:', themeData);
 
       const newThemeData = {
         name: formattedName,
@@ -292,11 +323,15 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         emojiTip: themeData.emojiTip,
       };
 
-      handleAddCustomTheme({ name: themeKey, data: newThemeData });
+      await handleAddCustomTheme(newThemeData);
       setNewThemeName('');
       setNewThemePrompt('');
     } catch (error) {
-      console.error('Error generating custom theme:', error);
+      console.error('🎨 [AdminAssetSheet] Error generating custom theme:', error);
+      
+      // Show user-friendly error message
+      alert(`Failed to generate AI theme: ${(error as Error).message}\n\nFalling back to basic theme.`);
+      
       // Fallback to basic theme if AI generation fails
       const newThemeData = {
         name: formattedName,
@@ -310,7 +345,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         emojiTip: "✨",
       };
 
-      handleAddCustomTheme({ name: themeKey, data: newThemeData });
+      await handleAddCustomTheme(newThemeData);
       setNewThemeName('');
       setNewThemePrompt('');
     } finally {
@@ -747,36 +782,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </div>
         )}
 
-        {/* Current Theme Prompt Editor */}
-        <div>
-          <h4 className="text-3xl font-extrabold text-blue-400 mb-6 flex items-center">
-            <SettingsIcon className="w-8 h-8 mr-3" />
-            Edit Current Theme Prompt
-          </h4>
-          <div className="mb-8"></div>
-          <label className="block text-sm font-semibold text-gray-300 mb-2">
-            Current Theme: <span className="text-blue-400">{theme?.name || currentSeason}</span>
-          </label>
-          <textarea
-            value={currentPromptValue}
-            onChange={(e) => setCurrentPromptValue(e.target.value)}
-            placeholder="Enter AI prompt description (e.g., 'A mystical forest with glowing mushrooms and ethereal lighting')"
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 mb-4"
-          />
-          <button 
-            onClick={() => {
-              handleUpdateTheme(currentSeason, { themePrompt: currentPromptValue });
-            }}
-            className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
-              currentPromptValue.trim() ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
-            }`}
-            disabled={!currentPromptValue.trim()}
-          >
-            <SettingsIcon className="w-4 h-4 mr-2" /> 
-            Apply Changes
-          </button>
-        </div>
 
         {/* Custom Theme Designer */}
         <div>
@@ -785,6 +790,15 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             Custom Theme Designer
           </h4>
           <div className="mb-8"></div>
+          
+          {/* Limit warning */}
+          {!canAddCustomTheme && (
+            <div className="mb-4 p-3 bg-red-900/20 border border-red-500/50 rounded-lg">
+              <p className="text-red-400 text-sm">
+                ⚠️ Maximum of {maxCustomThemes} custom themes reached. Delete some custom themes to create new ones.
+              </p>
+            </div>
+          )}
           <label className="block text-sm font-semibold text-gray-300 mb-2">Theme name</label>
           <input
             type="text"
@@ -804,11 +818,19 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           />
 
           <button 
-            onClick={handleNewThemeSave} 
+            onClick={() => {
+              console.log('🎨 [AdminAssetSheet] Button clicked!', { 
+                newThemeName: newThemeName.trim(), 
+                newThemePrompt: newThemePrompt.trim(), 
+                isGeneratingTheme,
+                canAddCustomTheme
+              });
+              handleNewThemeSave();
+            }} 
             className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
-              (newThemeName.trim() && newThemePrompt.trim() && !isGeneratingTheme) ? 'bg-gradient-to-r from-fuchsia-500 to-pink-600 hover:from-fuchsia-600 hover:to-pink-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
+              (newThemeName.trim() && newThemePrompt.trim() && !isGeneratingTheme && canAddCustomTheme) ? 'bg-gradient-to-r from-fuchsia-500 to-pink-600 hover:from-fuchsia-600 hover:to-pink-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
             }`}
-            disabled={!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme}
+            disabled={!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme || !canAddCustomTheme}
           >
             {isGeneratingTheme ? (
               <>
@@ -891,6 +913,107 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               ));
             })()}
           </div>
+        </div>
+
+        {/* Custom Theme Management */}
+        <div>
+          <h4 className="text-3xl font-extrabold text-red-400 mb-6 flex items-center">
+            <TrashIcon className="w-8 h-8 mr-3" />
+            Manage Custom Themes
+          </h4>
+          <div className="mb-8"></div>
+          <p className="text-sm text-gray-300 mb-4">
+            Remove custom themes you've created. Default themes cannot be deleted.
+          </p>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {(() => {
+              // Debug logging
+              console.log('🎨 All themes:', Object.keys(allThemes));
+              console.log('🎨 All themes values:', Object.values(allThemes).map(t => t.name));
+              
+              // Get unique custom themes (deduplicate by theme name)
+              const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky'];
+              const customThemes = Object.values(allThemes).filter(themeData => 
+                !defaultThemeNames.includes(themeData.name)
+              );
+              
+              console.log('🎨 Custom themes found:', customThemes.map(t => t.name));
+              
+              // Deduplicate by theme name
+              const uniqueCustomThemes = customThemes.reduce((acc, theme) => {
+                if (!acc.find(t => t.name === theme.name)) {
+                  acc.push(theme);
+                }
+                return acc;
+              }, [] as typeof customThemes);
+              
+              if (uniqueCustomThemes.length === 0) {
+                return (
+                  <div className="text-center text-gray-400 text-sm py-4">
+                    No custom themes created yet
+                  </div>
+                );
+              }
+              
+              return uniqueCustomThemes.map((themeData, index) => (
+                <div key={`${themeData.name}-${index}`} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-600">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-white">{themeData.name}</div>
+                    <div className="text-xs text-gray-400 truncate">{themeData.themePrompt || 'No prompt'}</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.`)) {
+                        // Remove all instances of this theme from allThemes
+                        const updatedThemes = { ...allThemes };
+                        Object.keys(updatedThemes).forEach(key => {
+                          if (updatedThemes[key].name === themeData.name) {
+                            delete updatedThemes[key];
+                          }
+                        });
+                        setAllThemes(updatedThemes);
+                      }
+                    }}
+                    className="ml-3 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Delete custom theme"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+
+        {/* Edit Current Theme Prompt - Moved to Bottom */}
+        <div>
+          <h4 className="text-3xl font-extrabold text-blue-400 mb-6 flex items-center">
+            <SettingsIcon className="w-8 h-8 mr-3" />
+            Edit Current Theme Prompt
+          </h4>
+          <div className="mb-8"></div>
+          <label className="block text-sm font-semibold text-gray-300 mb-2">
+            Current Theme: <span className="text-blue-400">{theme?.name || currentSeason}</span>
+          </label>
+          <textarea
+            value={currentPromptValue}
+            onChange={(e) => setCurrentPromptValue(e.target.value)}
+            placeholder="Enter AI prompt description (e.g., 'A mystical forest with glowing mushrooms and ethereal lighting')"
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 mb-4"
+          />
+          <button 
+            onClick={() => {
+              handleUpdateTheme(currentSeason, { themePrompt: currentPromptValue });
+            }}
+            className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
+              currentPromptValue.trim() ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
+            }`}
+            disabled={!currentPromptValue.trim()}
+          >
+            <SettingsIcon className="w-4 h-4 mr-2" /> 
+            Apply Changes
+          </button>
         </div>
         
         

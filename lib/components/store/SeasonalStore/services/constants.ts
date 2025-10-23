@@ -1,7 +1,7 @@
-import { Theme, EmojiCategory } from '../types';
+import { LegacyTheme, EmojiCategory } from '../types';
 
 // Initial Themes Data
-export const initialThemes: Record<string, Theme> = {
+export const initialThemes: Record<string, LegacyTheme> = {
   Winter: {
     name: 'Winter Frost',
     themePrompt: 'A chilly, cozy landscape with soft snow and icy blue colors.',
