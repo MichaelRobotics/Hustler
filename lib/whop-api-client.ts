@@ -647,6 +647,9 @@ export class WhopApiClient {
 
       const product = await response.json();
       
+      // Log the full response to understand the structure
+      console.log(`🔍 Full API response:`, JSON.stringify(product, null, 2));
+      
       console.log(`✅ Product details retrieved:`, {
         id: product.id,
         name: product.name,
@@ -655,11 +658,18 @@ export class WhopApiClient {
         hasBannerImage: !!product.bannerImage,
         bannerImage: product.bannerImage,
         hasLogo: !!product.logo,
-        logo: product.logo
+        logo: product.logo,
+        // Check for other possible image fields
+        hasCardImage: !!product.card_image,
+        cardImage: product.card_image,
+        hasBanner: !!product.banner,
+        banner: product.banner,
+        hasImage: !!product.image,
+        image: product.image
       });
 
       // Try multiple image fields in order of preference
-      const imageUrl = product.image_url || product.bannerImage || product.logo;
+      const imageUrl = product.image_url || product.card_image || product.bannerImage || product.banner || product.logo || product.image;
 
       return {
         image_url: imageUrl,
