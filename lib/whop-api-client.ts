@@ -73,7 +73,6 @@ export interface WhopApp {
   companyRoute?: string; // Company route for URL generation
   appSlug?: string; // App slug for custom URLs
   category?: string; // Marketplace category from Whop SDK
-  icon?: string; // App icon URL
 }
 
 export class WhopApiClient {
@@ -216,8 +215,7 @@ export class WhopApiClient {
                 route: undefined, // Apps don't have custom routes
                 experienceId: exp.id, // Store the experience ID for this app installation
                 companyRoute: companyRoute || undefined, // Company route for URL generation
-                appSlug: experienceSlug, // Generated experience slug
-                icon: exp.app?.icon?.sourceUrl || null // Add app icon
+                appSlug: experienceSlug // Generated experience slug
               };
             });
             
@@ -304,30 +302,6 @@ export class WhopApiClient {
             console.log(`🔍 INVESTIGATION: Full access pass object structure:`);
             console.log(JSON.stringify(accessPasses[0], null, 2));
             console.log(`🔍 INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
-            
-            // DEBUG: Check bannerImage structure specifically
-            const accessPass = accessPasses[0];
-            const finalBannerImage = accessPass.bannerImage?.sourceUrl || 
-                                   accessPass.logo?.sourceUrl || 
-                                   (accessPass.galleryImages?.nodes?.[0]?.source?.url);
-            console.log(`🔍 DEBUG - BannerImage Structure:`, {
-              bannerImage: accessPass.bannerImage,
-              bannerImageType: typeof accessPass.bannerImage,
-              bannerImageKeys: accessPass.bannerImage ? Object.keys(accessPass.bannerImage) : 'null',
-              bannerImageSourceUrl: accessPass.bannerImage?.sourceUrl,
-              bannerImageSource: accessPass.bannerImage?.source,
-              logo: accessPass.logo,
-              logoSourceUrl: accessPass.logo?.sourceUrl,
-              galleryImages: accessPass.galleryImages,
-              galleryImageCount: accessPass.galleryImages?.nodes?.length || 0,
-              firstGalleryImage: accessPass.galleryImages?.nodes?.[0]?.source?.url,
-              finalBannerImage: finalBannerImage,
-              hasAnyImage: !!finalBannerImage,
-              isWhopImage: finalBannerImage?.includes('img-v2-prod.whop.com') || finalBannerImage?.includes('assets.whop.com'),
-              imageType: finalBannerImage ? (finalBannerImage.includes('img-v2-prod.whop.com') ? 'WHOP_CDN' : 
-                                           finalBannerImage.includes('assets.whop.com') ? 'WHOP_ASSETS' : 
-                                           'EXTERNAL') : 'NONE'
-            });
           }
           
           if (accessPasses.length > 0) {
@@ -477,10 +451,7 @@ export class WhopApiClient {
         activeUsersCount: accessPass.activeUsersCount,
         reviewsAverage: accessPass.reviewsAverage,
         logo: accessPass.logo?.sourceUrl,
-        bannerImage: accessPass.bannerImage?.sourceUrl || 
-                    accessPass.logo?.sourceUrl || 
-                    (accessPass.galleryImages?.nodes?.[0]?.source?.url) || 
-                    null, // Let it be null if no images exist - don't force placeholders
+        bannerImage: accessPass.bannerImage?.source?.url,
         isFree
       };
     });
@@ -621,116 +592,6 @@ export class WhopApiClient {
     );
 
     return cheapestPlan;
-  }
-
-  /**
-   * Get individual product details using WHOP SDK
-   * This uses the WHOP SDK products.getProduct() method to get product image URLs
-   */
-  async getProductDetails(productId: string): Promise<{ image_url?: string; name?: string; description?: string } | null> {
-    try {
-      console.log(`🔍 Getting product details for ${productId} using direct API...`);
-      console.log(`🔍 Product ID format: ${productId} (length: ${productId.length})`);
-      
-      // Use the direct products API
-      const response = await fetch(`https://api.whop.com/api/v1/products/${productId}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        console.log(`⚠️ Product API request failed: ${response.status} ${response.statusText}`);
-        return null;
-      }
-
-      const product = await response.json();
-      
-      // Log the full response to understand the structure
-      console.log(`🔍 Full API response:`, JSON.stringify(product, null, 2));
-      
-      console.log(`✅ Product details retrieved:`, {
-        id: product.id,
-        title: product.title,
-        name: product.name,
-        hasImageUrl: !!product.image_url,
-        imageUrl: product.image_url,
-        hasBannerImage: !!product.bannerImage,
-        bannerImage: product.bannerImage,
-        hasLogo: !!product.logo,
-        logo: product.logo,
-        // Check for other possible image fields
-        hasCardImage: !!product.card_image,
-        cardImage: product.card_image,
-        hasBanner: !!product.banner,
-        banner: product.banner,
-        hasImage: !!product.image,
-        image: product.image
-      });
-
-      // Try multiple image fields in order of preference
-      let imageUrl = product.image_url || product.card_image || product.bannerImage || product.banner || product.logo || product.image;
-
-      // If no product image found, try to get company image as fallback
-      if (!imageUrl && product.company?.id) {
-        console.log(`🔍 No product image found, trying company image for company ${product.company.id}...`);
-        
-        // Try multiple company API endpoints
-        const companyEndpoints = [
-          `https://api.whop.com/api/v5/company`, // Current company (no ID needed)
-          `https://api.whop.com/api/v5/me/companies/${product.company.id}`, // Me companies
-          `https://api.whop.com/api/v2/company`, // V2 company
-          `https://api.whop.com/api/v5/app/companies/${product.company.id}` // App companies
-        ];
-        
-        for (const endpoint of companyEndpoints) {
-          try {
-            console.log(`🔍 Trying company endpoint: ${endpoint}`);
-            const companyResponse = await fetch(endpoint, {
-              headers: {
-                'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-                'Content-Type': 'application/json'
-              }
-            });
-
-            if (companyResponse.ok) {
-              const company = await companyResponse.json();
-              console.log(`✅ Company details retrieved from ${endpoint}:`, {
-                id: company.id,
-                title: company.title,
-                hasLogo: !!company.logo,
-                logo: company.logo,
-                hasBanner: !!company.banner,
-                banner: company.banner,
-                hasImage: !!company.image,
-                image: company.image
-              });
-
-              // Try company image fields
-              imageUrl = company.logo || company.banner || company.image;
-              if (imageUrl) {
-                console.log(`✅ Found company image: ${imageUrl}`);
-                break; // Found image, stop trying other endpoints
-              }
-            } else {
-              console.log(`⚠️ Company API request failed for ${endpoint}: ${companyResponse.status} ${companyResponse.statusText}`);
-            }
-          } catch (companyError) {
-            console.error(`❌ Error getting company details from ${endpoint}:`, companyError);
-          }
-        }
-      }
-
-      return {
-        image_url: imageUrl,
-        name: product.title || product.name, // Use title as primary, name as fallback
-        description: product.description
-      };
-    } catch (error) {
-      console.error(`❌ Error getting product details for ${productId}:`, error);
-      return null;
-    }
   }
 
   /**

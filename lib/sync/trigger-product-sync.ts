@@ -328,25 +328,12 @@ export async function triggerProductSyncForNewAdmin(
 							console.log(`🔗 FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
 						}
 						
-						// DEBUG: Log image data for access passes
-						console.log(`🔍 DEBUG - Access Pass Image Data for "${product.title}":`, {
-							bannerImage: product.bannerImage,
-							logo: product.logo,
-							price: product.price,
-							hasBannerImage: !!product.bannerImage,
-							hasLogo: !!product.logo
-						});
+						// Generate placeholder image if no logo available
+						const productImage = product.logo || product.bannerImage || 
+							`https://placehold.co/400x400/6366f1/ffffff?text=${encodeURIComponent(product.title.toUpperCase())}`;
 						
-						// Try to get product details with image_url as fallback
-						let productImage = product.bannerImage || product.logo;
-						if (!productImage) {
-							console.log(`🔍 No access pass image found, trying WHOP SDK for ${product.id}...`);
-							const productDetails = await whopClient.getProductDetails(product.id);
-							if (productDetails?.image_url) {
-								productImage = productDetails.image_url;
-								console.log(`✅ Found product image via WHOP SDK: ${productImage}`);
-							}
-						}
+						// Format price for database storage
+						const formattedPrice = product.price > 0 ? product.price.toString() : null;
 						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
@@ -357,9 +344,9 @@ export async function triggerProductSyncForNewAdmin(
 								description: product.description,
 								whopProductId: product.id,
 								productApps: productApps,
-								// NEW: Add image and price from access pass data
-								image: productImage || undefined, // Use bannerImage, logo, or direct API image
-								price: product.price?.toString() || undefined
+								// NEW: Add image and price data
+								image: productImage,
+								price: formattedPrice
 							}),
 							`createResource-${productCategory}-${product.title.trim()}`
 						);
@@ -538,6 +525,9 @@ export async function triggerProductSyncForNewAdmin(
           // Use app URL with company route and experience ID
           // FREE apps don't need ref or affiliate parameters
           const directUrl = whopClient.generateAppUrl(app, undefined, true);
+          
+          // Generate placeholder image for app (apps don't have direct image data)
+          const appImage = `https://placehold.co/400x400/10b981/ffffff?text=${encodeURIComponent(app.name.toUpperCase())}`;
 							
 							console.log(`🔍 Resource data:`, {
 								name: app.name,
@@ -545,7 +535,8 @@ export async function triggerProductSyncForNewAdmin(
 								category: "FREE_VALUE",
 								link: directUrl,
 								description: app.description || `Free access to ${app.name}`,
-								whopProductId: app.id
+								whopProductId: app.id,
+								image: appImage
 							});
 							
 							const resource = await retryDatabaseOperation(
@@ -558,8 +549,8 @@ export async function triggerProductSyncForNewAdmin(
 										link: directUrl,
 									description: app.description || `Free access to ${app.name.trim()}`,
 										whopProductId: app.id,
-										// NEW: Add app icon as image
-										image: app.icon || undefined // Use app icon for apps
+										// NEW: Add placeholder image for apps
+										image: appImage
 									});
 								},
 							`createResource-FREE-${app.name.trim()}`,
