@@ -175,67 +175,21 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 		}
 	}, []);
 
-	// Optimized scroll to bottom - mobile performance optimized
-	const scrollToBottom = useCallback(() => {
+	// Auto-scroll to bottom when new messages arrive (simplified like StorePreviewChat)
+	useEffect(() => {
 		if (chatEndRef.current) {
-			// Use smooth scroll for better UX
-			chatEndRef.current.scrollIntoView({
-				behavior: "smooth",
-				block: "end",
-				inline: "nearest",
-			});
+			chatEndRef.current.scrollIntoView({ behavior: "smooth" });
 		}
-	}, []);
+	}, [history]);
 
-	// Handle option clicks
+	// Handle option clicks (simplified)
 	const handleOptionClickLocal = useCallback(
 		(option: any, index: number) => {
 			handleOptionClick(option, index);
 			onMessageSent?.(option.text);
-			// Scroll to bottom after option selection
-			setTimeout(scrollToBottom, 100);
 		},
-		[handleOptionClick, onMessageSent, scrollToBottom],
+		[handleOptionClick, onMessageSent],
 	);
-
-	// Optimized keyboard handling - reduced timeout for better performance
-	useEffect(() => {
-		let previousViewportHeight =
-			window.visualViewport?.height || window.innerHeight;
-
-		const handleViewportChange = () => {
-			const currentViewportHeight =
-				window.visualViewport?.height || window.innerHeight;
-
-			// Only scroll when keyboard appears (viewport height decreases)
-			if (currentViewportHeight < previousViewportHeight) {
-				// Reduced timeout for faster response
-				setTimeout(scrollToBottom, 100);
-			}
-
-			previousViewportHeight = currentViewportHeight;
-		};
-
-		if (window.visualViewport) {
-			window.visualViewport.addEventListener("resize", handleViewportChange);
-			return () => {
-				window.visualViewport?.removeEventListener(
-					"resize",
-					handleViewportChange,
-				);
-			};
-		}
-	}, [scrollToBottom]);
-
-	// Auto-scroll when history changes (optimized for mobile performance)
-	useEffect(() => {
-		if (history.length > 0) {
-			// Use requestAnimationFrame for better performance
-			requestAnimationFrame(() => {
-				scrollToBottom();
-			});
-		}
-	}, [history, scrollToBottom]);
 
 	// Handle custom input submission
 	const handleSubmit = useCallback(async () => {
@@ -257,8 +211,6 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 			setIsTyping(false);
 			handleCustomInput(messageText);
 			onMessageSent?.(messageText);
-			// Scroll to bottom after message is processed
-			setTimeout(scrollToBottom, 100);
 		}, 800);
 	}, [message, handleCustomInput, onMessageSent]);
 
@@ -459,24 +411,19 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 		),
 	);
 
-	// Memoized message list
+	// Memoized message list (simplified like StorePreviewChat)
 	const messageList = useMemo(() => {
-		const messageElements = [];
-		
-		// Add first message
+		const messageElements = history.map((msg, index) => (
+			<MessageComponent
+				key={`${msg.type}-${index}`}
+				msg={msg}
+				index={index}
+			/>
+		));
+
+		// Add separation line after first message for seasonal store
 		if (history.length > 0) {
-			messageElements.push(
-				<MessageComponent
-					key={`${history[0].type}-0`}
-					msg={history[0]}
-					index={0}
-				/>
-			);
-		}
-		
-		// Add separator between first and second message
-		if (history.length > 1) {
-			messageElements.push(
+			messageElements.splice(1, 0, (
 				<div key="seasonal-store-separator" className="relative my-6 flex items-center">
 					{/* Left line */}
 					<div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-600 to-transparent"></div>
@@ -495,18 +442,7 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 					{/* Right line */}
 					<div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-300 dark:via-violet-600 to-transparent"></div>
 				</div>
-			);
-		}
-		
-		// Add remaining messages (from index 1 onwards)
-		for (let i = 1; i < history.length; i++) {
-			messageElements.push(
-				<MessageComponent
-					key={`${history[i].type}-${i}`}
-					msg={history[i]}
-					index={i}
-				/>
-			);
+			));
 		}
 
 		return messageElements;
@@ -526,11 +462,41 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 		[options, handleOptionClickLocal],
 	);
 
+	// Memoized progress calculation (extracted from inline calculations)
+	const progressData = useMemo(() => {
+		const stageOrder = [
+			{ key: "TRANSITION", name: "Getting Started" },
+			{ key: "WELCOME", name: "Welcome" },
+			{ key: "VALUE_DELIVERY", name: "Value Delivery" },
+			{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
+			{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
+			{ key: "OFFER", name: "Offer" },
+		];
+		const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
+		const availableStages = stageOrder.filter(stage => 
+			funnelFlow?.stages.some(s => s.name === stage.key)
+		);
+		
+		// Special case: OFFER stage should be 100%
+		if (currentStage === "OFFER") {
+			return { percentage: 100, isComplete: true };
+		}
+		
+		const progressPercentage = availableStages.length > 0 
+			? ((currentStageIndex + 1) / availableStages.length) * 100 
+			: 0;
+		
+		return { 
+			percentage: Math.round(progressPercentage), 
+			isComplete: progressPercentage >= 100 
+		};
+	}, [currentStage, funnelFlow]);
+
 	return (
 		<div
-			className="h-full w-full flex flex-col bg-gradient-to-br from-surface via-surface/99.8 to-surface/99.5 touch-manipulation"
+			className="h-full w-full flex flex-col bg-gradient-to-br from-surface via-surface/95 to-surface/90 touch-manipulation"
 			style={{
-				// Mobile performance optimizations
+				// Mobile performance optimizations (simplified like StorePreviewChat)
 				transform: "translateZ(0)", // Force hardware acceleration
 				WebkitTransform: "translateZ(0)", // iOS hardware acceleration
 				backfaceVisibility: "hidden", // Prevent flickering
@@ -548,7 +514,7 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 			{/* Chat Container */}
 			<div className="flex-1 flex flex-col min-h-0">
 				{/* Messages */}
-				<div className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide chat-messages-container bg-gradient-to-br from-surface via-surface/99.8 to-surface/99.5 backdrop-blur-sm">
+				<div className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide chat-messages-container">
 					{messageList}
 
 					{/* Options - User side (right side) */}
@@ -577,88 +543,23 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 
 			{/* Input Area - Now below the overflow container */}
 			{currentBlockId && (
-				<div className="flex-shrink-0 chat-input-container safe-area-bottom bg-gradient-to-br from-surface via-surface/99.8 to-surface/99.5 backdrop-blur-sm">
+				<div className="flex-shrink-0 chat-input-container safe-area-bottom">
 					{/* Progress Bar - Inside input container */}
 					{funnelFlow && (
 						<div className="px-4 py-3 border-b border-border/20 dark:border-border/10 relative">
 							{/* Floating Golden Percentage - Above progress bar, centered */}
 							<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full z-50">
 								<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
-								{(() => {
-									const stageOrder = [
-										{ key: "TRANSITION", name: "Getting Started" },
-										{ key: "WELCOME", name: "Welcome" },
-										{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-										{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-										{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-										{ key: "OFFER", name: "Offer" },
-									];
-									const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-									const availableStages = stageOrder.filter(stage => 
-										funnelFlow.stages.some(s => s.name === stage.key)
-									);
-									
-									// Special case: OFFER stage should be 100%
-									if (currentStage === "OFFER") {
-										return 100;
-									}
-									
-									const progressPercentage = availableStages.length > 0 
-										? ((currentStageIndex + 1) / availableStages.length) * 100 
-										: 0;
-									
-									return Math.round(progressPercentage);
-								})()}%
+									{progressData.percentage}%
 								</span>
 							</div>
 							<div className="relative w-full">
 								{/* Background Track - Smooth and subtle */}
 								<div className="w-full bg-gray-200/10 dark:bg-gray-600/10 rounded-full h-1">
 									<div
-										className={`h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden ${
-											(() => {
-												const stageOrder = [
-													{ key: "TRANSITION", name: "Getting Started" },
-													{ key: "WELCOME", name: "Welcome" },
-													{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-													{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-													{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-													{ key: "OFFER", name: "Offer" },
-												];
-												const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-												const availableStages = stageOrder.filter(stage => 
-													funnelFlow.stages.some(s => s.name === stage.key)
-												);
-												const progressPercentage = availableStages.length > 0 
-													? ((currentStageIndex + 1) / availableStages.length) * 100 
-													: 0;
-												return progressPercentage >= 100;
-											})()
-												? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
-												: 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
-										}`}
+										className="h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600"
 										style={{
-											width: `${(() => {
-												const stageOrder = [
-													{ key: "TRANSITION", name: "Getting Started" },
-													{ key: "WELCOME", name: "Welcome" },
-													{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-													{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-													{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-													{ key: "OFFER", name: "Offer" },
-												];
-												const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-												const availableStages = stageOrder.filter(stage => 
-													funnelFlow.stages.some(s => s.name === stage.key)
-												);
-												if (currentStage === "OFFER") {
-													return 100;
-												}
-												const progressPercentage = availableStages.length > 0 
-													? ((currentStageIndex + 1) / availableStages.length) * 100 
-													: 0;
-												return Math.round(progressPercentage);
-											})()}%`,
+											width: `${progressData.percentage}%`,
 										}}
 									>
 										{/* Animated shimmer effect */}
@@ -719,7 +620,7 @@ const SeasonalStoreChat: React.FC<SeasonalStoreChatProps> = ({
 
 			{/* Start Over Button - Show when conversation has ended (no more options) */}
 			{history.length > 0 && options.length === 0 && !currentBlockId && (
-				<div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20 bg-gradient-to-br from-surface via-surface/99.8 to-surface/99.5 backdrop-blur-sm">
+				<div className="flex-shrink-0 p-0 border-t border-border/30 dark:border-border/20">
 						<div className="flex justify-center gap-3 py-4">
 							{onEditMerchant && (
 								<Button

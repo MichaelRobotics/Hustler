@@ -246,7 +246,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         const state = JSON.parse(persistedState);
         console.log('💾 Restoring persisted state for experience:', experienceId);
         
-        // Restore theme-specific state
+        // Restore theme-specific state (handle both old and new compressed format)
         if (state.currentSeason) setCurrentSeason(state.currentSeason);
         if (state.themeTextStyles) setThemeTextStyles(state.themeTextStyles);
         if (state.themeLogos) setThemeLogos(state.themeLogos);
@@ -254,7 +254,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         if (state.themeUploadedBackgrounds) setThemeUploadedBackgrounds(state.themeUploadedBackgrounds);
         if (state.themeProducts) setThemeProducts(state.themeProducts);
         if (state.themeFloatingAssets) setThemeFloatingAssets(state.themeFloatingAssets);
-        if (state.allThemes) setAllThemes(state.allThemes);
+        
+        // Handle both old format (allThemes) and new format (customThemes)
+        if (state.allThemes) {
+          setAllThemes(state.allThemes);
+        } else if (state.customThemes) {
+          // Merge custom themes with existing allThemes
+          setAllThemes(prev => ({ ...prev, ...state.customThemes }));
+        }
         
         // Restore WHOP attachment state (theme-specific)
         if (state.themeBackgroundAttachmentIds) setThemeBackgroundAttachmentIds(state.themeBackgroundAttachmentIds);
@@ -278,28 +285,103 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   // State persistence: Save state to sessionStorage whenever it changes
   useEffect(() => {
     try {
-      const stateToPerist = {
+      // Create a compressed state object with only essential data
+      const stateToPersist = {
         currentSeason,
-        themeTextStyles,
-        themeLogos,
-        themeGeneratedBackgrounds,
-        themeUploadedBackgrounds,
-        themeProducts,
-        themeFloatingAssets,
-        allThemes,
-        themeBackgroundAttachmentIds,
-        themeBackgroundAttachmentUrls,
-        themeLogoAttachmentIds,
-        themeLogoAttachmentUrls,
-        promoButton,
+        // Only save non-empty text styles
+        themeTextStyles: Object.fromEntries(
+          Object.entries(themeTextStyles).filter(([_, styles]) => 
+            Object.values(styles).some(style => style?.content?.trim())
+          )
+        ),
+        // Only save non-empty logos
+        themeLogos: Object.fromEntries(
+          Object.entries(themeLogos).filter(([_, logo]) => logo?.src)
+        ),
+        // Only save non-empty backgrounds
+        themeGeneratedBackgrounds: Object.fromEntries(
+          Object.entries(themeGeneratedBackgrounds).filter(([_, bg]) => bg)
+        ),
+        themeUploadedBackgrounds: Object.fromEntries(
+          Object.entries(themeUploadedBackgrounds).filter(([_, bg]) => bg)
+        ),
+        // Only save products with content
+        themeProducts: Object.fromEntries(
+          Object.entries(themeProducts).filter(([_, products]) => 
+            products && products.length > 0
+          )
+        ),
+        // Only save non-empty floating assets
+        themeFloatingAssets: Object.fromEntries(
+          Object.entries(themeFloatingAssets).filter(([_, assets]) => 
+            assets && assets.length > 0
+          )
+        ),
+        // Only save custom themes (not default ones)
+        customThemes: Object.fromEntries(
+          Object.entries(allThemes).filter(([key, _]) => key.startsWith('custom_'))
+        ),
+        // Only save non-empty attachment data
+        themeBackgroundAttachmentIds: Object.fromEntries(
+          Object.entries(themeBackgroundAttachmentIds).filter(([_, id]) => id)
+        ),
+        themeBackgroundAttachmentUrls: Object.fromEntries(
+          Object.entries(themeBackgroundAttachmentUrls).filter(([_, url]) => url)
+        ),
+        themeLogoAttachmentIds: Object.fromEntries(
+          Object.entries(themeLogoAttachmentIds).filter(([_, id]) => id)
+        ),
+        themeLogoAttachmentUrls: Object.fromEntries(
+          Object.entries(themeLogoAttachmentUrls).filter(([_, url]) => url)
+        ),
+        promoButton: promoButton?.text ? promoButton : null,
         currentTemplateTheme,
         timestamp: Date.now()
       };
       
-      sessionStorage.setItem(`seasonalStore_${experienceId}`, JSON.stringify(stateToPerist));
+      const serializedState = JSON.stringify(stateToPersist);
+      
+      // Check if the data is too large (sessionStorage limit is ~5-10MB)
+      if (serializedState.length > 2 * 1024 * 1024) { // 2MB limit
+        console.warn('⚠️ State too large for sessionStorage, saving only essential data');
+        
+        // Save only the most essential data
+        const essentialState = {
+          currentSeason,
+          themeTextStyles: Object.fromEntries(
+            Object.entries(themeTextStyles).filter(([_, styles]) => 
+              Object.values(styles).some(style => style?.content?.trim())
+            )
+          ),
+          customThemes: Object.fromEntries(
+            Object.entries(allThemes).filter(([key, _]) => key.startsWith('custom_'))
+          ),
+          timestamp: Date.now()
+        };
+        
+        sessionStorage.setItem(`seasonalStore_${experienceId}`, JSON.stringify(essentialState));
+      } else {
+        sessionStorage.setItem(`seasonalStore_${experienceId}`, serializedState);
+      }
+      
       console.log('💾 State persisted to sessionStorage');
     } catch (error) {
       console.error('❌ Failed to persist state:', error);
+      
+      // Fallback: save only essential data
+      try {
+        const fallbackState = {
+          currentSeason,
+          customThemes: Object.fromEntries(
+            Object.entries(allThemes).filter(([key, _]) => key.startsWith('custom_'))
+          ),
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(`seasonalStore_${experienceId}`, JSON.stringify(fallbackState));
+        console.log('💾 Fallback state saved');
+      } catch (fallbackError) {
+        console.error('❌ Fallback save also failed:', fallbackError);
+      }
     }
   }, [
     experienceId,

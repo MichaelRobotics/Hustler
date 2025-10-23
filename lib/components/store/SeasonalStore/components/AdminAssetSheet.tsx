@@ -915,59 +915,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </div>
         </div>
 
-        {/* Custom Theme Management */}
-        <div>
-          <h4 className="text-3xl font-extrabold text-red-400 mb-6 flex items-center">
-            <TrashIcon className="w-8 h-8 mr-3" />
-            Manage Custom Themes
-          </h4>
-          <div className="mb-8"></div>
-          <p className="text-sm text-gray-300 mb-4">
-            Remove custom themes you've created. Default themes cannot be deleted.
-          </p>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {(() => {
-              // Get custom themes by checking for custom_ prefix in keys
-              const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => 
-                key.startsWith('custom_')
-              );
-              
-              // Convert to array of theme objects with their keys
-              const uniqueCustomThemes = customThemeEntries.map(([key, theme]) => ({ ...theme, _key: key }));
-              
-              if (uniqueCustomThemes.length === 0) {
-                return (
-                  <div className="text-center text-gray-400 text-sm py-4">
-                    No custom themes created yet
-                  </div>
-                );
-              }
-              
-              return uniqueCustomThemes.map((themeData, index) => (
-                <div key={`${themeData._key}-${index}`} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-600">
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-white">{themeData.name}</div>
-                    <div className="text-xs text-gray-400 truncate">{themeData.themePrompt || 'No prompt'}</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.`)) {
-                        // Remove only the specific theme by its unique key
-                        const updatedThemes = { ...allThemes };
-                        delete updatedThemes[themeData._key];
-                        setAllThemes(updatedThemes);
-                      }
-                    }}
-                    className="ml-3 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
-                    title="Delete custom theme"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              ));
-            })()}
-          </div>
-        </div>
 
         {/* Edit Current Theme Prompt - Moved to Bottom */}
         <div>
@@ -1018,6 +965,70 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             </button>
           </div>
         )}
+
+        {/* Custom Theme Management - Moved to Bottom */}
+        <div>
+          <h4 className="text-3xl font-extrabold text-red-400 mb-6 flex items-center">
+            <TrashIcon className="w-8 h-8 mr-3" />
+            Manage Custom Themes
+          </h4>
+          <div className="mb-8"></div>
+          <p className="text-sm text-gray-300 mb-4">
+            Remove custom themes you've created. Default themes cannot be deleted.
+          </p>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {(() => {
+              // Get custom themes by checking for custom_ prefix in keys
+              const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => 
+                key.startsWith('custom_')
+              );
+              
+              // Convert to array of theme objects with their keys
+              const uniqueCustomThemes = customThemeEntries.map(([key, theme]) => ({ ...theme, _key: key }));
+              
+              console.log('🔍 Custom themes for deletion:', uniqueCustomThemes);
+              console.log('🔍 Current theme:', theme?.name);
+              console.log('🔍 All themes keys:', Object.keys(allThemes));
+              
+              if (uniqueCustomThemes.length === 0) {
+                return (
+                  <div className="text-center text-gray-400 text-sm py-4">
+                    No custom themes created yet
+                  </div>
+                );
+              }
+              
+              return uniqueCustomThemes.map((themeData, index) => {
+                const isCurrentTheme = theme?.name === themeData.name;
+                return (
+                  <div key={`${themeData._key}-${index}`} className={`flex items-center justify-between p-3 rounded-lg border ${isCurrentTheme ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-800/50 border-gray-600'}`}>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-white flex items-center">
+                        {themeData.name}
+                        {isCurrentTheme && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded">CURRENT</span>}
+                      </div>
+                      <div className="text-xs text-gray-400 truncate">{themeData.themePrompt || 'No prompt'}</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.`)) {
+                          // Remove only the specific theme by its unique key
+                          const updatedThemes = { ...allThemes };
+                          delete updatedThemes[themeData._key];
+                          setAllThemes(updatedThemes);
+                        }
+                      }}
+                      className="ml-3 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Delete custom theme"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
         </div>
       </div>
     </div>
