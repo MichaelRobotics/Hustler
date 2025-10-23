@@ -46,16 +46,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Helper function to get default products for a season
   const getDefaultProducts = (season: string): Product[] => {
-    switch (season) {
-      case 'Winter Frost': return winterProducts;
-      case 'Summer Sun': return summerProducts;
-      case 'Fall':
-      case 'Autumn Harvest': return fallProducts;
-      case 'Holiday Cheer': return holidayProducts;
-      case 'Spring Renewal': return springProducts;
-      case 'Cyber Sale': return cyberProducts;
-      case 'Spooky Night':
-      case 'Halloween Spooky': return halloweenProducts;
+    switch (season.toLowerCase()) {
+      case 'winter': return winterProducts;
+      case 'summer': return summerProducts;
+      case 'fall': return fallProducts;
+      case 'holiday': return holidayProducts;
+      case 'spring': return springProducts;
+      case 'cyber': return cyberProducts;
+      case 'halloween': return halloweenProducts;
       default: return initialProducts;
     }
   };

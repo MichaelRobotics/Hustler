@@ -68,15 +68,13 @@ export const useSeasonalStore = () => {
   // Get products for current theme, fallback to default theme products
   const getDefaultProducts = (season: string): Product[] => {
     switch (season) {
-      case 'Winter Frost': return winterProducts;
-      case 'Summer Sun': return summerProducts;
-      case 'Fall':
-      case 'Autumn Harvest': return fallProducts;
+      case 'Winter': return winterProducts;
+      case 'Summer': return summerProducts;
+      case 'Fall': return fallProducts;
       case 'Holiday Cheer': return holidayProducts;
       case 'Spring Renewal': return springProducts;
       case 'Cyber Sale': return cyberProducts;
-      case 'Spooky Night':
-      case 'Halloween Spooky': return halloweenProducts;
+      case 'Spooky Night': return halloweenProducts;
       default: return initialProducts;
     }
   };
