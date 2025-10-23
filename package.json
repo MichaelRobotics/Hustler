@@ -50,7 +50,7 @@
 		"@types/ws": "^8.18.1",
 		"@vercel/functions": "^2.0.3",
 		"@whop-apps/sdk": "0.0.1-canary.117",
-		"@whop/api": "^0.0.49",
+		"@whop/api": "^0.0.51",
 		"@whop/react": "0.2.36",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
