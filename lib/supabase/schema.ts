@@ -174,6 +174,9 @@ export const resources = pgTable(
 		whopAppId: text("whop_app_id"), // For app-based products
 		whopMembershipId: text("whop_membership_id"), // For membership-based products
 		productApps: jsonb("product_apps"), // JSON field for product apps data
+		price: decimal("price", { precision: 10, scale: 2 }), // Price from access pass plan or user input
+		image: text("image"), // Link to icon of app/product/digital resource image
+		storageUrl: text("storage_url"), // Link that triggers digital asset upload
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

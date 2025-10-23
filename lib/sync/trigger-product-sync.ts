@@ -336,7 +336,10 @@ export async function triggerProductSyncForNewAdmin(
 								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
 								description: product.description,
 								whopProductId: product.id,
-								productApps: productApps
+								productApps: productApps,
+								// NEW: Add image and price from access pass data
+								image: product.bannerImage || undefined, // Use bannerImage for products
+								price: product.price?.toString() || undefined
 							}),
 							`createResource-${productCategory}-${product.title.trim()}`
 						);
@@ -534,7 +537,9 @@ export async function triggerProductSyncForNewAdmin(
 						category: "FREE_VALUE",
 										link: directUrl,
 									description: app.description || `Free access to ${app.name.trim()}`,
-										whopProductId: app.id
+										whopProductId: app.id,
+										// NEW: Add app icon as image
+										image: app.icon || undefined // Use app icon for apps
 									});
 								},
 							`createResource-FREE-${app.name.trim()}`,

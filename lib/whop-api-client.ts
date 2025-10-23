@@ -73,6 +73,7 @@ export interface WhopApp {
   companyRoute?: string; // Company route for URL generation
   appSlug?: string; // App slug for custom URLs
   category?: string; // Marketplace category from Whop SDK
+  icon?: string; // App icon URL
 }
 
 export class WhopApiClient {
@@ -215,7 +216,8 @@ export class WhopApiClient {
                 route: undefined, // Apps don't have custom routes
                 experienceId: exp.id, // Store the experience ID for this app installation
                 companyRoute: companyRoute || undefined, // Company route for URL generation
-                appSlug: experienceSlug // Generated experience slug
+                appSlug: experienceSlug, // Generated experience slug
+                icon: exp.app?.icon?.sourceUrl || null // Add app icon
               };
             });
             

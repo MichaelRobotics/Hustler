@@ -14,6 +14,9 @@ export interface CreateResourceInput {
 	description?: string;
 	whopProductId?: string; // For MY_PRODUCTS sync
 	productApps?: string[]; // Array of app names associated with this product
+	price?: string; // Price from access pass plan or user input
+	image?: string; // Link to icon of app/product/digital resource image
+	storageUrl?: string; // Link that triggers digital asset upload
 }
 
 export interface UpdateResourceInput {
@@ -24,6 +27,9 @@ export interface UpdateResourceInput {
 	code?: string;
 	description?: string;
 	whopProductId?: string;
+	price?: string; // Price from access pass plan or user input
+	image?: string; // Link to icon of app/product/digital resource image
+	storageUrl?: string; // Link that triggers digital asset upload
 }
 
 export interface ResourceWithFunnels {
@@ -37,6 +43,9 @@ export interface ResourceWithFunnels {
 	description?: string;
 	whopProductId?: string;
 	productApps?: any; // JSON field for product apps data
+	price?: string; // Price from access pass plan or user input
+	image?: string; // Link to icon of app/product/digital resource image
+	storageUrl?: string; // Link that triggers digital asset upload
 	createdAt: Date;
 	updatedAt: Date;
 	funnels: Array<{
@@ -128,6 +137,9 @@ export async function createResource(
 				description: input.description || null,
 				whopProductId: input.whopProductId || null,
 				productApps: input.productApps || null,
+				price: input.price || null,
+				image: input.image || null,
+				storageUrl: input.storageUrl || null,
 			})
 			.returning();
 
@@ -142,6 +154,9 @@ export async function createResource(
 			promoCode: newResource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: newResource.description || undefined,
 			whopProductId: newResource.whopProductId || undefined,
+			price: newResource.price || undefined,
+			image: newResource.image || undefined,
+			storageUrl: newResource.storageUrl || undefined,
 			createdAt: newResource.createdAt,
 			updatedAt: newResource.updatedAt,
 			funnels: [],
