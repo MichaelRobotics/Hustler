@@ -624,15 +624,15 @@ export class WhopApiClient {
   }
 
   /**
-   * Get individual product details with image_url field
-   * This uses the direct products API to get the image_url field
+   * Get individual product details with card_image field using direct API
+   * This uses the direct products API to get the card_image field
    */
-  async getProductDetails(productId: string): Promise<{ image_url?: string; name?: string; description?: string } | null> {
+  async getProductDetails(productId: string): Promise<{ card_image?: string; name?: string; description?: string } | null> {
     try {
-      console.log(`🔍 Getting product details for ${productId}...`);
+      console.log(`🔍 Getting product details for ${productId} using direct API...`);
       
       // Use the direct products API
-      const response = await fetch(`https://api.whop.com/api/v1/products/${productId}`, {
+      const response = await fetch(`https://api.whop.com/api/v5/products/${productId}`, {
         headers: {
           'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
           'Content-Type': 'application/json'
@@ -648,12 +648,12 @@ export class WhopApiClient {
       console.log(`✅ Product details retrieved:`, {
         id: productData.id,
         name: productData.name,
-        hasImageUrl: !!productData.image_url,
-        imageUrl: productData.image_url
+        hasCardImage: !!productData.card_image,
+        cardImage: productData.card_image
       });
 
       return {
-        image_url: productData.image_url,
+        card_image: productData.card_image,
         name: productData.name,
         description: productData.description
       };
