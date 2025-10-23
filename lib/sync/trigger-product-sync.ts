@@ -328,6 +328,15 @@ export async function triggerProductSyncForNewAdmin(
 							console.log(`🔗 FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
 						}
 						
+						// DEBUG: Log image data for access passes
+						console.log(`🔍 DEBUG - Access Pass Image Data for "${product.title}":`, {
+							bannerImage: product.bannerImage,
+							logo: product.logo,
+							price: product.price,
+							hasBannerImage: !!product.bannerImage,
+							hasLogo: !!product.logo
+						});
+						
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title.trim(),

@@ -304,6 +304,18 @@ export class WhopApiClient {
             console.log(`🔍 INVESTIGATION: Full access pass object structure:`);
             console.log(JSON.stringify(accessPasses[0], null, 2));
             console.log(`🔍 INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
+            
+            // DEBUG: Check bannerImage structure specifically
+            const accessPass = accessPasses[0];
+            console.log(`🔍 DEBUG - BannerImage Structure:`, {
+              bannerImage: accessPass.bannerImage,
+              bannerImageType: typeof accessPass.bannerImage,
+              bannerImageKeys: accessPass.bannerImage ? Object.keys(accessPass.bannerImage) : 'null',
+              bannerImageSourceUrl: accessPass.bannerImage?.sourceUrl,
+              bannerImageSource: accessPass.bannerImage?.source,
+              logo: accessPass.logo,
+              logoSourceUrl: accessPass.logo?.sourceUrl
+            });
           }
           
           if (accessPasses.length > 0) {
@@ -453,7 +465,7 @@ export class WhopApiClient {
         activeUsersCount: accessPass.activeUsersCount,
         reviewsAverage: accessPass.reviewsAverage,
         logo: accessPass.logo?.sourceUrl,
-        bannerImage: accessPass.bannerImage?.source?.url,
+        bannerImage: accessPass.bannerImage?.sourceUrl,
         isFree
       };
     });
