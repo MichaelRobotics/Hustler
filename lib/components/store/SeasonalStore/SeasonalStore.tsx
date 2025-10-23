@@ -285,12 +285,20 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     const isLeftSwipe = distance > 50;
     const isRightSwipe = distance < -50;
 
+    console.log('Touch swipe detected:', { distance, isLeftSwipe, isRightSwipe, currentProductIndex, productsLength: products.length });
+
     if (isLeftSwipe && currentProductIndex < products.length - 1) {
+      console.log('Navigating to next product');
       navigateToNext();
     }
     if (isRightSwipe && currentProductIndex > 0) {
+      console.log('Navigating to previous product');
       navigateToPrevious();
     }
+    
+    // Reset touch values
+    setTouchStart(null);
+    setTouchEnd(null);
   }, [touchStart, touchEnd, currentProductIndex, products.length, navigateToNext, navigateToPrevious]);
 
   // Auto-switch products every 10 seconds (disabled in edit mode)
@@ -1583,7 +1591,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       
       <div 
         ref={appRef} 
-        className={`min-h-screen font-inter antialiased relative overflow-y-auto transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
+        className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
         style={getBackgroundStyle}
       >
       {/* Top Navbar with Integrated Progress Bar */}
@@ -1647,8 +1655,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                     <span className="text-sm font-bold">HIDE CHAT</span>
                   </button>
                   {/* Below-button glow (positioned vertically lower than the button) */}
-                  <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[110%] h-6 opacity-0 group-hover:opacity-60 blur-xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
-                  <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[90%] h-4 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
+                  <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-full max-w-[110%] h-6 opacity-0 group-hover:opacity-60 blur-xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
+                  <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-full max-w-[90%] h-4 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
                 </div>
               )}
             </div>
@@ -1938,7 +1946,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
       {/* Main Content Container */}
       <div 
-        className={`relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto h-full`}
+        className={`relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto overflow-x-hidden h-full w-full`}
         onClick={() => editorState.isEditorView && setSelectedAsset(null)}
         onDragOver={(e) => editorState.isEditorView && e.preventDefault()}
         onDrop={editorState.isEditorView ? handleDropAsset : undefined}
@@ -2158,7 +2166,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               
               {/* Product Grid - Show 1 product on mobile, 2 on desktop with slide-out and slide-in animation */}
               <div 
-                className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden"
+                className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden w-full"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
@@ -2291,8 +2299,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                {promoButton.text}
              </button>
                {/* Below-button glow (positioned vertically lower than the button) */}
-               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-6 w-[110%] h-10 opacity-0 group-hover:opacity-60 blur-2xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
-               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-4 w-[90%] h-8 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
+               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-6 w-full max-w-[110%] h-10 opacity-0 group-hover:opacity-60 blur-2xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
+               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-4 w-full max-w-[90%] h-8 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
              </div>
            </div>
          )}
