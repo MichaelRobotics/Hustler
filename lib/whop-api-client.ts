@@ -146,40 +146,28 @@ export class WhopApiClient {
   }
 
   /**
-   * Get company data including logo using direct REST API
+   * Get company data including logo using Whop SDK
    */
   async getCompanyData(): Promise<{ title: string; logo: string | null }> {
     try {
       console.log(`🔍 Getting company data for company ${this.companyId}...`);
       
-      // Use direct REST API call as specified in Whop docs
-      const response = await fetch(`https://api.whop.com/api/v2/companies/${this.companyId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const companyResult = await response.json();
+      // Use Whop SDK client as shown in the documentation
+      const company = await whopSdk.companies.retrieve(this.companyId);
       
       // Debug: Log the full company result to understand the structure
-      console.log(`🔍 Full company result from REST API:`, JSON.stringify(companyResult, null, 2));
+      console.log(`🔍 Full company result from SDK:`, JSON.stringify(company, null, 2));
       
-      // Extract logo URL using the exact structure from Whop docs
+      // Extract logo URL using the exact structure from Whop SDK docs
       let logo = null;
-      if (companyResult.logo && companyResult.logo.url) {
-        logo = companyResult.logo.url;
-        console.log(`✅ Logo url from REST API: ${logo}`);
+      if (company.logo && company.logo.url) {
+        logo = company.logo.url;
+        console.log(`✅ Logo url from SDK: ${logo}`);
       } else {
-        console.log(`⚠️ No logo.url field in REST API response`);
+        console.log(`⚠️ No logo.url field in SDK response`);
       }
       
-      const title = companyResult.title || "App Installation";
+      const title = company.title || "App Installation";
       console.log(`✅ Company data: title=${title}, logo=${logo}`);
       
       return { title, logo };
