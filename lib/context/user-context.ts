@@ -165,36 +165,32 @@ async function createUserContext(
 			
 			if (companyId) {
 				try {
-					const { whopSdk } = await import("@/lib/whop-sdk");
-					const companyResult = await whopSdk.companies.getCompany({
-						companyId: companyId
+					// Use direct REST API call as specified in Whop docs
+					const response = await fetch(`https://api.whop.com/api/v2/companies/${companyId}`, {
+						method: 'GET',
+						headers: {
+							'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+							'Content-Type': 'application/json'
+						}
 					});
+					
+					if (!response.ok) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
+					
+					const companyResult = await response.json();
 					
 					companyName = companyResult.title || "App Installation";
 					
 					// Debug: Log the full company result to understand the structure
-					console.log(`🔍 Full company result:`, JSON.stringify(companyResult, null, 2));
+					console.log(`🔍 Full company result from REST API:`, JSON.stringify(companyResult, null, 2));
 					
-					// Extract logo URL from the object structure
-					if (companyResult.logo) {
-						console.log(`🔍 Logo object:`, JSON.stringify(companyResult.logo, null, 2));
-						
-						// Handle different possible structures
-						if (typeof companyResult.logo === 'string') {
-							companyLogo = companyResult.logo;
-							console.log(`✅ Logo is string: ${companyLogo}`);
-						} else if (companyResult.logo.sourceUrl) {
-							companyLogo = companyResult.logo.sourceUrl;
-							console.log(`✅ Logo sourceUrl: ${companyLogo}`);
-						} else if ((companyResult.logo as any).url) {
-							companyLogo = (companyResult.logo as any).url;
-							console.log(`✅ Logo url (fallback): ${companyLogo}`);
-						} else {
-							console.warn(`⚠️ Unknown logo structure:`, companyResult.logo);
-							companyLogo = null;
-						}
+					// Extract logo URL using the exact structure from Whop docs
+					if (companyResult.logo && companyResult.logo.url) {
+						companyLogo = companyResult.logo.url;
+						console.log(`✅ Logo url from REST API: ${companyLogo}`);
 					} else {
-						console.log(`⚠️ No logo field in company result`);
+						console.log(`⚠️ No logo.url field in REST API response`);
 						companyLogo = null;
 					}
 					
