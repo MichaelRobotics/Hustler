@@ -165,34 +165,12 @@ async function createUserContext(
 			
 			if (companyId) {
 				try {
-					// Use direct REST API call as specified in Whop docs
-					const response = await fetch(`https://api.whop.com/api/v2/companies/${companyId}`, {
-						method: 'GET',
-						headers: {
-							'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
-							'Content-Type': 'application/json'
-						}
-					});
+					const { getWhopApiClient } = await import("@/lib/whop-api-client");
+					const whopClient = getWhopApiClient(companyId, whopUserId);
+					const companyData = await whopClient.getCompanyData();
 					
-					if (!response.ok) {
-						throw new Error(`HTTP error! status: ${response.status}`);
-					}
-					
-					const companyResult = await response.json();
-					
-					companyName = companyResult.title || "App Installation";
-					
-					// Debug: Log the full company result to understand the structure
-					console.log(`🔍 Full company result from REST API:`, JSON.stringify(companyResult, null, 2));
-					
-					// Extract logo URL using the exact structure from Whop docs
-					if (companyResult.logo && companyResult.logo.url) {
-						companyLogo = companyResult.logo.url;
-						console.log(`✅ Logo url from REST API: ${companyLogo}`);
-					} else {
-						console.log(`⚠️ No logo.url field in REST API response`);
-						companyLogo = null;
-					}
+					companyName = companyData.title || "App Installation";
+					companyLogo = companyData.logo || null;
 					
 					console.log(`✅ Fetched company info: ${companyName}, logo: ${companyLogo}`);
 				} catch (error) {

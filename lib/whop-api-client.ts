@@ -146,6 +146,50 @@ export class WhopApiClient {
   }
 
   /**
+   * Get company data including logo using direct REST API
+   */
+  async getCompanyData(): Promise<{ title: string; logo: string | null }> {
+    try {
+      console.log(`🔍 Getting company data for company ${this.companyId}...`);
+      
+      // Use direct REST API call as specified in Whop docs
+      const response = await fetch(`https://api.whop.com/api/v2/companies/${this.companyId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.WHOP_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const companyResult = await response.json();
+      
+      // Debug: Log the full company result to understand the structure
+      console.log(`🔍 Full company result from REST API:`, JSON.stringify(companyResult, null, 2));
+      
+      // Extract logo URL using the exact structure from Whop docs
+      let logo = null;
+      if (companyResult.logo && companyResult.logo.url) {
+        logo = companyResult.logo.url;
+        console.log(`✅ Logo url from REST API: ${logo}`);
+      } else {
+        console.log(`⚠️ No logo.url field in REST API response`);
+      }
+      
+      const title = companyResult.title || "App Installation";
+      console.log(`✅ Company data: title=${title}, logo=${logo}`);
+      
+      return { title, logo };
+    } catch (error) {
+      console.error("❌ Error getting company data:", error);
+      return { title: "App Installation", logo: null };
+    }
+  }
+
+  /**
    * Get installed apps (experiences) in the company
    * These are used for FREE resources
    */
