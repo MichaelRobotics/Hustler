@@ -210,6 +210,9 @@ export interface FunnelWithResources {
 		code?: string;
 		description?: string;
 		productApps?: any;
+		image?: string;
+		storageUrl?: string;
+		price?: string;
 	}>;
 }
 
@@ -391,6 +394,9 @@ export async function getFunnelById(
 			code?: string;
 			description?: string;
 			productApps?: any;
+			image?: string;
+			storageUrl?: string;
+			price?: string;
 		}>();
 		funnelWithResourcesRaw.forEach((row: any) => {
 			if (row.resource && !resourcesMap.has(row.resource.id)) {
@@ -403,6 +409,9 @@ export async function getFunnelById(
 					code: row.resource.code || undefined,
 					description: row.resource.description || undefined,
 					productApps: row.resource.productApps || undefined,
+					image: row.resource.image || undefined,
+					storageUrl: row.resource.storageUrl || undefined,
+					price: row.resource.price || undefined,
 				});
 			}
 		});

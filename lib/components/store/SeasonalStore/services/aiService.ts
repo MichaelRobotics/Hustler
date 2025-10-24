@@ -121,7 +121,7 @@ export const generateProductImage = async (
   productName: string, 
   theme: any, 
   originalImageUrl: string
-): Promise<string> => {
+): Promise<{ url: string; attachmentId: string | null }> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-product-image-nanobanana', {
       method: 'POST',
@@ -143,7 +143,7 @@ export const generateProductImage = async (
     if (!data.success) {
       throw new Error(data.error || 'Product image generation failed');
     }
-    return data.imageUrl;
+    return { url: data.imageUrl, attachmentId: data.attachmentId };
   } catch (error) {
     console.error('Error generating product image:', error);
     throw new Error(`Failed to generate product image: ${(error as Error).message}`);

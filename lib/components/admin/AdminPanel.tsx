@@ -886,6 +886,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				<div className="h-screen w-full">
 					<StorePreview
 						experienceId={user?.experienceId}
+						allResources={allResources}
 						onMessageSent={(message, conversationId) => {
 							console.log("Store preview message:", {
 								message,

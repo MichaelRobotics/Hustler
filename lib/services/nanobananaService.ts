@@ -165,8 +165,8 @@ export class NanoBananaImageService {
       console.log('🎨 [Nano Banana] Generated image URL length:', imageUrl.length);
       
       return imageUrl;
-      } catch (error) {
-        console.error("Error in generateBackgroundImage:", error);
+    } catch (error) {
+      console.error("Error in generateBackgroundImage:", error);
         
         // Handle quota exceeded error with fallback
         const errorMessage = (error as Error).message;
@@ -180,32 +180,60 @@ export class NanoBananaImageService {
   }
 
   /**
-   * Generate product images with style variations using Imagen 3.0
+   * Generate or refine product images based on whether an existing image exists
    */
   async generateProductImage(
     productName: string, 
     theme: any, 
     originalImageUrl: string
-  ): Promise<string> {
+  ): Promise<{ url: string; attachmentId: string | null }> {
     console.log('🎨 [Nano Banana] Starting product image generation for:', productName);
     console.log('🎨 [Nano Banana] Theme object:', JSON.stringify(theme, null, 2));
+    console.log('🎨 [Nano Banana] Original image URL provided:', !!originalImageUrl);
+    console.log('🎨 [Nano Banana] Original image URL value:', originalImageUrl);
+    console.log('🎨 [Nano Banana] Original image URL type:', typeof originalImageUrl);
+    console.log('🎨 [Nano Banana] Original image URL length:', originalImageUrl?.length);
     
-    const enhancedPrompt = `Create a professional product image for "${productName}" in a ${theme.name} theme.
-    Style: Clean, modern, e-commerce ready
-    Background: ${theme.themePrompt}
-    Requirements:
-    - High resolution (800x800 minimum)
-    - Full, complete image with rich thematic background
-    - NO solid black or white backgrounds - use vibrant, themed colors
-    - Themed environment that complements the product
-    - Professional lighting with atmospheric effects
-    - Product-focused composition with contextual surroundings
-    - Rich environmental details (textures, patterns, thematic elements)
-    - ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
-    - No text overlays, labels, or captions
-    - No logos or symbols
-    - E-commerce optimized
-    - Ensure the entire image is filled with thematic content`;
+    // Always refine - never generate new images
+    const hasExistingImage = true; // Force refinement mode
+    
+    console.log('🎨 [Nano Banana] Image detection details:', {
+      originalImageUrl,
+      hasExistingImage: true, // Always true now
+      mode: 'REFINE_ONLY',
+      isPlaceholder: originalImageUrl?.includes('placehold.co'),
+      isBase64: originalImageUrl?.includes('data:image/'),
+      isWhopPlaceholder: originalImageUrl === 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'
+    });
+    
+    let enhancedPrompt: string;
+    
+    // Always use refinement mode
+    console.log('🎨 [Nano Banana] Refining image to match theme (always refine mode)');
+      enhancedPrompt = `Refine and enhance this existing product image to perfectly match a ${theme.name} theme.
+      
+      IMPORTANT: Use the existing product image as your reference and base. Keep the same product, same composition, same product details, but transform the background, lighting, and environment to match the ${theme.name} theme.
+      
+      Original product: "${productName}"
+      Theme: ${theme.name} - ${theme.themePrompt}
+      
+      Refinement requirements:
+      - PRESERVE the exact same product from the original image
+      - Keep the core product visible, recognizable, and unchanged
+      - ONLY transform the background and environment to match the ${theme.name} theme
+      - Apply theme-appropriate colors, lighting, and atmosphere to the background
+      - Enhance the composition with thematic elements in the background only
+      - Maintain professional e-commerce quality
+      - Ensure the product remains the focal point and looks identical
+      - Add theme-specific environmental details in the background
+      - Professional lighting that matches the theme mood
+      - High resolution (800x800 minimum)
+      - ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
+      - No text overlays, labels, or captions
+      - No logos or symbols
+      - E-commerce optimized
+      - Ensure the entire image is filled with thematic content
+      - The product itself should look exactly the same, only the background/environment changes`;
 
     try {
       const response = await this.genAI.models.generateImages({
@@ -230,8 +258,35 @@ export class NanoBananaImageService {
 
       const imageUrl = `data:image/png;base64,${imageBytes}`;
       console.log('🎨 [Nano Banana] Generated product image URL length:', imageUrl.length);
+      console.log('🎨 [Nano Banana] Image generation mode:', hasExistingImage ? 'REFINED' : 'GENERATED');
       
-      return imageUrl;
+      // Upload the generated image to WHOP storage immediately using WHOP SDK
+      console.log('📤 [Nano Banana] Uploading generated image to WHOP storage...');
+      try {
+        const { whopSdk } = await import('@/lib/whop-sdk');
+        
+        // Convert base64 to buffer
+        const base64Data = imageUrl.split(',')[1];
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // Create a File-like object from the buffer
+        const file = new File([buffer], `generated-product-${Date.now()}.png`, { type: 'image/png' });
+        
+        // Upload to WHOP storage
+        const uploadResult = await whopSdk.attachments.uploadAttachment({
+          file: file,
+          record: "experience", // Store as experience-related attachment
+        });
+        
+        console.log('📤 [Nano Banana] Upload result:', uploadResult);
+        return { 
+          url: uploadResult.attachment.source.url, 
+          attachmentId: uploadResult.directUploadId 
+        }; // Return both URL and attachmentId
+      } catch (uploadError) {
+        console.error('📤 [Nano Banana] Upload failed, returning base64 URL:', uploadError);
+        return { url: imageUrl, attachmentId: null }; // Fallback to base64 if upload fails
+      }
     } catch (error) {
       console.error("Error in generateProductImage:", error);
       throw new Error(`Product image generation failed: ${(error as Error).message}`);

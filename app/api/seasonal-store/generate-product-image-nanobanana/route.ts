@@ -18,13 +18,14 @@ export async function POST(request: NextRequest) {
 
     console.log('🎨 [Nano Banana API] Starting product image generation for:', productName);
     
-    const imageUrl = await nanoBananaService.generateProductImage(productName, theme, originalImageUrl || '');
+    const result = await nanoBananaService.generateProductImage(productName, theme, originalImageUrl || '');
     
-    console.log('🎨 [Nano Banana API] Generated product image URL length:', imageUrl.length);
+    console.log('🎨 [Nano Banana API] Generated product image result:', result);
     
     return NextResponse.json({ 
       success: true,
-      imageUrl,
+      imageUrl: result.url,
+      attachmentId: result.attachmentId,
       message: 'Product image generated successfully using Nano Banana service'
     });
 

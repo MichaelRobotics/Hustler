@@ -71,19 +71,25 @@ export const emojiToSvgDataURL = (emoji: string): string => {
 };
 
 /**
- * AI Text Generation for Product Refinement
+ * AI Text Generation for Product Refinement - Always Refine Mode
  */
 export const generateProductText = async (productName: string, productDescription: string, theme: Theme) => {
   // Validate environment before making API calls
   validateEnvironment();
 
-  const systemPrompt = `You are a world-class e-commerce copywriter and creative director. The current promotional theme is "${theme.name}". Your task is to rewrite the provided product name and description to be extremely appealing and perfectly aligned with this theme. Be exciting, use relevant thematic vocabulary. 
+  const systemPrompt = `You are a world-class e-commerce copywriter and creative director. The current promotional theme is "${theme.name}". Your task is to REFINE and enhance the provided product name and description to be extremely appealing and perfectly aligned with this theme. 
+
+IMPORTANT: This is REFINEMENT mode - you must preserve the core meaning and essence of the original product while enhancing it for the theme. Keep the same product identity but make it more appealing and theme-appropriate.
 
 CRITICAL: The description must be exactly 1 line, maximum 4 words. Keep it short, punchy, and impactful. Examples: "Cozy autumn warmth", "Perfect fall companion", "Seasonal comfort essential".
 
 Your response MUST be a JSON object with "newName" and "newDescription" fields.`;
 
-  const userQuery = `Original Product: Name: "${productName}", Description: "${productDescription}". Rewrite the name and description for the current theme of ${theme.name}.`;
+  const userQuery = `REFINE this existing product for the ${theme.name} theme:
+Original Name: "${productName}"
+Original Description: "${productDescription}"
+
+Enhance and refine these to be more appealing and theme-appropriate while preserving the core product identity.`;
 
   try {
     const fullPrompt = `${systemPrompt}\n\n${userQuery}`;

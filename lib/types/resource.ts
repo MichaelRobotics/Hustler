@@ -9,6 +9,9 @@ export interface Resource {
 	description?: string;
 	promoCode?: string;
 	productApps?: any; // JSON field for product apps data
+	image?: string; // Link to icon of app/product/digital resource image
+	storageUrl?: string; // Link that triggers digital asset upload
+	price?: string; // Price from access pass plan or user input
 }
 
 export interface ResourceFormData {
@@ -19,6 +22,9 @@ export interface ResourceFormData {
 	category: "PAID" | "FREE_VALUE";
 	description?: string;
 	promoCode?: string;
+	image?: string;
+	storageUrl?: string;
+	price?: string;
 }
 
 export interface Funnel {

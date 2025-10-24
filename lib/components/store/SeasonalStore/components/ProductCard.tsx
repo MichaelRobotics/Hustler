@@ -205,13 +205,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Editable Price */}
         <div className="text-xl font-extrabold mb-1 mt-auto">
           {isEditorView ? (
-            <input 
-              type="number"
-              step="0.01"
-              value={product.price}
-              onChange={handlePriceChange}
-              className={`w-16 text-center bg-transparent border-b border-gray-400 focus:outline-none focus:border-indigo-500 text-xl font-extrabold ${priceTextColor}`}
-            />
+            <div className="flex items-center justify-center">
+              <span className={`text-xl font-extrabold ${priceTextColor} mr-1`}>$</span>
+              <input 
+                type="number"
+                step="0.01"
+                value={product.price.toFixed(2)}
+                onChange={handlePriceChange}
+                className={`w-20 text-center bg-transparent border-b border-gray-400 focus:outline-none focus:border-indigo-500 text-xl font-extrabold ${priceTextColor}`}
+              />
+            </div>
           ) : (
             <span className={priceTextColor}>{`$${product.price.toFixed(2)}`}</span>
           )}

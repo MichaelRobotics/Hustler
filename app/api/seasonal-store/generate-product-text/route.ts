@@ -5,15 +5,35 @@ import { Theme } from '@/lib/components/store/SeasonalStore/types';
 export async function POST(request: NextRequest) {
   try {
     const { productName, productDescription, theme } = await request.json();
+    
+    console.log('🔍 [API] Received request data:', {
+      productName,
+      productDescription,
+      theme,
+      productNameType: typeof productName,
+      productDescriptionType: typeof productDescription,
+      themeType: typeof theme,
+      productNameEmpty: !productName,
+      productDescriptionEmpty: !productDescription,
+      themeEmpty: !theme
+    });
 
-    if (!productName || !productDescription || !theme) {
+    if (!productName || !theme) {
+      console.log('❌ [API] Missing required parameters:', {
+        hasProductName: !!productName,
+        hasProductDescription: !!productDescription,
+        hasTheme: !!theme
+      });
       return NextResponse.json(
-        { error: 'Missing required parameters: productName, productDescription, theme' },
+        { error: 'Missing required parameters: productName, theme' },
         { status: 400 }
       );
     }
 
-    const result = await generateProductText(productName, productDescription, theme as Theme);
+    // Provide fallback description if empty
+    const finalDescription = productDescription || `A premium ${productName} product`;
+
+    const result = await generateProductText(productName, finalDescription, theme as Theme);
     
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

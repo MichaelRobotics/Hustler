@@ -330,7 +330,7 @@ export async function triggerProductSyncForNewAdmin(
 						
 						// Generate placeholder image if no logo available
 						const productImage = product.logo || product.bannerImage || 
-							`https://placehold.co/400x400/6366f1/ffffff?text=${encodeURIComponent(product.title.toUpperCase())}`;
+							'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
 						
 						// Format price for database storage
 						const formattedPrice = product.price > 0 ? product.price.toString() : null;
@@ -528,7 +528,7 @@ export async function triggerProductSyncForNewAdmin(
           
           // Get app logo or generate placeholder if not available
           const appImage = app.logo || app.bannerImage || 
-            `https://placehold.co/400x400/10b981/ffffff?text=${encodeURIComponent(app.name.toUpperCase())}`;
+            'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
           
           // Log image source for debugging
           if (app.logo) {

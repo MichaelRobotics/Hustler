@@ -15,6 +15,7 @@ interface StorePreviewProps {
 	onBack?: () => void;
 	onEditMerchant?: () => void;
 	onLiveFunnelLoaded?: (funnel: any) => void;
+	allResources?: any[];
 }
 
 /**
@@ -30,6 +31,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	onBack,
 	onEditMerchant,
 	onLiveFunnelLoaded,
+	allResources = [],
 }) => {
 	// Store type toggle
 	const [useSeasonalStore, setUseSeasonalStore] = useState(false);
@@ -351,6 +353,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	if (useSeasonalStore) {
 		return <SeasonalStore 
 			experienceId={experienceId}
+			allResources={allResources}
 			onBack={() => {
 				// Switch back to StorePreview immediately
 				setUseSeasonalStore(false);

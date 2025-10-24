@@ -96,13 +96,49 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	};
 
 	const handleStartEdit = () => {
+		// For global context, use the new edit form above the Paid section
+		if (context === "global" && onEdit) {
+			onEdit(resource);
+			return;
+		}
+		
+		// For funnel context, use inline editing
 		setIsEditing(true);
 		setEditedResource(resource);
 		onEditingChange?.(true);
 	};
 
 	const handleSaveEdit = async () => {
-		if (!editedResource.name?.trim() || !editedResource.link?.trim()) {
+		// Validate required fields based on type and category
+		if (!editedResource.name?.trim()) {
+			return;
+		}
+		
+		// Image is now required for all products
+		if (!editedResource.image?.trim()) {
+			return;
+		}
+		
+		// Price is required only for paid products
+		if (editedResource.category === "PAID" && !editedResource.price?.trim()) {
+			return;
+		}
+		
+		// Validate price range for paid products
+		if (editedResource.category === "PAID" && editedResource.price) {
+			const price = parseFloat(editedResource.price);
+			if (price < 5 || price > 50000) {
+				return;
+			}
+		}
+		
+		// For Affiliate products, link is required
+		if (editedResource.type === "AFFILIATE" && !editedResource.link?.trim()) {
+			return;
+		}
+		
+		// For Owned products, digital asset (storageUrl) is required
+		if (editedResource.type === "MY_PRODUCTS" && !editedResource.storageUrl?.trim()) {
 			return;
 		}
 
@@ -316,39 +352,145 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						</div>
 					)}
 
-					{/* URL Field */}
-					<input
-						type="url"
-						value={editedResource.link || ""}
+					{/* URL Field - Only for Affiliate products */}
+					{editedResource.type === "AFFILIATE" && (
+						<input
+							type="url"
+							value={editedResource.link || ""}
+							onChange={(e) =>
+								setEditedResource({ ...editedResource, link: e.target.value })
+							}
+							placeholder="Affiliate URL"
+							disabled={isSaving}
+							className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+						/>
+					)}
+
+					{/* Price Field - Only for Paid products */}
+					{editedResource.category === "PAID" && (
+						<div className="space-y-1">
+							<input
+								type="text"
+								value={editedResource.price || ""}
+								onChange={(e) =>
+									setEditedResource({ ...editedResource, price: e.target.value })
+								}
+								placeholder="$0.00"
+								disabled={isSaving}
+								className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+							/>
+							{(() => {
+								const price = parseFloat(editedResource.price || "0");
+								const isValidPrice = price >= 5 && price <= 50000;
+								const hasPrice = editedResource.price && editedResource.price.trim() !== "";
+								
+								if (hasPrice && !isValidPrice) {
+									return (
+										<p className="text-xs text-red-600 dark:text-red-400">
+											Price must be between $5 and $50,000
+										</p>
+									);
+								}
+								
+								return (
+									<p className="text-xs text-gray-500 dark:text-gray-400">
+										*Only whop fees will be deducted
+									</p>
+								);
+							})()}
+						</div>
+					)}
+
+					{/* Description Field */}
+					<textarea
+						value={editedResource.description || ""}
 						onChange={(e) =>
-							setEditedResource({ ...editedResource, link: e.target.value })
+							setEditedResource({ ...editedResource, description: e.target.value })
 						}
-						placeholder="Digital asset URL"
+						placeholder="Product description (optional)..."
 						disabled={isSaving}
-						className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+						rows={3}
+						className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed resize-none"
 					/>
 
-					{/* Promo Code Field */}
-					<input
-						type="text"
-						value={editedResource.promoCode || ""}
-						onChange={(e) =>
-							setEditedResource({
-								...editedResource,
-								promoCode: e.target.value,
-							})
-						}
-						placeholder="Promo code (optional)..."
-						disabled={isSaving}
-						className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-					/>
+					{/* Image Upload Field */}
+					<div className="space-y-2">
+						<label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+							Product Image
+						</label>
+						<div className="border-2 border-dashed border-violet-300 dark:border-violet-600 rounded-lg p-4 text-center">
+							<div className="space-y-2">
+								<img
+									src={editedResource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'}
+									alt="Product preview"
+									className="w-20 h-20 object-cover rounded-lg mx-auto"
+								/>
+								{editedResource.image && (
+									<button
+										onClick={() => setEditedResource({ ...editedResource, image: undefined })}
+										className="text-xs text-red-600 hover:text-red-800"
+									>
+										Remove Image
+									</button>
+								)}
+							</div>
+						</div>
+					</div>
+
+					{/* Digital Asset Upload Field - Only for MY_PRODUCTS */}
+					{editedResource.type === "MY_PRODUCTS" && (
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+								Digital Asset
+							</label>
+							<div className="border-2 border-dashed border-violet-300 dark:border-violet-600 rounded-lg p-4 text-center">
+								{editedResource.storageUrl ? (
+									<div className="space-y-2">
+										<CheckCircle className="w-8 h-8 text-green-500 mx-auto" />
+										<span className="text-sm text-green-600 dark:text-green-400">
+											{editedResource.storageUrl.split('/').pop() || 'File uploaded'}
+										</span>
+										<button
+											onClick={() => setEditedResource({ ...editedResource, storageUrl: undefined })}
+											className="text-xs text-red-600 hover:text-red-800"
+										>
+											Remove Asset
+										</button>
+									</div>
+								) : (
+									<div className="text-sm text-gray-500 dark:text-gray-400">
+										<span className="font-medium">No digital asset uploaded</span>
+										<br />
+										<span className="text-xs">Upload a file to continue</span>
+									</div>
+								)}
+							</div>
+						</div>
+					)}
+
+					{/* Promo Code Field - Only for Paid products */}
+					{editedResource.category === "PAID" && (
+						<input
+							type="text"
+							value={editedResource.promoCode || ""}
+							onChange={(e) =>
+								setEditedResource({
+									...editedResource,
+									promoCode: e.target.value,
+								})
+							}
+							placeholder="Promo code (optional)..."
+							disabled={isSaving}
+							className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+						/>
+					)}
 				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 p-4 rounded-xl border transition-all duration-300 ${
+		<div className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 rounded-xl border transition-all duration-300 overflow-hidden ${
 			isJustAdded 
 				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40" 
 				: isJustRemoved
@@ -359,25 +501,38 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40"
 				: "border-border/50 dark:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10"
 		}`}>
-			<div className="flex items-start justify-between mb-3">
-				<div className="flex items-center gap-2">
+			{/* Top Half: Image with Overlay Icons */}
+			<div className="relative h-32 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800">
+				{/* Background Image */}
+				<div 
+					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+					style={{
+						backgroundImage: `url(${resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'})`,
+					}}
+				/>
+				
+					{/* Overlay with Icons and Badges */}
+				<div className="absolute inset-0 bg-black/20 dark:bg-black/40" />
+				<div className="absolute top-2 left-2 flex items-center gap-1">
 					{getCategoryIcon(resource.category)}
-					<span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300">
+					<span className="px-2 py-1 rounded-full text-xs font-medium bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-300 backdrop-blur-sm">
 						{getTypeLabel(resource.type)}
 					</span>
 					<span
-						className={`px-2 py-1 rounded-full text-xs font-medium ${
+						className={`px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm ${
 							resource.category === "PAID"
-								? "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300"
-								: "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
+								? "bg-orange-100/90 dark:bg-orange-900/90 text-orange-700 dark:text-orange-300"
+								: "bg-green-100/90 dark:bg-green-900/90 text-green-700 dark:text-green-300"
 						}`}
 					>
 						{resource.category === "PAID" ? "Paid" : "Gift"}
 					</span>
 				</div>
-				<div className="flex items-center gap-1">
+				
+				{/* Action Button in Top Right */}
+				<div className="absolute top-2 right-2 flex items-center gap-1">
 					{isRemoving ? (
-						<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
+						<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm backdrop-blur-sm">
 							<div className="w-2 h-2 bg-red-600 dark:bg-red-400 rounded-full mr-2 animate-pulse" />
 							<span className="hidden sm:inline font-semibold">Removing</span>
 							<span className="sm:hidden">●</span>
@@ -391,7 +546,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										color={isJustRemoved ? "red" : "red"}
 										onClick={handleUnassignFromFunnel}
 										disabled={isRemovingState}
-										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${
+										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 backdrop-blur-sm ${
 											isJustRemoved ? "animate-pulse shadow-lg shadow-red-500/30" : ""
 										}`}
 									>
@@ -403,7 +558,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										{isJustRemoved ? "Removed!" : (isRemovingState ? "Removing..." : "Remove")}
 									</Button>
 								) : funnel && !canAssignResource(funnel, resource) ? (
-									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
+									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100/90 dark:bg-red-900/90 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 backdrop-blur-sm">
 										<span className="font-bold">MAX</span>
 									</div>
 								) : (
@@ -412,7 +567,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										color={isJustAdded ? "green" : (resource.category === "PAID" ? "orange" : "green")}
 										onClick={handleAssignToFunnel}
 										disabled={isAdding}
-										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ${
+										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 backdrop-blur-sm ${
 											isJustAdded ? "animate-pulse shadow-lg shadow-green-500/30" : ""
 										} ${
 											isHighlighted ? "ring-4 ring-blue-500/50 shadow-lg shadow-blue-500/20 animate-pulse bg-gradient-to-r from-blue-500/20 to-blue-400/20 dark:from-blue-400/20 dark:to-blue-300/20" : ""
@@ -430,7 +585,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 							{context === "global" &&
 								!isResourceAssignedToAnyFunnel(resource.id) &&
 								(isSaving ? (
-									<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/60 dark:to-blue-800/60 text-blue-800 dark:text-blue-200 border-2 border-blue-300 dark:border-blue-600 shadow-sm">
+									<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/60 dark:to-blue-800/60 text-blue-800 dark:text-blue-200 border-2 border-blue-300 dark:border-blue-600 shadow-sm backdrop-blur-sm">
 										<div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full mr-2 animate-pulse" />
 										<span className="hidden sm:inline font-semibold">
 											Saving
@@ -442,7 +597,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 										size="1"
 										color="violet"
 										onClick={handleStartEdit}
-										className="px-2 py-1 text-xs"
+										className="px-2 py-1 text-xs backdrop-blur-sm"
 									>
 										<PenLine size={12} strokeWidth={2.5} className="mr-1" />
 										Edit
@@ -456,7 +611,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									variant="ghost"
 									color="red"
 									onClick={() => onDelete(resource.id, resource.name)}
-									className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+									className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors backdrop-blur-sm"
 									aria-label="Delete product"
 								>
 									<Trash2 size={14} strokeWidth={2.5} />
@@ -466,8 +621,9 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 					)}
 				</div>
 			</div>
-
-			<div className="space-y-2">
+			
+			{/* Bottom Half: Name and Description */}
+			<div className="p-4 space-y-2">
 				<Text
 					size="3"
 					weight="semi-bold"
@@ -478,9 +634,9 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 				<Text
 					size="2"
 					color="gray"
-					className="text-muted-foreground line-clamp-1"
+					className="text-muted-foreground line-clamp-2"
 				>
-					{resource.link}
+					{resource.description || resource.link}
 				</Text>
 				{resource.promoCode && (
 					<div className="flex items-center gap-2">

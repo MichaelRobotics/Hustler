@@ -91,10 +91,41 @@ async function createResourceHandler(
 		const input = await request.json();
 
 		// Validation
-		if (!input.name || !input.type || !input.category || !input.link) {
+		if (!input.name || !input.type || !input.category) {
 			return createErrorResponse(
 				"MISSING_REQUIRED_FIELDS",
-				"Name, type, category, and link are required",
+				"Name, type, and category are required",
+			);
+		}
+		
+		// Validate required fields based on type
+		if (input.type === "AFFILIATE" && !input.link) {
+			return createErrorResponse(
+				"MISSING_REQUIRED_FIELDS",
+				"Link is required for Affiliate products",
+			);
+		}
+		
+		if (input.type === "MY_PRODUCTS" && !input.storageUrl) {
+			return createErrorResponse(
+				"MISSING_REQUIRED_FIELDS",
+				"Digital asset (storageUrl) is required for Owned products",
+			);
+		}
+		
+		// Image is optional for all products
+		// if (!input.image) {
+		// 	return createErrorResponse(
+		// 		"MISSING_REQUIRED_FIELDS",
+		// 		"Image is required for all products",
+		// 	);
+		// }
+		
+		// Price is required for paid products
+		if (input.category === "PAID" && !input.price) {
+			return createErrorResponse(
+				"MISSING_REQUIRED_FIELDS",
+				"Price is required for paid products",
 			);
 		}
 

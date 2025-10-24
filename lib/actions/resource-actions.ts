@@ -209,6 +209,9 @@ export async function getResourceById(
 			description: resource.description || undefined,
 			whopProductId: resource.whopProductId || undefined,
 			productApps: resource.productApps || undefined,
+			image: resource.image || undefined,
+			storageUrl: resource.storageUrl || undefined,
+			price: resource.price || undefined,
 			createdAt: resource.createdAt,
 			updatedAt: resource.updatedAt,
 			funnels: resource.funnelResources.map((fr: any) => ({
@@ -312,6 +315,9 @@ export async function getResources(
 					description: resource.description || undefined,
 					whopProductId: resource.whopProductId || undefined,
 					productApps: resource.productApps || undefined,
+					image: resource.image || undefined,
+					storageUrl: resource.storageUrl || undefined,
+					price: resource.price || undefined,
 					createdAt: resource.createdAt,
 					updatedAt: resource.updatedAt,
 					funnels: [],
@@ -402,6 +408,9 @@ export async function updateResource(
 					input.whopProductId !== undefined
 						? input.whopProductId
 						: existingResource.whopProductId,
+				image: input.image !== undefined ? input.image : existingResource.image,
+				storageUrl: input.storageUrl !== undefined ? input.storageUrl : existingResource.storageUrl,
+				price: input.price !== undefined ? input.price : existingResource.price,
 				updatedAt: new Date(),
 			})
 			.where(eq(resources.id, resourceId))

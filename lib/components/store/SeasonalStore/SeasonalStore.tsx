@@ -41,9 +41,10 @@ import type { FunnelFlow } from '../../../types/funnel';
 interface SeasonalStoreProps {
   onBack?: () => void;
   experienceId?: string;
+  allResources?: any[];
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experienceId }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experienceId, allResources = [] }) => {
   // Theme functionality
   const { appearance, toggleTheme } = useTheme();
   
@@ -76,6 +77,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   
   // Notification state
   const [showNotification, setShowNotification] = useState(false);
+  
+  // ResourceLibrary integration state
+  const [resourceLibraryProducts, setResourceLibraryProducts] = useState<any[]>([]);
+  const [hasLoadedResourceLibrary, setHasLoadedResourceLibrary] = useState(false);
+  const [deletedResourceLibraryProducts, setDeletedResourceLibraryProducts] = useState<Record<string, Set<string>>>({});
   
   // Mobile detection effect
   useEffect(() => {
@@ -138,7 +144,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     // Product Management
     addProduct,
     updateProduct,
-    deleteProduct,
+    deleteProduct: deleteSeasonalStoreProduct,
     
     // Asset Management
     addFloatingAsset,
@@ -180,6 +186,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     MAX_CUSTOM_TEMPLATES,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
   
+  // Only use ResourceLibrary products (no default products)
+  const combinedProducts = useMemo(() => {
+    console.log(`[SeasonalStore] Displaying ${resourceLibraryProducts.length} ResourceLibrary products (no default products)`);
+    return resourceLibraryProducts;
+  }, [resourceLibraryProducts]);
+  
   // Helper function to convert database Theme to LegacyTheme for UI components
   const convertThemeToLegacy = useCallback((dbTheme: any): LegacyTheme => {
     return {
@@ -213,7 +225,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       clearInterval(autoSwitchIntervalRef.current);
     }
     
-    if (products.length <= 2) return; // Don't auto-switch if 2 or fewer products
+    if (combinedProducts.length <= 2) return; // Don't auto-switch if 2 or fewer products
     if (editorState.isEditorView) return; // Don't auto-switch in edit mode
     
     // Shorter timeout for mobile (5 seconds) vs desktop (10 seconds)
@@ -226,7 +238,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         setSwipeDirection('left'); // Auto-switch slides left
         setTimeout(() => {
       setCurrentProductIndex(prevIndex => {
-        const maxIndex = products.length - 2;
+        const maxIndex = combinedProducts.length - 2;
         return prevIndex >= maxIndex ? 0 : prevIndex + 1;
       });
           setSwipeDirection('right'); // Slide in from right
@@ -237,7 +249,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         }, 100); // Faster: 200ms -> 100ms
       }
     }, switchTimeout);
-  }, [products.length, editorState.isEditorView, isSliding]);
+  }, [combinedProducts.length, editorState.isEditorView, isSliding]);
 
   // Smooth navigation functions
   const navigateToPrevious = useCallback(() => {
@@ -257,11 +269,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   }, [currentProductIndex, startAutoSwitch, isSliding]);
 
   const navigateToNext = useCallback(() => {
-    if (currentProductIndex < products.length - 2 && !isSliding) {
+    if (currentProductIndex < combinedProducts.length - 2 && !isSliding) {
       setIsSliding(true);
       setSwipeDirection('left');
       setTimeout(() => {
-        setCurrentProductIndex(prev => Math.min(products.length - 2, prev + 1));
+        setCurrentProductIndex(prev => Math.min(combinedProducts.length - 2, prev + 1));
         setSwipeDirection('right'); // Slide in from right
         setTimeout(() => {
           setSwipeDirection(null);
@@ -270,7 +282,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       }, 100); // Faster: 200ms -> 100ms
       startAutoSwitch();
     }
-  }, [currentProductIndex, products.length, startAutoSwitch, isSliding]);
+  }, [currentProductIndex, combinedProducts.length, startAutoSwitch, isSliding]);
 
   // Touch swipe handlers for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -289,9 +301,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     const isLeftSwipe = distance > 50;
     const isRightSwipe = distance < -50;
 
-    console.log('Touch swipe detected:', { distance, isLeftSwipe, isRightSwipe, currentProductIndex, productsLength: products.length });
+    console.log('Touch swipe detected:', { distance, isLeftSwipe, isRightSwipe, currentProductIndex, productsLength: combinedProducts.length });
 
-    if (isLeftSwipe && currentProductIndex < products.length - 2) {
+    if (isLeftSwipe && currentProductIndex < combinedProducts.length - 2) {
       console.log('Navigating to next product');
       navigateToNext();
     }
@@ -303,7 +315,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     // Reset touch values
     setTouchStart(null);
     setTouchEnd(null);
-  }, [touchStart, touchEnd, currentProductIndex, products.length, navigateToNext, navigateToPrevious]);
+  }, [touchStart, touchEnd, currentProductIndex, combinedProducts.length, navigateToNext, navigateToPrevious]);
 
   // Auto-switch products every 10 seconds (disabled in edit mode)
   useEffect(() => {
@@ -344,25 +356,60 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
     try {
       console.log('🤖 Refining product:', product.name);
-      const refinedText = await generateProductText(product.name, product.description, theme);
+      console.log('🤖 Product has existing image:', !!product.image && !product.image.includes('placehold.co'));
+      console.log('🤖 Product object:', product);
+      console.log('🤖 Theme object:', theme);
+      console.log('🤖 Product name:', product.name);
+      console.log('🤖 Product description:', product.description);
+      console.log('🤖 Theme name:', theme?.name);
+      
+      // Provide fallback description if empty
+      const productDescription = product.description || `A premium ${product.name} product`;
+      console.log('🤖 Using description:', productDescription);
+      
+      const refinedText = await generateProductText(product.name, productDescription, theme);
       console.log('🤖 Generated text:', refinedText);
       
-      console.log('🎨 Generating product image for:', refinedText.newName);
-      const finalImage = await generateProductImage(refinedText.newName, theme, product.image);
-      console.log('🎨 Generated product image URL:', finalImage);
+      console.log('🎨 Generating/refining product image for:', refinedText.newName);
+      console.log('🎨 Product image URL being passed:', product.image);
+      console.log('🎨 Product imageAttachmentUrl:', product.imageAttachmentUrl);
+      console.log('🎨 Product has image:', !!product.image);
+      const uploadResult = await generateProductImage(refinedText.newName, theme, product.image);
+      console.log('🎨 Generated product image (already uploaded to WHOP):', uploadResult);
 
-      // Upload generated image to WHOP storage
-      console.log('📤 Uploading generated product image to WHOP...');
-      const uploadResult = await uploadUrlToWhop(finalImage);
-      console.log('📤 Upload result:', uploadResult);
-
-      updateProduct(product.id, {
-        name: refinedText.newName,
-        description: refinedText.newDescription,
-        image: finalImage,
-        imageAttachmentId: uploadResult.attachmentId,
-        imageAttachmentUrl: uploadResult.url,
-      });
+      console.log('🔄 Updating product with ID:', product.id);
+      console.log('🔄 New image URL:', uploadResult.url);
+      console.log('🔄 New attachment ID:', uploadResult.attachmentId);
+      
+      // Check if this is a ResourceLibrary product (string ID) or regular product (numeric ID)
+      if (typeof product.id === 'string' && product.id.startsWith('resource-')) {
+        console.log('🔄 Updating ResourceLibrary product in state');
+        // Update ResourceLibrary product in local state
+        setResourceLibraryProducts(prev => prev.map(p => 
+          p.id === product.id 
+            ? {
+                ...p,
+                name: refinedText.newName,
+                description: refinedText.newDescription,
+                image: uploadResult.url,
+                imageAttachmentId: uploadResult.attachmentId,
+                imageAttachmentUrl: uploadResult.url,
+              }
+            : p
+        ));
+      } else {
+        console.log('🔄 Updating regular SeasonalStore product');
+        // Update regular SeasonalStore product
+        updateProduct(product.id, {
+          name: refinedText.newName,
+          description: refinedText.newDescription,
+          image: uploadResult.url,
+          imageAttachmentId: uploadResult.attachmentId,
+          imageAttachmentUrl: uploadResult.url,
+        });
+      }
+      
+      console.log('✅ Product update called with new image data');
     } catch (error) {
       console.error('🤖 Product refinement failed:', error);
       setError(`Refinement Failed: ${(error as Error).message}`);
@@ -800,6 +847,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     }
   }, [experienceId, setError]);
 
+
   const openTemplateManager = () => setTemplateManagerOpen(true);
   const closeTemplateManager = () => setTemplateManagerOpen(false);
   const closeTemplateManagerAnimated = () => {
@@ -811,7 +859,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   useEffect(() => {
     const handleBeforeUnload = () => {
       // Auto-save template when leaving the page
-      if (products.length > 0 || floatingAssets.length > 0) {
+      if (combinedProducts.length > 0 || floatingAssets.length > 0) {
         saveTemplate({
           name: `Auto-saved ${new Date().toLocaleString()}`,
           experienceId: '', // Will be set by the API
@@ -1012,6 +1060,72 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     loadLiveFunnel();
   }, [loadLiveFunnel]);
 
+  // Load ResourceLibrary products on mount and when theme changes
+  useEffect(() => {
+    if (!experienceId || allResources.length === 0) return;
+    
+    console.log('[SeasonalStore] Loading ResourceLibrary products, experienceId:', experienceId, 'theme:', currentSeason, 'themeName:', theme.name);
+    
+    // Filter for "Paid" products only and exclude deleted ones for current theme
+    const paidResources = allResources.filter(resource => 
+      resource.category === "PAID" && 
+      resource.name && 
+      resource.price &&
+      !(deletedResourceLibraryProducts[currentSeason]?.has(resource.id)) // Exclude deleted products for current theme only
+    );
+    
+    console.log(`[SeasonalStore] Found ${paidResources.length} paid resources (${allResources.filter(r => r.category === "PAID" && r.name && r.price).length - paidResources.length} deleted in ${currentSeason})`);
+    console.log('[SeasonalStore] Deleted resource IDs for current theme:', Array.from(deletedResourceLibraryProducts[currentSeason] || []));
+    console.log('[SeasonalStore] All theme deletions:', Object.keys(deletedResourceLibraryProducts).map(theme => `${theme}: ${Array.from(deletedResourceLibraryProducts[theme] || []).length} deleted`));
+    console.log('[SeasonalStore] Sample resource data:', paidResources[0]);
+    console.log('[SeasonalStore] Sample price data:', paidResources[0]?.price, 'parsed:', paidResources[0]?.price ? parseFloat(paidResources[0].price) : 'N/A', 'formatted:', paidResources[0]?.price ? `$${(Math.round(parseFloat(paidResources[0].price) * 100) / 100).toFixed(2)}` : 'N/A');
+    console.log('[SeasonalStore] Current theme properties:', {
+      name: theme.name,
+      accent: theme.accent,
+      card: theme.card,
+      text: theme.text
+    });
+    
+    // Convert ResourceLibrary products to SeasonalStore format
+    const convertedProducts = paidResources.map((resource, index) => {
+      // Format price with dollar sign and ensure cents are shown
+      const rawPrice = resource.price ? parseFloat(resource.price) : 0;
+      const formattedPrice = Math.round(rawPrice * 100) / 100; // Ensure 2 decimal places
+      
+      // Use the current theme's styling (don't override name, description, image)
+      return {
+        id: `resource-${resource.id}`,
+        name: resource.name, // Keep original name
+        description: resource.description || '', // Keep original description
+        price: formattedPrice,
+        image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Keep original image or use placeholder
+        imageAttachmentUrl: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Map to imageAttachmentUrl for ProductCard
+        buttonText: 'View Details',
+        buttonClass: theme.accent, // Use theme's accent color
+        buttonLink: resource.type === "AFFILIATE" ? resource.link : resource.storageUrl,
+        // Use theme's styling for everything else
+        cardClass: theme.card, // Use theme's card styling
+        titleClass: theme.text, // Use theme's text color
+        descClass: theme.text, // Use theme's text color
+        buttonAnimColor: theme.accent.includes('blue') ? 'blue' : 
+                        theme.accent.includes('yellow') ? 'yellow' :
+                        theme.accent.includes('orange') ? 'orange' :
+                        theme.accent.includes('red') ? 'red' :
+                        theme.accent.includes('pink') ? 'pink' :
+                        theme.accent.includes('cyan') ? 'cyan' :
+                        'indigo' // Default fallback
+      };
+    });
+    
+    setResourceLibraryProducts(convertedProducts);
+    setHasLoadedResourceLibrary(true);
+    
+    console.log(`[SeasonalStore] Converted ${convertedProducts.length} ResourceLibrary products (no default products)`);
+    console.log('[SeasonalStore] Sample converted product:', convertedProducts[0]);
+    console.log('[SeasonalStore] Sample converted price:', convertedProducts[0]?.price, 'formatted as:', convertedProducts[0]?.price ? `$${convertedProducts[0].price.toFixed(2)}` : 'N/A');
+    console.log('[SeasonalStore] Sample converted image:', convertedProducts[0]?.image, 'imageAttachmentUrl:', convertedProducts[0]?.imageAttachmentUrl);
+    
+  }, [experienceId, allResources, currentSeason, deletedResourceLibraryProducts]);
 
   // Debug chat state
   useEffect(() => {
@@ -1051,6 +1165,34 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
   const handleRemoveSticker = useCallback((productId: number) => {
     updateProduct(productId, { containerAsset: undefined });
   }, [updateProduct]);
+
+  // Handle delete for ResourceLibrary products
+  const handleDeleteResourceLibraryProduct = useCallback((productId: string) => {
+    // Extract the original resource ID from the product ID
+    const resourceId = productId.replace('resource-', '');
+    
+    // Remove from resourceLibraryProducts state
+    setResourceLibraryProducts(prev => prev.filter(product => product.id !== productId));
+    
+    // Track this product as deleted for the current theme only
+    setDeletedResourceLibraryProducts(prev => ({
+      ...prev,
+      [currentSeason]: new Set([...(prev[currentSeason] || []), resourceId])
+    }));
+    
+    console.log(`[SeasonalStore] Deleted ResourceLibrary product: ${productId} (resource ID: ${resourceId}) from theme: ${currentSeason}`);
+  }, [currentSeason]);
+
+  // Combined delete handler that routes to appropriate delete function
+  const deleteProduct = useCallback((productId: number | string) => {
+    if (typeof productId === 'string' && productId.startsWith('resource-')) {
+      // This is a ResourceLibrary product
+      handleDeleteResourceLibraryProduct(productId);
+    } else {
+      // This is a regular SeasonalStore product
+      deleteSeasonalStoreProduct(productId as number);
+    }
+  }, [handleDeleteResourceLibraryProduct, deleteSeasonalStoreProduct]);
 
   // Drop Handlers
   const handleDropAsset = useCallback((e: React.DragEvent) => {
@@ -2152,10 +2294,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         
         {/* Product Showcase */}
         <div className="w-full max-w-5xl my-4">
-          {products.length > 0 ? (
+          {combinedProducts.length > 0 ? (
             <div className="flex items-center gap-4">
               {/* Left Arrow - Only show on desktop when there are more than 2 products */}
-              {products.length > 2 && (
+              {combinedProducts.length > 2 && (
                 <button
                   onClick={navigateToPrevious}
                   disabled={currentProductIndex === 0}
@@ -2175,7 +2317,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
-                {products.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
+                {combinedProducts.slice(currentProductIndex, currentProductIndex + 2).map((product, index) => (
                   <div 
                     key={`${product.id}-${currentProductIndex}`}
                     className={`transition-all duration-150 ease-in-out transform ${
@@ -2216,10 +2358,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
               
               
               {/* Right Arrow - Only show on desktop when there are more than 2 products */}
-              {products.length > 2 && (
+              {combinedProducts.length > 2 && (
                 <button
                   onClick={navigateToNext}
-                  disabled={currentProductIndex >= products.length - 2}
+                  disabled={currentProductIndex >= combinedProducts.length - 2}
                   className="hidden md:flex p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                   title="Next products"
                 >
@@ -2238,9 +2380,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         </div>
 
          {/* Navigation Dots - Only show on mobile when there are multiple products */}
-         {products.length > 1 && (
+         {combinedProducts.length > 1 && (
            <div className="flex justify-center mt-4 space-x-2 md:hidden">
-             {Array.from({ length: Math.max(1, products.length - 1) }, (_, index) => (
+             {Array.from({ length: Math.max(1, combinedProducts.length - 1) }, (_, index) => (
                <button
                  key={index}
                  onClick={() => {
