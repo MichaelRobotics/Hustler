@@ -152,19 +152,21 @@ export class WhopApiClient {
     try {
       console.log(`🔍 Getting company data for company ${this.companyId}...`);
       
-      // Use Whop SDK client as shown in the documentation
-      const company = await whopSdk.companies.retrieve(this.companyId);
+      // Use Whop SDK client as shown in the existing codebase
+      const company = await whopSdk.companies.getCompany({
+        companyId: this.companyId
+      });
       
       // Debug: Log the full company result to understand the structure
       console.log(`🔍 Full company result from SDK:`, JSON.stringify(company, null, 2));
       
-      // Extract logo URL using the exact structure from Whop SDK docs
+      // Extract logo URL using the correct structure from SDK types
       let logo = null;
-      if (company.logo && company.logo.url) {
-        logo = company.logo.url;
-        console.log(`✅ Logo url from SDK: ${logo}`);
+      if (company.logo && company.logo.sourceUrl) {
+        logo = company.logo.sourceUrl;
+        console.log(`✅ Logo sourceUrl from SDK: ${logo}`);
       } else {
-        console.log(`⚠️ No logo.url field in SDK response`);
+        console.log(`⚠️ No logo.sourceUrl field in SDK response`);
       }
       
       const title = company.title || "App Installation";
