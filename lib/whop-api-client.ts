@@ -146,40 +146,6 @@ export class WhopApiClient {
   }
 
   /**
-   * Get company data including logo using Whop SDK
-   */
-  async getCompanyData(): Promise<{ title: string; logo: string | null }> {
-    try {
-      console.log(`🔍 Getting company data for company ${this.companyId}...`);
-      
-      // Use Whop SDK client as shown in the existing codebase
-      const company = await whopSdk.companies.getCompany({
-        companyId: this.companyId
-      });
-      
-      // Debug: Log the full company result to understand the structure
-      console.log(`🔍 Full company result from SDK:`, JSON.stringify(company, null, 2));
-      
-      // Extract logo URL using the correct structure from SDK types
-      let logo = null;
-      if (company.logo && company.logo.sourceUrl) {
-        logo = company.logo.sourceUrl;
-        console.log(`✅ Logo sourceUrl from SDK: ${logo}`);
-      } else {
-        console.log(`⚠️ No logo.sourceUrl field in SDK response`);
-      }
-      
-      const title = company.title || "App Installation";
-      console.log(`✅ Company data: title=${title}, logo=${logo}`);
-      
-      return { title, logo };
-    } catch (error) {
-      console.error("❌ Error getting company data:", error);
-      return { title: "App Installation", logo: null };
-    }
-  }
-
-  /**
    * Get installed apps (experiences) in the company
    * These are used for FREE resources
    */

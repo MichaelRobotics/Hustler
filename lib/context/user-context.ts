@@ -165,16 +165,36 @@ async function createUserContext(
 			
 			if (companyId) {
 				try {
-					const { getWhopApiClient } = await import("@/lib/whop-api-client");
-					const whopClient = getWhopApiClient(companyId, whopUserId);
-					const companyData = await whopClient.getCompanyData();
+					const { whopSdk } = await import("@/lib/whop-sdk");
+					const companyResult = await whopSdk.companies.getCompany({
+						companyId: companyId
+					});
 					
-					companyName = companyData.title || "App Installation";
-					companyLogo = companyData.logo || null;
+					companyName = companyResult.title || "App Installation";
 					
-					console.log(`✅ Fetched company info: ${companyName}, logo: ${companyLogo}`);
+					console.log(`✅ Fetched company info: ${companyName}`);
 				} catch (error) {
 					console.warn(`⚠️ Failed to fetch company info for ${companyId}:`, error);
+					// Continue with default values
+				}
+			}
+			
+			// Get company logo using new Whop SDK format
+			if (companyId) {
+				try {
+					// Use the new company logo service
+					const { retrieveCompanyLogo } = await import("@/lib/services/company-logo-service");
+					
+					// Get company logo using new Whop SDK format
+					companyLogo = await retrieveCompanyLogo(companyId);
+					
+					if (companyLogo) {
+						console.log(`✅ Retrieved company logo: ${companyLogo}`);
+					} else {
+						console.log(`⚠️ No logo found for company ${companyId}`);
+					}
+				} catch (error) {
+					console.warn(`⚠️ Failed to fetch company logo for ${companyId}:`, error);
 					// Continue with default values
 				}
 			}
