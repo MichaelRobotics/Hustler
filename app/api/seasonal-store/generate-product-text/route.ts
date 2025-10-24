@@ -4,36 +4,29 @@ import { Theme } from '@/lib/components/store/SeasonalStore/types';
 
 export async function POST(request: NextRequest) {
   try {
-    const { productName, productDescription, theme } = await request.json();
+    const body = await request.json();
+    console.log('🎯 [API] Received request body:', JSON.stringify(body, null, 2));
     
-    console.log('🔍 [API] Received request data:', {
-      productName,
-      productDescription,
-      theme,
-      productNameType: typeof productName,
-      productDescriptionType: typeof productDescription,
-      themeType: typeof theme,
-      productNameEmpty: !productName,
-      productDescriptionEmpty: !productDescription,
-      themeEmpty: !theme
+    const { productName, productDescription, theme } = body;
+
+    console.log('🎯 [API] Extracted parameters:', {
+      productName: !!productName,
+      productDescription: !!productDescription,
+      theme: !!theme,
+      productNameValue: productName,
+      productDescriptionValue: productDescription,
+      themeValue: theme
     });
 
-    if (!productName || !theme) {
-      console.log('❌ [API] Missing required parameters:', {
-        hasProductName: !!productName,
-        hasProductDescription: !!productDescription,
-        hasTheme: !!theme
-      });
+    if (!productName || productDescription === undefined || productDescription === null || !theme) {
+      console.log('🎯 [API] Missing required parameters');
       return NextResponse.json(
-        { error: 'Missing required parameters: productName, theme' },
+        { error: 'Missing required parameters: productName, productDescription, theme' },
         { status: 400 }
       );
     }
 
-    // Provide fallback description if empty
-    const finalDescription = productDescription || `A premium ${productName} product`;
-
-    const result = await generateProductText(productName, finalDescription, theme as Theme);
+    const result = await generateProductText(productName, productDescription, theme as Theme);
     
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

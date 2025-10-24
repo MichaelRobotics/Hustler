@@ -71,38 +71,45 @@ export const emojiToSvgDataURL = (emoji: string): string => {
 };
 
 /**
- * AI Text Generation for Product Refinement - Always Refine Mode
+ * AI Text Generation for Product Refinement
  */
 export const generateProductText = async (productName: string, productDescription: string, theme: Theme) => {
+  console.log('🎯 [Actions] Starting generateProductText with:', {
+    productName,
+    productDescription,
+    theme: theme.name
+  });
+
   // Validate environment before making API calls
   validateEnvironment();
 
-  const systemPrompt = `You are a world-class e-commerce copywriter and creative director. The current promotional theme is "${theme.name}". Your task is to REFINE and enhance the provided product name and description to be extremely appealing and perfectly aligned with this theme. 
-
-IMPORTANT: This is REFINEMENT mode - you must preserve the core meaning and essence of the original product while enhancing it for the theme. Keep the same product identity but make it more appealing and theme-appropriate.
+  const systemPrompt = `You are a world-class e-commerce copywriter and creative director. The current promotional theme is "${theme.name}". Your task is to rewrite the provided product name and description to be extremely appealing and perfectly aligned with this theme. Be exciting, use relevant thematic vocabulary. 
 
 CRITICAL: The description must be exactly 1 line, maximum 4 words. Keep it short, punchy, and impactful. Examples: "Cozy autumn warmth", "Perfect fall companion", "Seasonal comfort essential".
 
 Your response MUST be a JSON object with "newName" and "newDescription" fields.`;
 
-  const userQuery = `REFINE this existing product for the ${theme.name} theme:
-Original Name: "${productName}"
-Original Description: "${productDescription}"
-
-Enhance and refine these to be more appealing and theme-appropriate while preserving the core product identity.`;
+  const userQuery = `Original Product: Name: "${productName}", Description: "${productDescription || 'No description provided'}". Rewrite the name and description for the current theme of ${theme.name}.`;
 
   try {
     const fullPrompt = `${systemPrompt}\n\n${userQuery}`;
+    console.log('🎯 [Actions] Full prompt:', fullPrompt);
     
     // Initialize the Google Gen AI SDK
     const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    console.log('🎯 [Actions] Gemini API key available:', !!process.env.GEMINI_API_KEY);
 
+    console.log('🎯 [Actions] Calling Gemini API with model:', LLM_MODEL);
     const response = await genAI.models.generateContent({
       model: LLM_MODEL,
-      contents: fullPrompt,
+      contents: [{
+        parts: [{ text: fullPrompt }]
+      }]
     });
 
+    console.log('🎯 [Actions] Raw response:', response);
     const text = response.text;
+    console.log('🎯 [Actions] Response text:', text);
     
     if (!text) {
       throw new Error("AI text generation failed.");
@@ -115,7 +122,10 @@ Enhance and refine these to be more appealing and theme-appropriate while preser
       jsonText = jsonText.split('```')[1].split('```')[0].trim();
     }
 
-    return JSON.parse(jsonText);
+    console.log('🎯 [Actions] Parsed JSON text:', jsonText);
+    const result = JSON.parse(jsonText);
+    console.log('🎯 [Actions] Final result:', result);
+    return result;
   } catch (error) {
     console.error("Error in generateProductText:", error);
     throw new SeasonalStoreAIError(`Product text generation failed: ${(error as Error).message}`, "UNKNOWN");
@@ -144,7 +154,9 @@ export const generateEmojiMatch = async (userPrompt: string): Promise<string> =>
     console.log('🎯 [Server Action] Calling Gemini API with model:', LLM_MODEL);
     const response = await genAI.models.generateContent({
       model: LLM_MODEL,
-      contents: fullPrompt,
+      contents: [{
+        parts: [{ text: fullPrompt }]
+      }]
     });
 
     console.log('🎯 [Server Action] Raw response:', response);

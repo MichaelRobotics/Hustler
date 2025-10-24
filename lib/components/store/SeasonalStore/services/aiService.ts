@@ -59,16 +59,20 @@ export const generateProductText = async (
   theme: any
 ): Promise<{ newName: string; newDescription: string }> => {
   try {
+    const requestBody = {
+      productName,
+      productDescription,
+      theme
+    };
+    
+    console.log('🎯 [Frontend] Sending request to generate-product-text:', requestBody);
+    
     const response = await retryFetch('/api/seasonal-store/generate-product-text', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        productName,
-        productDescription,
-        theme
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -119,9 +123,10 @@ export const generateEmojiMatch = async (prompt: string): Promise<string> => {
 // Generate product image using Nano Banana service
 export const generateProductImage = async (
   productName: string, 
+  productDescription: string,
   theme: any, 
   originalImageUrl: string
-): Promise<{ url: string; attachmentId: string | null }> => {
+): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-product-image-nanobanana', {
       method: 'POST',
@@ -130,6 +135,7 @@ export const generateProductImage = async (
       },
       body: JSON.stringify({
         productName,
+        productDescription,
         theme,
         originalImageUrl
       }),
@@ -143,7 +149,7 @@ export const generateProductImage = async (
     if (!data.success) {
       throw new Error(data.error || 'Product image generation failed');
     }
-    return { url: data.imageUrl, attachmentId: data.attachmentId };
+    return data.imageUrl;
   } catch (error) {
     console.error('Error generating product image:', error);
     throw new Error(`Failed to generate product image: ${(error as Error).message}`);
@@ -153,7 +159,9 @@ export const generateProductImage = async (
 // Generate background image using Nano Banana service with container dimensions
 export const generateBackgroundImage = async (
   themePrompt: string, 
-  containerDimensions?: { width: number; height: number; aspectRatio: number }
+  containerDimensions?: { width: number; height: number; aspectRatio: number },
+  existingBackgroundUrl?: string,
+  backgroundContext?: { isGenerated: boolean; isUploaded: boolean }
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-background-nanobanana', {
@@ -163,7 +171,9 @@ export const generateBackgroundImage = async (
       },
       body: JSON.stringify({ 
         themePrompt,
-        containerDimensions 
+        containerDimensions,
+        existingBackgroundUrl,
+        backgroundContext
       }),
     });
 
@@ -217,22 +227,27 @@ export const generateLogo = async (
 };
 
 // Responsive background generation with iframe container measurement
-export const generateResponsiveBackgroundImage = async (themePrompt: string): Promise<string> => {
+export const generateResponsiveBackgroundImage = async (
+  themePrompt: string, 
+  existingBackgroundUrl?: string,
+  backgroundContext?: { isGenerated: boolean; isUploaded: boolean }
+): Promise<string> => {
   try {
     console.log('🎨 [Responsive AI] Starting responsive background generation...');
+    console.log('🎨 [Responsive AI] Existing background URL:', existingBackgroundUrl);
     
     // Measure iframe container dimensions
     const containerDimensions = measureIframeContainer();
     if (!containerDimensions) {
       console.warn('🎨 [Responsive AI] Could not measure container, using fallback dimensions');
       // Fallback to standard dimensions
-      return await generateBackgroundImage(themePrompt);
+      return await generateBackgroundImage(themePrompt, undefined, existingBackgroundUrl, backgroundContext);
     }
     
     console.log('🎨 [Responsive AI] Container dimensions:', containerDimensions);
     
     // Generate image with container dimensions
-    const imageUrl = await generateBackgroundImage(themePrompt, containerDimensions);
+    const imageUrl = await generateBackgroundImage(themePrompt, containerDimensions, existingBackgroundUrl, backgroundContext);
     
     // Validate image coverage
     const validation = await validateImageCoverage(imageUrl, containerDimensions);
@@ -272,6 +287,6 @@ export const generateResponsiveBackgroundImage = async (themePrompt: string): Pr
     }
     
     // Only fallback for non-quota errors
-    return await generateBackgroundImage(themePrompt);
+    return await generateBackgroundImage(themePrompt, undefined, undefined, backgroundContext);
   }
 };

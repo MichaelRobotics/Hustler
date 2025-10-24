@@ -4,11 +4,15 @@ import { nanoBananaService } from '@/lib/services/nanobananaService';
 export async function POST(request: NextRequest) {
   let themePrompt: string = '';
   let containerDimensions: any = undefined;
+  let existingBackgroundUrl: string | undefined = undefined;
+  let backgroundContext: { isGenerated: boolean; isUploaded: boolean } | undefined = undefined;
   
   try {
     const body = await request.json();
     themePrompt = body.themePrompt;
     containerDimensions = body.containerDimensions;
+    existingBackgroundUrl = body.existingBackgroundUrl;
+    backgroundContext = body.backgroundContext;
 
     if (!themePrompt) {
       return NextResponse.json(
@@ -19,8 +23,10 @@ export async function POST(request: NextRequest) {
 
     console.log('🎨 [Nano Banana API] Starting background generation with prompt:', themePrompt);
     console.log('🎨 [Nano Banana API] Container dimensions:', containerDimensions);
+    console.log('🎨 [Nano Banana API] Existing background URL:', existingBackgroundUrl);
+    console.log('🎨 [Nano Banana API] Background context:', backgroundContext);
     
-    const imageUrl = await nanoBananaService.generateBackgroundImage(themePrompt, containerDimensions);
+    const imageUrl = await nanoBananaService.generateBackgroundImage(themePrompt, containerDimensions, existingBackgroundUrl, backgroundContext);
     
     console.log('🎨 [Nano Banana API] Generated image URL length:', imageUrl.length);
     

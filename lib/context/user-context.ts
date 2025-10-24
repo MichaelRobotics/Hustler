@@ -171,9 +171,34 @@ async function createUserContext(
 					});
 					
 					companyName = companyResult.title || "App Installation";
-					companyLogo = companyResult.logo || null;
 					
-					console.log(`✅ Fetched company info: ${companyName}`);
+					// Debug: Log the full company result to understand the structure
+					console.log(`🔍 Full company result:`, JSON.stringify(companyResult, null, 2));
+					
+					// Extract logo URL from the object structure
+					if (companyResult.logo) {
+						console.log(`🔍 Logo object:`, JSON.stringify(companyResult.logo, null, 2));
+						
+						// Handle different possible structures
+						if (typeof companyResult.logo === 'string') {
+							companyLogo = companyResult.logo;
+							console.log(`✅ Logo is string: ${companyLogo}`);
+						} else if (companyResult.logo.sourceUrl) {
+							companyLogo = companyResult.logo.sourceUrl;
+							console.log(`✅ Logo sourceUrl: ${companyLogo}`);
+						} else if ((companyResult.logo as any).url) {
+							companyLogo = (companyResult.logo as any).url;
+							console.log(`✅ Logo url (fallback): ${companyLogo}`);
+						} else {
+							console.warn(`⚠️ Unknown logo structure:`, companyResult.logo);
+							companyLogo = null;
+						}
+					} else {
+						console.log(`⚠️ No logo field in company result`);
+						companyLogo = null;
+					}
+					
+					console.log(`✅ Fetched company info: ${companyName}, logo: ${companyLogo}`);
 				} catch (error) {
 					console.warn(`⚠️ Failed to fetch company info for ${companyId}:`, error);
 					// Continue with default values

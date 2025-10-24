@@ -31,7 +31,7 @@ import {
   generateEmojiMatch,
   fileToBase64 
 } from './services/aiService';
-import { uploadBase64ToWhop, uploadUrlToWhop } from '../../../utils/whop-image-upload';
+import { uploadUrlToWhop } from '../../../utils/whop-image-upload';
 import { useIframeDimensions } from './utils/iframeDimensions';
 import { useBackgroundAnalysis } from './utils/backgroundAnalyzer';
 import SeasonalStoreChat from './components/SeasonalStoreChat';
@@ -356,26 +356,28 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
     try {
       console.log('🤖 Refining product:', product.name);
-      console.log('🤖 Product has existing image:', !!product.image && !product.image.includes('placehold.co'));
-      console.log('🤖 Product object:', product);
-      console.log('🤖 Theme object:', theme);
-      console.log('🤖 Product name:', product.name);
       console.log('🤖 Product description:', product.description);
-      console.log('🤖 Theme name:', theme?.name);
+      console.log('🤖 Product image URL:', product.image);
+      console.log('🤖 Product imageAttachmentUrl:', product.imageAttachmentUrl);
+      console.log('🤖 Product has existing image:', !!product.image && !product.image.includes('placehold.co'));
+      console.log('🤖 Product has imageAttachmentUrl:', !!product.imageAttachmentUrl && !product.imageAttachmentUrl.includes('placehold.co'));
+      console.log('🤖 Product ID:', product.id);
+      console.log('🤖 Product type:', typeof product.id === 'string' && product.id.startsWith('resource-') ? 'ResourceLibrary' : 'SeasonalStore');
       
-      // Provide fallback description if empty
-      const productDescription = product.description || `A premium ${product.name} product`;
-      console.log('🤖 Using description:', productDescription);
-      
-      const refinedText = await generateProductText(product.name, productDescription, theme);
+      const refinedText = await generateProductText(product.name, product.description, theme);
       console.log('🤖 Generated text:', refinedText);
       
       console.log('🎨 Generating/refining product image for:', refinedText.newName);
-      console.log('🎨 Product image URL being passed:', product.image);
-      console.log('🎨 Product imageAttachmentUrl:', product.imageAttachmentUrl);
-      console.log('🎨 Product has image:', !!product.image);
-      const uploadResult = await generateProductImage(refinedText.newName, theme, product.image);
-      console.log('🎨 Generated product image (already uploaded to WHOP):', uploadResult);
+      const imageUrlToUse = product.imageAttachmentUrl || product.image;
+      console.log('🎨 Original image URL being sent to AI:', imageUrlToUse);
+      console.log('🎨 Using uploaded image for refinement:', !!product.imageAttachmentUrl);
+      const finalImage = await generateProductImage(refinedText.newName, refinedText.newDescription, theme, imageUrlToUse);
+      console.log('🎨 Generated product image URL:', finalImage);
+
+      // Upload generated image to WHOP storage
+      console.log('📤 Uploading generated product image to WHOP...');
+      const uploadResult = await uploadUrlToWhop(finalImage);
+      console.log('📤 Upload result:', uploadResult);
 
       console.log('🔄 Updating product with ID:', product.id);
       console.log('🔄 New image URL:', uploadResult.url);
@@ -391,7 +393,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
                 ...p,
                 name: refinedText.newName,
                 description: refinedText.newDescription,
-                image: uploadResult.url,
+                image: finalImage,
                 imageAttachmentId: uploadResult.attachmentId,
                 imageAttachmentUrl: uploadResult.url,
               }
@@ -403,7 +405,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
         updateProduct(product.id, {
           name: refinedText.newName,
           description: refinedText.newDescription,
-          image: uploadResult.url,
+          image: finalImage,
           imageAttachmentId: uploadResult.attachmentId,
           imageAttachmentUrl: uploadResult.url,
         });
@@ -461,7 +463,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
 
     try {
       console.log('🎨 Generating responsive background with prompt:', legacyTheme.themePrompt);
-      const imageUrl = await generateResponsiveBackgroundImage(legacyTheme.themePrompt || '');
+      console.log('🎨 Current background URL for refinement:', backgroundAttachmentUrl);
+      console.log('🎨 Background type context:', {
+        generatedBackground,
+        uploadedBackground,
+        isGenerated: generatedBackground === backgroundAttachmentUrl,
+        isUploaded: uploadedBackground === backgroundAttachmentUrl
+      });
+      const imageUrl = await generateResponsiveBackgroundImage(
+        legacyTheme.themePrompt || '', 
+        backgroundAttachmentUrl || undefined,
+        {
+          isGenerated: generatedBackground === backgroundAttachmentUrl,
+          isUploaded: uploadedBackground === backgroundAttachmentUrl
+        }
+      );
       console.log('🎨 Generated responsive background URL:', imageUrl);
       
       // Automatically upload to WHOP storage
@@ -482,7 +498,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       setIsGeneratingBackground(false);
       setShowGenerateBgInNavbar(false); // Move to original location after generation
     }
-  }, [legacyTheme.themePrompt, setImageLoading, setError, setBackground]);
+  }, [legacyTheme.themePrompt, backgroundAttachmentUrl, generatedBackground, uploadedBackground, setImageLoading, setError, setBackground]);
 
   const handleBgImageUpload = useCallback(async (file: File) => {
     if (!file) return;
@@ -493,7 +509,22 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       
       // Automatically upload to WHOP storage
       console.log('🔄 Uploading user background to WHOP storage...');
-      const uploadedImage = await uploadBase64ToWhop(imageUrl, file.name);
+      
+      // Use the API route for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload-to-whop', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const uploadedImage = await response.json();
       console.log('✅ User background uploaded to WHOP:', uploadedImage);
       
       // Set both the original URL and WHOP attachment
@@ -547,7 +578,22 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       
       // Automatically upload logo to WHOP storage
       console.log('🔄 Uploading user logo to WHOP storage...');
-      const uploadedImage = await uploadBase64ToWhop(imageUrl, file.name);
+      
+      // Use the API route for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload-to-whop', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const uploadedImage = await response.json();
       console.log('✅ User logo uploaded to WHOP:', uploadedImage);
       
       setLogoAsset({ ...logoAsset, src: imageUrl, alt: 'Custom Uploaded Logo' });
@@ -1092,6 +1138,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
       const rawPrice = resource.price ? parseFloat(resource.price) : 0;
       const formattedPrice = Math.round(rawPrice * 100) / 100; // Ensure 2 decimal places
       
+      console.log(`[SeasonalStore] Converting ResourceLibrary product ${resource.name}:`, {
+        id: resource.id,
+        name: resource.name,
+        image: resource.image,
+        hasImage: !!resource.image,
+        imageType: typeof resource.image
+      });
+      
       // Use the current theme's styling (don't override name, description, image)
       return {
         id: `resource-${resource.id}`,
@@ -1141,26 +1195,57 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, experience
     if (!file) return;
     try {
       setUploadingImage(true);
+      console.log('🔄 Uploading product image to WHOP storage...');
+      
+      // Use the API route for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload-to-whop', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const uploadedImage = await response.json();
+      console.log('✅ Product image uploaded to WHOP:', uploadedImage);
+      
+      // Convert to base64 for local display
       const base64Data = await fileToBase64(file);
       const imageUrl = `data:${file.type};base64,${base64Data}`;
       
-      // Automatically upload product image to WHOP storage
-      console.log('🔄 Uploading product image to WHOP storage...');
-      const uploadedImage = await uploadBase64ToWhop(imageUrl, file.name);
-      console.log('✅ Product image uploaded to WHOP:', uploadedImage);
-      
-      updateProduct(productId, { 
-        image: imageUrl,
+      console.log('🔄 Updating product with new image:', {
+        productId,
+        imageUrl: imageUrl.substring(0, 50) + '...',
         imageAttachmentId: uploadedImage.attachmentId,
         imageAttachmentUrl: uploadedImage.url
       });
+      
+      // Update ResourceLibrary products instead of themeProducts
+      setResourceLibraryProducts(prev => prev.map(product => 
+        product.id === productId 
+          ? {
+              ...product,
+              image: imageUrl,
+              imageAttachmentId: uploadedImage.attachmentId,
+              imageAttachmentUrl: uploadedImage.url
+            }
+          : product
+      ));
+      
+      console.log('✅ Product updated successfully');
       setError(null);
     } catch (error) {
+      console.error('❌ Product image upload failed:', error);
       setError(`File upload failed: ${(error as Error).message}`);
     } finally {
       setUploadingImage(false);
     }
-  }, [setUploadingImage, setError, updateProduct]);
+  }, [setUploadingImage, setError]);
 
   const handleRemoveSticker = useCallback((productId: number) => {
     updateProduct(productId, { containerAsset: undefined });

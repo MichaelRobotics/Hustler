@@ -7,6 +7,14 @@
 
 import { WhopServerSdk } from "@whop/api";
 
+// Debug environment variables
+console.log('🔍 WHOP SDK Environment check:', {
+  WHOP_API_KEY: process.env.WHOP_API_KEY ? 'Present' : 'Missing',
+  NEXT_PUBLIC_WHOP_APP_ID: process.env.NEXT_PUBLIC_WHOP_APP_ID ? 'Present' : 'Missing',
+  NEXT_PUBLIC_WHOP_AGENT_USER_ID: process.env.NEXT_PUBLIC_WHOP_AGENT_USER_ID ? 'Present' : 'Missing',
+  NEXT_PUBLIC_WHOP_COMPANY_ID: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID ? 'Present' : 'Missing'
+});
+
 // Validate required environment variables
 if (!process.env.NEXT_PUBLIC_WHOP_APP_ID) {
 	throw new Error("NEXT_PUBLIC_WHOP_APP_ID environment variable is required");

@@ -38,27 +38,65 @@ export async function uploadBase64ToWhop(
  */
 export async function uploadFileToWhop(file: File): Promise<UploadedImage> {
   try {
-    const formData = new FormData();
-    formData.append('file', file);
+    // Check if we're in a server context (API route) or client context
+    const isServerContext = typeof window === 'undefined';
+    
+    if (isServerContext) {
+      // Server context: Use WHOP SDK directly
+      console.log('🔍 Server context: Using WHOP SDK directly...');
+      
+      // Import the existing WHOP SDK
+      const { whopSdk } = await import('../whop-sdk');
+      
+      // Upload to WHOP storage using the SDK directly
+      const response = await whopSdk.attachments.uploadAttachment({
+        file: file,
+        record: "experience", // Store as experience-related attachment
+      });
 
-    const response = await fetch('/api/upload-image', {
-      method: 'POST',
-      body: formData,
-    });
+      console.log("🔍 Image uploaded successfully:", {
+        attachmentId: response.directUploadId,
+        url: response.attachment.source.url
+      });
 
-    const data = await response.json();
+      return {
+        attachmentId: response.directUploadId,
+        url: response.attachment.source.url,
+        filename: file.name,
+        size: file.size,
+        type: file.type,
+      };
+    } else {
+      // Client context: Use API route
+      console.log('🔍 Client context: Uploading file to WHOP via API route...');
+      
+      const formData = new FormData();
+      formData.append('file', file);
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Upload failed');
+      const response = await fetch('/api/upload-to-whop', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      console.log("🔍 Image uploaded successfully:", {
+        attachmentId: data.attachmentId,
+        url: data.url
+      });
+
+      return {
+        attachmentId: data.attachmentId,
+        url: data.url,
+        filename: data.filename,
+        size: data.size,
+        type: data.type,
+      };
     }
-
-    return {
-      attachmentId: data.attachmentId,
-      url: data.url,
-      filename: data.filename,
-      size: data.size,
-      type: data.type,
-    };
   } catch (error) {
     console.error('Error uploading file to WHOP:', error);
     throw new Error(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
