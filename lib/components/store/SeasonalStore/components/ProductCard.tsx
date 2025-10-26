@@ -7,13 +7,13 @@ interface ProductCardProps {
   theme: LegacyTheme;
   isEditorView: boolean;
   loadingState: LoadingState;
-  onUpdateProduct: (id: number, updates: Partial<Product>) => void;
-  onDeleteProduct: (id: number) => void;
-  onProductImageUpload: (productId: number, file: File) => void;
+  onUpdateProduct: (id: number | string, updates: Partial<Product>) => void;
+  onDeleteProduct: (id: number | string) => void;
+  onProductImageUpload: (productId: number | string, file: File) => void;
   onRefineProduct: (product: Product) => void;
-  onRemoveSticker: (productId: number) => void;
-  onDropAsset: (e: React.DragEvent, productId: number) => void;
-  onOpenEditor?: (productId: number, target: 'name' | 'description' | 'card' | 'button') => void;
+  onRemoveSticker: (productId: number | string) => void;
+  onDropAsset: (e: React.DragEvent, productId: number | string) => void;
+  onOpenEditor?: (productId: number | string, target: 'name' | 'description' | 'card' | 'button') => void;
   inlineButtonEditing?: boolean;
   onInlineButtonSave?: (text: string) => void;
   onInlineButtonEnd?: () => void;
@@ -67,20 +67,43 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const cardClass = product.cardClass || theme.card;
   const buttonText = product.buttonText || 'VIEW DETAILS';
   const buttonBaseClass = product.buttonClass || theme.accent;
+  
+  // Debug logging
+  console.log('🎨 ProductCard render for product:', product.id, {
+    cardClass: product.cardClass,
+    titleClass: product.titleClass,
+    descClass: product.descClass,
+    buttonClass: product.buttonClass,
+    finalCardClass: cardClass,
+    finalTitleClass: titleClass,
+    finalDescClass: descClass
+  });
   // Avoid inline color styles per instructions; rely on classes only
 
   return (
-    <div 
-      className={`rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
-      onClick={(e) => {
-        if (!isEditorView) return;
-        const target = e.target as HTMLElement;
-        // Treat product name/desc and form fields as interactive to avoid opening modal while inline editing
-        const interactive = target.closest('button,input,textarea,label,[data-inline-product-name],[data-inline-product-desc]');
-        if (interactive) return;
-        if (onOpenEditor) onOpenEditor(product.id, 'card');
-      }}
-    >
+    <div className="relative max-w-xs mx-auto">
+      {/* Blurred background for visual feedback */}
+      <div 
+        className="absolute inset-0 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-lg"
+        style={{ 
+          zIndex: -1,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+          backdropFilter: 'blur(8px)'
+        }}
+      />
+      
+      {/* Main product card */}
+      <div 
+        className={`rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
+        onClick={(e) => {
+          if (!isEditorView) return;
+          const target = e.target as HTMLElement;
+          // Treat product name/desc and form fields as interactive to avoid opening modal while inline editing
+          const interactive = target.closest('button,input,textarea,label,[data-inline-product-name],[data-inline-product-desc]');
+          if (interactive) return;
+          if (onOpenEditor) onOpenEditor(product.id, 'card');
+        }}
+      >
       {/* Image Section - Top Half */}
       <div className="relative h-56 w-full">
         {/* Background Image - fills top half */}
@@ -89,7 +112,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           style={{
             backgroundImage: product.imageAttachmentUrl 
               ? `url(${product.imageAttachmentUrl})` 
-              : `url(https://placehold.co/400x400/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())})`,
+              : product.image
+                ? `url(${product.image})`
+                : `url(https://placehold.co/400x400/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -250,6 +275,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 };

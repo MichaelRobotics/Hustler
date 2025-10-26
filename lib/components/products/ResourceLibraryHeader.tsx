@@ -6,8 +6,9 @@ import type { Funnel, ResourceLibraryProps } from "../../types/resource";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 
-interface ResourceLibraryHeaderProps
-	extends Pick<ResourceLibraryProps, "context" | "onBack"> {
+interface ResourceLibraryHeaderProps {
+	context: "global" | "funnel" | "store";
+	onBack?: () => void;
 	onAddProduct: () => void;
 	onOpenOfflineConfirmation?: () => void;
 	onDeploy?: (funnelId: string) => Promise<void>;
@@ -38,7 +39,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 			{/* Top Section: Back Button + Title */}
 			<div className="flex items-center gap-4 mb-6">
-				{context === "funnel" && onBack && (
+				{(context === "funnel" || context === "store") && onBack && (
 					<Button
 						size="2"
 						variant="ghost"
@@ -57,7 +58,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 						weight="bold"
 						className="text-black dark:text-white"
 					>
-						{context === "funnel" ? "Merchant Market Stall" : "Warehouse"}
+						{context === "funnel" ? "Merchant Market Stall" : context === "store" ? "Market Stall" : "Warehouse"}
 					</Heading>
 				</div>
 			</div>
@@ -77,7 +78,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 
 				{/* Right Side: Create Resource Button, Go Live Button, or Live Status */}
 				<div className="flex-shrink-0">
-					{(context === "funnel" || context === "global") && (
+					{(context === "funnel" || context === "global" || context === "store") && (
 						funnel?.isDeployed ? (
 							/* Live Status Button - When funnel is deployed */
 							<button

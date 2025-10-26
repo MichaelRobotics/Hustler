@@ -12,14 +12,6 @@ import {
 } from '@/lib/components/store/SeasonalStore/types';
 import { 
   initialThemes, 
-  initialProducts, 
-  winterProducts,
-  summerProducts,
-  fallProducts,
-  holidayProducts,
-  springProducts,
-  cyberProducts,
-  halloweenProducts, 
   defaultLogo 
 } from '@/lib/components/store/SeasonalStore/services/constants';
 
@@ -65,21 +57,8 @@ export const useSeasonalStore = () => {
   const generatedBackground = themeGeneratedBackgrounds[currentSeason] || null;
   const uploadedBackground = themeUploadedBackgrounds[currentSeason] || null;
   
-  // Get products for current theme, fallback to default theme products
-  const getDefaultProducts = (season: string): Product[] => {
-    switch (season) {
-      case 'Winter': return winterProducts;
-      case 'Summer': return summerProducts;
-      case 'Fall': return fallProducts;
-      case 'Holiday Cheer': return holidayProducts;
-      case 'Spring Renewal': return springProducts;
-      case 'Cyber Sale': return cyberProducts;
-      case 'Spooky Night': return halloweenProducts;
-      default: return initialProducts;
-    }
-  };
-  
-  const products = themeProducts[currentSeason] || getDefaultProducts(currentSeason);
+  // Get products for current theme - only use products loaded from database
+  const products = themeProducts[currentSeason] || [];
   
   // Editor State
   const [editorState, setEditorState] = useState<EditorState>({
@@ -184,16 +163,6 @@ export const useSeasonalStore = () => {
     return result;
   };
 
-  // Initialize theme-specific products if not already set
-  useEffect(() => {
-    if (!themeProducts[currentSeason]) {
-      const defaultProducts = getDefaultProducts(currentSeason);
-      setThemeProducts(prev => ({
-        ...prev,
-        [currentSeason]: defaultProducts
-      }));
-    }
-  }, [currentSeason, themeProducts, getDefaultProducts]);
 
   // Update text colors when theme changes
   useEffect(() => {

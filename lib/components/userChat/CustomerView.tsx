@@ -13,6 +13,7 @@ import FunnelProgressBar from "./FunnelProgressBar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
 import { useTheme } from "../common/ThemeProvider";
+import { TemplateRenderer } from "./TemplateRenderer";
 
 /**
  * --- Customer View Component ---
@@ -51,6 +52,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [adminLoading, setAdminLoading] = useState(false);
 	const [adminError, setAdminError] = useState<string | null>(null);
 	const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
+	
+	// Live template state
+	const [liveTemplate, setLiveTemplate] = useState<any>(null);
+	const [hasLiveTemplate, setHasLiveTemplate] = useState(false);
+	const [templateLoading, setTemplateLoading] = useState(true);
+	const [templateReady, setTemplateReady] = useState(false);
 	
 	// View mode state - single source of truth
 	type ViewMode = 'iframe-only' | 'chat-only' | 'split-view';
@@ -327,6 +334,44 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, [experienceId, userType]);
 
+	// Check for live template
+	const checkLiveTemplate = useCallback(async () => {
+		if (!experienceId) return;
+		
+		try {
+			setTemplateLoading(true);
+			console.log(`[CustomerView] Checking for live template for experienceId: ${experienceId}`);
+			const response = await apiGet(`/api/templates/live`, experienceId);
+			if (response.ok) {
+				const data = await response.json();
+				if (data.success && data.template) {
+					console.log(`[CustomerView] Found live template:`, data.template.name);
+					setLiveTemplate(data.template);
+					setHasLiveTemplate(true);
+					// Don't set templateReady immediately - wait for frontend loading
+					console.log(`[CustomerView] Template found, waiting for frontend loading...`);
+				} else {
+					console.log(`[CustomerView] No live template found`);
+					setLiveTemplate(null);
+					setHasLiveTemplate(false);
+					setTemplateReady(true); // No template means we're ready to show regular content
+				}
+			} else {
+				console.log(`[CustomerView] No live template found (${response.status})`);
+				setLiveTemplate(null);
+				setHasLiveTemplate(false);
+				setTemplateReady(true); // No template found - ready to show regular content
+			}
+		} catch (error) {
+			console.error(`[CustomerView] Error checking live template:`, error);
+			setLiveTemplate(null);
+			setHasLiveTemplate(false);
+			setTemplateReady(true); // Error case - ready to show regular content
+		} finally {
+			setTemplateLoading(false);
+		}
+	}, [experienceId]);
+
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
 		if (!experienceId) {
@@ -541,7 +586,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		loadFunnelAndConversation();
 		fetchUserContext();
 		fetchExperienceLink(); // Get experience link for iframe
-	}, [loadFunnelAndConversation, fetchUserContext, fetchExperienceLink]);
+		checkLiveTemplate(); // Check for live template
+	}, [loadFunnelAndConversation, fetchUserContext, fetchExperienceLink, checkLiveTemplate]);
 
 	// Monitor iframeUrl changes
 	useEffect(() => {
@@ -650,6 +696,32 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		userType,
 		shouldShowAdminPanel: userType === "admin"
 	});
+
+	// Show TemplateRenderer if live template is found
+	if (hasLiveTemplate && liveTemplate) {
+		return (
+			<TemplateRenderer
+				liveTemplate={liveTemplate}
+				onProductClick={() => {
+					console.log('[CustomerView] Product clicked in template');
+				}}
+				onPromoClick={() => {
+					console.log('[CustomerView] Promo button clicked in template');
+				}}
+				isMobile={isMobile}
+				isFunnelActive={isFunnelActive || false}
+				funnelFlow={funnelFlow}
+				experienceId={experienceId}
+				userName={userName}
+				whopUserId={whopUserId}
+				onMessageSent={handleMessageSentInternal}
+				conversationId={conversationId || undefined}
+				conversation={conversation || undefined}
+				stageInfo={stageInfo || undefined}
+				userType={userType}
+			/>
+		);
+	}
 
 	// Render UserChat with real data
 			return (

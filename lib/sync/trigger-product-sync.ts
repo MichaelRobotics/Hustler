@@ -1,3 +1,4 @@
+
 import { db } from "@/lib/supabase/db-server";
 import { resources, users, experiences } from "@/lib/supabase/schema";
 import { eq, and, isNotNull, sql } from "drizzle-orm";
@@ -64,7 +65,7 @@ export async function triggerProductSyncForNewAdmin(
 	// Enhanced keepalive with progress reporting
 	const globalKeepAlive = setInterval(() => {
 		const elapsed = Math.round((Date.now() - syncState.startTime) / 1000);
-		console.log(`[PRODUCT-SYNC] 💓 Global Keepalive: Product sync in progress... Phase: ${syncState.phase}, Progress: ${syncState.progress}%, Elapsed: ${elapsed}s`);
+		console.log(`[PRODUCT-SYNC] � Global Keepalive: Product sync in progress... Phase: ${syncState.phase}, Progress: ${syncState.progress}%, Elapsed: ${elapsed}s`);
 	}, 5000); // Every 5 seconds for more frequent updates
 
 	// Helper function to classify apps by name (fallback when marketplace category is not available)
@@ -103,7 +104,7 @@ export async function triggerProductSyncForNewAdmin(
 			syncState.completedSteps++;
 		}
 		syncState.progress = Math.round((syncState.completedSteps / syncState.totalSteps) * 100);
-		console.log(`[PRODUCT-SYNC] 📊 Progress Update: ${phase} - ${syncState.progress}% (${syncState.completedSteps}/${syncState.totalSteps})`);
+		console.log(`[PRODUCT-SYNC] � Progress Update: ${phase} - ${syncState.progress}% (${syncState.completedSteps}/${syncState.totalSteps})`);
 	};
 
 	// Circuit breaker for external API calls
@@ -141,13 +142,13 @@ export async function triggerProductSyncForNewAdmin(
 	};
 	
 	try {
-		console.log(`[PRODUCT-SYNC] 🔄 Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
-		console.log(`[PRODUCT-SYNC] 📊 Company ID: ${companyId}`);
-		console.log(`[PRODUCT-SYNC] 🔧 Function called at: ${new Date().toISOString()}`);
+		console.log(`[PRODUCT-SYNC] � Triggering smart upselling sync for new admin user ${userId} in experience ${experienceId}`);
+		console.log(`[PRODUCT-SYNC] � Company ID: ${companyId}`);
+		console.log(`[PRODUCT-SYNC] � Function called at: ${new Date().toISOString()}`);
 
 		// Check database connection health before starting
 		updateProgress("checking_database_health");
-		console.log("🔍 Checking database connection health...");
+		console.log("� Checking database connection health...");
 		try {
 			await db.select().from(users).limit(1);
 			console.log("✅ Database connection healthy");
@@ -159,7 +160,7 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Check if products have already been synced for this experience
 		// Use a more comprehensive check to prevent race conditions
-		console.log("🔍 Checking for existing sync state...");
+		console.log("� Checking for existing sync state...");
 		
 		// Check for existing resources
 		const existingResources = await db.select()
@@ -193,10 +194,10 @@ export async function triggerProductSyncForNewAdmin(
 		// Add a small delay to prevent race conditions
 		await new Promise(resolve => setTimeout(resolve, 100));
 
-		console.log(`🚀 Starting smart upselling sync for experience ${experienceId}`);
+		console.log(`� Starting smart upselling sync for experience ${experienceId}`);
 
 		// Get user's Whop user ID from database
-		console.log("🔧 Getting user's Whop user ID...");
+		console.log("� Getting user's Whop user ID...");
 		const userRecord = await db.query.users.findFirst({
 			where: eq(users.id, userId),
 			columns: { whopUserId: true }
@@ -210,12 +211,12 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`✅ Found Whop user ID: ${whopUserId}`);
 
 		// Get Whop API client with proper multi-tenant context
-		console.log("🔧 Getting Whop API client...");
+		console.log("� Getting Whop API client...");
 		const whopClient = getWhopApiClient(companyId, whopUserId);
 		console.log("✅ Whop API client created with proper multi-tenant context");
 
 		// Get the Whop experience ID for the current app
-		console.log("🔧 Getting Whop experience ID for current app...");
+		console.log("� Getting Whop experience ID for current app...");
 		const currentExperience = await db.query.experiences.findFirst({
 			where: eq(experiences.id, experienceId),
 			columns: { whopExperienceId: true }
@@ -230,7 +231,7 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Step 1: Get owner's business products from discovery page
 		updateProgress("fetching_discovery_products");
-		console.log("🏪 Fetching owner's discovery page products...");
+		console.log("� Fetching owner's discovery page products...");
 		let discoveryProducts: any[] = [];
 		try {
 			if (!circuitBreaker.canExecute()) {
@@ -261,7 +262,7 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Step 3: Create discovery products first (PAID/FREE)
 		updateProgress("creating_discovery_resources");
-		console.log("💳 Creating discovery products (PAID/FREE)...");
+		console.log("� Creating discovery products (PAID/FREE)...");
 		const upsellProducts = discoveryProducts; // Use all discovery products as upsells
 		console.log(`Found ${upsellProducts.length} discovery products to use as upsells`);
 		
@@ -269,7 +270,7 @@ export async function triggerProductSyncForNewAdmin(
 		const paidProducts = upsellProducts.filter(product => !product.isFree && product.price > 0);
 		const freeProducts = upsellProducts.filter(product => product.isFree || product.price === 0);
 		
-		console.log(`📊 Discovery products breakdown: ${paidProducts.length} PAID, ${freeProducts.length} FREE`);
+		console.log(`� Discovery products breakdown: ${paidProducts.length} PAID, ${freeProducts.length} FREE`);
 		
 		// Limit to 6 PAID discovery products and 6 FREE discovery products
 		const maxPaidProducts = 6;
@@ -289,7 +290,7 @@ export async function triggerProductSyncForNewAdmin(
 		const limitedDiscoveryProducts = [...limitedPaidProducts, ...limitedFreeDiscoveryProducts];
 		
 		if (limitedDiscoveryProducts.length > 0) {
-			console.log(`🔍 Processing ${limitedDiscoveryProducts.length} discovery products...`);
+			console.log(`� Processing ${limitedDiscoveryProducts.length} discovery products...`);
 			
 			// Process discovery products in batches for better performance and error handling
 			const batchSize = 3; // Process 3 products at a time
@@ -298,7 +299,7 @@ export async function triggerProductSyncForNewAdmin(
 			
 			for (let i = 0; i < limitedDiscoveryProducts.length; i += batchSize) {
 				const batch = limitedDiscoveryProducts.slice(i, i + batchSize);
-				console.log(`🔍 Processing discovery products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedDiscoveryProducts.length/batchSize)} (${batch.length} products)`);
+				console.log(`� Processing discovery products batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(limitedDiscoveryProducts.length/batchSize)} (${batch.length} products)`);
 				
 				// Process batch in parallel with individual error handling and retry logic
 				const batchPromises = batch.map(async (product) => {
@@ -325,7 +326,7 @@ export async function triggerProductSyncForNewAdmin(
 						// They will be populated later by access pass processing
 						const productApps = productCategory === "FREE_VALUE" ? [] : undefined;
 						if (productApps) {
-							console.log(`🔗 FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
+							console.log(`� FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
 						}
 						
 						// Generate placeholder image if no logo available
@@ -335,6 +336,12 @@ export async function triggerProductSyncForNewAdmin(
 						// Format price for database storage
 						const formattedPrice = product.price > 0 ? product.price.toString() : null;
 						
+						// Skip products with empty names
+						if (!product.title || !product.title.trim()) {
+							console.log(`⚠️ Skipping product with empty name: ${product.id}`);
+							return; // Skip this product
+						}
+
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title.trim(),
@@ -390,7 +397,7 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Step 4: Create FREE apps from installed apps second (separate from discovery products)
 		updateProgress("creating_free_resources");
-		console.log("📱 Creating FREE apps from installed apps (separate from discovery products)...");
+		console.log("� Creating FREE apps from installed apps (separate from discovery products)...");
 		try {
 			// Add timeout to installed apps fetch
 			const installedAppsTimeout = 45000; // 45 seconds total
@@ -400,10 +407,10 @@ export async function triggerProductSyncForNewAdmin(
 					setTimeout(() => reject(new Error(`Installed apps fetch timeout after ${installedAppsTimeout}ms`)), installedAppsTimeout)
 				)
 			]);
-			console.log(`🔍 Found ${installedApps.length} installed apps`);
+			console.log(`� Found ${installedApps.length} installed apps`);
 			
 			// Filter out current app and get app categories from Whop SDK
-				console.log(`🔍 Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
+				console.log(`� Excluding apps with Whop experience ID: ${currentWhopExperienceId} (current app)`);
 				
 				const availableApps: typeof installedApps = [];
 				
@@ -415,12 +422,12 @@ export async function triggerProductSyncForNewAdmin(
 					
 					// Skip apps that have the same Whop experience ID as the current app
 					if (app.experienceId === currentWhopExperienceId) {
-						console.log(`🚫 Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
+						console.log(`� Skipping app "${app.name}" - same Whop experience ID as current app (${currentWhopExperienceId})`);
 						
 						// Generate and store the app link for the current experience
 						try {
 							const appLink = whopClient.generateAppUrl(app, undefined, true);
-							console.log(`🔗 Generated app link for current experience: ${appLink}`);
+							console.log(`� Generated app link for current experience: ${appLink}`);
 							
 							// Store the link in the experience table
 							await db.update(experiences)
@@ -440,11 +447,11 @@ export async function triggerProductSyncForNewAdmin(
 					
 				// Classify app using name-based keywords
 				app.category = classifyAppByName(app.name);
-				console.log(`📱 App "${app.name}" category from name-based classification: ${app.category}`);
+				console.log(`� App "${app.name}" category from name-based classification: ${app.category}`);
 						availableApps.push(app);
 				}
 				
-			console.log(`🔍 Found ${availableApps.length} apps with valid categories (excluding current app)`);
+			console.log(`� Found ${availableApps.length} apps with valid categories (excluding current app)`);
 				
 			// Classify apps by categories
 				const classifiedApps = {
@@ -454,7 +461,7 @@ export async function triggerProductSyncForNewAdmin(
 				other: availableApps.filter(app => app.category === 'other')
 				};
 			
-				console.log(`📊 App classification results:`);
+				console.log(`� App classification results:`);
 				console.log(`  - Learning/Educational: ${classifiedApps.learn.length} apps`);
 				console.log(`  - Earning/Monetization: ${classifiedApps.earn.length} apps`);
 				console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
@@ -465,7 +472,7 @@ export async function triggerProductSyncForNewAdmin(
 			const maxTotalFree = 6; // Total FREE resources (discovery + apps)
 			const remainingFreeSlots = Math.max(0, maxTotalFree - freeDiscoveryCount);
 			
-			console.log(`📊 FREE resource allocation: ${freeDiscoveryCount} FREE discovery products, ${remainingFreeSlots} remaining slots for FREE apps`);
+			console.log(`� FREE resource allocation: ${freeDiscoveryCount} FREE discovery products, ${remainingFreeSlots} remaining slots for FREE apps`);
 			
 			// Apply selection hierarchy for remaining FREE apps
 			const maxFreeApps = remainingFreeSlots;
@@ -506,7 +513,7 @@ export async function triggerProductSyncForNewAdmin(
 			console.log(`✅ Selected ${otherApps.length} Other apps to fill remaining slots: ${otherApps.map(app => app.name).join(', ')}`);
 		}
 		
-		console.log(`📱 Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with category-based selection`);
+		console.log(`� Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with category-based selection`);
 			
 			if (selectedApps.length > 0) {
 				// Create FREE resources for each selected app (with batching for performance)
@@ -516,12 +523,12 @@ export async function triggerProductSyncForNewAdmin(
 				
 				for (let i = 0; i < selectedApps.length; i += batchSize) {
 					const batch = selectedApps.slice(i, i + batchSize);
-					console.log(`🔍 Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
+					console.log(`� Processing FREE apps batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(selectedApps.length/batchSize)} (${batch.length} apps)`);
 					
 					// Process batch in parallel with individual error handling and retry logic
 					const batchPromises = batch.map(async (app) => {
 						try {
-							console.log(`🔍 Creating FREE resource for app: ${app.name} (${app.id})`);
+							console.log(`� Creating FREE resource for app: ${app.name} (${app.id})`);
           // Use app URL with company route and experience ID
           // FREE apps don't need ref or affiliate parameters
           const directUrl = whopClient.generateAppUrl(app, undefined, true);
@@ -539,7 +546,7 @@ export async function triggerProductSyncForNewAdmin(
             console.log(`⚠️ No app image found, using placeholder for ${app.name}`);
           }
 							
-							console.log(`🔍 Resource data:`, {
+							console.log(`� Resource data:`, {
 								name: app.name,
 								type: "MY_PRODUCTS",
 								category: "FREE_VALUE",
@@ -549,9 +556,15 @@ export async function triggerProductSyncForNewAdmin(
 								image: appImage
 							});
 							
+							// Skip apps with empty names
+							if (!app.name || !app.name.trim()) {
+								console.log(`⚠️ Skipping app with empty name: ${app.id}`);
+								return; // Skip this app
+							}
+							
 							const resource = await retryDatabaseOperation(
 								() => {
-								console.log(`🔍 Executing createResource for ${app.name.trim()}...`);
+								console.log(`� Executing createResource for ${app.name.trim()}...`);
 									return createResource({ id: userId, experience: { id: experienceId } } as any, {
 									name: app.name.trim(),
 						type: "MY_PRODUCTS",
@@ -585,7 +598,7 @@ export async function triggerProductSyncForNewAdmin(
 						}
 					});
 					
-					console.log(`🔍 Waiting for ${batch.length} FREE resource creations to complete...`);
+					console.log(`� Waiting for ${batch.length} FREE resource creations to complete...`);
 					
 					// Add timeout to entire batch processing
 					const batchTimeout = 60000; // 60 seconds for entire batch
@@ -611,14 +624,14 @@ export async function triggerProductSyncForNewAdmin(
 				console.log(`✅ Created ${successCount} FREE resources from installed apps (${errorCount} errors)`);
 			
 			// Efficiently process access passes for all selected FREE apps
-			console.log(`🔍 Processing access passes for ${selectedApps.length} FREE apps efficiently...`);
+			console.log(`� Processing access passes for ${selectedApps.length} FREE apps efficiently...`);
 			
 			// Get all resources in current experience once (instead of per app)
 			const allExperienceResources = await db.select()
 				.from(resources)
 				.where(eq(resources.experienceId, experienceId));
 			
-			console.log(`📋 Found ${allExperienceResources.length} total resources in current experience`);
+			console.log(`� Found ${allExperienceResources.length} total resources in current experience`);
 			
 			// Process all apps in parallel for access passes
 			const accessPassPromises = selectedApps.map(async (app) => {
@@ -628,7 +641,7 @@ export async function triggerProductSyncForNewAdmin(
 						return { app, accessPasses: [], appResource: null };
 					}
 					
-					console.log(`🔍 Getting access passes for app: ${app.name} (experienceId: ${app.experienceId})`);
+					console.log(`� Getting access passes for app: ${app.name} (experienceId: ${app.experienceId})`);
 					
 					// Get access passes for this app's experience
 					const accessPassesResult = await whopSdk.experiences.listAccessPassesForExperience({
@@ -636,7 +649,7 @@ export async function triggerProductSyncForNewAdmin(
 					});
 					
 					const accessPasses = accessPassesResult?.accessPasses || [];
-					console.log(`📋 Found ${accessPasses.length} access passes for app ${app.name}:`, accessPasses.map(ap => ap.id));
+					console.log(`� Found ${accessPasses.length} access passes for app ${app.name}:`, accessPasses.map(ap => ap.id));
 					
 					return {
 						app,
@@ -661,18 +674,18 @@ export async function triggerProductSyncForNewAdmin(
 					continue;
 				}
 				
-				console.log(`📋 Found FREE app resource: ${appResource.name}`);
+				console.log(`� Found FREE app resource: ${appResource.name}`);
 				
 				// For each access pass, find resources that match those access pass IDs
 				for (const accessPass of accessPasses) {
-					console.log(`🔍 Looking for resources matching access pass ${accessPass.id}`);
+					console.log(`� Looking for resources matching access pass ${accessPass.id}`);
 					
 					// Find resources that have this access pass as their whopProductId
 					const matchingResources = allExperienceResources.filter(
 						(resource: any) => resource.whopProductId === accessPass.id
 					);
 					
-					console.log(`📋 Found ${matchingResources.length} resources matching access pass ${accessPass.id}`);
+					console.log(`� Found ${matchingResources.length} resources matching access pass ${accessPass.id}`);
 					
 					// For each matching resource, collect the app name
 					for (const resource of matchingResources) {
@@ -683,7 +696,7 @@ export async function triggerProductSyncForNewAdmin(
 						// Add app name if not already present
 						if (!appResourceMappings[resource.id].includes(app.name)) {
 							appResourceMappings[resource.id].push(app.name);
-							console.log(`📝 Collected app "${app.name}" for resource ${resource.name} (access pass: ${accessPass.id})`);
+							console.log(`� Collected app "${app.name}" for resource ${resource.name} (access pass: ${accessPass.id})`);
 						}
 					}
 					
@@ -727,7 +740,7 @@ export async function triggerProductSyncForNewAdmin(
 			
 			// Execute all database updates in parallel
 			if (updatePromises.length > 0) {
-				console.log(`🔄 Executing ${updatePromises.length} database updates in parallel...`);
+				console.log(`� Executing ${updatePromises.length} database updates in parallel...`);
 				await Promise.all(updatePromises);
 			}
 			
@@ -747,7 +760,7 @@ export async function triggerProductSyncForNewAdmin(
 
 		// Step 5: Sync FREE_VALUE resources with "prod_..." whop_product_id to PAID resources' product_apps
 		updateProgress("syncing_free_to_paid_resources");
-		console.log("🔄 Syncing FREE_VALUE resources with 'prod_...' whop_product_id to PAID resources' product_apps...");
+		console.log("� Syncing FREE_VALUE resources with 'prod_...' whop_product_id to PAID resources' product_apps...");
 		
 		try {
 			// Get all resources in the current experience
@@ -774,8 +787,8 @@ export async function triggerProductSyncForNewAdmin(
 				resource.category === "PAID"
 			);
 			
-			console.log(`🔍 Found ${freeResourcesWithProdId.length} FREE_VALUE resources with 'prod_...' whop_product_id`);
-			console.log(`🔍 Found ${paidResources.length} PAID resources`);
+			console.log(`� Found ${freeResourcesWithProdId.length} FREE_VALUE resources with 'prod_...' whop_product_id`);
+			console.log(`� Found ${paidResources.length} PAID resources`);
 			
 			if (freeResourcesWithProdId.length > 0 && paidResources.length > 0) {
 				// Create mapping of FREE resource names to add to PAID resources' product_apps
@@ -812,7 +825,7 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Execute all sync updates in parallel
 				if (syncPromises.length > 0) {
-					console.log(`🔄 Executing ${syncPromises.length} FREE-to-PAID sync updates in parallel...`);
+					console.log(`� Executing ${syncPromises.length} FREE-to-PAID sync updates in parallel...`);
 					await Promise.all(syncPromises);
 				}
 				
@@ -837,11 +850,11 @@ export async function triggerProductSyncForNewAdmin(
 		// Final progress update - mark all steps as completed
 		syncState.completedSteps = syncState.totalSteps;
 		syncState.progress = 100;
-		console.log(`[PRODUCT-SYNC] 📊 Progress Update: sync_completed - 100% (${syncState.completedSteps}/${syncState.totalSteps})`);
+		console.log(`[PRODUCT-SYNC] � Progress Update: sync_completed - 100% (${syncState.completedSteps}/${syncState.totalSteps})`);
 		
 		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
 		
-		console.log(`[PRODUCT-SYNC] 🎉 Resource library sync completed for experience ${experienceId}:`);
+		console.log(`[PRODUCT-SYNC] � Resource library sync completed for experience ${experienceId}:`);
 		console.log(`[PRODUCT-SYNC]    - Total time: ${totalElapsed}s`);
 		console.log(`[PRODUCT-SYNC]    - Progress: ${syncState.progress}%`);
 		console.log(`[PRODUCT-SYNC]    - FREE apps: ${syncState.successCounts.freeResources}`);
@@ -860,7 +873,7 @@ export async function triggerProductSyncForNewAdmin(
 		
 		// Log final state even on error
 		const totalElapsed = Math.round((Date.now() - syncState.startTime) / 1000);
-		console.log(`[PRODUCT-SYNC] 💥 Sync failed after ${totalElapsed}s at ${syncState.progress}% progress`);
+		console.log(`[PRODUCT-SYNC] � Sync failed after ${totalElapsed}s at ${syncState.progress}% progress`);
 		console.log(`[PRODUCT-SYNC]    - Errors: ${syncState.errors.length}`);
 		console.log(`[PRODUCT-SYNC]    - Success counts:`, syncState.successCounts);
 		
@@ -869,7 +882,7 @@ export async function triggerProductSyncForNewAdmin(
 	} finally {
 		// Always clear the global keepalive interval
 		clearInterval(globalKeepAlive);
-		console.log("[PRODUCT-SYNC] 🧹 Cleaned up global keepalive mechanism");
+		console.log("[PRODUCT-SYNC] � Cleaned up global keepalive mechanism");
 	}
 }
 
@@ -886,7 +899,7 @@ async function retryDatabaseOperation<T>(
 	
 	for (let attempt = 1; attempt <= maxRetries; attempt++) {
 		try {
-			console.log(`🔄 ${operationName} attempt ${attempt}/${maxRetries} (timeout: ${timeoutMs}ms)`);
+			console.log(`� ${operationName} attempt ${attempt}/${maxRetries} (timeout: ${timeoutMs}ms)`);
 			
 			// Add timeout to prevent hanging
 			const result = await Promise.race([
@@ -937,4 +950,3 @@ export async function shouldSyncProductsForUser(userId: string): Promise<boolean
 		return false;
 	}
 }
-

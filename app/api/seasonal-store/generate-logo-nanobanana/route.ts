@@ -3,7 +3,7 @@ import { nanoBananaService } from '@/lib/services/nanobananaService';
 
 export async function POST(request: NextRequest) {
   try {
-    const { theme, shape, currentLogoUrl } = await request.json();
+    const { theme, shape, currentLogoUrl, logoContext } = await request.json();
 
     if (!theme || !shape) {
       return NextResponse.json(
@@ -13,10 +13,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('🎨 [Nano Banana API] Starting logo generation for theme:', theme.name);
+    console.log('🎨 [Nano Banana API] Current logo URL:', currentLogoUrl?.startsWith('data:') ? 
+      currentLogoUrl.substring(0, 50) + '...' + currentLogoUrl.substring(currentLogoUrl.length - 50) : 
+      currentLogoUrl);
+    console.log('🎨 [Nano Banana API] Logo context:', logoContext);
     
-    const imageUrl = await nanoBananaService.generateLogo(theme, shape, currentLogoUrl || '');
+    const imageUrl = await nanoBananaService.generateLogo(theme, shape, currentLogoUrl || '', logoContext);
     
     console.log('🎨 [Nano Banana API] Generated logo URL length:', imageUrl.length);
+    console.log('🎨 [Nano Banana API] Generated logo preview:', imageUrl.startsWith('data:') ? 
+      imageUrl.substring(0, 50) + '...' + imageUrl.substring(imageUrl.length - 50) : 
+      imageUrl);
     
     return NextResponse.json({ 
       success: true,

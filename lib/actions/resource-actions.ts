@@ -84,6 +84,11 @@ export async function createResource(
 		// Trim whitespace from name
 		const trimmedName = input.name.trim();
 		
+		// Validate that name is not empty after trimming
+		if (!trimmedName) {
+			throw new Error("Resource name cannot be empty");
+		}
+		
 		// Check for duplicate name within the same experience
 		const existingResourceWithSameName = await db.query.resources.findFirst({
 			where: and(
@@ -389,6 +394,15 @@ export async function updateResource(
 			if (!input.whopProductId.trim()) {
 				throw new Error("WHOP product ID cannot be empty");
 			}
+		}
+
+		// Validate name if provided
+		if (input.name !== undefined) {
+			const trimmedName = input.name.trim();
+			if (!trimmedName) {
+				throw new Error("Resource name cannot be empty");
+			}
+			input.name = trimmedName;
 		}
 
 		// Update resource

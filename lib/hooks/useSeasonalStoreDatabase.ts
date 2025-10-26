@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { 
   Product, 
@@ -12,14 +13,6 @@ import {
 } from '@/lib/components/store/SeasonalStore/types';
 import { 
   initialThemes, 
-  initialProducts, 
-  winterProducts,
-  summerProducts,
-  fallProducts,
-  holidayProducts,
-  springProducts,
-  cyberProducts,
-  halloweenProducts, 
   defaultLogo 
 } from '@/lib/components/store/SeasonalStore/services/constants';
 import { 
@@ -44,19 +37,6 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   const MAX_CUSTOM_THEMES = 10;
   const MAX_CUSTOM_TEMPLATES = 10;
   
-  // Helper function to get default products for a season
-  const getDefaultProducts = (season: string): Product[] => {
-    switch (season.toLowerCase()) {
-      case 'winter': return winterProducts;
-      case 'summer': return summerProducts;
-      case 'fall': return fallProducts;
-      case 'holiday': return holidayProducts;
-      case 'spring': return springProducts;
-      case 'cyber': return cyberProducts;
-      case 'halloween': return halloweenProducts;
-      default: return initialProducts;
-    }
-  };
   
   // Core State
   const [allThemes, setAllThemes] = useState<Record<string, LegacyTheme>>(initialThemes);
@@ -79,6 +59,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Template theme state - when a template is loaded, use its themeSnapshot
   const [currentTemplateTheme, setCurrentTemplateTheme] = useState<LegacyTheme | null>(null);
+  
+  // Track if a template has been manually loaded to prevent live template override
+  const [hasManuallyLoadedTemplate, setHasManuallyLoadedTemplate] = useState(false);
+  
+  // Store ResourceLibrary product IDs from loaded templates
+  const [templateResourceLibraryProductIds, setTemplateResourceLibraryProductIds] = useState<string[]>([]);
   
   // Helper function to convert Tailwind color classes to hex values
   const getThemeTextColor = (welcomeColor: string | undefined): string => {
@@ -175,8 +161,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     icon: '🎁'
   });
   
-  // Products for current theme - ensure we have default products for each theme
-  const products = themeProducts[currentSeason] || getDefaultProducts(currentSeason);
+  // Products for current theme - only use products loaded from database
+  const products = themeProducts[currentSeason] || [];
   
   // Floating assets for current theme
   const floatingAssets = themeFloatingAssets[currentSeason] || [];
@@ -186,6 +172,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     setCurrentSeason(season);
     // Clear template theme when switching to a global theme
     setCurrentTemplateTheme(null);
+    // Reset manual template flag when switching themes
+    setHasManuallyLoadedTemplate(false);
   }, []);
   
   // Current theme - use template theme if loaded, otherwise use global themes
@@ -201,42 +189,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   const [apiError, setApiError] = useState<string | null>(null);
   
-  // Initialize default products for each theme on first load
-  useEffect(() => {
-    const initializeThemeProducts = () => {
-      const updatedThemeProducts: Record<string, Product[]> = {};
-      
-      // Initialize products for each theme if not already set
-      Object.keys(initialThemes).forEach(themeName => {
-        if (!themeProducts[themeName]) {
-          updatedThemeProducts[themeName] = getDefaultProducts(themeName);
-        }
-      });
-      
-      // Only update if we have new products to add
-      if (Object.keys(updatedThemeProducts).length > 0) {
-        setThemeProducts(prev => ({
-          ...prev,
-          ...updatedThemeProducts
-        }));
-        console.log('🎯 Initialized default products for themes:', Object.keys(updatedThemeProducts));
-      }
-    };
-    
-    initializeThemeProducts();
-  }, []); // Run only once on mount
   
-  // Ensure current season has products when switching themes
-  useEffect(() => {
-    if (!themeProducts[currentSeason]) {
-      const defaultProducts = getDefaultProducts(currentSeason);
-      setThemeProducts(prev => ({
-        ...prev,
-        [currentSeason]: defaultProducts
-      }));
-      console.log('🎯 Initialized products for current season:', currentSeason);
-    }
-  }, [currentSeason, themeProducts]);
   
   // State persistence: Load state from sessionStorage on mount
   useEffect(() => {
@@ -484,17 +437,22 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setLiveTemplate(live);
       
       if (live) {
-        // Load live template data
-        setCurrentSeason(live.currentSeason);
-        
-        // Live template uses its own themeSnapshot - no need to modify allThemes
-        console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
-        
-        setThemeTextStyles(live.templateData.themeTextStyles);
-        setThemeLogos(live.templateData.themeLogos);
-        setThemeGeneratedBackgrounds(live.templateData.themeGeneratedBackgrounds);
-        setThemeUploadedBackgrounds(live.templateData.themeUploadedBackgrounds);
-        setThemeProducts(live.templateData.themeProducts);
+        // Only load live template if no template has been manually loaded
+        if (!hasManuallyLoadedTemplate) {
+          // Load live template data
+          setCurrentSeason(live.currentSeason);
+          
+          // Live template uses its own themeSnapshot - no need to modify allThemes
+          console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
+          
+          setThemeTextStyles(live.templateData.themeTextStyles);
+          setThemeLogos(live.templateData.themeLogos);
+          setThemeGeneratedBackgrounds(live.templateData.themeGeneratedBackgrounds);
+          setThemeUploadedBackgrounds(live.templateData.themeUploadedBackgrounds);
+          setThemeProducts(live.templateData.themeProducts);
+        } else {
+          console.log('🎨 Skipping live template load - manual template already loaded');
+        }
         
         // Load current theme styling if available (but don't override allThemes)
         if (live.templateData.currentTheme) {
@@ -544,7 +502,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         setApiError(`Failed to load live template: ${(error as Error).message}`);
       }
     }
-  }, [experienceId]);
+  }, [experienceId, hasManuallyLoadedTemplate]);
   
   // Load last edited template
   const loadLastEditedTemplate = useCallback(async () => {
@@ -629,14 +587,121 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Load template data into current state
       setCurrentSeason(template.currentSeason);
       
+      // Mark that a template has been manually loaded
+      setHasManuallyLoadedTemplate(true);
+      
       // Template uses its own themeSnapshot - no need to modify allThemes
-      console.log('🎨 Loading template with snapshot theme:', template.themeSnapshot.name);
+      console.log('📂 ===== TEMPLATE LOAD STRUCTURE =====');
+      console.log('📂 Template ID:', template.id);
+      console.log('📂 Template Name:', template.name);
+      console.log('📂 Experience ID:', template.experienceId);
+      console.log('📂 User ID:', template.userId);
+      console.log('📂 Theme ID:', template.themeId);
+      console.log('📂 Current Season:', template.currentSeason);
+      console.log('📂 Is Live:', template.isLive);
+      console.log('📂 Is Last Edited:', template.isLastEdited);
+      console.log('📂 Created At:', template.createdAt);
+      console.log('📂 Updated At:', template.updatedAt);
+      
+      console.log('📂 ===== THEME SNAPSHOT =====');
+      console.log('📂 Theme Snapshot:', JSON.stringify(template.themeSnapshot, null, 2));
+      
+      console.log('📂 ===== TEMPLATE DATA STRUCTURE =====');
+      console.log('📂 Theme Text Styles:', JSON.stringify(template.templateData.themeTextStyles, null, 2));
+      console.log('📂 Theme Logos:', JSON.stringify(template.templateData.themeLogos, null, 2));
+      console.log('📂 Theme Generated Backgrounds:', JSON.stringify(template.templateData.themeGeneratedBackgrounds, null, 2));
+      console.log('📂 Theme Uploaded Backgrounds:', JSON.stringify(template.templateData.themeUploadedBackgrounds, null, 2));
+      console.log('📂 Theme Products:', JSON.stringify(template.templateData.themeProducts, null, 2));
+      console.log('📂 Theme Floating Assets:', JSON.stringify(template.templateData.themeFloatingAssets, null, 2));
+      
+      console.log('📂 ===== LEGACY COMPATIBILITY =====');
+      console.log('📂 Products (Legacy):', JSON.stringify(template.templateData.products, null, 2));
+      console.log('📂 Floating Assets (Legacy):', JSON.stringify(template.templateData.floatingAssets, null, 2));
+      console.log('📂 Fixed Text Styles (Legacy):', JSON.stringify(template.templateData.fixedTextStyles, null, 2));
+      console.log('📂 Logo Asset (Legacy):', JSON.stringify(template.templateData.logoAsset, null, 2));
+      console.log('📂 Generated Background (Legacy):', template.templateData.generatedBackground);
+      console.log('📂 Uploaded Background (Legacy):', template.templateData.uploadedBackground);
+      
+      console.log('📂 ===== WHOP ATTACHMENTS =====');
+      console.log('📂 Background Attachment ID:', template.templateData.backgroundAttachmentId);
+      console.log('📂 Background Attachment URL:', template.templateData.backgroundAttachmentUrl);
+      console.log('📂 Logo Attachment ID:', template.templateData.logoAttachmentId);
+      console.log('📂 Logo Attachment URL:', template.templateData.logoAttachmentUrl);
+      
+      console.log('📂 ===== CURRENT THEME =====');
+      console.log('📂 Current Theme:', JSON.stringify(template.templateData.currentTheme, null, 2));
+      
+      console.log('📂 ===== PROMO BUTTON =====');
+      console.log('📂 Promo Button:', JSON.stringify(template.templateData.promoButton, null, 2));
+      
+      console.log('📂 ===== PRODUCT DETAILS =====');
+      if (template.templateData.products && template.templateData.products.length > 0) {
+        template.templateData.products.forEach((product, index) => {
+          console.log(`📂 Product ${index + 1}:`, {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            description: product.description,
+            image: product.image,
+            imageAttachmentId: product.imageAttachmentId,
+            imageAttachmentUrl: product.imageAttachmentUrl,
+            containerAsset: product.containerAsset,
+            cardClass: product.cardClass,
+            buttonText: product.buttonText,
+            buttonClass: product.buttonClass,
+            buttonAnimColor: product.buttonAnimColor,
+            titleClass: product.titleClass,
+            descClass: product.descClass,
+            buttonLink: product.buttonLink
+          });
+        });
+      }
+      
+      console.log('📂 ===== LOADING INTO STATE =====');
+      console.log('📂 Loading template with snapshot theme:', template.themeSnapshot.name);
       
       setThemeTextStyles(template.templateData.themeTextStyles);
       setThemeLogos(template.templateData.themeLogos);
       setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds);
       setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds);
-      setThemeProducts(template.templateData.themeProducts);
+      
+      // Handle template products - check format and load accordingly
+      if (template.templateData.themeProducts && template.templateData.themeProducts[template.currentSeason]) {
+        const templateProducts = template.templateData.themeProducts[template.currentSeason];
+        
+        if (Array.isArray(templateProducts) && templateProducts.length > 0) {
+          if (typeof templateProducts[0] === 'string') {
+            // Legacy format: ResourceLibrary product IDs (old system)
+            console.log('📂 Loading template with ResourceLibrary product IDs (legacy):', templateProducts);
+            
+            setThemeProducts({
+              [template.currentSeason]: []
+            });
+            
+            // Store the ResourceLibrary product IDs for the component to use
+            setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
+          } else {
+            // New format: Complete frontend product state
+            console.log('📂 Loading template with complete frontend product state:', templateProducts.length, 'products');
+            
+            setThemeProducts({
+              [template.currentSeason]: templateProducts
+            });
+            
+            // Clear template ResourceLibrary product IDs for new format
+            setTemplateResourceLibraryProductIds([]);
+          }
+        } else {
+          // Empty products array
+          setThemeProducts({
+            [template.currentSeason]: []
+          });
+          setTemplateResourceLibraryProductIds([]);
+        }
+      } else {
+        setThemeProducts(template.templateData.themeProducts);
+        setTemplateResourceLibraryProductIds([]);
+      }
       
       // Load theme-specific floating assets if available, otherwise fallback to legacy format
       if (template.templateData.themeFloatingAssets) {
@@ -687,6 +752,30 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         }));
       }
       
+      console.log('📂 ===== LOAD COMPLETE =====');
+      console.log('📂 Template loaded successfully:', template.name);
+      console.log('📂 Current Season set to:', template.currentSeason);
+      console.log('📂 Theme Products loaded:', Object.keys(template.templateData.themeProducts || {}));
+      console.log('📂 Theme Text Styles loaded:', Object.keys(template.templateData.themeTextStyles || {}));
+      console.log('📂 Theme Logos loaded:', Object.keys(template.templateData.themeLogos || {}));
+      console.log('📂 Theme Backgrounds loaded:', Object.keys(template.templateData.themeGeneratedBackgrounds || {}));
+      console.log('📂 Theme Floating Assets loaded:', Object.keys(template.templateData.themeFloatingAssets || {}));
+      
+      // Show detailed product information for current season
+      const currentSeasonProducts = template.templateData.themeProducts?.[template.currentSeason] || [];
+      console.log('📂 Products for current season:', currentSeasonProducts.length);
+      if (currentSeasonProducts.length > 0) {
+        const resourceLibraryCount = currentSeasonProducts.filter(p => typeof p.id === 'string' && p.id.startsWith('resource-')).length;
+        const frontendCount = currentSeasonProducts.length - resourceLibraryCount;
+        console.log('📂 Product breakdown:', {
+          total: currentSeasonProducts.length,
+          resourceLibrary: resourceLibraryCount,
+          frontend: frontendCount
+        });
+      }
+      
+      console.log('📂 ===== END TEMPLATE LOAD STRUCTURE =====');
+      
       return template;
     } catch (error) {
       console.error('Error loading template:', error);
@@ -697,11 +786,17 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   const setLiveTemplateHandler = useCallback(async (templateId: string) => {
     try {
-      await setLiveTemplateAction(experienceId, templateId);
-      // Find the template and set it as live
-      const template = templates.find(t => t.id === templateId);
-      if (template) {
-        setLiveTemplate(template);
+      if (templateId === "default") {
+        // Handle default case - clear all live templates
+        await setLiveTemplateAction(experienceId, "default");
+        setLiveTemplate(null);
+      } else {
+        await setLiveTemplateAction(experienceId, templateId);
+        // Find the template and set it as live
+        const template = templates.find(t => t.id === templateId);
+        if (template) {
+          setLiveTemplate(template);
+        }
       }
     } catch (error) {
       console.error('Error setting live template:', error);
@@ -959,6 +1054,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     themeGeneratedBackgrounds,
     themeUploadedBackgrounds,
     themeProducts,
+    setThemeProducts,
     themeFloatingAssets,
     
     // Current theme's computed state
@@ -1049,5 +1145,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     canAddTemplate,
     MAX_CUSTOM_THEMES,
     MAX_CUSTOM_TEMPLATES,
+    
+    // Template ResourceLibrary product IDs
+    templateResourceLibraryProductIds,
+    setTemplateResourceLibraryProductIds,
   };
 };

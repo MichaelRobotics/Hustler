@@ -39,7 +39,9 @@ interface ImageGenerationResponse {
 
 export class NanoBananaImageService {
   private genAI: GoogleGenAI;
-  private readonly IMAGE_MODEL = 'gemini-2.5-flash-image';
+  private readonly BACKGROUND_MODEL = 'imagen-4.0-generate-001'; // Use correct Imagen model
+  private readonly REFINEMENT_MODEL = 'gemini-2.5-flash-image'; // Use flash for refinement
+  private readonly API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
   constructor() {
     validateEnvironment();
@@ -152,8 +154,9 @@ export class NanoBananaImageService {
     console.log('🎨 [Nano Banana] Background strategy:', shouldRefineBackground ? 'REFINE user-uploaded background' : 'REGENERATE new background');
     
     // Use dynamic dimensions if provided, otherwise fallback to standard
-    const targetWidth = containerDimensions ? Math.round(containerDimensions.width * 1.2) : 1920;
-    const targetHeight = containerDimensions ? Math.round(containerDimensions.height * 1.2) : 1080;
+    // Ultra resolution: 2x multiplier for maximum quality
+    const targetWidth = containerDimensions ? Math.round(containerDimensions.width * 2.0) : 3840;
+    const targetHeight = containerDimensions ? Math.round(containerDimensions.height * 2.0) : 2160;
     const aspectRatio = containerDimensions ? containerDimensions.aspectRatio : 16/9;
     
     console.log('🎨 [Nano Banana] Calculated target dimensions:', {
@@ -190,10 +193,17 @@ Dimensions: ${targetWidth}x${targetHeight} (${aspectRatio.toFixed(3)}:1)
 - Change only colors, lighting, and atmospheric effects
 - Apply theme colors and mood to match the theme
 - Maintain professional e-commerce quality
-- High resolution (${targetWidth}x${targetHeight} minimum)
-- NO TEXT, WORDS, LETTERS, OR WRITING
+- Ultra-high resolution (${targetWidth}x${targetHeight} minimum)
+- Maximum quality, photorealistic
+- Cinematic quality with professional lighting
+- Ultra-detailed textures and atmospheric effects
+- ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
+- No quality settings text, resolution labels, or metadata text
+- No watermarks, signatures, or artist names
 - No text overlays, labels, or captions
 - No logos or symbols
+- No technical specifications or settings displayed
+- Completely text-free background only
 
 REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background structure must remain exactly the same.`;
     } else {
@@ -212,20 +222,26 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
       - Smooth gradient or natural texture covering the entire image
       - Subtle ambient lighting and atmospheric effects
       - Professional e-commerce aesthetic
-      - High quality, photorealistic
+      - Ultra-high resolution, maximum quality, photorealistic
+      - Cinematic quality with professional lighting
+      - Ultra-detailed textures and atmospheric effects
       
       CONTENT RESTRICTIONS:
-      - NO TEXT, WORDS, LETTERS, OR WRITING of any kind
+      - ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
+      - No quality settings text, resolution labels, or metadata text
+      - No watermarks, signatures, or artist names
       - No logos, symbols, or human figures
       - No text overlays, labels, or captions
       - No UI elements, buttons, or interface components
-      - Pure background image only
+      - No technical specifications or settings displayed
+      - Pure background image only - completely text-free
       
       FINAL REQUIREMENTS:
       - Seamless background that can be used as a website background
       - No empty spaces or unfilled areas
       - Continuous pattern or texture from edge to edge
-      - Optimized for ${targetWidth}x${targetHeight} display dimensions`;
+      - Optimized for ${targetWidth}x${targetHeight} display dimensions
+      - Ultra-high resolution for maximum visual impact`;
     }
 
     try {
@@ -269,9 +285,9 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
         console.log('🎨 [Nano Banana] Base64 contains valid image data:', imageBase64.length > 1000);
         
         // Use Gemini's generateContent with base64 image data
-        console.log('🎨 [Nano Banana] Using gemini-2.5-flash-image for background editing');
+        console.log('🎨 [Nano Banana] Using imagen4 for background editing');
         response = await this.genAI.models.generateContent({
-          model: 'gemini-2.5-flash-image',
+          model: this.BACKGROUND_MODEL,
           contents: [
             {
               parts: [
@@ -288,58 +304,74 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
         } as any);
       } else {
         console.log('🎨 [Nano Banana] Using text-to-image generation for new/regenerated background');
-        console.log('🎨 [Nano Banana] Using gemini-2.5-flash-image for new background generation');
-        response = await this.genAI.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: [
-            {
-              parts: [
-                { text: enhancedPrompt }
-              ]
-            }
-          ]
-        });
+        console.log('🎨 [Nano Banana] Using Imagen API for new background generation');
+        
+        // Calculate aspect ratio for Imagen API
+        const aspectRatio = this.calculateAspectRatio(targetWidth, targetHeight);
+        console.log('🎨 [Nano Banana] Calculated aspect ratio:', aspectRatio);
+        
+        // Use the correct Imagen API
+        response = await this.callImagenAPI(enhancedPrompt, aspectRatio);
       }
       
-      // Handle response from generateContent
-      const generateContentResponse = response as any;
-      const candidates = generateContentResponse?.candidates;
-      if (!candidates || candidates.length === 0) {
-        console.error('🎨 [Nano Banana] No candidates in response:', response);
-        throw new Error("Background generation failed to return image data.");
-      }
-      
-      const content = candidates[0]?.content;
-      if (!content) {
-        console.error('🎨 [Nano Banana] No content in response:', response);
-        throw new Error("Background generation failed to return image data.");
-      }
-      
-      const parts = content.parts;
-      if (!parts || parts.length === 0) {
-        console.error('🎨 [Nano Banana] No parts in response:', response);
-        throw new Error("Background generation failed to return image data.");
-      }
-      
-      // Look for image data in the response
-      const imagePart = parts.find((part: any) => part.inlineData || part.inline_data);
-      if (!imagePart) {
-        console.error('🎨 [Nano Banana] No image data in response:', response);
-        console.error('🎨 [Nano Banana] Available parts:', parts.map((part: any) => Object.keys(part)));
-        throw new Error("Background generation failed to return image data.");
-      }
-      
-      // Handle inlineData response (base64 image data)
+      // Handle response from Imagen API
       let imageBytes: string;
-      if (imagePart.inlineData) {
-        imageBytes = imagePart.inlineData.data;
-        console.log('🎨 [Nano Banana] Got inlineData background image, length:', imageBytes.length);
-      } else if (imagePart.inline_data) {
-        imageBytes = imagePart.inline_data.data;
-        console.log('🎨 [Nano Banana] Got inline_data background image, length:', imageBytes.length);
+      
+      if (shouldRefineBackground) {
+        // Handle Gemini response for image editing
+        const generateContentResponse = response as any;
+        const candidates = generateContentResponse?.candidates;
+        if (!candidates || candidates.length === 0) {
+          console.error('🎨 [Nano Banana] No candidates in response:', response);
+          throw new Error("Background generation failed to return image data.");
+        }
+        
+        const content = candidates[0]?.content;
+        if (!content) {
+          console.error('🎨 [Nano Banana] No content in response:', response);
+          throw new Error("Background generation failed to return image data.");
+        }
+        
+        const parts = content.parts;
+        if (!parts || parts.length === 0) {
+          console.error('🎨 [Nano Banana] No parts in response:', response);
+          throw new Error("Background generation failed to return image data.");
+        }
+        
+        // Look for image data in the response
+        const imagePart = parts.find((part: any) => part.inlineData || part.inline_data);
+        if (!imagePart) {
+          console.error('🎨 [Nano Banana] No image data in response:', response);
+          console.error('🎨 [Nano Banana] Available parts:', parts.map((part: any) => Object.keys(part)));
+          throw new Error("Background generation failed to return image data.");
+        }
+        
+        // Handle inlineData response (base64 image data)
+        if (imagePart.inlineData) {
+          imageBytes = imagePart.inlineData.data;
+          console.log('🎨 [Nano Banana] Got inlineData background image, length:', imageBytes.length);
+        } else if (imagePart.inline_data) {
+          imageBytes = imagePart.inline_data.data;
+          console.log('🎨 [Nano Banana] Got inline_data background image, length:', imageBytes.length);
+        } else {
+          console.error('🎨 [Nano Banana] No image data found in response part:', imagePart);
+          throw new Error("Background generation failed to return image data.");
+        }
       } else {
-        console.error('🎨 [Nano Banana] No image data found in response part:', imagePart);
-        throw new Error("Background generation failed to return image data.");
+        // Handle Imagen API response for new image generation
+        if (!response.predictions || response.predictions.length === 0) {
+          console.error('🎨 [Nano Banana] No predictions in Imagen response:', response);
+          throw new Error("Background generation failed to return image data.");
+        }
+        
+        const firstPrediction = response.predictions[0];
+        if (!firstPrediction.bytesBase64Encoded) {
+          console.error('🎨 [Nano Banana] No image data in Imagen response:', response);
+          throw new Error("Background generation failed to return image data.");
+        }
+        
+        imageBytes = firstPrediction.bytesBase64Encoded;
+        console.log('🎨 [Nano Banana] Got image from Imagen API, length:', imageBytes.length);
       }
       
       // Upload base64 image to WHOP storage and return URL
@@ -521,11 +553,11 @@ REMEMBER: This is IMAGE REFINEMENT, not product creation. The product must remai
         // Skip image editing if we detected AVIF format
         if (hasExistingImage && imageBase64 && imageBase64.length > 0) {
           // Use Gemini's generateContent with base64 image data
-          console.log('🎨 [Nano Banana] Using gemini-2.5-flash-image for image editing');
+          console.log('🎨 [Nano Banana] Using flash for image editing');
           console.log('🎨 [Nano Banana] Image editing prompt:', enhancedPrompt.substring(0, 200) + '...');
           
           response = await this.genAI.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: this.REFINEMENT_MODEL,
             contents: [
               {
                 parts: [
@@ -543,9 +575,9 @@ REMEMBER: This is IMAGE REFINEMENT, not product creation. The product must remai
         } else {
           // Fall back to text-to-image generation
           console.log('🎨 [Nano Banana] Using text-to-image generation (AVIF fallback)');
-          console.log('🎨 [Nano Banana] Using gemini-2.5-flash-image for text-to-image generation');
+          console.log('🎨 [Nano Banana] Using flash for text-to-image generation');
           response = await this.genAI.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: this.REFINEMENT_MODEL,
             contents: [
               {
                 parts: [
@@ -557,11 +589,11 @@ REMEMBER: This is IMAGE REFINEMENT, not product creation. The product must remai
         }
       } else {
         console.log('🎨 [Nano Banana] Using text-to-image generation');
-        console.log('🎨 [Nano Banana] Using gemini-2.5-flash-image for new image generation');
+        console.log('🎨 [Nano Banana] Using flash for new image generation');
         
         // Use generateContent for new image generation
         response = await this.genAI.models.generateContent({
-          model: 'gemini-2.5-flash-image',
+          model: this.REFINEMENT_MODEL,
           contents: [
             {
               parts: [
@@ -694,9 +726,12 @@ REMEMBER: This is IMAGE REFINEMENT, not product creation. The product must remai
   async generateLogo(
     theme: any, 
     shape: 'round' | 'square', 
-    currentLogoUrl: string
+    currentLogoUrl: string,
+    logoContext?: { isUploaded: boolean; isGenerated: boolean }
   ): Promise<string> {
     console.log('🎨 [Nano Banana] Starting logo generation for theme:', theme.name);
+    console.log('🎨 [Nano Banana] Current logo URL:', currentLogoUrl);
+    console.log('🎨 [Nano Banana] Logo context:', logoContext);
     
     // Logo placeholder dimensions: w-24 h-24 = 96px x 96px
     const logoSize = 96;
@@ -710,52 +745,162 @@ REMEMBER: This is IMAGE REFINEMENT, not product creation. The product must remai
       theme: theme.name
     });
     
-    const enhancedPrompt = `Create a professional logo for a ${theme.name} themed e-commerce store.
-    Style: Modern, clean, minimalist
-    Shape: ${shape}
-    Theme: ${theme.themePrompt}
-    Requirements:
-    - EXACT resolution: ${targetWidth} pixels wide by ${targetHeight} pixels tall
-    - EXACT aspect ratio: 1:1 (square)
-    - The image MUST be exactly ${targetWidth}x${targetHeight} pixels
-    - NO cropping, NO scaling, NO aspect ratio changes
-    - Full, complete logo design with rich thematic elements
-    - NO solid black or white backgrounds - use vibrant, themed colors
-    - Scalable vector-style design with thematic background
-    - Theme-appropriate colors and atmospheric effects
-    - Professional appearance with contextual surroundings
-    - ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
-    - Icon/symbol only - no text elements
-    - No logos with text or lettering
-    - E-commerce suitable
-    - Ensure the entire logo area is filled with thematic content
-    - Perfect fit for ${targetWidth}x${targetHeight} display dimensions`;
+    // Use same simple logic as ProductCard - check if we have an existing image to refine
+    let hasExistingLogo = currentLogoUrl && 
+      currentLogoUrl.trim() !== '' && 
+      !currentLogoUrl.includes('placehold.co') && 
+      currentLogoUrl.startsWith('http');
+    
+    console.log('🎨 [Nano Banana] Logo detection details:', {
+      currentLogoUrl,
+      hasExistingLogo,
+      isPlaceholder: currentLogoUrl?.includes('placehold.co'),
+      isHttpUrl: currentLogoUrl?.startsWith('http')
+    });
+    
+    console.log('🎨 [Nano Banana] Logo strategy:', hasExistingLogo ? 'REFINE existing logo' : 'GENERATE new logo');
+    
+    let enhancedPrompt: string;
+    
+    if (hasExistingLogo) {
+      console.log('🎨 [Nano Banana] Refining existing logo to match theme');
+      enhancedPrompt = `REFINE THIS EXISTING LOGO - DO NOT CREATE A NEW LOGO:
+
+Theme: ${theme.name} - ${theme.themePrompt}
+Shape: ${shape}
+Dimensions: ${targetWidth}x${targetHeight} (1:1 square)
+
+🎯 CRITICAL INSTRUCTIONS:
+- PRESERVE the original logo design and structure
+- ONLY modify colors, lighting, and theme-appropriate elements
+- Keep the same logo concept and layout
+- Apply ${theme.name} theme colors and atmosphere
+- Maintain professional appearance
+- NO text, words, or letters
+- Icon/symbol only
+- Perfect fit for ${targetWidth}x${targetHeight} display
+- E-commerce suitable
+- Modern, clean, minimalist style`;
+    } else {
+      console.log('🎨 [Nano Banana] Generating new logo from scratch');
+      enhancedPrompt = `Create a professional logo for a ${theme.name} themed e-commerce store.
+Style: Modern, clean, minimalist
+Shape: ${shape}
+Theme: ${theme.themePrompt}
+Requirements:
+- EXACT resolution: ${targetWidth} pixels wide by ${targetHeight} pixels tall
+- EXACT aspect ratio: 1:1 (square)
+- The image MUST be exactly ${targetWidth}x${targetHeight} pixels
+- NO cropping, NO scaling, NO aspect ratio changes
+- Full, complete logo design with rich thematic elements
+- NO solid black or white backgrounds - use vibrant, themed colors
+- Scalable vector-style design with thematic background
+- Theme-appropriate colors and atmospheric effects
+- Professional appearance with contextual surroundings
+- ABSOLUTELY NO TEXT, WORDS, LETTERS, OR WRITING of any kind
+- Icon/symbol only - no text elements
+- No logos with text or lettering
+- E-commerce suitable
+- Ensure the entire logo area is filled with thematic content
+- Perfect fit for ${targetWidth}x${targetHeight} display dimensions`;
+    }
 
     try {
-      const response = await this.genAI.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: enhancedPrompt,
-        config: {
-          numberOfImages: 1,
-        },
-      });
-
-      const generatedImages = response?.generatedImages;
-      if (!generatedImages || generatedImages.length === 0) {
-        console.error('🎨 [Nano Banana] No images generated:', response);
-        throw new Error("Logo generation failed to return image data.");
-      }
-
-      const imageBytes = generatedImages[0]?.image?.imageBytes;
-      if (!imageBytes) {
-        console.error('🎨 [Nano Banana] No image bytes in response:', generatedImages[0]);
-        throw new Error("Logo generation failed to return image data.");
-      }
-
-      const imageUrl = `data:image/png;base64,${imageBytes}`;
-      console.log('🎨 [Nano Banana] Generated logo URL length:', imageUrl.length);
+      let response;
       
-      return imageUrl;
+      if (hasExistingLogo) {
+        console.log('🎨 [Nano Banana] Using image editing with existing logo URL');
+        console.log('🎨 [Nano Banana] Logo URL:', currentLogoUrl);
+        
+        // Fetch the logo from URL and convert to base64 for Gemini API
+        const imageResponse = await fetch(currentLogoUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to fetch logo image: ${imageResponse.status}`);
+        }
+        
+        const imageBuffer = await imageResponse.arrayBuffer();
+        let imageBase64: string;
+        let mimeType: string;
+        
+        // Check if the image is in an unsupported format (like AVIF)
+        const contentType = imageResponse.headers.get('content-type') || 'image/png';
+        console.log('🎨 [Nano Banana] Original content type:', contentType);
+        
+        if (contentType === 'image/avif' || contentType.includes('avif')) {
+          console.log('🎨 [Nano Banana] AVIF format detected - Converting to PNG for Gemini compatibility');
+          imageBase64 = Buffer.from(imageBuffer).toString('base64');
+          mimeType = 'image/png';
+          console.log('🎨 [Nano Banana] Converted AVIF to PNG format, base64 length:', imageBase64.length);
+        } else {
+          imageBase64 = Buffer.from(imageBuffer).toString('base64');
+          mimeType = contentType;
+        }
+        
+        console.log('🎨 [Nano Banana] Converted logo to base64, length:', imageBase64.length);
+        console.log('🎨 [Nano Banana] Using MIME type:', mimeType);
+        console.log('🎨 [Nano Banana] Base64 preview:', imageBase64.substring(0, 50) + '...' + imageBase64.substring(imageBase64.length - 50));
+        
+        response = await this.genAI.models.generateContent({
+          model: this.REFINEMENT_MODEL,
+          contents: [
+            {
+              parts: [
+                { 
+                  inlineData: {
+                    mimeType: mimeType,
+                    data: imageBase64
+                  }
+                },
+                { text: enhancedPrompt }
+              ]
+            }
+          ]
+        } as any);
+      } else {
+        console.log('🎨 [Nano Banana] Using text-to-image generation for new/regenerated logo');
+        console.log('🎨 [Nano Banana] Using flash for new logo generation');
+        response = await this.genAI.models.generateContent({
+          model: this.REFINEMENT_MODEL,
+          contents: [
+            {
+              parts: [
+                { text: enhancedPrompt }
+              ]
+            }
+          ]
+        } as any);
+      }
+
+      const parts = response?.candidates?.[0]?.content?.parts;
+      if (!parts || parts.length === 0) {
+        console.error('🎨 [Nano Banana] No parts in response:', response);
+        throw new Error("Logo generation failed to return image data.");
+      }
+
+      // Extract base64 from response
+      const imagePart = parts.find((part: any) => part.inlineData);
+      let imageBytes: string | undefined;
+      
+      if (imagePart?.inlineData) {
+        imageBytes = imagePart.inlineData.data;
+        console.log('🎨 [Nano Banana] Got inlineData logo, length:', imageBytes?.length);
+      } else {
+        console.error('🎨 [Nano Banana] No image data in response parts:', parts);
+        throw new Error("Logo generation failed to return image data.");
+      }
+
+      if (!imageBytes) {
+        console.error('🎨 [Nano Banana] No image bytes in response:', parts);
+        throw new Error("Logo generation failed to return image data.");
+      }
+
+      // Upload base64 image to WHOP storage and return URL
+      const base64DataUrl = `data:image/png;base64,${imageBytes}`;
+      const { uploadBase64ToWhop } = await import('../utils/whop-image-upload');
+      const uploadResult = await uploadBase64ToWhop(base64DataUrl, `generated-logo-${Date.now()}.png`);
+      console.log('🎨 [Nano Banana] Successfully uploaded logo to WHOP storage:', uploadResult.url);
+      
+      return uploadResult.url;
     } catch (error) {
       console.error("Error in generateLogo:", error);
       throw new Error(`Logo generation failed: ${(error as Error).message}`);
@@ -822,6 +967,70 @@ REMEMBER: This is IMAGE REFINEMENT, not product creation. The product must remai
         images: []
       };
     }
+  }
+
+  /**
+   * Call the Imagen API directly using the correct endpoint
+   */
+  private async callImagenAPI(prompt: string, aspectRatio: string): Promise<any> {
+    const url = `${this.API_BASE_URL}/models/${this.BACKGROUND_MODEL}:predict`;
+    
+    const requestBody = {
+      instances: [
+        {
+          prompt: prompt
+        }
+      ],
+      parameters: {
+        sampleCount: 1,
+        imageSize: "2K",
+        aspectRatio: aspectRatio,
+        personGeneration: "allow_adult"
+      }
+    };
+
+    console.log('🎨 [Nano Banana] Calling Imagen API:', url);
+    console.log('🎨 [Nano Banana] Request body:', JSON.stringify(requestBody, null, 2));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': process.env.GEMINI_API_KEY!
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('🎨 [Nano Banana] Imagen API error:', response.status, errorText);
+      throw new Error(`Imagen API request failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('🎨 [Nano Banana] Imagen API response received');
+    return data;
+  }
+
+  /**
+   * Calculate aspect ratio for Imagen API
+   */
+  private calculateAspectRatio(width: number, height: number): string {
+    const ratio = width / height;
+    
+    // Map to supported Imagen aspect ratios
+    if (Math.abs(ratio - 1) < 0.1) return "1:1";
+    if (Math.abs(ratio - 0.75) < 0.1) return "3:4";
+    if (Math.abs(ratio - 1.33) < 0.1) return "4:3";
+    if (Math.abs(ratio - 0.56) < 0.1) return "9:16";
+    if (Math.abs(ratio - 1.78) < 0.1) return "16:9";
+    
+    // Default to closest match
+    if (ratio < 0.8) return "3:4";
+    if (ratio < 1.2) return "1:1";
+    if (ratio < 1.5) return "4:3";
+    if (ratio < 1.8) return "16:9";
+    return "16:9";
   }
 }
 

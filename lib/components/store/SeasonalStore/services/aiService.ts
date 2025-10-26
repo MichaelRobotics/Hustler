@@ -196,7 +196,8 @@ export const generateBackgroundImage = async (
 export const generateLogo = async (
   theme: any, 
   shape: 'round' | 'square', 
-  currentLogoUrl: string
+  currentLogoUrl: string,
+  logoContext?: { isUploaded: boolean; isGenerated: boolean }
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-logo-nanobanana', {
@@ -207,7 +208,8 @@ export const generateLogo = async (
       body: JSON.stringify({
         theme,
         shape,
-        currentLogoUrl
+        currentLogoUrl,
+        logoContext
       }),
     });
 

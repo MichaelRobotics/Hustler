@@ -171,30 +171,11 @@ async function createUserContext(
 					});
 					
 					companyName = companyResult.title || "App Installation";
+					companyLogo = companyResult.logo || null;
 					
 					console.log(`✅ Fetched company info: ${companyName}`);
 				} catch (error) {
 					console.warn(`⚠️ Failed to fetch company info for ${companyId}:`, error);
-					// Continue with default values
-				}
-			}
-			
-			// Get company logo using new Whop SDK format
-			if (companyId) {
-				try {
-					// Use the new company logo service
-					const { retrieveCompanyLogo } = await import("@/lib/services/company-logo-service");
-					
-					// Get company logo using new Whop SDK format
-					companyLogo = await retrieveCompanyLogo(companyId);
-					
-					if (companyLogo) {
-						console.log(`✅ Retrieved company logo: ${companyLogo}`);
-					} else {
-						console.log(`⚠️ No logo found for company ${companyId}`);
-					}
-				} catch (error) {
-					console.warn(`⚠️ Failed to fetch company logo for ${companyId}:`, error);
 					// Continue with default values
 				}
 			}

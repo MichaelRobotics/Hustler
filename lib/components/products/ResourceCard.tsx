@@ -38,6 +38,7 @@ interface ResourceCardProps {
 	isJustCreated?: boolean;
 	isJustEdited?: boolean;
 	isHighlighted?: boolean;
+	isBeingEdited?: boolean;
 }
 
 export const ResourceCard: React.FC<ResourceCardProps> = ({
@@ -58,6 +59,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	isJustCreated = false,
 	isJustEdited = false,
 	isHighlighted = false,
+	isBeingEdited = false,
 }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
@@ -584,6 +586,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 
 							{context === "global" &&
 								!isResourceAssignedToAnyFunnel(resource.id) &&
+								!isBeingEdited &&
 								(isSaving ? (
 									<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/60 dark:to-blue-800/60 text-blue-800 dark:text-blue-200 border-2 border-blue-300 dark:border-blue-600 shadow-sm backdrop-blur-sm">
 										<div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full mr-2 animate-pulse" />

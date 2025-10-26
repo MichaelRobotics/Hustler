@@ -44,7 +44,7 @@ export const LibraryResourceDeleteModal: React.FC<
 						weight="bold"
 						className="text-red-600 dark:text-red-400"
 					>
-						Remove Library Product
+						Delete Library Product
 					</Heading>
 					<Button
 						size="1"
@@ -59,7 +59,7 @@ export const LibraryResourceDeleteModal: React.FC<
 
 				<div className="mb-6">
 					<Text size="3" className="text-foreground mb-3">
-						Are you sure you want to remove this product from your library?
+						Are you sure you want to delete this product from your library?
 					</Text>
 					<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/30 rounded-lg p-3">
 						<Text
@@ -72,7 +72,7 @@ export const LibraryResourceDeleteModal: React.FC<
 					</div>
 					<Text size="2" color="gray" className="text-muted-foreground mt-2">
 						This action cannot be undone. The product will be permanently
-						removed from your library.
+						deleted from your library.
 					</Text>
 				</div>
 
@@ -83,7 +83,7 @@ export const LibraryResourceDeleteModal: React.FC<
 						className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60"
 					>
 						<Trash2 size={18} strokeWidth={2.5} className="mr-2" />
-						Remove Product
+						Delete Product
 					</Button>
 					<Button
 						variant="soft"

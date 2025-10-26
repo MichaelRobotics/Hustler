@@ -8,14 +8,16 @@ import { apiGet, apiPost } from "../../utils/api-client";
 import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
 import { ArrowLeft, Sun, Moon, Store } from "lucide-react";
+import type { AuthenticatedUser } from "../../types/user";
 
 interface StorePreviewProps {
-	experienceId?: string;
+	user?: AuthenticatedUser | null; // Changed from experienceId to full user object
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	onEditMerchant?: () => void;
 	onLiveFunnelLoaded?: (funnel: any) => void;
 	allResources?: any[];
+	setAllResources?: (resources: any[]) => void;
 }
 
 /**
@@ -26,25 +28,34 @@ interface StorePreviewProps {
  * Does NOT include the PreviewView topnavbar (back arrow, avatar, "Preview view" indicator, hustler name, theme switch).
  */
 const StorePreview: React.FC<StorePreviewProps> = ({
-	experienceId,
+	user,
 	onMessageSent,
 	onBack,
 	onEditMerchant,
 	onLiveFunnelLoaded,
 	allResources = [],
+	setAllResources = () => {},
 }) => {
+	// Extract experienceId from user object
+	const experienceId = user?.experienceId;
 	// Store type toggle
 	const [useSeasonalStore, setUseSeasonalStore] = useState(false);
 	
 	const [liveFunnel, setLiveFunnel] = useState<any>(null);
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [isFunnelActive, setIsFunnelActive] = useState(false);
-	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [iframeUrl, setIframeUrl] = useState<string>('');
 	const [urlLoaded, setUrlLoaded] = useState(false);
 	const [iframeLoaded, setIframeLoaded] = useState(false); // Track iframe load completion
 	const [overlayTransitioning, setOverlayTransitioning] = useState(false); // Track overlay transition
+	
+	// Live template state
+	const [liveTemplate, setLiveTemplate] = useState<any>(null);
+	const [hasLiveTemplate, setHasLiveTemplate] = useState(false);
+	const [templateLoading, setTemplateLoading] = useState(true); // Track template loading separately
+	const [templateReady, setTemplateReady] = useState(false); // Track when template is ready for rendering
+	const [funnelLoading, setFunnelLoading] = useState(true); // Track funnel loading separately
 	
 	// View mode state - similar to CustomerView
 	type ViewMode = 'iframe-only' | 'chat-only' | 'split-view';
@@ -57,6 +68,23 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	
 	// Theme state
 	const { appearance, toggleTheme } = useTheme();
+	
+	// Combined loading state - show loading until template is properly loaded (like TemplateRenderer)
+	const isEverythingLoaded = !templateLoading && !funnelLoading && urlLoaded && (!hasLiveTemplate || templateReady);
+	
+	// Show loading overlay until template is properly loaded
+	const shouldShowLoadingOverlay = !isEverythingLoaded;
+	
+	// Debug loading states
+	console.log('[StorePreview] Loading states (TemplateRenderer style):', {
+		templateLoading,
+		templateReady,
+		funnelLoading,
+		urlLoaded,
+		hasLiveTemplate,
+		isEverythingLoaded,
+		shouldShowLoadingOverlay
+	});
 
 	// Function to extract base URL from experience link
 	const extractBaseUrl = useCallback((link: string): string => {
@@ -133,16 +161,54 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		}
 	}, [experienceId, extractBaseUrl]);
 
+	// Check for live template
+	const checkLiveTemplate = useCallback(async () => {
+		if (!experienceId) return;
+		
+		try {
+			setTemplateLoading(true);
+			console.log(`[StorePreview] Checking for live template for experienceId: ${experienceId}`);
+			const response = await apiGet(`/api/templates/live`, experienceId);
+			if (response.ok) {
+				const data = await response.json();
+				if (data.success && data.template) {
+					console.log(`[StorePreview] Found live template:`, data.template.name);
+					setLiveTemplate(data.template);
+					setHasLiveTemplate(true);
+					// Don't set templateReady immediately - wait for frontend loading
+					console.log(`[StorePreview] Template found, waiting for frontend loading...`);
+				} else {
+					console.log(`[StorePreview] No live template found`);
+					setLiveTemplate(null);
+					setHasLiveTemplate(false);
+					setTemplateReady(true); // No template means we're ready to show regular content
+				}
+			} else {
+				console.log(`[StorePreview] No live template found (${response.status})`);
+				setLiveTemplate(null);
+				setHasLiveTemplate(false);
+				setTemplateReady(true); // No template found - ready to show regular content
+			}
+		} catch (error) {
+			console.error(`[StorePreview] Error checking live template:`, error);
+			setLiveTemplate(null);
+			setHasLiveTemplate(false);
+			setTemplateReady(true); // Error case - ready to show regular content
+		} finally {
+			setTemplateLoading(false);
+		}
+	}, [experienceId]);
+
 	// Load live funnel
 	const loadLiveFunnel = useCallback(async () => {
 		if (!experienceId) {
 			setError("Experience ID is required");
-			setIsLoading(false);
+			setFunnelLoading(false);
 			return;
 		}
 
 		try {
-			setIsLoading(true);
+			setFunnelLoading(true);
 			setError(null);
 
 			console.log(`[StorePreview] Loading live funnel for experienceId: ${experienceId}`);
@@ -194,7 +260,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			console.error("Error loading live funnel:", err);
 			setError(err instanceof Error ? err.message : "Failed to load live funnel");
 		} finally {
-			setIsLoading(false);
+			setFunnelLoading(false);
 		}
 	}, [experienceId]);
 
@@ -262,13 +328,14 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 
 	// Load data on mount
 	useEffect(() => {
+		checkLiveTemplate();
 		loadLiveFunnel();
 		fetchExperienceLink();
-	}, [loadLiveFunnel, fetchExperienceLink]);
+	}, [checkLiveTemplate, loadLiveFunnel, fetchExperienceLink]);
 
 	// Show popup after loading overlay disappears and no funnel is active
 	useEffect(() => {
-		if (!isLoading && iframeLoaded && !isFunnelActive && !showNoFunnelPopup && !popupShown) {
+		if (isEverythingLoaded && !isFunnelActive && !showNoFunnelPopup && !popupShown) {
 			// Show popup after loading overlay is completely gone
 			setShowNoFunnelPopup(true);
 			setPopupShown(true); // Mark as shown to prevent re-appearing
@@ -278,25 +345,27 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 				setShowNoFunnelPopup(false);
 			}, 7000);
 		}
-	}, [isLoading, iframeLoaded, isFunnelActive, showNoFunnelPopup, popupShown]);
+	}, [isEverythingLoaded, isFunnelActive, showNoFunnelPopup, popupShown]);
 
-	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
+	// Fallback: Remove overlay after 8 seconds regardless of loading state (like TemplateRenderer)
 	useEffect(() => {
 		const fallbackTimer = setTimeout(() => {
-			if (!iframeLoaded) {
+			if (!isEverythingLoaded) {
 				setOverlayTransitioning(true);
 				console.log('🎭 Fallback: Starting fast blur transition...');
 				
 				setTimeout(() => {
-					setIframeLoaded(true);
+					setTemplateLoading(false);
+					setFunnelLoading(false);
+					setTemplateReady(true);
 					setOverlayTransitioning(false);
-					console.log('🎭 Fallback: Fancy overlay removed after timeout');
+					console.log('🎭 Fallback: Template loading completed after timeout');
 				}, 500);
 			}
 		}, 8000);
 
 		return () => clearTimeout(fallbackTimer);
-	}, [iframeLoaded]);
+	}, [isEverythingLoaded]);
 
 	const handleMessageSentInternal = (message: string, convId?: string) => {
 		console.log("Store preview message:", {
@@ -349,21 +418,65 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 
 	// isFunnelActive is now a state variable
 
+	// Show SeasonalStore if live template is found (with loading overlay until ready)
+	if (hasLiveTemplate) {
+		return <SeasonalStore 
+			user={user}
+			allResources={allResources}
+			setAllResources={setAllResources}
+			previewLiveTemplate={liveTemplate}
+			hideEditorButtons={true}
+			onTemplateLoaded={() => {
+				console.log('[StorePreview] Template is fully loaded on frontend');
+				// Template is now fully loaded on frontend, safe to remove overlay
+				setTemplateReady(true);
+			}}
+			onBack={() => {
+				// Go back to SeasonalStore view (main onBack prop)
+				if (onBack) {
+					onBack();
+				} else {
+					// Fallback: Switch back to StorePreview immediately
+					setUseSeasonalStore(false);
+					// Trigger loading overlay like TemplateRenderer
+					setTemplateLoading(true);
+					setFunnelLoading(true);
+					setTemplateReady(false);
+					// Match TemplateRenderer loading duration: 3.5 seconds total
+					setTimeout(() => {
+						setTemplateLoading(false);
+						setFunnelLoading(false);
+						setTemplateReady(true);
+					}, 3500);
+				}
+			}} 
+		/>;
+	}
+
 	// Show SeasonalStore if enabled
 	if (useSeasonalStore) {
 		return <SeasonalStore 
-			experienceId={experienceId}
+			user={user}
 			allResources={allResources}
+			setAllResources={setAllResources}
 			onBack={() => {
-				// Switch back to StorePreview immediately
-				setUseSeasonalStore(false);
-				// Trigger loading overlay on top of StorePreview
-				setIsLoading(true);
-				// Match StorePreview loading duration: 3.5 seconds total
-				// (3 seconds content stabilization + 500ms transition)
-				setTimeout(() => {
-					setIsLoading(false);
-				}, 3500);
+				// Go back to SeasonalStore view (main onBack prop)
+				if (onBack) {
+					onBack();
+				} else {
+					// Fallback: Switch back to StorePreview immediately
+					setUseSeasonalStore(false);
+					// Trigger loading overlay like TemplateRenderer
+					setTemplateLoading(true);
+					setFunnelLoading(true);
+					setTemplateReady(false);
+					// Match TemplateRenderer loading duration: 3.5 seconds total
+					setTimeout(() => {
+						setTemplateLoading(false);
+						setFunnelLoading(false);
+						setTemplateReady(true);
+					}, 3500);
+				}
 			}} 
 		/>;
 	}
@@ -372,9 +485,9 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	return (
 		<div className="h-screen w-full relative flex flex-col">
 			
-			{/* Whop Native Loading Overlay - Covers entire StorePreview until iframe loads */}
-			{(!iframeLoaded || overlayTransitioning) && (
-				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
+			{/* Whop Native Loading Overlay - Covers entire screen until everything loads */}
+			{shouldShowLoadingOverlay && (
+				<div className={`fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
 					overlayTransitioning ? 'transition-all duration-500 filter blur-[20px] opacity-0' : ''
 				}`}>
 					{/* Main content */}
@@ -396,35 +509,17 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 								Preparing showcase items...
 							</p>
 						</div>
+						
+						{/* Loading dots animation */}
+						<div className="flex justify-center space-x-2 mt-6">
+							<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+							<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+							<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+						</div>
 					</div>
 				</div>
 			)}
 
-			{/* Back Navigation Loading Overlay - Covers entire StorePreview when navigating back */}
-			{isLoading && (
-				<div className="absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden">
-					{/* Main content */}
-					<div className="text-center relative z-10">
-						{/* Whop-style loading spinner */}
-						<div className="relative mb-6">
-							<div className="w-8 h-8 mx-auto relative">
-								<div className="absolute inset-0 border-2 border-gray-200 dark:border-gray-700 rounded-full"></div>
-								<div className="absolute inset-0 border-2 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-							</div>
-						</div>
-						
-						{/* Whop-style loading text */}
-						<div className="space-y-2">
-							<h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-								Returning to Store Preview
-							</h2>
-							<p className="text-sm text-gray-500 dark:text-gray-400">
-								Preparing your store view...
-							</p>
-						</div>
-					</div>
-				</div>
-			)}
 
 			{/* Top Navbar - With back arrow, avatar, and theme switch */}
 			{(() => { console.log('[StorePreview] Rendering navbar with grid layout'); return null; })()}
@@ -698,7 +793,6 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 							<StorePreviewChat
 								funnelFlow={funnelFlow}
 								resources={liveFunnel?.resources || []}
-								experienceId={experienceId}
 								onMessageSent={handleMessageSentInternal}
 								hideAvatar={true} // Hide avatar as requested
 								onEditMerchant={onEditMerchant}

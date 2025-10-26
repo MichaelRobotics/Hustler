@@ -6,6 +6,7 @@ import { LiveChatPage } from "../liveChat";
 import PreviewPage from "../preview/PreviewPage";
 import ResourceLibrary from "../products/ResourceLibrary";
 import StorePreview from "../store/StorePreview";
+import { SeasonalStore } from "../store/SeasonalStore/SeasonalStore";
 import AdminHeader from "./AdminHeader";
 import AdminSidebar from "./AdminSidebar";
 import FunnelAnalyticsPage from "./FunnelAnalyticsPage";
@@ -52,7 +53,8 @@ type View =
 	| "funnelBuilder"
 	| "preview"
 	| "liveChat"
-	| "store";
+	| "store"
+	| "storePreview";
 
 interface AdminPanelProps {
 	user: AuthenticatedUser | null;
@@ -884,9 +886,34 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 				<div className="h-screen w-full">
-					<StorePreview
-						experienceId={user?.experienceId}
+					<SeasonalStore
+						user={user}
 						allResources={allResources}
+						setAllResources={setAllResources}
+						onBack={() => {
+							console.log("🏪 [STORE] Back to AdminPanel");
+							setCurrentView("dashboard");
+						}}
+						onNavigateToStorePreview={() => {
+							console.log("🏪 [STORE] Navigate to StorePreview");
+							setCurrentView("storePreview");
+						}}
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	if (currentView === "storePreview") {
+		return (
+			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+
+				<div className="h-screen w-full">
+					<StorePreview
+						user={user}
+						allResources={allResources}
+						setAllResources={setAllResources}
 						onMessageSent={(message, conversationId) => {
 							console.log("Store preview message:", {
 								message,
@@ -895,20 +922,23 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								timestamp: new Date().toISOString(),
 							});
 						}}
-						onBack={handleBackToResourceLibrary}
+						onBack={() => {
+							console.log("🏪 [STORE PREVIEW] Back to SeasonalStore");
+							setCurrentView("store");
+						}}
 						onLiveFunnelLoaded={(funnel) => {
-							console.log("🏪 [STORE] Live funnel loaded:", funnel);
+							console.log("🏪 [STORE PREVIEW] Live funnel loaded:", funnel);
 							setSelectedFunnel(funnel);
 						}}
 						onEditMerchant={() => {
-							console.log("🏪 [STORE] onEditMerchant called");
-							console.log("🏪 [STORE] selectedFunnel:", selectedFunnel);
-							console.log("🏪 [STORE] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
+							console.log("🏪 [STORE PREVIEW] onEditMerchant called");
+							console.log("🏪 [STORE PREVIEW] selectedFunnel:", selectedFunnel);
+							console.log("🏪 [STORE PREVIEW] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
 							if (selectedFunnel && hasValidFlow(selectedFunnel)) {
-								console.log("🏪 [STORE] Navigating to funnel builder for editing:", selectedFunnel.id);
+								console.log("🏪 [STORE PREVIEW] Navigating to funnel builder for editing:", selectedFunnel.id);
 								setCurrentView("funnelBuilder");
 							} else {
-								console.log("🏪 [STORE] No valid funnel to edit");
+								console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
 							}
 						}}
 					/>

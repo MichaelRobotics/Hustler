@@ -23,7 +23,8 @@ interface AdminSidebarProps {
 		| "funnelBuilder"
 		| "preview"
 		| "liveChat"
-		| "store";
+		| "store"
+		| "storePreview";
 	onViewChange: (
 		view:
 			| "dashboard"
@@ -32,7 +33,8 @@ interface AdminSidebarProps {
 			| "funnelBuilder"
 			| "preview"
 			| "liveChat"
-			| "store",
+			| "store"
+			| "storePreview",
 	) => void;
 	onLibraryIconClick?: () => void;
 	className?: string;
@@ -73,6 +75,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 				isFunnelBuilderView: currentView === "funnelBuilder",
 				isLiveChatView: currentView === "liveChat",
 				isStoreView: currentView === "store",
+				isStorePreviewView: currentView === "storePreview",
 			}),
 			[currentView],
 		);
@@ -86,7 +89,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 					| "funnelBuilder"
 					| "preview"
 					| "liveChat"
-					| "store",
+					| "store"
+					| "storePreview",
 			) => {
 				if (disabled) return; // Prevent navigation when disabled
 				onViewChange(view);
