@@ -140,13 +140,13 @@ export const FormFields: React.FC<FormFieldsProps> = ({
         </div>
       )}
 
-      {/* URL Field - Only for Affiliate products */}
-      {resource.type === "AFFILIATE" && (
+      {/* URL Field - For Affiliate products and actual Whop products */}
+      {(resource.type === "AFFILIATE" || (resource.type === "MY_PRODUCTS" && resource.whopProductId)) && (
         <input
           type="url"
           value={resource.link || ""}
           onChange={(e) => setResource({ ...resource, link: e.target.value })}
-          placeholder="Affiliate URL"
+          placeholder={resource.type === "AFFILIATE" ? "Affiliate URL" : "Product link"}
           disabled={isSaving}
           className={getFieldClassName()}
         />
@@ -162,8 +162,8 @@ export const FormFields: React.FC<FormFieldsProps> = ({
         className={`${getFieldClassName()} resize-none`}
       />
 
-      {/* Digital Asset Upload - Only for Owned products */}
-      {resource.type === "MY_PRODUCTS" && (
+      {/* Digital Asset Upload - Only for Owned products that are NOT actual Whop products */}
+      {resource.type === "MY_PRODUCTS" && !resource.whopProductId && (
         <div className="space-y-2">
           <div
             onDragOver={onAssetDragOver}

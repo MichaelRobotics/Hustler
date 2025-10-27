@@ -12,6 +12,7 @@ export interface Resource {
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
 	price?: string; // Price from access pass plan or user input
+	whopProductId?: string; // ID of the actual Whop product/app (for synced products)
 }
 
 export interface ResourceFormData {
@@ -25,6 +26,7 @@ export interface ResourceFormData {
 	image?: string;
 	storageUrl?: string;
 	price?: string;
+	whopProductId?: string; // ID of the actual Whop product/app (for synced products)
 }
 
 export interface Funnel {
