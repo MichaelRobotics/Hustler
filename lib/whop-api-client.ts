@@ -209,7 +209,7 @@ export class WhopApiClient {
               return {
                 id: exp.app?.id || exp.id,
                 name: exp.app?.name || exp.name,
-                description: exp.description,
+                description: exp.app?.description || exp.description, // Try app description first, then experience description
                 price: 0,
                 currency: 'usd',
                 discoveryPageUrl: undefined,

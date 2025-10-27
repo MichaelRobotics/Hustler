@@ -27,7 +27,7 @@ type View =
 	| "storePreview";
 
 export function useViewNavigation() {
-	const [currentView, setCurrentView] = useState<View>("dashboard");
+	const [currentView, setCurrentView] = useState<View>("store");
 
 	const handleViewChange = (
 		view: View,

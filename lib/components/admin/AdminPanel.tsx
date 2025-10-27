@@ -24,6 +24,7 @@ import { useAnalyticsManagement } from "@/lib/hooks/useAnalyticsManagement";
 import { useModalManagement } from "@/lib/hooks/useModalManagement";
 import { useViewNavigation } from "@/lib/hooks/useViewNavigation";
 import { useAutoDeployment } from "@/lib/hooks/useAutoDeployment";
+import { useUpdateSync } from "@/lib/hooks/useUpdateSync";
 import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import { apiPut } from "@/lib/utils/api-client";
 import type { Resource } from "@/lib/types/resource";
@@ -117,7 +118,6 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleGenerationError,
 		isFunnelNameAvailable,
 		isDeleting,
-		isAutoCreated,
 	} = useFunnelManagement(user);
 
 	const {
@@ -130,6 +130,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleOpenResourceLibrary,
 		handleAddToFunnel,
 		handleBackToDashboard: resourceBackToDashboard,
+		fetchResources,
 	} = useResourceManagement(user);
 
 	const {
@@ -144,6 +145,19 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		clearAllAnalyticsData,
 		isAnalyticsDataStale,
 	} = useAnalyticsManagement(user);
+
+	// Update sync functionality - managed at AdminPanel level to persist across navigation
+	const {
+		isChecking: isCheckingUpdates,
+		syncResult,
+		showPopup: showSyncPopup,
+		error: syncError,
+		hasCheckedOnce,
+		checkForUpdates,
+		applyChanges,
+		closePopup: closeSyncPopup,
+		resetState: resetUpdateSyncState,
+	} = useUpdateSync({ user, onSyncComplete: fetchResources });
 
 	// Modal management for offline confirmation
 	const {
@@ -237,6 +251,27 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		handleManageResources: navigationHandleManageResources,
 		handleBackToDashboard: navigationBackToDashboard,
 	} = useViewNavigation();
+
+	// Trigger update sync when user first navigates to store view
+	React.useEffect(() => {
+		if (
+			currentView === "store" &&
+			user?.productsSynced &&
+			user?.accessLevel === 'admin' &&
+			user?.experienceId &&
+			user.experienceId !== 'default-experience' &&
+			!hasCheckedOnce
+		) {
+			console.log('[AdminPanel] Admin user navigated to store, checking for updates...', {
+				userId: user.id,
+				experienceId: user.experienceId,
+				productsSynced: user.productsSynced,
+				accessLevel: user.accessLevel,
+				hasCheckedOnce
+			});
+			checkForUpdates();
+		}
+	}, [currentView, user?.id, user?.productsSynced, user?.accessLevel, user?.experienceId, hasCheckedOnce, checkForUpdates]);
 
 	// Memoized handlers for better performance
 	const handleViewChange = useCallback(
@@ -358,36 +393,6 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		[handleAddToFunnel, selectedFunnelForLibrary, funnels, setFunnels, setSelectedFunnel, setSelectedFunnelForLibrary],
 	);
 
-	// Auto-navigate to Library when a new funnel is auto-created
-	React.useEffect(() => {
-		console.log("🔍 [AUTO-NAV DEBUG] Checking auto-navigation conditions:", {
-			funnelsLength: funnels.length,
-			currentView,
-			selectedFunnelForLibrary: !!selectedFunnelForLibrary,
-			isAutoCreated,
-			conditions: {
-				hasOneFunnel: funnels.length === 1,
-				isOnDashboard: currentView === "dashboard",
-				noSelectedFunnel: !selectedFunnelForLibrary,
-				wasAutoCreated: isAutoCreated
-			}
-		});
-		
-		// Only navigate if:
-		// 1. We have exactly one funnel
-		// 2. We're on the dashboard
-		// 3. No funnel is currently selected for library
-		// 4. The funnel was auto-created (not manually created)
-		if (funnels.length === 1 && currentView === "dashboard" && !selectedFunnelForLibrary && isAutoCreated) {
-			const newFunnel = funnels[0];
-			console.log("🚀 [AUTO-NAV] Auto-created funnel detected, navigating to Library view:", newFunnel);
-			
-			// Navigate to Library view in funnel context
-			setLibraryContext("funnel");
-			setSelectedFunnelForLibrary(newFunnel);
-			setCurrentView("resourceLibrary");
-		}
-	}, [funnels.length, currentView, selectedFunnelForLibrary, isAutoCreated, setLibraryContext, setSelectedFunnelForLibrary, setCurrentView]);
 
 	// Sync selectedFunnelForLibrary with funnels array when funnel updates (e.g., after generation)
 	React.useEffect(() => {
@@ -890,6 +895,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						user={user}
 						allResources={allResources}
 						setAllResources={setAllResources}
+						isActive={currentView === "store"}
 						onBack={() => {
 							console.log("🏪 [STORE] Back to AdminPanel");
 							setCurrentView("dashboard");
@@ -897,6 +903,18 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						onNavigateToStorePreview={() => {
 							console.log("🏪 [STORE] Navigate to StorePreview");
 							setCurrentView("storePreview");
+						}}
+						// Update sync props - managed at AdminPanel level
+						updateSyncProps={{
+							isChecking: isCheckingUpdates,
+							syncResult,
+							showPopup: showSyncPopup,
+							error: syncError,
+							hasCheckedOnce,
+							checkForUpdates,
+							applyChanges,
+							closePopup: closeSyncPopup,
+							resetState: resetUpdateSyncState,
 						}}
 					/>
 				</div>

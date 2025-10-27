@@ -6,6 +6,7 @@ import { getWhopApiClient } from "@/lib/whop-api-client";
 import { createResource } from "@/lib/actions/resource-actions";
 import { whopSdk } from "@/lib/whop-sdk";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
+import { updateProductSync } from "./index";
 
 // App type classification based on name patterns
 function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
@@ -146,6 +147,45 @@ export async function triggerProductSyncForNewAdmin(
 		console.log(`[PRODUCT-SYNC] � Company ID: ${companyId}`);
 		console.log(`[PRODUCT-SYNC] � Function called at: ${new Date().toISOString()}`);
 
+		// Check for updates first if user already has products synced
+		const existingUserRecord = await db.query.users.findFirst({
+			where: eq(users.id, userId),
+			columns: { productsSynced: true }
+		});
+
+		if (existingUserRecord?.productsSynced) {
+			console.log(`[PRODUCT-SYNC] � User already has products synced, checking for updates first...`);
+			
+			try {
+				// Get user context for update sync
+				const { getUserContext } = await import('../context/user-context');
+				const userContext = await getUserContext(userId, companyId, experienceId, false);
+				
+				if (userContext) {
+					const updateResult = await updateProductSync.checkForUpdates(userContext.user);
+					
+					if (updateResult.hasChanges) {
+						console.log(`[PRODUCT-SYNC] ⚠️ Updates detected:`, {
+							created: updateResult.summary.created,
+							updated: updateResult.summary.updated,
+							deleted: updateResult.summary.deleted,
+							total: updateResult.summary.total,
+						});
+						
+						// Store update result for frontend to display
+						// Note: In a real implementation, you might want to store this in a database table
+						// or use a real-time notification system
+						console.log(`[PRODUCT-SYNC] ℹ️ Update sync completed - changes will be shown in frontend popup`);
+					} else {
+						console.log(`[PRODUCT-SYNC] ✅ No updates detected - products are up to date`);
+					}
+				}
+			} catch (updateError) {
+				console.error(`[PRODUCT-SYNC] ❌ Error checking for updates:`, updateError);
+				// Continue with main sync even if update check fails
+			}
+		}
+
 		// Check database connection health before starting
 		updateProgress("checking_database_health");
 		console.log("� Checking database connection health...");
@@ -174,15 +214,15 @@ export async function triggerProductSyncForNewAdmin(
 			.limit(1);
 
 		// Check if user is already synced
-		const existingUserRecord = await db.query.users.findFirst({
+		const userSyncRecord = await db.query.users.findFirst({
 			where: eq(users.id, userId),
 			columns: { productsSynced: true }
 		});
 
-		if (existingResources.length > 0 || existingUserRecord?.productsSynced) {
+		if (existingResources.length > 0 || userSyncRecord?.productsSynced) {
 			console.log(`✅ Products already synced for experience ${experienceId}, skipping sync`);
 			console.log(`   - Resources: ${existingResources.length}`);
-			console.log(`   - User synced: ${existingUserRecord?.productsSynced}`);
+			console.log(`   - User synced: ${userSyncRecord?.productsSynced}`);
 			
 			// Mark user as synced even though we didn't sync (already done)
 			await db.update(users)

@@ -31,6 +31,7 @@ import {
   getLiveTemplate, 
   getLastEditedTemplate 
 } from '@/lib/actions/templates-actions';
+import type { Resource } from '@/lib/types/resource';
 
 export const useSeasonalStoreDatabase = (experienceId: string) => {
   // Constants for limits
@@ -42,9 +43,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   const [allThemes, setAllThemes] = useState<Record<string, LegacyTheme>>(initialThemes);
   const [currentSeason, setCurrentSeason] = useState<string>('Fall');
   
+  // Store Navigation State (persists across view switches)
+  const [lastActiveTheme, setLastActiveTheme] = useState<string>('Fall');
+  const [lastActiveTemplate, setLastActiveTemplate] = useState<StoreTemplate | null>(null);
+  
   // Theme-Specific State
   const [themeTextStyles, setThemeTextStyles] = useState<Record<string, FixedTextStyles>>({});
-  const [themeLogos, setThemeLogos] = useState<Record<string, LogoAsset>>({});
+  const [themeLogos, setThemeLogos] = useState<Record<string, LogoAsset | null>>({});
   const [themeGeneratedBackgrounds, setThemeGeneratedBackgrounds] = useState<Record<string, string | null>>({});
   const [themeUploadedBackgrounds, setThemeUploadedBackgrounds] = useState<Record<string, string | null>>({});
   const [themeProducts, setThemeProducts] = useState<Record<string, Product[]>>({});
@@ -62,6 +67,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Track if a template has been manually loaded to prevent live template override
   const [hasManuallyLoadedTemplate, setHasManuallyLoadedTemplate] = useState(false);
+  
+  // Track when initial data loading is complete
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+  
+  // Track when store content is ready (template or auto-add complete)
+  const [isStoreContentReady, setIsStoreContentReady] = useState(false);
   
   // Store ResourceLibrary product IDs from loaded templates
   const [templateResourceLibraryProductIds, setTemplateResourceLibraryProductIds] = useState<string[]>([]);
@@ -191,167 +202,6 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   
   
-  // State persistence: Load state from sessionStorage on mount
-  useEffect(() => {
-    try {
-      const persistedState = sessionStorage.getItem(`seasonalStore_${experienceId}`);
-      if (persistedState) {
-        const state = JSON.parse(persistedState);
-        console.log('💾 Restoring persisted state for experience:', experienceId);
-        
-        // Restore theme-specific state (handle both old and new compressed format)
-        if (state.currentSeason) setCurrentSeason(state.currentSeason);
-        if (state.themeTextStyles) setThemeTextStyles(state.themeTextStyles);
-        if (state.themeLogos) setThemeLogos(state.themeLogos);
-        if (state.themeGeneratedBackgrounds) setThemeGeneratedBackgrounds(state.themeGeneratedBackgrounds);
-        if (state.themeUploadedBackgrounds) setThemeUploadedBackgrounds(state.themeUploadedBackgrounds);
-        if (state.themeProducts) setThemeProducts(state.themeProducts);
-        if (state.themeFloatingAssets) setThemeFloatingAssets(state.themeFloatingAssets);
-        
-        // Handle both old format (allThemes) and new format (customThemes)
-        if (state.allThemes) {
-          setAllThemes(state.allThemes);
-        } else if (state.customThemes) {
-          // Merge custom themes with existing allThemes
-          setAllThemes(prev => ({ ...prev, ...state.customThemes }));
-        }
-        
-        // Restore WHOP attachment state (theme-specific)
-        if (state.themeBackgroundAttachmentIds) setThemeBackgroundAttachmentIds(state.themeBackgroundAttachmentIds);
-        if (state.themeBackgroundAttachmentUrls) setThemeBackgroundAttachmentUrls(state.themeBackgroundAttachmentUrls);
-        if (state.themeLogoAttachmentIds) setThemeLogoAttachmentIds(state.themeLogoAttachmentIds);
-        if (state.themeLogoAttachmentUrls) setThemeLogoAttachmentUrls(state.themeLogoAttachmentUrls);
-        
-        // Restore promo button state
-        if (state.promoButton) setPromoButton(state.promoButton);
-        
-        // Restore template theme state
-        if (state.currentTemplateTheme) setCurrentTemplateTheme(state.currentTemplateTheme);
-        
-        console.log('✅ State restored successfully');
-      }
-    } catch (error) {
-      console.error('❌ Failed to restore persisted state:', error);
-    }
-  }, [experienceId]); // Only run on mount or when experienceId changes
-  
-  // State persistence: Save state to sessionStorage whenever it changes
-  useEffect(() => {
-    try {
-      // Create a compressed state object with only essential data
-      const stateToPersist = {
-        currentSeason,
-        // Only save non-empty text styles
-        themeTextStyles: Object.fromEntries(
-          Object.entries(themeTextStyles).filter(([_, styles]) => 
-            Object.values(styles).some(style => style?.content?.trim())
-          )
-        ),
-        // Only save non-empty logos
-        themeLogos: Object.fromEntries(
-          Object.entries(themeLogos).filter(([_, logo]) => logo?.src)
-        ),
-        // Only save non-empty backgrounds
-        themeGeneratedBackgrounds: Object.fromEntries(
-          Object.entries(themeGeneratedBackgrounds).filter(([_, bg]) => bg)
-        ),
-        themeUploadedBackgrounds: Object.fromEntries(
-          Object.entries(themeUploadedBackgrounds).filter(([_, bg]) => bg)
-        ),
-        // Only save products with content
-        themeProducts: Object.fromEntries(
-          Object.entries(themeProducts).filter(([_, products]) => 
-            products && products.length > 0
-          )
-        ),
-        // Only save non-empty floating assets
-        themeFloatingAssets: Object.fromEntries(
-          Object.entries(themeFloatingAssets).filter(([_, assets]) => 
-            assets && assets.length > 0
-          )
-        ),
-        // Only save custom themes (not default ones)
-        customThemes: Object.fromEntries(
-          Object.entries(allThemes).filter(([key, _]) => key.startsWith('custom_'))
-        ),
-        // Only save non-empty attachment data
-        themeBackgroundAttachmentIds: Object.fromEntries(
-          Object.entries(themeBackgroundAttachmentIds).filter(([_, id]) => id)
-        ),
-        themeBackgroundAttachmentUrls: Object.fromEntries(
-          Object.entries(themeBackgroundAttachmentUrls).filter(([_, url]) => url)
-        ),
-        themeLogoAttachmentIds: Object.fromEntries(
-          Object.entries(themeLogoAttachmentIds).filter(([_, id]) => id)
-        ),
-        themeLogoAttachmentUrls: Object.fromEntries(
-          Object.entries(themeLogoAttachmentUrls).filter(([_, url]) => url)
-        ),
-        promoButton: promoButton?.text ? promoButton : null,
-        currentTemplateTheme,
-        timestamp: Date.now()
-      };
-      
-      const serializedState = JSON.stringify(stateToPersist);
-      
-      // Check if the data is too large (sessionStorage limit is ~5-10MB)
-      if (serializedState.length > 2 * 1024 * 1024) { // 2MB limit
-        console.warn('⚠️ State too large for sessionStorage, saving only essential data');
-        
-        // Save only the most essential data
-        const essentialState = {
-          currentSeason,
-          themeTextStyles: Object.fromEntries(
-            Object.entries(themeTextStyles).filter(([_, styles]) => 
-              Object.values(styles).some(style => style?.content?.trim())
-            )
-          ),
-          customThemes: Object.fromEntries(
-            Object.entries(allThemes).filter(([key, _]) => key.startsWith('custom_'))
-          ),
-          timestamp: Date.now()
-        };
-        
-        sessionStorage.setItem(`seasonalStore_${experienceId}`, JSON.stringify(essentialState));
-      } else {
-        sessionStorage.setItem(`seasonalStore_${experienceId}`, serializedState);
-      }
-      
-      console.log('💾 State persisted to sessionStorage');
-    } catch (error) {
-      console.error('❌ Failed to persist state:', error);
-      
-      // Fallback: save only essential data
-      try {
-        const fallbackState = {
-          currentSeason,
-          customThemes: Object.fromEntries(
-            Object.entries(allThemes).filter(([key, _]) => key.startsWith('custom_'))
-          ),
-          timestamp: Date.now()
-        };
-        sessionStorage.setItem(`seasonalStore_${experienceId}`, JSON.stringify(fallbackState));
-        console.log('💾 Fallback state saved');
-      } catch (fallbackError) {
-        console.error('❌ Fallback save also failed:', fallbackError);
-      }
-    }
-  }, [
-    experienceId,
-    currentSeason,
-    themeTextStyles,
-    themeLogos,
-    themeGeneratedBackgrounds,
-    themeUploadedBackgrounds,
-    themeProducts,
-    themeFloatingAssets,
-    allThemes,
-    themeBackgroundAttachmentIds,
-    themeBackgroundAttachmentUrls,
-    themeLogoAttachmentIds,
-    themeLogoAttachmentUrls,
-    promoButton
-  ]);
   
   // Helper function to convert database Theme to LegacyTheme
   const convertThemeToLegacy = (dbTheme: Theme): LegacyTheme => {
@@ -430,36 +280,108 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
   }, [experienceId]);
   
-  // Load live template
-  const loadLiveTemplate = useCallback(async () => {
+  // Auto-add all Market Stall products to all themes
+  const autoAddMarketStallProductsToAllThemes = useCallback(async () => {
     try {
+      // Get all resources from the Market Stall (Resource Library)
+      const response = await fetch(`/api/resources?experienceId=${experienceId}`);
+      if (!response.ok) {
+        console.log('🛒 No Market Stall products found or error fetching resources');
+        return;
+      }
+      
+      const data = await response.json();
+      const allResources = data.data?.resources || [];
+      
+      // Filter for PAID products only
+      const paidResources = allResources.filter((resource: Resource) => 
+        resource.category === 'PAID'
+      );
+      
+      if (paidResources.length === 0) {
+        console.log('🛒 No PAID products in Market Stall to add');
+        return;
+      }
+      
+      console.log(`🛒 Found ${paidResources.length} PAID products in Market Stall`);
+      
+      // Get all available seasons/themes (including custom themes)
+      const defaultSeasons = Object.keys(initialThemes);
+      const customThemeKeys = Object.keys(allThemes).filter(key => key.startsWith('custom_'));
+      const allThemeKeys = [...defaultSeasons, ...customThemeKeys];
+      
+      console.log(`🛒 Found ${defaultSeasons.length} default themes and ${customThemeKeys.length} custom themes`);
+      
+      // Market Stall placeholder image
+      const marketStallPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+      
+      // Convert PAID resources to products with Market Stall placeholders
+      const marketStallProducts = paidResources.map((resource: Resource) => ({
+        id: `resource-${resource.id}`,
+        name: resource.name,
+        description: resource.description || '',
+        price: parseFloat(resource.price || '0'), // Convert string to number
+        image: resource.image || marketStallPlaceholder, // Use Market Stall placeholder if no image
+        link: resource.link || '',
+        category: resource.category || 'PAID',
+        type: resource.type || 'MY_PRODUCTS',
+        // Add Market Stall placeholders
+        placeholder: true,
+        marketStallProduct: true
+      }));
+      
+      // Add products to all themes (default + custom)
+      setThemeProducts(prev => {
+        const updated = { ...prev };
+        let hasChanges = false;
+        
+        allThemeKeys.forEach(themeKey => {
+          const existingProducts = updated[themeKey] || [];
+          const existingResourceIds = existingProducts
+            .filter(p => typeof p.id === 'string' && p.id.startsWith('resource-'))
+            .map(p => p.id);
+          
+          // Only add products that aren't already in this theme
+          const newProducts = marketStallProducts.filter((product: Product) => 
+            !existingResourceIds.includes(product.id)
+          );
+          
+          if (newProducts.length > 0) {
+            updated[themeKey] = [...existingProducts, ...newProducts];
+            const themeType = themeKey.startsWith('custom_') ? 'custom theme' : 'theme';
+            console.log(`🛒 Added ${newProducts.length} PAID Market Stall products to ${themeType}: ${themeKey}`);
+            hasChanges = true;
+          }
+        });
+        
+        // Only return updated state if there were actual changes to prevent infinite loops
+        return hasChanges ? updated : prev;
+      });
+      
+      console.log('🛒 Successfully added all PAID Market Stall products to all themes');
+      
+    } catch (error) {
+      console.error('🛒 Error auto-adding Market Stall products:', error);
+    }
+  }, [experienceId]);
+  
+  // Application load logic: live template -> first template -> default spooky theme + auto-add Market Stall products
+  const loadApplicationData = useCallback(async () => {
+    try {
+      // Step 1: Try to load live template
       const live = await getLiveTemplate(experienceId);
       setLiveTemplate(live);
       
       if (live) {
-        // Only load live template if no template has been manually loaded
-        if (!hasManuallyLoadedTemplate) {
-          // Load live template data
-          setCurrentSeason(live.currentSeason);
-          
-          // Live template uses its own themeSnapshot - no need to modify allThemes
-          console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
-          
-          setThemeTextStyles(live.templateData.themeTextStyles);
-          setThemeLogos(live.templateData.themeLogos);
-          setThemeGeneratedBackgrounds(live.templateData.themeGeneratedBackgrounds);
-          setThemeUploadedBackgrounds(live.templateData.themeUploadedBackgrounds);
-          setThemeProducts(live.templateData.themeProducts);
-        } else {
-          console.log('🎨 Skipping live template load - manual template already loaded');
-        }
+        // Load live template data
+        setCurrentSeason(live.currentSeason);
+        console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
         
-        // Load current theme styling if available (but don't override allThemes)
-        if (live.templateData.currentTheme) {
-          console.log('🎨 Live template has current theme styling:', live.templateData.currentTheme.name);
-          console.log('🎨 Current theme data:', live.templateData.currentTheme);
-          // Note: Template uses its own themeSnapshot, no need to modify allThemes
-        }
+        setThemeTextStyles(live.templateData.themeTextStyles);
+        setThemeLogos(live.templateData.themeLogos);
+        setThemeGeneratedBackgrounds(live.templateData.themeGeneratedBackgrounds);
+        setThemeUploadedBackgrounds(live.templateData.themeUploadedBackgrounds);
+        setThemeProducts(live.templateData.themeProducts);
         
         // Load promo button styling if available
         if (live.templateData.promoButton) {
@@ -492,17 +414,66 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             [live.currentSeason]: live.templateData.logoAttachmentUrl || null
           }));
         }
+        
+        setIsStoreContentReady(true);
+        console.log('🎨 Live template loaded - store content ready');
+      } else {
+        // Step 2: No live template - try to load first template from list
+        const allTemplates = await getTemplates(experienceId);
+        setTemplates(allTemplates);
+        
+        if (allTemplates && allTemplates.length > 0) {
+          // Load the first template from the list
+          const firstTemplate = allTemplates[0];
+          console.log('🎨 No live template found - loading first template:', firstTemplate.name);
+          
+          setCurrentSeason(firstTemplate.currentSeason);
+          setThemeTextStyles(firstTemplate.templateData.themeTextStyles);
+          setThemeLogos(firstTemplate.templateData.themeLogos);
+          setThemeGeneratedBackgrounds(firstTemplate.templateData.themeGeneratedBackgrounds);
+          setThemeUploadedBackgrounds(firstTemplate.templateData.themeUploadedBackgrounds);
+          setThemeProducts(firstTemplate.templateData.themeProducts);
+          
+          // Load promo button styling if available
+          if (firstTemplate.templateData.promoButton) {
+            setPromoButton(firstTemplate.templateData.promoButton);
+          }
+          
+          setIsStoreContentReady(true);
+          console.log('🎨 First template loaded - store content ready');
+        } else {
+          // Step 3: No templates at all - show default "Spooky Night" theme
+          console.log('🎨 No templates found - showing default Spooky Night theme');
+          setCurrentSeason('Fall'); // Use Fall as the season (which contains Spooky Night theme)
+          
+          // Initialize Fall theme with empty products (Market Stall products will be added later)
+          setThemeProducts(prev => ({ ...prev, 'Fall': [] }));
+          
+          setIsStoreContentReady(true);
+          console.log('🎨 Default Spooky Night theme loaded - store content ready');
+        }
       }
+      
+      // Step 4: Auto-add all Market Stall products to all themes
+      console.log('🛒 Auto-adding all Market Stall products to all themes...');
+      await autoAddMarketStallProductsToAllThemes();
+      
+      // Mark initial load as complete
+      setIsInitialLoadComplete(true);
+      
     } catch (error) {
-      console.error('Error loading live template:', error);
+      console.error('Error loading application data:', error);
       if ((error as Error).message.includes('Token missing') || (error as Error).message.includes('401')) {
         console.log('Authentication required for database operations');
         setApiError(null);
       } else {
-        setApiError(`Failed to load live template: ${(error as Error).message}`);
+        setApiError(`Failed to load application data: ${(error as Error).message}`);
       }
+      // Still mark as complete even on error to prevent infinite loading
+      setIsInitialLoadComplete(true);
+      setIsStoreContentReady(true);
     }
-  }, [experienceId, hasManuallyLoadedTemplate]);
+  }, [experienceId, autoAddMarketStallProductsToAllThemes]);
   
   // Load last edited template
   const loadLastEditedTemplate = useCallback(async () => {
@@ -525,10 +496,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     if (experienceId) {
       loadThemes();
       loadTemplates();
-      loadLiveTemplate();
+      loadApplicationData(); // New unified load function
       loadLastEditedTemplate();
     }
-  }, [experienceId, loadThemes, loadTemplates, loadLiveTemplate, loadLastEditedTemplate]);
+  }, [experienceId, loadThemes, loadTemplates, loadApplicationData, loadLastEditedTemplate]);
   
   // Theme management functions
   const createThemeHandler = useCallback(async (themeData: Omit<Theme, "id" | "experienceId" | "createdAt" | "updatedAt">) => {
@@ -944,6 +915,73 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }));
   }, [currentSeason]);
   
+  // Add Market Stall products to a specific custom theme
+  const addMarketStallProductsToCustomTheme = useCallback(async (customThemeKey: string) => {
+    try {
+      // Get all resources from the Market Stall (Resource Library)
+      const response = await fetch(`/api/resources?experienceId=${experienceId}`);
+      if (!response.ok) {
+        console.log('🛒 No Market Stall products found for custom theme');
+        return;
+      }
+      
+      const data = await response.json();
+      const allResources = data.data?.resources || [];
+      
+      // Filter for PAID products only
+      const paidResources = allResources.filter((resource: Resource) => 
+        resource.category === 'PAID'
+      );
+      
+      if (paidResources.length === 0) {
+        console.log('🛒 No PAID products in Market Stall for custom theme');
+        return;
+      }
+      
+      // Market Stall placeholder image
+      const marketStallPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+      
+      // Convert PAID resources to products with Market Stall placeholders
+      const marketStallProducts = paidResources.map((resource: Resource) => ({
+        id: `resource-${resource.id}`,
+        name: resource.name,
+        description: resource.description || '',
+        price: parseFloat(resource.price || '0'), // Convert string to number
+        image: resource.image || marketStallPlaceholder, // Use Market Stall placeholder if no image
+        link: resource.link || '',
+        category: resource.category || 'PAID',
+        type: resource.type || 'MY_PRODUCTS',
+        // Add Market Stall placeholders
+        placeholder: true,
+        marketStallProduct: true
+      }));
+      
+      // Add products to the custom theme
+      setThemeProducts(prev => {
+        const updated = { ...prev };
+        const existingProducts = updated[customThemeKey] || [];
+        const existingResourceIds = existingProducts
+          .filter(p => typeof p.id === 'string' && p.id.startsWith('resource-'))
+          .map(p => p.id);
+        
+        // Only add products that aren't already in this custom theme
+        const newProducts = marketStallProducts.filter((product: Product) => 
+          !existingResourceIds.includes(product.id)
+        );
+        
+        if (newProducts.length > 0) {
+          updated[customThemeKey] = [...existingProducts, ...newProducts];
+          console.log(`🛒 Added ${newProducts.length} PAID Market Stall products to custom theme: ${customThemeKey}`);
+        }
+        
+        return updated;
+      });
+      
+    } catch (error) {
+      console.error('🛒 Error adding Market Stall products to custom theme:', error);
+    }
+  }, [experienceId]);
+  
   // Theme management
   const addCustomTheme = useCallback(async (theme: LegacyTheme) => {
     try {
@@ -977,6 +1015,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
       setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
       
+      // Add Market Stall products to the new custom theme
+      console.log('🛒 Adding Market Stall products to new custom theme:', customThemeKey);
+      await addMarketStallProductsToCustomTheme(customThemeKey);
+      
       return newTheme;
     } catch (error) {
       console.error('❌ Failed to save custom theme to database:', error);
@@ -987,10 +1029,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         // Create a unique key for custom themes to avoid conflicts with default themes
         const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
         setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
+        
+        // Still add Market Stall products even if database save fails
+        console.log('🛒 Adding Market Stall products to custom theme (fallback):', customThemeKey);
+        await addMarketStallProductsToCustomTheme(customThemeKey);
       }
       throw error;
     }
-  }, [experienceId, currentSeason, createTheme, setApiError, canAddCustomTheme]);
+  }, [experienceId, currentSeason, createTheme, setApiError, canAddCustomTheme, addMarketStallProductsToCustomTheme]);
   
   // Editor controls
   const toggleEditorView = useCallback(() => {
@@ -1037,6 +1083,47 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       throw error;
     }
   }, [experienceId]);
+
+  // Store Navigation State Management
+  const saveLastActiveTheme = useCallback((theme: string) => {
+    setLastActiveTheme(theme);
+    console.log(`💾 Saved last active theme: ${theme}`);
+  }, []);
+  
+  const saveLastActiveTemplate = useCallback((template: StoreTemplate | null) => {
+    setLastActiveTemplate(template);
+    console.log(`💾 Saved last active template: ${template?.name || 'none'}`);
+  }, []);
+  
+  const restoreLastActiveState = useCallback(() => {
+    if (lastActiveTemplate) {
+      console.log(`🔄 Restoring last active template: ${lastActiveTemplate.name}`);
+      setCurrentSeason(lastActiveTemplate.currentSeason);
+      setThemeTextStyles(lastActiveTemplate.templateData.themeTextStyles);
+      setThemeLogos(lastActiveTemplate.templateData.themeLogos);
+      setThemeGeneratedBackgrounds(lastActiveTemplate.templateData.themeGeneratedBackgrounds);
+      setThemeUploadedBackgrounds(lastActiveTemplate.templateData.themeUploadedBackgrounds);
+      setThemeProducts(lastActiveTemplate.templateData.themeProducts);
+      if (lastActiveTemplate.templateData.promoButton) {
+        setPromoButton(lastActiveTemplate.templateData.promoButton);
+      }
+      if (lastActiveTemplate.templateData.backgroundAttachmentId) {
+        setThemeBackgroundAttachmentIds(prev => ({ ...prev, [lastActiveTemplate.currentSeason]: lastActiveTemplate.templateData.backgroundAttachmentId || null }));
+      }
+      if (lastActiveTemplate.templateData.backgroundAttachmentUrl) {
+        setThemeBackgroundAttachmentUrls(prev => ({ ...prev, [lastActiveTemplate.currentSeason]: lastActiveTemplate.templateData.backgroundAttachmentUrl || null }));
+      }
+      if (lastActiveTemplate.templateData.logoAttachmentId) {
+        setThemeLogoAttachmentIds(prev => ({ ...prev, [lastActiveTemplate.currentSeason]: lastActiveTemplate.templateData.logoAttachmentId || null }));
+      }
+      if (lastActiveTemplate.templateData.logoAttachmentUrl) {
+        setThemeLogoAttachmentUrls(prev => ({ ...prev, [lastActiveTemplate.currentSeason]: lastActiveTemplate.templateData.logoAttachmentUrl || null }));
+      }
+    } else if (lastActiveTheme) {
+      console.log(`🔄 Restoring last active theme: ${lastActiveTheme}`);
+      setCurrentSeason(lastActiveTheme);
+    }
+  }, [lastActiveTemplate, lastActiveTheme]);
   
   return {
     // Core state
@@ -1149,5 +1236,17 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     // Template ResourceLibrary product IDs
     templateResourceLibraryProductIds,
     setTemplateResourceLibraryProductIds,
+    
+    // Loading state
+    isInitialLoadComplete,
+    isStoreContentReady,
+    setIsStoreContentReady,
+    
+    // Store Navigation State Management
+    lastActiveTheme,
+    lastActiveTemplate,
+    saveLastActiveTheme,
+    saveLastActiveTemplate,
+    restoreLastActiveState,
   };
 };

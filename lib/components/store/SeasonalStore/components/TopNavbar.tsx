@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, Sun, Moon } from 'lucide-react';
+import { Home, ArrowLeft, Sun, Moon } from 'lucide-react';
 import { EyeIcon, EditIcon } from './Icons';
 
 interface TopNavbarProps {
@@ -26,6 +26,7 @@ interface TopNavbarProps {
   allThemes: Record<string, any>;
   legacyTheme: any;
   hideEditorButtons?: boolean;
+  isStorePreview?: boolean; // New prop to indicate StorePreview context
   
   // Handlers
   toggleEditorView: () => void;
@@ -53,6 +54,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   allThemes,
   legacyTheme,
   hideEditorButtons = false,
+  isStorePreview = false,
   toggleEditorView,
   handleGenerateBgClick,
   handleBgImageUpload,
@@ -70,13 +72,23 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       <div className="px-3 py-2 h-full flex items-center">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-4">
-            {/* Back Arrow */}
+            {/* Home/Back Button */}
             <button
               onClick={onBack || (() => window.history.back())}
-              className="p-1 text-white hover:text-gray-300 transition-colors duration-200"
-              title="Go Back to Store Preview"
+              className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white relative"
+              title={isStorePreview ? "Go Back" : "Go Home"}
             >
-              <ArrowLeft size={16} />
+              <div className="flex items-center justify-center">
+                {isStorePreview ? (
+                  <ArrowLeft className="w-5 h-5" />
+                ) : (
+                  <Home className="w-5 h-5" />
+                )}
+              </div>
+              {/* Tooltip */}
+              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                {isStorePreview ? "Go Back" : "Go Home"}
+              </div>
             </button>
           </div>
 

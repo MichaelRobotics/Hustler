@@ -108,7 +108,7 @@ export const useTemplateAutoSave = ({
                 name: product.name,
                 price: product.price,
                 description: product.description,
-                image: product.imageAttachmentUrl || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`, // Use placeholder if no WHOP storage URL
+                image: product.image || `https://placehold.co/200x200/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())}`, // Keep original image or use placeholder
                 imageAttachmentId: product.imageAttachmentId,
                 imageAttachmentUrl: product.imageAttachmentUrl,
                 containerAsset: product.containerAsset,

@@ -55,11 +55,27 @@ import { useProductImageUpload } from './hooks/useProductImageUpload';
 import { useTemplateSave } from './hooks/useTemplateSave';
 import { usePreviewLiveTemplate } from './hooks/usePreviewLiveTemplate';
 import { useAutoAddResources } from './hooks/useAutoAddResources';
+import { useUpdateSync } from '../../../hooks/useUpdateSync';
+import { SyncChangesPopup } from './components/SyncChangesPopup';
 import { convertThemeToLegacy, formatPrice, generateAssetId } from './utils';
 import SeasonalStoreChat from './components/SeasonalStoreChat';
 import { apiGet } from '../../../utils/api-client';
 import type { FunnelFlow } from '../../../types/funnel';
 import type { AuthenticatedUser } from '../../../types/user';
+
+import type { UpdateSyncResult } from '../../../sync/update-product-sync';
+
+interface UpdateSyncProps {
+  isChecking: boolean;
+  syncResult: UpdateSyncResult | null;
+  showPopup: boolean;
+  error: string | null;
+  hasCheckedOnce: boolean;
+  checkForUpdates: () => Promise<UpdateSyncResult | null | undefined>;
+  applyChanges: () => Promise<any>;
+  closePopup: () => void;
+  resetState?: () => void; // Optional reset function
+}
 
 interface SeasonalStoreProps {
   onBack?: () => void;
@@ -70,9 +86,12 @@ interface SeasonalStoreProps {
   hideEditorButtons?: boolean;
   onTemplateLoaded?: () => void; // Callback when template is fully loaded on frontend
   onNavigateToStorePreview?: () => void; // Callback to navigate to StorePreview
+  isStorePreview?: boolean; // Indicates if this SeasonalStore is being used in StorePreview context
+  isActive?: boolean; // Indicates if this SeasonalStore is currently the active view
+  updateSyncProps?: UpdateSyncProps; // Optional update sync props from AdminPanel
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, onNavigateToStorePreview }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, onNavigateToStorePreview, isStorePreview = false, isActive = false, updateSyncProps }) => {
   // Extract experienceId from user object
   const experienceId = user?.experienceId;
   
@@ -86,38 +105,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
   const isGeneratingRef = useRef(false);
   
-  // React state preservation - save to sessionStorage when component unmounts
-  const saveStateToSession = useCallback((state: any) => {
-    try {
-      sessionStorage.setItem('seasonalStoreState', JSON.stringify({
-        ...state,
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.error('Failed to save state to sessionStorage:', error);
-    }
-  }, []);
-
-  const loadStateFromSession = useCallback(() => {
-    try {
-      const saved = sessionStorage.getItem('seasonalStoreState');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Only use saved state if it's recent (within last 30 minutes)
-        if (Date.now() - parsed.timestamp < 30 * 60 * 1000) {
-          return parsed;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load state from sessionStorage:', error);
-    }
-    return null;
-  }, []);
-  
   // Chat functionality
   const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
   const [liveFunnel, setLiveFunnel] = useState<any>(null);
   const [isFunnelActive, setIsFunnelActive] = useState(false);
+  const [isFunnelCheckComplete, setIsFunnelCheckComplete] = useState(false); // Track if funnel check is complete
   const [isChatOpen, setIsChatOpen] = useState(false);
   
   // FunnelBuilder view state
@@ -137,6 +129,22 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const [hasLoadedResourceLibrary, setHasLoadedResourceLibrary] = useState(false);
   const [deletedResourceLibraryProducts, setDeletedResourceLibraryProducts] = useState<Record<string, Set<string>>>({});
   
+  // Update sync functionality - use props from AdminPanel if available, otherwise use local hook
+  const {
+    isChecking: isCheckingUpdates,
+    syncResult,
+    showPopup: showSyncPopup,
+    error: syncError,
+    hasCheckedOnce,
+    checkForUpdates,
+    applyChanges,
+    closePopup: closeSyncPopup,
+    resetState: resetUpdateSyncState,
+  } = updateSyncProps || useUpdateSync({ user });
+  
+  // Track last user ID to reset state when user changes (only if using local hook)
+  const lastCheckedUserId = useRef<string | null>(null);
+  
   // Load products from theme when theme changes (initial load from DB) - moved after database hook
   
   // Mobile detection effect
@@ -150,9 +158,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  // Show notification when no funnel is live
+  // Show notification when no funnel is live (only after funnel check is complete)
   useEffect(() => {
-    if (!funnelFlow || !isFunnelActive) {
+    if (isFunnelCheckComplete && (!funnelFlow || !isFunnelActive)) {
       setShowNotification(true);
       
       // Auto-hide notification after 7 seconds
@@ -160,7 +168,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         setShowNotification(false);
       }, 7000);
     }
-  }, [funnelFlow, isFunnelActive]);
+  }, [isFunnelCheckComplete, funnelFlow, isFunnelActive]);
+
   
   const {
     // State
@@ -244,7 +253,52 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Template ResourceLibrary product IDs
     templateResourceLibraryProductIds,
     setTemplateResourceLibraryProductIds,
+    
+    // Loading state
+    isInitialLoadComplete,
+    isStoreContentReady,
+    setIsStoreContentReady,
+    
+    // Store Navigation State Management
+    lastActiveTheme,
+    lastActiveTemplate,
+    saveLastActiveTheme,
+    saveLastActiveTemplate,
+    restoreLastActiveState,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
+  
+  // Check for product updates when component mounts and user has products synced
+  // Only run this effect if we're using the local hook (not props from AdminPanel)
+  useEffect(() => {
+    if (updateSyncProps) {
+      // If updateSyncProps are provided, don't run local update sync logic
+      return;
+    }
+    
+    // Reset update sync state if user changed
+    if (user?.id !== lastCheckedUserId.current) {
+      resetUpdateSyncState?.();
+      lastCheckedUserId.current = user?.id || null;
+    }
+    
+    if (
+      user?.productsSynced && 
+      user?.accessLevel === 'admin' && // Ensure user is admin
+      experienceId && 
+      experienceId !== 'default-experience' && // Ensure we have a real experience ID
+      isStoreContentReady && 
+      !hasCheckedOnce // Use React state instead of ref
+    ) {
+      console.log('[SeasonalStore] Admin user has products synced, checking for updates...', {
+        userId: user.id,
+        experienceId,
+        productsSynced: user.productsSynced,
+        accessLevel: user.accessLevel,
+        hasCheckedOnce
+      });
+      checkForUpdates();
+    }
+  }, [user?.id, user?.productsSynced, user?.accessLevel, experienceId, isStoreContentReady, hasCheckedOnce, checkForUpdates, resetUpdateSyncState, updateSyncProps]);
   
   // Use only products that are in the current theme
   const combinedProducts = useMemo(() => {
@@ -253,55 +307,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     return [...themeProductsList];
   }, [themeProducts, currentSeason]);
   
-  // State preservation - save to sessionStorage when state changes
-  useEffect(() => {
-    // Only save if we have meaningful state
-    if (Object.keys(themeProducts).length > 0) {
-      console.log('🔄 Saving state to sessionStorage');
-      saveStateToSession({
-        themeProducts,
-        fixedTextStyles,
-        logoAsset,
-        generatedBackground,
-        uploadedBackground,
-        floatingAssets,
-        currentSeason
-      });
-    }
-  }, [themeProducts, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, floatingAssets, currentSeason, saveStateToSession]);
-
-  // Load saved state on mount
-  useEffect(() => {
-    const savedState = loadStateFromSession();
-    if (savedState) {
-      console.log('🔄 Loading preserved state from sessionStorage');
-      // Restore theme-specific state
-      if (savedState.themeProducts) {
-        Object.keys(savedState.themeProducts).forEach(season => {
-          setThemeProducts(prev => ({
-            ...prev,
-            [season]: savedState.themeProducts[season]
-          }));
-        });
-      }
-      if (savedState.fixedTextStyles) {
-        setFixedTextStyles(savedState.fixedTextStyles);
-      }
-      if (savedState.logoAsset) {
-        setLogoAsset(savedState.logoAsset);
-      }
-      if (savedState.generatedBackground) {
-        setBackground('generated', savedState.generatedBackground);
-      }
-      if (savedState.uploadedBackground) {
-        setBackground('uploaded', savedState.uploadedBackground);
-      }
-      if (savedState.currentSeason) {
-        setCurrentSeason(savedState.currentSeason);
-      }
-    }
-  }, []); // Only run on mount
-
   // Product navigation state
   const [isSliding, setIsSliding] = useState(false);
   
@@ -619,11 +624,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         setFunnelFlow(null);
         setIsFunnelActive(false);
       }
+      
+      // Mark funnel check as complete
+      setIsFunnelCheckComplete(true);
     } catch (error) {
       console.error('[SeasonalStore] Error loading live funnel:', error);
       setLiveFunnel(null);
       setFunnelFlow(null);
       setIsFunnelActive(false);
+      
+      // Mark funnel check as complete even on error
+      setIsFunnelCheckComplete(true);
     }
   }, [experienceId]);
 
@@ -667,6 +678,37 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     console.log('[SeasonalStore] useEffect triggered, experienceId:', experienceId);
     loadLiveFunnel();
   }, [loadLiveFunnel]);
+
+  // Save current state when theme or template changes
+  useEffect(() => {
+    if (currentSeason) {
+      saveLastActiveTheme(currentSeason);
+      console.log(`💾 Auto-saving current theme: ${currentSeason}`);
+    }
+  }, [currentSeason, saveLastActiveTheme]);
+
+  useEffect(() => {
+    if (liveTemplate) {
+      saveLastActiveTemplate(liveTemplate);
+      console.log(`💾 Auto-saving current template: ${liveTemplate.name}`);
+    }
+  }, [liveTemplate, saveLastActiveTemplate]);
+
+  // Restore last active state when store loads (but only if no live template is being loaded)
+  useEffect(() => {
+    if (isStoreContentReady && !liveTemplate && lastActiveTemplate) {
+      console.log(`🔄 Restoring last active state on store load`);
+      restoreLastActiveState();
+    }
+  }, [isStoreContentReady, liveTemplate, lastActiveTemplate, restoreLastActiveState]);
+
+  // Restore last active state when store becomes active (user switches back to store view)
+  useEffect(() => {
+    if (isActive && isStoreContentReady && !liveTemplate && lastActiveTemplate) {
+      console.log(`🔄 Restoring last active state - store became active`);
+      restoreLastActiveState();
+    }
+  }, [isActive, isStoreContentReady, liveTemplate, lastActiveTemplate, restoreLastActiveState]);
 
   // Load ResourceLibrary products on mount and when theme changes
   useEffect(() => {
@@ -815,7 +857,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   }, [themeProducts, currentSeason]);
 
   // Use auto-add resources hook
-  const { hasAutoAddedResources } = useAutoAddResources({
+  const { hasAutoAddedResources, isAutoAddComplete } = useAutoAddResources({
     allResources,
     hasLoadedResourceLibrary,
     currentSeason,
@@ -825,7 +867,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setThemeProducts,
     handleProductImageUpload,
     templateResourceLibraryProductIds, // Pass template ResourceLibrary product IDs
+    setIsStoreContentReady, // Pass callback to notify when store content is ready
   });
+
+  // Store Loading Logic: Wait for content to be ready before showing store
+  // - If live template exists: loads live template data
+  // - If no live template: auto-adds synced WHOP products as default
+  // - Store only renders when content is ready (no default Fall theme flash)
+  const isProductsReady = isInitialLoadComplete; // Products are ready when initial load completes
+  
+  // Promo button is ready when store content is ready
+  const isPromoButtonReady = isStoreContentReady;
 
   // Combined delete handler that routes to appropriate delete function
   const deleteProduct = useCallback((productId: number | string) => {
@@ -1245,12 +1297,46 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   return (
     <>
+      {/* Show loading screen while waiting for store content */}
+      {!isStoreContentReady && (
+        <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden loading-screen-fade-in">
+          {/* Main content */}
+          <div className="text-center relative z-10">
+            {/* Whop-style loading spinner */}
+            <div className="relative mb-6">
+              <div className="w-8 h-8 mx-auto relative">
+                <div className="absolute inset-0 border-2 border-gray-200 dark:border-gray-700 rounded-full"></div>
+                <div className="absolute inset-0 border-2 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+              </div>
+            </div>
+            
+            {/* Whop-style loading text */}
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Calling for Merchant
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Preparing showcase items...
+              </p>
+            </div>
+            
+            {/* Loading dots animation */}
+            <div className="flex justify-center space-x-2 mt-6">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
       
-      <div 
-        ref={appRef} 
-        className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
-        style={getBackgroundStyle}
-      >
+      {/* Store content - only render when ready */}
+      {isStoreContentReady && (
+        <div 
+          ref={appRef} 
+          className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
+          style={getBackgroundStyle}
+        >
       <TopNavbar
         onBack={onBack}
         editorState={editorState}
@@ -1263,6 +1349,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         allThemes={allThemes}
         legacyTheme={legacyTheme}
         hideEditorButtons={hideEditorButtons}
+        isStorePreview={isStorePreview}
         toggleEditorView={toggleEditorView}
         handleGenerateBgClick={handleGenerateBgClick}
         handleBgImageUpload={handleBgImageUpload}
@@ -1423,9 +1510,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           swipeDirection={swipeDirection}
           editorState={editorState}
           legacyTheme={legacyTheme}
-                      loadingState={loadingState}
+          loadingState={loadingState}
           inlineEditTarget={inlineEditTarget}
           inlineProductId={inlineProductId}
+          isProductsReady={isProductsReady}
           navigateToPrevious={navigateToPrevious}
           navigateToNext={navigateToNext}
           handleTouchStart={handleTouchStart}
@@ -1448,6 +1536,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           backgroundAnalysis={backgroundAnalysis}
           fixedTextStyles={fixedTextStyles}
           legacyTheme={legacyTheme}
+          isPromoButtonReady={isPromoButtonReady}
           onOpenProductEditor={openProductEditorWrapper}
           setIsChatOpen={setIsChatOpen}
           setFixedTextStyles={setFixedTextStyles}
@@ -1598,6 +1687,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           </div>
         </div>
       </div>
+      )}
       
       {/* Green Popup - No Merchant is Live */}
       {showNotification && !isFunnelActive && (
@@ -1628,6 +1718,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sync Changes Popup - Only show in store view */}
+      {isActive && (
+        <SyncChangesPopup
+          isOpen={showSyncPopup}
+          onClose={closeSyncPopup}
+          onApplyChanges={applyChanges}
+          syncResult={syncResult}
+          isLoading={isCheckingUpdates}
+        />
       )}
     </>
   );

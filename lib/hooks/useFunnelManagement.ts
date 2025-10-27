@@ -43,7 +43,6 @@ export function useFunnelManagement(user?: { experienceId?: string; name?: strin
 	const [isLoading, setIsLoading] = useState(true);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [isAutoCreated, setIsAutoCreated] = useState(false);
 	
 	// Product selection modal state
 	const [isProductSelectionOpen, setIsProductSelectionOpen] = useState(false);
@@ -117,52 +116,6 @@ export function useFunnelManagement(user?: { experienceId?: string; name?: strin
 		};
 	}, [user?.experienceId]);
 
-	// Auto-create funnel when no funnels exist after loading
-	useEffect(() => {
-		// Only auto-create if:
-		// 1. Not currently loading
-		// 2. No funnels exist
-		// 3. User is available with name
-		// 4. No error occurred during loading
-		if (!isLoading && funnels.length === 0 && user?.name && !error) {
-			console.log("🔄 [AUTO-CREATE] No funnels found, creating default funnel for user:", user.name);
-			
-			// Create default funnel name
-			const defaultFunnelName = `${user.name} Merchant`;
-			
-			// Auto-create the funnel
-			const autoCreateFunnel = async () => {
-				try {
-					setError(null);
-					const response = await apiPost("/api/funnels", {
-						name: defaultFunnelName
-					}, experienceId);
-
-					if (!response.ok) {
-						const errorData = await response.json();
-						throw new Error(errorData.message || "Failed to create default funnel");
-					}
-
-					const data = await response.json();
-					const newFunnel = data.data;
-
-					setFunnels([newFunnel]);
-					setSelectedFunnel(newFunnel);
-					setIsAutoCreated(true); // Mark as auto-created
-					
-					console.log("✅ [AUTO-CREATE] Default funnel created successfully:", newFunnel);
-					return newFunnel;
-				} catch (err) {
-					const errorMessage =
-						err instanceof Error ? err.message : "Failed to create default funnel";
-					setError(errorMessage);
-					console.error("❌ [AUTO-CREATE] Error creating default funnel:", err);
-				}
-			};
-
-			autoCreateFunnel();
-		}
-	}, [isLoading, funnels.length, user?.name, error, experienceId]);
 
 	const handleAddFunnel = async () => {
 		if (newFunnelName.trim()) {
@@ -722,7 +675,6 @@ export function useFunnelManagement(user?: { experienceId?: string; name?: strin
 		isLoading,
 		isDeleting,
 		error,
-		isAutoCreated,
 
 		// Setters
 		setFunnels,

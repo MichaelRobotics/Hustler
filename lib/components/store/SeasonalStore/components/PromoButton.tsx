@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface PromoButtonProps {
   funnelFlow: any;
@@ -26,6 +26,7 @@ interface PromoButtonProps {
     };
   };
   legacyTheme: any;
+  isPromoButtonReady: boolean; // Updated prop name for promo button-specific loading
   
   // Handlers
   onOpenProductEditor: (id: number | string | null, target: string) => void;
@@ -46,6 +47,7 @@ export const PromoButton: React.FC<PromoButtonProps> = ({
   backgroundAnalysis,
   fixedTextStyles,
   legacyTheme,
+  isPromoButtonReady,
   onOpenProductEditor,
   setIsChatOpen,
   setFixedTextStyles,
@@ -55,12 +57,31 @@ export const PromoButton: React.FC<PromoButtonProps> = ({
   getGlowBgClass,
   getGlowBgStrongClass,
 }) => {
+  const [showPromoButton, setShowPromoButton] = useState(false);
+
+  // Show promo button after a delay when data is ready
+  useEffect(() => {
+    if (isPromoButtonReady) {
+      const timer = setTimeout(() => {
+        setShowPromoButton(true);
+      }, 300); // 300ms delay after promo button data is ready
+      
+      return () => clearTimeout(timer);
+    } else {
+      setShowPromoButton(false);
+    }
+  }, [isPromoButtonReady]);
+
   if (!funnelFlow || !isFunnelActive) {
     return null;
   }
 
   return (
-    <div className="w-full max-w-3xl my-1 text-center">
+    <div className={`w-full max-w-3xl my-1 text-center transition-opacity duration-400 ease-out ${
+      showPromoButton 
+        ? 'opacity-100' 
+        : 'opacity-0'
+    }`}>
       {/* Promo Message */}
       <p
         onClick={() => {

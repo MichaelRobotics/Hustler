@@ -10,6 +10,7 @@ interface AutoAddResourcesHookProps {
   setThemeProducts: (fn: (prev: Record<string, any[]>) => Record<string, any[]>) => void;
   handleProductImageUpload: (productId: number | string, file: File) => Promise<void>;
   templateResourceLibraryProductIds?: string[]; // ResourceLibrary product IDs from loaded template
+  setIsStoreContentReady?: (ready: boolean) => void; // Callback to notify when store content is ready
 }
 
 export const useAutoAddResources = ({
@@ -22,8 +23,10 @@ export const useAutoAddResources = ({
   setThemeProducts,
   handleProductImageUpload,
   templateResourceLibraryProductIds = [],
+  setIsStoreContentReady,
 }: AutoAddResourcesHookProps) => {
   const [hasAutoAddedResources, setHasAutoAddedResources] = useState(false);
+  const [isAutoAddComplete, setIsAutoAddComplete] = useState(false);
 
   // Handle template loading - add only ResourceLibrary products that exist in the library
   useEffect(() => {
@@ -126,10 +129,20 @@ export const useAutoAddResources = ({
       }
       
       setHasAutoAddedResources(true);
+      setIsAutoAddComplete(true);
+      
+      // Notify that store content is ready
+      if (setIsStoreContentReady) {
+        setIsStoreContentReady(true);
+        console.log(`[useAutoAddResources] Store content ready - auto-add complete`);
+      }
+      
+      console.log(`[useAutoAddResources] Auto-add process complete`);
     }
-  }, [allResources, hasLoadedResourceLibrary, hasAutoAddedResources, currentSeason, themeProducts, deletedResourceLibraryProducts, legacyTheme, setThemeProducts, handleProductImageUpload]);
+  }, [allResources, hasLoadedResourceLibrary, hasAutoAddedResources, currentSeason, themeProducts, deletedResourceLibraryProducts, legacyTheme, setThemeProducts, handleProductImageUpload, setIsStoreContentReady]);
 
   return {
     hasAutoAddedResources,
+    isAutoAddComplete,
   };
 };

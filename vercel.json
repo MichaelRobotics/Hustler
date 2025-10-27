@@ -10,10 +10,6 @@
     "app/api/cron/**/*.ts": {
       "maxDuration": 800,
       "memory": 2048
-    },
-    "app/api/admin/sync-products/route.ts": {
-      "maxDuration": 800,
-      "memory": 2048
     }
   },
   "crons": [

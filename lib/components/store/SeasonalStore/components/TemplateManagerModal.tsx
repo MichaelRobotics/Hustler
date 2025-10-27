@@ -175,8 +175,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               </div>
             ) : (
               <div className="max-h-[30rem] overflow-y-auto space-y-3">
-                {/* Default Template Option - Only show when there IS a live template */}
-                {liveTemplate && (
+                {/* Default Template Option - Show always except when DEFAULT template is live */}
+                {!(liveTemplate && liveTemplate.name === "Default") && (
                   <div className="bg-gray-700 rounded-lg p-3 border border-gray-600">
                     <div className="flex items-center justify-between mb-2">
                       <h5 className="font-semibold text-white">Default (No Template Live)</h5>

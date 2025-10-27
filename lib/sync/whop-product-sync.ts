@@ -171,7 +171,7 @@ export class WhopProductSync {
 			const existingResource = await db.query.resources.findFirst({
 				where: and(
 					eq(resources.whopProductId, whopProduct.id),
-					eq(resources.experienceId, user.experienceId),
+					eq(resources.experienceId, user.experience.id), // Use database UUID
 				),
 			});
 
@@ -207,7 +207,7 @@ export class WhopProductSync {
 				// Create new resource
 				await db.insert(resources).values({
 					...resourceData,
-					experienceId: user.experienceId,
+					experienceId: user.experience.id, // Use database UUID
 					userId: user.id,
 					createdAt: new Date(),
 				});

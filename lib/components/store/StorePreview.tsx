@@ -426,6 +426,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			setAllResources={setAllResources}
 			previewLiveTemplate={liveTemplate}
 			hideEditorButtons={true}
+			isStorePreview={true}
+			isActive={true}
 			onTemplateLoaded={() => {
 				console.log('[StorePreview] Template is fully loaded on frontend');
 				// Template is now fully loaded on frontend, safe to remove overlay
@@ -449,7 +451,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 						setTemplateReady(true);
 					}, 3500);
 				}
-			}} 
+			}}
 		/>;
 	}
 
@@ -459,6 +461,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			user={user}
 			allResources={allResources}
 			setAllResources={setAllResources}
+			isStorePreview={true}
+			isActive={true}
 			onBack={() => {
 				// Go back to SeasonalStore view (main onBack prop)
 				if (onBack) {
@@ -477,7 +481,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 						setTemplateReady(true);
 					}, 3500);
 				}
-			}} 
+			}}
 		/>;
 	}
 

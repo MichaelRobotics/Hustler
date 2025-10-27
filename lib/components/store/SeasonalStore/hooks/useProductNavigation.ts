@@ -52,34 +52,52 @@ export const useProductNavigation = ({
   }, [products.length, isEditorView, isSliding, setIsSliding]);
 
   // Smooth navigation functions
-  const navigateToPrevious = useCallback(() => {
+  const navigateToPrevious = useCallback((skipSlideAnimation = false) => {
     if (currentProductIndex > 0 && !isSliding) {
       setIsSliding(true);
-      setSwipeDirection('right');
-      setTimeout(() => {
+      
+      if (skipSlideAnimation) {
+        // Skip slide animation - just change the index immediately
         setCurrentProductIndex(prev => Math.max(0, prev - 1));
-        setSwipeDirection('left'); // Slide in from left
+        setSwipeDirection(null);
+        setIsSliding(false);
+      } else {
+        // Use slide animation
+        setSwipeDirection('right');
         setTimeout(() => {
-          setSwipeDirection(null);
-          setIsSliding(false);
-        }, 150); // Faster: 300ms -> 150ms
-      }, 100); // Faster: 200ms -> 100ms
+          setCurrentProductIndex(prev => Math.max(0, prev - 1));
+          setSwipeDirection('left'); // Slide in from left
+          setTimeout(() => {
+            setSwipeDirection(null);
+            setIsSliding(false);
+          }, 150); // Faster: 300ms -> 150ms
+        }, 100); // Faster: 200ms -> 100ms
+      }
       startAutoSwitch();
     }
   }, [currentProductIndex, startAutoSwitch, isSliding, setIsSliding]);
 
-  const navigateToNext = useCallback(() => {
+  const navigateToNext = useCallback((skipSlideAnimation = false) => {
     if (currentProductIndex < products.length - 2 && !isSliding) {
       setIsSliding(true);
-      setSwipeDirection('left');
-      setTimeout(() => {
+      
+      if (skipSlideAnimation) {
+        // Skip slide animation - just change the index immediately
         setCurrentProductIndex(prev => Math.min(products.length - 2, prev + 1));
-        setSwipeDirection('right'); // Slide in from right
+        setSwipeDirection(null);
+        setIsSliding(false);
+      } else {
+        // Use slide animation
+        setSwipeDirection('left');
         setTimeout(() => {
-          setSwipeDirection(null);
-          setIsSliding(false);
-        }, 150); // Faster: 300ms -> 150ms
-      }, 100); // Faster: 200ms -> 100ms
+          setCurrentProductIndex(prev => Math.min(products.length - 2, prev + 1));
+          setSwipeDirection('right'); // Slide in from right
+          setTimeout(() => {
+            setSwipeDirection(null);
+            setIsSliding(false);
+          }, 150); // Faster: 300ms -> 150ms
+        }, 100); // Faster: 200ms -> 100ms
+      }
       startAutoSwitch();
     }
   }, [currentProductIndex, products.length, startAutoSwitch, isSliding, setIsSliding]);

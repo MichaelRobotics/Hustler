@@ -13,6 +13,95 @@ body {
 	font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Loading Screen Transitions */
+@keyframes loadingScreenFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes loadingScreenFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes storeContentFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.loading-screen-fade-in {
+  animation: loadingScreenFadeIn 0.5s ease-out forwards;
+}
+
+.loading-screen-fade-out {
+  animation: loadingScreenFadeOut 0.2s ease-out forwards;
+}
+
+.store-content-fade-in {
+  animation: storeContentFadeIn 0.4s ease-out forwards;
+}
+
+/* Product Loading Animations */
+@keyframes productFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.product-loading-animation {
+  opacity: 0;
+  animation: productFadeIn 0.4s ease-out forwards;
+}
+
+/* Product Navigation Animations */
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.product-fade-out {
+  animation: fadeOut 0.3s ease-out forwards;
+}
+
+.product-fade-in {
+  opacity: 0;
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Force products to be invisible during navigation */
+.product-navigating {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
 /* Chat Performance Optimizations */
 .chat-optimized {
 	-webkit-tap-highlight-color: transparent;
