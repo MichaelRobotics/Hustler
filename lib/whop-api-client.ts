@@ -312,6 +312,16 @@ export class WhopApiClient {
             console.log(`� INVESTIGATION: Full access pass object structure:`);
             console.log(JSON.stringify(accessPasses[0], null, 2));
             console.log(`� INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
+            
+            // INVESTIGATION: Check if access passes have embedded plans
+            console.log(`� INVESTIGATION: Checking for embedded plans in access passes:`);
+            accessPasses.forEach((accessPass: any, index: number) => {
+              const embeddedPlans = accessPass.plans || accessPass.planIds || accessPass.plan || [];
+              console.log(`  ${index + 1}. "${accessPass.title}" - embedded plans: ${Array.isArray(embeddedPlans) ? embeddedPlans.length : 'not array'}`);
+              if (embeddedPlans && embeddedPlans.length > 0) {
+                console.log(`    Embedded plans:`, embeddedPlans);
+              }
+            });
           }
           
           if (accessPasses.length > 0) {
@@ -401,35 +411,62 @@ export class WhopApiClient {
   private mapAccessPassesToProducts(accessPasses: any[], plans: any[], companyRoute?: string): WhopProduct[] {
     // Group plans by access pass ID
     const plansByAccessPass = new Map<string, any[]>();
+    
+    console.log(`🔍 DEBUGGING: Mapping ${plans.length} plans to ${accessPasses.length} access passes`);
+    
     plans.forEach((plan: any) => {
       if (plan.accessPass?.id) {
         if (!plansByAccessPass.has(plan.accessPass.id)) {
           plansByAccessPass.set(plan.accessPass.id, []);
         }
         plansByAccessPass.get(plan.accessPass.id)!.push(plan);
+        console.log(`🔍 DEBUGGING: Mapped plan ${plan.id} to access pass ${plan.accessPass.id} (${plan.accessPass.title})`);
+      } else {
+        console.log(`⚠️ DEBUGGING: Plan ${plan.id} has no accessPass.id, skipping`);
       }
     });
     
+    console.log(`🔍 DEBUGGING: Plans by access pass mapping:`);
+    plansByAccessPass.forEach((plans, accessPassId) => {
+      console.log(`  Access Pass ${accessPassId}: ${plans.length} plans`);
+    });
+    
     return accessPasses.map((accessPass: any) => {
-      const accessPassPlans = plansByAccessPass.get(accessPass.id) || [];
+      // Check for embedded plans in the access pass itself
+      const embeddedPlans = accessPass.plans || accessPass.planIds || accessPass.plan || [];
+      const externalPlans = plansByAccessPass.get(accessPass.id) || [];
+      
+      // Combine embedded and external plans
+      const allPlans = [...embeddedPlans, ...externalPlans];
+      
+      console.log(`🔍 DEBUGGING: Processing access pass "${accessPass.title}" (${accessPass.id})`);
+      console.log(`  - Embedded plans: ${Array.isArray(embeddedPlans) ? embeddedPlans.length : 'not array'}`);
+      console.log(`  - External plans: ${externalPlans.length}`);
+      console.log(`  - Total plans: ${allPlans.length}`);
       
       // Find the cheapest plan to determine if it's free
       let minPrice = Infinity;
       let currency = 'usd';
       
-      if (accessPassPlans.length > 0) {
-        accessPassPlans.forEach(plan => {
+      if (allPlans.length > 0) {
+        console.log(`🔍 DEBUGGING: Analyzing ${allPlans.length} plans for "${accessPass.title}":`);
+        allPlans.forEach((plan, index) => {
           // Use initialPriceDue as the primary indicator for paid/free status
           const price = plan.initialPriceDue || 0;
+          console.log(`  Plan ${index + 1}: ${plan.id} - initialPriceDue: ${price}, baseCurrency: ${plan.baseCurrency}`);
           if (price < minPrice) {
             minPrice = price;
             currency = plan.baseCurrency || 'usd';
           }
         });
+      } else {
+        console.log(`⚠️ DEBUGGING: No plans found for "${accessPass.title}" - will be marked as FREE`);
       }
       
       const isFree = minPrice === 0 || minPrice === Infinity;
       const price = isFree ? 0 : minPrice;
+      
+      console.log(`🔍 DEBUGGING: Final calculation for "${accessPass.title}": minPrice=${minPrice}, isFree=${isFree}, finalPrice=${price}`);
       
       // Generate URLs
       let discoveryPageUrl: string | undefined;
@@ -451,9 +488,9 @@ export class WhopApiClient {
         description: accessPass.shortenedDescription || accessPass.creatorPitch || '',
         price: price,
         currency: currency,
-        model: isFree ? 'free' : (accessPassPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
+        model: isFree ? 'free' : (allPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
         includedApps: [],
-        plans: accessPassPlans.map(plan => ({
+        plans: allPlans.map(plan => ({
           id: plan.id,
           price: plan.initialPriceDue || 0,  // Use initialPriceDue for consistency with price detection
           currency: plan.baseCurrency || 'usd',
