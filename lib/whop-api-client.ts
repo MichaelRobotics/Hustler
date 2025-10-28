@@ -291,7 +291,7 @@ export class WhopApiClient {
           const accessPassesResult = await Promise.race([
             (whopSdk.companies as any).listAccessPasses({
               companyId: this.companyId,
-              visibility: "visible",
+              visibility: "all", // Changed from "visible" to "all" to include all products
               first: strategy.first
             }),
             new Promise<never>((_, reject) => 
@@ -302,8 +302,13 @@ export class WhopApiClient {
           const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
           console.log(`✅ ${strategy.name} strategy succeeded! Found ${accessPasses.length} access passes`);
           
-          // INVESTIGATION: Log full access pass object structure to see all available fields
+          // INVESTIGATION: Log visibility of each access pass
           if (accessPasses.length > 0) {
+            console.log(`🔍 Access passes visibility breakdown:`);
+            accessPasses.forEach((accessPass: any, index: number) => {
+              console.log(`  ${index + 1}. "${accessPass.title}" - visibility: ${accessPass.visibility}`);
+            });
+            
             console.log(`� INVESTIGATION: Full access pass object structure:`);
             console.log(JSON.stringify(accessPasses[0], null, 2));
             console.log(`� INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
@@ -316,7 +321,7 @@ export class WhopApiClient {
               const plansResult = await Promise.race([
                 (whopSdk.companies as any).listPlans({
                   companyId: this.companyId,
-                  visibility: "visible",
+                  visibility: "all", // Changed from "visible" to "all" to include all plans
                   first: strategy.first
                 }),
                 new Promise<never>((_, reject) => 
@@ -340,8 +345,14 @@ export class WhopApiClient {
             // Get company route for discovery page URLs
             const companyRoute = await this.getCompanyRoute();
             
+            // Filter out archived products but keep others
+            const filteredAccessPasses = accessPasses.filter((accessPass: any) => 
+              accessPass.visibility !== 'archived'
+            );
+            console.log(`🔍 Filtered access passes: ${filteredAccessPasses.length}/${accessPasses.length} (excluded archived)`);
+            
             // Map to products
-            const products = this.mapAccessPassesToProducts(accessPasses, plans, companyRoute || undefined);
+            const products = this.mapAccessPassesToProducts(filteredAccessPasses, plans, companyRoute || undefined);
             console.log(`✅ Mapped to ${products.length} DISCOVERY PAGE PRODUCTS`);
             
             // INVESTIGATION: Log final product structure to see what fields we have
