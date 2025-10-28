@@ -27,6 +27,7 @@ interface TopNavbarProps {
   legacyTheme: any;
   hideEditorButtons?: boolean;
   isStorePreview?: boolean; // New prop to indicate StorePreview context
+  highlightSaveButton?: boolean; // New prop to highlight save button after generation
   
   // Handlers
   toggleEditorView: () => void;
@@ -55,6 +56,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   legacyTheme,
   hideEditorButtons = false,
   isStorePreview = false,
+  highlightSaveButton = false,
   toggleEditorView,
   handleGenerateBgClick,
   handleBgImageUpload,
@@ -68,7 +70,60 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   getGlowBgStrongClass,
 }) => {
   return (
-    <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
+    <>
+      <style jsx>{`
+        @keyframes saveHighlight {
+          0%, 100% { 
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.4), 0 0 40px rgba(34, 197, 94, 0.2);
+            transform: scale(1);
+          }
+          50% { 
+            box-shadow: 0 0 30px rgba(34, 197, 94, 0.6), 0 0 60px rgba(34, 197, 94, 0.4);
+            transform: scale(1.05);
+          }
+        }
+        @keyframes savePulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.8; }
+        }
+        @keyframes tooltipPulse {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        @keyframes shine {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .save-highlight {
+          animation: saveHighlight 2s ease-in-out infinite;
+        }
+        .save-pulse {
+          animation: savePulse 1.5s ease-in-out infinite;
+        }
+        .tooltip-pulse {
+          animation: tooltipPulse 2s ease-in-out infinite;
+        }
+        .pulse-animation {
+          animation: pulse 2s ease-in-out infinite;
+        }
+        .shine-animation::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+          animation: shine 3s ease-in-out infinite;
+          border-radius: inherit;
+        }
+      `}</style>
+      
+      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
       <div className="px-3 py-2 h-full flex items-center">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-4">
@@ -96,21 +151,23 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           <div className="flex-1 flex justify-center">
             {/* Generate Background Button in Center (Page view only) */}
             {!editorState.isEditorView && showGenerateBgInNavbar && !isChatOpen && !hideEditorButtons && (
-              <button 
-                onClick={handleGenerateBgClick}
-                disabled={loadingState.isImageLoading}
-                className={`px-4 py-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg flex items-center space-x-2 ${
-                  loadingState.isImageLoading 
-                    ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
-                }`}
-                title="Generate AI Background"
-              >
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="text-sm font-medium text-white">Generate Background</span>
-              </button>
+              <>
+                <button 
+                  onClick={handleGenerateBgClick}
+                  disabled={loadingState.isImageLoading}
+                  className={`px-4 py-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg flex items-center space-x-2 overflow-hidden ${
+                    loadingState.isImageLoading 
+                      ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                      : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40 pulse-animation shine-animation'
+                  }`}
+                  title="Generate AI Background"
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className="text-sm font-medium text-white">Generate Background</span>
+                </button>
+              </>
             )}
             
             {/* Hide Chat Button when chat is open */}
@@ -268,7 +325,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 {/* Save Template */}
                 <button 
                   onClick={handleSaveTemplate}
-                  className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 relative"
+                  className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative ${
+                    highlightSaveButton 
+                      ? 'bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50 hover:shadow-green-500/60 save-highlight save-pulse' 
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
+                  }`}
                   title="Save Current Store as Template"
                 >
                   <div className="flex items-center justify-center">
@@ -277,7 +338,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     </svg>
                   </div>
                   {/* Tooltip */}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                  <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap pointer-events-none ${
+                    highlightSaveButton 
+                      ? 'tooltip-pulse' 
+                      : 'opacity-0 group-hover:opacity-100 transition-opacity duration-200'
+                  }`}>
                     Save
                   </div>
                 </button>
@@ -290,7 +355,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 >
                   <div className="flex items-center justify-center">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
                     </svg>
                   </div>
                   {/* Tooltip */}
@@ -323,6 +388,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         </div>
       </div>
     </div>
+    </>
   );
 };
 

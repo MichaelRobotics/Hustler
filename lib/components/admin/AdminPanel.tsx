@@ -82,6 +82,9 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 	// State for tracking when modals are open (to disable sidebar)
 	const [isLibraryModalOpen, setIsLibraryModalOpen] = React.useState(false);
 
+	// State for storing background style to pass to StorePreview
+	const [storePreviewBackground, setStorePreviewBackground] = React.useState<React.CSSProperties | undefined>(undefined);
+
 	// Use the extracted hooks
 	const {
 		funnels,
@@ -900,9 +903,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							console.log("🏪 [STORE] Back to AdminPanel");
 							setCurrentView("dashboard");
 						}}
-						onNavigateToStorePreview={() => {
-							console.log("🏪 [STORE] Navigate to StorePreview");
+						onNavigateToStorePreview={(backgroundStyle) => {
+							console.log("🏪 [STORE] Navigate to StorePreview with background:", backgroundStyle);
 							setCurrentView("storePreview");
+							// Store the background style to pass to StorePreview
+							setStorePreviewBackground(backgroundStyle);
 						}}
 						// Update sync props - managed at AdminPanel level
 						updateSyncProps={{
@@ -959,6 +964,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
 							}
 						}}
+						backgroundStyle={storePreviewBackground}
 					/>
 				</div>
 			</div>

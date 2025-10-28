@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import AIFunnelBuilderPage from '../../../funnelBuilder/AIFunnelBuilderPage';
 import { StoreResourceLibrary } from '../../../products/StoreResourceLibrary';
 import type { AuthenticatedUser } from '../../../../types/user';
@@ -12,6 +12,7 @@ interface ConditionalReturnsProps {
   isFunnelActive: boolean;
   experienceId?: string;
   user?: AuthenticatedUser | null; // Add user prop
+  backgroundStyle?: React.CSSProperties; // Add background style prop
 
   // StoreResourceLibrary props
   showStoreResourceLibrary: boolean;
@@ -30,6 +31,7 @@ interface ConditionalReturnsProps {
   // Loading overlay props
   previewLiveTemplate?: any;
   isTemplateLoaded: boolean;
+  onConditionalReturnsReady?: (isReady: boolean) => void; // Callback to notify parent when ready
 }
 
 export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
@@ -41,6 +43,7 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
   isFunnelActive,
   experienceId,
   user,
+  backgroundStyle,
 
   // StoreResourceLibrary props
   showStoreResourceLibrary,
@@ -59,7 +62,51 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
   // Loading overlay props
   previewLiveTemplate,
   isTemplateLoaded,
+  onConditionalReturnsReady,
 }) => {
+  // State for background preloading
+  const [isBackgroundPreloaded, setIsBackgroundPreloaded] = useState(false);
+
+  // Preload background image when template is loading
+  useEffect(() => {
+    if (previewLiveTemplate && !isTemplateLoaded && backgroundStyle?.backgroundImage) {
+      const backgroundUrl = backgroundStyle.backgroundImage.replace('url(', '').replace(')', '');
+      
+      if (backgroundUrl && backgroundUrl !== 'none') {
+        console.log('🖼️ [ConditionalReturns] Preloading background image:', backgroundUrl);
+        
+        const img = new Image();
+        img.onload = () => {
+          console.log('🖼️ [ConditionalReturns] Background image preloaded successfully');
+          setIsBackgroundPreloaded(true);
+        };
+        img.onerror = () => {
+          console.log('🖼️ [ConditionalReturns] Background image preload failed, continuing anyway');
+          setIsBackgroundPreloaded(true); // Continue even if preload fails
+        };
+        img.src = backgroundUrl;
+      } else {
+        // No background image to preload
+        setIsBackgroundPreloaded(true);
+      }
+    } else if (isTemplateLoaded) {
+      // Template is loaded, no need to preload
+      setIsBackgroundPreloaded(true);
+    }
+  }, [previewLiveTemplate, isTemplateLoaded, backgroundStyle?.backgroundImage]);
+
+  // Notify parent when ConditionalReturns is ready
+  useEffect(() => {
+    if (onConditionalReturnsReady) {
+      // ConditionalReturns is ready when:
+      // 1. No preview template (nothing to show)
+      // 2. Template is loaded (nothing to show)
+      // 3. Template is loading AND background is preloaded (ready to show loading screen)
+      const isReady = !previewLiveTemplate || isTemplateLoaded || (previewLiveTemplate && !isTemplateLoaded && isBackgroundPreloaded);
+      onConditionalReturnsReady(isReady);
+    }
+  }, [previewLiveTemplate, isTemplateLoaded, isBackgroundPreloaded, onConditionalReturnsReady]);
+
   // Show FunnelBuilder if Edit Merchant was clicked
   if (showFunnelBuilder && liveFunnel) {
     return (
@@ -106,10 +153,13 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
     );
   }
 
-  // Show loading overlay if template is not loaded yet
-  if (previewLiveTemplate && !isTemplateLoaded) {
+  // Show loading overlay if template is not loaded yet AND background is preloaded
+  if (previewLiveTemplate && !isTemplateLoaded && isBackgroundPreloaded) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden">
+      <div 
+        className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden"
+        style={backgroundStyle || { backgroundColor: 'white' }}
+      >
         {/* Main content */}
         <div className="text-center relative z-10">
           {/* Whop-style loading spinner */}

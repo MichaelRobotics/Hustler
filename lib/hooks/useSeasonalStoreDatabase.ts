@@ -809,8 +809,57 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }));
   }, [currentSeason]);
   
-  // Background management
-  const setBackground = useCallback((type: 'generated' | 'uploaded', url: string | null) => {
+  // Background management with preloading to prevent gaps
+  const setBackground = useCallback(async (type: 'generated' | 'uploaded', url: string | null) => {
+    if (!url) {
+      // If URL is null, immediately clear the background
+      if (type === 'generated') {
+        setThemeGeneratedBackgrounds(prev => ({
+          ...prev,
+          [currentSeason]: null
+        }));
+      } else {
+        setThemeUploadedBackgrounds(prev => ({
+          ...prev,
+          [currentSeason]: null
+        }));
+      }
+      setThemeBackgroundAttachmentUrls(prev => ({
+        ...prev,
+        [currentSeason]: null
+      }));
+      return;
+    }
+
+    // Preload the new image to ensure it's ready before switching
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      try {
+        console.log('🖼️ Preloading new background image:', url);
+        
+        // Create a new Image object to preload
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // Handle CORS if needed
+        
+        // Wait for the image to load
+        await new Promise((resolve, reject) => {
+          img.onload = () => {
+            console.log('✅ Background image preloaded successfully');
+            resolve(true);
+          };
+          img.onerror = (error) => {
+            console.warn('⚠️ Failed to preload background image, but continuing:', error);
+            resolve(true); // Continue even if preload fails
+          };
+          img.src = url;
+        });
+        
+        console.log('🔄 Switching to preloaded background image');
+      } catch (error) {
+        console.warn('⚠️ Background preload failed, but continuing:', error);
+      }
+    }
+
+    // Now update the background state
     if (type === 'generated') {
       setThemeGeneratedBackgrounds(prev => ({
         ...prev,

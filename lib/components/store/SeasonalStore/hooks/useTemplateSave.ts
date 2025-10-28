@@ -21,6 +21,10 @@ interface UseTemplateSaveProps {
   setError: (error: string | null) => void;
   experienceId: string;
   allResources?: any[]; // Add allResources to check ResourceLibrary
+  // Callbacks for UI updates
+  onSavingStarted?: (templateName: string) => void;
+  onTemplateSaved?: (templateName: string, templateId: string) => void;
+  onOpenTemplateManager?: () => void;
 }
 
 export const useTemplateSave = ({
@@ -43,11 +47,27 @@ export const useTemplateSave = ({
   setError,
   experienceId,
   allResources = [],
+  onSavingStarted,
+  onTemplateSaved,
+  onOpenTemplateManager,
 }: UseTemplateSaveProps) => {
   const handleSaveTemplate = useCallback(async () => {
     try {
-      const templateName = prompt('Enter template name:');
-      if (!templateName) return;
+      // Auto-generate template name with theme name + date
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const templateName = `${theme.name || 'Theme'} ${dateStr}`;
+      
+      // Call the saving started callback
+      if (onSavingStarted) {
+        onSavingStarted(templateName);
+      }
       
       // Templates should always use themeSnapshot, never create database themes
       // This keeps templates self-contained and prevents theme dropdown pollution
@@ -298,9 +318,20 @@ export const useTemplateSave = ({
       
       console.log('💾 ===== END TEMPLATE SAVE STRUCTURE =====');
       
-      await saveTemplate(templateData);
+      const savedTemplate = await saveTemplate(templateData);
       
-      alert('Template saved successfully!');
+      // Call the template saved callback with template info
+      if (onTemplateSaved) {
+        onTemplateSaved(templateName, savedTemplate.id);
+      }
+      
+      // Auto-open template manager after save
+      if (onOpenTemplateManager) {
+        setTimeout(() => {
+          onOpenTemplateManager();
+        }, 1000); // Delay to show notification first
+      }
+      
     } catch (error) {
       setError(`Failed to save template: ${(error as Error).message}`);
     }
@@ -321,7 +352,10 @@ export const useTemplateSave = ({
     logoAttachmentUrl, 
     promoButton, 
     setError,
-    allResources
+    allResources,
+    onSavingStarted,
+    onTemplateSaved,
+    onOpenTemplateManager
   ]);
 
   return {

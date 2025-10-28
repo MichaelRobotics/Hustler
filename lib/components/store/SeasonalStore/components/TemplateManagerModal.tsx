@@ -10,6 +10,7 @@ interface Template {
     floatingAssets: any[];
   };
   currentSeason: string;
+  createdAt?: Date;
 }
 
 interface TemplateManagerModalProps {
@@ -17,6 +18,7 @@ interface TemplateManagerModalProps {
   isAnimating: boolean;
   templates: Template[];
   liveTemplate: Template | null;
+  highlightedTemplateId?: string; // New prop for highlighting
   backgroundAnalysis: {
     recommendedTextColor: string;
   };
@@ -27,6 +29,7 @@ interface TemplateManagerModalProps {
   deleteTemplate: (id: string) => void;
   setLiveTemplate: (id: string) => void;
   redirectToPublicShop: () => void;
+  onMakePublic?: (templateId: string) => void; // New callback for making public
 }
 
 export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
@@ -34,17 +37,45 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   isAnimating,
   templates,
   liveTemplate,
+  highlightedTemplateId,
   backgroundAnalysis,
   onClose,
   loadTemplate,
   deleteTemplate,
   setLiveTemplate,
   redirectToPublicShop,
+  onMakePublic,
 }) => {
+  
   if (!isOpen) return null;
 
   return (
-    <div
+    <>
+      <style jsx>{`
+        @keyframes makePublicPulse {
+          0%, 100% { 
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6), 0 0 20px rgba(34, 197, 94, 0.3);
+          }
+          50% { 
+            transform: scale(1.1);
+            box-shadow: 0 0 0 12px rgba(34, 197, 94, 0), 0 0 40px rgba(34, 197, 94, 0.5);
+          }
+        }
+        @keyframes makePublicShine {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .make-public-pulse {
+          animation: makePublicPulse 3s ease-in-out infinite;
+        }
+        .make-public-shine {
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+          background-size: 200% 100%;
+          animation: makePublicShine 4s ease-in-out infinite;
+        }
+      `}</style>
+      <div
       className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -158,14 +189,28 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
 
           {/* Templates List */}
           <div>
-            <h4 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">Templates {templates.filter(template => template.name !== "Default" && template.id !== liveTemplate?.id).length}</h4>
+            <h4 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">Templates {templates.filter(template => {
+              // Always hide Default template from TEMPLATES list
+              if (template.name === "Default") {
+                return false;
+              }
+              // Hide the currently live template
+              return template.id !== liveTemplate?.id;
+            }).length}</h4>
             {templates.length > 10 && (
               <div className="mb-2 text-xs text-gray-400">
                 Showing first 10 templates
               </div>
             )}
             <div className="mb-8"></div>
-            {templates.filter(template => template.name !== "Default" && template.id !== liveTemplate?.id).length === 0 ? (
+            {templates.filter(template => {
+              // Always hide Default template from TEMPLATES list
+              if (template.name === "Default") {
+                return false;
+              }
+              // Hide the currently live template
+              return template.id !== liveTemplate?.id;
+            }).length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <svg className="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -175,8 +220,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               </div>
             ) : (
               <div className="max-h-[30rem] overflow-y-auto space-y-3">
-                {/* Default Template Option - Show always except when DEFAULT template is live */}
-                {!(liveTemplate && liveTemplate.name === "Default") && (
+                {/* Default Template Option - Show when NO template is live AND no default template is public */}
+                {!liveTemplate && !templates.some(t => t.name === "Default") && (
                   <div className="bg-gray-700 rounded-lg p-3 border border-gray-600">
                     <div className="flex items-center justify-between mb-2">
                       <h5 className="font-semibold text-white">Default (No Template Live)</h5>
@@ -200,8 +245,33 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   </div>
                 )}
                 
-                {templates.filter(template => template.name !== "Default" && template.id !== liveTemplate?.id).slice(0, 10).map((template) => (
-                  <div key={template.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                {templates
+                  .filter(template => {
+                    // Always hide Default template from TEMPLATES list
+                    if (template.name === "Default") {
+                      return false;
+                    }
+                    // Hide the currently live template
+                    return template.id !== liveTemplate?.id;
+                  })
+                  .sort((a, b) => {
+                    // Sort by creation date (newest first)
+                    // Primary: Use createdAt if available
+                    // Fallback: Use template ID (assuming newer IDs are created later)
+                    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : a.id.localeCompare(b.id);
+                    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : b.id.localeCompare(a.id);
+                    return dateB - dateA;
+                  })
+                  .slice(0, 10)
+                  .map((template) => (
+                  <div 
+                    key={template.id} 
+                    className={`rounded-lg p-3 border transition-all duration-[10000ms] ${
+                      template.id === highlightedTemplateId 
+                        ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-400 shadow-lg shadow-green-500/25' 
+                        : 'bg-gray-800 border-gray-700'
+                    }`}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <h5 className="font-semibold text-white truncate">{template.name}</h5>
                       <button
@@ -234,11 +304,18 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                       <button
                         onClick={() => {
                           setLiveTemplate(template.id);
+                          if (onMakePublic) {
+                            onMakePublic(template.id);
+                          }
                           onClose();
                         }}
-                        className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm rounded transition-colors flex items-center"
+                        className={`px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm font-bold rounded-lg transition-all duration-300 transform hover:scale-110 relative overflow-hidden flex items-center shadow-lg hover:shadow-xl ${
+                          template.id === highlightedTemplateId 
+                            ? 'make-public-pulse make-public-shine' 
+                            : 'hover:shadow-green-500/50'
+                        }`}
                       >
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M8 5v14l11-7z" />
                         </svg>
                         Make Shop Public
@@ -251,7 +328,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

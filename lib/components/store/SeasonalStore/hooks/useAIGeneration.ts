@@ -19,7 +19,7 @@ interface UseAIGenerationProps {
   setError: (error: string | null) => void;
   updateProduct: (id: number, updates: any) => void;
   setAvailableAssets: (fn: (prev: any[]) => any[]) => void;
-  setBackground: (type: "generated" | "uploaded", url: string | null) => void;
+  setBackground: (type: "generated" | "uploaded", url: string | null) => Promise<void>;
   setBackgroundAttachmentId: (id: string | null) => void;
   setLogoAsset: (fn: (prev: any) => any) => void;
   setThemeProducts: (fn: (prev: any) => any) => void;
@@ -29,6 +29,7 @@ interface UseAIGenerationProps {
   uploadedBackground?: string;
   logoAttachmentUrl?: string;
   iframeDimensions?: { width: number; height: number };
+  toggleEditorView?: () => void;
 }
 
 export const useAIGeneration = ({
@@ -50,6 +51,7 @@ export const useAIGeneration = ({
   uploadedBackground,
   logoAttachmentUrl,
   iframeDimensions,
+  toggleEditorView,
 }: UseAIGenerationProps) => {
   const isGeneratingRef = useRef(false);
 
@@ -214,9 +216,15 @@ export const useAIGeneration = ({
       console.log('📤 Background upload result:', uploadResult);
       
       // Update background with WHOP storage URL and attachment ID
-      setBackground("generated", uploadResult.url);
+      await setBackground("generated", uploadResult.url);
       setBackgroundAttachmentId(uploadResult.attachmentId);
       console.log('✅ Background generation and upload complete');
+      
+      // Switch to editor view after successful background generation
+      if (toggleEditorView) {
+        console.log('🎨 Switching to editor view after background generation');
+        toggleEditorView();
+      }
     } catch (error) {
       console.error('❌ Error generating background:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate background');

@@ -13,6 +13,8 @@ import { TopNavbar } from './components/TopNavbar';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ProductShowcase } from './components/ProductShowcase';
 import { TemplateManagerModal } from './components/TemplateManagerModal';
+import { TemplateSaveNotification } from './components/TemplateSaveNotification';
+import { MakePublicNotification } from './components/MakePublicNotification';
 import { PromoButton } from './components/PromoButton';
 import { ProductEditorModal } from './components/ProductEditorModal';
 import { TextEditorModal } from './components/TextEditorModal';
@@ -85,7 +87,7 @@ interface SeasonalStoreProps {
   previewLiveTemplate?: any;
   hideEditorButtons?: boolean;
   onTemplateLoaded?: () => void; // Callback when template is fully loaded on frontend
-  onNavigateToStorePreview?: () => void; // Callback to navigate to StorePreview
+  onNavigateToStorePreview?: (backgroundStyle?: React.CSSProperties) => void; // Callback to navigate to StorePreview
   isStorePreview?: boolean; // Indicates if this SeasonalStore is being used in StorePreview context
   isActive?: boolean; // Indicates if this SeasonalStore is currently the active view
   updateSyncProps?: UpdateSyncProps; // Optional update sync props from AdminPanel
@@ -104,6 +106,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Flag to prevent multiple simultaneous background generations
   const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
   const isGeneratingRef = useRef(false);
+  
+  // State to highlight save button after background generation
+  const [highlightSaveButton, setHighlightSaveButton] = useState(false);
   
   // Chat functionality
   const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
@@ -267,6 +272,25 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     restoreLastActiveState,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
   
+  // Auto-highlight save button after background generation completes
+  useEffect(() => {
+    if (!loadingState.isImageLoading && !loadingState.isGeneratingImage && !loadingState.isUploadingImage) {
+      // Background generation just completed
+      if (backgroundAttachmentUrl || generatedBackground) {
+        console.log('🎨 Background generation completed - highlighting save button');
+        setHighlightSaveButton(true);
+        
+        // Remove highlight after 10 seconds
+        const timer = setTimeout(() => {
+          setHighlightSaveButton(false);
+          console.log('🎨 Save button highlight removed');
+        }, 10000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loadingState.isImageLoading, loadingState.isGeneratingImage, loadingState.isUploadingImage, backgroundAttachmentUrl, generatedBackground]);
+  
   // Check for product updates when component mounts and user has products synced
   // Only run this effect if we're using the local hook (not props from AdminPanel)
   useEffect(() => {
@@ -421,6 +445,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     uploadedBackground: uploadedBackground ?? undefined,
     logoAttachmentUrl: logoAttachmentUrl ?? undefined,
     iframeDimensions: iframeDimensions ?? undefined,
+    toggleEditorView,
   });
 
   // Custom add product function that resets index to show new product at front
@@ -664,6 +689,24 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     promoButton,
     setError,
     allResources, // Pass allResources for ResourceLibrary product checking
+    onSavingStarted: (templateName: string) => {
+      // Show saving notification
+      setTemplateSaveNotification({ isOpen: true, isSaving: true, templateName });
+    },
+    onTemplateSaved: (templateName: string, templateId: string) => {
+      // Update notification to saved state
+      setTemplateSaveNotification({ isOpen: true, isSaving: false, templateName });
+      // Highlight the saved template
+      setHighlightedTemplateId(templateId);
+      // Remove highlight after 10 seconds
+      setTimeout(() => {
+        setHighlightedTemplateId(undefined);
+      }, 10000);
+    },
+    onOpenTemplateManager: () => {
+      // Open template manager
+      openTemplateManager();
+    },
   });
 
   // Wrapper for setLogoAsset to handle function signature mismatch
@@ -1022,7 +1065,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     }
   }, [mainHeader?.styleClass]);
 
-  // Determine background style
+  // Determine background style with smooth transitions
   const getBackgroundStyle = useMemo(() => {
     // Only use WHOP attachment URL - no base64 fallbacks
     if (backgroundAttachmentUrl) {
@@ -1034,14 +1077,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         backgroundRepeat: 'no-repeat',
         backgroundAttachment: 'fixed',
         minHeight: '100vh',
-        width: '100%'
+        width: '100%',
+        transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
+        opacity: 1
       };
     }
     // Return empty object to let CSS classes handle the background
     // The className already includes legacyTheme.background for gradient backgrounds
     return {
       minHeight: '100vh',
-      width: '100%'
+      width: '100%',
+      transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out'
     };
   }, [backgroundAttachmentUrl]);
 
@@ -1056,6 +1102,22 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const [adminSheetAnimOpen, setAdminSheetAnimOpen] = useState(false);
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [templateManagerAnimOpen, setTemplateManagerAnimOpen] = useState(false);
+  
+  // Template save notification state
+  const [templateSaveNotification, setTemplateSaveNotification] = useState<{
+    isOpen: boolean;
+    isSaving: boolean;
+    templateName: string;
+  }>({ isOpen: false, isSaving: false, templateName: '' });
+  
+  // Make public notification state
+  const [makePublicNotification, setMakePublicNotification] = useState<{
+    isOpen: boolean;
+    templateName: string;
+  }>({ isOpen: false, templateName: '' });
+  
+  // Highlighted template state
+  const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | undefined>(undefined);
   useEffect(() => {
     if (editingText.isOpen) {
       // next tick to trigger transition
@@ -1173,6 +1235,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Generate background button location state
   const [showGenerateBgInNavbar, setShowGenerateBgInNavbar] = useState(true); // Start in navbar
   
+  // State for coordinating with ConditionalReturns loading
+  const [isConditionalReturnsReady, setIsConditionalReturnsReady] = useState(false);
+  
   useEffect(() => {
     if (inlineEditTarget === 'headerMessage') headerInputRef.current?.focus();
     if (inlineEditTarget === 'subHeader') subHeaderInputRef.current?.focus();
@@ -1264,6 +1329,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     isFunnelActive,
     experienceId,
     user,
+    backgroundStyle: getBackgroundStyle,
 
     // StoreResourceLibrary props
     showStoreResourceLibrary,
@@ -1282,6 +1348,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Loading overlay props
     previewLiveTemplate,
     isTemplateLoaded,
+    onConditionalReturnsReady: (isReady: boolean) => {
+      // Update loading state based on ConditionalReturns readiness
+      setIsConditionalReturnsReady(isReady);
+      if (isReady) {
+        console.log('🔄 [SeasonalStore] ConditionalReturns is ready, can hide loading screen');
+      } else {
+        console.log('🔄 [SeasonalStore] ConditionalReturns not ready, keep loading screen');
+      }
+    },
   });
 
   // If conditional return exists, return it
@@ -1297,8 +1372,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   return (
     <>
-      {/* Show loading screen while waiting for store content */}
-      {!isStoreContentReady && (
+      {/* Show loading screen while waiting for store content AND ConditionalReturns to be ready */}
+      {(!isStoreContentReady || !isConditionalReturnsReady) && (
         <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden loading-screen-fade-in">
           {/* Main content */}
           <div className="text-center relative z-10">
@@ -1330,8 +1405,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         </div>
       )}
       
-      {/* Store content - only render when ready */}
-      {isStoreContentReady && (
+      {/* Store content - only render when ready AND ConditionalReturns is ready */}
+      {isStoreContentReady && isConditionalReturnsReady && (
         <div 
           ref={appRef} 
           className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
@@ -1350,6 +1425,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         legacyTheme={legacyTheme}
         hideEditorButtons={hideEditorButtons}
         isStorePreview={isStorePreview}
+        highlightSaveButton={highlightSaveButton}
         toggleEditorView={toggleEditorView}
         handleGenerateBgClick={handleGenerateBgClick}
         handleBgImageUpload={handleBgImageUpload}
@@ -1599,23 +1675,134 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         isAnimating={templateManagerAnimOpen}
         templates={templates}
         liveTemplate={liveTemplate}
+        highlightedTemplateId={highlightedTemplateId}
         backgroundAnalysis={backgroundAnalysis}
         onClose={closeTemplateManagerAnimated}
         loadTemplate={loadTemplate}
         deleteTemplate={deleteTemplate}
         setLiveTemplate={setLiveTemplate}
-        redirectToPublicShop={() => {
-          // Navigate to StorePreview instead of opening public shop
-          if (onNavigateToStorePreview) {
-            onNavigateToStorePreview();
-          } else {
-            // Fallback: Open the public shop in a new tab
-            const publicUrl = `/experiences/${experienceId}`;
-            window.open(publicUrl, '_blank');
+        redirectToPublicShop={async () => {
+          // Preload the background image BEFORE showing loading screen
+          const preloadBackground = async () => {
+            const backgroundUrl = backgroundAttachmentUrl || generatedBackground;
+            if (backgroundUrl) {
+              console.log('🖼️ [View Shop] Preloading background image:', backgroundUrl);
+              return new Promise<void>((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  console.log('🖼️ [View Shop] Background image preloaded successfully');
+                  resolve();
+                };
+                img.onerror = () => {
+                  console.log('🖼️ [View Shop] Background image preload failed, continuing anyway');
+                  resolve();
+                };
+                img.src = backgroundUrl;
+              });
+            }
+            return Promise.resolve();
+          };
+          
+          try {
+            // Preload background image FIRST
+            await preloadBackground();
+            
+            // Only navigate AFTER background is loaded (this will show loading screen with preloaded background)
+            if (onNavigateToStorePreview) {
+              console.log('🖼️ [View Shop] Background preloaded, now navigating to StorePreview');
+              // Pass the background style to StorePreview so it can use it immediately
+              onNavigateToStorePreview(getBackgroundStyle);
+            } else {
+              // Fallback: Open the public shop in a new tab
+              const publicUrl = `/experiences/${experienceId}`;
+              window.open(publicUrl, '_blank');
+            }
+          } catch (error) {
+            console.error('Error preloading background for View Shop:', error);
+            // Continue with navigation even if preload fails
+            if (onNavigateToStorePreview) {
+              onNavigateToStorePreview(undefined);
+            } else {
+              const publicUrl = `/experiences/${experienceId}`;
+              window.open(publicUrl, '_blank');
+            }
+          }
+        }}
+        onMakePublic={async (templateId) => {
+          // Find the template name
+          const template = templates.find(t => t.id === templateId);
+          const templateName = template?.name || 'Template';
+          
+          // Show make public notification
+          setMakePublicNotification({ isOpen: true, templateName });
+          
+          // Preload the background image before redirecting
+          const preloadBackground = async () => {
+            const backgroundUrl = backgroundAttachmentUrl || generatedBackground;
+            if (backgroundUrl) {
+              console.log('🖼️ Preloading background image:', backgroundUrl);
+              return new Promise<void>((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  console.log('🖼️ Background image preloaded successfully');
+                  resolve();
+                };
+                img.onerror = () => {
+                  console.log('🖼️ Background image preload failed, continuing anyway');
+                  resolve();
+                };
+                img.src = backgroundUrl;
+              });
+            }
+            return Promise.resolve();
+          };
+          
+          try {
+            // Preload background image
+            await preloadBackground();
+            
+            // Redirect to public shop after background is loaded
+            setTimeout(() => {
+              if (onNavigateToStorePreview) {
+                console.log('🖼️ [Make Public] Background preloaded, now navigating to StorePreview');
+                // Pass the background style to StorePreview so it can use it immediately
+                onNavigateToStorePreview(getBackgroundStyle);
+              } else {
+                // Fallback: Open the public shop in a new tab
+                const publicUrl = `/experiences/${experienceId}`;
+                window.open(publicUrl, '_blank');
+              }
+            }, 1000); // Reduced delay since background is preloaded
+          } catch (error) {
+            console.error('Error preloading background:', error);
+            // Continue with redirect even if preload fails
+            setTimeout(() => {
+              if (onNavigateToStorePreview) {
+                console.log('🖼️ [Make Public] Preload failed, navigating without background style');
+                onNavigateToStorePreview(undefined);
+              } else {
+                const publicUrl = `/experiences/${experienceId}`;
+                window.open(publicUrl, '_blank');
+              }
+            }, 1000);
           }
         }}
       />
 
+      {/* Template Save Notification */}
+      <TemplateSaveNotification
+        isOpen={templateSaveNotification.isOpen}
+        isSaving={templateSaveNotification.isSaving}
+        templateName={templateSaveNotification.templateName}
+        onClose={() => setTemplateSaveNotification({ isOpen: false, isSaving: false, templateName: '' })}
+      />
+
+      {/* Make Public Notification */}
+      <MakePublicNotification
+        isOpen={makePublicNotification.isOpen}
+        templateName={makePublicNotification.templateName}
+        onClose={() => setMakePublicNotification({ isOpen: false, templateName: '' })}
+      />
 
       {/* Seasonal Store Chat - Half View with Unfold/Fold Animation */}
       <div className={`fixed inset-x-0 bottom-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-md text-gray-900 dark:text-gray-100 shadow-2xl border-t border-b-0 border-white/20 dark:border-gray-700/20 transition-all duration-300 ease-in-out transform ${

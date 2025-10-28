@@ -18,6 +18,7 @@ interface StorePreviewProps {
 	onLiveFunnelLoaded?: (funnel: any) => void;
 	allResources?: any[];
 	setAllResources?: (resources: any[]) => void;
+	backgroundStyle?: React.CSSProperties; // Add background style prop
 }
 
 /**
@@ -35,6 +36,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	onLiveFunnelLoaded,
 	allResources = [],
 	setAllResources = () => {},
+	backgroundStyle,
 }) => {
 	// Extract experienceId from user object
 	const experienceId = user?.experienceId;
@@ -56,6 +58,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	const [templateLoading, setTemplateLoading] = useState(true); // Track template loading separately
 	const [templateReady, setTemplateReady] = useState(false); // Track when template is ready for rendering
 	const [funnelLoading, setFunnelLoading] = useState(true); // Track funnel loading separately
+	const [backgroundPreloaded, setBackgroundPreloaded] = useState(false); // Track background preloading
 	
 	// View mode state - similar to CustomerView
 	type ViewMode = 'iframe-only' | 'chat-only' | 'split-view';
@@ -70,7 +73,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	const { appearance, toggleTheme } = useTheme();
 	
 	// Combined loading state - show loading until template is properly loaded (like TemplateRenderer)
-	const isEverythingLoaded = !templateLoading && !funnelLoading && urlLoaded && (!hasLiveTemplate || templateReady);
+	const isEverythingLoaded = !templateLoading && !funnelLoading && urlLoaded && (!hasLiveTemplate || (templateReady && backgroundPreloaded));
 	
 	// Show loading overlay until template is properly loaded
 	const shouldShowLoadingOverlay = !isEverythingLoaded;
@@ -82,6 +85,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		funnelLoading,
 		urlLoaded,
 		hasLiveTemplate,
+		backgroundPreloaded,
 		isEverythingLoaded,
 		shouldShowLoadingOverlay
 	});
@@ -175,24 +179,62 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 					console.log(`[StorePreview] Found live template:`, data.template.name);
 					setLiveTemplate(data.template);
 					setHasLiveTemplate(true);
+					
+					// Preload background image from template
+					const preloadTemplateBackground = async () => {
+						const templateData = data.template.templateData;
+						const backgroundUrl = templateData?.generatedBackground || templateData?.uploadedBackground;
+						
+						if (backgroundUrl) {
+							console.log('🖼️ [StorePreview] Preloading template background:', backgroundUrl);
+							return new Promise<void>((resolve) => {
+								const img = new Image();
+								img.onload = () => {
+									console.log('🖼️ [StorePreview] Template background preloaded successfully');
+									setBackgroundPreloaded(true);
+									resolve();
+								};
+								img.onerror = () => {
+									console.log('🖼️ [StorePreview] Template background preload failed, continuing anyway');
+									setBackgroundPreloaded(true);
+									resolve();
+								};
+								img.src = backgroundUrl;
+							});
+						} else {
+							console.log('🖼️ [StorePreview] No background image to preload');
+							setBackgroundPreloaded(true);
+							return Promise.resolve();
+						}
+					};
+					
+					// Start background preloading
+					preloadTemplateBackground().catch(error => {
+						console.error('Error preloading template background:', error);
+						setBackgroundPreloaded(true);
+					});
+					
 					// Don't set templateReady immediately - wait for frontend loading
 					console.log(`[StorePreview] Template found, waiting for frontend loading...`);
 				} else {
 					console.log(`[StorePreview] No live template found`);
 					setLiveTemplate(null);
 					setHasLiveTemplate(false);
+					setBackgroundPreloaded(true); // No template means no background to preload
 					setTemplateReady(true); // No template means we're ready to show regular content
 				}
 			} else {
 				console.log(`[StorePreview] No live template found (${response.status})`);
 				setLiveTemplate(null);
 				setHasLiveTemplate(false);
+				setBackgroundPreloaded(true); // No template means no background to preload
 				setTemplateReady(true); // No template found - ready to show regular content
 			}
 		} catch (error) {
 			console.error(`[StorePreview] Error checking live template:`, error);
 			setLiveTemplate(null);
 			setHasLiveTemplate(false);
+			setBackgroundPreloaded(true); // Error means no background to preload
 			setTemplateReady(true); // Error case - ready to show regular content
 		} finally {
 			setTemplateLoading(false);
@@ -491,9 +533,12 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 			
 			{/* Whop Native Loading Overlay - Covers entire screen until everything loads */}
 			{shouldShowLoadingOverlay && (
-				<div className={`fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
-					overlayTransitioning ? 'transition-all duration-500 filter blur-[20px] opacity-0' : ''
-				}`}>
+				<div 
+					className={`fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden ${
+						overlayTransitioning ? 'transition-all duration-500 filter blur-[20px] opacity-0' : ''
+					}`}
+					style={backgroundStyle || { backgroundColor: 'white' }}
+				>
 					{/* Main content */}
 					<div className="text-center relative z-10">
 						{/* Whop-style loading spinner */}
