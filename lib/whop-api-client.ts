@@ -115,11 +115,9 @@ export class WhopApiClient {
         try {
           console.log(`🔍 Trying ${strategy.name} strategy (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
           
-          // Use proper SDK context with required companyId parameter (like old implementation)
-          const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
-          
+          // Use proper SDK method - whopSdk.experiences.listExperiences (not companies.listExperiences)
           const experiencesResult = await Promise.race([
-            sdkWithContext.experiences.listExperiences({
+            whopSdk.experiences.listExperiences({
               companyId: this.companyId, // Required by the API
               first: strategy.first,
               onAccessPass: false
