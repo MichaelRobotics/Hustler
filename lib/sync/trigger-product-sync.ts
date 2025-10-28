@@ -343,12 +343,8 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Process batch in parallel with individual error handling and retry logic
 				const batchPromises = batch.map(async (product) => {
-					// Determine category based on product price (don't rely on isFree as it can be misleading)
-					// Check if product has any plans with price > 0
-					const hasPaidPlans = product.plans && product.plans.some((plan: any) => plan.price > 0);
-					const productCategory = hasPaidPlans ? "PAID" : "FREE_VALUE";
-					
-					console.log(`🔍 DEBUGGING: Product "${product.title}" - hasPaidPlans: ${hasPaidPlans}, plans: ${product.plans?.length || 0}, category: ${productCategory}`);
+					// Determine category based on product price/free status
+					const productCategory = product.isFree || product.price === 0 ? "FREE_VALUE" : "PAID";
 					
 					try {
 						const cheapestPlan = whopClient.getCheapestPlan(product);

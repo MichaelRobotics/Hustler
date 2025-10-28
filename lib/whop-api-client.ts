@@ -312,16 +312,6 @@ export class WhopApiClient {
             console.log(`� INVESTIGATION: Full access pass object structure:`);
             console.log(JSON.stringify(accessPasses[0], null, 2));
             console.log(`� INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
-            
-            // INVESTIGATION: Check if access passes have embedded plans
-            console.log(`� INVESTIGATION: Checking for embedded plans in access passes:`);
-            accessPasses.forEach((accessPass: any, index: number) => {
-              const embeddedPlans = accessPass.plans || accessPass.planIds || accessPass.plan || [];
-              console.log(`  ${index + 1}. "${accessPass.title}" - embedded plans: ${Array.isArray(embeddedPlans) ? embeddedPlans.length : 'not array'}`);
-              if (embeddedPlans && embeddedPlans.length > 0) {
-                console.log(`    Embedded plans:`, embeddedPlans);
-              }
-            });
           }
           
           if (accessPasses.length > 0) {
@@ -432,25 +422,17 @@ export class WhopApiClient {
     });
     
     return accessPasses.map((accessPass: any) => {
-      // Check for embedded plans in the access pass itself
-      const embeddedPlans = accessPass.plans || accessPass.planIds || accessPass.plan || [];
-      const externalPlans = plansByAccessPass.get(accessPass.id) || [];
+      const accessPassPlans = plansByAccessPass.get(accessPass.id) || [];
       
-      // Combine embedded and external plans
-      const allPlans = [...embeddedPlans, ...externalPlans];
-      
-      console.log(`🔍 DEBUGGING: Processing access pass "${accessPass.title}" (${accessPass.id})`);
-      console.log(`  - Embedded plans: ${Array.isArray(embeddedPlans) ? embeddedPlans.length : 'not array'}`);
-      console.log(`  - External plans: ${externalPlans.length}`);
-      console.log(`  - Total plans: ${allPlans.length}`);
+      console.log(`🔍 DEBUGGING: Processing access pass "${accessPass.title}" (${accessPass.id}) with ${accessPassPlans.length} plans`);
       
       // Find the cheapest plan to determine if it's free
       let minPrice = Infinity;
       let currency = 'usd';
       
-      if (allPlans.length > 0) {
-        console.log(`🔍 DEBUGGING: Analyzing ${allPlans.length} plans for "${accessPass.title}":`);
-        allPlans.forEach((plan, index) => {
+      if (accessPassPlans.length > 0) {
+        console.log(`🔍 DEBUGGING: Analyzing ${accessPassPlans.length} plans for "${accessPass.title}":`);
+        accessPassPlans.forEach((plan, index) => {
           // Use initialPriceDue as the primary indicator for paid/free status
           const price = plan.initialPriceDue || 0;
           console.log(`  Plan ${index + 1}: ${plan.id} - initialPriceDue: ${price}, baseCurrency: ${plan.baseCurrency}`);
@@ -488,9 +470,9 @@ export class WhopApiClient {
         description: accessPass.shortenedDescription || accessPass.creatorPitch || '',
         price: price,
         currency: currency,
-        model: isFree ? 'free' : (allPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
+        model: isFree ? 'free' : (accessPassPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
         includedApps: [],
-        plans: allPlans.map(plan => ({
+        plans: accessPassPlans.map(plan => ({
           id: plan.id,
           price: plan.initialPriceDue || 0,  // Use initialPriceDue for consistency with price detection
           currency: plan.baseCurrency || 'usd',
