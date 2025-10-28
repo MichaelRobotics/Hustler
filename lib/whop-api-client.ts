@@ -106,27 +106,30 @@ export class WhopApiClient {
       
       // MULTIPLE RETRY STRATEGY: Try different approaches
       const strategies = [
-        { name: "Ultra-fast", timeout: 2000, first: 5 },
-        { name: "Fast", timeout: 5000, first: 10 },
-        { name: "Standard", timeout: 10000, first: 20 }
+        { name: "Ultra-fast", timeout: 2000, first: 10 },
+        { name: "Fast", timeout: 5000, first: 20 },
+        { name: "Standard", timeout: 10000, first: 50 }
       ];
       
       for (const strategy of strategies) {
         try {
           console.log(`🔍 Trying ${strategy.name} strategy (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
           
-          // Use global SDK for experiences with type assertion (SDK types may be incomplete)
+          // Use proper SDK context with required companyId parameter (like old implementation)
+          const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
+          
           const experiencesResult = await Promise.race([
-            (whopSdk.companies as any).listExperiences({
-              companyId: this.companyId,
-              first: strategy.first
+            sdkWithContext.experiences.listExperiences({
+              companyId: this.companyId, // Required by the API
+              first: strategy.first,
+              onAccessPass: false
             }),
             new Promise<never>((_, reject) => 
               setTimeout(() => reject(new Error("API timeout")), strategy.timeout)
             )
           ]);
           
-          const experiences = experiencesResult?.experiences?.nodes || [];
+          const experiences = experiencesResult?.experiencesV2?.nodes || [];
           console.log(`✅ ${strategy.name} strategy succeeded! Found ${experiences.length} experiences`);
           
           if (experiences.length > 0) {
@@ -135,7 +138,8 @@ export class WhopApiClient {
             
             const apps = experiences.map((exp: any) => {
               // Generate a slug from the app name and experience ID
-              const appName = (exp.app?.name || exp.name || 'app')
+              const rawAppName = exp.app?.name || exp.name || 'app';
+              const appName = rawAppName
                 .toLowerCase()
                 .replace(/[^a-z0-9]/g, '-')
                 .replace(/-+/g, '-')
@@ -144,7 +148,11 @@ export class WhopApiClient {
               const experienceIdSuffix = exp.id?.replace('exp_', '') || '';
               const experienceSlug = `${appName}-${experienceIdSuffix}`;
               
-              return {
+              console.log(`🔍 [App Slug Generation] Raw app name: "${rawAppName}" → Slug: "${appName}"`);
+              console.log(`🔍 [App Slug Generation] Experience ID: "${exp.id}" → Suffix: "${experienceIdSuffix}"`);
+              console.log(`🔍 [App Slug Generation] Final slug: "${experienceSlug}"`);
+              
+              const app = {
                 id: exp.app?.id || exp.id,
                 name: exp.app?.name || exp.name,
                 description: exp.app?.description || exp.description, // Try app description first, then experience description
@@ -160,6 +168,18 @@ export class WhopApiClient {
                 logo: exp.app?.icon?.sourceUrl || exp.logo?.sourceUrl || undefined,
                 bannerImage: exp.bannerImage?.sourceUrl || undefined
               };
+              
+              // Debug: Log app URL generation data
+              console.log(`🔍 App "${app.name}" URL generation data:`, {
+                experienceId: app.experienceId,
+                companyRoute: app.companyRoute,
+                appSlug: app.appSlug,
+                companyId: this.companyId,
+                hasCompanyRoute: !!app.companyRoute,
+                hasExperienceId: !!app.experienceId
+              });
+              
+              return app;
             });
             
             console.log(`✅ Mapped to ${apps.length} installed apps from API`);
@@ -486,11 +506,22 @@ export class WhopApiClient {
    * - Mobile: Should open in Whop mobile app (if properly configured)
    */
   generateAppUrl(app: WhopApp, refId?: string, isFree: boolean = true): string {
+    console.log(`🔍 [generateAppUrl] Input app data:`, {
+      id: app.id,
+      name: app.name,
+      experienceId: app.experienceId,
+      companyRoute: app.companyRoute,
+      appSlug: app.appSlug,
+      companyId: this.companyId
+    });
+    
     // Use company route if available, otherwise fall back to company ID
     const companyIdentifier = app.companyRoute || this.companyId;
+    console.log(`🔍 [generateAppUrl] Company identifier: ${companyIdentifier} (from ${app.companyRoute ? 'companyRoute' : 'companyId'})`);
     
     // Use experience slug if available, otherwise fall back to experience ID
     const experienceIdentifier = app.appSlug || app.experienceId;
+    console.log(`🔍 [generateAppUrl] Experience identifier: ${experienceIdentifier} (from ${app.appSlug ? 'appSlug' : 'experienceId'})`);
     
     const baseUrl = `https://whop.com/joined/${companyIdentifier}/${experienceIdentifier}/app/`;
     const url = new URL(baseUrl);

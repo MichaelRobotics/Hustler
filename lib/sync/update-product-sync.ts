@@ -238,6 +238,7 @@ export class UpdateProductSync {
   private async fetchWhopApps(whopClient: any, companyId: string): Promise<WhopApp[]> {
     try {
       const installedApps = await whopClient.getInstalledApps();
+      console.log(`[UPDATE-SYNC] 🔍 Fetched ${installedApps.length} installed apps from Whop API`);
       
       // Get current experience to exclude it from apps
       const currentExperience = await db.query.experiences.findFirst({
@@ -245,9 +246,30 @@ export class UpdateProductSync {
         columns: { whopExperienceId: true }
       });
 
-      return installedApps.filter((app: WhopApp) => 
-        app.experienceId !== currentExperience?.whopExperienceId
-      );
+      console.log(`[UPDATE-SYNC] 🔍 Current experience ID: ${currentExperience?.whopExperienceId}`);
+
+      const filteredApps = installedApps.filter((app: WhopApp) => {
+        const shouldInclude = app.experienceId !== currentExperience?.whopExperienceId;
+        console.log(`[UPDATE-SYNC] 🔍 App "${app.name}" (${app.experienceId}) - ${shouldInclude ? 'INCLUDED' : 'EXCLUDED'}`);
+        return shouldInclude;
+      });
+
+      console.log(`[UPDATE-SYNC] 🔍 After filtering: ${filteredApps.length} apps (excluded current experience)`);
+      
+      // Debug: Check app structure for link generation
+      if (filteredApps.length > 0) {
+        const sampleApp = filteredApps[0];
+        console.log(`[UPDATE-SYNC] 🔍 Sample app structure for link generation:`, {
+          id: sampleApp.id,
+          name: sampleApp.name,
+          experienceId: sampleApp.experienceId,
+          companyRoute: sampleApp.companyRoute,
+          appSlug: sampleApp.appSlug,
+          hasRequiredFields: !!(sampleApp.companyRoute || sampleApp.experienceId)
+        });
+      }
+      
+      return filteredApps;
     } catch (error) {
       console.error("Error fetching Whop apps:", error);
       return [];
