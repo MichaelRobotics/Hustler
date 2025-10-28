@@ -444,7 +444,7 @@ export class WhopApiClient {
         includedApps: [],
         plans: accessPassPlans.map(plan => ({
           id: plan.id,
-          price: plan.rawInitialPrice || 0,
+          price: plan.initialPriceDue || 0,  // Use initialPriceDue for consistency with price detection
           currency: plan.baseCurrency || 'usd',
           title: plan.paymentLinkDescription || `Plan ${plan.id}`
         })),
