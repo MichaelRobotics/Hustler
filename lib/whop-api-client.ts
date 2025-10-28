@@ -1,4 +1,5 @@
 import { whopSdk } from '@/lib/whop-sdk';
+import Whop from '@whop/sdk';
 
 // App type classification based on name patterns
 function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
@@ -18,15 +19,9 @@ function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'oth
   }
   
   // Community/Social apps
-  if (name.includes('chat') || name.includes('community') || name.includes('social') || 
-      name.includes('discord') || name.includes('forum') || name.includes('livestream') || 
-      name.includes('clip') || name.includes('site') || name.includes('list')) {
+  if (name.includes('community') || name.includes('social') || name.includes('chat') || 
+      name.includes('forum') || name.includes('discord') || name.includes('group')) {
     return 'community';
-  }
-  
-  // Free/Utility apps
-  if (name.includes('free') || name.includes('utility') || name.includes('tool')) {
-    return 'other';
   }
   
   return 'other';
@@ -35,168 +30,111 @@ function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'oth
 export interface WhopProduct {
   id: string;
   title: string;
-  description?: string;
+  description: string;
   price: number;
   currency: string;
   model: 'free' | 'one-time' | 'recurring';
-  includedApps: string[];
+  includedApps: any[];
   plans: Array<{
     id: string;
     price: number;
     currency: string;
-    title?: string;
+    title: string;
+    plan_type?: string;
+    renewal_price?: number;
+    billing_period?: number;
   }>;
-  visibility: 'archived' | 'hidden' | 'quick_link' | 'visible';
+  visibility: 'visible' | 'hidden' | 'archived' | 'quick_link';
+  discoveryPageUrl?: string;
+  checkoutUrl?: string;
+  route?: string;
+  verified?: boolean;
+  activeUsersCount?: number;
+  reviewsAverage?: number;
+  logo?: string;
+  bannerImage?: string;
+  isFree: boolean;
   status?: string;
   category?: string;
   tags?: string[];
   imageUrl?: string;
   createdAt?: string;
-  // URLs for discovery page and checkout
-  discoveryPageUrl?: string;
-  checkoutUrl?: string;
-  route?: string; // The route used to construct discovery page URL
   updatedAt?: string;
-  isFree?: boolean; // Helper field for FREE/PAID detection
 }
 
 export interface WhopApp {
   id: string;
   name: string;
-  description?: string;
+  description: string;
   price: number;
   currency: string;
   discoveryPageUrl?: string;
   checkoutUrl?: string;
   route?: string;
-  experienceId?: string; // The experience ID for this app installation
-  companyRoute?: string; // Company route for URL generation
-  appSlug?: string; // App slug for custom URLs
+  experienceId?: string;
+  companyRoute?: string;
+  appSlug?: string;
+  logo?: string;
+  bannerImage?: string;
   category?: string; // Marketplace category from Whop SDK
-  logo?: string; // App logo URL
-  bannerImage?: string; // App banner image URL
 }
 
+/**
+ * WhopApiClient - Handles all Whop API interactions
+ * Provides caching, retry strategies, and rate limiting
+ */
 export class WhopApiClient {
   private companyId: string;
   private userId: string;
-  private cache: Map<string, { data: any; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 30000; // 30 seconds cache
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   constructor(companyId: string, userId: string) {
     this.companyId = companyId;
     this.userId = userId;
-    
-    // Validate required parameters
-    if (!companyId || !userId) {
-      throw new Error("WhopApiClient requires both companyId and userId");
-    }
-    
-    // Validate environment variables
-    if (!process.env.WHOP_API_KEY) {
-      console.warn("⚠️ WHOP_API_KEY not found in environment variables");
-    }
-    if (!process.env.NEXT_PUBLIC_WHOP_APP_ID) {
-      console.warn("⚠️ NEXT_PUBLIC_WHOP_APP_ID not found in environment variables");
-    }
   }
 
   /**
-   * Get cached data or execute API call
-   */
-  private async getCachedOrFetch<T>(
-    cacheKey: string,
-    apiCall: () => Promise<T>
-  ): Promise<T> {
-    const cached = this.cache.get(cacheKey);
-    const now = Date.now();
-    
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL) {
-      console.log(`� Using cached data for ${cacheKey}`);
-      return cached.data;
-    }
-    
-    console.log(`� Fetching fresh data for ${cacheKey}`);
-    const data = await apiCall();
-    this.cache.set(cacheKey, { data, timestamp: now });
-    return data;
-  }
-
-  /**
-   * Get company route/slug for custom URLs
-   */
-  async getCompanyRoute(): Promise<string | null> {
-    try {
-      console.log(`� Getting company route for company ${this.companyId}...`);
-      
-      const companyResult = await whopSdk.companies.getCompany({
-        companyId: this.companyId
-      });
-      
-      const company = companyResult as any;
-      // Use the actual route field from Whop API
-      const route = company?.route || null;
-      
-      console.log(`✅ Company route: ${route}`);
-      return route;
-    } catch (error) {
-      console.error("❌ Error getting company route:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Get installed apps (experiences) in the company
-   * These are used for FREE resources
+   * Get INSTALLED APPS using SDK methods
+   * These are apps that are already installed in the company
    */
   async getInstalledApps(): Promise<WhopApp[]> {
+    console.log(`🔍 Getting INSTALLED APPS for company ${this.companyId}...`);
+    
     try {
-      console.log(`Fetching installed apps for company ${this.companyId}...`);
+      console.log("🔍 Getting installed apps using SDK methods...");
       
       // MULTIPLE RETRY STRATEGY: Try different approaches
       const strategies = [
-        { name: "Ultra-fast", timeout: 2000, first: 10 },
-        { name: "Fast", timeout: 5000, first: 20 },
-        { name: "Standard", timeout: 10000, first: 50 }
+        { name: "Ultra-fast", timeout: 2000, first: 5 },
+        { name: "Fast", timeout: 5000, first: 10 },
+        { name: "Standard", timeout: 10000, first: 20 }
       ];
       
       for (const strategy of strategies) {
         try {
-          console.log(`� Trying ${strategy.name} strategy for experiences (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
+          console.log(`🔍 Trying ${strategy.name} strategy (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
           
-          // Use proper SDK context with required companyId parameter
-          const sdkWithContext = whopSdk.withUser(this.userId).withCompany(this.companyId);
-          
+          // Use global SDK for experiences with type assertion (SDK types may be incomplete)
           const experiencesResult = await Promise.race([
-            sdkWithContext.experiences.listExperiences({
-              companyId: this.companyId, // Required by the API
-              first: strategy.first,
-              onAccessPass: false
+            (whopSdk.companies as any).listExperiences({
+              companyId: this.companyId,
+              first: strategy.first
             }),
             new Promise<never>((_, reject) => 
               setTimeout(() => reject(new Error("API timeout")), strategy.timeout)
             )
           ]);
           
-          const experiences = experiencesResult?.experiencesV2?.nodes || [];
+          const experiences = experiencesResult?.experiences?.nodes || [];
           console.log(`✅ ${strategy.name} strategy succeeded! Found ${experiences.length} experiences`);
           
-          // INVESTIGATION: Log full experience object structure to see all available fields
           if (experiences.length > 0) {
-            console.log(`� INVESTIGATION: Full experience object structure:`);
-            console.log(JSON.stringify(experiences[0], null, 2));
-            console.log(`� INVESTIGATION: Experience object keys:`, Object.keys(experiences[0] || {}));
-            if (experiences[0]?.app) {
-              console.log(`� INVESTIGATION: App object keys:`, Object.keys(experiences[0].app));
-            }
-          }
-          
-          if (experiences.length > 0) {
-            // Get company route for custom URLs
+            // Get company route for discovery page URLs
             const companyRoute = await this.getCompanyRoute();
             
-            const apps: WhopApp[] = experiences.map((exp: any) => {
-              // Generate experience slug: {appName}-{experienceIdSuffix}
+            const apps = experiences.map((exp: any) => {
+              // Generate a slug from the app name and experience ID
               const appName = (exp.app?.name || exp.name || 'app')
                 .toLowerCase()
                 .replace(/[^a-z0-9]/g, '-')
@@ -228,13 +166,13 @@ export class WhopApiClient {
             
             // INVESTIGATION: Log final app structure to see what fields we have
             if (apps.length > 0) {
-              console.log(`� INVESTIGATION: Final app object structure:`);
+              console.log(`🔍 INVESTIGATION: Final app object structure:`);
               console.log(JSON.stringify(apps[0], null, 2));
-              console.log(`� INVESTIGATION: App object keys:`, Object.keys(apps[0]));
+              console.log(`🔍 INVESTIGATION: App object keys:`, Object.keys(apps[0]));
               
               // INVESTIGATION: Check for potential app type fields
               const app = apps[0] as any;
-              console.log(`� INVESTIGATION: Potential app type fields:`);
+              console.log(`🔍 INVESTIGATION: Potential app type fields:`);
               console.log(`  - category: ${app.category || 'NOT FOUND'}`);
               console.log(`  - type: ${app.type || 'NOT FOUND'}`);
               console.log(`  - tags: ${app.tags || 'NOT FOUND'}`);
@@ -244,7 +182,7 @@ export class WhopApiClient {
               
               // INVESTIGATION: Test name-based classification
               const classifiedType = classifyAppType(app.name);
-              console.log(`� INVESTIGATION: Name-based classification for "${app.name}": ${classifiedType}`);
+              console.log(`🔍 INVESTIGATION: Name-based classification for "${app.name}": ${classifiedType}`);
             }
             
             return apps;
@@ -267,229 +205,206 @@ export class WhopApiClient {
   }
 
   /**
-   * Get DISCOVERY PAGE PRODUCTS (not apps) using SDK methods
+   * Get DISCOVERY PAGE PRODUCTS using direct Whop SDK API
    * These are the actual products customers can buy for PAID upsells
    */
   async getCompanyProducts(): Promise<WhopProduct[]> {
-    console.log(`� Getting DISCOVERY PAGE PRODUCTS for company ${this.companyId}...`);
+    console.log(`🔍 Getting DISCOVERY PAGE PRODUCTS for company ${this.companyId} using direct SDK API...`);
     
     try {
-      console.log("� Getting discovery page products using SDK methods...");
+      // Create Whop SDK client
+      const client = new Whop({
+        appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
+        apiKey: process.env.WHOP_API_KEY!,
+      });
+
+      console.log("🔍 Step 1: Fetching all plans...");
+      const plans: any[] = [];
+      for await (const planListResponse of client.plans.list({ company_id: this.companyId })) {
+        plans.push(planListResponse);
+      }
+      console.log(`✅ Found ${plans.length} plans`);
       
-      // MULTIPLE RETRY STRATEGY: Try different approaches
-      const strategies = [
-        { name: "Ultra-fast", timeout: 2000, first: 5 },
-        { name: "Fast", timeout: 5000, first: 10 },
-        { name: "Standard", timeout: 10000, first: 20 }
-      ];
+      // DEBUG: Log all plans to see what we're getting
+      console.log(`🔍 DEBUG - All plans fetched:`, plans.map(p => ({
+        id: p.id,
+        initial_price: p.initial_price,
+        currency: p.currency,
+        title: p.title,
+        plan_type: p.plan_type,
+        product_id: p.product?.id,
+        product_title: p.product?.title
+      })));
+
+      console.log("🔍 Step 2: Fetching all products...");
+      const products: any[] = [];
+      for await (const productListItem of client.products.list({ company_id: this.companyId })) {
+        products.push(productListItem);
+      }
+      console.log(`✅ Found ${products.length} products`);
       
-      for (const strategy of strategies) {
+      // Filter out products that don't have proper product associations
+      const validProducts = products.filter(product => {
+        // Only include products that have at least one plan associated with them
+        const hasAssociatedPlans = plans.some(plan => plan.product?.id === product.id);
+        if (!hasAssociatedPlans) {
+          console.log(`⚠️ Filtering out product "${product.title}" (${product.id}) - no associated plans`);
+        }
+        return hasAssociatedPlans;
+      });
+      
+      console.log(`🔍 Filtered products: ${validProducts.length}/${products.length} (excluded products without plans)`);
+
+      // Filter out archived products
+      const visibleProducts = validProducts.filter(product => product.visibility !== 'archived');
+      console.log(`🔍 Filtered products: ${visibleProducts.length}/${validProducts.length} (excluded archived)`);
+      
+      // Use all visible products (no filtering)
+      const finalProducts = visibleProducts;
+      
+      console.log(`🔍 Final products: ${finalProducts.length}/${visibleProducts.length} (no filtering applied)`);
+
+      console.log("🔍 Step 3: Correlating plans with products and getting detailed product data...");
+      const correlatedProducts: WhopProduct[] = [];
+
+      for (const product of finalProducts) {
         try {
-          console.log(`� Trying ${strategy.name} strategy (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
+          // Get detailed product data
+          const detailedProduct = await client.products.retrieve(product.id);
           
-          // Use global SDK for access passes with type assertion (SDK types may be incomplete)
-          const accessPassesResult = await Promise.race([
-            (whopSdk.companies as any).listAccessPasses({
-              companyId: this.companyId,
-              visibility: "all", // Changed from "visible" to "all" to include all products
-              first: strategy.first
-            }),
-            new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error("API timeout")), strategy.timeout)
-            )
-          ]);
+          // Find plans for this product
+          const productPlans = plans.filter(plan => plan.product?.id === product.id);
+
+          console.log(`🔍 Processing product "${detailedProduct.title}" (${detailedProduct.id}) with ${productPlans.length} plans`);
           
-          const accessPasses = accessPassesResult?.accessPasses?.nodes || [];
-          console.log(`✅ ${strategy.name} strategy succeeded! Found ${accessPasses.length} access passes`);
-          
-          // INVESTIGATION: Log visibility of each access pass
-          if (accessPasses.length > 0) {
-            console.log(`🔍 Access passes visibility breakdown:`);
-            accessPasses.forEach((accessPass: any, index: number) => {
-              console.log(`  ${index + 1}. "${accessPass.title}" - visibility: ${accessPass.visibility}`);
-            });
-            
-            console.log(`� INVESTIGATION: Full access pass object structure:`);
-            console.log(JSON.stringify(accessPasses[0], null, 2));
-            console.log(`� INVESTIGATION: Access pass object keys:`, Object.keys(accessPasses[0]));
+          // DEBUG: Log all plans for Profittest
+          if (detailedProduct.title === "Profittest") {
+            console.log(`🔍 DEBUG Profittest - All plans found:`, productPlans.map(p => ({
+              id: p.id,
+              initial_price: p.initial_price,
+              currency: p.currency,
+              title: p.title,
+              plan_type: p.plan_type,
+              product_id: p.product?.id
+            })));
           }
           
-          if (accessPasses.length > 0) {
-            // Try to get plans (optional - don't fail if this times out)
-            let plans: any[] = [];
-            try {
-              const plansResult = await Promise.race([
-                (whopSdk.companies as any).listPlans({
-                  companyId: this.companyId,
-                  visibility: "all", // Changed from "visible" to "all" to include all plans
-                  first: strategy.first
-                }),
-                new Promise<never>((_, reject) => 
-                  setTimeout(() => reject(new Error("Plans timeout")), strategy.timeout)
-                )
-              ]);
-              plans = plansResult?.plans?.nodes || [];
-              console.log(`✅ Found ${plans.length} plans`);
+          // Calculate pricing - handle both one-time and subscription plans
+          let minPrice = Infinity;
+          let currency = 'usd';
+          let isFree = true;
+          
+          if (productPlans.length > 0) {
+            productPlans.forEach((plan, index) => {
+              let effectivePrice = 0;
               
-              // INVESTIGATION: Log full plan object structure to see all available fields
-              if (plans.length > 0) {
-                console.log(`� INVESTIGATION: Full plan object structure:`);
-                console.log(JSON.stringify(plans[0], null, 2));
-                console.log(`� INVESTIGATION: Plan object keys:`, Object.keys(plans[0]));
+              if (plan.plan_type === 'renewal') {
+                // For subscription plans, use renewal_price (monthly cost)
+                effectivePrice = plan.renewal_price || plan.initial_price || 0;
+                console.log(`  Plan ${index + 1}: ${plan.id} - SUBSCRIPTION - renewal_price: ${plan.renewal_price}, initial_price: ${plan.initial_price}, billing_period: ${plan.billing_period} days, effective_price: ${effectivePrice}`);
+              } else {
+                // For one-time plans, use initial_price
+                effectivePrice = plan.initial_price || 0;
+                console.log(`  Plan ${index + 1}: ${plan.id} - ONE-TIME - initial_price: ${effectivePrice}, currency: ${plan.currency}`);
               }
               
-            } catch (planError) {
-              console.log("⚠️ Plans API failed, continuing with access passes only");
-            }
-            
-            // Get company route for discovery page URLs
-            const companyRoute = await this.getCompanyRoute();
-            
-            // Filter out archived products but keep others
-            const filteredAccessPasses = accessPasses.filter((accessPass: any) => 
-              accessPass.visibility !== 'archived'
-            );
-            console.log(`🔍 Filtered access passes: ${filteredAccessPasses.length}/${accessPasses.length} (excluded archived)`);
-            
-            // Map to products
-            const products = this.mapAccessPassesToProducts(filteredAccessPasses, plans, companyRoute || undefined);
-            console.log(`✅ Mapped to ${products.length} DISCOVERY PAGE PRODUCTS`);
-            
-            // INVESTIGATION: Log final product structure to see what fields we have
-            if (products.length > 0) {
-              console.log(`� INVESTIGATION: Final product object structure:`);
-              console.log(JSON.stringify(products[0], null, 2));
-              console.log(`� INVESTIGATION: Product object keys:`, Object.keys(products[0]));
-              
-              // INVESTIGATION: Check for potential product type fields
-              const product = products[0] as any;
-              console.log(`� INVESTIGATION: Potential product type fields:`);
-              console.log(`  - category: ${product.category || 'NOT FOUND'}`);
-              console.log(`  - type: ${product.type || 'NOT FOUND'}`);
-              console.log(`  - tags: ${product.tags || 'NOT FOUND'}`);
-              console.log(`  - businessModel: ${product.businessModel || 'NOT FOUND'}`);
-              console.log(`  - appStoreCategory: ${product.appStoreCategory || 'NOT FOUND'}`);
-              console.log(`  - productType: ${product.productType || 'NOT FOUND'}`);
-              
-              // INVESTIGATION: Test name-based classification for products
-              const classifiedType = classifyAppType(product.title);
-              console.log(`� INVESTIGATION: Name-based classification for product "${product.title}": ${classifiedType}`);
-            }
-            
-            return products;
+              if (effectivePrice < minPrice) {
+                minPrice = effectivePrice;
+                currency = plan.currency || 'usd';
+              }
+            });
+            isFree = minPrice === 0;
+          } else {
+            console.log(`⚠️ No plans found for "${detailedProduct.title}" - will be marked as FREE`);
+            minPrice = 0;
           }
-          
-        } catch (strategyError) {
-          console.log(`❌ ${strategy.name} strategy failed:`, strategyError instanceof Error ? strategyError.message : String(strategyError));
-          continue; // Try next strategy
+
+          const finalPrice = isFree ? 0 : minPrice;
+          console.log(`🔍 Final calculation for "${detailedProduct.title}": minPrice=${minPrice}, isFree=${isFree}, finalPrice=${finalPrice}`);
+
+          // Generate URLs
+            const companyRoute = await this.getCompanyRoute();
+          let discoveryPageUrl: string | undefined;
+          if (companyRoute && detailedProduct.route) {
+            discoveryPageUrl = `https://whop.com/${companyRoute}/${detailedProduct.route}/`;
+          } else if (detailedProduct.route) {
+            discoveryPageUrl = `https://whop.com/${detailedProduct.route}/`;
+          }
+          const checkoutUrl = detailedProduct.route ? `https://whop.com/${detailedProduct.route}/checkout` : undefined;
+
+          console.log(`🔍 PRODUCT ${detailedProduct.title}: ${isFree ? 'FREE' : 'PAID'} ($${finalPrice}) - URL: ${discoveryPageUrl}`);
+
+          correlatedProducts.push({
+            id: detailedProduct.id,
+            title: detailedProduct.title || detailedProduct.headline || `Product ${detailedProduct.id}`,
+            description: detailedProduct.description || detailedProduct.headline || '',
+            price: finalPrice,
+            currency: currency,
+            model: isFree ? 'free' : (productPlans.some(p => p.plan_type === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
+            includedApps: [],
+            plans: productPlans.map(plan => ({
+              id: plan.id,
+              price: plan.plan_type === 'renewal' ? (plan.renewal_price || plan.initial_price || 0) : (plan.initial_price || 0),
+              currency: plan.currency || 'usd',
+              title: plan.title || `Plan ${plan.id}`,
+              plan_type: plan.plan_type,
+              renewal_price: plan.renewal_price,
+              billing_period: plan.billing_period
+            })),
+            visibility: (detailedProduct.visibility || 'visible') as 'visible' | 'hidden' | 'archived' | 'quick_link',
+            discoveryPageUrl,
+            checkoutUrl,
+            route: detailedProduct.route,
+            verified: detailedProduct.verified,
+            activeUsersCount: detailedProduct.member_count,
+            reviewsAverage: detailedProduct.published_reviews_count,
+            logo: undefined, // Direct SDK API doesn't provide logo in product.retrieve
+            bannerImage: undefined, // Direct SDK API doesn't provide bannerImage in product.retrieve  
+            imageUrl: undefined, // Direct SDK API doesn't provide imageUrl in product.retrieve
+            isFree
+          });
+
+        } catch (productError) {
+          console.error(`❌ Failed to process product ${product.id}:`, productError);
+          continue; // Skip this product and continue with others
         }
       }
+
+      console.log(`✅ Successfully processed ${correlatedProducts.length} products using direct SDK API`);
       
-      // If all strategies failed, throw error
-      throw new Error("All API strategies failed");
+      // INVESTIGATION: Log final product structure
+      if (correlatedProducts.length > 0) {
+        console.log(`🔍 INVESTIGATION: Final product object structure:`);
+        console.log(JSON.stringify(correlatedProducts[0], null, 2));
+        console.log(`🔍 INVESTIGATION: Product object keys:`, Object.keys(correlatedProducts[0]));
+      }
+
+      return correlatedProducts;
       
     } catch (error) {
-      console.error("❌ Failed to get discovery page products:", error);
+      console.error("❌ Failed to get discovery page products using direct SDK API:", error);
       console.log("⚠️ No PAID upsell products will be created");
       return [];
     }
   }
 
   /**
-   * Map access passes and plans to WhopProduct format
+   * Get company route for URL generation using direct SDK API
    */
-  private mapAccessPassesToProducts(accessPasses: any[], plans: any[], companyRoute?: string): WhopProduct[] {
-    // Group plans by access pass ID
-    const plansByAccessPass = new Map<string, any[]>();
-    
-    console.log(`🔍 DEBUGGING: Mapping ${plans.length} plans to ${accessPasses.length} access passes`);
-    
-    plans.forEach((plan: any) => {
-      if (plan.accessPass?.id) {
-        if (!plansByAccessPass.has(plan.accessPass.id)) {
-          plansByAccessPass.set(plan.accessPass.id, []);
-        }
-        plansByAccessPass.get(plan.accessPass.id)!.push(plan);
-        console.log(`🔍 DEBUGGING: Mapped plan ${plan.id} to access pass ${plan.accessPass.id} (${plan.accessPass.title})`);
-      } else {
-        console.log(`⚠️ DEBUGGING: Plan ${plan.id} has no accessPass.id, skipping`);
-      }
-    });
-    
-    console.log(`🔍 DEBUGGING: Plans by access pass mapping:`);
-    plansByAccessPass.forEach((plans, accessPassId) => {
-      console.log(`  Access Pass ${accessPassId}: ${plans.length} plans`);
-    });
-    
-    return accessPasses.map((accessPass: any) => {
-      const accessPassPlans = plansByAccessPass.get(accessPass.id) || [];
-      
-      console.log(`🔍 DEBUGGING: Processing access pass "${accessPass.title}" (${accessPass.id}) with ${accessPassPlans.length} plans`);
-      
-      // Find the cheapest plan to determine if it's free
-      let minPrice = Infinity;
-      let currency = 'usd';
-      
-      if (accessPassPlans.length > 0) {
-        console.log(`🔍 DEBUGGING: Analyzing ${accessPassPlans.length} plans for "${accessPass.title}":`);
-        accessPassPlans.forEach((plan, index) => {
-          // Use initialPriceDue as the primary indicator for paid/free status
-          const price = plan.initialPriceDue || 0;
-          console.log(`  Plan ${index + 1}: ${plan.id} - initialPriceDue: ${price}, baseCurrency: ${plan.baseCurrency}`);
-          if (price < minPrice) {
-            minPrice = price;
-            currency = plan.baseCurrency || 'usd';
-          }
-        });
-      } else {
-        console.log(`⚠️ DEBUGGING: No plans found for "${accessPass.title}" - will be marked as FREE`);
-      }
-      
-      const isFree = minPrice === 0 || minPrice === Infinity;
-      const price = isFree ? 0 : minPrice;
-      
-      console.log(`🔍 DEBUGGING: Final calculation for "${accessPass.title}": minPrice=${minPrice}, isFree=${isFree}, finalPrice=${price}`);
-      
-      // Generate URLs
-      let discoveryPageUrl: string | undefined;
-      if (companyRoute && accessPass.route) {
-        // Use discovery page format for affiliate tracking (required by Whop docs)
-        // Format: https://whop.com/{companyRoute}/{accessPassRoute}/
-        discoveryPageUrl = `https://whop.com/${companyRoute}/${accessPass.route}/`;
-      } else if (accessPass.route) {
-        // Fallback to direct access pass route
-        discoveryPageUrl = `https://whop.com/${accessPass.route}/`;
-      }
-      const checkoutUrl = accessPass.route ? `https://whop.com/${accessPass.route}/checkout` : undefined;
-      
-      console.log(`� PRODUCT ${accessPass.title}: ${isFree ? 'FREE' : 'PAID'} ($${price}) - URL: ${discoveryPageUrl}`);
-      
-      return {
-        id: accessPass.id,
-        title: accessPass.title || accessPass.headline || `Product ${accessPass.id}`,
-        description: accessPass.shortenedDescription || accessPass.creatorPitch || '',
-        price: price,
-        currency: currency,
-        model: isFree ? 'free' : (accessPassPlans.some(p => p.planType === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
-        includedApps: [],
-        plans: accessPassPlans.map(plan => ({
-          id: plan.id,
-          price: plan.initialPriceDue || 0,  // Use initialPriceDue for consistency with price detection
-          currency: plan.baseCurrency || 'usd',
-          title: plan.paymentLinkDescription || `Plan ${plan.id}`
-        })),
-        visibility: accessPass.visibility || 'visible' as const,
-        discoveryPageUrl,
-        checkoutUrl,
-        route: accessPass.route,
-        verified: accessPass.verified,
-        activeUsersCount: accessPass.activeUsersCount,
-        reviewsAverage: accessPass.reviewsAverage,
-        logo: accessPass.logo?.sourceUrl,
-        bannerImage: accessPass.bannerImage?.source?.url,
-        isFree
-      };
-    });
+  private async getCompanyRoute(): Promise<string | null> {
+    try {
+      // Create Whop SDK client
+      const client = new Whop({
+        appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
+        apiKey: process.env.WHOP_API_KEY!,
+      });
+
+      const company = await client.companies.retrieve(this.companyId);
+      return company.route || null;
+    } catch (error) {
+      console.error("❌ Failed to get company route:", error);
+      return null;
+    }
   }
 
   /**
@@ -505,7 +420,7 @@ export class WhopApiClient {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`� ${operationName} attempt ${attempt}/${maxRetries} (timeout: ${timeoutMs}ms)`);
+        console.log(`🔍 ${operationName} attempt ${attempt}/${maxRetries} (timeout: ${timeoutMs}ms)`);
         
         // Add rate limiting delay between attempts
         if (attempt > 1) {
@@ -543,75 +458,6 @@ export class WhopApiClient {
     }
     
     throw new Error(`${operationName} failed after ${maxRetries} attempts. Last error: ${lastError?.message}`);
-  }
-
-  /**
-   * Determine funnel name from discovery page products
-   * Uses FREE product if available, otherwise cheapest PAID product
-   */
-  determineFunnelName(products: WhopProduct[]): string {
-    if (products.length === 0) {
-      return "App Installation";
-    }
-
-    // First, try to find a FREE product
-    const freeProduct = products.find(p => p.isFree);
-    if (freeProduct) {
-      console.log(`� Using FREE product for funnel name: ${freeProduct.title}`);
-      return freeProduct.title;
-    }
-
-    // If no FREE product, use the cheapest PAID product
-    const paidProducts = products.filter(p => !p.isFree && p.price > 0);
-    if (paidProducts.length > 0) {
-      const cheapestProduct = paidProducts.reduce((cheapest, current) => 
-        current.price < cheapest.price ? current : cheapest
-      );
-      console.log(`� Using cheapest PAID product for funnel name: ${cheapestProduct.title} ($${cheapestProduct.price})`);
-      return cheapestProduct.title;
-    }
-
-    // Fallback
-    console.log("⚠️ No suitable product found for funnel naming, using fallback");
-    return "App Installation";
-  }
-
-  /**
-   * Get the funnel product from discovery page products
-   * This is the product that will be used to name the funnel
-   */
-  getFunnelProduct(products: WhopProduct[]): WhopProduct | null {
-    if (products.length === 0) {
-      return null;
-    }
-
-    // First, try to find a FREE product
-    const freeProduct = products.find(p => p.isFree);
-    if (freeProduct) {
-      console.log(`� Funnel product: ${freeProduct.title} (${freeProduct.includedApps.length} apps included)`);
-      return freeProduct;
-    }
-
-    // If no FREE product, use the cheapest PAID product
-    const paidProducts = products.filter(p => !p.isFree && p.price > 0);
-    if (paidProducts.length > 0) {
-      const cheapestProduct = paidProducts.reduce((cheapest, current) => 
-        current.price < cheapest.price ? current : cheapest
-      );
-      console.log(`� Funnel product: ${cheapestProduct.title} ($${cheapestProduct.price})`);
-      return cheapestProduct;
-    }
-
-    return null;
-  }
-
-  /**
-   * Get upsell products (exclude the funnel product)
-   */
-  getUpsellProducts(products: WhopProduct[], funnelProductId: string): WhopProduct[] {
-    const upsellProducts = products.filter(p => p.id !== funnelProductId);
-    console.log(`� Found ${upsellProducts.length} upsell products (excluding funnel product)`);
-    return upsellProducts;
   }
 
   /**
@@ -655,18 +501,20 @@ export class WhopApiClient {
     }
     
     console.log(`✅ Generated app URL: ${url.toString()}`);
-    console.log(`� Mobile compatibility: This URL should work on both desktop and mobile`);
-    console.log(`� Configuration: Company route=${companyIdentifier}, Experience slug=${experienceIdentifier}`);
-    console.log(`� Debug info: app.companyRoute=${app.companyRoute}, app.appSlug=${app.appSlug}, app.experienceId=${app.experienceId}`);
+    console.log(`🔍 Mobile compatibility: This URL should work on both desktop and mobile`);
+    console.log(`🔍 Configuration: Company route=${companyIdentifier}, Experience slug=${experienceIdentifier}`);
+    console.log(`🔍 Debug info: app.companyRoute=${app.companyRoute}, app.appSlug=${app.appSlug}, app.experienceId=${app.experienceId}`);
     
     return url.toString();
   }
-
 }
 
 // Cache for API clients to avoid recreating them
 const whopApiClientCache = new Map<string, WhopApiClient>();
 
+/**
+ * Get WhopApiClient instance for a company and user
+ */
 export function getWhopApiClient(companyId: string, userId: string): WhopApiClient {
   const cacheKey = `${companyId}:${userId}`;
   

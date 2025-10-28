@@ -125,9 +125,43 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     throw new Error(`Product ${whopProductId} has empty name`);
   }
 
+  // Handle duplicate names intelligently
+  let resourceName = product.title.trim();
+  
+  // Check if a resource with this name already exists
+  const existingResourceWithSameName = await db.query.resources.findFirst({
+    where: and(
+      eq(resources.experienceId, user.experience.id),
+      eq(resources.name, resourceName)
+    ),
+  });
+  
+  // If name exists, try different strategies to make it unique
+  if (existingResourceWithSameName) {
+    // Strategy 1: Add product type suffix
+    const productType = whopProductId.startsWith('app_') ? 'App' : 'Product';
+    resourceName = `${product.title.trim()} (${productType})`;
+    
+    // Check if this name is also taken
+    const existingWithType = await db.query.resources.findFirst({
+      where: and(
+        eq(resources.experienceId, user.experience.id),
+        eq(resources.name, resourceName)
+      ),
+    });
+    
+    // Strategy 2: Add short product ID if type suffix is also taken
+    if (existingWithType) {
+      resourceName = `${product.title.trim()} (${whopProductId.slice(-6)})`;
+      console.log(`[API] Name conflict with type suffix, using ID suffix: "${resourceName}"`);
+    } else {
+      console.log(`[API] Name conflict detected, using type suffix: "${resourceName}"`);
+    }
+  }
+
   // Use the same createResource action as trigger-product-sync
   const resource = await createResource(user, {
-    name: product.title.trim(),
+    name: resourceName,
     type: "MY_PRODUCTS",
     category: productCategory,
     link: trackingUrl,
@@ -224,7 +258,16 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   }
 
   // Update the resource in database
-  await db.update(resources)
+  console.log(`[API] Updating resource ${existingResource.id} with new data:`, {
+    name: product.title.trim(),
+    category: productCategory,
+    link: trackingUrl,
+    description: product.description,
+    image: productImage,
+    price: formattedPrice,
+  });
+  
+  const updateResult = await db.update(resources)
     .set({
       name: product.title.trim(),
       category: productCategory,
@@ -235,6 +278,8 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
       updatedAt: new Date(),
     })
     .where(eq(resources.id, existingResource.id));
+  
+  console.log(`[API] Resource update result:`, updateResult);
   
   return existingResource;
 }

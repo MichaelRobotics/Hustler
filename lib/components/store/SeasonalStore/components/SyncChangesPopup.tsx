@@ -18,6 +18,7 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isDebugExpanded, setIsDebugExpanded] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -158,6 +159,95 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
                 >
                   Sync
                 </button>
+              </div>
+            )}
+
+            {/* Debug Toggle */}
+            <div className="mt-3 flex justify-center">
+              <button
+                onClick={() => setIsDebugExpanded(!isDebugExpanded)}
+                className="flex items-center space-x-1 text-white/70 hover:text-white text-xs transition-colors duration-200"
+              >
+                <svg 
+                  className={`w-3 h-3 transition-transform duration-200 ${isDebugExpanded ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>Debug Info</span>
+              </button>
+            </div>
+
+            {/* Debug Section */}
+            {isDebugExpanded && syncResult && (
+              <div className="mt-3 bg-black/20 backdrop-blur-sm rounded-lg p-3 text-xs text-white/90 max-h-60 overflow-y-auto">
+                <div className="space-y-2">
+                  <div className="font-semibold text-white mb-2">🔍 Update Check Details:</div>
+                  
+                  {/* What gets checked */}
+                  <div className="space-y-1">
+                    <div className="font-medium text-white/90">What Update Check Compares:</div>
+                    <ul className="ml-2 space-y-1 text-white/80">
+                      <li>• <strong>Name:</strong> Database vs Whop API product title</li>
+                      <li>• <strong>Description:</strong> Database vs Whop API product description</li>
+                      <li>• <strong>Price:</strong> Database vs Whop API product price</li>
+                      <li>• <strong>Image:</strong> Database vs Whop API product image</li>
+                      <li>• <strong>Existence:</strong> Products that exist in Whop but not in database (created)</li>
+                      <li>• <strong>Deletion:</strong> Products that exist in database but not in Whop (deleted)</li>
+                    </ul>
+                  </div>
+
+                  {/* Current Results */}
+                  <div className="space-y-1">
+                    <div className="font-medium text-white/90">Current Detection Results:</div>
+                    <div className="ml-2 space-y-1">
+                      <div>📊 Total Changes: {syncResult.summary.total}</div>
+                      <div>✅ Created: {syncResult.summary.created}</div>
+                      <div>🔄 Updated: {syncResult.summary.updated}</div>
+                      <div>❌ Deleted: {syncResult.summary.deleted}</div>
+                      <div>🕒 Last Checked: {syncResult.lastChecked ? (typeof syncResult.lastChecked === 'string' ? new Date(syncResult.lastChecked).toLocaleTimeString() : syncResult.lastChecked.toLocaleTimeString()) : 'Unknown'}</div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Changes */}
+                  {syncResult.changes.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="font-medium text-white/90">Detailed Changes:</div>
+                      <div className="ml-2 space-y-1 max-h-32 overflow-y-auto">
+                        {syncResult.changes.map((change, index) => (
+                          <div key={index} className="bg-white/10 rounded p-2">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                                change.type === 'created' ? 'bg-green-500/30 text-green-200' :
+                                change.type === 'updated' ? 'bg-blue-500/30 text-blue-200' :
+                                'bg-red-500/30 text-red-200'
+                              }`}>
+                                {change.type.toUpperCase()}
+                              </span>
+                              <span className="font-medium">{change.name}</span>
+                              <span className={`px-1 py-0.5 rounded text-xs ${
+                                change.category === 'PAID' ? 'bg-yellow-500/30 text-yellow-200' : 'bg-gray-500/30 text-gray-200'
+                              }`}>
+                                {change.category}
+                              </span>
+                            </div>
+                            {change.changes && Object.keys(change.changes).length > 0 && (
+                              <div className="text-xs text-white/70">
+                                {Object.entries(change.changes).map(([field, changeData]: [string, any]) => (
+                                  <div key={field} className="ml-2">
+                                    <strong>{field}:</strong> "{changeData.old}" → "{changeData.new}"
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </>

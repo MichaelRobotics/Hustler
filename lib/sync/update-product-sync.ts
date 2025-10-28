@@ -260,12 +260,22 @@ export class UpdateProductSync {
   private detectChanges(currentResource: any, whopProduct: ApiWhopProduct): any {
     const changes: any = {};
 
-    // Check name changes
+    // Check name changes - ignore suffix-only changes (duplicate handling)
     if (currentResource.name !== whopProduct.title) {
-      changes.name = {
-        old: currentResource.name,
-        new: whopProduct.title,
-      };
+      // Check if this is just a suffix removal (e.g., "Test (abc123)" → "Test")
+      const baseName = whopProduct.title.trim();
+      const currentName = currentResource.name.trim();
+      
+      // Pattern: "BaseName (suffix)" → "BaseName"
+      const suffixPattern = new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\([^)]+\\)$`);
+      
+      if (!suffixPattern.test(currentName)) {
+        // Only report as change if it's not just a suffix removal
+        changes.name = {
+          old: currentResource.name,
+          new: whopProduct.title,
+        };
+      }
     }
 
     // Check description changes
@@ -278,10 +288,15 @@ export class UpdateProductSync {
       };
     }
 
-    // Check price changes
+    // Check price changes - normalize prices to avoid "100" vs "100.00" false positives
     const currentPrice = currentResource.price || '';
     const newPrice = whopProduct.price > 0 ? whopProduct.price.toString() : '';
-    if (currentPrice !== newPrice) {
+    
+    // Normalize prices by parsing as numbers and comparing
+    const currentPriceNum = parseFloat(currentPrice) || 0;
+    const newPriceNum = parseFloat(newPrice) || 0;
+    
+    if (currentPriceNum !== newPriceNum) {
       changes.price = {
         old: currentPrice,
         new: newPrice,
@@ -310,12 +325,22 @@ export class UpdateProductSync {
   private detectAppChanges(currentResource: any, whopApp: WhopApp): any {
     const changes: any = {};
 
-    // Check name changes
+    // Check name changes - ignore suffix-only changes (duplicate handling)
     if (currentResource.name !== whopApp.name) {
-      changes.name = {
-        old: currentResource.name,
-        new: whopApp.name,
-      };
+      // Check if this is just a suffix removal (e.g., "Test (abc123)" → "Test")
+      const baseName = whopApp.name.trim();
+      const currentName = currentResource.name.trim();
+      
+      // Pattern: "BaseName (suffix)" → "BaseName"
+      const suffixPattern = new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\([^)]+\\)$`);
+      
+      if (!suffixPattern.test(currentName)) {
+        // Only report as change if it's not just a suffix removal
+        changes.name = {
+          old: currentResource.name,
+          new: whopApp.name,
+        };
+      }
     }
 
     // Skip description checking for apps - not needed for update sync
