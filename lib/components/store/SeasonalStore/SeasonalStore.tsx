@@ -803,7 +803,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         imageAttachmentUrl: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Map to imageAttachmentUrl for ProductCard
         buttonText: 'View Details',
         buttonClass: theme?.accent || 'bg-indigo-500', // Use theme's accent color
-        buttonLink: resource.type === "AFFILIATE" ? resource.link : resource.storageUrl,
+        buttonLink: resource.link, // Always use the resource link for navigation
+        whopProductId: resource.whopProductId, // Track Whop product ID for synced products
         // Use theme's styling for everything else
         cardClass: theme?.card || 'bg-white', // Use theme's card styling
         titleClass: theme?.text || 'text-gray-900', // Use theme's text color

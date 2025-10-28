@@ -15,6 +15,7 @@ export interface Product {
   // WHOP attachment support for product images
   imageAttachmentId?: string | null;
   imageAttachmentUrl?: string | null;
+  whopProductId?: string; // ID of the actual Whop product/app (for synced products)
 }
 
 export interface ContainerAsset {

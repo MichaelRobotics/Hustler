@@ -53,6 +53,7 @@ export const useAutoAddResources = ({
           image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
           buttonText: 'VIEW DETAILS',
           buttonLink: resource.link || '',
+          whopProductId: resource.whopProductId, // Track Whop product ID for synced products
           cardClass: legacyTheme.card,
           titleClass: legacyTheme.text,
           descClass: legacyTheme.text,
@@ -111,6 +112,7 @@ export const useAutoAddResources = ({
           image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
           buttonText: 'VIEW DETAILS',
           buttonLink: resource.link || '',
+          whopProductId: resource.whopProductId, // Track Whop product ID for synced products
           cardClass: legacyTheme.card,
           titleClass: legacyTheme.text,
           descClass: legacyTheme.text,
