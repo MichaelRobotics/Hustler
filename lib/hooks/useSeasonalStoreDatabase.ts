@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   Product, 
   FloatingAsset, 
@@ -76,6 +76,50 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Store ResourceLibrary product IDs from loaded templates
   const [templateResourceLibraryProductIds, setTemplateResourceLibraryProductIds] = useState<string[]>([]);
+  
+  // Track if we've loaded from localStorage cache (use ref to avoid re-renders)
+  const hasLoadedFromCacheRef = useRef(false);
+  
+  // Helper functions for localStorage caching
+  const getLastLoadedTemplateKey = useCallback(() => {
+    return `lastLoadedTemplate_${experienceId}`;
+  }, [experienceId]);
+  
+  const saveLastLoadedTemplateToCache = useCallback((template: StoreTemplate) => {
+    try {
+      const key = getLastLoadedTemplateKey();
+      localStorage.setItem(key, JSON.stringify(template));
+      console.log('💾 Saved last loaded template to localStorage:', template.name, template.id);
+    } catch (error) {
+      console.error('Error saving template to localStorage:', error);
+    }
+  }, [getLastLoadedTemplateKey]);
+  
+  const loadLastLoadedTemplateFromCache = useCallback((): StoreTemplate | null => {
+    try {
+      const key = getLastLoadedTemplateKey();
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const template = JSON.parse(cached) as StoreTemplate;
+        console.log('💾 Loaded last loaded template from localStorage:', template.name, template.id);
+        return template;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error loading template from localStorage:', error);
+      return null;
+    }
+  }, [getLastLoadedTemplateKey]);
+  
+  const clearLastLoadedTemplateFromCache = useCallback(() => {
+    try {
+      const key = getLastLoadedTemplateKey();
+      localStorage.removeItem(key);
+      console.log('🗑️ Cleared last loaded template from localStorage');
+    } catch (error) {
+      console.error('Error clearing template from localStorage:', error);
+    }
+  }, [getLastLoadedTemplateKey]);
   
   // Helper function to convert Tailwind color classes to hex values
   const getThemeTextColor = (welcomeColor: string | undefined): string => {
@@ -658,13 +702,158 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
   }, []);
   
+  // Helper function to apply template data to state (used for both cached and DB-loaded templates)
+  const applyTemplateDataToState = useCallback(async (template: StoreTemplate, skipProductFiltering = false) => {
+    setCurrentSeason(template.currentSeason);
+    setThemeTextStyles(template.templateData.themeTextStyles);
+    setThemeLogos(template.templateData.themeLogos);
+    
+    // CRITICAL: Preload background image BEFORE setting state to prevent gaps
+    const backgroundUrl = template.templateData.backgroundAttachmentUrl || 
+                         template.templateData.themeUploadedBackgrounds?.[template.currentSeason] || 
+                         template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] ||
+                         template.templateData.uploadedBackground ||
+                         template.templateData.generatedBackground;
+    
+    if (backgroundUrl) {
+      console.log('🖼️ Preloading template background image:', backgroundUrl);
+      // Preload the image first
+      await preloadBackgroundImage(backgroundUrl);
+      
+      // Then set the state (image is already loaded, no gap!)
+      const isGenerated = !!(template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] || template.templateData.generatedBackground);
+      if (isGenerated) {
+        setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds || {});
+      } else {
+        setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds || {});
+      }
+    } else {
+      // Set backgrounds (might be null/empty, but that's fine)
+      setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds || {});
+      setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds || {});
+    }
+    
+    // Set WHOP attachment fields if available (theme-specific)
+    if (template.templateData.backgroundAttachmentId) {
+      setThemeBackgroundAttachmentIds(prev => ({
+        ...prev,
+        [template.currentSeason]: template.templateData.backgroundAttachmentId || null
+      }));
+    }
+    if (template.templateData.backgroundAttachmentUrl) {
+      setThemeBackgroundAttachmentUrls(prev => ({
+        ...prev,
+        [template.currentSeason]: template.templateData.backgroundAttachmentUrl || null
+      }));
+    }
+    if (template.templateData.logoAttachmentId) {
+      setThemeLogoAttachmentIds(prev => ({
+        ...prev,
+        [template.currentSeason]: template.templateData.logoAttachmentId || null
+      }));
+    }
+    if (template.templateData.logoAttachmentUrl) {
+      setThemeLogoAttachmentUrls(prev => ({
+        ...prev,
+        [template.currentSeason]: template.templateData.logoAttachmentUrl || null
+      }));
+    }
+    
+    // Handle template products
+    if (skipProductFiltering) {
+      // For cached templates, use products directly (they've already been filtered when saved)
+      if (template.templateData.themeProducts && template.templateData.themeProducts[template.currentSeason]) {
+        const templateProducts = template.templateData.themeProducts[template.currentSeason];
+        if (Array.isArray(templateProducts) && templateProducts.length > 0) {
+          if (typeof templateProducts[0] === 'string') {
+            // Legacy format: ResourceLibrary product IDs
+            setThemeProducts({ [template.currentSeason]: [] });
+            setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
+          } else {
+            // New format: Complete frontend product state
+            setThemeProducts({ [template.currentSeason]: templateProducts });
+            setTemplateResourceLibraryProductIds([]);
+          }
+        } else {
+          setThemeProducts({ [template.currentSeason]: [] });
+          setTemplateResourceLibraryProductIds([]);
+        }
+      } else {
+        setThemeProducts(template.templateData.themeProducts || {});
+        setTemplateResourceLibraryProductIds([]);
+      }
+    } else {
+      // For DB-loaded templates, filter against Market Stall
+      if (template.templateData.themeProducts && template.templateData.themeProducts[template.currentSeason]) {
+        const templateProducts = template.templateData.themeProducts[template.currentSeason];
+        if (Array.isArray(templateProducts) && templateProducts.length > 0) {
+          if (typeof templateProducts[0] === 'string') {
+            // Legacy format: ResourceLibrary product IDs
+            setThemeProducts({ [template.currentSeason]: [] });
+            setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
+          } else {
+            // New format: Filter against Market Stall
+            const filteredProducts = await filterTemplateProductsAgainstMarketStall(templateProducts, template.currentSeason);
+            setThemeProducts({ [template.currentSeason]: filteredProducts });
+            setTemplateResourceLibraryProductIds([]);
+          }
+        } else {
+          setThemeProducts({ [template.currentSeason]: [] });
+          setTemplateResourceLibraryProductIds([]);
+        }
+      } else {
+        const allSeasonProducts: Record<string, Product[]> = {};
+        if (template.templateData.themeProducts && typeof template.templateData.themeProducts === 'object') {
+          for (const [season, products] of Object.entries(template.templateData.themeProducts)) {
+            if (Array.isArray(products)) {
+              allSeasonProducts[season] = await filterTemplateProductsAgainstMarketStall(products, season);
+            }
+          }
+        }
+        setThemeProducts(allSeasonProducts);
+        setTemplateResourceLibraryProductIds([]);
+      }
+    }
+    
+    // Load theme-specific floating assets
+    if (template.templateData.themeFloatingAssets) {
+      setThemeFloatingAssets(template.templateData.themeFloatingAssets);
+    } else {
+      setThemeFloatingAssets({ [template.currentSeason]: template.templateData.floatingAssets || [] });
+    }
+    
+    // Set the template's theme for rendering
+    if (template.templateData.currentTheme) {
+      setCurrentTemplateTheme(template.templateData.currentTheme);
+    } else {
+      setCurrentTemplateTheme(convertTemplateThemeToLegacy(template.themeSnapshot));
+    }
+    
+    // Load promo button styling if available
+    if (template.templateData.promoButton) {
+      setPromoButton(template.templateData.promoButton);
+    }
+  }, [preloadBackgroundImage, filterTemplateProductsAgainstMarketStall, convertTemplateThemeToLegacy, setCurrentSeason, setThemeTextStyles, setThemeLogos, setThemeGeneratedBackgrounds, setThemeUploadedBackgrounds, setThemeBackgroundAttachmentIds, setThemeBackgroundAttachmentUrls, setThemeLogoAttachmentIds, setThemeLogoAttachmentUrls, setThemeProducts, setTemplateResourceLibraryProductIds, setThemeFloatingAssets, setCurrentTemplateTheme, setPromoButton]);
+  
   // Application load logic: live template -> first template -> default spooky theme + auto-add Market Stall products
   const loadApplicationData = useCallback(async () => {
     try {
+      // Step 0: Try to load from localStorage cache FIRST for instant display (only once)
+      if (!hasLoadedFromCacheRef.current) {
+        const cachedTemplate = loadLastLoadedTemplateFromCache();
+        if (cachedTemplate) {
+          console.log('💾 Loading cached template immediately:', cachedTemplate.name, cachedTemplate.id);
+          hasLoadedFromCacheRef.current = true; // Mark as loaded to prevent re-loading
+          await applyTemplateDataToState(cachedTemplate, true); // Skip product filtering for cached data
+          setIsStoreContentReady(true);
+          console.log('💾 Cached template loaded - store content ready');
+        }
+      }
+      
       // Track if any template was loaded
       let templateWasLoaded = false;
       
-      // Step 1: Try to load live template
+      // Step 1: Try to load live template from DB
       const live = await getLiveTemplate(experienceId);
       setLiveTemplate(live);
       
@@ -743,6 +932,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           setPromoButton(live.templateData.promoButton);
         }
         
+        // Save to cache for instant load next time
+        saveLastLoadedTemplateToCache(live);
+        
         // Mark content ready AFTER background is preloaded
         setIsStoreContentReady(true);
         console.log('🎨 Live template loaded - store content ready (background preloaded)');
@@ -799,6 +991,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             setPromoButton(firstTemplate.templateData.promoButton);
           }
           
+          // Save to cache for instant load next time
+          saveLastLoadedTemplateToCache(firstTemplate);
+          
           // Mark content ready AFTER background is preloaded
           setIsStoreContentReady(true);
           console.log('🎨 First template loaded - store content ready (background preloaded)');
@@ -838,7 +1033,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setIsInitialLoadComplete(true);
       setIsStoreContentReady(true);
     }
-  }, [experienceId, autoAddMarketStallProductsToAllThemes, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage]);
+  }, [experienceId, autoAddMarketStallProductsToAllThemes, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, loadLastLoadedTemplateFromCache, applyTemplateDataToState, saveLastLoadedTemplateToCache]);
   
   // Load last edited template
   const loadLastEditedTemplate = useCallback(async () => {
@@ -859,12 +1054,17 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   // Initialize data on mount
   useEffect(() => {
     if (experienceId) {
+      // Reset cache ref when experienceId changes
+      hasLoadedFromCacheRef.current = false;
+      
       loadThemes();
       loadTemplates();
       loadApplicationData(); // New unified load function
       loadLastEditedTemplate();
     }
-  }, [experienceId, loadThemes, loadTemplates, loadApplicationData, loadLastEditedTemplate]);
+    // Only depend on experienceId to prevent infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experienceId]);
   
   // Theme management functions
   const createThemeHandler = useCallback(async (themeData: Omit<Theme, "id" | "experienceId" | "createdAt" | "updatedAt">) => {
@@ -1151,13 +1351,16 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       console.log('📂 ===== END TEMPLATE LOAD STRUCTURE =====');
       
+      // Save to cache for instant load next time
+      saveLastLoadedTemplateToCache(template);
+      
       return template;
     } catch (error) {
       console.error('Error loading template:', error);
       setApiError(`Failed to load template: ${(error as Error).message}`);
       throw error;
     }
-  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage]);
+  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, saveLastLoadedTemplateToCache]);
   
   const setLiveTemplateHandler = useCallback(async (templateId: string) => {
     try {
@@ -1530,12 +1733,18 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     try {
       await deleteTemplateAction(experienceId, templateId);
       setTemplates(prev => prev.filter(t => t.id !== templateId));
+      
+      // Clear cache if the deleted template was cached
+      const cachedTemplate = loadLastLoadedTemplateFromCache();
+      if (cachedTemplate && cachedTemplate.id === templateId) {
+        clearLastLoadedTemplateFromCache();
+      }
     } catch (error) {
       console.error('Error deleting template:', error);
       setApiError(`Failed to delete template: ${(error as Error).message}`);
       throw error;
     }
-  }, [experienceId]);
+  }, [experienceId, loadLastLoadedTemplateFromCache, clearLastLoadedTemplateFromCache]);
 
   // Store Navigation State Management
   const saveLastActiveTheme = useCallback((theme: string) => {
