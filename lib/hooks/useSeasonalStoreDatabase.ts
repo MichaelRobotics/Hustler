@@ -280,30 +280,295 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
   }, [experienceId]);
   
-  // Auto-add all Market Stall products to all themes
-  const autoAddMarketStallProductsToAllThemes = useCallback(async () => {
+  // CRITICAL: Filter template products to ONLY include ones that exist in Market Stall
+  // Applies template product design (buttons, colors, images, etc.) to matching Market Stall products
+  const filterTemplateProductsAgainstMarketStall = useCallback(async (
+    templateProducts: Product[],
+    currentSeason: string
+  ): Promise<Product[]> => {
     try {
-      // Get all resources from the Market Stall (Resource Library)
+      // Fetch Market Stall resources to check against
       const response = await fetch(`/api/resources?experienceId=${experienceId}`);
       if (!response.ok) {
-        console.log('🛒 No Market Stall products found or error fetching resources');
+        console.log('🎨 [Template Filter] No Market Stall resources found - skipping template product filtering');
+        return [];
+      }
+      
+      const data = await response.json();
+      const marketStallResources = data.data?.resources || [];
+      
+      // COMPREHENSIVE DEBUG: Show all Market Stall resources
+      console.log(`🎨 [Template Filter] ===== MARKET STALL RESOURCES ANALYSIS =====`);
+      console.log(`🎨 [Template Filter] Total Market Stall resources: ${marketStallResources.length}`);
+      const marketStallDetail = marketStallResources.map((r: Resource) => ({
+        id: r.id,
+        name: r.name,
+        whopProductId: r.whopProductId || '(none)',
+        category: r.category,
+        type: r.type
+      }));
+      console.log(`🎨 [Template Filter] Market Stall resources detail:`, marketStallDetail);
+      console.log(`🎨 [Template Filter] Market Stall resource IDs only:`, marketStallResources.map((r: Resource) => r.id));
+      console.log(`🎨 [Template Filter] Market Stall whopProductIds:`, marketStallResources.map((r: Resource) => r.whopProductId || '(none)'));
+      console.log(`🎨 [Template Filter] Market Stall names and IDs mapping:`, marketStallDetail.map((r: typeof marketStallDetail[0]) => `${r.name} → ID: ${r.id}, WhopID: ${r.whopProductId}`));
+      
+      // COMPREHENSIVE DEBUG: Show all template products
+      console.log(`🎨 [Template Filter] ===== TEMPLATE PRODUCTS ANALYSIS =====`);
+      console.log(`🎨 [Template Filter] Total template products: ${templateProducts.length}`);
+      const templateProductsDetail = templateProducts.map((tp: Product) => ({
+        id: tp.id,
+        name: tp.name,
+        whopProductId: tp.whopProductId || '(none)',
+        idType: typeof tp.id,
+        idStartsWithResource: typeof tp.id === 'string' && tp.id.startsWith('resource-'),
+        extractedResourceId: typeof tp.id === 'string' && tp.id.startsWith('resource-') ? tp.id.replace('resource-', '') : '(not a resource ID)'
+      }));
+      console.log(`🎨 [Template Filter] Template products detail:`, templateProductsDetail);
+      console.log(`🎨 [Template Filter] Template product IDs only:`, templateProducts.map((tp: Product) => tp.id));
+      console.log(`🎨 [Template Filter] Template extracted resource IDs:`, templateProducts.map((tp: Product) => 
+        typeof tp.id === 'string' && tp.id.startsWith('resource-') ? tp.id.replace('resource-', '') : null
+      ).filter(id => id !== null));
+      console.log(`🎨 [Template Filter] Template whopProductIds:`, templateProducts.map((tp: Product) => tp.whopProductId || '(none)'));
+      console.log(`🎨 [Template Filter] Template names and IDs mapping:`, templateProductsDetail.map(tp => `${tp.name} → ID: ${tp.id}, Extracted Resource ID: ${tp.extractedResourceId}, WhopID: ${tp.whopProductId}`));
+      
+      console.log(`🎨 [Template Filter] Checking ${templateProducts.length} template products against ${marketStallResources.length} Market Stall resources`);
+      
+      const filteredProducts: Product[] = [];
+      const skippedProducts: string[] = [];
+      
+      for (const templateProduct of templateProducts) {
+        let matchedResource: Resource | null = null;
+        
+        // DEBUG: Log template product details
+        console.log(`🎨 [Template Filter] Checking template product:`, {
+          id: templateProduct.id,
+          name: templateProduct.name,
+          whopProductId: templateProduct.whopProductId,
+          idType: typeof templateProduct.id,
+          idStartsWithResource: typeof templateProduct.id === 'string' && templateProduct.id.startsWith('resource-')
+        });
+        
+        // Strategy 1: Match by whopProductId (for synced Whop products)
+        if (templateProduct.whopProductId) {
+          matchedResource = marketStallResources.find((resource: Resource) => 
+            resource.whopProductId === templateProduct.whopProductId
+          );
+          
+          if (matchedResource) {
+            console.log(`✅ [Template Filter] Matched "${templateProduct.name}" by whopProductId: ${templateProduct.whopProductId}`);
+          } else {
+            console.log(`⚠️ [Template Filter] No match by whopProductId "${templateProduct.whopProductId}" for "${templateProduct.name}"`);
+          }
+        }
+        
+        // Strategy 2: Match by resource ID (if product.id starts with "resource-")
+        if (!matchedResource && typeof templateProduct.id === 'string' && templateProduct.id.startsWith('resource-')) {
+          const resourceId = templateProduct.id.replace('resource-', '');
+          console.log(`🎨 [Template Filter] Trying to match by resource ID: "${resourceId}"`);
+          
+          // DEBUG: Log available resource IDs
+          console.log(`🎨 [Template Filter] Available Market Stall resource IDs:`, marketStallResources.map((r: Resource) => r.id));
+          
+          matchedResource = marketStallResources.find((resource: Resource) => 
+            resource.id === resourceId
+          );
+          
+          if (matchedResource) {
+            console.log(`✅ [Template Filter] Matched "${templateProduct.name}" by resource ID: ${resourceId}`);
+          } else {
+            console.log(`⚠️ [Template Filter] No match by resource ID "${resourceId}" for "${templateProduct.name}"`);
+          }
+        }
+        
+        // Strategy 3: Match by exact name (fallback when resource ID changed but product still exists in Market Stall)
+        // Only match if:
+        // 1. Resource ID and whopProductId matching failed
+        // 2. Exact name match (case-insensitive, trimmed)
+        // 3. This handles cases where products were recreated with new IDs but same name
+        if (!matchedResource && templateProduct.name) {
+          const normalizedTemplateName = templateProduct.name.toLowerCase().trim();
+          
+          // Find exact name match
+          matchedResource = marketStallResources.find((resource: Resource) => {
+            if (!resource.name) return false;
+            const normalizedResourceName = resource.name.toLowerCase().trim();
+            return normalizedResourceName === normalizedTemplateName;
+          });
+          
+          if (matchedResource) {
+            console.log(`✅ [Template Filter] Matched "${templateProduct.name}" by exact name (resource ID changed: ${typeof templateProduct.id === 'string' && templateProduct.id.startsWith('resource-') ? templateProduct.id.replace('resource-', '') : 'N/A'} → ${matchedResource.id})`);
+          } else {
+            console.log(`⚠️ [Template Filter] No exact name match for "${templateProduct.name}"`);
+          }
+        }
+        
+        // Only match products that exist in Market Stall by exact ID, whopProductId, or exact name
+        if (matchedResource) {
+          // Product exists in Market Stall - keep it with template design applied
+          const mergedProduct: Product = {
+            // Use Market Stall resource data as base
+            id: `resource-${matchedResource.id}`,
+            name: matchedResource.name, // Keep Market Stall name
+            description: matchedResource.description || '', // Keep Market Stall description
+            price: parseFloat(matchedResource.price || '0'), // Keep Market Stall price
+            buttonLink: matchedResource.link || '', // Keep Market Stall link
+            whopProductId: matchedResource.whopProductId, // Keep Market Stall whopProductId
+            
+            // Apply template product design/styling
+            cardClass: templateProduct.cardClass, // Template design
+            buttonClass: templateProduct.buttonClass, // Template button styling
+            buttonText: templateProduct.buttonText || 'VIEW DETAILS', // Template button text
+            buttonAnimColor: templateProduct.buttonAnimColor, // Template button animation
+            titleClass: templateProduct.titleClass, // Template title styling
+            descClass: templateProduct.descClass, // Template description styling
+            
+            // Use template image if available, otherwise Market Stall image
+            image: templateProduct.image || templateProduct.imageAttachmentUrl || matchedResource.image || '',
+            imageAttachmentId: templateProduct.imageAttachmentId || null,
+            imageAttachmentUrl: templateProduct.imageAttachmentUrl || templateProduct.image || matchedResource.image || null,
+            
+            // Keep template container asset if available
+            containerAsset: templateProduct.containerAsset,
+          };
+          
+          filteredProducts.push(mergedProduct);
+          console.log(`✅ [Template Filter] Keeping "${templateProduct.name}" with template design applied`);
+        } else {
+          // Product doesn't exist in Market Stall - skip it
+          skippedProducts.push(templateProduct.name || 'Unknown');
+          console.log(`❌ [Template Filter] Skipping "${templateProduct.name}" - not found in Market Stall`);
+        }
+      }
+      
+      // FINAL SUMMARY: Show match results
+      console.log(`🎨 [Template Filter] ===== MATCH RESULTS SUMMARY =====`);
+      console.log(`🎨 [Template Filter] Total matches: ${filteredProducts.length} / ${templateProducts.length}`);
+      console.log(`🎨 [Template Filter] Total skipped: ${skippedProducts.length} / ${templateProducts.length}`);
+      
+      // Show matched products
+      if (filteredProducts.length > 0) {
+        console.log(`🎨 [Template Filter] ✅ MATCHED PRODUCTS:`, filteredProducts.map(p => {
+          const pResourceId = typeof p.id === 'string' && p.id.startsWith('resource-') ? p.id.replace('resource-', '') : null;
+          return {
+            originalName: templateProducts.find(tp => {
+              const tpResourceId = typeof tp.id === 'string' && tp.id.startsWith('resource-') ? tp.id.replace('resource-', '') : null;
+              return tpResourceId === pResourceId || tp.whopProductId === p.whopProductId;
+            })?.name || 'Unknown',
+            marketStallName: p.name,
+            resourceId: pResourceId || '(not a resource ID)',
+            whopProductId: p.whopProductId || '(none)'
+          };
+        }));
+      }
+      
+      // Show skipped products with reason
+      if (skippedProducts.length > 0) {
+        console.log(`🎨 [Template Filter] ❌ SKIPPED PRODUCTS:`, skippedProducts.map(productName => {
+          const templateProduct = templateProducts.find(tp => tp.name === productName);
+          if (!templateProduct) return { name: productName, reason: 'Product not found in template array' };
+          
+          const templateResourceId = typeof templateProduct.id === 'string' && templateProduct.id.startsWith('resource-') 
+            ? templateProduct.id.replace('resource-', '') 
+            : null;
+          
+          const marketStallHasId = templateResourceId ? marketStallResources.some((r: Resource) => r.id === templateResourceId) : false;
+          const marketStallHasWhopId = templateProduct.whopProductId 
+            ? marketStallResources.some((r: Resource) => r.whopProductId === templateProduct.whopProductId) 
+            : false;
+          
+          let reason = 'Not found in Market Stall';
+          if (templateResourceId && !marketStallHasId) {
+            reason = `Resource ID "${templateResourceId}" not found in Market Stall`;
+          } else if (templateProduct.whopProductId && !marketStallHasWhopId) {
+            reason = `WhopProductId "${templateProduct.whopProductId}" not found in Market Stall`;
+          } else if (!templateResourceId && !templateProduct.whopProductId) {
+            reason = 'No resource ID or whopProductId in template product';
+          }
+          
+          return {
+            name: productName,
+            templateId: templateProduct.id,
+            templateResourceId: templateResourceId || '(none)',
+            templateWhopProductId: templateProduct.whopProductId || '(none)',
+            reason: reason
+          };
+        }));
+      }
+      
+      // ID COMPARISON TABLE
+      console.log(`🎨 [Template Filter] ===== ID COMPARISON TABLE =====`);
+      const templateResourceIds = templateProducts
+        .map(tp => typeof tp.id === 'string' && tp.id.startsWith('resource-') ? tp.id.replace('resource-', '') : null)
+        .filter((id): id is string => id !== null);
+      const marketStallIds = marketStallResources.map((r: Resource) => r.id);
+      
+      console.log(`🎨 [Template Filter] Template Resource IDs (${templateResourceIds.length}):`, templateResourceIds);
+      console.log(`🎨 [Template Filter] Market Stall Resource IDs (${marketStallIds.length}):`, marketStallIds);
+      
+      const missingInMarketStall = templateResourceIds.filter((id: string) => !marketStallIds.includes(id));
+      const missingInTemplate = marketStallIds.filter((id: string) => !templateResourceIds.includes(id));
+      
+      if (missingInMarketStall.length > 0) {
+        console.log(`🎨 [Template Filter] ⚠️ Template Resource IDs NOT in Market Stall:`, missingInMarketStall);
+      }
+      if (missingInTemplate.length > 0) {
+        console.log(`🎨 [Template Filter] ℹ️ Market Stall Resource IDs NOT in Template:`, missingInTemplate);
+      }
+      
+      // WhopProductId comparison
+      const templateWhopIds = templateProducts.map(tp => tp.whopProductId).filter((id: string | undefined): id is string => !!id);
+      const marketStallWhopIds = marketStallResources.map((r: Resource) => r.whopProductId).filter((id: string | undefined): id is string => !!id);
+      
+      console.log(`🎨 [Template Filter] Template whopProductIds (${templateWhopIds.length}):`, templateWhopIds);
+      console.log(`🎨 [Template Filter] Market Stall whopProductIds (${marketStallWhopIds.length}):`, marketStallWhopIds);
+      
+      const missingWhopInMarketStall = templateWhopIds.filter((id: string) => !marketStallWhopIds.includes(id));
+      const missingWhopInTemplate = marketStallWhopIds.filter((id: string) => !templateWhopIds.includes(id));
+      
+      if (missingWhopInMarketStall.length > 0) {
+        console.log(`🎨 [Template Filter] ⚠️ Template whopProductIds NOT in Market Stall:`, missingWhopInMarketStall);
+      }
+      if (missingWhopInTemplate.length > 0) {
+        console.log(`🎨 [Template Filter] ℹ️ Market Stall whopProductIds NOT in Template:`, missingWhopInTemplate);
+      }
+      
+      console.log(`🎨 [Template Filter] ===== END ANALYSIS =====`);
+      
+      return filteredProducts;
+    } catch (error) {
+      console.error('🎨 [Template Filter] Error filtering template products:', error);
+      // Return empty array on error - don't load products if we can't verify they exist in Market Stall
+      return [];
+    }
+  }, [experienceId]);
+  
+  // Auto-add ONLY Market Stall (ResourceLibrary) products to all themes
+  // IMPORTANT: This function ONLY uses Market Stall (global ResourceLibrary) products
+  const autoAddMarketStallProductsToAllThemes = useCallback(async () => {
+    try {
+      // Get ONLY Market Stall resources from the global ResourceLibrary API
+      // This fetches from /api/resources which returns Market Stall (global context) products only
+      const response = await fetch(`/api/resources?experienceId=${experienceId}`);
+      if (!response.ok) {
+        console.log('🛒 No Market Stall products found or error fetching Market Stall resources');
         return;
       }
       
       const data = await response.json();
-      const allResources = data.data?.resources || [];
+      // IMPORTANT: These are Market Stall (global ResourceLibrary) products only
+      const marketStallResources = data.data?.resources || [];
       
-      // Filter for PAID products only
-      const paidResources = allResources.filter((resource: Resource) => 
+      // Filter for PAID Market Stall products only
+      const paidMarketStallResources = marketStallResources.filter((resource: Resource) => 
         resource.category === 'PAID'
       );
       
-      if (paidResources.length === 0) {
+      if (paidMarketStallResources.length === 0) {
         console.log('🛒 No PAID products in Market Stall to add');
         return;
       }
       
-      console.log(`🛒 Found ${paidResources.length} PAID products in Market Stall`);
+      console.log(`🛒 Found ${paidMarketStallResources.length} PAID Market Stall products`);
       
       // Get all available seasons/themes (including custom themes)
       const defaultSeasons = Object.keys(initialThemes);
@@ -315,8 +580,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Market Stall placeholder image
       const marketStallPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
       
-      // Convert PAID resources to products with Market Stall placeholders
-      const marketStallProducts = paidResources.map((resource: Resource) => ({
+      // Convert PAID Market Stall resources to products with Market Stall placeholders
+      // IMPORTANT: Only Market Stall products are being added
+      const marketStallProducts = paidMarketStallResources.map((resource: Resource) => ({
         id: `resource-${resource.id}`,
         name: resource.name,
         description: resource.description || '',
@@ -358,35 +624,82 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         return hasChanges ? updated : prev;
       });
       
-      console.log('🛒 Successfully added all PAID Market Stall products to all themes');
+      console.log('🛒 Successfully added all PAID Market Stall (ResourceLibrary) products to all themes');
       
     } catch (error) {
       console.error('🛒 Error auto-adding Market Stall products:', error);
     }
   }, [experienceId]);
   
+  // Helper function to preload background image
+  const preloadBackgroundImage = useCallback(async (url: string): Promise<void> => {
+    if (!url || (!url.startsWith('https://') && !url.startsWith('http://'))) {
+      return;
+    }
+    
+    try {
+      console.log('🖼️ Preloading background image:', url);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      await new Promise<void>((resolve) => {
+        img.onload = () => {
+          console.log('✅ Background image preloaded successfully');
+          resolve();
+        };
+        img.onerror = () => {
+          console.warn('⚠️ Failed to preload background image, but continuing');
+          resolve(); // Continue even if preload fails
+        };
+        img.src = url;
+      });
+    } catch (error) {
+      console.warn('⚠️ Background preload failed, but continuing:', error);
+    }
+  }, []);
+  
   // Application load logic: live template -> first template -> default spooky theme + auto-add Market Stall products
   const loadApplicationData = useCallback(async () => {
     try {
+      // Track if any template was loaded
+      let templateWasLoaded = false;
+      
       // Step 1: Try to load live template
       const live = await getLiveTemplate(experienceId);
       setLiveTemplate(live);
       
       if (live) {
+        templateWasLoaded = true;
         // Load live template data
         setCurrentSeason(live.currentSeason);
         console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
         
         setThemeTextStyles(live.templateData.themeTextStyles);
         setThemeLogos(live.templateData.themeLogos);
-        setThemeGeneratedBackgrounds(live.templateData.themeGeneratedBackgrounds);
-        setThemeUploadedBackgrounds(live.templateData.themeUploadedBackgrounds);
-        setThemeProducts(live.templateData.themeProducts);
         
-        // Load promo button styling if available
-        if (live.templateData.promoButton) {
-          console.log('🎨 Loading promo button styling from live template:', live.templateData.promoButton.text);
-          setPromoButton(live.templateData.promoButton);
+        // CRITICAL: Preload background image BEFORE setting state to prevent gaps
+        const backgroundUrl = live.templateData.backgroundAttachmentUrl || 
+                             live.templateData.themeUploadedBackgrounds?.[live.currentSeason] || 
+                             live.templateData.themeGeneratedBackgrounds?.[live.currentSeason] ||
+                             live.templateData.uploadedBackground ||
+                             live.templateData.generatedBackground;
+        
+        if (backgroundUrl) {
+          console.log('🖼️ Preloading live template background image:', backgroundUrl);
+          // Preload the image first
+          await preloadBackgroundImage(backgroundUrl);
+          
+          // Then set the state (image is already loaded, no gap!)
+          const isGenerated = !!(live.templateData.themeGeneratedBackgrounds?.[live.currentSeason] || live.templateData.generatedBackground);
+          if (isGenerated) {
+            setThemeGeneratedBackgrounds({ [live.currentSeason]: backgroundUrl });
+          } else {
+            setThemeUploadedBackgrounds({ [live.currentSeason]: backgroundUrl });
+          }
+        } else {
+          // Clear backgrounds if no URL
+          setThemeGeneratedBackgrounds({ [live.currentSeason]: null });
+          setThemeUploadedBackgrounds({ [live.currentSeason]: null });
         }
         
         // Set WHOP attachment fields if available (theme-specific)
@@ -415,14 +728,31 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           }));
         }
         
+        // CRITICAL: Filter template products - only keep ones that exist in Market Stall
+        // Apply template design to matching Market Stall products
+        const liveTemplateProducts = live.templateData.themeProducts[live.currentSeason] || [];
+        const filteredProducts = await filterTemplateProductsAgainstMarketStall(liveTemplateProducts, live.currentSeason);
+        
+        setThemeProducts({
+          [live.currentSeason]: filteredProducts
+        });
+        
+        // Load promo button styling if available
+        if (live.templateData.promoButton) {
+          console.log('🎨 Loading promo button styling from live template:', live.templateData.promoButton.text);
+          setPromoButton(live.templateData.promoButton);
+        }
+        
+        // Mark content ready AFTER background is preloaded
         setIsStoreContentReady(true);
-        console.log('🎨 Live template loaded - store content ready');
+        console.log('🎨 Live template loaded - store content ready (background preloaded)');
       } else {
         // Step 2: No live template - try to load first template from list
         const allTemplates = await getTemplates(experienceId);
         setTemplates(allTemplates);
         
         if (allTemplates && allTemplates.length > 0) {
+          templateWasLoaded = true;
           // Load the first template from the list
           const firstTemplate = allTemplates[0];
           console.log('🎨 No live template found - loading first template:', firstTemplate.name);
@@ -430,17 +760,48 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           setCurrentSeason(firstTemplate.currentSeason);
           setThemeTextStyles(firstTemplate.templateData.themeTextStyles);
           setThemeLogos(firstTemplate.templateData.themeLogos);
-          setThemeGeneratedBackgrounds(firstTemplate.templateData.themeGeneratedBackgrounds);
-          setThemeUploadedBackgrounds(firstTemplate.templateData.themeUploadedBackgrounds);
-          setThemeProducts(firstTemplate.templateData.themeProducts);
+          
+          // CRITICAL: Preload background image BEFORE setting state to prevent gaps
+          const backgroundUrl = firstTemplate.templateData.themeUploadedBackgrounds?.[firstTemplate.currentSeason] || 
+                               firstTemplate.templateData.themeGeneratedBackgrounds?.[firstTemplate.currentSeason] ||
+                               firstTemplate.templateData.uploadedBackground ||
+                               firstTemplate.templateData.generatedBackground;
+          
+          if (backgroundUrl) {
+            console.log('🖼️ Preloading first template background image:', backgroundUrl);
+            // Preload the image first
+            await preloadBackgroundImage(backgroundUrl);
+            
+            // Then set the state (image is already loaded, no gap!)
+            const isGenerated = !!(firstTemplate.templateData.themeGeneratedBackgrounds?.[firstTemplate.currentSeason] || firstTemplate.templateData.generatedBackground);
+            if (isGenerated) {
+              setThemeGeneratedBackgrounds({ [firstTemplate.currentSeason]: backgroundUrl });
+            } else {
+              setThemeUploadedBackgrounds({ [firstTemplate.currentSeason]: backgroundUrl });
+            }
+          } else {
+            // Clear backgrounds if no URL
+            setThemeGeneratedBackgrounds({ [firstTemplate.currentSeason]: null });
+            setThemeUploadedBackgrounds({ [firstTemplate.currentSeason]: null });
+          }
+          
+          // CRITICAL: Filter template products - only keep ones that exist in Market Stall
+          // Apply template design to matching Market Stall products
+          const firstTemplateProducts = firstTemplate.templateData.themeProducts[firstTemplate.currentSeason] || [];
+          const filteredProducts = await filterTemplateProductsAgainstMarketStall(firstTemplateProducts, firstTemplate.currentSeason);
+          
+          setThemeProducts({
+            [firstTemplate.currentSeason]: filteredProducts
+          });
           
           // Load promo button styling if available
           if (firstTemplate.templateData.promoButton) {
             setPromoButton(firstTemplate.templateData.promoButton);
           }
           
+          // Mark content ready AFTER background is preloaded
           setIsStoreContentReady(true);
-          console.log('🎨 First template loaded - store content ready');
+          console.log('🎨 First template loaded - store content ready (background preloaded)');
         } else {
           // Step 3: No templates at all - show default "Spooky Night" theme
           console.log('🎨 No templates found - showing default Spooky Night theme');
@@ -454,9 +815,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         }
       }
       
-      // Step 4: Auto-add all Market Stall products to all themes
-      console.log('🛒 Auto-adding all Market Stall products to all themes...');
+      // Step 4: Auto-add Market Stall products ONLY if no template was loaded
+      if (!templateWasLoaded) {
+        console.log('🛒 No templates loaded - auto-adding Market Stall products to all themes...');
       await autoAddMarketStallProductsToAllThemes();
+      } else {
+        console.log('🛒 Template loaded - skipping Market Stall auto-add (template already has products)');
+      }
       
       // Mark initial load as complete
       setIsInitialLoadComplete(true);
@@ -473,7 +838,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setIsInitialLoadComplete(true);
       setIsStoreContentReady(true);
     }
-  }, [experienceId, autoAddMarketStallProductsToAllThemes]);
+  }, [experienceId, autoAddMarketStallProductsToAllThemes, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage]);
   
   // Load last edited template
   const loadLastEditedTemplate = useCallback(async () => {
@@ -633,8 +998,31 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       setThemeTextStyles(template.templateData.themeTextStyles);
       setThemeLogos(template.templateData.themeLogos);
+      
+      // CRITICAL: Preload background image BEFORE setting state to prevent gaps
+      const backgroundUrl = template.templateData.backgroundAttachmentUrl || 
+                           template.templateData.themeUploadedBackgrounds?.[template.currentSeason] || 
+                           template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] ||
+                           template.templateData.uploadedBackground ||
+                           template.templateData.generatedBackground;
+      
+      if (backgroundUrl) {
+        console.log('🖼️ Preloading template background image:', backgroundUrl);
+        // Preload the image first
+        await preloadBackgroundImage(backgroundUrl);
+        
+        // Then set the state (image is already loaded, no gap!)
+        const isGenerated = !!(template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] || template.templateData.generatedBackground);
+        if (isGenerated) {
       setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds);
+        } else {
       setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds);
+        }
+      } else {
+        // Set backgrounds (might be null/empty, but that's fine)
+        setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds);
+        setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds);
+      }
       
       // Handle template products - check format and load accordingly
       if (template.templateData.themeProducts && template.templateData.themeProducts[template.currentSeason]) {
@@ -655,8 +1043,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             // New format: Complete frontend product state
             console.log('📂 Loading template with complete frontend product state:', templateProducts.length, 'products');
             
+            // CRITICAL: Filter template products - only keep ones that exist in Market Stall
+            // Apply template design to matching Market Stall products
+            const filteredProducts = await filterTemplateProductsAgainstMarketStall(templateProducts, template.currentSeason);
+            
             setThemeProducts({
-              [template.currentSeason]: templateProducts
+              [template.currentSeason]: filteredProducts
             });
             
             // Clear template ResourceLibrary product IDs for new format
@@ -670,7 +1062,19 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           setTemplateResourceLibraryProductIds([]);
         }
       } else {
-        setThemeProducts(template.templateData.themeProducts);
+        // Handle case where themeProducts is at root level (all seasons)
+        if (template.templateData.themeProducts && typeof template.templateData.themeProducts === 'object') {
+          // Filter products for each season
+          const filteredThemeProducts: Record<string, Product[]> = {};
+          for (const [season, products] of Object.entries(template.templateData.themeProducts)) {
+            if (Array.isArray(products)) {
+              filteredThemeProducts[season] = await filterTemplateProductsAgainstMarketStall(products, season);
+            }
+          }
+          setThemeProducts(filteredThemeProducts);
+        } else {
+          setThemeProducts(template.templateData.themeProducts || {});
+        }
         setTemplateResourceLibraryProductIds([]);
       }
       
@@ -753,7 +1157,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setApiError(`Failed to load template: ${(error as Error).message}`);
       throw error;
     }
-  }, [experienceId]);
+  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage]);
   
   const setLiveTemplateHandler = useCallback(async (templateId: string) => {
     try {

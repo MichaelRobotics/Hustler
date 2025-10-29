@@ -7,6 +7,8 @@ interface SyncChangesPopupProps {
   onApplyChanges: () => void;
   syncResult: UpdateSyncResult | null;
   isLoading?: boolean;
+  isApplying?: boolean; // New prop for when changes are being applied
+  onSyncSuccess?: () => void; // Callback for successful sync
 }
 
 export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
@@ -15,17 +17,46 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
   onApplyChanges,
   syncResult,
   isLoading = false,
+  isApplying = false,
+  onSyncSuccess,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isDebugExpanded, setIsDebugExpanded] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [hasStartedSync, setHasStartedSync] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
       setIsAnimating(true);
+      setShowSuccess(false);
+      setHasStartedSync(false);
     }
   }, [isOpen]);
+
+  // Track when sync starts
+  useEffect(() => {
+    if (isApplying) {
+      setHasStartedSync(true);
+    }
+  }, [isApplying]);
+
+  // Handle success animation when sync completes
+  useEffect(() => {
+    if (isApplying === false && hasStartedSync && syncResult && !isLoading) {
+      // Sync completed successfully
+      setShowSuccess(true);
+      
+      // Auto-hide after showing success for 2 seconds
+      setTimeout(() => {
+        handleClose();
+        if (onSyncSuccess) {
+          onSyncSuccess();
+        }
+      }, 2000);
+    }
+  }, [isApplying, hasStartedSync, syncResult, isLoading]);
 
   const handleClose = () => {
     setIsAnimating(false);
@@ -77,12 +108,44 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
           }
         }
         
+        @keyframes rotateSync {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        
+        @keyframes checkmarkScale {
+          0% {
+            transform: scale(0);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.2);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        
         .slide-in-bounce {
           animation: slideInBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
         }
         
         .slide-out-bounce {
           animation: slideOutBounce 0.4s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+        }
+        
+        .rotate-sync {
+          animation: rotateSync 1s linear infinite;
+        }
+        
+        .checkmark-scale {
+          animation: checkmarkScale 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
         }
         
         .popup-container {
@@ -99,12 +162,22 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                {showSuccess ? (
+                  <svg className="w-4 h-4 text-white checkmark-scale" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : isApplying ? (
+                  <svg className="w-4 h-4 text-white rotate-sync" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
               </div>
             <h3 className="text-sm font-bold text-white">
-              {isLoading ? "Checking..." : "Products Sync Needed"}
+              {showSuccess ? "Sync Complete!" : isApplying ? "Syncing Products..." : isLoading ? "Checking..." : "Products Sync Needed"}
             </h3>
             </div>
             <button
@@ -117,7 +190,11 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
             </button>
           </div>
 
-        {isLoading ? (
+        {showSuccess ? (
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 text-center">
+            <p className="text-white/90 text-xs font-medium">Products synced successfully!</p>
+          </div>
+        ) : isLoading || isApplying ? (
           <div className="flex items-center justify-center py-3">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
           </div>
@@ -151,13 +228,14 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
             )}
 
             {/* Sync Button */}
-            {hasChanges && (
+            {hasChanges && !showSuccess && (
               <div className="flex justify-center">
                 <button
                   onClick={onApplyChanges}
-                  className="px-6 py-2 bg-white text-green-600 text-xs font-bold rounded-lg hover:bg-white/90 hover:scale-105 transition-all duration-200 shadow-lg"
+                  disabled={isApplying}
+                  className="px-6 py-2 bg-white text-green-600 text-xs font-bold rounded-lg hover:bg-white/90 hover:scale-105 transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Sync
+                  {isApplying ? "Syncing..." : "Sync"}
                 </button>
               </div>
             )}

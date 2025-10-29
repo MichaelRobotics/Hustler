@@ -896,7 +896,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				<div className="h-screen w-full">
 					<SeasonalStore
 						user={user}
-						allResources={allResources}
+						allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
 						setAllResources={setAllResources}
 						isActive={currentView === "store"}
 						onBack={() => {
@@ -920,6 +920,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							applyChanges,
 							closePopup: closeSyncPopup,
 							resetState: resetUpdateSyncState,
+							onSyncComplete: fetchResources, // Reset ResourceLibrary after sync
 						}}
 					/>
 				</div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ProductCard } from './ProductCard';
 import { LegacyTheme, Product } from '../types';
 
@@ -126,7 +126,15 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
     }, 300);
   };
 
-  console.log('Navigation state:', { isProductsReady, showNavigation, productCount: combinedProducts.length });
+  // Debug logging - only log when state actually changes
+  const prevState = useRef({ isProductsReady, showNavigation, productCount: combinedProducts.length });
+  useEffect(() => {
+    const currentState = { isProductsReady, showNavigation, productCount: combinedProducts.length };
+    if (JSON.stringify(prevState.current) !== JSON.stringify(currentState)) {
+      console.log('Navigation state:', currentState);
+      prevState.current = currentState;
+    }
+  }, [isProductsReady, showNavigation, combinedProducts.length]);
 
   return (
     <div className="w-full max-w-5xl my-4">

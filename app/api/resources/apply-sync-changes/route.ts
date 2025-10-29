@@ -24,17 +24,26 @@ async function applySpecificChanges(user: AuthenticatedUser, syncResult: UpdateS
   try {
     // Get Whop API client
     const whopClient = getWhopApiClient(user.experience.whopCompanyId, user.whopUserId);
+    console.log(`[API] 🔍 Using WhopApiClient for company: ${user.experience.whopCompanyId}, user: ${user.whopUserId}`);
+
+    // Fetch all data once to avoid caching issues
+    console.log(`[API] 🔍 Fetching all apps and products once to avoid caching issues...`);
+    const [allApps, allProducts] = await Promise.all([
+      whopClient.getInstalledApps(),
+      whopClient.getCompanyProducts()
+    ]);
+    console.log(`[API] ✅ Fetched ${allApps.length} apps and ${allProducts.length} products`);
 
     // Process each change
     for (const change of syncResult.changes) {
       try {
         if (change.type === 'created') {
           // Create new resource
-          await createResourceFromWhop(user, whopClient, change.whopProductId);
+          await createResourceFromWhop(user, whopClient, change.whopProductId, allApps, allProducts);
           result.created++;
         } else if (change.type === 'updated') {
           // Update existing resource
-          await updateResourceFromWhop(user, whopClient, change.whopProductId);
+          await updateResourceFromWhop(user, whopClient, change.whopProductId, allApps, allProducts);
           result.updated++;
         } else if (change.type === 'deleted') {
           // Delete resource
@@ -58,20 +67,28 @@ async function applySpecificChanges(user: AuthenticatedUser, syncResult: UpdateS
 /**
  * Create a new resource from Whop product or app
  */
-async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, whopProductId: string) {
+async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, whopProductId: string, allApps: any[], allProducts: any[]) {
   let product: any = null;
   
   // Check if it's an app (starts with 'app_') or a product (starts with 'prod_')
   if (whopProductId.startsWith('app_')) {
-    // It's an app - get from installed apps
-    const apps = await whopClient.getInstalledApps();
-    product = apps.find((app: any) => app.id === whopProductId);
+    // It's an app - use pre-fetched apps data
+    console.log(`[API] 🔍 Using pre-fetched ${allApps.length} apps data`);
+    product = allApps.find((app: any) => app.id === whopProductId);
     
     if (!product) {
       throw new Error(`App ${whopProductId} not found in Whop API`);
     }
     
-    // Convert app to product-like structure for consistency
+    console.log(`[API] 🔍 Found app data for ${whopProductId}:`, {
+      id: product.id,
+      name: product.name,
+      experienceId: product.experienceId,
+      companyRoute: product.companyRoute,
+      appSlug: product.appSlug
+    });
+    
+    // Convert app to product-like structure for consistency, but preserve app-specific fields
     product = {
       id: product.id,
       title: product.name,
@@ -82,12 +99,18 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
       isFree: true,
       discoveryPageUrl: null,
       imageUrl: product.logo || product.bannerImage,
-      category: 'other' // Apps don't have categories
+      category: 'other', // Apps don't have categories
+      // PRESERVE app-specific fields needed for URL generation
+      experienceId: product.experienceId,
+      companyRoute: product.companyRoute,
+      appSlug: product.appSlug,
+      logo: product.logo,
+      bannerImage: product.bannerImage
     };
   } else {
-    // It's a product - get from discovery products
-    const products = await whopClient.getCompanyProducts();
-    product = products.find((p: any) => p.id === whopProductId);
+    // It's a product - use pre-fetched products data
+    console.log(`[API] 🔍 Using pre-fetched ${allProducts.length} products data`);
+    product = allProducts.find((p: any) => p.id === whopProductId);
     
     if (!product) {
       throw new Error(`Product ${whopProductId} not found in Whop API`);
@@ -102,7 +125,14 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   
   if (whopProductId.startsWith('app_')) {
     // For apps, generate app URL
+    console.log(`[API] 🔍 About to generate app URL for ${product.title}:`, {
+      experienceId: product.experienceId,
+      companyRoute: product.companyRoute,
+      appSlug: product.appSlug,
+      hasRequiredFields: !!(product.companyRoute || product.experienceId)
+    });
     trackingUrl = whopClient.generateAppUrl(product, undefined, true);
+    console.log(`[API] ✅ Generated app URL: ${trackingUrl}`);
   } else {
     // For products, use discovery page URL or fallback
     if (product.discoveryPageUrl) {
@@ -160,6 +190,18 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   }
 
   // Use the same createResource action as trigger-product-sync
+  console.log(`[API] 🔍 About to create resource with link: ${trackingUrl}`);
+  console.log(`[API] 🔍 Full createResource input:`, {
+    name: resourceName,
+    type: "MY_PRODUCTS",
+    category: productCategory,
+    link: trackingUrl,
+    description: product.description,
+    whopProductId: product.id,
+    productApps: productCategory === "FREE_VALUE" ? [] : undefined,
+    image: productImage,
+    price: formattedPrice
+  });
   const resource = await createResource(user, {
     name: resourceName,
     type: "MY_PRODUCTS",
@@ -171,6 +213,7 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     image: productImage,
     price: formattedPrice
   });
+  console.log(`[API] ✅ Created resource with link: ${resource.link}`);
   
   return resource;
 }
@@ -178,20 +221,28 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
 /**
  * Update an existing resource from Whop product or app
  */
-async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, whopProductId: string) {
+async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, whopProductId: string, allApps: any[], allProducts: any[]) {
   let product: any = null;
   
   // Check if it's an app (starts with 'app_') or a product (starts with 'prod_')
   if (whopProductId.startsWith('app_')) {
-    // It's an app - get from installed apps
-    const apps = await whopClient.getInstalledApps();
-    product = apps.find((app: any) => app.id === whopProductId);
+    // It's an app - use pre-fetched apps data
+    console.log(`[API] 🔍 Using pre-fetched ${allApps.length} apps data for update`);
+    product = allApps.find((app: any) => app.id === whopProductId);
     
     if (!product) {
       throw new Error(`App ${whopProductId} not found in Whop API`);
     }
     
-    // Convert app to product-like structure for consistency
+    console.log(`[API] 🔍 Found app data for ${whopProductId}:`, {
+      id: product.id,
+      name: product.name,
+      experienceId: product.experienceId,
+      companyRoute: product.companyRoute,
+      appSlug: product.appSlug
+    });
+    
+    // Convert app to product-like structure for consistency, but preserve app-specific fields
     product = {
       id: product.id,
       title: product.name,
@@ -202,12 +253,18 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
       isFree: true,
       discoveryPageUrl: null,
       imageUrl: product.logo || product.bannerImage,
-      category: 'other' // Apps don't have categories
+      category: 'other', // Apps don't have categories
+      // PRESERVE app-specific fields needed for URL generation
+      experienceId: product.experienceId,
+      companyRoute: product.companyRoute,
+      appSlug: product.appSlug,
+      logo: product.logo,
+      bannerImage: product.bannerImage
     };
   } else {
-    // It's a product - get from discovery products
-    const products = await whopClient.getCompanyProducts();
-    product = products.find((p: any) => p.id === whopProductId);
+    // It's a product - use pre-fetched products data
+    console.log(`[API] 🔍 Using pre-fetched ${allProducts.length} products data`);
+    product = allProducts.find((p: any) => p.id === whopProductId);
     
     if (!product) {
       throw new Error(`Product ${whopProductId} not found in Whop API`);
@@ -234,7 +291,14 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   
   if (whopProductId.startsWith('app_')) {
     // For apps, generate app URL
+    console.log(`[API] 🔍 About to generate app URL for ${product.title}:`, {
+      experienceId: product.experienceId,
+      companyRoute: product.companyRoute,
+      appSlug: product.appSlug,
+      hasRequiredFields: !!(product.companyRoute || product.experienceId)
+    });
     trackingUrl = whopClient.generateAppUrl(product, undefined, true);
+    console.log(`[API] ✅ Generated app URL: ${trackingUrl}`);
   } else {
     // For products, use discovery page URL or fallback
     if (product.discoveryPageUrl) {

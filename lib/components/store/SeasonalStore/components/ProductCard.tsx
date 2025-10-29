@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, UploadIcon, ZapIcon } from './Icons';
 
@@ -68,16 +68,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const buttonText = product.buttonText || 'VIEW DETAILS';
   const buttonBaseClass = product.buttonClass || theme.accent;
   
-  // Debug logging
-  console.log('🎨 ProductCard render for product:', product.id, {
-    cardClass: product.cardClass,
-    titleClass: product.titleClass,
-    descClass: product.descClass,
-    buttonClass: product.buttonClass,
-    finalCardClass: cardClass,
-    finalTitleClass: titleClass,
-    finalDescClass: descClass
-  });
+  // Debug logging - only log when product actually changes
+  const prevProduct = useRef(product);
+  useEffect(() => {
+    if (JSON.stringify(prevProduct.current) !== JSON.stringify(product)) {
+      console.log('🎨 ProductCard render for product:', product.id, {
+        cardClass: product.cardClass,
+        titleClass: product.titleClass,
+        descClass: product.descClass,
+        buttonClass: product.buttonClass,
+        finalCardClass: cardClass,
+        finalTitleClass: titleClass,
+        finalDescClass: descClass
+      });
+      prevProduct.current = product;
+    }
+  }, [product, cardClass, titleClass, descClass]);
   // Avoid inline color styles per instructions; rely on classes only
 
   return (

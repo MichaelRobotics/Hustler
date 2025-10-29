@@ -57,7 +57,6 @@ import { useProductImageUpload } from './hooks/useProductImageUpload';
 import { useTemplateSave } from './hooks/useTemplateSave';
 import { usePreviewLiveTemplate } from './hooks/usePreviewLiveTemplate';
 import { useAutoAddResources } from './hooks/useAutoAddResources';
-import { useUpdateSync } from '../../../hooks/useUpdateSync';
 import { SyncChangesPopup } from './components/SyncChangesPopup';
 import { convertThemeToLegacy, formatPrice, generateAssetId } from './utils';
 import SeasonalStoreChat from './components/SeasonalStoreChat';
@@ -77,6 +76,7 @@ interface UpdateSyncProps {
   applyChanges: () => Promise<any>;
   closePopup: () => void;
   resetState?: () => void; // Optional reset function
+  onSyncComplete?: () => void; // Callback to refresh resources after sync
 }
 
 interface SeasonalStoreProps {
@@ -134,7 +134,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const [hasLoadedResourceLibrary, setHasLoadedResourceLibrary] = useState(false);
   const [deletedResourceLibraryProducts, setDeletedResourceLibraryProducts] = useState<Record<string, Set<string>>>({});
   
-  // Update sync functionality - use props from AdminPanel if available, otherwise use local hook
+  // Update sync functionality - ONLY use props from AdminPanel (no local hook)
   const {
     isChecking: isCheckingUpdates,
     syncResult,
@@ -145,10 +145,41 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     applyChanges,
     closePopup: closeSyncPopup,
     resetState: resetUpdateSyncState,
-  } = updateSyncProps || useUpdateSync({ user });
+  } = updateSyncProps || {
+    isChecking: false,
+    syncResult: null,
+    showPopup: false,
+    error: null,
+    hasCheckedOnce: false,
+    checkForUpdates: async () => null,
+    applyChanges: async () => {},
+    closePopup: () => {},
+    resetState: () => {},
+  };
   
-  // Track last user ID to reset state when user changes (only if using local hook)
-  const lastCheckedUserId = useRef<string | null>(null);
+  // State for sync applying
+  const [isApplyingSync, setIsApplyingSync] = useState(false);
+  
+  
+  // Sync handlers
+  const handleApplyChanges = async () => {
+    setIsApplyingSync(true);
+    try {
+      await applyChanges();
+    } catch (error) {
+      console.error('Error applying sync changes:', error);
+    } finally {
+      setIsApplyingSync(false);
+    }
+  };
+
+  const handleSyncSuccess = () => {
+    // Reset ResourceLibrary context by refreshing resources
+    if (updateSyncProps?.onSyncComplete) {
+      updateSyncProps.onSyncComplete();
+    }
+    console.log('🔄 ResourceLibrary context reset after successful sync');
+  };
   
   // Load products from theme when theme changes (initial load from DB) - moved after database hook
   
@@ -291,38 +322,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     }
   }, [loadingState.isImageLoading, loadingState.isGeneratingImage, loadingState.isUploadingImage, backgroundAttachmentUrl, generatedBackground]);
   
-  // Check for product updates when component mounts and user has products synced
-  // Only run this effect if we're using the local hook (not props from AdminPanel)
-  useEffect(() => {
-    if (updateSyncProps) {
-      // If updateSyncProps are provided, don't run local update sync logic
-      return;
-    }
-    
-    // Reset update sync state if user changed
-    if (user?.id !== lastCheckedUserId.current) {
-      resetUpdateSyncState?.();
-      lastCheckedUserId.current = user?.id || null;
-    }
-    
-    if (
-      user?.productsSynced && 
-      user?.accessLevel === 'admin' && // Ensure user is admin
-      experienceId && 
-      experienceId !== 'default-experience' && // Ensure we have a real experience ID
-      isStoreContentReady && 
-      !hasCheckedOnce // Use React state instead of ref
-    ) {
-      console.log('[SeasonalStore] Admin user has products synced, checking for updates...', {
-        userId: user.id,
-        experienceId,
-        productsSynced: user.productsSynced,
-        accessLevel: user.accessLevel,
-        hasCheckedOnce
-      });
-      checkForUpdates();
-    }
-  }, [user?.id, user?.productsSynced, user?.accessLevel, experienceId, isStoreContentReady, hasCheckedOnce, checkForUpdates, resetUpdateSyncState, updateSyncProps]);
+  // Update sync is now handled entirely by AdminPanel - no local logic needed
   
   // Use only products that are in the current theme
   const combinedProducts = useMemo(() => {
@@ -532,6 +532,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const setPromoButton = setDbPromoButton;
 
   // Use preview live template hook
+  // CRITICAL: Pass Market Stall resources to filter template products
   const { isTemplateLoaded } = usePreviewLiveTemplate({
     previewLiveTemplate,
     onTemplateLoaded,
@@ -540,6 +541,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setFixedTextStyles,
     setThemeProducts,
     setPromoButton,
+    allResources, // Market Stall resources for filtering
+    experienceId, // For fetching Market Stall if allResources not available
   });
 
 
@@ -901,8 +904,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   }, [themeProducts, currentSeason]);
 
   // Use auto-add resources hook
+  // IMPORTANT: allResources prop MUST contain ONLY Market Stall (global ResourceLibrary) products
+  // This ensures auto-add ONLY uses Market Stall products, not funnel-specific products
   const { hasAutoAddedResources, isAutoAddComplete } = useAutoAddResources({
-    allResources,
+    allResources, // Market Stall (global ResourceLibrary) products only
     hasLoadedResourceLibrary,
     currentSeason,
     themeProducts,
@@ -912,6 +917,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     handleProductImageUpload,
     templateResourceLibraryProductIds, // Pass template ResourceLibrary product IDs
     setIsStoreContentReady, // Pass callback to notify when store content is ready
+    isTemplateLoaded, // Pass internal template loaded state
   });
 
   // Store Loading Logic: Wait for content to be ready before showing store
@@ -1349,7 +1355,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Loading overlay props
     previewLiveTemplate,
     isTemplateLoaded,
-    onConditionalReturnsReady: (isReady: boolean) => {
+    onConditionalReturnsReady: useCallback((isReady: boolean) => {
       // Update loading state based on ConditionalReturns readiness
       setIsConditionalReturnsReady(isReady);
       if (isReady) {
@@ -1357,7 +1363,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       } else {
         console.log('🔄 [SeasonalStore] ConditionalReturns not ready, keep loading screen');
       }
-    },
+    }, []),
   });
 
   // If conditional return exists, return it
@@ -1913,9 +1919,11 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         <SyncChangesPopup
           isOpen={showSyncPopup}
           onClose={closeSyncPopup}
-          onApplyChanges={applyChanges}
+          onApplyChanges={handleApplyChanges}
           syncResult={syncResult}
           isLoading={isCheckingUpdates}
+          isApplying={isApplyingSync}
+          onSyncSuccess={handleSyncSuccess}
         />
       )}
     </>
