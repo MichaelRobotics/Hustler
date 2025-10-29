@@ -312,22 +312,8 @@ export async function triggerProductSyncForNewAdmin(
 		
 		console.log(`� Discovery products breakdown: ${paidProducts.length} PAID, ${freeProducts.length} FREE`);
 		
-		// Limit to 6 PAID discovery products and 6 FREE discovery products
-		const maxPaidProducts = 6;
-		const maxFreeDiscoveryProducts = 6;
-		
-		const limitedPaidProducts = paidProducts.slice(0, maxPaidProducts);
-		const limitedFreeDiscoveryProducts = freeProducts.slice(0, maxFreeDiscoveryProducts);
-		
-		if (paidProducts.length > maxPaidProducts) {
-			console.log(`⚠️ Limiting PAID discovery products to ${maxPaidProducts} (found ${paidProducts.length}, using first ${maxPaidProducts})`);
-		}
-		if (freeProducts.length > maxFreeDiscoveryProducts) {
-			console.log(`⚠️ Limiting FREE discovery products to ${maxFreeDiscoveryProducts} (found ${freeProducts.length}, using first ${maxFreeDiscoveryProducts})`);
-		}
-		
-		// Combine limited products
-		const limitedDiscoveryProducts = [...limitedPaidProducts, ...limitedFreeDiscoveryProducts];
+		// Process all discovery products (no limits)
+		const limitedDiscoveryProducts = [...paidProducts, ...freeProducts];
 		
 		if (limitedDiscoveryProducts.length > 0) {
 			console.log(`� Processing ${limitedDiscoveryProducts.length} discovery products...`);
@@ -507,53 +493,26 @@ export async function triggerProductSyncForNewAdmin(
 				console.log(`  - Community/Social: ${classifiedApps.community.length} apps`);
 			console.log(`  - Other: ${classifiedApps.other.length} apps`);
 			
-			// Calculate remaining FREE slots after FREE discovery products
-			const freeDiscoveryCount = limitedFreeDiscoveryProducts.length;
-			const maxTotalFree = 6; // Total FREE resources (discovery + apps)
-			const remainingFreeSlots = Math.max(0, maxTotalFree - freeDiscoveryCount);
+			// Process all FREE apps (no limits)
+			const freeDiscoveryCount = freeProducts.length;
 			
-			console.log(`� FREE resource allocation: ${freeDiscoveryCount} FREE discovery products, ${remainingFreeSlots} remaining slots for FREE apps`);
+			console.log(`� FREE resource allocation: ${freeDiscoveryCount} FREE discovery products, ${availableApps.length} remaining slots for FREE apps`);
 			
-			// Apply selection hierarchy for remaining FREE apps
-			const maxFreeApps = remainingFreeSlots;
+			// Select all apps from all categories (no per-category limits)
 			const selectedApps: typeof availableApps = [];
 		
-		// Select apps up to remaining FREE slots, prioritizing by category
-		let remainingSlots = maxFreeApps;
+		// Select all apps from all categories (no limits)
 		
-		// 1. Learning/Educational - up to 2 apps if slots available
-		if (remainingSlots > 0 && classifiedApps.learn.length > 0) {
-			const learnApps = classifiedApps.learn.slice(0, Math.min(2, remainingSlots));
-			selectedApps.push(...learnApps);
-			remainingSlots -= learnApps.length;
-			console.log(`✅ Selected ${learnApps.length} Learning apps: ${learnApps.map(app => app.name).join(', ')}`);
-		}
+		// Select all apps from all categories
+		selectedApps.push(...classifiedApps.learn);
 		
-		// 2. Earning/Monetization - up to 2 apps if slots available
-		if (remainingSlots > 0 && classifiedApps.earn.length > 0) {
-			const earnApps = classifiedApps.earn.slice(0, Math.min(2, remainingSlots));
-			selectedApps.push(...earnApps);
-			remainingSlots -= earnApps.length;
-			console.log(`✅ Selected ${earnApps.length} Earning apps: ${earnApps.map(app => app.name).join(', ')}`);
-		}
+		selectedApps.push(...classifiedApps.earn);
 		
-		// 3. Community/Social - up to 2 apps if slots available
-		if (remainingSlots > 0 && classifiedApps.community.length > 0) {
-			const communityApps = classifiedApps.community.slice(0, Math.min(2, remainingSlots));
-			selectedApps.push(...communityApps);
-			remainingSlots -= communityApps.length;
-			console.log(`✅ Selected ${communityApps.length} Community apps: ${communityApps.map(app => app.name).join(', ')}`);
-		}
+		selectedApps.push(...classifiedApps.community);
 		
-		// 4. Other - fill remaining slots to reach the 6 FREE limit
-		if (remainingSlots > 0 && classifiedApps.other.length > 0) {
-			const otherApps = classifiedApps.other.slice(0, remainingSlots);
-			selectedApps.push(...otherApps);
-			remainingSlots -= otherApps.length;
-			console.log(`✅ Selected ${otherApps.length} Other apps to fill remaining slots: ${otherApps.map(app => app.name).join(', ')}`);
-		}
+		selectedApps.push(...classifiedApps.other);
 		
-		console.log(`� Processing ${selectedApps.length} FREE apps (max ${maxFreeApps}) with category-based selection`);
+		console.log(`� Processing ${selectedApps.length} FREE apps (no limits) with category-based selection`);
 			
 			if (selectedApps.length > 0) {
 				// Create FREE resources for each selected app (with batching for performance)

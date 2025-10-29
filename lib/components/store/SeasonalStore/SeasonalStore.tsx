@@ -1089,14 +1089,45 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         opacity: 1
       };
     }
-    // Return empty object to let CSS classes handle the background
-    // The className already includes legacyTheme.background for gradient backgrounds
+    // If no background image, use theme-specific placeholder
+    let placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    let placeholderFilter: string | undefined;
+    
+    // Use theme-specific placeholder if available
+    if (currentSeason === 'Cyber Sale') {
+      placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
+      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+    } else if (currentSeason === 'Spring Renewal') {
+      placeholderUrl = 'https://img-v2-prod.whop.com/rSJXS5NKttt8u2117kcOOwxIS6i46EjvNolcNoHEr0U/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/27a182d3-b2fb-4b67-9675-3361e7dd6820.png';
+      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+    } else if (currentSeason === 'Holiday Cheer') {
+      placeholderUrl = 'https://img-v2-prod.whop.com/NZ7GNGGID4Xa4x8v6MggFBmA1OvefQKzR51uNiE4ZF8/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/ac7a903a-f73f-4c15-a3b8-62dcf5337742.png';
+      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+    } else if (currentSeason === 'Fall' || currentSeason === 'Spooky Night') {
+      placeholderUrl = 'https://img-v2-prod.whop.com/aqN_MUYyIWK1YPCflECQlExGsDTd_rftFEEh4zp59vI/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/3a3e7c27-e3aa-43fb-8bbd-d18ef28f7e33.png';
+      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+    } else if (currentSeason === 'Summer') {
+      placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
+      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+    } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
+      placeholderUrl = 'https://img-v2-prod.whop.com/PLpSH3dql4KTduPQzghcuyqwRjmL6XNaHz636Hb5KsQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9045cee2-26be-4194-9b50-82b7f0e3b827.png';
+      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+    }
+    
+    console.log('🎨 No background image, using placeholder for theme:', currentSeason);
     return {
+      backgroundImage: `url(${placeholderUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed',
       minHeight: '100vh',
       width: '100%',
-      transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out'
+      transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
+      opacity: 1,
+      filter: placeholderFilter
     };
-  }, [backgroundAttachmentUrl]);
+  }, [backgroundAttachmentUrl, currentSeason]);
 
   // Product editor slide-over state
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | string | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });
@@ -1691,23 +1722,40 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         redirectToPublicShop={async () => {
           // Preload the background image BEFORE showing loading screen
           const preloadBackground = async () => {
+            // Use background image if available, otherwise use theme-specific placeholder
             const backgroundUrl = backgroundAttachmentUrl || generatedBackground;
-            if (backgroundUrl) {
-              console.log('🖼️ [View Shop] Preloading background image:', backgroundUrl);
-              return new Promise<void>((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                  console.log('🖼️ [View Shop] Background image preloaded successfully');
-                  resolve();
-                };
-                img.onerror = () => {
-                  console.log('🖼️ [View Shop] Background image preload failed, continuing anyway');
-                  resolve();
-                };
-                img.src = backgroundUrl;
-              });
+            let placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+            
+            // Use theme-specific placeholder if available
+            if (currentSeason === 'Cyber Sale') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
+            } else if (currentSeason === 'Spring Renewal') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/rSJXS5NKttt8u2117kcOOwxIS6i46EjvNolcNoHEr0U/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/27a182d3-b2fb-4b67-9675-3361e7dd6820.png';
+            } else if (currentSeason === 'Holiday Cheer') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/NZ7GNGGID4Xa4x8v6MggFBmA1OvefQKzR51uNiE4ZF8/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/ac7a903a-f73f-4c15-a3b8-62dcf5337742.png';
+            } else if (currentSeason === 'Fall' || currentSeason === 'Spooky Night') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/aqN_MUYyIWK1YPCflECQlExGsDTd_rftFEEh4zp59vI/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/3a3e7c27-e3aa-43fb-8bbd-d18ef28f7e33.png';
+            } else if (currentSeason === 'Summer') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
+            } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/PLpSH3dql4KTduPQzghcuyqwRjmL6XNaHz636Hb5KsQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9045cee2-26be-4194-9b50-82b7f0e3b827.png';
             }
-            return Promise.resolve();
+            
+            const imageToPreload = backgroundUrl || placeholderUrl;
+            
+            console.log('🖼️ [View Shop] Preloading background image:', imageToPreload);
+            return new Promise<void>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                console.log('🖼️ [View Shop] Background image preloaded successfully');
+                resolve();
+              };
+              img.onerror = () => {
+                console.log('🖼️ [View Shop] Background image preload failed, continuing anyway');
+                resolve();
+              };
+              img.src = imageToPreload;
+            });
           };
           
           try {
@@ -1745,23 +1793,40 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           
           // Preload the background image before redirecting
           const preloadBackground = async () => {
+            // Use background image if available, otherwise use theme-specific placeholder
             const backgroundUrl = backgroundAttachmentUrl || generatedBackground;
-            if (backgroundUrl) {
-              console.log('🖼️ Preloading background image:', backgroundUrl);
-              return new Promise<void>((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                  console.log('🖼️ Background image preloaded successfully');
-                  resolve();
-                };
-                img.onerror = () => {
-                  console.log('🖼️ Background image preload failed, continuing anyway');
-                  resolve();
-                };
-                img.src = backgroundUrl;
-              });
+            let placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+            
+            // Use theme-specific placeholder if available
+            if (currentSeason === 'Cyber Sale') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
+            } else if (currentSeason === 'Spring Renewal') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/rSJXS5NKttt8u2117kcOOwxIS6i46EjvNolcNoHEr0U/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/27a182d3-b2fb-4b67-9675-3361e7dd6820.png';
+            } else if (currentSeason === 'Holiday Cheer') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/NZ7GNGGID4Xa4x8v6MggFBmA1OvefQKzR51uNiE4ZF8/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/ac7a903a-f73f-4c15-a3b8-62dcf5337742.png';
+            } else if (currentSeason === 'Fall' || currentSeason === 'Spooky Night') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/aqN_MUYyIWK1YPCflECQlExGsDTd_rftFEEh4zp59vI/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/3a3e7c27-e3aa-43fb-8bbd-d18ef28f7e33.png';
+            } else if (currentSeason === 'Summer') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
+            } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
+              placeholderUrl = 'https://img-v2-prod.whop.com/PLpSH3dql4KTduPQzghcuyqwRjmL6XNaHz636Hb5KsQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9045cee2-26be-4194-9b50-82b7f0e3b827.png';
             }
-            return Promise.resolve();
+            
+            const imageToPreload = backgroundUrl || placeholderUrl;
+            
+            console.log('🖼️ Preloading background image:', imageToPreload);
+            return new Promise<void>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                console.log('🖼️ Background image preloaded successfully');
+                resolve();
+              };
+              img.onerror = () => {
+                console.log('🖼️ Background image preload failed, continuing anyway');
+                resolve();
+              };
+              img.src = imageToPreload;
+            });
           };
           
           try {

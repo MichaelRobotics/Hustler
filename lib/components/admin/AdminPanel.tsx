@@ -507,6 +507,97 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		setIsLibraryModalOpen(isModalOpen);
 	}, []);
 
+	// SeasonalStore and StorePreview - Always mounted to preserve React state across view switches
+	// Hidden when not in store/storePreview view to maintain state persistence
+	const isStoreView = currentView === "store" || currentView === "storePreview";
+	const isStoreActive = currentView === "store";
+	const isStorePreviewActive = currentView === "storePreview";
+
+	// Store views - Always mounted but conditionally visible to preserve React state
+	const renderStoreViews = (
+		<>
+			{/* SeasonalStore - Always mounted, hidden when not in store view to preserve React state */}
+			<div className={`fixed inset-0 z-50 ${isStoreActive ? '' : 'opacity-0 pointer-events-none'}`} style={isStoreActive ? {} : { transition: 'opacity 0s' }}>
+				<div className={`min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans ${isStoreActive ? 'transition-all duration-300' : ''}`}>
+					<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+					<div className="h-screen w-full">
+						<SeasonalStore
+							user={user}
+							allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
+							setAllResources={setAllResources}
+							isActive={isStoreActive}
+							onBack={() => {
+								console.log("🏪 [STORE] Back to AdminPanel");
+								setCurrentView("dashboard");
+							}}
+							onNavigateToStorePreview={(backgroundStyle) => {
+								console.log("🏪 [STORE] Navigate to StorePreview with background:", backgroundStyle);
+								setCurrentView("storePreview");
+								// Store the background style to pass to StorePreview
+								setStorePreviewBackground(backgroundStyle);
+							}}
+							// Update sync props - managed at AdminPanel level
+							updateSyncProps={{
+								isChecking: isCheckingUpdates,
+								syncResult,
+								showPopup: showSyncPopup,
+								error: syncError,
+								hasCheckedOnce,
+								checkForUpdates,
+								applyChanges,
+								closePopup: closeSyncPopup,
+								resetState: resetUpdateSyncState,
+								onSyncComplete: fetchResources, // Reset ResourceLibrary after sync
+							}}
+						/>
+					</div>
+				</div>
+			</div>
+
+			{/* StorePreview - Always mounted, hidden when not in storePreview view to preserve React state */}
+			<div className={`fixed inset-0 z-50 ${isStorePreviewActive ? '' : 'opacity-0 pointer-events-none'}`} style={isStorePreviewActive ? {} : { transition: 'opacity 0s' }}>
+				<div className={`min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans ${isStorePreviewActive ? 'transition-all duration-300' : ''}`}>
+					<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+					<div className="h-screen w-full">
+						<StorePreview
+							user={user}
+							allResources={allResources}
+							setAllResources={setAllResources}
+							onMessageSent={(message, conversationId) => {
+								console.log("Store preview message:", {
+									message,
+									conversationId,
+									experienceId: user?.experienceId,
+									timestamp: new Date().toISOString(),
+								});
+							}}
+							onBack={() => {
+								console.log("🏪 [STORE PREVIEW] Back to SeasonalStore");
+								setCurrentView("store");
+							}}
+							onLiveFunnelLoaded={(funnel) => {
+								console.log("🏪 [STORE PREVIEW] Live funnel loaded:", funnel);
+								setSelectedFunnel(funnel);
+							}}
+							onEditMerchant={() => {
+								console.log("🏪 [STORE PREVIEW] onEditMerchant called");
+								console.log("🏪 [STORE PREVIEW] selectedFunnel:", selectedFunnel);
+								console.log("🏪 [STORE PREVIEW] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
+								if (selectedFunnel && hasValidFlow(selectedFunnel)) {
+									console.log("🏪 [STORE PREVIEW] Navigating to funnel builder for editing:", selectedFunnel.id);
+									setCurrentView("funnelBuilder");
+								} else {
+									console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
+								}
+							}}
+							backgroundStyle={storePreviewBackground}
+						/>
+					</div>
+				</div>
+			</div>
+		</>
+	);
+
 	// Render different views based on current state
 	if (currentView === "analytics" && selectedFunnel) {
 		// Debug logging
@@ -526,6 +617,9 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 
 		return (
 			<>
+				{/* Store views - Always mounted to preserve React state */}
+				{renderStoreViews}
+				
 				<FunnelAnalyticsPage
 					funnel={selectedFunnel}
 					allUsers={generateMockData(150).map((user) => ({
@@ -577,7 +671,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		console.log("🔍 [ADMIN PANEL] Rendering resourceLibrary view");
 		if (libraryContext === "global") {
 			return (
-				<div className="flex h-screen">
+				<>
+					{/* Store views - Always mounted to preserve React state */}
+					{renderStoreViews}
+					
+					<div className="flex h-screen">
 					{!isLibraryModalOpen && (
 						<AdminSidebar
 							currentView={currentView}
@@ -611,10 +709,14 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						/>
 					</div>
 				</div>
+				</>
 			);
 		} else {
 			return (
 				<>
+					{/* Store views - Always mounted to preserve React state */}
+					{renderStoreViews}
+					
 					<ResourceLibrary
 						funnel={selectedFunnelForLibrary || undefined}
 						allResources={allResources}
@@ -726,7 +828,11 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		);
 
 		return (
-			<AIFunnelBuilderPage
+			<>
+				{/* Store views - Always mounted to preserve React state */}
+				{renderStoreViews}
+				
+				<AIFunnelBuilderPage
 				funnel={selectedFunnel}
 				onBack={handleBackToDashboard}
 				onUpdate={async (updatedFunnel) => {
@@ -800,12 +906,17 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				hasAnyLiveFunnel={hasAnyLiveFunnel}
 				isSingleMerchant={funnels.length === 1}
 			/>
+			</>
 		);
 	}
 
 	if (currentView === "funnelBuilder" && !selectedFunnel) {
 		return (
-			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+			<>
+				{/* Store views - Always mounted to preserve React state */}
+				{renderStoreViews}
+				
+				<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 				<div className="flex h-screen">
@@ -843,6 +954,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 					</div>
 				</div>
 			</div>
+			</>
 		);
 	}
 
@@ -861,18 +973,27 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		};
 
 		return (
-			<PreviewPage
+			<>
+				{/* Store views - Always mounted to preserve React state */}
+				{renderStoreViews}
+				
+				<PreviewPage
 				funnel={selectedFunnel}
 				experienceId={user?.experienceId}
 				onBack={handleBackFromPreview}
 				sourcePage={previewSource}
 			/>
+			</>
 		);
 	}
 
 	if (currentView === "liveChat") {
 		return (
-			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+			<>
+				{/* Store views - Always mounted to preserve React state */}
+				{renderStoreViews}
+				
+				<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
 				<div className="h-screen w-full">
@@ -885,165 +1006,90 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 					/>
 				</div>
 			</div>
+			</>
 		);
 	}
 
-	// Store view and StorePreview - Keep both SeasonalStore instances mounted to preserve state
-	// Hide/show them based on currentView to maintain state persistence
-	if (currentView === "store" || currentView === "storePreview") {
-		return (
-			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+	// Main dashboard view (fallback for all non-specialized views)
+	return (
+		<>
+			{/* Store views - Always mounted to preserve React state */}
+			{renderStoreViews}
+
+			{/* Main dashboard/content view - Always rendered, hidden when in store views */}
+			<div className={`min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300 ${isStoreView ? 'hidden' : ''}`}>
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
-				{/* SeasonalStore - Main store view (always mounted, hidden when in storePreview) */}
-				<div className={`h-screen w-full ${currentView === "store" ? '' : 'hidden'}`}>
-					<SeasonalStore
-						user={user}
-						allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
-						setAllResources={setAllResources}
-						isActive={currentView === "store"}
-						onBack={() => {
-							console.log("🏪 [STORE] Back to AdminPanel");
-							setCurrentView("dashboard");
-						}}
-						onNavigateToStorePreview={(backgroundStyle) => {
-							console.log("🏪 [STORE] Navigate to StorePreview with background:", backgroundStyle);
-							setCurrentView("storePreview");
-							// Store the background style to pass to StorePreview
-							setStorePreviewBackground(backgroundStyle);
-						}}
-						// Update sync props - managed at AdminPanel level
-						updateSyncProps={{
-							isChecking: isCheckingUpdates,
-							syncResult,
-							showPopup: showSyncPopup,
-							error: syncError,
-							hasCheckedOnce,
-							checkForUpdates,
-							applyChanges,
-							closePopup: closeSyncPopup,
-							resetState: resetUpdateSyncState,
-							onSyncComplete: fetchResources, // Reset ResourceLibrary after sync
-						}}
-					/>
-				</div>
-
-				{/* StorePreview - Preview view (always mounted, hidden when in store) */}
-				{currentView === "storePreview" && (
-					<div className="h-screen w-full">
-						<StorePreview
-							user={user}
-							allResources={allResources}
-							setAllResources={setAllResources}
-							onMessageSent={(message, conversationId) => {
-								console.log("Store preview message:", {
-									message,
-									conversationId,
-									experienceId: user?.experienceId,
-									timestamp: new Date().toISOString(),
-								});
-							}}
-							onBack={() => {
-								console.log("🏪 [STORE PREVIEW] Back to SeasonalStore");
-								setCurrentView("store");
-							}}
-							onLiveFunnelLoaded={(funnel) => {
-								console.log("🏪 [STORE PREVIEW] Live funnel loaded:", funnel);
-								setSelectedFunnel(funnel);
-							}}
-							onEditMerchant={() => {
-								console.log("🏪 [STORE PREVIEW] onEditMerchant called");
-								console.log("🏪 [STORE PREVIEW] selectedFunnel:", selectedFunnel);
-								console.log("🏪 [STORE PREVIEW] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
-								if (selectedFunnel && hasValidFlow(selectedFunnel)) {
-									console.log("🏪 [STORE PREVIEW] Navigating to funnel builder for editing:", selectedFunnel.id);
-									setCurrentView("funnelBuilder");
-								} else {
-									console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
-								}
-							}}
-							backgroundStyle={storePreviewBackground}
+				<div className="flex h-screen">
+						{!isRenaming && !isCreatingNewFunnel && (
+						<AdminSidebar
+							currentView={currentView}
+							onViewChange={handleViewChange}
+							onLibraryIconClick={handleLibraryIconClick}
+							className="flex-shrink-0 h-full"
+							libraryContext={libraryContext}
+							currentFunnelForLibrary={selectedFunnelForLibrary}
+							isUserTyping={isUserTyping}
+							disabled={isLibraryModalOpen}
 						/>
-					</div>
-				)}
-			</div>
-		);
-	}
+					)}
 
-	// Main dashboard view
-	return (
-		<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
-			<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+					<div className="flex-1 overflow-auto w-full lg:w-auto">
+						<div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+							<div className="max-w-7xl mx-auto">
+								<AdminHeader 
+									onAddFunnel={handleCreateNewFunnelInline}
+									funnelCount={funnels.length}
+									maxFunnels={GLOBAL_LIMITS.FUNNELS}
+								/>
 
-			<div className="flex h-screen">
-					{!isRenaming && !isCreatingNewFunnel && (
-					<AdminSidebar
-						currentView={currentView}
-						onViewChange={handleViewChange}
-						onLibraryIconClick={handleLibraryIconClick}
-						className="flex-shrink-0 h-full"
-						libraryContext={libraryContext}
-						currentFunnelForLibrary={selectedFunnelForLibrary}
-						isUserTyping={isUserTyping}
-						disabled={isLibraryModalOpen}
-					/>
-				)}
+								<div className="mt-8">
+								<FunnelsDashboard
+									funnels={funnels}
+									setFunnels={setFunnels}
+									handleEditFunnel={handleEditFunnelWithNavigation}
+									handleDeployFunnel={handleDeployFunnel}
+									setFunnelToDelete={handleDeleteFunnel}
+									editingFunnelId={editingFunnelId}
+									setEditingFunnelId={setEditingFunnelId}
+									handleSaveFunnelName={handleSaveFunnelName}
+									onFunnelClick={handleFunnelClickWithNavigation}
+									handleDuplicateFunnel={handleDuplicateFunnel}
+									handleManageResources={handleManageResourcesWithNavigation}
+									onGoToLibrary={handleGoToLibrary}
+									isRenaming={isRenaming}
+									setIsRenaming={setIsRenaming}
+									isCreatingNewFunnel={isCreatingNewFunnel}
+									setIsCreatingNewFunnel={setIsCreatingNewFunnel}
+									isDeleting={isDeleting}
+									newFunnelName={newFunnelName}
+									setNewFunnelName={setNewFunnelName}
+									funnelToDelete={funnelToDelete}
+									isDeleteDialogOpen={isDeleteDialogOpen}
+									isFunnelNameAvailable={isFunnelNameAvailable}
+									user={user}
+									/>
+								</div>
 
-				<div className="flex-1 overflow-auto w-full lg:w-auto">
-					<div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
-						<div className="max-w-7xl mx-auto">
-							<AdminHeader 
-								onAddFunnel={handleCreateNewFunnelInline}
-								funnelCount={funnels.length}
-								maxFunnels={GLOBAL_LIMITS.FUNNELS}
-							/>
-
-							<div className="mt-8">
-							<FunnelsDashboard
-								funnels={funnels}
-								setFunnels={setFunnels}
-								handleEditFunnel={handleEditFunnelWithNavigation}
-								handleDeployFunnel={handleDeployFunnel}
-								setFunnelToDelete={handleDeleteFunnel}
-								editingFunnelId={editingFunnelId}
-								setEditingFunnelId={setEditingFunnelId}
-								handleSaveFunnelName={handleSaveFunnelName}
-								onFunnelClick={handleFunnelClickWithNavigation}
-								handleDuplicateFunnel={handleDuplicateFunnel}
-								handleManageResources={handleManageResourcesWithNavigation}
-								onGoToLibrary={handleGoToLibrary}
-								isRenaming={isRenaming}
-								setIsRenaming={setIsRenaming}
-								isCreatingNewFunnel={isCreatingNewFunnel}
-								setIsCreatingNewFunnel={setIsCreatingNewFunnel}
-								isDeleting={isDeleting}
-								newFunnelName={newFunnelName}
-								setNewFunnelName={setNewFunnelName}
-								funnelToDelete={funnelToDelete}
-								isDeleteDialogOpen={isDeleteDialogOpen}
-								isFunnelNameAvailable={isFunnelNameAvailable}
-								user={user}
+								{/* Modals */}
+								<DeleteFunnelModal
+									isOpen={isDeleteDialogOpen}
+									onOpenChange={setIsDeleteDialogOpen}
+									funnelToDelete={funnelToDelete}
+									onConfirmDelete={handleConfirmDelete}
+									isDeleting={isDeleting}
+								/>
+								<OfflineConfirmationModal
+									isOpen={offlineConfirmation}
+									onClose={closeOfflineConfirmation}
+									onConfirm={handleTakeFunnelOffline}
 								/>
 							</div>
-
-							{/* Modals */}
-							<DeleteFunnelModal
-								isOpen={isDeleteDialogOpen}
-								onOpenChange={setIsDeleteDialogOpen}
-								funnelToDelete={funnelToDelete}
-								onConfirmDelete={handleConfirmDelete}
-								isDeleting={isDeleting}
-							/>
-							<OfflineConfirmationModal
-								isOpen={offlineConfirmation}
-								onClose={closeOfflineConfirmation}
-								onConfirm={handleTakeFunnelOffline}
-							/>
 						</div>
 					</div>
 				</div>
 			</div>
-		</div>
+		</>
 	);
 });
 

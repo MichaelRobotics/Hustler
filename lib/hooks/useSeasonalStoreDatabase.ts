@@ -1011,174 +1011,66 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Track if any template was loaded
       let templateWasLoaded = false;
       
-      // Step 1: Try to load live template from DB
+      // Get live template data but don't load it - just store it for reference
       const live = await getLiveTemplate(experienceId);
       setLiveTemplate(live);
       
-      if (live) {
+      // Load templates list for fallback
+      const allTemplates = await getTemplates(experienceId);
+      setTemplates(allTemplates);
+      
+      // Step 1: Try to load latest template from DB (skip live template)
+      const latestTemplate = await getLastEditedTemplate(experienceId);
+      
+      if (latestTemplate) {
         templateWasLoaded = true;
-        // Load live template data
-        setCurrentSeason(live.currentSeason);
-        console.log('🎨 Loading live template with snapshot theme:', live.themeSnapshot.name);
+        // Load latest template data
+        console.log('🎨 Loading latest template:', latestTemplate.name);
         
-        setThemeTextStyles(live.templateData.themeTextStyles);
-        setThemeLogos(live.templateData.themeLogos);
-        
-        // CRITICAL: Preload background image BEFORE setting state to prevent gaps
-        const backgroundUrl = live.templateData.backgroundAttachmentUrl || 
-                             live.templateData.themeUploadedBackgrounds?.[live.currentSeason] || 
-                             live.templateData.themeGeneratedBackgrounds?.[live.currentSeason] ||
-                             live.templateData.uploadedBackground ||
-                             live.templateData.generatedBackground;
-        
-        if (backgroundUrl) {
-          console.log('🖼️ Preloading live template background image:', backgroundUrl);
-          // Preload the image first
-          await preloadBackgroundImage(backgroundUrl);
-          
-          // Then set the state (image is already loaded, no gap!)
-          const isGenerated = !!(live.templateData.themeGeneratedBackgrounds?.[live.currentSeason] || live.templateData.generatedBackground);
-          if (isGenerated) {
-            setThemeGeneratedBackgrounds({ [live.currentSeason]: backgroundUrl });
-          } else {
-            setThemeUploadedBackgrounds({ [live.currentSeason]: backgroundUrl });
-          }
-        } else {
-          // Clear backgrounds if no URL
-          setThemeGeneratedBackgrounds({ [live.currentSeason]: null });
-          setThemeUploadedBackgrounds({ [live.currentSeason]: null });
-        }
-        
-        // Set WHOP attachment fields if available (theme-specific)
-        if (live.templateData.backgroundAttachmentId) {
-          setThemeBackgroundAttachmentIds(prev => ({
-            ...prev,
-            [live.currentSeason]: live.templateData.backgroundAttachmentId || null
-          }));
-        }
-        if (live.templateData.backgroundAttachmentUrl) {
-          setThemeBackgroundAttachmentUrls(prev => ({
-            ...prev,
-            [live.currentSeason]: live.templateData.backgroundAttachmentUrl || null
-          }));
-        }
-        if (live.templateData.logoAttachmentId) {
-          setThemeLogoAttachmentIds(prev => ({
-            ...prev,
-            [live.currentSeason]: live.templateData.logoAttachmentId || null
-          }));
-        }
-        if (live.templateData.logoAttachmentUrl) {
-          setThemeLogoAttachmentUrls(prev => ({
-            ...prev,
-            [live.currentSeason]: live.templateData.logoAttachmentUrl || null
-          }));
-        }
-        
-        // CRITICAL: Filter template products - only keep ones that exist in Market Stall
-        // Apply template design to matching Market Stall products
-        const liveTemplateProducts = live.templateData.themeProducts[live.currentSeason] || [];
-        const filteredProducts = await filterTemplateProductsAgainstMarketStall(liveTemplateProducts, live.currentSeason);
-        
-        setThemeProducts({
-          [live.currentSeason]: filteredProducts
-        });
-        
-        // Load promo button styling if available
-        if (live.templateData.promoButton) {
-          console.log('🎨 Loading promo button styling from live template:', live.templateData.promoButton.text);
-          setPromoButton(live.templateData.promoButton);
-        }
+        await applyTemplateDataToState(latestTemplate, false, false);
         
         // Save to cache for instant load next time
-        saveLastLoadedTemplateToCache(live);
+        saveLastLoadedTemplateToCache(latestTemplate);
         
         // Mark content ready AFTER background is preloaded
         setIsStoreContentReady(true);
-        console.log('🎨 Live template loaded - store content ready (background preloaded)');
-      } else {
-        // Step 2: No live template - try to load first template from list
-        const allTemplates = await getTemplates(experienceId);
-        setTemplates(allTemplates);
+        console.log('🎨 Latest template loaded - store content ready (background preloaded)');
+      } else if (allTemplates && allTemplates.length > 0) {
+        // Step 2: No latest template - try to load first template from list
+        templateWasLoaded = true;
+        // Load the first template from the list
+        const firstTemplate = allTemplates[0];
+        console.log('🎨 No latest template found - loading first template:', firstTemplate.name);
         
-        if (allTemplates && allTemplates.length > 0) {
-          templateWasLoaded = true;
-          // Load the first template from the list
-          const firstTemplate = allTemplates[0];
-          console.log('🎨 No live template found - loading first template:', firstTemplate.name);
-          
-          setCurrentSeason(firstTemplate.currentSeason);
-          setThemeTextStyles(firstTemplate.templateData.themeTextStyles);
-          setThemeLogos(firstTemplate.templateData.themeLogos);
-          
-          // CRITICAL: Preload background image BEFORE setting state to prevent gaps
-          const backgroundUrl = firstTemplate.templateData.themeUploadedBackgrounds?.[firstTemplate.currentSeason] || 
-                               firstTemplate.templateData.themeGeneratedBackgrounds?.[firstTemplate.currentSeason] ||
-                               firstTemplate.templateData.uploadedBackground ||
-                               firstTemplate.templateData.generatedBackground;
-          
-          if (backgroundUrl) {
-            console.log('🖼️ Preloading first template background image:', backgroundUrl);
-            // Preload the image first
-            await preloadBackgroundImage(backgroundUrl);
-            
-            // Then set the state (image is already loaded, no gap!)
-            const isGenerated = !!(firstTemplate.templateData.themeGeneratedBackgrounds?.[firstTemplate.currentSeason] || firstTemplate.templateData.generatedBackground);
-            if (isGenerated) {
-              setThemeGeneratedBackgrounds({ [firstTemplate.currentSeason]: backgroundUrl });
-            } else {
-              setThemeUploadedBackgrounds({ [firstTemplate.currentSeason]: backgroundUrl });
-            }
-          } else {
-            // Clear backgrounds if no URL
-            setThemeGeneratedBackgrounds({ [firstTemplate.currentSeason]: null });
-            setThemeUploadedBackgrounds({ [firstTemplate.currentSeason]: null });
-          }
-          
-          // CRITICAL: Filter template products - only keep ones that exist in Market Stall
-          // Apply template design to matching Market Stall products
-          const firstTemplateProducts = firstTemplate.templateData.themeProducts[firstTemplate.currentSeason] || [];
-          const filteredProducts = await filterTemplateProductsAgainstMarketStall(firstTemplateProducts, firstTemplate.currentSeason);
-          
-          setThemeProducts({
-            [firstTemplate.currentSeason]: filteredProducts
-          });
-          
-          // Load promo button styling if available
-          if (firstTemplate.templateData.promoButton) {
-            setPromoButton(firstTemplate.templateData.promoButton);
-          }
-          
-          // Save to cache for instant load next time
-          saveLastLoadedTemplateToCache(firstTemplate);
-          
-          // Mark content ready AFTER background is preloaded
-          setIsStoreContentReady(true);
-          console.log('🎨 First template loaded - store content ready (background preloaded)');
-        } else {
-          // Step 3: No templates at all - show default "Spooky Night" theme
-          console.log('🎨 No templates found - showing default Spooky Night theme');
-          setCurrentSeason('Fall'); // Use Fall as the season (which contains Spooky Night theme)
-          
-          // Initialize Fall theme with empty products (Market Stall products will be added later)
-          setThemeProducts(prev => ({ ...prev, 'Fall': [] }));
-          
-          setIsStoreContentReady(true);
-          console.log('🎨 Default Spooky Night theme loaded - store content ready');
-        }
+        await applyTemplateDataToState(firstTemplate, false, false);
+        
+        // Save to cache for instant load next time
+        saveLastLoadedTemplateToCache(firstTemplate);
+        
+        // Mark content ready AFTER background is preloaded
+        setIsStoreContentReady(true);
+        console.log('🎨 First template loaded - store content ready (background preloaded)');
+      } else {
+        // Step 3: No templates at all - show default "Spooky Night" theme
+        console.log('🎨 No templates found - showing default Spooky Night theme');
+        setCurrentSeason('Fall'); // Use Fall as the season (which contains Spooky Night theme)
+        
+        // Initialize Fall theme with empty products (Market Stall products will be added later)
+        setThemeProducts(prev => ({ ...prev, 'Fall': [] }));
+        
+        setIsStoreContentReady(true);
+        console.log('🎨 Default Spooky Night theme loaded - store content ready');
       }
       
-      // Step 4: Auto-add Market Stall products ONLY if no template was loaded
-      if (!templateWasLoaded) {
-        console.log('🛒 No templates loaded - auto-adding Market Stall products to all themes...');
+      // Step 4: Auto-add Market Stall products for ALL themes (if not already added)
+      // This runs regardless of whether a template was loaded - it ensures all themes have Market Stall products
+      // Only adds products that aren't already in each theme
+      console.log('🛒 Auto-adding Market Stall products to all themes (only missing products)...');
       await autoAddMarketStallProductsToAllThemes();
-      } else {
-        console.log('🛒 Template loaded - skipping Market Stall auto-add (template already has products)');
-      }
       
       // Step 5: After initial template is loaded, cache ALL templates and preload all backgrounds
       // This ensures instant switching between templates without DB fetches
-      const allTemplates = await getTemplates(experienceId);
+      // Use the templates we already fetched earlier
       if (allTemplates && allTemplates.length > 0) {
         // Cache all templates and preload backgrounds in the background (non-blocking)
         cacheAllTemplatesAndPreloadBackgrounds(allTemplates).catch(err => {
