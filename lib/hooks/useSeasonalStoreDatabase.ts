@@ -62,6 +62,106 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   const [liveTemplate, setLiveTemplate] = useState<StoreTemplate | null>(null);
   const [lastEditedTemplate, setLastEditedTemplate] = useState<StoreTemplate | null>(null);
   
+  // Template Cache - stores ALL templates with preloaded backgrounds for instant switching
+  // Persisted to localStorage so it's shared across component instances (SeasonalStore <-> StorePreview)
+  const getTemplateCacheKey = useCallback(() => {
+    return `templateCache_${experienceId}`;
+  }, [experienceId]);
+  
+  const getBackgroundsPreloadedKey = useCallback(() => {
+    return `templateBackgroundsPreloaded_${experienceId}`;
+  }, [experienceId]);
+  
+  // Initialize cached templates from localStorage on mount
+  const [cachedTemplates, setCachedTemplates] = useState<Map<string, StoreTemplate>>(() => {
+    try {
+      const key = `templateCache_${experienceId}`;
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const templatesArray = JSON.parse(cached) as StoreTemplate[];
+        const templateMap = new Map<string, StoreTemplate>();
+        templatesArray.forEach(template => {
+          // Convert date strings back to Date objects
+          const templateWithDates = {
+            ...template,
+            createdAt: new Date(template.createdAt),
+            updatedAt: new Date(template.updatedAt),
+          };
+          templateMap.set(template.id, templateWithDates as StoreTemplate);
+        });
+        console.log(`💾 Loaded ${templateMap.size} cached templates from localStorage`);
+        return templateMap;
+      }
+    } catch (error) {
+      console.error('Error loading cached templates from localStorage:', error);
+    }
+    return new Map();
+  });
+  
+  const [templateBackgroundsPreloaded, setTemplateBackgroundsPreloaded] = useState(() => {
+    try {
+      const key = `templateBackgroundsPreloaded_${experienceId}`;
+      return localStorage.getItem(key) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  // Load cached templates from localStorage on mount
+  const loadCachedTemplates = useCallback((): Map<string, StoreTemplate> => {
+    try {
+      const key = getTemplateCacheKey();
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const templatesArray = JSON.parse(cached) as StoreTemplate[];
+        const templateMap = new Map<string, StoreTemplate>();
+        templatesArray.forEach(template => {
+          // Convert date strings back to Date objects
+          const templateWithDates = {
+            ...template,
+            createdAt: new Date(template.createdAt),
+            updatedAt: new Date(template.updatedAt),
+          };
+          templateMap.set(template.id, templateWithDates as StoreTemplate);
+        });
+        console.log(`💾 Loaded ${templateMap.size} cached templates from localStorage`);
+        return templateMap;
+      }
+    } catch (error) {
+      console.error('Error loading cached templates from localStorage:', error);
+    }
+    return new Map();
+  }, [getTemplateCacheKey]);
+  
+  // Save cached templates to localStorage whenever cache is updated
+  const saveCachedTemplatesToLocalStorage = useCallback((templates: Map<string, StoreTemplate>) => {
+    try {
+      const key = getTemplateCacheKey();
+      const templatesArray = Array.from(templates.values());
+      localStorage.setItem(key, JSON.stringify(templatesArray));
+      console.log(`💾 Saved ${templates.size} templates to localStorage cache`);
+    } catch (error) {
+      console.error('Error saving cached templates to localStorage:', error);
+    }
+  }, [getTemplateCacheKey]);
+  
+  // Wrapper for setCachedTemplates that also saves to localStorage
+  const updateCachedTemplates = useCallback((templates: Map<string, StoreTemplate>) => {
+    setCachedTemplates(templates);
+    saveCachedTemplatesToLocalStorage(templates);
+  }, [saveCachedTemplatesToLocalStorage]);
+  
+  // Wrapper for setTemplateBackgroundsPreloaded that also saves to localStorage
+  const updateTemplateBackgroundsPreloaded = useCallback((value: boolean) => {
+    setTemplateBackgroundsPreloaded(value);
+    try {
+      const key = getBackgroundsPreloadedKey();
+      localStorage.setItem(key, value.toString());
+    } catch (error) {
+      console.error('Error saving backgrounds preloaded flag to localStorage:', error);
+    }
+  }, [getBackgroundsPreloadedKey]);
+  
   // Template theme state - when a template is loaded, use its themeSnapshot
   const [currentTemplateTheme, setCurrentTemplateTheme] = useState<LegacyTheme | null>(null);
   
@@ -308,11 +408,91 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
   }, [experienceId]);
   
+  // Helper function to preload background image (declared early for use in cacheAllTemplatesAndPreloadBackgrounds)
+  const preloadBackgroundImage = useCallback(async (url: string): Promise<void> => {
+    if (!url || (!url.startsWith('https://') && !url.startsWith('http://'))) {
+      return;
+    }
+    
+    try {
+      console.log('🖼️ Preloading background image:', url);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      await new Promise<void>((resolve) => {
+        img.onload = () => {
+          console.log('✅ Background image preloaded successfully');
+          resolve();
+        };
+        img.onerror = () => {
+          console.warn('⚠️ Failed to preload background image, but continuing');
+          resolve(); // Continue even if preload fails
+        };
+        img.src = url;
+      });
+    } catch (error) {
+      console.warn('⚠️ Background preload failed, but continuing:', error);
+    }
+  }, []);
+  
+  // Function to cache all templates and preload all backgrounds for instant switching
+  // NOTE: Declared here before loadTemplates to avoid hoisting issues
+  const cacheAllTemplatesAndPreloadBackgrounds = useCallback(async (templatesList: StoreTemplate[]) => {
+    if (templateBackgroundsPreloaded || templatesList.length === 0) {
+      console.log('🔄 Templates already cached and backgrounds preloaded, skipping...');
+      return;
+    }
+    
+    console.log(`🔄 Caching ${templatesList.length} templates and preloading all backgrounds...`);
+    
+    // Create a new Map for cached templates
+    const newCache = new Map<string, StoreTemplate>();
+    
+    // Cache all templates
+    templatesList.forEach(template => {
+      newCache.set(template.id, template);
+    });
+    
+    updateCachedTemplates(newCache);
+    console.log(`✅ Cached ${newCache.size} templates`);
+    
+    // Preload all template backgrounds in parallel (non-blocking)
+    const backgroundPreloadPromises = templatesList.map(async (template) => {
+      // Get background URL for this template
+      const backgroundUrl = template.templateData.backgroundAttachmentUrl || 
+                           template.templateData.themeUploadedBackgrounds?.[template.currentSeason] || 
+                           template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] ||
+                           template.templateData.uploadedBackground ||
+                           template.templateData.generatedBackground;
+      
+      if (backgroundUrl) {
+        await preloadBackgroundImage(backgroundUrl);
+        console.log(`✅ Preloaded background for template: ${template.name}`);
+      }
+      
+      return template;
+    });
+    
+    // Wait for all backgrounds to preload
+    await Promise.all(backgroundPreloadPromises);
+    
+    updateTemplateBackgroundsPreloaded(true);
+    console.log(`✅ All ${templatesList.length} template backgrounds preloaded!`);
+  }, [preloadBackgroundImage, templateBackgroundsPreloaded, updateCachedTemplates, updateTemplateBackgroundsPreloaded]);
+  
   // Load templates from database
   const loadTemplates = useCallback(async () => {
     try {
       const templatesList = await getTemplates(experienceId);
       setTemplates(templatesList);
+      
+      // Also cache templates when they're loaded (if not already cached)
+      if (templatesList.length > 0 && !templateBackgroundsPreloaded) {
+        // Cache and preload in background (non-blocking)
+        cacheAllTemplatesAndPreloadBackgrounds(templatesList).catch(err => {
+          console.error('Error caching templates in loadTemplates:', err);
+        });
+      }
     } catch (error) {
       console.error('Error loading templates:', error);
       if ((error as Error).message.includes('Token missing') || (error as Error).message.includes('401')) {
@@ -322,7 +502,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         setApiError(`Failed to load templates: ${(error as Error).message}`);
       }
     }
-  }, [experienceId]);
+  }, [experienceId, templateBackgroundsPreloaded, cacheAllTemplatesAndPreloadBackgrounds]);
   
   // CRITICAL: Filter template products to ONLY include ones that exist in Market Stall
   // Applies template product design (buttons, colors, images, etc.) to matching Market Stall products
@@ -675,40 +855,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
   }, [experienceId]);
   
-  // Helper function to preload background image
-  const preloadBackgroundImage = useCallback(async (url: string): Promise<void> => {
-    if (!url || (!url.startsWith('https://') && !url.startsWith('http://'))) {
-      return;
-    }
-    
-    try {
-      console.log('🖼️ Preloading background image:', url);
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      await new Promise<void>((resolve) => {
-        img.onload = () => {
-          console.log('✅ Background image preloaded successfully');
-          resolve();
-        };
-        img.onerror = () => {
-          console.warn('⚠️ Failed to preload background image, but continuing');
-          resolve(); // Continue even if preload fails
-        };
-        img.src = url;
-      });
-    } catch (error) {
-      console.warn('⚠️ Background preload failed, but continuing:', error);
-    }
-  }, []);
-  
   // Helper function to apply template data to state (used for both cached and DB-loaded templates)
-  const applyTemplateDataToState = useCallback(async (template: StoreTemplate, skipProductFiltering = false) => {
+  const applyTemplateDataToState = useCallback(async (template: StoreTemplate, skipProductFiltering = false, isCached = false) => {
     setCurrentSeason(template.currentSeason);
     setThemeTextStyles(template.templateData.themeTextStyles);
     setThemeLogos(template.templateData.themeLogos);
     
     // CRITICAL: Preload background image BEFORE setting state to prevent gaps
+    // Skip preloading if template is cached (backgrounds already preloaded)
     const backgroundUrl = template.templateData.backgroundAttachmentUrl || 
                          template.templateData.themeUploadedBackgrounds?.[template.currentSeason] || 
                          template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] ||
@@ -716,9 +870,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
                          template.templateData.generatedBackground;
     
     if (backgroundUrl) {
-      console.log('🖼️ Preloading template background image:', backgroundUrl);
-      // Preload the image first
-      await preloadBackgroundImage(backgroundUrl);
+      if (!isCached) {
+        // Only preload if not cached (cached templates already have preloaded backgrounds)
+        console.log('🖼️ Preloading template background image:', backgroundUrl);
+        await preloadBackgroundImage(backgroundUrl);
+      } else {
+        console.log('✅ Using preloaded background from cache (instant transition!)');
+      }
       
       // Then set the state (image is already loaded, no gap!)
       const isGenerated = !!(template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] || template.templateData.generatedBackground);
@@ -844,7 +1002,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         if (cachedTemplate) {
           console.log('💾 Loading cached template immediately:', cachedTemplate.name, cachedTemplate.id);
           hasLoadedFromCacheRef.current = true; // Mark as loaded to prevent re-loading
-          await applyTemplateDataToState(cachedTemplate, true); // Skip product filtering for cached data
+          await applyTemplateDataToState(cachedTemplate, true, true); // Skip product filtering, mark as cached
           setIsStoreContentReady(true);
           console.log('💾 Cached template loaded - store content ready');
         }
@@ -1018,6 +1176,16 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         console.log('🛒 Template loaded - skipping Market Stall auto-add (template already has products)');
       }
       
+      // Step 5: After initial template is loaded, cache ALL templates and preload all backgrounds
+      // This ensures instant switching between templates without DB fetches
+      const allTemplates = await getTemplates(experienceId);
+      if (allTemplates && allTemplates.length > 0) {
+        // Cache all templates and preload backgrounds in the background (non-blocking)
+        cacheAllTemplatesAndPreloadBackgrounds(allTemplates).catch(err => {
+          console.error('Error caching templates:', err);
+        });
+      }
+      
       // Mark initial load as complete
       setIsInitialLoadComplete(true);
       
@@ -1033,7 +1201,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setIsInitialLoadComplete(true);
       setIsStoreContentReady(true);
     }
-  }, [experienceId, autoAddMarketStallProductsToAllThemes, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, loadLastLoadedTemplateFromCache, applyTemplateDataToState, saveLastLoadedTemplateToCache]);
+  }, [experienceId, autoAddMarketStallProductsToAllThemes, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, loadLastLoadedTemplateFromCache, applyTemplateDataToState, saveLastLoadedTemplateToCache, cacheAllTemplatesAndPreloadBackgrounds]);
   
   // Load last edited template
   const loadLastEditedTemplate = useCallback(async () => {
@@ -1118,7 +1286,24 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   const loadTemplate = useCallback(async (templateId: string) => {
     try {
-      const template = await getTemplate(experienceId, templateId);
+      // First, check if template is in cache (instant load, no DB fetch)
+      let template = cachedTemplates.get(templateId);
+      const isCached = !!template;
+      
+      if (!template) {
+        // Template not in cache, fetch from DB
+        console.log(`📂 Template ${templateId} not in cache, fetching from DB...`);
+        template = await getTemplate(experienceId, templateId);
+        
+        // Add to cache for next time (also saves to localStorage)
+        updateCachedTemplates((() => {
+          const newCache = new Map(cachedTemplates);
+          newCache.set(templateId, template!);
+          return newCache;
+        })());
+      } else {
+        console.log(`✅ Template ${templateId} found in cache, using cached version (instant load!)`);
+      }
       
       // Load template data into current state
       setCurrentSeason(template.currentSeason);
@@ -1200,6 +1385,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setThemeLogos(template.templateData.themeLogos);
       
       // CRITICAL: Preload background image BEFORE setting state to prevent gaps
+      // Skip preloading if template is cached (backgrounds already preloaded during initial cache)
       const backgroundUrl = template.templateData.backgroundAttachmentUrl || 
                            template.templateData.themeUploadedBackgrounds?.[template.currentSeason] || 
                            template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] ||
@@ -1207,16 +1393,20 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
                            template.templateData.generatedBackground;
       
       if (backgroundUrl) {
-        console.log('🖼️ Preloading template background image:', backgroundUrl);
-        // Preload the image first
-        await preloadBackgroundImage(backgroundUrl);
+        if (!isCached) {
+          // Only preload if not cached (cached templates already have preloaded backgrounds)
+          console.log('🖼️ Preloading template background image:', backgroundUrl);
+          await preloadBackgroundImage(backgroundUrl);
+        } else {
+          console.log('✅ Using preloaded background from cache (instant transition!)');
+        }
         
         // Then set the state (image is already loaded, no gap!)
         const isGenerated = !!(template.templateData.themeGeneratedBackgrounds?.[template.currentSeason] || template.templateData.generatedBackground);
         if (isGenerated) {
-      setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds);
+          setThemeGeneratedBackgrounds(template.templateData.themeGeneratedBackgrounds);
         } else {
-      setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds);
+          setThemeUploadedBackgrounds(template.templateData.themeUploadedBackgrounds);
         }
       } else {
         // Set backgrounds (might be null/empty, but that's fine)
@@ -1360,7 +1550,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setApiError(`Failed to load template: ${(error as Error).message}`);
       throw error;
     }
-  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, saveLastLoadedTemplateToCache]);
+  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, saveLastLoadedTemplateToCache, cachedTemplates]);
   
   const setLiveTemplateHandler = useCallback(async (templateId: string) => {
     try {

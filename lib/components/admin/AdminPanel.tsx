@@ -888,12 +888,15 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 		);
 	}
 
-	if (currentView === "store") {
+	// Store view and StorePreview - Keep both SeasonalStore instances mounted to preserve state
+	// Hide/show them based on currentView to maintain state persistence
+	if (currentView === "store" || currentView === "storePreview") {
 		return (
 			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
-				<div className="h-screen w-full">
+				{/* SeasonalStore - Main store view (always mounted, hidden when in storePreview) */}
+				<div className={`h-screen w-full ${currentView === "store" ? '' : 'hidden'}`}>
 					<SeasonalStore
 						user={user}
 						allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
@@ -924,50 +927,45 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						}}
 					/>
 				</div>
-			</div>
-		);
-	}
 
-	if (currentView === "storePreview") {
-		return (
-			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
-				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
-
-				<div className="h-screen w-full">
-					<StorePreview
-						user={user}
-						allResources={allResources}
-						setAllResources={setAllResources}
-						onMessageSent={(message, conversationId) => {
-							console.log("Store preview message:", {
-								message,
-								conversationId,
-								experienceId: user?.experienceId,
-								timestamp: new Date().toISOString(),
-							});
-						}}
-						onBack={() => {
-							console.log("🏪 [STORE PREVIEW] Back to SeasonalStore");
-							setCurrentView("store");
-						}}
-						onLiveFunnelLoaded={(funnel) => {
-							console.log("🏪 [STORE PREVIEW] Live funnel loaded:", funnel);
-							setSelectedFunnel(funnel);
-						}}
-						onEditMerchant={() => {
-							console.log("🏪 [STORE PREVIEW] onEditMerchant called");
-							console.log("🏪 [STORE PREVIEW] selectedFunnel:", selectedFunnel);
-							console.log("🏪 [STORE PREVIEW] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
-							if (selectedFunnel && hasValidFlow(selectedFunnel)) {
-								console.log("🏪 [STORE PREVIEW] Navigating to funnel builder for editing:", selectedFunnel.id);
-								setCurrentView("funnelBuilder");
-							} else {
-								console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
-							}
-						}}
-						backgroundStyle={storePreviewBackground}
-					/>
-				</div>
+				{/* StorePreview - Preview view (always mounted, hidden when in store) */}
+				{currentView === "storePreview" && (
+					<div className="h-screen w-full">
+						<StorePreview
+							user={user}
+							allResources={allResources}
+							setAllResources={setAllResources}
+							onMessageSent={(message, conversationId) => {
+								console.log("Store preview message:", {
+									message,
+									conversationId,
+									experienceId: user?.experienceId,
+									timestamp: new Date().toISOString(),
+								});
+							}}
+							onBack={() => {
+								console.log("🏪 [STORE PREVIEW] Back to SeasonalStore");
+								setCurrentView("store");
+							}}
+							onLiveFunnelLoaded={(funnel) => {
+								console.log("🏪 [STORE PREVIEW] Live funnel loaded:", funnel);
+								setSelectedFunnel(funnel);
+							}}
+							onEditMerchant={() => {
+								console.log("🏪 [STORE PREVIEW] onEditMerchant called");
+								console.log("🏪 [STORE PREVIEW] selectedFunnel:", selectedFunnel);
+								console.log("🏪 [STORE PREVIEW] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
+								if (selectedFunnel && hasValidFlow(selectedFunnel)) {
+									console.log("🏪 [STORE PREVIEW] Navigating to funnel builder for editing:", selectedFunnel.id);
+									setCurrentView("funnelBuilder");
+								} else {
+									console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
+								}
+							}}
+							backgroundStyle={storePreviewBackground}
+						/>
+					</div>
+				)}
 			</div>
 		);
 	}
