@@ -199,7 +199,7 @@ export const usePreviewLiveTemplate = ({
         // Apply template design to matching Market Stall products
         if (templateData.products && templateData.products.length > 0) {
           const filteredProducts = await filterTemplateProducts(templateData.products);
-          setThemeProducts(prev => ({
+          setThemeProducts((prev: Record<string, any[]>) => ({
             ...prev,
             [previewLiveTemplate.currentSeason || 'Fall']: filteredProducts
           }));
@@ -209,12 +209,12 @@ export const usePreviewLiveTemplate = ({
           const seasonProducts = templateData.themeProducts[currentSeason] || [];
           if (seasonProducts.length > 0) {
             const filteredProducts = await filterTemplateProducts(seasonProducts);
-            setThemeProducts(prev => ({
+            setThemeProducts((prev: Record<string, any[]>) => ({
               ...prev,
               [currentSeason]: filteredProducts
             }));
           } else {
-            setThemeProducts(prev => ({
+            setThemeProducts((prev: Record<string, any[]>) => ({
               ...prev,
               [currentSeason]: []
             }));

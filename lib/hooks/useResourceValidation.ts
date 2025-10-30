@@ -8,6 +8,7 @@ interface Resource {
   price?: string;
   link?: string;
   storageUrl?: string;
+  whopProductId?: string;
 }
 
 interface ValidationResult {
