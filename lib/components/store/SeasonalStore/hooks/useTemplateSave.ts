@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { StoreTemplate } from '../types';
+import { getThemePlaceholderUrl } from '../utils/getThemePlaceholder';
 
 interface UseTemplateSaveProps {
   saveTemplate: (templateData: Omit<StoreTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<StoreTemplate>;
@@ -142,10 +143,10 @@ export const useTemplateSave = ({
             } : logoAsset
           },
           themeGeneratedBackgrounds: {
-            [currentSeason]: backgroundAttachmentUrl
+            [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
           },
           themeUploadedBackgrounds: {
-            [currentSeason]: backgroundAttachmentUrl
+            [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
           },
           themeProducts: {
             [currentSeason]: frontendProducts // Save complete frontend product state
@@ -219,9 +220,9 @@ export const useTemplateSave = ({
             alt: logoAsset?.alt || 'Logo'
           } : logoAsset,
           
-          // Background assets (WHOP storage)
-          generatedBackground: backgroundAttachmentUrl,
-          uploadedBackground: backgroundAttachmentUrl,
+          // Background assets (WHOP storage or theme placeholder)
+          generatedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
+          uploadedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
           backgroundAttachmentId,
           backgroundAttachmentUrl,
           logoAttachmentId,

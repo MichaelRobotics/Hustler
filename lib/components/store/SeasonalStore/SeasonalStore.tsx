@@ -1110,7 +1110,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
       placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
     } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/PLpSH3dql4KTduPQzghcuyqwRjmL6XNaHz636Hb5KsQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9045cee2-26be-4194-9b50-82b7f0e3b827.png';
+      placeholderUrl = 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png';
       placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
     }
     
@@ -1738,7 +1738,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             } else if (currentSeason === 'Summer') {
               placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
             } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/PLpSH3dql4KTduPQzghcuyqwRjmL6XNaHz636Hb5KsQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9045cee2-26be-4194-9b50-82b7f0e3b827.png';
+              placeholderUrl = 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png';
             }
             
             const imageToPreload = backgroundUrl || placeholderUrl;
@@ -1809,7 +1809,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             } else if (currentSeason === 'Summer') {
               placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
             } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/PLpSH3dql4KTduPQzghcuyqwRjmL6XNaHz636Hb5KsQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9045cee2-26be-4194-9b50-82b7f0e3b827.png';
+              placeholderUrl = 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png';
             }
             
             const imageToPreload = backgroundUrl || placeholderUrl;

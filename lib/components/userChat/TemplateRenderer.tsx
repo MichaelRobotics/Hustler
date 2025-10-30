@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import UserChat from './UserChat';
 import type { FunnelFlow } from '../../types/funnel';
 import type { ConversationWithMessages } from '../../types/user';
+import { getThemePlaceholderUrl } from '../store/SeasonalStore/utils/getThemePlaceholder';
 
 interface TemplateRendererProps {
   liveTemplate: any;
@@ -102,11 +103,23 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   });
 
   // Get background image - check both theme-specific and legacy
-  const backgroundImage = templateData.themeGeneratedBackgrounds?.[currentSeason] 
+  // Also fallback to theme placeholder if no background is set
+  let backgroundImage = templateData.themeGeneratedBackgrounds?.[currentSeason] 
     || templateData.themeUploadedBackgrounds?.[currentSeason]
     || templateData.generatedBackground
     || templateData.uploadedBackground
     || null;
+  
+  // If no background image, use theme-specific placeholder
+  if (!backgroundImage) {
+    // Get theme name from template (check currentTheme or themeSnapshot)
+    const themeName = templateData.currentTheme?.name || liveTemplate.themeSnapshot?.name || currentSeason;
+    
+    // Import and use getThemePlaceholderUrl function
+    // Use helper function instead of inline map
+    backgroundImage = getThemePlaceholderUrl(themeName) || getThemePlaceholderUrl(currentSeason);
+    console.log('[TemplateRenderer] No background image found, using theme placeholder for:', themeName, 'fallback season:', currentSeason);
+  }
 
   // Get logo - check both theme-specific and legacy
   const logoAsset = templateData.themeLogos?.[currentSeason] || templateData.logoAsset;

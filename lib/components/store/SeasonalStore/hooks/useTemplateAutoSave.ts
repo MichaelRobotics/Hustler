@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { StoreTemplate } from '../types';
+import { getThemePlaceholderUrl } from '../utils/getThemePlaceholder';
 
 interface UseTemplateAutoSaveProps {
   products: any[];
@@ -97,10 +98,10 @@ export const useTemplateAutoSave = ({
               } : logoAsset
             },
             themeGeneratedBackgrounds: {
-              [currentSeason]: backgroundAttachmentUrl
+              [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
             },
             themeUploadedBackgrounds: {
-              [currentSeason]: backgroundAttachmentUrl
+              [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
             },
             themeProducts: {
               [currentSeason]: products.map(product => ({
@@ -203,9 +204,9 @@ export const useTemplateAutoSave = ({
               shape: logoAsset?.shape || 'square',
               alt: logoAsset?.alt || 'Logo'
             } : logoAsset,
-            // Use WHOP storage URLs instead of base64
-            generatedBackground: backgroundAttachmentUrl,
-            uploadedBackground: backgroundAttachmentUrl,
+            // Use WHOP storage URLs or theme placeholder
+            generatedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
+            uploadedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
             backgroundAttachmentId,
             backgroundAttachmentUrl,
             logoAttachmentId,
