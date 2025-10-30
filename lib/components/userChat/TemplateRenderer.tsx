@@ -135,8 +135,25 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   // Get text styles - check both theme-specific and legacy
   const textStyles = templateData.themeTextStyles?.[currentSeason] || templateData.fixedTextStyles || {};
 
-  // Get products - check both theme-specific and legacy
-  const products = templateData.themeProducts?.[currentSeason] || templateData.products || [];
+  // Get theme snapshot for styling fallbacks
+  const themeSnapshot = liveTemplate.themeSnapshot || templateData.currentTheme || {};
+
+  // Get products - check both theme-specific and legacy, then apply styling fallbacks like SeasonalStore
+  const rawProducts = templateData.themeProducts?.[currentSeason] || templateData.products || [];
+  const products = rawProducts.map((p: any) => ({
+    ...p,
+    // Ensure imageAttachmentUrl fallback for ProductCard image logic
+    imageAttachmentUrl: p.imageAttachmentUrl || p.image || p.imageUrl || p.imageSrc || null,
+    // Styling fallbacks derived from theme snapshot when missing
+    cardClass: p.cardClass || themeSnapshot.card || 'bg-white',
+    titleClass: p.titleClass || themeSnapshot.text || 'text-gray-900',
+    descClass: p.descClass || themeSnapshot.text || 'text-gray-600',
+    buttonClass: p.buttonClass || 'bg-indigo-500 hover:bg-indigo-600 text-white',
+    buttonText: p.buttonText || 'View Details',
+  }));
+
+  // Floating assets (emojis, tickets, etc.) - theme-specific or legacy
+  const floatingAssets = (templateData.themeFloatingAssets?.[currentSeason] || templateData.floatingAssets || []) as any[];
 
   // Get promo button
   const promoButton = templateData.promoButton;
@@ -298,6 +315,40 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
       
       {/* Template Content Container */}
       <div className="relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto overflow-x-hidden h-full w-full">
+        {/* Floating assets layer (emojis/images) */}
+        {floatingAssets && floatingAssets.length > 0 && (
+          <div className="pointer-events-none absolute inset-0 z-0">
+            {floatingAssets.map((asset: any) => (
+              <div
+                key={asset.id}
+                style={{
+                  position: 'absolute',
+                  left: asset.x,
+                  top: asset.y,
+                  transform: `translate(-50%, -50%) rotate(${
+                    typeof asset.rotation === 'string'
+                      ? (asset.rotation.endsWith('deg') ? asset.rotation : `${asset.rotation}deg`)
+                      : `${asset.rotation || 0}deg`
+                  }) scale(${asset.scale ?? 1})`,
+                  zIndex: typeof asset.z === 'number' ? asset.z : 0,
+                }}
+              >
+                {asset.type === 'text' && asset.content ? (
+                  <span className={asset.styleClass || ''} style={{ fontSize: '2rem', lineHeight: 1 }}>
+                    {asset.content}
+                  </span>
+                ) : asset.type === 'image' && asset.src ? (
+                  <img
+                    src={asset.src}
+                    alt={asset.alt || ''}
+                    className={asset.styleClass || ''}
+                    style={{ width: asset.isLogo ? '150px' : '100px', height: 'auto' }}
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
         {/* Template Content */}
         <div className="relative z-10 w-full">
         {/* Logo */}
