@@ -63,8 +63,8 @@ export const useResourceValidation = (): ValidationActions => {
       errors.push('Affiliate URL is required');
     }
 
-    // Storage URL validation for owned products
-    if (resource.type === 'MY_PRODUCTS' && !resource.storageUrl?.trim()) {
+    // Storage URL validation for owned products that are NOT Whop products
+    if (resource.type === 'MY_PRODUCTS' && !resource.whopProductId && !resource.storageUrl?.trim()) {
       errors.push('Digital asset is required for owned products');
     }
 

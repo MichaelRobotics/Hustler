@@ -79,13 +79,12 @@ export const useAutoAddResources = ({
 
   // Auto-add ONLY Market Stall (ResourceLibrary) products to theme on initial load
   useEffect(() => {
-    // Only run this when:
-    // 1. No template is loaded internally (isTemplateLoaded is false)
-    // 2. SeasonalStore loads initially
-    // 3. Market Stall resources are available
+    // Run this when:
+    // 1. Market Stall resources are available
+    // 2. We haven't already auto-added resources for this session
     // IMPORTANT: allResources prop contains ONLY Market Stall (global ResourceLibrary) products
-    if (!isTemplateLoaded && !hasLoadedResourceLibrary && !hasAutoAddedResources && allResources.length > 0) {
-      console.log(`[useAutoAddResources] No template loaded - auto-adding Market Stall products to theme on initial load`);
+    if (!hasLoadedResourceLibrary && !hasAutoAddedResources && allResources.length > 0) {
+      console.log(`[useAutoAddResources] Auto-adding Market Stall products to theme on initial load`);
       
       // Get all PAID Market Stall resources that aren't already in the theme
       // allResources comes from Market Stall (global ResourceLibrary context)

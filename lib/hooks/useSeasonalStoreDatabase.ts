@@ -925,19 +925,19 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         if (Array.isArray(templateProducts) && templateProducts.length > 0) {
           if (typeof templateProducts[0] === 'string') {
             // Legacy format: ResourceLibrary product IDs
-            setThemeProducts({ [template.currentSeason]: [] });
+            setThemeProducts(prev => ({ ...prev, [template.currentSeason]: [] }));
             setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
           } else {
             // New format: Complete frontend product state
-            setThemeProducts({ [template.currentSeason]: templateProducts });
+            setThemeProducts(prev => ({ ...prev, [template.currentSeason]: templateProducts }));
             setTemplateResourceLibraryProductIds([]);
           }
         } else {
-          setThemeProducts({ [template.currentSeason]: [] });
+          setThemeProducts(prev => ({ ...prev, [template.currentSeason]: [] }));
           setTemplateResourceLibraryProductIds([]);
         }
       } else {
-        setThemeProducts(template.templateData.themeProducts || {});
+        setThemeProducts(prev => ({ ...prev, ...(template.templateData.themeProducts || {}) }));
         setTemplateResourceLibraryProductIds([]);
       }
     } else {
@@ -947,16 +947,16 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         if (Array.isArray(templateProducts) && templateProducts.length > 0) {
           if (typeof templateProducts[0] === 'string') {
             // Legacy format: ResourceLibrary product IDs
-            setThemeProducts({ [template.currentSeason]: [] });
+            setThemeProducts(prev => ({ ...prev, [template.currentSeason]: [] }));
             setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
           } else {
             // New format: Filter against Market Stall
             const filteredProducts = await filterTemplateProductsAgainstMarketStall(templateProducts, template.currentSeason);
-            setThemeProducts({ [template.currentSeason]: filteredProducts });
+            setThemeProducts(prev => ({ ...prev, [template.currentSeason]: filteredProducts }));
             setTemplateResourceLibraryProductIds([]);
           }
         } else {
-          setThemeProducts({ [template.currentSeason]: [] });
+          setThemeProducts(prev => ({ ...prev, [template.currentSeason]: [] }));
           setTemplateResourceLibraryProductIds([]);
         }
       } else {
@@ -968,7 +968,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             }
           }
         }
-        setThemeProducts(allSeasonProducts);
+        setThemeProducts(prev => ({ ...prev, ...allSeasonProducts }));
         setTemplateResourceLibraryProductIds([]);
       }
     }
@@ -1080,9 +1080,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         const liveTemplateProducts = live.templateData.themeProducts[live.currentSeason] || [];
         const filteredProducts = await filterTemplateProductsAgainstMarketStall(liveTemplateProducts, live.currentSeason);
         
-        setThemeProducts({
+        setThemeProducts(prev => ({
+          ...prev,
           [live.currentSeason]: filteredProducts
-        });
+        }));
         
         // Load promo button styling if available
         if (live.templateData.promoButton) {
@@ -1168,13 +1169,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         }
       }
       
-      // Step 4: Auto-add Market Stall products ONLY if no template was loaded
-      if (!templateWasLoaded) {
-        console.log('🛒 No templates loaded - auto-adding Market Stall products to all themes...');
+      // Step 4: Always ensure Market Stall products are available in all themes
+      // This ensures Market Stall products are available even when templates are loaded
+      console.log('🛒 Ensuring Market Stall products are available in all themes...');
       await autoAddMarketStallProductsToAllThemes();
-      } else {
-        console.log('🛒 Template loaded - skipping Market Stall auto-add (template already has products)');
-      }
       
       // Step 5: After initial template is loaded, cache ALL templates and preload all backgrounds
       // This ensures instant switching between templates without DB fetches
@@ -1423,9 +1421,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             // Legacy format: ResourceLibrary product IDs (old system)
             console.log('📂 Loading template with ResourceLibrary product IDs (legacy):', templateProducts);
             
-            setThemeProducts({
+            setThemeProducts(prev => ({
+              ...prev,
               [template.currentSeason]: []
-            });
+            }));
             
             // Store the ResourceLibrary product IDs for the component to use
             setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
@@ -1437,18 +1436,20 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             // Apply template design to matching Market Stall products
             const filteredProducts = await filterTemplateProductsAgainstMarketStall(templateProducts, template.currentSeason);
             
-            setThemeProducts({
+            setThemeProducts(prev => ({
+              ...prev,
               [template.currentSeason]: filteredProducts
-            });
+            }));
             
             // Clear template ResourceLibrary product IDs for new format
             setTemplateResourceLibraryProductIds([]);
           }
         } else {
           // Empty products array
-          setThemeProducts({
+          setThemeProducts(prev => ({
+            ...prev,
             [template.currentSeason]: []
-          });
+          }));
           setTemplateResourceLibraryProductIds([]);
         }
       } else {
@@ -1461,9 +1462,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
               filteredThemeProducts[season] = await filterTemplateProductsAgainstMarketStall(products, season);
             }
           }
-          setThemeProducts(filteredThemeProducts);
+          setThemeProducts(prev => ({ ...prev, ...filteredThemeProducts }));
         } else {
-          setThemeProducts(template.templateData.themeProducts || {});
+          setThemeProducts(prev => ({ ...prev, ...(template.templateData.themeProducts || {}) }));
         }
         setTemplateResourceLibraryProductIds([]);
       }
@@ -1955,7 +1956,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setThemeLogos(lastActiveTemplate.templateData.themeLogos);
       setThemeGeneratedBackgrounds(lastActiveTemplate.templateData.themeGeneratedBackgrounds);
       setThemeUploadedBackgrounds(lastActiveTemplate.templateData.themeUploadedBackgrounds);
-      setThemeProducts(lastActiveTemplate.templateData.themeProducts);
+      setThemeProducts(prev => ({ ...prev, ...lastActiveTemplate.templateData.themeProducts }));
       if (lastActiveTemplate.templateData.promoButton) {
         setPromoButton(lastActiveTemplate.templateData.promoButton);
       }

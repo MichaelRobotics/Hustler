@@ -384,8 +384,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 			return;
 		}
 		
-		// For Owned products, digital asset (storageUrl) is required
-		if (editingResource.type === "MY_PRODUCTS" && !editingResource.storageUrl?.trim()) {
+		// For Owned products that are NOT actual Whop products, digital asset (storageUrl) is required
+		if (editingResource.type === "MY_PRODUCTS" && !editingResource.whopProductId && !editingResource.storageUrl?.trim()) {
 			return;
 		}
 

@@ -435,9 +435,9 @@ export const useSeasonalStore = () => {
     
     // Load theme-specific products if available, otherwise fallback to legacy format
     if (template.templateData.themeProducts) {
-      setThemeProducts(template.templateData.themeProducts);
+      setThemeProducts(prev => ({ ...prev, ...template.templateData.themeProducts }));
     } else {
-      setThemeProducts({ [template.currentSeason]: template.templateData.products });
+      setThemeProducts(prev => ({ ...prev, [template.currentSeason]: template.templateData.products }));
     }
     
     // Load theme-specific data if available, otherwise fallback to legacy format

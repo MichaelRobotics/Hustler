@@ -148,7 +148,7 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
         onAddToTheme={handleAddToTheme}
         onRemoveFromTheme={handleRemoveFromTheme}
         isResourceInTheme={isResourceInTheme}
-        autoOpenCreateModal={true}
+        autoOpenCreateModal={false}
       />
     );
   }

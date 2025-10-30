@@ -199,16 +199,25 @@ export const usePreviewLiveTemplate = ({
         // Apply template design to matching Market Stall products
         if (templateData.products && templateData.products.length > 0) {
           const filteredProducts = await filterTemplateProducts(templateData.products);
-          setThemeProducts(filteredProducts);
+          setThemeProducts(prev => ({
+            ...prev,
+            [previewLiveTemplate.currentSeason || 'Fall']: filteredProducts
+          }));
         } else if (templateData.themeProducts) {
           // Handle themeProducts format (for current season)
           const currentSeason = previewLiveTemplate.currentSeason || 'Fall';
           const seasonProducts = templateData.themeProducts[currentSeason] || [];
           if (seasonProducts.length > 0) {
             const filteredProducts = await filterTemplateProducts(seasonProducts);
-            setThemeProducts(filteredProducts);
+            setThemeProducts(prev => ({
+              ...prev,
+              [currentSeason]: filteredProducts
+            }));
           } else {
-            setThemeProducts([]);
+            setThemeProducts(prev => ({
+              ...prev,
+              [currentSeason]: []
+            }));
           }
         }
         

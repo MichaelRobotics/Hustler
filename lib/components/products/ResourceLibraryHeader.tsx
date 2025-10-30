@@ -131,38 +131,32 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 									{isDeploying ? "Going Live..." : "Go Live"}
 								</span>
 							</Button>
-						) : isAtGlobalLimit ? (
-							<div className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-								<span className="text-gray-500 dark:text-gray-400 font-medium">
-									Product Limit: {allResourcesCount}/{GLOBAL_LIMITS.PRODUCTS}
-								</span>
-								<span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-									MAX
-								</span>
-							</div>
 						) : (
-							/* Create Resource Button - When funnel is not deployed and not at limit */
-							<Button
-								size="3"
-								color="violet"
-								onClick={onAddProduct}
-								className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
-									filteredResourcesCount === 0 || showCreateAssets
-										? "animate-pulse animate-bounce"
-										: ""
-								}`}
-							>
-								<Plus
-									size={20}
-									strokeWidth={2.5}
-									className={`transition-transform duration-300 ${
+							// Only show the create button in Warehouse (global) context
+							context === "global" ? (
+								/* Create Resource Button - When not at limit */
+								<Button
+									size="3"
+									color="violet"
+									onClick={onAddProduct}
+									className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
 										filteredResourcesCount === 0 || showCreateAssets
-											? "animate-spin"
-											: "group-hover:rotate-12"
+											? "animate-pulse animate-bounce"
+											: ""
 									}`}
-								/>
-								Create Digital Asset
-							</Button>
+								>
+									<Plus
+										size={20}
+										strokeWidth={2.5}
+										className={`transition-transform duration-300 ${
+											filteredResourcesCount === 0 || showCreateAssets
+												? "animate-spin"
+												: "group-hover:rotate-12"
+										}`}
+									/>
+									Create Digital Asset
+								</Button>
+							) : null
 						)
 					)}
 				</div>
