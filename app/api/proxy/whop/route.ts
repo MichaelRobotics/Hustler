@@ -443,6 +443,10 @@ export async function GET(request: NextRequest) {
                 } else {
                   isAutoScrolling = false;
                   console.log('Auto-scroll completed');
+                  // Notify parent window that content reveal is complete
+                  if (window.parent && window.parent !== window) {
+                    window.parent.postMessage('content-reveal-completed', '*');
+                  }
                 }
               }
               
@@ -452,6 +456,10 @@ export async function GET(request: NextRequest) {
               setTimeout(() => {
                 isAutoScrolling = false;
                 console.log('Content reveal animation completed');
+                // Notify parent window that content reveal is complete
+                if (window.parent && window.parent !== window) {
+                  window.parent.postMessage('content-reveal-completed', '*');
+                }
               }, 4000);
             }
           }

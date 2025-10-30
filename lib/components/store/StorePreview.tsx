@@ -59,6 +59,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	const [templateReady, setTemplateReady] = useState(false); // Track when template is ready for rendering
 	const [funnelLoading, setFunnelLoading] = useState(true); // Track funnel loading separately
 	const [backgroundPreloaded, setBackgroundPreloaded] = useState(false); // Track background preloading
+	const [iframeContentRevealed, setIframeContentRevealed] = useState(false); // Track iframe content reveal animation
 	
 	// View mode state - similar to CustomerView
 	type ViewMode = 'iframe-only' | 'chat-only' | 'split-view';
@@ -72,8 +73,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 	// Theme state
 	const { appearance, toggleTheme } = useTheme();
 	
-	// Combined loading state - show loading until template is properly loaded (like TemplateRenderer)
-	const isEverythingLoaded = !templateLoading && !funnelLoading && urlLoaded && (!hasLiveTemplate || (templateReady && backgroundPreloaded));
+	// Combined loading state - show loading until template is properly loaded AND iframe content is revealed
+	const isEverythingLoaded = !templateLoading && !funnelLoading && urlLoaded && iframeContentRevealed && (!hasLiveTemplate || (templateReady && backgroundPreloaded));
 	
 	// Show loading overlay until template is properly loaded
 	const shouldShowLoadingOverlay = !isEverythingLoaded;
@@ -86,6 +87,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		urlLoaded,
 		hasLiveTemplate,
 		backgroundPreloaded,
+		iframeContentRevealed,
 		isEverythingLoaded,
 		shouldShowLoadingOverlay
 	});
@@ -368,6 +370,20 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		setTimeout(() => setIsTransitioning(false), transitionDuration);
 	}, [viewMode, isMobile]);
 
+	// Listen for iframe content reveal completion
+	useEffect(() => {
+		const handleMessage = (event: MessageEvent) => {
+			// Listen for messages from the iframe content
+			if (event.data === 'content-reveal-completed') {
+				console.log('[StorePreview] Received content reveal completion from iframe');
+				setIframeContentRevealed(true);
+			}
+		};
+
+		window.addEventListener('message', handleMessage);
+		return () => window.removeEventListener('message', handleMessage);
+	}, []);
+
 	// Load data on mount
 	useEffect(() => {
 		checkLiveTemplate();
@@ -389,10 +405,12 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 		}
 	}, [isEverythingLoaded, isFunnelActive, showNoFunnelPopup, popupShown]);
 
-	// Fallback: Remove overlay after 8 seconds regardless of loading state (like TemplateRenderer)
+	// Fallback: Remove overlay after 10 seconds regardless of loading state (extended for iframe content)
 	useEffect(() => {
 		const fallbackTimer = setTimeout(() => {
 			if (!isEverythingLoaded) {
+				console.log('🎭 Fallback: Forcing iframe content reveal after timeout');
+				setIframeContentRevealed(true);
 				setOverlayTransitioning(true);
 				console.log('🎭 Fallback: Starting fast blur transition...');
 				
@@ -404,7 +422,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 					console.log('🎭 Fallback: Template loading completed after timeout');
 				}, 500);
 			}
-		}, 8000);
+		}, 10000); // Extended to 10 seconds to allow for iframe content reveal
 
 		return () => clearTimeout(fallbackTimer);
 	}, [isEverythingLoaded]);
