@@ -315,9 +315,9 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
       
       {/* Template Content Container */}
       <div className="relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto overflow-x-hidden h-full w-full">
-        {/* Floating assets layer (emojis/images) */}
+        {/* Floating assets layer (emojis/images) - above product cards */}
         {floatingAssets && floatingAssets.length > 0 && (
-          <div className="pointer-events-none absolute inset-0 z-0">
+          <div className="pointer-events-none absolute inset-0 z-20">
             {floatingAssets.map((asset: any) => (
               <div
                 key={asset.id}
@@ -330,7 +330,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                       ? (asset.rotation.endsWith('deg') ? asset.rotation : `${asset.rotation}deg`)
                       : `${asset.rotation || 0}deg`
                   }) scale(${asset.scale ?? 1})`,
-                  zIndex: typeof asset.z === 'number' ? asset.z : 0,
+                  zIndex: typeof asset.z === 'number' ? asset.z : 1,
                 }}
               >
                 {asset.type === 'text' && asset.content ? (
