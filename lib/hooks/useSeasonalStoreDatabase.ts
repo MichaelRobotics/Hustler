@@ -630,13 +630,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         if (matchedResource) {
           // Product exists in Market Stall - keep it with template design applied
           const mergedProduct: Product = {
-            // Use Market Stall resource data as base
+            // Use template data first, fallback to Market Stall resource data
             id: `resource-${matchedResource.id}`,
-            name: matchedResource.name, // Keep Market Stall name
-            description: matchedResource.description || '', // Keep Market Stall description
-            price: parseFloat(matchedResource.price || '0'), // Keep Market Stall price
-            buttonLink: matchedResource.link || '', // Keep Market Stall link
-            whopProductId: matchedResource.whopProductId, // Keep Market Stall whopProductId
+            name: templateProduct.name || matchedResource.name, // Prefer template name, fallback to Market Stall
+            description: templateProduct.description || matchedResource.description || '', // Prefer template description, fallback to Market Stall
+            price: templateProduct.price !== undefined && templateProduct.price !== null ? templateProduct.price : parseFloat(matchedResource.price || '0'), // Prefer template price, fallback to Market Stall
+            buttonLink: templateProduct.buttonLink || matchedResource.link || '', // Prefer template link, fallback to Market Stall
+            whopProductId: matchedResource.whopProductId, // Keep Market Stall whopProductId for syncing
             
             // Apply template product design/styling
             cardClass: templateProduct.cardClass, // Template design
