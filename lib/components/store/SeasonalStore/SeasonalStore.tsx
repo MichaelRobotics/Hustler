@@ -875,6 +875,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     if (currentThemeProducts.length > 0) {
       console.log(`[SeasonalStore] Loading ${currentThemeProducts.length} products from theme:`, currentSeason);
       
+      // Debug: Log buttonLink data in themeProducts
+      currentThemeProducts.forEach((product, index) => {
+        console.log(`[SeasonalStore] 🔍 Theme product ${index + 1} (${product.name}):`, {
+          id: product.id,
+          hasButtonLink: !!product.buttonLink,
+          buttonLink: product.buttonLink,
+          isResourceProduct: typeof product.id === 'string' && product.id.startsWith('resource-')
+        });
+      });
+      
       // Separate ResourceLibrary products from frontend products
       const resourceLibraryProducts = currentThemeProducts.filter(product => 
         typeof product.id === 'string' && product.id.startsWith('resource-')
@@ -889,10 +899,58 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         total: currentThemeProducts.length
       });
       
+      // Debug: Check buttonLink in resourceLibraryProducts before setting state
+      if (resourceLibraryProducts.length > 0) {
+        resourceLibraryProducts.forEach((product, index) => {
+          console.log(`[SeasonalStore] 🔍 ResourceLibrary product ${index + 1} (${product.name}) before setting state:`, {
+            id: product.id,
+            hasButtonLink: !!product.buttonLink,
+            buttonLink: product.buttonLink
+          });
+        });
+      }
+      
       // Load ResourceLibrary products into resourceLibraryProducts state
       if (resourceLibraryProducts.length > 0) {
         console.log(`[SeasonalStore] Loading ${resourceLibraryProducts.length} ResourceLibrary products`);
-        setResourceLibraryProducts(resourceLibraryProducts);
+        
+        // Fix: Restore buttonLink from allResources if missing
+        const productsWithLinks = resourceLibraryProducts.map(product => {
+          // If buttonLink is missing, try to find it in allResources
+          if (!product.buttonLink && typeof product.id === 'string' && product.id.startsWith('resource-')) {
+            const resourceId = product.id.replace('resource-', '');
+            const matchingResource = allResources.find(r => r.id === resourceId);
+            
+            if (matchingResource?.link) {
+              console.log(`[SeasonalStore] 🔧 Restoring buttonLink for product "${product.name}" from resource:`, matchingResource.link);
+              return {
+                ...product,
+                buttonLink: matchingResource.link
+              };
+            } else {
+              console.warn(`[SeasonalStore] ⚠️ Could not find resource ${resourceId} in allResources to restore buttonLink for product "${product.name}"`);
+            }
+          }
+          return product;
+        });
+        
+        // Update both resourceLibraryProducts state AND themeProducts to persist the fix
+        setResourceLibraryProducts(productsWithLinks);
+        
+        // Also update themeProducts to persist the restored buttonLink
+        if (productsWithLinks.some(p => p.buttonLink && !resourceLibraryProducts.find(op => op.id === p.id && op.buttonLink))) {
+          console.log(`[SeasonalStore] 🔧 Updating themeProducts to persist restored buttonLinks`);
+          setThemeProducts(prev => ({
+            ...prev,
+            [currentSeason]: (prev[currentSeason] || []).map(product => {
+              const restoredProduct = productsWithLinks.find(p => p.id === product.id);
+              if (restoredProduct && restoredProduct.buttonLink && !product.buttonLink) {
+                return restoredProduct;
+              }
+              return product;
+            })
+          }));
+        }
       }
       
       // Load frontend products into frontendProducts state
@@ -901,7 +959,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         // Frontend products are now handled through resourceLibraryProducts
       }
     }
-  }, [themeProducts, currentSeason]);
+  }, [themeProducts, currentSeason, allResources]);
 
   // Use auto-add resources hook
   // IMPORTANT: allResources prop MUST contain ONLY Market Stall (global ResourceLibrary) products

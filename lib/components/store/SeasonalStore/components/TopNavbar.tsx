@@ -147,28 +147,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             </button>
           </div>
 
-          {/* Center: Generate Background Button (Page view) or Hide Chat Button */}
+          {/* Center: Hide Chat Button (Page view) */}
           <div className="flex-1 flex justify-center">
-            {/* Generate Background Button in Center (Page view only) */}
-            {!editorState.isEditorView && showGenerateBgInNavbar && !isChatOpen && !hideEditorButtons && (
-              <>
-                <button 
-                  onClick={handleGenerateBgClick}
-                  disabled={loadingState.isImageLoading}
-                  className={`px-4 py-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg flex items-center space-x-2 overflow-hidden ${
-                    loadingState.isImageLoading 
-                      ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                      : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40 pulse-animation shine-animation'
-                  }`}
-                  title="Generate AI Background"
-                >
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <span className="text-sm font-medium text-white">Generate Background</span>
-                </button>
-              </>
-            )}
+            {/* Generate Background Button hidden in Page View - only available in Editor View */}
             
             {/* Hide Chat Button when chat is open */}
             {isChatOpen && (

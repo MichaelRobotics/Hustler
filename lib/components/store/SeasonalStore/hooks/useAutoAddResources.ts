@@ -111,21 +111,51 @@ export const useAutoAddResources = ({
       if (marketStallResourcesToAdd.length > 0) {
         console.log(`[useAutoAddResources] Adding ${marketStallResourcesToAdd.length} Market Stall products to theme:`, marketStallResourcesToAdd.map(r => r.name));
         
+        // Debug: Log resource link data
+        marketStallResourcesToAdd.forEach(resource => {
+          console.log(`[useAutoAddResources] 🔍 Resource "${resource.name}" link data:`, {
+            hasLink: !!resource.link,
+            link: resource.link,
+            linkType: typeof resource.link,
+            linkLength: resource.link?.length || 0,
+            resourceId: resource.id,
+            fullResource: resource
+          });
+        });
+        
         // Convert Market Stall resources to products and add to theme
-        const newProducts = marketStallResourcesToAdd.map(resource => ({
-          id: `resource-${resource.id}`,
-          name: resource.name,
-          description: resource.description || '',
-          price: parseFloat(resource.price) || 0,
-          image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
-          buttonText: 'VIEW DETAILS',
-          buttonLink: resource.link || '',
-          whopProductId: resource.whopProductId, // Track Whop product ID for synced products
-          cardClass: legacyTheme.card,
-          titleClass: legacyTheme.text,
-          descClass: legacyTheme.text,
-          buttonClass: legacyTheme.accent,
-        }));
+        const newProducts = marketStallResourcesToAdd.map(resource => {
+          const buttonLink = resource.link || '';
+          console.log(`[useAutoAddResources] 🔍 Creating product from resource "${resource.name}":`, {
+            resourceId: resource.id,
+            resourceLink: resource.link,
+            assignedButtonLink: buttonLink,
+            hasButtonLink: !!buttonLink
+          });
+          
+          return {
+            id: `resource-${resource.id}`,
+            name: resource.name,
+            description: resource.description || '',
+            price: parseFloat(resource.price) || 0,
+            image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
+            buttonText: 'VIEW DETAILS',
+            buttonLink: buttonLink,
+            whopProductId: resource.whopProductId, // Track Whop product ID for synced products
+            cardClass: legacyTheme.card,
+            titleClass: legacyTheme.text,
+            descClass: legacyTheme.text,
+            buttonClass: legacyTheme.accent,
+          };
+        });
+        
+        // Debug: Log created products
+        console.log(`[useAutoAddResources] 🔍 Created products with buttonLink:`, newProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          hasButtonLink: !!p.buttonLink,
+          buttonLink: p.buttonLink
+        })));
         
         // Add all new products to theme
         setThemeProducts(prev => ({
