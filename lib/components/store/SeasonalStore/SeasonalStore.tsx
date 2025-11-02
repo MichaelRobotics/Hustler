@@ -63,6 +63,7 @@ import SeasonalStoreChat from './components/SeasonalStoreChat';
 import { apiGet } from '../../../utils/api-client';
 import type { FunnelFlow } from '../../../types/funnel';
 import type { AuthenticatedUser } from '../../../types/user';
+import { deleteTheme as deleteThemeAction } from '../../../actions/themes-actions';
 
 import type { UpdateSyncResult } from '../../../sync/update-product-sync';
 
@@ -301,6 +302,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     saveLastActiveTheme,
     saveLastActiveTemplate,
     restoreLastActiveState,
+    
+    // Theme loading
+    loadThemes,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
   
   // Auto-highlight save button after background generation completes
@@ -1568,6 +1572,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             setAllThemes={setAllThemes}
             handleAddCustomTheme={addCustomTheme}
             currentTheme={theme}
+            experienceId={experienceId}
+            onDeleteTheme={async (themeId: string) => {
+              if (!experienceId) {
+                throw new Error('Experience ID is required to delete theme');
+              }
+              await deleteThemeAction(experienceId, themeId);
+              // Reload themes from database to update the themes state
+              await loadThemes();
+            }}
             handleUpdateTheme={async (season, updates) => {
               try {
                 console.log('🎨 Updating theme for season:', season, updates);

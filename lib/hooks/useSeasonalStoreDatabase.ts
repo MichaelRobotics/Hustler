@@ -2101,5 +2101,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     saveLastActiveTheme,
     saveLastActiveTemplate,
     restoreLastActiveState,
+    
+    // Theme loading
+    loadThemes,
   };
 };
