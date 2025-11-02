@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FloatingAsset, LegacyTheme, FixedTextStyles } from '../types/index';
 import { 
   SettingsIcon, 
@@ -12,6 +12,7 @@ import {
 } from './Icons';
 import { emojiToSvgDataURL } from '../services/aiService';
 import { useBackgroundAnalysis } from '../utils/backgroundAnalyzer';
+import { DeleteThemeNotification } from './DeleteThemeNotification';
 
 interface AdminAssetSheetProps {
   isOpen: boolean;
@@ -45,6 +46,9 @@ interface AdminAssetSheetProps {
   maxCustomTemplates?: number;
   // Current theme prop - the actually viewed theme (may be custom or default)
   currentTheme?: LegacyTheme | null;
+  // Database props for theme deletion
+  experienceId?: string;
+  onDeleteTheme?: (themeId: string) => Promise<void>;
 }
 
 
@@ -77,6 +81,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   maxCustomThemes = 10,
   maxCustomTemplates = 10,
   currentTheme,
+  experienceId,
+  onDeleteTheme,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -90,6 +96,13 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   const [newThemeName, setNewThemeName] = useState('');
   const [newThemePrompt, setNewThemePrompt] = useState('');
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
+  
+  // Theme deletion notification state
+  const [deleteNotification, setDeleteNotification] = useState<{
+    isOpen: boolean;
+    isDeleting: boolean;
+    themeName: string;
+  }>({ isOpen: false, isDeleting: false, themeName: '' });
   
   const selectedAsset = floatingAssets.find(a => a.id === selectedAssetId);
   // Use the passed currentTheme prop if available, otherwise fall back to allThemes[currentSeason]
@@ -1023,15 +1036,44 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                       </div>
                     </div>
                     <button
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.${isCurrentTheme ? ' You are currently viewing this theme - it will be removed from your theme list.' : ''}`)) {
-                          // Remove only the specific theme by its unique key
+                      onClick={async () => {
+                        // Show deleting notification immediately
+                        setDeleteNotification({ isOpen: true, isDeleting: true, themeName: themeData.name });
+                        
+                        try {
+                          // Check if this is a database theme (db_ prefix) or frontend-only theme (custom_ prefix)
+                          if (themeData._key.startsWith('db_')) {
+                            // Extract theme ID from key (format: db_${themeId})
+                            const themeId = themeData._key.replace('db_', '');
+                            
+                            // Delete from database if onDeleteTheme callback is provided
+                            if (onDeleteTheme && experienceId) {
+                              await onDeleteTheme(themeId);
+                              console.log('✅ Theme deleted from database:', themeId);
+                            } else if (!onDeleteTheme || !experienceId) {
+                              console.warn('⚠️ Cannot delete theme from database: missing onDeleteTheme or experienceId');
+                            }
+                          }
+                          
+                          // Remove from frontend state
                           const updatedThemes = { ...allThemes };
                           delete updatedThemes[themeData._key];
                           setAllThemes(updatedThemes);
                           
+                          console.log('✅ Theme removed from frontend:', themeData._key);
+                          
+                          // Update notification to show success
+                          setDeleteNotification({ isOpen: true, isDeleting: false, themeName: themeData.name });
+                          
                           // Note: If deleting the currently active theme, currentSeason will still point to the deleted key
                           // The parent component should handle switching to a fallback theme if needed
+                        } catch (error) {
+                          console.error('❌ Failed to delete theme:', error);
+                          // Still show error in notification briefly
+                          setDeleteNotification({ isOpen: true, isDeleting: false, themeName: `Error: ${(error as Error).message}` });
+                          setTimeout(() => {
+                            setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' });
+                          }, 3000);
                         }
                       }}
                       className="flex-shrink-0 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
@@ -1047,6 +1089,14 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         </div>
         </div>
       </div>
+      
+      {/* Delete Theme Notification - Same style as Save notification */}
+      <DeleteThemeNotification
+        isOpen={deleteNotification.isOpen}
+        isDeleting={deleteNotification.isDeleting}
+        themeName={deleteNotification.themeName}
+        onClose={() => setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' })}
+      />
     </div>
   );
 };
