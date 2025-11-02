@@ -43,6 +43,8 @@ interface AdminAssetSheetProps {
   canAddTemplate?: boolean;
   maxCustomThemes?: number;
   maxCustomTemplates?: number;
+  // Current theme prop - the actually viewed theme (may be custom or default)
+  currentTheme?: LegacyTheme | null;
 }
 
 
@@ -74,6 +76,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   canAddTemplate = true,
   maxCustomThemes = 10,
   maxCustomTemplates = 10,
+  currentTheme,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -89,7 +92,9 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
   
   const selectedAsset = floatingAssets.find(a => a.id === selectedAssetId);
-  const theme = allThemes[currentSeason];
+  // Use the passed currentTheme prop if available, otherwise fall back to allThemes[currentSeason]
+  // This ensures we correctly identify the currently viewed theme (including custom themes)
+  const theme = currentTheme || allThemes[currentSeason];
   
   // Current theme prompt editing
   const [currentPromptValue, setCurrentPromptValue] = useState(theme?.themePrompt || '');
@@ -978,16 +983,25 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </p>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {(() => {
-              // Get custom themes by checking for custom_ prefix in keys
-              const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => 
-                key.startsWith('custom_')
-              );
+              // Default theme names that should not be deletable
+              const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky', 'Spooky Night'];
+              
+              // Get custom themes by excluding default themes and checking for custom_ or db_ prefix in keys
+              // This includes both frontend-created themes (custom_) and database-loaded themes (db_)
+              const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => {
+                // Include themes with custom_ or db_ prefix (these are custom themes)
+                const isCustomKey = key.startsWith('custom_') || key.startsWith('db_');
+                // Also exclude default theme names (in case they're stored with different keys)
+                const isNotDefaultName = !defaultThemeNames.includes(themeData.name);
+                return isCustomKey && isNotDefaultName;
+              });
               
               // Convert to array of theme objects with their keys
               const uniqueCustomThemes = customThemeEntries.map(([key, theme]) => ({ ...theme, _key: key }));
               
               console.log('🔍 Custom themes for deletion:', uniqueCustomThemes);
               console.log('🔍 Current theme:', theme?.name);
+              console.log('🔍 Current theme key (if custom):', theme && Object.entries(allThemes).find(([k, t]) => t.name === theme.name)?.[0]);
               console.log('🔍 All themes keys:', Object.keys(allThemes));
               
               if (uniqueCustomThemes.length === 0) {
@@ -1001,24 +1015,26 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               return uniqueCustomThemes.map((themeData, index) => {
                 const isCurrentTheme = theme?.name === themeData.name;
                 return (
-                  <div key={`${themeData._key}-${index}`} className={`flex items-center justify-between p-3 rounded-lg border ${isCurrentTheme ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-800/50 border-gray-600'}`}>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-white flex items-center">
-                        {themeData.name}
-                        {isCurrentTheme && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded">CURRENT</span>}
+                  <div key={`${themeData._key}-${index}`} className={`flex items-center gap-2 p-3 rounded-lg border ${isCurrentTheme ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-800/50 border-gray-600'}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-white flex items-center gap-2">
+                        <span className="truncate" title={themeData.name}>{themeData.name}</span>
+                        {isCurrentTheme && <span className="flex-shrink-0 text-xs bg-blue-500 text-white px-2 py-1 rounded">CURRENT</span>}
                       </div>
-                      <div className="text-xs text-gray-400 truncate">{themeData.themePrompt || 'No prompt'}</div>
                     </div>
                     <button
                       onClick={() => {
-                        if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.`)) {
+                        if (confirm(`Are you sure you want to delete "${themeData.name}"? This action cannot be undone.${isCurrentTheme ? ' You are currently viewing this theme - it will be removed from your theme list.' : ''}`)) {
                           // Remove only the specific theme by its unique key
                           const updatedThemes = { ...allThemes };
                           delete updatedThemes[themeData._key];
                           setAllThemes(updatedThemes);
+                          
+                          // Note: If deleting the currently active theme, currentSeason will still point to the deleted key
+                          // The parent component should handle switching to a fallback theme if needed
                         }
                       }}
-                      className="ml-3 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
+                      className="flex-shrink-0 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
                       title="Delete custom theme"
                     >
                       <TrashIcon className="w-4 h-4" />

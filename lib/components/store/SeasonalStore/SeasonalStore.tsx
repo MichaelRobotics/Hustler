@@ -1567,6 +1567,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             allThemes={allThemes}
             setAllThemes={setAllThemes}
             handleAddCustomTheme={addCustomTheme}
+            currentTheme={theme}
             handleUpdateTheme={async (season, updates) => {
               try {
                 console.log('🎨 Updating theme for season:', season, updates);
