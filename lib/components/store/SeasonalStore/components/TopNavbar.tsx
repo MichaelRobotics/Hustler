@@ -132,7 +132,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       
       <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem] overflow-y-hidden">
       <div className="px-3 py-2 h-full flex items-center overflow-x-auto overflow-y-hidden scrollbar-hide md:overflow-x-visible">
-        <div className="flex items-center justify-between min-w-full md:min-w-0">
+        <div className="flex items-center justify-between w-full md:w-full" style={{ minWidth: 'max-content' }}>
           <div className="flex items-center gap-4 flex-shrink-0">
             {/* Home/Back Button */}
             <button
