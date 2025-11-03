@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { truncateDescription } from '../utils';
 
 interface PreviewLiveTemplateHookProps {
   previewLiveTemplate?: any;
@@ -126,7 +127,7 @@ export const usePreviewLiveTemplate = ({
             // Use template data first, fallback to Market Stall resource data
             id: `resource-${matchedResource.id}`,
             name: templateProduct.name || matchedResource.name, // Prefer template name, fallback to Market Stall
-            description: templateProduct.description || matchedResource.description || '', // Prefer template description, fallback to Market Stall
+            description: templateProduct.description || truncateDescription(matchedResource.description || ''), // Prefer template description, fallback to Market Stall (truncated)
             price: templateProduct.price !== undefined && templateProduct.price !== null ? templateProduct.price : parseFloat(matchedResource.price || '0'), // Prefer template price, fallback to Market Stall
             buttonLink: templateProduct.buttonLink || matchedResource.link || '', // Prefer template link, fallback to Market Stall
             whopProductId: matchedResource.whopProductId, // Keep Market Stall whopProductId for syncing

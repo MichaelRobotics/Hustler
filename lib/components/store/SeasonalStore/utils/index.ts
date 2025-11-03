@@ -60,6 +60,38 @@ export const extractColorFromClass = (className: string, prefix: string): string
 };
 
 /**
+ * Truncate description to approximately 2 lines (roughly 120 characters)
+ * Attempts to break at sentence boundaries when possible
+ */
+export const truncateDescription = (description: string, maxLength: number = 120): string => {
+  if (!description || description.length <= maxLength) {
+    return description;
+  }
+  
+  // Try to truncate at the last sentence boundary before maxLength
+  const truncated = description.substring(0, maxLength);
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastExclamation = truncated.lastIndexOf('!');
+  const lastQuestion = truncated.lastIndexOf('?');
+  
+  const lastSentenceEnd = Math.max(lastPeriod, lastExclamation, lastQuestion);
+  
+  // If we found a sentence end within the last 30 chars, use it
+  if (lastSentenceEnd > maxLength - 30 && lastSentenceEnd > 0) {
+    return description.substring(0, lastSentenceEnd + 1);
+  }
+  
+  // Otherwise, truncate at word boundary
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > maxLength - 20 && lastSpace > 0) {
+    return description.substring(0, lastSpace) + '...';
+  }
+  
+  // Fallback: hard truncate with ellipsis
+  return truncated + '...';
+};
+
+/**
  * Extract text color from CSS class
  */
 export const extractTextColor = (className: string): string => {

@@ -59,7 +59,7 @@ import { useTemplateSave } from './hooks/useTemplateSave';
 import { usePreviewLiveTemplate } from './hooks/usePreviewLiveTemplate';
 import { useAutoAddResources } from './hooks/useAutoAddResources';
 import { SyncChangesPopup } from './components/SyncChangesPopup';
-import { convertThemeToLegacy, formatPrice, generateAssetId } from './utils';
+import { convertThemeToLegacy, formatPrice, generateAssetId, truncateDescription } from './utils';
 import SeasonalStoreChat from './components/SeasonalStoreChat';
 import { apiGet } from '../../../utils/api-client';
 import type { FunnelFlow } from '../../../types/funnel';
@@ -805,7 +805,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       return {
         id: `resource-${resource.id}`,
         name: resource.name, // Keep original name
-        description: resource.description || '', // Keep original description
+        description: truncateDescription(resource.description || ''), // Truncate description to 2 lines
         price: formattedPrice,
         image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Keep original image or use placeholder
         imageAttachmentUrl: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Map to imageAttachmentUrl for ProductCard

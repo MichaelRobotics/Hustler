@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { truncateDescription } from '../utils';
 
 interface AutoAddResourcesHookProps {
   allResources: any[]; // IMPORTANT: MUST contain ONLY Market Stall (global ResourceLibrary) products
@@ -52,7 +53,7 @@ export const useAutoAddResources = ({
         const templateProducts = existingResources.map(resource => ({
           id: `resource-${resource.id}`,
           name: resource.name,
-          description: resource.description || '',
+          description: truncateDescription(resource.description || ''),
           price: parseFloat(resource.price) || 0,
           image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
           buttonText: 'VIEW DETAILS',
@@ -136,7 +137,7 @@ export const useAutoAddResources = ({
           return {
             id: `resource-${resource.id}`,
             name: resource.name,
-            description: resource.description || '',
+            description: truncateDescription(resource.description || ''),
             price: parseFloat(resource.price) || 0,
             image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
             buttonText: 'VIEW DETAILS',

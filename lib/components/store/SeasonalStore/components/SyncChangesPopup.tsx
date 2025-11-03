@@ -58,6 +58,24 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
     }
   }, [isApplying, hasStartedSync, syncResult, isLoading]);
 
+  // Auto-close when no changes available (products are synced)
+  useEffect(() => {
+    if (!isLoading && !isApplying && syncResult && !syncResult.hasChanges && !showSuccess) {
+      // Products are synced (no updates available)
+      setShowSuccess(true);
+      
+      // Auto-hide after showing success for 2 seconds
+      const timer = setTimeout(() => {
+        handleClose();
+        if (onSyncSuccess) {
+          onSyncSuccess();
+        }
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, isApplying, syncResult, showSuccess, onSyncSuccess]);
+
   const handleClose = () => {
     setIsAnimating(false);
     // Wait for animation to complete before hiding
@@ -162,7 +180,7 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
-                {showSuccess ? (
+                {showSuccess || (syncResult && !syncResult.hasChanges && !isLoading && !isApplying) ? (
                   <svg className="w-4 h-4 text-white checkmark-scale" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
@@ -177,7 +195,7 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
                 )}
               </div>
             <h3 className="text-sm font-bold text-white">
-              {showSuccess ? "Sync Complete!" : isApplying ? "Syncing Products..." : isLoading ? "Checking..." : "Products Sync Needed"}
+              {showSuccess ? "Sync Complete!" : isApplying ? "Syncing Products..." : isLoading ? "Checking..." : (syncResult && !syncResult.hasChanges ? "Products Synced!" : "Products Sync Needed")}
             </h3>
             </div>
             <button
@@ -195,8 +213,15 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
             <p className="text-white/90 text-xs font-medium">Products synced successfully!</p>
           </div>
         ) : isLoading || isApplying ? (
-          <div className="flex items-center justify-center py-3">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 text-center">
+            <div className="flex items-center justify-center space-x-2">
+              <svg className="w-4 h-4 text-white rotate-sync" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <p className="text-white/90 text-xs font-medium">
+                {isApplying ? "Syncing products..." : "Checking for updates..."}
+              </p>
+            </div>
           </div>
         ) : (
           <>
@@ -223,7 +248,12 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
               </div>
             ) : (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 text-center">
-                <p className="text-white/90 text-xs font-medium">No updates available</p>
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4 text-white checkmark-scale" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <p className="text-white/90 text-xs font-medium">Products synced!</p>
+                </div>
               </div>
             )}
 
