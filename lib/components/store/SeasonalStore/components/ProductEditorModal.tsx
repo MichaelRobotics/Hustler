@@ -28,6 +28,8 @@ interface Product {
   // WHOP attachment support for product images
   imageAttachmentId?: string | null;
   imageAttachmentUrl?: string | null;
+  // Badge support
+  badge?: 'new' | '5star' | 'bestseller' | null;
 }
 
 interface ProductEditorModalProps {
@@ -226,6 +228,53 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     placeholder="Enter description"
                     className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 h-24 placeholder-black"
                   />
+                </div>
+                
+                {/* Badge Selector */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">Badge</label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => updateProduct(productEditor.productId!, { badge: null })}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        !products.find(p => p.id === productEditor.productId)?.badge
+                          ? 'bg-gray-700 text-white ring-2 ring-indigo-400'
+                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      None
+                    </button>
+                    <button
+                      onClick={() => updateProduct(productEditor.productId!, { badge: 'new' })}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        products.find(p => p.id === productEditor.productId)?.badge === 'new'
+                          ? 'bg-green-600 text-white ring-2 ring-green-400'
+                          : 'bg-green-800/50 text-green-300 hover:bg-green-800/70'
+                      }`}
+                    >
+                      New
+                    </button>
+                    <button
+                      onClick={() => updateProduct(productEditor.productId!, { badge: '5star' })}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        products.find(p => p.id === productEditor.productId)?.badge === '5star'
+                          ? 'bg-yellow-500 text-gray-900 ring-2 ring-yellow-400'
+                          : 'bg-yellow-800/50 text-yellow-300 hover:bg-yellow-800/70'
+                      }`}
+                    >
+                      5 ⭐
+                    </button>
+                    <button
+                      onClick={() => updateProduct(productEditor.productId!, { badge: 'bestseller' })}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        products.find(p => p.id === productEditor.productId)?.badge === 'bestseller'
+                          ? 'bg-orange-600 text-white ring-2 ring-orange-400'
+                          : 'bg-orange-800/50 text-orange-300 hover:bg-orange-800/70'
+                      }`}
+                    >
+                      BestSeller
+                    </button>
+                  </div>
                 </div>
               </>
             )}

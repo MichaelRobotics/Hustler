@@ -72,6 +72,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   return (
     <>
       <style jsx>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
         @keyframes saveHighlight {
           0%, 100% { 
             box-shadow: 0 0 20px rgba(34, 197, 94, 0.4), 0 0 40px rgba(34, 197, 94, 0.2);
@@ -123,14 +130,14 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         }
       `}</style>
       
-      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
-      <div className="px-3 py-2 h-full flex items-center">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-4">
+      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem] overflow-y-hidden">
+      <div className="px-3 py-2 h-full flex items-center overflow-x-auto overflow-y-hidden scrollbar-hide md:overflow-x-visible">
+        <div className="flex items-center justify-between min-w-full md:min-w-0">
+          <div className="flex items-center gap-4 flex-shrink-0">
             {/* Home/Back Button */}
             <button
               onClick={onBack || (() => window.history.back())}
-              className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white relative"
+              className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white relative flex-shrink-0"
               title={isStorePreview ? "Go Back" : "Go Home"}
             >
               <div className="flex items-center justify-center">
@@ -184,7 +191,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 
           {/* Right Side: Admin Controls */}
           {!hideEditorButtons && (
-            <div className="p-1 rounded-lg bg-black/50 backdrop-blur text-white text-xs shadow-2xl flex items-center space-x-2 min-h-[2.5rem] h-full flex-shrink-0">
+            <div className="p-1 rounded-lg bg-black/50 backdrop-blur text-white text-xs shadow-2xl flex items-center space-x-2 min-h-[2.5rem] h-full flex-shrink-0 overflow-x-auto scrollbar-hide">
               {/* View Toggle */}
               <button 
               onClick={() => {
@@ -239,7 +246,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             )}
 
             {editorState.isEditorView && (
-              <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="flex items-center space-x-2 flex-shrink-0 flex-nowrap">
                 {/* Background Upload - Moved to left of theme selector */}
                 <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 relative">
                   <div className="flex items-center justify-center">

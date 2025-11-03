@@ -16,6 +16,8 @@ export interface Product {
   imageAttachmentId?: string | null;
   imageAttachmentUrl?: string | null;
   whopProductId?: string; // ID of the actual Whop product/app (for synced products)
+  // Badge support
+  badge?: 'new' | '5star' | 'bestseller' | null;
 }
 
 export interface ContainerAsset {
