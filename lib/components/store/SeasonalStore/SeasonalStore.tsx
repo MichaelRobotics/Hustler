@@ -14,6 +14,7 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { ProductShowcase } from './components/ProductShowcase';
 import { TemplateManagerModal } from './components/TemplateManagerModal';
 import { TemplateSaveNotification } from './components/TemplateSaveNotification';
+import { ThemeGenerationNotification } from './components/ThemeGenerationNotification';
 import { MakePublicNotification } from './components/MakePublicNotification';
 import { PromoButton } from './components/PromoButton';
 import { ProductEditorModal } from './components/ProductEditorModal';
@@ -1209,6 +1210,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     isSaving: boolean;
     templateName: string;
   }>({ isOpen: false, isSaving: false, templateName: '' });
+
+  const [themeGenerationNotification, setThemeGenerationNotification] = useState<{
+    isOpen: boolean;
+    isGenerating: boolean;
+    themeName: string;
+  }>({ isOpen: false, isGenerating: false, themeName: '' });
   
   // Make public notification state
   const [makePublicNotification, setMakePublicNotification] = useState<{
@@ -1573,6 +1580,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             handleAddCustomTheme={addCustomTheme}
             currentTheme={theme}
             experienceId={experienceId}
+            onThemeGeneration={(isGenerating, themeName) => {
+              setThemeGenerationNotification({
+                isOpen: true,
+                isGenerating,
+                themeName,
+              });
+            }}
             onDeleteTheme={async (themeId: string) => {
               if (!experienceId) {
                 throw new Error('Experience ID is required to delete theme');
@@ -1939,6 +1953,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         isSaving={templateSaveNotification.isSaving}
         templateName={templateSaveNotification.templateName}
         onClose={() => setTemplateSaveNotification({ isOpen: false, isSaving: false, templateName: '' })}
+      />
+
+      {/* Theme Generation Notification */}
+      <ThemeGenerationNotification
+        isOpen={themeGenerationNotification.isOpen}
+        isGenerating={themeGenerationNotification.isGenerating}
+        themeName={themeGenerationNotification.themeName}
+        onClose={() => setThemeGenerationNotification({ isOpen: false, isGenerating: false, themeName: '' })}
       />
 
       {/* Make Public Notification */}

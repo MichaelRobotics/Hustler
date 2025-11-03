@@ -269,7 +269,12 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
                   key={`${color}-${index}`}
                   onClick={() => setFixedTextStyles(prev => ({
                     ...prev,
-                    [editingText.targetId]: { ...prev[editingText.targetId], color }
+                    [editingText.targetId]: { 
+                      ...prev[editingText.targetId],
+                      color: color,
+                      content: prev[editingText.targetId]?.content || currentTextStyle.content,
+                      styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
+                    }
                   }))}
                   className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-gray-400 transition-colors"
                   style={{ backgroundColor: color }}

@@ -49,6 +49,8 @@ interface AdminAssetSheetProps {
   // Database props for theme deletion
   experienceId?: string;
   onDeleteTheme?: (themeId: string) => Promise<void>;
+  // Theme generation notification callback
+  onThemeGeneration?: (isGenerating: boolean, themeName: string) => void;
 }
 
 
@@ -83,6 +85,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   currentTheme,
   experienceId,
   onDeleteTheme,
+  onThemeGeneration,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -253,7 +256,9 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
     };
     handleAddFloatingAsset(newAsset);
     setManualSearch('');
-  }, [handleAddFloatingAsset]);
+    // Close the panel when emoji is selected
+    onClose();
+  }, [handleAddFloatingAsset, onClose]);
 
 
   // Handler for Promo Ticket Creation
@@ -302,6 +307,10 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
 
     console.log('🎨 [AdminAssetSheet] Starting AI theme generation:', { formattedName, prompt: newThemePrompt.trim() });
     setIsGeneratingTheme(true);
+    
+    // Close the sheet and show notification
+    onClose();
+    onThemeGeneration?.(true, formattedName);
 
     try {
       // Generate AI-powered theme colors and background
@@ -344,6 +353,9 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       await handleAddCustomTheme(newThemeData);
       setNewThemeName('');
       setNewThemePrompt('');
+      
+      // Update notification to show completed
+      onThemeGeneration?.(false, formattedName);
     } catch (error) {
       console.error('🎨 [AdminAssetSheet] Error generating custom theme:', error);
       
@@ -366,14 +378,17 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       await handleAddCustomTheme(newThemeData);
       setNewThemeName('');
       setNewThemePrompt('');
+      
+      // Update notification to show completed even on error (fallback theme was created)
+      onThemeGeneration?.(false, formattedName);
     } finally {
       setIsGeneratingTheme(false);
     }
-  }, [newThemeName, newThemePrompt, handleAddCustomTheme, isGeneratingTheme]);
+  }, [newThemeName, newThemePrompt, handleAddCustomTheme, isGeneratingTheme, onClose, onThemeGeneration]);
 
   return (
     <div
-      className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       role="dialog"
       aria-modal="true"
       aria-label="Assets Manager"

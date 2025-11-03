@@ -26,6 +26,7 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
   const assetRef = useRef<HTMLDivElement>(null);
   const [editMode, setEditMode] = useState<'position' | 'scale' | 'rotate' | null>(null);
   const [hasDragged, setHasDragged] = useState(false);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const dragOffsetRef = useRef({ 
     x: 0, 
     y: 0, 
@@ -54,11 +55,8 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
     boxShadow: '0 4px 10px rgba(0, 0, 0, 0.5)',
   } : {};
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, mode: 'position' | 'scale' | 'rotate') => {
+  const handleStartDrag = useCallback((clientX: number, clientY: number, mode: 'position' | 'scale' | 'rotate') => {
     if (!isEditable) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
     
     onSelectAsset(asset.id);
     setEditMode(mode);
@@ -73,8 +71,8 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
     const currentY = parseFloat(asset.y);
     
     dragOffsetRef.current = {
-      x: e.clientX - currentX,
-      y: e.clientY - currentY,
+      x: clientX - currentX,
+      y: clientY - currentY,
       center: {
         x: assetRect.left + assetRect.width / 2,
         y: assetRect.top + assetRect.height / 2,
@@ -85,20 +83,38 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
     };
   }, [isEditable, asset, onSelectAsset, appRef, isTextAsset]);
 
-  // Mouse Move/Up logic
+  const handleMouseDown = useCallback((e: React.MouseEvent, mode: 'position' | 'scale' | 'rotate') => {
+    if (!isEditable) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    handleStartDrag(e.clientX, e.clientY, mode);
+  }, [isEditable, handleStartDrag]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent, mode: 'position' | 'scale' | 'rotate') => {
+    if (!isEditable) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    handleStartDrag(touch.clientX, touch.clientY, mode);
+  }, [isEditable, handleStartDrag]);
+
+  // Mouse and Touch Move/Up logic
   useEffect(() => {
     if (!editMode) return;
     const containerRect = appRef.current?.getBoundingClientRect();
     if (!containerRect) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (clientX: number, clientY: number) => {
       if (!assetRef.current) return;
       
       if (editMode === 'position') {
         setHasDragged(true);
         
-        let newX = e.clientX - dragOffsetRef.current.x;
-        let newY = e.clientY - dragOffsetRef.current.y;
+        let newX = clientX - dragOffsetRef.current.x;
+        let newY = clientY - dragOffsetRef.current.y;
 
         // Constrain to container bounds
         newX = Math.max(0, Math.min(newX, containerRect.width));
@@ -121,16 +137,16 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
           y: `${newY.toFixed(0)}px`,
         });
       } else if (editMode === 'scale') {
-        const distanceX = e.clientX - dragOffsetRef.current.center.x;
-        const distanceY = e.clientY - dragOffsetRef.current.center.y;
+        const distanceX = clientX - dragOffsetRef.current.center.x;
+        const distanceY = clientY - dragOffsetRef.current.center.y;
         const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
         
         const newScale = Math.max(0.5, Math.min(3.0, distance / (dragOffsetRef.current.initialWidth * 0.75)));
         
         onUpdateAsset(asset.id, { scale: parseFloat(newScale.toFixed(2)) });
       } else if (editMode === 'rotate') {
-        const deltaX = e.clientX - dragOffsetRef.current.center.x;
-        const deltaY = e.clientY - dragOffsetRef.current.center.y;
+        const deltaX = clientX - dragOffsetRef.current.center.x;
+        const deltaY = clientY - dragOffsetRef.current.center.y;
         const angleRad = Math.atan2(deltaY, deltaX);
         const angleDeg = (angleRad * 180 / Math.PI) + 90;
         const normalizedAngle = (angleDeg + 360) % 360;
@@ -138,17 +154,38 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
         onUpdateAsset(asset.id, { rotation: normalizedAngle.toFixed(0) });
       }
     };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleMove(touch.clientX, touch.clientY);
+      }
+    };
     
-    const handleMouseUp = () => {
+    const handleEnd = () => {
+      // Reset hasDragged after a short delay to allow click detection
+      if (hasDragged) {
+        setTimeout(() => setHasDragged(false), 100);
+      }
+      touchStartPosRef.current = null;
       setEditMode(null);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleEnd);
     };
   }, [editMode, asset.id, onUpdateAsset, appRef, isTextAsset]);
 
@@ -166,7 +203,21 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
         cursor: isEditable ? 'grab' : 'default',
       }}
       onMouseDown={(e) => handleMouseDown(e, 'position')}
-      onClick={(e) => { 
+      onTouchStart={(e) => handleTouchStart(e, 'position')}
+      onTouchEnd={(e) => {
+        e.stopPropagation();
+        // Check if this was a tap (not a drag)
+        if (touchStartPosRef.current) {
+          const touch = e.changedTouches[0];
+          const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+          const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+          // If moved less than 10px, treat as tap
+          if (deltaX < 10 && deltaY < 10 && !hasDragged) {
+            onSelectAsset(asset.id);
+          }
+        }
+      }}
+      onClick={(e) => {
         e.stopPropagation(); 
         if (hasDragged) {
           // Don't delete if we just dragged
@@ -224,6 +275,7 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
         <div 
           className="absolute bottom-[-10px] right-[-10px] w-5 h-5 bg-cyan-500 rounded-full border-2 border-white shadow-xl cursor-nwse-resize pointer-events-auto hover:scale-125 transition-transform"
           onMouseDown={(e) => handleMouseDown(e, 'scale')}
+          onTouchStart={(e) => handleTouchStart(e, 'scale')}
           onDoubleClick={(e) => { 
             e.stopPropagation(); 
             onUpdateAsset(asset.id, { scale: 1.0 }); 
@@ -238,6 +290,7 @@ export const FloatingAsset = memo<FloatingAssetProps>(({
           <div 
             className="absolute top-[-45px] left-1/2 w-5 h-5 bg-cyan-500 rounded-full border-2 border-white shadow-xl cursor-grab pointer-events-auto transform -translate-x-1/2 hover:scale-125 transition-transform"
             onMouseDown={(e) => handleMouseDown(e, 'rotate')}
+            onTouchStart={(e) => handleTouchStart(e, 'rotate')}
             onDoubleClick={(e) => { 
               e.stopPropagation(); 
               onUpdateAsset(asset.id, { rotation: '0' }); 

@@ -283,10 +283,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {product.name}
         </h2>
         
-        {/* Editable Product Description (Fixed min height for alignment) */}
+        {/* Editable Product Description (Fixed min height for alignment, max 2 lines) */}
         <p 
-          className={`text-xs mb-1 ${descClass} flex-grow`}
-          style={{ minHeight: '1.5rem', cursor: isEditorView ? 'text' : 'default' }}
+          className={`text-xs mb-1 ${descClass} flex-grow ${!isEditorView ? 'line-clamp-2' : ''}`}
+          style={{ 
+            minHeight: '1.5rem', 
+            cursor: isEditorView ? 'text' : 'default'
+          }}
           contentEditable={isEditorView}
           suppressContentEditableWarning={true}
           onBlur={handleDescriptionChange}
