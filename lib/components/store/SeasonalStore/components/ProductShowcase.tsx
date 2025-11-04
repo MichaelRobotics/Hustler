@@ -93,8 +93,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
     if (editorState.isEditorView) return;
     if (isNavigating) return;
     
-    // Auto-switch every 3 seconds
-    const switchTimeout = 3000;
+    // Auto-switch timeout: 5 seconds for desktop, 3 seconds for mobile
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const switchTimeout = isMobile ? 3000 : 5000;
     
     autoSwitchIntervalRef.current = setInterval(() => {
       // Only auto-switch if not currently navigating
