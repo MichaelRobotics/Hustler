@@ -1899,7 +1899,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   const [editorState, setEditorState] = useState<EditorState>({
     isEditorView: true, // Default to Edit View when opening store
     isSheetOpen: false,
-    isAdminSheetOpen: true, // Default to Assets panel open when entering store
+    isAdminSheetOpen: false, // Assets panel closed by default
     selectedAssetId: null
   });
   
