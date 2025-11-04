@@ -243,15 +243,18 @@ export class WhopApiClient {
       }
       console.log(`✅ Found ${plans.length} plans`);
       
-      // DEBUG: Log all plans to see what we're getting
-      console.log(`🔍 DEBUG - All plans fetched:`, plans.map(p => ({
+      // DEBUG: Log only visible/hidden plans with visibility field
+      const visibleHiddenPlans = plans.filter(p => p.visibility === 'visible' || p.visibility === 'hidden');
+      console.log(`🔍 DEBUG - Visible/Hidden plans fetched (${visibleHiddenPlans.length}/${plans.length}):`, visibleHiddenPlans.map(p => ({
         id: p.id,
+        visibility: p.visibility,
         initial_price: p.initial_price,
+        renewal_price: p.renewal_price,
         currency: p.currency,
         title: p.title,
         plan_type: p.plan_type,
         product_id: p.product?.id,
-        product_title: p.product?.title
+        product_name: p.product?.title || 'Unknown Product'
       })));
 
       console.log("🔍 Step 2: Fetching all products...");
@@ -261,45 +264,184 @@ export class WhopApiClient {
       }
       console.log(`✅ Found ${products.length} products`);
       
+      // DEBUG: Log all products with visibility
+      console.log(`🔍 DEBUG - All products fetched:`, products.map(p => ({
+        id: p.id,
+        name: p.title || 'Unnamed Product',
+        visibility: p.visibility || 'visible',
+        status: p.status || 'active'
+      })));
+      
       // Filter out products that don't have proper product associations
+      // Only check for plans with visibility 'visible' or 'hidden'
       const validProducts = products.filter(product => {
-        // Only include products that have at least one plan associated with them
-        const hasAssociatedPlans = plans.some(plan => plan.product?.id === product.id);
+        // Only include products that have at least one visible/hidden plan associated with them
+        const hasAssociatedPlans = plans.some(plan => 
+          plan.product?.id === product.id &&
+          (plan.visibility === 'visible' || plan.visibility === 'hidden')
+        );
         if (!hasAssociatedPlans) {
-          console.log(`⚠️ Filtering out product "${product.title}" (${product.id}) - no associated plans`);
+          console.log(`⚠️ Filtering out product "${product.title}" (${product.id}) - no visible/hidden associated plans`);
         }
         return hasAssociatedPlans;
       });
       
-      console.log(`🔍 Filtered products: ${validProducts.length}/${products.length} (excluded products without plans)`);
+      console.log(`🔍 Filtered products: ${validProducts.length}/${products.length} (excluded products without visible/hidden plans)`);
 
-      // Filter out archived products
-      const visibleProducts = validProducts.filter(product => product.visibility !== 'archived');
-      console.log(`🔍 Filtered products: ${visibleProducts.length}/${validProducts.length} (excluded archived)`);
+      // Filter products by visibility - include visible, hidden, and quick_link (exclude only archived)
+      const visibleProducts = validProducts.filter(product => 
+        product.visibility === 'visible' || product.visibility === 'hidden' || product.visibility === 'quick_link'
+      );
+      console.log(`🔍 Filtered products: ${visibleProducts.length}/${validProducts.length} (excluded only archived)`);
+      
+      // DEBUG: Log product names
+      console.log(`🔍 DEBUG - Visible/Hidden/QuickLink products:`, visibleProducts.map(p => ({
+        id: p.id,
+        name: p.title || 'Unnamed Product',
+        visibility: p.visibility
+      })));
       
       // Use all visible products (no filtering)
       const finalProducts = visibleProducts;
       
       console.log(`🔍 Final products: ${finalProducts.length}/${visibleProducts.length} (no filtering applied)`);
 
+      // Find plans without matching products and create products from them
+      const visibleHiddenPlansForOrphans = plans.filter(p => p.visibility === 'visible' || p.visibility === 'hidden');
+      const productIds = new Set(finalProducts.map(p => p.id));
+      
+      const orphanPlans = visibleHiddenPlansForOrphans.filter(plan => {
+        const planProductId = plan.product?.id;
+        return planProductId && !productIds.has(planProductId);
+      });
+      
+      console.log(`🔍 Found ${orphanPlans.length} plans without matching products`);
+      
+      // Group orphan plans by product ID
+      const orphanPlansByProduct = new Map<string, typeof orphanPlans>();
+      orphanPlans.forEach(plan => {
+        const productId = plan.product?.id;
+        if (productId) {
+          if (!orphanPlansByProduct.has(productId)) {
+            orphanPlansByProduct.set(productId, []);
+          }
+          orphanPlansByProduct.get(productId)!.push(plan);
+        }
+      });
+      
+      // Create products from orphan plans
+      const createdProducts: any[] = [];
+      orphanPlansByProduct.forEach((plansForProduct, productId) => {
+        const firstPlan = plansForProduct[0];
+        const productName = firstPlan.product?.title || 'Unknown Product';
+        
+        // Only create if product name is NOT "Unknown Product" (case insensitive)
+        if (productName && productName.toLowerCase() !== 'unknown product') {
+          console.log(`🔍 Creating product from plan: "${productName}" (${productId})`);
+          
+          // Calculate price from plans (prioritize renewal plans)
+          const renewalPlansForProduct = plansForProduct.filter(p => p.plan_type === 'renewal');
+          const oneTimePlansForProduct = plansForProduct.filter(p => p.plan_type !== 'renewal');
+          
+          let minPrice = Infinity;
+          let currency = 'usd';
+          
+          if (renewalPlansForProduct.length > 0) {
+            renewalPlansForProduct.forEach(plan => {
+              const effectivePrice = plan.renewal_price !== undefined && plan.renewal_price !== null 
+                ? plan.renewal_price 
+                : (plan.initial_price || 0);
+              if (effectivePrice < minPrice) {
+                minPrice = effectivePrice;
+                currency = plan.currency || 'usd';
+              }
+            });
+          } else if (oneTimePlansForProduct.length > 0) {
+            oneTimePlansForProduct.forEach(plan => {
+              const effectivePrice = plan.initial_price || 0;
+              if (effectivePrice < minPrice) {
+                minPrice = effectivePrice;
+                currency = plan.currency || 'usd';
+              }
+            });
+          }
+          
+          const isFree = minPrice === 0;
+          const finalPrice = isFree ? 0 : minPrice;
+          
+          // Get purchase URL from plan (prefer first plan with purchase_url, or first plan's purchase_url)
+          const planWithPurchaseUrl = plansForProduct.find(plan => plan.purchase_url) || plansForProduct[0];
+          const purchaseUrl = planWithPurchaseUrl?.purchase_url || undefined;
+          
+          // Create product object from plan data
+          const createdProduct = {
+            id: productId,
+            title: productName,
+            description: firstPlan.description || '',
+            visibility: firstPlan.product?.visibility || 'visible',
+            status: 'active',
+            price: finalPrice,
+            currency: currency,
+            isFree: isFree,
+            purchaseUrl: purchaseUrl, // Store purchase URL from plan
+            plans: plansForProduct.map(plan => ({
+              id: plan.id,
+              price: plan.plan_type === 'renewal' 
+                ? (plan.renewal_price !== undefined && plan.renewal_price !== null ? plan.renewal_price : (plan.initial_price || 0))
+                : (plan.initial_price || 0),
+              currency: plan.currency || 'usd',
+              title: plan.title || `Plan ${plan.id}`,
+              plan_type: plan.plan_type,
+              renewal_price: plan.renewal_price,
+              billing_period: plan.billing_period,
+              purchase_url: plan.purchase_url
+            }))
+          };
+          
+          createdProducts.push(createdProduct);
+          console.log(`✅ Created product "${productName}" from plan with ${plansForProduct.length} plan(s), price: ${finalPrice}`);
+        } else {
+          console.log(`⚠️ Skipping plan product "${productName}" - has "Unknown Product" name`);
+        }
+      });
+      
+      // Add created products to final products list
+      const allProducts = [...finalProducts, ...createdProducts];
+      console.log(`🔍 Total products after adding from plans: ${allProducts.length} (${finalProducts.length} existing + ${createdProducts.length} created from plans)`);
+
       console.log("🔍 Step 3: Correlating plans with products and getting detailed product data...");
       const correlatedProducts: WhopProduct[] = [];
 
-      for (const product of finalProducts) {
+      for (const product of allProducts) {
         try {
-          // Get detailed product data
-          const detailedProduct = await client.products.retrieve(product.id);
+          // Get detailed product data (skip if product was created from plan)
+          let detailedProduct: any;
+          const isCreatedFromPlan = createdProducts.some(cp => cp.id === product.id);
           
-          // Find plans for this product
-          const productPlans = plans.filter(plan => plan.product?.id === product.id);
+          if (isCreatedFromPlan) {
+            // Use the created product data directly (no need to fetch from API)
+            console.log(`🔍 Using product created from plan: "${product.title}" (${product.id})`);
+            detailedProduct = product;
+          } else {
+            // Get detailed product data from API
+            detailedProduct = await client.products.retrieve(product.id);
+          }
+          
+          // Find plans for this product - filter by visibility (only visible and hidden)
+          const productPlans = plans.filter(plan => 
+            plan.product?.id === product.id &&
+            (plan.visibility === 'visible' || plan.visibility === 'hidden')
+          );
 
           console.log(`🔍 Processing product "${detailedProduct.title}" (${detailedProduct.id}) with ${productPlans.length} plans`);
           
-          // DEBUG: Log all plans for Profittest
+          // DEBUG: Log visible/hidden plans for Profittest (with visibility and renewal_price)
           if (detailedProduct.title === "Profittest") {
-            console.log(`🔍 DEBUG Profittest - All plans found:`, productPlans.map(p => ({
+            console.log(`🔍 DEBUG Profittest - Visible/Hidden plans found:`, productPlans.map(p => ({
               id: p.id,
+              visibility: p.visibility,
               initial_price: p.initial_price,
+              renewal_price: p.renewal_price,
               currency: p.currency,
               title: p.title,
               plan_type: p.plan_type,
@@ -307,30 +449,52 @@ export class WhopApiClient {
             })));
           }
           
-          // Calculate pricing - handle both one-time and subscription plans
+          // Calculate pricing - prioritize renewal plans, then one-time plans
+          // Skip if product was created from plan (already has price calculated)
           let minPrice = Infinity;
           let currency = 'usd';
           let isFree = true;
           
-          if (productPlans.length > 0) {
-            productPlans.forEach((plan, index) => {
-              let effectivePrice = 0;
+          if (isCreatedFromPlan) {
+            // Use pre-calculated price from created product
+            minPrice = detailedProduct.price || 0;
+            currency = detailedProduct.currency || 'usd';
+            isFree = detailedProduct.isFree || minPrice === 0;
+            console.log(`🔍 Using pre-calculated price for created product "${detailedProduct.title}": ${minPrice} ${currency}, isFree: ${isFree}`);
+          } else if (productPlans.length > 0) {
+            // First, check renewal plans and find the cheapest
+            const renewalPlans = productPlans.filter(plan => plan.plan_type === 'renewal');
+            
+            if (renewalPlans.length > 0) {
+              console.log(`🔍 Found ${renewalPlans.length} renewal plan(s) - checking for cheapest...`);
+              renewalPlans.forEach((plan, index) => {
+                // Always prefer renewal_price over initial_price when both exist for renewal plans
+                const effectivePrice = plan.renewal_price !== undefined && plan.renewal_price !== null 
+                  ? plan.renewal_price 
+                  : (plan.initial_price || 0);
+                console.log(`  Renewal Plan ${index + 1}: ${plan.id} - renewal_price: ${plan.renewal_price}, initial_price: ${plan.initial_price}, billing_period: ${plan.billing_period} days, effective_price: ${effectivePrice}`);
+                
+                if (effectivePrice < minPrice) {
+                  minPrice = effectivePrice;
+                  currency = plan.currency || 'usd';
+                }
+              });
+            } else {
+              // If no renewal plans, check one-time plans
+              const oneTimePlans = productPlans.filter(plan => plan.plan_type !== 'renewal');
+              console.log(`🔍 No renewal plans found, checking ${oneTimePlans.length} one-time plan(s)...`);
               
-              if (plan.plan_type === 'renewal') {
-                // For subscription plans, use renewal_price (monthly cost)
-                effectivePrice = plan.renewal_price || plan.initial_price || 0;
-                console.log(`  Plan ${index + 1}: ${plan.id} - SUBSCRIPTION - renewal_price: ${plan.renewal_price}, initial_price: ${plan.initial_price}, billing_period: ${plan.billing_period} days, effective_price: ${effectivePrice}`);
-              } else {
-                // For one-time plans, use initial_price
-                effectivePrice = plan.initial_price || 0;
-                console.log(`  Plan ${index + 1}: ${plan.id} - ONE-TIME - initial_price: ${effectivePrice}, currency: ${plan.currency}`);
-              }
-              
-              if (effectivePrice < minPrice) {
-                minPrice = effectivePrice;
-                currency = plan.currency || 'usd';
-              }
-            });
+              oneTimePlans.forEach((plan, index) => {
+                const effectivePrice = plan.initial_price || 0;
+                console.log(`  One-time Plan ${index + 1}: ${plan.id} - initial_price: ${effectivePrice}, currency: ${plan.currency}`);
+                
+                if (effectivePrice < minPrice) {
+                  minPrice = effectivePrice;
+                  currency = plan.currency || 'usd';
+                }
+              });
+            }
+            
             isFree = minPrice === 0;
           } else {
             console.log(`⚠️ No plans found for "${detailedProduct.title}" - will be marked as FREE`);
@@ -341,34 +505,65 @@ export class WhopApiClient {
           console.log(`🔍 Final calculation for "${detailedProduct.title}": minPrice=${minPrice}, isFree=${isFree}, finalPrice=${finalPrice}`);
 
           // Generate URLs
-            const companyRoute = await this.getCompanyRoute();
           let discoveryPageUrl: string | undefined;
-          if (companyRoute && detailedProduct.route) {
-            discoveryPageUrl = `https://whop.com/${companyRoute}/${detailedProduct.route}/`;
-          } else if (detailedProduct.route) {
-            discoveryPageUrl = `https://whop.com/${detailedProduct.route}/`;
+          let checkoutUrl: string | undefined;
+          
+          if (isCreatedFromPlan) {
+            // For products created from plans, use purchase_url from plan
+            discoveryPageUrl = detailedProduct.purchaseUrl || undefined;
+            checkoutUrl = detailedProduct.purchaseUrl || undefined;
+            console.log(`🔍 Using purchase_url from plan for created product "${detailedProduct.title}": ${discoveryPageUrl}`);
+          } else {
+            // For regular products, generate URLs from route
+            const companyRoute = await this.getCompanyRoute();
+            if (companyRoute && detailedProduct.route) {
+              discoveryPageUrl = `https://whop.com/${companyRoute}/${detailedProduct.route}/`;
+            } else if (detailedProduct.route) {
+              discoveryPageUrl = `https://whop.com/${detailedProduct.route}/`;
+            }
+            checkoutUrl = detailedProduct.route ? `https://whop.com/${detailedProduct.route}/checkout` : undefined;
           }
-          const checkoutUrl = detailedProduct.route ? `https://whop.com/${detailedProduct.route}/checkout` : undefined;
 
           console.log(`🔍 PRODUCT ${detailedProduct.title}: ${isFree ? 'FREE' : 'PAID'} ($${finalPrice}) - URL: ${discoveryPageUrl}`);
 
+          // Use plans from created product if available, otherwise from productPlans
+          const plansToUse = isCreatedFromPlan && detailedProduct.plans 
+            ? detailedProduct.plans 
+            : productPlans.map(plan => {
+                // Always prefer renewal_price over initial_price when both exist for renewal plans
+                let planPrice = 0;
+                if (plan.plan_type === 'renewal') {
+                  planPrice = plan.renewal_price !== undefined && plan.renewal_price !== null 
+                    ? plan.renewal_price 
+                    : (plan.initial_price || 0);
+                } else {
+                  planPrice = plan.initial_price || 0;
+                }
+                
+                return {
+                  id: plan.id,
+                  price: planPrice,
+                  currency: plan.currency || 'usd',
+                  title: plan.title || `Plan ${plan.id}`,
+                  plan_type: plan.plan_type,
+                  renewal_price: plan.renewal_price,
+                  billing_period: plan.billing_period
+                };
+              });
+          
+          // Determine model type based on plans
+          const hasRenewalPlans = plansToUse.some((p: any) => p.plan_type === 'renewal');
+          const modelType = isFree ? 'free' : (hasRenewalPlans ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring';
+          
           correlatedProducts.push({
             id: detailedProduct.id,
             title: detailedProduct.title || detailedProduct.headline || `Product ${detailedProduct.id}`,
             description: detailedProduct.description || detailedProduct.headline || '',
             price: finalPrice,
             currency: currency,
-            model: isFree ? 'free' : (productPlans.some(p => p.plan_type === 'renewal') ? 'recurring' : 'one-time') as 'free' | 'one-time' | 'recurring',
+            model: modelType,
             includedApps: [],
-            plans: productPlans.map(plan => ({
-              id: plan.id,
-              price: plan.plan_type === 'renewal' ? (plan.renewal_price || plan.initial_price || 0) : (plan.initial_price || 0),
-              currency: plan.currency || 'usd',
-              title: plan.title || `Plan ${plan.id}`,
-              plan_type: plan.plan_type,
-              renewal_price: plan.renewal_price,
-              billing_period: plan.billing_period
-            })),
+            plans: plansToUse,
             visibility: (detailedProduct.visibility || 'visible') as 'visible' | 'hidden' | 'archived' | 'quick_link',
             discoveryPageUrl,
             checkoutUrl,
