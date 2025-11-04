@@ -60,6 +60,8 @@ export interface LegacyTheme {
   welcomeColor: string;
   background: string;
   backgroundImage?: string | null;
+  placeholderImage?: string | null; // Refined placeholder image for custom themes
+  mainHeader?: string | null; // AI-generated main header text (for custom themes)
   aiMessage: string;
   emojiTip: string;
 }
@@ -175,6 +177,9 @@ export interface Theme {
   themePrompt?: string;
   accentColor?: string;
   ringColor?: string;
+  placeholderImage?: string | null; // Refined product placeholder image for custom themes
+  mainHeader?: string | null; // AI-generated main header text
+  subHeader?: string | null; // AI-generated subheader text
   card?: string;
   text?: string;
   welcomeColor?: string;

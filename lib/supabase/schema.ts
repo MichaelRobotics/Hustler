@@ -520,6 +520,9 @@ export const themes = pgTable(
 		themePrompt: text("theme_prompt"),
 		accentColor: text("accent_color"),
 		ringColor: text("ring_color"),
+		placeholderImage: text("placeholder_image"), // Refined product placeholder image for custom themes
+		mainHeader: text("main_header"), // AI-generated main header text
+		subHeader: text("sub_header"), // AI-generated subheader text
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},

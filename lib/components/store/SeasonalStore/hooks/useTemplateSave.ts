@@ -98,6 +98,9 @@ export const useTemplateSave = ({
           season: currentSeason,
           themePrompt: theme.themePrompt,
           accentColor: theme.accent,
+          placeholderImage: (theme as any).placeholderImage || (legacyTheme as any).placeholderImage || null, // Preserve custom theme placeholder
+          mainHeader: (theme as any).mainHeader || (legacyTheme as any).mainHeader || null, // Preserve custom theme mainHeader
+          subHeader: theme.aiMessage || (legacyTheme as any).subHeader || null, // Preserve custom theme subHeader
           ringColor: theme.accent,
           card: theme.card,
           text: theme.text,
@@ -238,7 +241,9 @@ export const useTemplateSave = ({
             welcomeColor: theme.welcomeColor,
             background: theme.background,
             backgroundImage: theme.backgroundImage,
+            placeholderImage: (theme as any).placeholderImage || (legacyTheme as any).placeholderImage || null, // Preserve custom theme placeholder
             aiMessage: theme.aiMessage,
+            mainHeader: (theme as any).mainHeader || (legacyTheme as any).mainHeader || null, // Preserve custom theme mainHeader
             emojiTip: theme.emojiTip
           },
           

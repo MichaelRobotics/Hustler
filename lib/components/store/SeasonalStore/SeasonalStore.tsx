@@ -1153,11 +1153,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       };
     }
     // If no background image, use theme-specific placeholder
-    let placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    // First check if theme has a custom placeholderImage (for custom themes)
+    let placeholderUrl = (legacyTheme as any)?.placeholderImage || null;
     let placeholderFilter: string | undefined;
     
-    // Use theme-specific placeholder if available
-    if (currentSeason === 'Cyber Sale') {
+    // If no custom placeholder, use theme-specific placeholder
+    if (!placeholderUrl) {
+      placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+      
+      // Use theme-specific placeholder if available
+      if (currentSeason === 'Cyber Sale') {
       placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
       placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
     } else if (currentSeason === 'Spring Renewal') {
@@ -1182,8 +1187,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       placeholderUrl = 'https://img-v2-prod.whop.com/LpAWtPhmyrvfSLDlQbkLwzdL4wwZI_9R4RJtSjIukeQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/edbb3d96-0248-4ecf-8345-921c100a064d.png';
       placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
     }
+    }
     
-    console.log('🎨 No background image, using placeholder for theme:', currentSeason);
+    console.log('🎨 No background image, using placeholder for theme:', currentSeason, placeholderUrl ? '(custom placeholder)' : '(default placeholder)');
     return {
       backgroundImage: `url(${placeholderUrl})`,
       backgroundSize: 'cover',
@@ -1196,7 +1202,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       opacity: 1,
       filter: placeholderFilter
     };
-  }, [backgroundAttachmentUrl, currentSeason]);
+  }, [backgroundAttachmentUrl, currentSeason, legacyTheme]);
 
   // Product editor slide-over state
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | string | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });

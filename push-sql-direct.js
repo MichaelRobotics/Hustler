@@ -47,6 +47,21 @@ async function pushMigrations() {
       }
     }
     
+    // Read and execute the theme metadata migration
+    console.log('📋 Applying theme metadata migration...');
+    const themeMetadataSQL = fs.readFileSync(path.join(__dirname, 'drizzle/20250120000004_add_theme_metadata.sql'), 'utf8');
+    
+    try {
+      await sql.unsafe(themeMetadataSQL);
+      console.log('✅ Theme metadata migration applied successfully');
+    } catch (error) {
+      if (error.message.includes('already exists') || error.message.includes('duplicate column')) {
+        console.log('ℹ️  Theme metadata columns already exist, skipping...');
+      } else {
+        throw error;
+      }
+    }
+    
     // Verify tables exist
     console.log('🔍 Verifying tables...');
     const themesCheck = await sql`

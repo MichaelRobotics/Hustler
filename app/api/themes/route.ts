@@ -70,7 +70,7 @@ async function createThemeHandler(
     }
 
     const body = await request.json();
-    const { name, season, themePrompt, accentColor, ringColor } = body;
+    const { name, season, themePrompt, accentColor, ringColor, placeholderImage, mainHeader, subHeader } = body;
 
     if (!name || !season) {
       return NextResponse.json(
@@ -99,6 +99,9 @@ async function createThemeHandler(
       themePrompt,
       accentColor,
       ringColor,
+      placeholderImage,
+      mainHeader,
+      subHeader,
     }).returning();
 
     return NextResponse.json({

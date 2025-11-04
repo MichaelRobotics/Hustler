@@ -61,6 +61,9 @@ export const useTemplateAutoSave = ({
             themePrompt: theme.themePrompt,
             accentColor: theme.accent,
             ringColor: theme.accent,
+            placeholderImage: (theme as any).placeholderImage || null, // Preserve custom theme placeholder
+            mainHeader: (theme as any).mainHeader || null, // Preserve custom theme mainHeader
+            subHeader: theme.aiMessage || null, // Preserve custom theme subHeader
             createdAt: new Date(),
             updatedAt: new Date()
           }, // Snapshot of current theme
@@ -221,7 +224,10 @@ export const useTemplateAutoSave = ({
               text: theme.text,
               welcomeColor: theme.welcomeColor,
               background: theme.background,
+              backgroundImage: theme.backgroundImage,
+              placeholderImage: (theme as any).placeholderImage || null, // Preserve custom theme placeholder
               aiMessage: theme.aiMessage,
+              mainHeader: (theme as any).mainHeader || null, // Preserve custom theme mainHeader
               emojiTip: theme.emojiTip
             },
             promoButton: {

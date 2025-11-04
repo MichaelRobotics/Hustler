@@ -346,7 +346,9 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         welcomeColor: themeData.welcomeColor,
         background: themeData.background,
         backgroundImage: themeData.backgroundImage,
+        placeholderImage: themeData.placeholderImage || themeData.backgroundImage, // Store refined placeholder
         aiMessage: themeData.aiMessage,
+        mainHeader: themeData.mainHeader, // Store generated mainHeader
         emojiTip: themeData.emojiTip,
       };
 

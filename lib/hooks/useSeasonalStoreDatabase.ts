@@ -317,7 +317,61 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     setCurrentTemplateTheme(null);
     // Reset manual template flag when switching themes
     setHasManuallyLoadedTemplate(false);
-  }, []);
+    
+    // Initialize text styles for custom themes if they don't exist
+    const theme = allThemes[season];
+    if (theme && (season.startsWith('db_') || season.startsWith('custom_'))) {
+      setThemeTextStyles(prev => {
+        // Only initialize if text styles don't already exist for this theme
+        if (prev[season]) {
+          return prev;
+        }
+        
+        // Use saved metadata from theme if available
+        const savedMainHeader = (theme as any).mainHeader || theme.name.toUpperCase();
+        const savedSubHeader = theme.aiMessage || '';
+        const themeDefaults = getThemeDefaultText(theme.name, savedSubHeader);
+        const textColor = getThemeTextColor(theme.welcomeColor);
+        
+        return {
+          ...prev,
+          [season]: {
+            mainHeader: {
+              content: savedMainHeader, // Use saved mainHeader from database
+              color: textColor,
+              styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+            },
+            headerMessage: {
+              content: savedMainHeader, // Use same as mainHeader for headerMessage
+              color: textColor,
+              styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+            },
+            subHeader: {
+              content: savedSubHeader || themeDefaults.subHeader, // Use saved subheader from database
+              color: textColor,
+              styleClass: 'text-lg sm:text-xl font-normal'
+            },
+            promoMessage: {
+              content: themeDefaults.promoMessage,
+              color: textColor,
+              styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+            }
+          }
+        };
+      });
+      
+      // Ensure products are added to this custom theme if they don't exist
+      setThemeProducts(prev => {
+        if (prev[season] && prev[season].length > 0) {
+          return prev; // Products already exist
+        }
+        
+        // Products will be added by autoAddMarketStallProductsToAllThemes
+        // But we can trigger it here if needed
+        return prev;
+      });
+    }
+  }, [allThemes, getThemeTextColor]);
   
   // Current theme - use template theme if loaded, otherwise use global themes
   const theme = currentTemplateTheme || allThemes[currentSeason] || initialThemes[currentSeason];
@@ -353,18 +407,30 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Helper function to convert template theme to LegacyTheme
   const convertTemplateThemeToLegacy = (templateTheme: any): LegacyTheme => {
-    return {
+    const legacyTheme: LegacyTheme = {
       name: templateTheme.name,
       themePrompt: templateTheme.themePrompt,
       accent: templateTheme.accentColor || templateTheme.accent || 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400',
       card: templateTheme.card || 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
       text: templateTheme.text || 'text-gray-800',
       welcomeColor: templateTheme.welcomeColor || 'text-yellow-300',
-      background: templateTheme.background || 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900',
-      backgroundImage: templateTheme.backgroundImage || null,
-      aiMessage: templateTheme.aiMessage || 'Discover exclusive seasonal products',
+      background: templateTheme.placeholderImage 
+        ? `bg-cover bg-center` 
+        : (templateTheme.background || 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'),
+      backgroundImage: templateTheme.placeholderImage || templateTheme.backgroundImage || null,
+      aiMessage: templateTheme.subHeader || templateTheme.aiMessage || 'Discover exclusive seasonal products',
       emojiTip: templateTheme.emojiTip || '🎁'
     };
+    
+    // Preserve custom theme metadata if available
+    if (templateTheme.placeholderImage) {
+      (legacyTheme as any).placeholderImage = templateTheme.placeholderImage;
+    }
+    if (templateTheme.mainHeader) {
+      (legacyTheme as any).mainHeader = templateTheme.mainHeader;
+    }
+    
+    return legacyTheme;
   };
   
   // Load themes from database
@@ -375,12 +441,62 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       // Convert to legacy theme map and merge with initial themes
       const themesMap: Record<string, LegacyTheme> = { ...initialThemes }; // Start with initial themes
+      const newThemeTextStyles: Record<string, FixedTextStyles> = {};
+      
       themesList.forEach(theme => {
         // Use unique key for database themes to avoid overriding default themes
         const dbThemeKey = `db_${theme.id}`;
-        themesMap[dbThemeKey] = convertThemeToLegacy(theme);
+        const legacyTheme = convertThemeToLegacy(theme);
+        // Add saved metadata to the theme object
+        (legacyTheme as any).placeholderImage = theme.placeholderImage || null;
+        (legacyTheme as any).mainHeader = theme.mainHeader || null;
+        themesMap[dbThemeKey] = legacyTheme;
+        
+        // Initialize text styles with saved values from database
+        if (theme.mainHeader || theme.subHeader) {
+          const savedMainHeader = theme.mainHeader || theme.name.toUpperCase();
+          const savedSubHeader = theme.subHeader || legacyTheme.aiMessage;
+          const themeDefaults = getThemeDefaultText(theme.name, savedSubHeader);
+          const textColor = getThemeTextColor(legacyTheme.welcomeColor);
+          
+          newThemeTextStyles[dbThemeKey] = {
+            mainHeader: {
+              content: savedMainHeader, // Use saved mainHeader from database
+              color: textColor,
+              styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+            },
+            headerMessage: {
+              content: savedMainHeader, // Use same as mainHeader for headerMessage
+              color: textColor,
+              styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+            },
+            subHeader: {
+              content: savedSubHeader || themeDefaults.subHeader, // Use saved subheader from database
+              color: textColor,
+              styleClass: 'text-lg sm:text-xl font-normal'
+            },
+            promoMessage: {
+              content: themeDefaults.promoMessage,
+              color: textColor,
+              styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+            }
+          };
+        }
       });
+      
       setAllThemes(themesMap);
+      // Initialize text styles for themes loaded from database
+      if (Object.keys(newThemeTextStyles).length > 0) {
+        setThemeTextStyles(prev => {
+          const updated = { ...prev, ...newThemeTextStyles };
+          console.log('✅ Initialized text styles for custom themes from database:', Object.keys(newThemeTextStyles));
+          // Log what was initialized for debugging
+          Object.keys(newThemeTextStyles).forEach(key => {
+            console.log(`  - ${key}: mainHeader="${newThemeTextStyles[key].mainHeader.content}", subHeader="${newThemeTextStyles[key].subHeader.content}"`);
+          });
+          return updated;
+        });
+      }
     } catch (error) {
       console.error('Error loading themes:', error);
       // Don't set error for authentication issues, just log them
@@ -784,10 +900,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       // Get all available seasons/themes (including custom themes)
       const defaultSeasons = Object.keys(initialThemes);
-      const customThemeKeys = Object.keys(allThemes).filter(key => key.startsWith('custom_'));
+      // Include both 'custom_' and 'db_' prefixed custom themes
+      const customThemeKeys = Object.keys(allThemes).filter(key => 
+        key.startsWith('custom_') || key.startsWith('db_')
+      );
       const allThemeKeys = [...defaultSeasons, ...customThemeKeys];
       
-      console.log(`🛒 Found ${defaultSeasons.length} default themes and ${customThemeKeys.length} custom themes`);
+      console.log(`🛒 Found ${defaultSeasons.length} default themes and ${customThemeKeys.length} custom themes (including db themes)`);
       
       // Market Stall placeholder image
       const marketStallPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
@@ -826,7 +945,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           
           if (newProducts.length > 0) {
             updated[themeKey] = [...existingProducts, ...newProducts];
-            const themeType = themeKey.startsWith('custom_') ? 'custom theme' : 'theme';
+            const themeType = (themeKey.startsWith('custom_') || themeKey.startsWith('db_')) ? 'custom theme' : 'theme';
             console.log(`🛒 Added ${newProducts.length} PAID Market Stall products to ${themeType}: ${themeKey}`);
             hasChanges = true;
           }
@@ -841,7 +960,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     } catch (error) {
       console.error('🛒 Error auto-adding Market Stall products:', error);
     }
-  }, [experienceId]);
+  }, [experienceId, allThemes]);
   
   // Helper function to apply template data to state (used for both cached and DB-loaded templates)
   const applyTemplateDataToState = useCallback(async (template: StoreTemplate, skipProductFiltering = false, isCached = false) => {
@@ -970,9 +1089,18 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     
     // Set the template's theme for rendering
     if (template.templateData.currentTheme) {
-      setCurrentTemplateTheme(template.templateData.currentTheme);
+      const currentTheme = template.templateData.currentTheme;
+      // Preserve custom theme metadata from currentTheme
+      if ((currentTheme as any).placeholderImage) {
+        (currentTheme as any).placeholderImage = (currentTheme as any).placeholderImage;
+      }
+      if ((currentTheme as any).mainHeader) {
+        (currentTheme as any).mainHeader = (currentTheme as any).mainHeader;
+      }
+      setCurrentTemplateTheme(currentTheme);
     } else {
-      setCurrentTemplateTheme(convertTemplateThemeToLegacy(template.themeSnapshot));
+      const snapshotLegacyTheme = convertTemplateThemeToLegacy(template.themeSnapshot);
+      setCurrentTemplateTheme(snapshotLegacyTheme);
     }
     
     // Load promo button styling if available
@@ -984,6 +1112,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   // Application load logic: live template -> first template -> default spooky theme + auto-add Market Stall products
   const loadApplicationData = useCallback(async () => {
     try {
+      // IMPORTANT: Load themes FIRST before anything else so custom themes are available
+      // This ensures custom themes are in allThemes before we try to auto-add products to them
+      console.log('🎨 Loading themes from database...');
+      await loadThemes();
+      // Use a small delay to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 50));
+      console.log('✅ Themes loaded, allThemes now contains:', Object.keys(allThemes).filter(k => k.startsWith('db_') || k.startsWith('custom_')).length, 'custom themes');
+      
       // Step 0: Try to load from localStorage cache FIRST for instant display (only once)
       if (!hasLoadedFromCacheRef.current) {
         const cachedTemplate = loadLastLoadedTemplateFromCache();
@@ -1152,6 +1288,40 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           // Initialize Black Friday theme with empty products (Market Stall products will be added later)
           setThemeProducts(prev => ({ ...prev, 'Black Friday': [] }));
           
+          // Initialize text styles for Black Friday if they don't exist
+          setThemeTextStyles(prev => {
+            if (prev['Black Friday']) {
+              return prev; // Already initialized
+            }
+            const themeDefaults = getThemeDefaultText('Black Friday', allThemes['Black Friday']?.aiMessage);
+            const textColor = getThemeTextColor(allThemes['Black Friday']?.welcomeColor);
+            return {
+              ...prev,
+              'Black Friday': {
+                mainHeader: {
+                  content: themeDefaults.mainHeader,
+                  color: textColor,
+                  styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+                },
+                headerMessage: {
+                  content: themeDefaults.headerMessage,
+                  color: textColor,
+                  styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+                },
+                subHeader: {
+                  content: themeDefaults.subHeader,
+                  color: textColor,
+                  styleClass: 'text-lg sm:text-xl font-normal'
+                },
+                promoMessage: {
+                  content: themeDefaults.promoMessage,
+                  color: textColor,
+                  styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+                }
+              }
+            };
+          });
+          
           setIsStoreContentReady(true);
           console.log('🎨 Default Black Friday theme loaded - store content ready');
         }
@@ -1159,7 +1329,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       // Step 4: Always ensure Market Stall products are available in all themes
       // This ensures Market Stall products are available even when templates are loaded
+      // IMPORTANT: This must run AFTER themes are loaded so custom themes are included
       console.log('🛒 Ensuring Market Stall products are available in all themes...');
+      // Get current state to ensure we have the latest themes
+      const currentThemes = allThemes;
+      console.log('🛒 Current allThemes keys:', Object.keys(currentThemes));
+      console.log('🛒 Custom themes found:', Object.keys(currentThemes).filter(k => k.startsWith('db_') || k.startsWith('custom_')).length);
       await autoAddMarketStallProductsToAllThemes();
       
       // Step 5: After initial template is loaded, cache ALL templates and preload all backgrounds
@@ -1211,9 +1386,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Reset cache ref when experienceId changes
       hasLoadedFromCacheRef.current = false;
       
-      loadThemes();
+      // Load themes first, then load application data (which will also load themes but they'll be cached)
+      // loadThemes is called inside loadApplicationData now, so we don't need to call it separately
       loadTemplates();
-      loadApplicationData(); // New unified load function
+      loadApplicationData(); // New unified load function (includes loadThemes)
       loadLastEditedTemplate();
     }
     // Only depend on experienceId to prevent infinite loops
@@ -1471,7 +1647,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       } else {
         // Use themeSnapshot if currentTheme is not available
         console.log('🎨 Using themeSnapshot for rendering:', template.themeSnapshot.name);
-        setCurrentTemplateTheme(convertTemplateThemeToLegacy(template.themeSnapshot));
+        const snapshotLegacyTheme = convertTemplateThemeToLegacy(template.themeSnapshot);
+        setCurrentTemplateTheme(snapshotLegacyTheme);
       }
       
       // Load promo button styling if available
@@ -1836,7 +2013,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         season: currentSeason, // Use current season
         themePrompt: theme.themePrompt || '',
         accentColor: theme.accent || 'bg-indigo-500',
-        ringColor: theme.accent || 'bg-indigo-500'
+        ringColor: theme.accent || 'bg-indigo-500',
+        placeholderImage: (theme as any).placeholderImage || null, // Save refined placeholder image
+        mainHeader: (theme as any).mainHeader || null, // Save AI-generated main header
+        subHeader: theme.aiMessage || null // Save AI-generated subheader (aiMessage)
       };
       
       // Save to database
@@ -1846,28 +2026,39 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Update local state
       setThemes(prev => [...prev, newTheme]);
       
-      // Create a unique key for custom themes to avoid conflicts with default themes
-      const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
-      setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
+      // Create a unique key for custom themes using the database theme ID
+      const customThemeKey = `db_${newTheme.id}`;
+      
+      // Add saved metadata from database to the theme object
+      const themeWithMetadata = {
+        ...theme,
+        placeholderImage: newTheme.placeholderImage || (theme as any).placeholderImage || null,
+        mainHeader: newTheme.mainHeader || (theme as any).mainHeader || null,
+      };
+      
+      setAllThemes(prev => ({ ...prev, [customThemeKey]: themeWithMetadata }));
       
       // Initialize default text styles for the new custom theme with proper colors
-      const themeDefaults = getThemeDefaultText(theme.name, theme.aiMessage);
+      // Use saved mainHeader from database if available, otherwise use generated or defaults
+      const savedMainHeader = newTheme.mainHeader || (theme as any).mainHeader || theme.name.toUpperCase();
+      const savedSubHeader = newTheme.subHeader || theme.aiMessage;
+      const themeDefaults = getThemeDefaultText(theme.name, savedSubHeader);
       const textColor = getThemeTextColor(theme.welcomeColor);
       setThemeTextStyles(prev => ({
         ...prev,
         [customThemeKey]: {
           mainHeader: {
-            content: themeDefaults.mainHeader,
+            content: savedMainHeader, // Use saved mainHeader from database
             color: textColor,
             styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
           },
           headerMessage: {
-            content: themeDefaults.headerMessage,
+            content: savedMainHeader, // Use same as mainHeader for headerMessage
             color: textColor,
             styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
           },
           subHeader: {
-            content: themeDefaults.subHeader,
+            content: savedSubHeader || themeDefaults.subHeader, // Use saved subheader from database
             color: textColor,
             styleClass: 'text-lg sm:text-xl font-normal'
           },
@@ -1895,23 +2086,25 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
         
         // Initialize default text styles for the new custom theme with proper colors (fallback)
+        // Use generated mainHeader from API if available, otherwise use theme defaults
+        const generatedMainHeader = (theme as any).mainHeader || theme.name.toUpperCase();
         const themeDefaults = getThemeDefaultText(theme.name, theme.aiMessage);
         const textColor = getThemeTextColor(theme.welcomeColor);
         setThemeTextStyles(prev => ({
           ...prev,
           [customThemeKey]: {
             mainHeader: {
-              content: themeDefaults.mainHeader,
+              content: generatedMainHeader, // Use AI-generated mainHeader
               color: textColor,
               styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
             },
             headerMessage: {
-              content: themeDefaults.headerMessage,
+              content: generatedMainHeader, // Use same as mainHeader for headerMessage
               color: textColor,
               styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
             },
             subHeader: {
-              content: themeDefaults.subHeader,
+              content: theme.aiMessage || themeDefaults.subHeader, // Use AI-generated subheader
               color: textColor,
               styleClass: 'text-lg sm:text-xl font-normal'
             },

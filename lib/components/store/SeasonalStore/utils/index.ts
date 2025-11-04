@@ -28,9 +28,12 @@ export const convertThemeToLegacy = (dbTheme: any): LegacyTheme => {
     card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
     text: 'text-gray-800',
     welcomeColor: 'text-yellow-300',
-    background: `bg-[url('https://placehold.co/1920x1080/000000/ffffff?text=${encodeURIComponent(dbTheme.name || 'Theme')}')] bg-cover bg-center`,
-    backgroundImage: null,
-    aiMessage: `Welcome to our ${dbTheme.name || 'collection'}!`,
+    background: dbTheme.placeholderImage 
+      ? `bg-cover bg-center` 
+      : `bg-[url('https://placehold.co/1920x1080/000000/ffffff?text=${encodeURIComponent(dbTheme.name || 'Theme')}')] bg-cover bg-center`,
+    backgroundImage: dbTheme.placeholderImage || null,
+    placeholderImage: dbTheme.placeholderImage || null, // Restore saved placeholder image
+    aiMessage: dbTheme.subHeader || `Welcome to our ${dbTheme.name || 'collection'}!`, // Restore saved subheader
     emojiTip: "✨"
   };
 };
