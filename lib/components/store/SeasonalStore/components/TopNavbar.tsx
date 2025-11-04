@@ -137,7 +137,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             {/* Home/Back Button */}
             <button
               onClick={onBack || (() => window.history.back())}
-              className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white relative flex-shrink-0"
+              className="p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white flex-shrink-0"
               title={isStorePreview ? "Go Back" : "Go Home"}
             >
               <div className="flex items-center justify-center">
@@ -146,10 +146,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 ) : (
                   <Home className="w-5 h-5" />
                 )}
-              </div>
-              {/* Tooltip */}
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                {isStorePreview ? "Go Back" : "Go Home"}
               </div>
             </button>
           </div>
@@ -201,11 +197,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   setIsChatOpen(false);
                 }
               }}
-              className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 shadow-lg ${
+              className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
                 editorState.isEditorView 
                 ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 shadow-red-500/25 hover:shadow-red-500/40' 
                 : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40'
-              } text-white relative`}
+              } text-white`}
               title={editorState.isEditorView ? 'Switch to Customer Page View' : 'Switch to Editor View'}
             >
               <div className="flex items-center justify-center">
@@ -215,10 +211,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     <EditIcon className="w-5 h-5" />
                   )}
               </div>
-              {/* Tooltip */}
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                {editorState.isEditorView ? 'Page View' : 'Editor View'}
-              </div>
             </button>
 
             {/* Generate Background Button - Icon in theme bar (Editor view only) */}
@@ -226,7 +218,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               <button 
                 onClick={handleGenerateBgClick}
                 disabled={loadingState.isImageLoading}
-                className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
+                className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
                   loadingState.isImageLoading 
                     ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
                     : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
@@ -238,25 +230,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                {/* Tooltip */}
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                  Generate Background
-                </div>
               </button>
             )}
 
             {editorState.isEditorView && (
               <div className="flex items-center space-x-2 flex-shrink-0 flex-nowrap">
                 {/* Background Upload - Moved to left of theme selector */}
-                <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 relative">
+                <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40" title="Upload Background">
                   <div className="flex items-center justify-center">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                  </div>
-                  {/* Tooltip */}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                    Upload Background
                   </div>
                   <input 
                     type="file" 
@@ -291,7 +275,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <button 
                     onClick={handleGenerateBgClick}
                     disabled={loadingState.isImageLoading}
-                    className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
+                    className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
                       loadingState.isImageLoading 
                         ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
                         : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
@@ -303,17 +287,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
-                    {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                      Generate Background
-                    </div>
                   </button>
                 )}
                 
                 {/* Save Template */}
                 <button 
                   onClick={handleSaveTemplate}
-                  className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative ${
+                  className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 ${
                     highlightSaveButton 
                       ? 'bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50 hover:shadow-green-500/60 save-highlight save-pulse' 
                       : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
@@ -325,20 +305,12 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                     </svg>
                   </div>
-                  {/* Tooltip */}
-                  <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap pointer-events-none ${
-                    highlightSaveButton 
-                      ? 'tooltip-pulse' 
-                      : 'opacity-0 group-hover:opacity-100 transition-opacity duration-200'
-                  }`}>
-                    Save
-                  </div>
                 </button>
                 
                 {/* Elements */}
                 <button 
                   onClick={toggleAdminSheet}
-                  className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 relative"
+                  className="p-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40"
                   title="Manage Elements & AI Tools"
                 >
                   <div className="flex items-center justify-center">
@@ -346,26 +318,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
                     </svg>
                   </div>
-                  {/* Tooltip */}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                    Assets
-                  </div>
                 </button>
                 
                 {/* Templates */}
                 <button 
                   onClick={openTemplateManager}
-                  className="p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 relative"
+                  className="p-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40"
                   title="Manage Shop"
                 >
                   <div className="flex items-center justify-center">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                  </div>
-                  {/* Tooltip */}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                    Shop
                   </div>
                 </button>
               </div>

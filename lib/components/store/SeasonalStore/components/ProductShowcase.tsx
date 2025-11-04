@@ -61,6 +61,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   const [showNavigation, setShowNavigation] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const autoSwitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Show navigation arrows after products finish loading
   useEffect(() => {
@@ -76,6 +77,52 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
       setShowNavigation(false);
     }
   }, [isProductsReady, combinedProducts.length]);
+
+  // Auto-switch products with fade animation (same as manual navigation)
+  useEffect(() => {
+    // Clear existing interval
+    if (autoSwitchIntervalRef.current) {
+      clearInterval(autoSwitchIntervalRef.current);
+    }
+    
+    // Don't auto-switch if:
+    // - 2 or fewer products
+    // - In editor view
+    // - Currently navigating
+    if (combinedProducts.length <= 2) return;
+    if (editorState.isEditorView) return;
+    if (isNavigating) return;
+    
+    // Auto-switch every 3 seconds
+    const switchTimeout = 3000;
+    
+    autoSwitchIntervalRef.current = setInterval(() => {
+      // Only auto-switch if not currently navigating
+      if (!isNavigating) {
+        // Use the same fade animation as manual navigation
+        setIsNavigating(true);
+        setIsFadingOut(true);
+        
+        // After fade out completes, change products and wait for render
+        setTimeout(() => {
+          navigateToNext(true); // Skip built-in slide animation (handles wrap-around)
+          // Use requestAnimationFrame to ensure products are rendered before fade in
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setIsFadingOut(false); // This will trigger fade in
+              setIsNavigating(false);
+            });
+          });
+        }, 300);
+      }
+    }, switchTimeout);
+    
+    return () => {
+      if (autoSwitchIntervalRef.current) {
+        clearInterval(autoSwitchIntervalRef.current);
+      }
+    };
+  }, [combinedProducts.length, editorState.isEditorView, isNavigating, currentProductIndex, navigateToNext]);
 
   // Navigation handlers with fade animation
   const handleNavigateNext = () => {

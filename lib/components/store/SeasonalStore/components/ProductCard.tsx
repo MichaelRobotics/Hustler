@@ -68,6 +68,74 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const buttonText = product.buttonText || 'VIEW DETAILS';
   const buttonBaseClass = product.buttonClass || theme.accent;
   
+  // Parse transparency from cardClass and extract base background color
+  const getCardStyle = () => {
+    // Match bg-color/opacity or bg-[custom]/opacity patterns
+    const transparencyMatch = cardClass.match(/bg-((?:\[[^\]]+\]|[^\s/]+)+)\/(\d{1,3})/);
+    if (transparencyMatch && transparencyMatch[1] && transparencyMatch[2]) {
+      const bgColor = transparencyMatch[1];
+      const opacityValue = parseInt(transparencyMatch[2], 10) / 100;
+      
+      // Map common Tailwind colors to RGB values
+      const colorMap: Record<string, string> = {
+        'white': '255, 255, 255',
+        'gray-50': '249, 250, 251',
+        'gray-100': '243, 244, 246',
+        'gray-200': '229, 231, 235',
+        'gray-300': '209, 213, 219',
+        'gray-400': '156, 163, 175',
+        'gray-500': '107, 114, 128',
+        'gray-600': '75, 85, 99',
+        'gray-700': '55, 65, 81',
+        'gray-800': '31, 41, 55',
+        'gray-900': '17, 24, 39',
+        'slate-100': '241, 245, 249',
+        'slate-800': '30, 41, 59',
+        'amber-50': '255, 251, 235',
+        'green-50': '240, 253, 244',
+        'purple-50': '250, 245, 255',
+        'blue-50': '239, 246, 255',
+        'rose-50': '255, 241, 242',
+        'emerald-50': '236, 253, 245',
+      };
+      
+      // Handle custom colors like bg-[#0f0b1f]
+      let rgbColor = '255, 255, 255'; // default to white
+      if (bgColor.startsWith('[') && bgColor.endsWith(']')) {
+        // Custom color like [#0f0b1f]
+        const hexColor = bgColor.slice(1, -1);
+        if (hexColor.startsWith('#')) {
+          const hex = hexColor.slice(1);
+          if (hex.length === 6) {
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            rgbColor = `${r}, ${g}, ${b}`;
+          }
+        }
+      } else {
+        // Standard Tailwind color
+        rgbColor = colorMap[bgColor] || '255, 255, 255';
+      }
+      
+      // Remove the background class with opacity and apply via inline style
+      // This regex matches bg-color/opacity and removes it, keeping other classes
+      const baseCardClass = cardClass.replace(/bg-(?:\[[^\]]+\]|[^\s/]+)\/\d{1,3}/, '').trim();
+      return {
+        className: baseCardClass,
+        style: { 
+          backgroundColor: `rgba(${rgbColor}, ${opacityValue})`,
+        }
+      };
+    }
+    return {
+      className: cardClass,
+      style: {}
+    };
+  };
+  
+  const cardStyle = getCardStyle();
+  
   // Debug logging - only log when product actually changes
   const prevProduct = useRef(product);
   useEffect(() => {
@@ -100,7 +168,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       
       {/* Main product card */}
       <div 
-        className={`rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
+        className={`rounded-2xl transition-all duration-300 ${cardStyle.className} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
+        style={cardStyle.style}
         onClick={(e) => {
           if (!isEditorView) return;
           const target = e.target as HTMLElement;
@@ -229,21 +298,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Delete Product Button */}
           <button
             onClick={() => onDeleteProduct(product.id)}
-            className="p-2 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300 relative group"
+            className="p-2 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300"
             title="Delete Product"
           >
             <TrashIcon className="w-3 h-3" />
-            {/* Tooltip */}
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-              Delete Product
-            </div>
           </button>
 
           {/* Single Combined AI Refine Button */}
           <button
             onClick={() => onRefineProduct(product)}
             disabled={loadingState.isTextLoading || loadingState.isImageLoading}
-            className={`p-2 rounded-xl group transition-all duration-300 transform hover:scale-105 relative shadow-lg ${
+            className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
               (loadingState.isTextLoading || loadingState.isImageLoading) 
                 ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-gray-300 cursor-not-allowed shadow-gray-500/25' 
                 : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
@@ -252,10 +317,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           >
             <div className="flex items-center justify-center">
               <ZapIcon className="w-3 h-3" />
-            </div>
-            {/* Tooltip */}
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-              AI Refine All
             </div>
           </button>
         </div>

@@ -30,7 +30,7 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
     { 
       label: 'Display (Large)', 
       class: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg',
-      description: 'Main header style - THE SEASONAL VAULT'
+      description: 'Main header style - CLICK, MAIN HEADER TEXT'
     },
     { 
       label: 'Header (H1)', 

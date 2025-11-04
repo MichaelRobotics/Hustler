@@ -12,13 +12,15 @@ import {
 } from '@/lib/components/store/SeasonalStore/types';
 import { 
   initialThemes, 
-  defaultLogo 
+  defaultLogo,
+  getThemeDefaultText,
+  getThemeTextColor as getThemeTextColorFromConstants
 } from '@/lib/components/store/SeasonalStore/services/constants';
 
 export const useSeasonalStore = () => {
   // Core State
   const [allThemes, setAllThemes] = useState<Record<string, LegacyTheme>>(initialThemes);
-  const [currentSeason, setCurrentSeason] = useState<string>('Fall');
+  const [currentSeason, setCurrentSeason] = useState<string>('Black Friday');
   const [floatingAssets, setFloatingAssets] = useState<FloatingAsset[]>([]);
   const [availableAssets, setAvailableAssets] = useState<FloatingAsset[]>([]);
   
@@ -30,25 +32,27 @@ export const useSeasonalStore = () => {
   const [themeProducts, setThemeProducts] = useState<Record<string, Product[]>>({});
   
   // Current theme's state (computed from theme-specific state)
+  const themeDefaults = getThemeDefaultText(currentSeason, initialThemes[currentSeason]?.aiMessage || initialThemes['Black Friday']?.aiMessage);
+  const themeTextColor = getThemeTextColorFromConstants(allThemes[currentSeason]?.welcomeColor);
   const fixedTextStyles = themeTextStyles[currentSeason] || {
     mainHeader: { 
-      content: 'THE SEASONAL VAULT', 
-      color: '#FFFFFF', 
+      content: themeDefaults.mainHeader, 
+      color: themeTextColor, 
       styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg' 
     },
     headerMessage: { 
-      content: 'THE SEASONAL VAULT', 
-      color: '#FFFFFF', 
+      content: themeDefaults.headerMessage, 
+      color: themeTextColor, 
       styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg' 
     },
     subHeader: { 
-      content: initialThemes[currentSeason]?.aiMessage || initialThemes['Fall'].aiMessage, 
-      color: '#FFFFFF', 
+      content: themeDefaults.subHeader, 
+      color: themeTextColor, 
       styleClass: 'text-lg sm:text-xl font-normal' 
     },
     promoMessage: { 
-      content: 'Our Merchant has a Gift for you!', 
-      color: '#FFFFFF', 
+      content: themeDefaults.promoMessage, 
+      color: themeTextColor, 
       styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md' 
     },
   };
@@ -286,6 +290,35 @@ export const useSeasonalStore = () => {
     // Create a unique key for custom themes to avoid conflicts with default themes
     const customThemeKey = `custom_${legacyTheme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
     setAllThemes(prev => ({ ...prev, [customThemeKey]: legacyTheme }));
+    
+    // Initialize default text styles for the new custom theme with proper colors
+    const themeDefaults = getThemeDefaultText(legacyTheme.name, legacyTheme.aiMessage);
+    const textColor = getThemeTextColorFromConstants(legacyTheme.welcomeColor);
+    setThemeTextStyles(prev => ({
+      ...prev,
+      [customThemeKey]: {
+        mainHeader: {
+          content: themeDefaults.mainHeader,
+          color: textColor,
+          styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+        },
+        headerMessage: {
+          content: themeDefaults.headerMessage,
+          color: textColor,
+          styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+        },
+        subHeader: {
+          content: themeDefaults.subHeader,
+          color: textColor,
+          styleClass: 'text-lg sm:text-xl font-normal'
+        },
+        promoMessage: {
+          content: themeDefaults.promoMessage,
+          color: textColor,
+          styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+        }
+      }
+    }));
   }, []);
 
   // Editor State Management

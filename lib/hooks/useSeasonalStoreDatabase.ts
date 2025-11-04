@@ -13,7 +13,9 @@ import {
 } from '@/lib/components/store/SeasonalStore/types';
 import { 
   initialThemes, 
-  defaultLogo 
+  defaultLogo,
+  getThemeDefaultText,
+  getThemeTextColor as getThemeTextColorFromConstants
 } from '@/lib/components/store/SeasonalStore/services/constants';
 import { 
   getThemes, 
@@ -41,10 +43,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Core State
   const [allThemes, setAllThemes] = useState<Record<string, LegacyTheme>>(initialThemes);
-  const [currentSeason, setCurrentSeason] = useState<string>('Fall');
+  const [currentSeason, setCurrentSeason] = useState<string>('Black Friday');
   
   // Store Navigation State (persists across view switches)
-  const [lastActiveTheme, setLastActiveTheme] = useState<string>('Fall');
+  const [lastActiveTheme, setLastActiveTheme] = useState<string>('Black Friday');
   const [lastActiveTemplate, setLastActiveTemplate] = useState<StoreTemplate | null>(null);
   
   // Theme-Specific State
@@ -221,29 +223,14 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
   }, [getLastLoadedTemplateKey]);
   
-  // Helper function to convert Tailwind color classes to hex values
+  // Helper function to convert Tailwind color classes to hex values (uses constants)
   const getThemeTextColor = (welcomeColor: string | undefined): string => {
-    if (!welcomeColor) return '#FFFFFF';
-    
-    // Map Tailwind color classes to hex values
-    const colorMap: Record<string, string> = {
-      'text-blue-200': '#BFDBFE',      // Winter
-      'text-yellow-100': '#FEF3C7',    // Summer  
-      'text-orange-100': '#FFEDD5',    // Fall
-      'text-red-200': '#FECACA',        // Holiday
-      'text-pink-100': '#FCE7F3',      // Spring
-      'text-purple-400': '#C084FC',    // Cyber
-      'text-orange-200': '#FED7AA',     // Spooky
-      'text-cyan-300': '#67E8F9',      // Cyber Sale
-      'text-green-200': '#BBF7D0',     // Spring
-    };
-    
-    return colorMap[welcomeColor] || '#FFFFFF';
+    return getThemeTextColorFromConstants(welcomeColor);
   };
-  
+
   // Helper function to check if we can add a custom theme
   const canAddCustomTheme = useCallback(() => {
-    const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky'];
+    const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Sale', 'Spooky Night', 'Black Friday'];
     const customThemes = Object.values(allThemes).filter(theme => 
       !defaultThemeNames.includes(theme.name)
     );
@@ -256,24 +243,25 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   }, [templates]);
 
   // Default text styles with theme-appropriate colors
+  const themeDefaults = getThemeDefaultText(currentSeason, allThemes[currentSeason]?.aiMessage || allThemes['Black Friday']?.aiMessage);
   const defaultTextStyles = {
     mainHeader: { 
-      content: 'THE SEASONAL VAULT', 
+      content: themeDefaults.mainHeader, 
       color: getThemeTextColor(allThemes[currentSeason]?.welcomeColor), 
       styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg' 
     },
     headerMessage: { 
-      content: 'THE SEASONAL VAULT', 
+      content: themeDefaults.headerMessage, 
       color: getThemeTextColor(allThemes[currentSeason]?.welcomeColor), 
       styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg' 
     },
     subHeader: { 
-      content: allThemes[currentSeason]?.aiMessage || allThemes['Fall']?.aiMessage || 'Discover exclusive seasonal products', 
+      content: themeDefaults.subHeader, 
       color: getThemeTextColor(allThemes[currentSeason]?.welcomeColor), 
       styleClass: 'text-lg sm:text-xl font-normal' 
     },
     promoMessage: { 
-      content: '', 
+      content: themeDefaults.promoMessage, 
       color: getThemeTextColor(allThemes[currentSeason]?.welcomeColor), 
       styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md' 
     }
@@ -1157,15 +1145,15 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           setIsStoreContentReady(true);
           console.log('🎨 First template loaded - store content ready (background preloaded)');
         } else {
-          // Step 3: No templates at all - show default "Spooky Night" theme
-          console.log('🎨 No templates found - showing default Spooky Night theme');
-          setCurrentSeason('Fall'); // Use Fall as the season (which contains Spooky Night theme)
+          // Step 3: No templates at all - show default "Black Friday" theme
+          console.log('🎨 No templates found - showing default Black Friday theme');
+          setCurrentSeason('Black Friday');
           
-          // Initialize Fall theme with empty products (Market Stall products will be added later)
-          setThemeProducts(prev => ({ ...prev, 'Fall': [] }));
+          // Initialize Black Friday theme with empty products (Market Stall products will be added later)
+          setThemeProducts(prev => ({ ...prev, 'Black Friday': [] }));
           
           setIsStoreContentReady(true);
-          console.log('🎨 Default Spooky Night theme loaded - store content ready');
+          console.log('🎨 Default Black Friday theme loaded - store content ready');
         }
       }
       
@@ -1732,9 +1720,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Editor state management
   const [editorState, setEditorState] = useState<EditorState>({
-    isEditorView: false,
+    isEditorView: true, // Default to Edit View when opening store
     isSheetOpen: false,
-    isAdminSheetOpen: false,
+    isAdminSheetOpen: true, // Default to Assets panel open when entering store
     selectedAssetId: null
   });
   
@@ -1862,6 +1850,35 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
       setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
       
+      // Initialize default text styles for the new custom theme with proper colors
+      const themeDefaults = getThemeDefaultText(theme.name, theme.aiMessage);
+      const textColor = getThemeTextColor(theme.welcomeColor);
+      setThemeTextStyles(prev => ({
+        ...prev,
+        [customThemeKey]: {
+          mainHeader: {
+            content: themeDefaults.mainHeader,
+            color: textColor,
+            styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+          },
+          headerMessage: {
+            content: themeDefaults.headerMessage,
+            color: textColor,
+            styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+          },
+          subHeader: {
+            content: themeDefaults.subHeader,
+            color: textColor,
+            styleClass: 'text-lg sm:text-xl font-normal'
+          },
+          promoMessage: {
+            content: themeDefaults.promoMessage,
+            color: textColor,
+            styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+          }
+        }
+      }));
+      
       // Add Market Stall products to the new custom theme
       console.log('🛒 Adding Market Stall products to new custom theme:', customThemeKey);
       await addMarketStallProductsToCustomTheme(customThemeKey);
@@ -1877,13 +1894,42 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         const customThemeKey = `custom_${theme.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
         setAllThemes(prev => ({ ...prev, [customThemeKey]: theme }));
         
+        // Initialize default text styles for the new custom theme with proper colors (fallback)
+        const themeDefaults = getThemeDefaultText(theme.name, theme.aiMessage);
+        const textColor = getThemeTextColor(theme.welcomeColor);
+        setThemeTextStyles(prev => ({
+          ...prev,
+          [customThemeKey]: {
+            mainHeader: {
+              content: themeDefaults.mainHeader,
+              color: textColor,
+              styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+            },
+            headerMessage: {
+              content: themeDefaults.headerMessage,
+              color: textColor,
+              styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+            },
+            subHeader: {
+              content: themeDefaults.subHeader,
+              color: textColor,
+              styleClass: 'text-lg sm:text-xl font-normal'
+            },
+            promoMessage: {
+              content: themeDefaults.promoMessage,
+              color: textColor,
+              styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
+            }
+          }
+        }));
+        
         // Still add Market Stall products even if database save fails
         console.log('🛒 Adding Market Stall products to custom theme (fallback):', customThemeKey);
         await addMarketStallProductsToCustomTheme(customThemeKey);
       }
       throw error;
     }
-  }, [experienceId, currentSeason, createTheme, setApiError, canAddCustomTheme, addMarketStallProductsToCustomTheme]);
+  }, [experienceId, currentSeason, createTheme, setApiError, canAddCustomTheme, addMarketStallProductsToCustomTheme, getThemeTextColor, setThemeTextStyles, setAllThemes]);
   
   // Editor controls
   const toggleEditorView = useCallback(() => {

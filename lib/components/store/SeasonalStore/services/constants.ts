@@ -35,6 +35,17 @@ export const initialThemes: Record<string, LegacyTheme> = {
     aiMessage: "Beware! Our haunted collection emerges from the shadows. Dare to discover what lurks in the darkness...",
     emojiTip: "👻🎃💀🦇 (e.g., 'haunted house')",
   },
+  Autumn: {
+    name: 'Autumn Harvest',
+    themePrompt: 'A warm, cozy autumn scene with golden leaves, pumpkin patches, and harvest fields. Rich oranges, deep reds, warm browns, and amber tones.',
+    accent: 'bg-amber-600 hover:bg-amber-700 text-white ring-orange-400',
+    card: 'bg-amber-50/90 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-orange-500/30',
+    text: 'text-amber-900',
+    welcomeColor: 'text-amber-200',
+    background: 'bg-gradient-to-br from-amber-600 via-orange-600 to-red-700',
+    aiMessage: "Embrace the cozy season with our autumn collection featuring warm tones and harvest essentials",
+    emojiTip: "🍂🍁🍎🌰 (e.g., 'falling maple leaf')",
+  },
   'Holiday Cheer': {
     name: 'Holiday Cheer',
     themePrompt: 'A festive, traditional Christmas scene with deep reds and greens.',
@@ -67,6 +78,17 @@ export const initialThemes: Record<string, LegacyTheme> = {
     background: 'bg-gradient-to-br from-gray-900 to-purple-900',
     aiMessage: "WARNING: Systems online. Initiate maximum savings protocols during our Cyber Sale!",
     emojiTip: "💻⚡🔮 (e.g., 'lightning bolt')",
+  },
+  'Black Friday': {
+    name: 'Black Friday',
+    themePrompt: 'A bold, high-energy Black Friday sale scene with deep blacks, vibrant gold accents, and dramatic lighting. Premium luxury aesthetics with bold typography and urgent sale messaging.',
+    accent: 'bg-yellow-500 hover:bg-yellow-600 text-gray-900 ring-yellow-400',
+    card: 'bg-gray-900/95 backdrop-blur-md shadow-2xl hover:shadow-3xl shadow-yellow-500/30 border border-yellow-500/30',
+    text: 'text-white',
+    welcomeColor: 'text-yellow-300',
+    background: 'bg-gradient-to-br from-black via-gray-900 to-gray-800',
+    aiMessage: "BLACK FRIDAY SALE! Massive discounts and exclusive deals. Don't miss out on these limited-time offers!",
+    emojiTip: "💰💎⚡🔥🛍️ (e.g., 'shopping bag with deals')",
   },
 };
 
@@ -171,3 +193,59 @@ export const textStyleOptions = [
   { label: 'Promo (H3)', class: 'text-3xl font-medium' },
   { label: 'Body (P)', class: 'text-xl font-normal' },
 ];
+
+// Theme Default Text Styles
+export interface ThemeDefaultText {
+  mainHeader: string;
+  headerMessage: string;
+  subHeader: string;
+  promoMessage: string;
+}
+
+export const themeDefaultTexts: Record<string, ThemeDefaultText> = {
+  'Winter': { mainHeader: 'WINTER COLLECTION', headerMessage: 'WINTER COLLECTION', subHeader: 'Discover our curated winter collection with premium items for the season', promoMessage: 'COZY DEALS' },
+  'Winter Frost': { mainHeader: 'WINTER COLLECTION', headerMessage: 'WINTER COLLECTION', subHeader: 'Discover our curated winter collection with premium items for the season', promoMessage: 'COZY DEALS' },
+  'Summer': { mainHeader: 'SUMMER ESSENTIALS', headerMessage: 'SUMMER ESSENTIALS', subHeader: 'Explore our summer essentials and trending items for the warm season', promoMessage: 'BEACH READY' },
+  'Summer Sun': { mainHeader: 'SUMMER ESSENTIALS', headerMessage: 'SUMMER ESSENTIALS', subHeader: 'Explore our summer essentials and trending items for the warm season', promoMessage: 'BEACH READY' },
+  'Fall': { mainHeader: 'SPOOKY NIGHT', headerMessage: 'SPOOKY NIGHT', subHeader: "Beware! Our haunted collection emerges from the shadows. Dare to discover what lurks in the darkness...", promoMessage: 'BOO! DEALS' },
+  'Spooky Night': { mainHeader: 'SPOOKY NIGHT', headerMessage: 'SPOOKY NIGHT', subHeader: "Beware! Our haunted collection emerges from the shadows. Dare to discover what lurks in the darkness...", promoMessage: 'BOO! DEALS' },
+  'Autumn': { mainHeader: 'AUTUMN HARVEST', headerMessage: 'AUTUMN HARVEST', subHeader: 'Embrace the cozy season with our autumn collection featuring warm tones and harvest essentials', promoMessage: 'FALL SAVINGS' },
+  'Autumn Harvest': { mainHeader: 'AUTUMN HARVEST', headerMessage: 'AUTUMN HARVEST', subHeader: 'Embrace the cozy season with our autumn collection featuring warm tones and harvest essentials', promoMessage: 'FALL SAVINGS' },
+  'Holiday Cheer': { mainHeader: 'HOLIDAY CHEER', headerMessage: 'HOLIDAY CHEER', subHeader: 'Celebrate the holidays with our special collection of festive gifts and decor', promoMessage: 'GIFT GUIDE' },
+  'Spring Renewal': { mainHeader: 'SPRING RENEWAL', headerMessage: 'SPRING RENEWAL', subHeader: "Blossom into savings! Our Spring Renewal line brings fresh starts and bright ideas.", promoMessage: 'FRESH DEALS' },
+  'Cyber Sale': { mainHeader: 'CYBER SALE', headerMessage: 'CYBER SALE', subHeader: "WARNING: Systems online. Initiate maximum savings protocols during our Cyber Sale!", promoMessage: 'TECH DEALS' },
+  'Black Friday': { mainHeader: 'BLACK FRIDAY', headerMessage: 'BLACK FRIDAY', subHeader: "SPECIAL OFFERS", promoMessage: '50% OFF' },
+};
+
+// Helper function to get theme default text
+export const getThemeDefaultText = (themeName: string, fallbackAiMessage?: string): ThemeDefaultText => {
+  return themeDefaultTexts[themeName] || { 
+    mainHeader: 'CLICK, MAIN HEADER TEXT', 
+    headerMessage: 'CLICK, MAIN HEADER TEXT', 
+    subHeader: fallbackAiMessage || 'Discover exclusive seasonal products',
+    promoMessage: '' 
+  };
+};
+
+// Helper function to convert Tailwind color classes to hex values for text colors
+export const getThemeTextColor = (welcomeColor: string | undefined): string => {
+  if (!welcomeColor) return '#FFFFFF';
+  
+  // Map Tailwind color classes to hex values
+  const colorMap: Record<string, string> = {
+    'text-blue-200': '#BFDBFE',      // Winter
+    'text-yellow-100': '#FEF3C7',    // Summer  
+    'text-yellow-200': '#FDE68A',
+    'text-yellow-300': '#FCD34D',    // Black Friday
+    'text-orange-100': '#FFEDD5',    // Fall
+    'text-orange-200': '#FED7AA',    // Spooky
+    'text-red-200': '#FECACA',        // Holiday
+    'text-pink-100': '#FCE7F3',      // Spring
+    'text-purple-400': '#C084FC',    // Cyber
+    'text-cyan-300': '#67E8F9',      // Cyber Sale
+    'text-green-200': '#BBF7D0',     // Spring
+    'text-amber-200': '#FDE68A',     // Autumn
+  };
+  
+  return colorMap[welcomeColor] || '#FFFFFF';
+};

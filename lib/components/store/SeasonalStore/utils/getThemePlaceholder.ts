@@ -15,6 +15,9 @@ export function getThemePlaceholderUrl(themeName: string): string {
     'Summer': 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png',
     'Winter': 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png',
     'Winter Frost': 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png',
+    'Autumn': 'https://img-v2-prod.whop.com/zx2JzitsjsKHimZ-sTR6BLdvR7Ecn41Hzy1JPOUt7-c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/6911df86-f29f-4e0f-ace6-43e20f9a3820.png',
+    'Autumn Harvest': 'https://img-v2-prod.whop.com/zx2JzitsjsKHimZ-sTR6BLdvR7Ecn41Hzy1JPOUt7-c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/6911df86-f29f-4e0f-ace6-43e20f9a3820.png',
+    'Black Friday': 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
   };
   
   return themePlaceholders[themeName] || defaultPlaceholder;

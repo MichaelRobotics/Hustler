@@ -407,6 +407,74 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-6">
+        {/* Manual Emoji Bank */}
+        <div>
+          <h4 className="text-3xl font-extrabold text-cyan-400 mb-6 flex items-center">
+            <SearchIcon className="w-8 h-8 mr-3"/> Emoji Bank
+          </h4>
+          <div className="mb-8"></div>
+          
+          <input
+            type="search"
+            placeholder="Search emojis (e.g., 'gift', 'heart')"
+            value={manualSearch}
+            onChange={(e) => setManualSearch(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
+          />
+
+          <div className="max-h-60 overflow-y-auto space-y-3 p-1 rounded-lg">
+            {(() => {
+              // If searching, show all results in one section
+              if (manualSearch.trim()) {
+                return (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">
+                      🔍 Search Results ({filteredEmojis.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {filteredEmojis.map((item, idx) => (
+                        <button
+                          key={idx}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectEmoji(item.emoji);
+                          }}
+                          className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
+                          title={`${item.name} (${item.keywords.slice(0, 3).join(', ')})`}
+                        >
+                          {item.emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Show categorized view when not searching
+              return Object.entries(groupedEmojis).map(([category, items]) => (
+                <div key={category}>
+                  <h5 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">{category}</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {items.map((item, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectEmoji(item.emoji);
+                        }}
+                        className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
+                        title={item.name}
+                      >
+                        {item.emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+
         {/* Text Editor */}
         {selectedAssetId && ['mainHeader', 'headerMessage', 'subHeader', 'promoMessage'].includes(selectedAssetId) && (
           <div className="p-3 bg-gray-900 rounded-xl border border-blue-600/50">
@@ -782,7 +850,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                   if (selectedAssetId === 'mainHeader') {
                     setFixedTextStyles(prev => ({
                       ...prev, 
-                      mainHeader: {...prev.mainHeader, content: 'THE SEASONAL VAULT'}
+                      mainHeader: {...prev.mainHeader, content: 'CLICK, MAIN HEADER TEXT'}
                     }));
                   } else if (selectedAssetId === 'headerMessage') {
                     setFixedTextStyles(prev => ({
@@ -877,75 +945,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               </>
             )}
           </button>
-        </div>
-
-        
-        {/* Manual Emoji Bank */}
-        <div>
-          <h4 className="text-3xl font-extrabold text-cyan-400 mb-6 flex items-center">
-            <SearchIcon className="w-8 h-8 mr-3"/> Emoji Bank
-          </h4>
-          <div className="mb-8"></div>
-          
-          <input
-            type="search"
-            placeholder="Search emojis (e.g., 'gift', 'heart')"
-            value={manualSearch}
-            onChange={(e) => setManualSearch(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
-          />
-
-          <div className="max-h-60 overflow-y-auto space-y-3 p-1 rounded-lg">
-            {(() => {
-              // If searching, show all results in one section
-              if (manualSearch.trim()) {
-                return (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">
-                      🔍 Search Results ({filteredEmojis.length})
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {filteredEmojis.map((item, idx) => (
-                        <button
-                          key={idx}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectEmoji(item.emoji);
-                          }}
-                          className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
-                          title={`${item.name} (${item.keywords.slice(0, 3).join(', ')})`}
-                        >
-                          {item.emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              }
-
-              // Show categorized view when not searching
-              return Object.entries(groupedEmojis).map(([category, items]) => (
-                <div key={category}>
-                  <h5 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">{category}</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {items.map((item, idx) => (
-                      <button
-                        key={idx}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectEmoji(item.emoji);
-                        }}
-                        className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
-                        title={item.name}
-                      >
-                        {item.emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
         </div>
 
 
