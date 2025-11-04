@@ -25,13 +25,10 @@ export async function authenticateWhopUser(
 ): Promise<AuthContext | null> {
 	try {
 		const headersList = await headers();
-		console.log("🔍 Middleware - Headers:", Object.fromEntries(headersList.entries()));
 		
 		const { userId } = await validateToken({ headers: headersList });
-		console.log("🔍 Middleware - User ID from validateToken:", userId);
 
 		if (!userId) {
-			console.log("No valid WHOP user token found");
 			return null;
 		}
 
@@ -40,7 +37,6 @@ export async function authenticateWhopUser(
 		if (request) {
 			// First try to get from X-Experience-ID header (for API calls)
 			experienceId = request.headers.get("X-Experience-ID") || undefined;
-			console.log("🔍 Middleware - X-Experience-ID header:", experienceId);
 			
 			// If not in header, try to extract from URL path
 			if (!experienceId) {
@@ -51,17 +47,14 @@ export async function authenticateWhopUser(
 					experienceIndex !== -1 && pathParts[experienceIndex + 1]
 						? pathParts[experienceIndex + 1]
 						: undefined;
-				console.log("🔍 Middleware - URL experience ID:", experienceId);
 			}
 			
 			// If still no experienceId, try to get from URL query parameters
 			if (!experienceId) {
 				const url = new URL(request.url);
 				experienceId = url.searchParams.get("experienceId") || undefined;
-				console.log("🔍 Middleware - Query experience ID:", experienceId);
 			}
 		}
-		console.log("🔍 Middleware - Final experienceId:", experienceId);
 
 		return {
 			user: { userId, experienceId },

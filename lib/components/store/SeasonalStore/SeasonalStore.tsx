@@ -1707,8 +1707,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           </div>
         )}
 
-        {/* Floating Add Product Button - Only in Edit View */}
-        {editorState.isEditorView && (
+        {/* Floating Add Product Button - Only in Edit View, hide in StorePreview */}
+        {editorState.isEditorView && !hideEditorButtons && !isStorePreview && (
            <button
              onClick={handleAddProduct}
              className="fixed top-24 right-6 z-50 flex items-center px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 backdrop-blur-sm border border-green-500/20"
