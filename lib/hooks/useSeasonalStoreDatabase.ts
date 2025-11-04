@@ -1088,19 +1088,29 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     }
     
     // Set the template's theme for rendering
+    let templateTheme: LegacyTheme;
     if (template.templateData.currentTheme) {
-      const currentTheme = template.templateData.currentTheme;
-      // Preserve custom theme metadata from currentTheme
-      if ((currentTheme as any).placeholderImage) {
-        (currentTheme as any).placeholderImage = (currentTheme as any).placeholderImage;
-      }
-      if ((currentTheme as any).mainHeader) {
-        (currentTheme as any).mainHeader = (currentTheme as any).mainHeader;
-      }
-      setCurrentTemplateTheme(currentTheme);
+      templateTheme = template.templateData.currentTheme;
+      setCurrentTemplateTheme(templateTheme);
     } else {
-      const snapshotLegacyTheme = convertTemplateThemeToLegacy(template.themeSnapshot);
-      setCurrentTemplateTheme(snapshotLegacyTheme);
+      templateTheme = convertTemplateThemeToLegacy(template.themeSnapshot);
+      setCurrentTemplateTheme(templateTheme);
+    }
+    
+    // IMPORTANT: If this is a custom theme (not in initial themes), add it to allThemes
+    // so it can be selected from the dropdown after template is loaded
+    const isDefaultTheme = Object.values(initialThemes).some(
+      defaultTheme => defaultTheme.name === templateTheme.name
+    );
+    
+    if (!isDefaultTheme) {
+      // This is a custom theme - add it to allThemes with a template-specific key
+      const templateThemeKey = `template_${template.id}_${templateTheme.name}`;
+      console.log('🎨 [applyTemplateDataToState] Adding custom theme from template to allThemes:', templateThemeKey, templateTheme.name);
+      setAllThemes(prev => ({
+        ...prev,
+        [templateThemeKey]: templateTheme
+      }));
     }
     
     // Load promo button styling if available
@@ -1641,14 +1651,32 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       }
       
       // Set the template's theme for rendering
+      let templateTheme: LegacyTheme;
       if (template.templateData.currentTheme) {
         console.log('🎨 Setting template theme for rendering:', template.templateData.currentTheme.name);
-        setCurrentTemplateTheme(template.templateData.currentTheme);
+        templateTheme = template.templateData.currentTheme;
+        setCurrentTemplateTheme(templateTheme);
       } else {
         // Use themeSnapshot if currentTheme is not available
         console.log('🎨 Using themeSnapshot for rendering:', template.themeSnapshot.name);
-        const snapshotLegacyTheme = convertTemplateThemeToLegacy(template.themeSnapshot);
-        setCurrentTemplateTheme(snapshotLegacyTheme);
+        templateTheme = convertTemplateThemeToLegacy(template.themeSnapshot);
+        setCurrentTemplateTheme(templateTheme);
+      }
+      
+      // IMPORTANT: If this is a custom theme (not in initial themes), add it to allThemes
+      // so it can be selected from the dropdown after template is loaded
+      const isDefaultTheme = Object.values(initialThemes).some(
+        defaultTheme => defaultTheme.name === templateTheme.name
+      );
+      
+      if (!isDefaultTheme) {
+        // This is a custom theme - add it to allThemes with a template-specific key
+        const templateThemeKey = `template_${template.id}_${templateTheme.name}`;
+        console.log('🎨 Adding custom theme from template to allThemes:', templateThemeKey, templateTheme.name);
+        setAllThemes(prev => ({
+          ...prev,
+          [templateThemeKey]: templateTheme
+        }));
       }
       
       // Load promo button styling if available
