@@ -503,7 +503,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                     >
                     <ProductCard
                       product={product}
-                      onProductClick={handleChatOpen}
+                      onProductClick={() => {}} // Disabled - product card click no longer opens chat
                       onButtonClick={handleChatOpen}
                     />
                     </div>
@@ -698,7 +698,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
       {/* Main product card - matches SeasonalStore exactly */}
       <div 
         className={`rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
-        onClick={onProductClick}
       >
         {/* Image Section - Top Half - matches SeasonalStore exactly */}
         <div className="relative h-56 w-full">
