@@ -185,7 +185,22 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 					// Preload background image from template
 					const preloadTemplateBackground = async () => {
 						const templateData = data.template.templateData;
-						const backgroundUrl = templateData?.generatedBackground || templateData?.uploadedBackground;
+						const currentSeason = data.template.currentSeason || 'Fall';
+						
+						// Check all possible background sources in priority order:
+						// 1. Theme-specific backgrounds (for custom themes)
+						// 2. WHOP attachment URL
+						// 3. Legacy backgrounds
+						// 4. Custom theme placeholderImage (from currentTheme or themeSnapshot)
+						// Do NOT use default Whop template placeholder if custom theme has placeholderImage
+						const backgroundUrl = templateData.themeGeneratedBackgrounds?.[currentSeason]
+							|| templateData.themeUploadedBackgrounds?.[currentSeason]
+							|| templateData.backgroundAttachmentUrl
+							|| templateData.generatedBackground
+							|| templateData.uploadedBackground
+							|| templateData.currentTheme?.placeholderImage
+							|| data.template.themeSnapshot?.placeholderImage
+							|| null;
 						
 						if (backgroundUrl) {
 							console.log('🖼️ [StorePreview] Preloading template background:', backgroundUrl);

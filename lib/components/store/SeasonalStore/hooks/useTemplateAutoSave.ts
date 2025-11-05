@@ -61,7 +61,9 @@ export const useTemplateAutoSave = ({
             themePrompt: theme.themePrompt,
             accentColor: theme.accent,
             ringColor: theme.accent,
-            placeholderImage: (theme as any).placeholderImage || null, // Preserve custom theme placeholder
+            placeholderImage: backgroundAttachmentUrl 
+              || (theme as any).placeholderImage 
+              || null, // Save actual background URL (attachment or custom theme placeholder)
             mainHeader: (theme as any).mainHeader || null, // Preserve custom theme mainHeader
             subHeader: theme.aiMessage || null, // Preserve custom theme subHeader
             createdAt: new Date(),
@@ -101,10 +103,14 @@ export const useTemplateAutoSave = ({
               } : logoAsset
             },
             themeGeneratedBackgrounds: {
-              [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
+              [currentSeason]: backgroundAttachmentUrl 
+                || (theme as any).placeholderImage 
+                || getThemePlaceholderUrl(currentSeason)
             },
             themeUploadedBackgrounds: {
-              [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
+              [currentSeason]: backgroundAttachmentUrl 
+                || (theme as any).placeholderImage 
+                || getThemePlaceholderUrl(currentSeason)
             },
             themeProducts: {
               [currentSeason]: products.map(product => ({
@@ -208,8 +214,12 @@ export const useTemplateAutoSave = ({
               alt: logoAsset?.alt || 'Logo'
             } : logoAsset,
             // Use WHOP storage URLs or theme placeholder
-            generatedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
-            uploadedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
+            generatedBackground: backgroundAttachmentUrl 
+              || (theme as any).placeholderImage 
+              || getThemePlaceholderUrl(currentSeason),
+            uploadedBackground: backgroundAttachmentUrl 
+              || (theme as any).placeholderImage 
+              || getThemePlaceholderUrl(currentSeason),
             backgroundAttachmentId,
             backgroundAttachmentUrl,
             logoAttachmentId,

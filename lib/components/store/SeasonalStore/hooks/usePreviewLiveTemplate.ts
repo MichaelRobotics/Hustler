@@ -179,11 +179,25 @@ export const usePreviewLiveTemplate = ({
         const templateData = previewLiveTemplate.templateData;
         
         // Set background if available (now async)
-        if (templateData.generatedBackground) {
-          await setBackground('generated', templateData.generatedBackground);
-        }
-        if (templateData.uploadedBackground) {
-          await setBackground('uploaded', templateData.uploadedBackground);
+        // Check all possible background sources in priority order:
+        // 1. Theme-specific backgrounds (for custom themes)
+        // 2. WHOP attachment URL
+        // 3. Legacy backgrounds
+        // 4. Custom theme placeholderImage (from currentTheme or themeSnapshot)
+        const currentSeason = previewLiveTemplate.currentSeason || 'Fall';
+        const backgroundUrl = templateData.themeGeneratedBackgrounds?.[currentSeason]
+          || templateData.themeUploadedBackgrounds?.[currentSeason]
+          || templateData.backgroundAttachmentUrl
+          || templateData.generatedBackground
+          || templateData.uploadedBackground
+          || templateData.currentTheme?.placeholderImage
+          || previewLiveTemplate.themeSnapshot?.placeholderImage
+          || null;
+        
+        if (backgroundUrl) {
+          // Determine if it's generated or uploaded based on source
+          const isGenerated = !!(templateData.themeGeneratedBackgrounds?.[currentSeason] || templateData.generatedBackground);
+          await setBackground(isGenerated ? 'generated' : 'uploaded', backgroundUrl);
         }
         
         // Set logo if available

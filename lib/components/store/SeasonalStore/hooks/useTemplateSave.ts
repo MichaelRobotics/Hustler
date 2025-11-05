@@ -98,14 +98,20 @@ export const useTemplateSave = ({
           season: currentSeason,
           themePrompt: theme.themePrompt,
           accentColor: theme.accent,
-          placeholderImage: (theme as any).placeholderImage || (legacyTheme as any).placeholderImage || null, // Preserve custom theme placeholder
+          placeholderImage: backgroundAttachmentUrl 
+            || (theme as any).placeholderImage 
+            || (legacyTheme as any).placeholderImage 
+            || null, // Save actual background URL (attachment or custom theme placeholder)
           mainHeader: (theme as any).mainHeader || (legacyTheme as any).mainHeader || null, // Preserve custom theme mainHeader
           subHeader: theme.aiMessage || (legacyTheme as any).subHeader || null, // Preserve custom theme subHeader
           ringColor: theme.accent,
           card: theme.card,
           text: theme.text,
           welcomeColor: theme.welcomeColor,
-          background: theme.background,
+          background: backgroundAttachmentUrl 
+            || (theme as any).placeholderImage 
+            || (legacyTheme as any).placeholderImage 
+            || theme.background, // Save actual background URL to theme.background as well
           aiMessage: theme.aiMessage,
           emojiTip: theme.emojiTip,
           createdAt: new Date(),
@@ -146,10 +152,16 @@ export const useTemplateSave = ({
             } : logoAsset
           },
           themeGeneratedBackgrounds: {
-            [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
+            [currentSeason]: backgroundAttachmentUrl 
+              || (theme as any).placeholderImage 
+              || (legacyTheme as any).placeholderImage 
+              || getThemePlaceholderUrl(currentSeason)
           },
           themeUploadedBackgrounds: {
-            [currentSeason]: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason)
+            [currentSeason]: backgroundAttachmentUrl 
+              || (theme as any).placeholderImage 
+              || (legacyTheme as any).placeholderImage 
+              || getThemePlaceholderUrl(currentSeason)
           },
           themeProducts: {
             [currentSeason]: frontendProducts // Save complete frontend product state
@@ -224,10 +236,19 @@ export const useTemplateSave = ({
           } : logoAsset,
           
           // Background assets (WHOP storage or theme placeholder)
-          generatedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
-          uploadedBackground: backgroundAttachmentUrl || getThemePlaceholderUrl(currentSeason),
+          generatedBackground: backgroundAttachmentUrl 
+            || (theme as any).placeholderImage 
+            || (legacyTheme as any).placeholderImage 
+            || getThemePlaceholderUrl(currentSeason),
+          uploadedBackground: backgroundAttachmentUrl 
+            || (theme as any).placeholderImage 
+            || (legacyTheme as any).placeholderImage 
+            || getThemePlaceholderUrl(currentSeason),
           backgroundAttachmentId,
-          backgroundAttachmentUrl,
+          backgroundAttachmentUrl: backgroundAttachmentUrl 
+            || (theme as any).placeholderImage 
+            || (legacyTheme as any).placeholderImage 
+            || null,
           logoAttachmentId,
           logoAttachmentUrl,
           
@@ -241,7 +262,10 @@ export const useTemplateSave = ({
             welcomeColor: theme.welcomeColor,
             background: theme.background,
             backgroundImage: theme.backgroundImage,
-            placeholderImage: (theme as any).placeholderImage || (legacyTheme as any).placeholderImage || null, // Preserve custom theme placeholder
+            placeholderImage: backgroundAttachmentUrl 
+              || (theme as any).placeholderImage 
+              || (legacyTheme as any).placeholderImage 
+              || null, // Save actual background URL (attachment or custom theme placeholder)
             aiMessage: theme.aiMessage,
             mainHeader: (theme as any).mainHeader || (legacyTheme as any).mainHeader || null, // Preserve custom theme mainHeader
             emojiTip: theme.emojiTip

@@ -99,26 +99,52 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
     themeProducts: templateData.themeProducts,
     products: templateData.products,
     fixedTextStyles: templateData.fixedTextStyles,
-    promoButton: templateData.promoButton
+    promoButton: templateData.promoButton,
+    currentTheme: templateData.currentTheme,
+    themeSnapshot: liveTemplate.themeSnapshot,
+    customThemeMetadata: {
+      mainHeader: templateData.currentTheme?.mainHeader || liveTemplate.themeSnapshot?.mainHeader,
+      subHeader: templateData.currentTheme?.subHeader || liveTemplate.themeSnapshot?.subHeader,
+      placeholderImage: templateData.currentTheme?.placeholderImage || liveTemplate.themeSnapshot?.placeholderImage
+    }
   });
 
-  // Get background image - check both theme-specific and legacy
-  // Also fallback to theme placeholder if no background is set
+  // Get background image - check all sources in priority order:
+  // 1. Theme-specific backgrounds (for custom themes)
+  // 2. WHOP attachment URL
+  // 3. Legacy backgrounds
+  // 4. Custom theme placeholderImage (from currentTheme or themeSnapshot)
+  // Do NOT use default Whop template placeholder if custom theme has placeholderImage
   let backgroundImage = templateData.themeGeneratedBackgrounds?.[currentSeason] 
     || templateData.themeUploadedBackgrounds?.[currentSeason]
+    || templateData.backgroundAttachmentUrl
     || templateData.generatedBackground
     || templateData.uploadedBackground
     || null;
   
-  // If no background image, use theme-specific placeholder
+  // If no background image, check custom theme placeholderImage
+  // Only fall back to default Whop template if no custom theme placeholder exists
   if (!backgroundImage) {
-    // Get theme name from template (check currentTheme or themeSnapshot)
-    const themeName = templateData.currentTheme?.name || liveTemplate.themeSnapshot?.name || currentSeason;
+    // Check custom theme placeholderImage from currentTheme or themeSnapshot
+    const customThemePlaceholder = templateData.currentTheme?.placeholderImage 
+      || liveTemplate.themeSnapshot?.placeholderImage 
+      || null;
     
-    // Import and use getThemePlaceholderUrl function
-    // Use helper function instead of inline map
-    backgroundImage = getThemePlaceholderUrl(themeName) || getThemePlaceholderUrl(currentSeason);
-    console.log('[TemplateRenderer] No background image found, using theme placeholder for:', themeName, 'fallback season:', currentSeason);
+    if (customThemePlaceholder) {
+      backgroundImage = customThemePlaceholder;
+      console.log('[TemplateRenderer] Using custom theme placeholderImage:', customThemePlaceholder);
+    } else {
+      // Only use default Whop template placeholder if no custom theme placeholder exists
+      // Get theme name from template (check currentTheme or themeSnapshot)
+      const themeName = templateData.currentTheme?.name || liveTemplate.themeSnapshot?.name || currentSeason;
+      
+      // Import and use getThemePlaceholderUrl function
+      // Use helper function instead of inline map
+      backgroundImage = getThemePlaceholderUrl(themeName) || getThemePlaceholderUrl(currentSeason);
+      console.log('[TemplateRenderer] No custom theme background found, using default theme placeholder for:', themeName, 'fallback season:', currentSeason);
+    }
+  } else {
+    console.log('[TemplateRenderer] Using background from template:', backgroundImage);
   }
 
   // Get logo - check both theme-specific and legacy
@@ -133,10 +159,46 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   });
 
   // Get text styles - check both theme-specific and legacy
-  const textStyles = templateData.themeTextStyles?.[currentSeason] || templateData.fixedTextStyles || {};
-
+  // Also check custom theme mainHeader/subHeader from currentTheme or themeSnapshot if not in textStyles
+  let textStyles = templateData.themeTextStyles?.[currentSeason] || templateData.fixedTextStyles || {};
+  
   // Get theme snapshot for styling fallbacks
   const themeSnapshot = liveTemplate.themeSnapshot || templateData.currentTheme || {};
+  const currentTheme = templateData.currentTheme || liveTemplate.themeSnapshot || {};
+  
+  // If textStyles are missing mainHeader/subHeader, try to restore from custom theme metadata
+  if (!textStyles.mainHeader && (currentTheme.mainHeader || themeSnapshot.mainHeader)) {
+    const mainHeaderText = currentTheme.mainHeader || themeSnapshot.mainHeader || '';
+    const textColor = 'rgb(255, 237, 213)'; // Default text color
+    textStyles = {
+      ...textStyles,
+      mainHeader: {
+        content: mainHeaderText,
+        color: textColor,
+        styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
+      },
+      headerMessage: {
+        content: mainHeaderText,
+        color: textColor,
+        styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+      }
+    };
+    console.log('[TemplateRenderer] Restored mainHeader from custom theme:', mainHeaderText);
+  }
+  
+  if (!textStyles.subHeader && (currentTheme.subHeader || themeSnapshot.subHeader || currentTheme.aiMessage)) {
+    const subHeaderText = currentTheme.subHeader || themeSnapshot.subHeader || currentTheme.aiMessage || '';
+    const textColor = textStyles.mainHeader?.color || textStyles.headerMessage?.color || 'rgb(255, 237, 213)';
+    textStyles = {
+      ...textStyles,
+      subHeader: {
+        content: subHeaderText,
+        color: textColor,
+        styleClass: 'text-lg sm:text-xl font-normal'
+      }
+    };
+    console.log('[TemplateRenderer] Restored subHeader from custom theme:', subHeaderText);
+  }
 
   // Get products - check both theme-specific and legacy, then apply styling fallbacks like SeasonalStore
   const rawProducts = templateData.themeProducts?.[currentSeason] || templateData.products || [];
