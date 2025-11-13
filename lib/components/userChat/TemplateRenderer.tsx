@@ -555,22 +555,9 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
         {/* PromoButton Component - Only show when funnel is active - matches SeasonalStore exactly */}
         {isFunnelActive && (
           <div className="w-full max-w-3xl my-1 text-center mx-auto">
-            {/* Promo Message */}
-            {textStyles.promoMessage && textStyles.promoMessage.content && (
-              <p
-                className={`${textStyles.promoMessage.styleClass || 'text-2xl sm:text-3xl font-semibold drop-shadow-md'} mb-8 drop-shadow-md`}
-                style={{ 
-                  color: textStyles.promoMessage.color || 'rgb(255, 237, 213)', 
-                  textShadow: 'rgba(0, 0, 0, 0.3) 1px 1px 2px'
-                }}
-              >
-                {textStyles.promoMessage.content}
-              </p>
-            )}
-            
             {/* Claim Button */}
             {promoButton && (
-              <div className="relative w-full mt-8">
+              <div className="relative w-full">
                 <button
                   onClick={handleChatOpen}
                   className={`group relative z-10 flex items-center justify-center w-full py-4 text-xl rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass || 'ring-white/30 hover:ring-slate-400'} ${promoButton.buttonClass || 'bg-rose-600 hover:bg-rose-700 text-white'} shadow-2xl`}

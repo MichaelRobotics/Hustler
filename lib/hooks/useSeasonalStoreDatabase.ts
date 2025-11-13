@@ -1440,7 +1440,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       if (!canAddTemplate()) {
         const error = `Cannot save template: Maximum of ${MAX_CUSTOM_TEMPLATES} templates allowed`;
         console.warn('⚠️', error);
-        setApiError(error);
+        // Don't set apiError for template limit - it will be handled by notification
+        // setApiError(error);
         throw new Error(error);
       }
       
@@ -1451,7 +1452,11 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       return newTemplate;
     } catch (error) {
       console.error('Error saving template:', error);
-      setApiError(`Failed to save template: ${(error as Error).message}`);
+      const errorMessage = (error as Error).message;
+      // Don't set apiError for template limit errors - handled by notification
+      if (!errorMessage.includes('Maximum of') || !errorMessage.includes('templates allowed')) {
+        setApiError(`Failed to save template: ${errorMessage}`);
+      }
       throw error;
     }
   }, [experienceId, canAddTemplate]);

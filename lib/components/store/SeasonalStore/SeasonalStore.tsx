@@ -16,6 +16,7 @@ import { TemplateManagerModal } from './components/TemplateManagerModal';
 import { TemplateSaveNotification } from './components/TemplateSaveNotification';
 import { ThemeGenerationNotification } from './components/ThemeGenerationNotification';
 import { MakePublicNotification } from './components/MakePublicNotification';
+import { TemplateLimitNotification } from './components/TemplateLimitNotification';
 import { PromoButton } from './components/PromoButton';
 import { ProductEditorModal } from './components/ProductEditorModal';
 import { TextEditorModal } from './components/TextEditorModal';
@@ -53,7 +54,6 @@ import { useBackgroundAnalysis } from './utils/backgroundAnalyzer';
 import { useThemeUtils } from './hooks/useThemeUtils';
 import { useProductNavigation } from './hooks/useProductNavigation';
 import { useAIGeneration } from './hooks/useAIGeneration';
-import { useTemplateAutoSave } from './hooks/useTemplateAutoSave';
 import { useProductImageUpload } from './hooks/useProductImageUpload';
 import { useTemplateSave } from './hooks/useTemplateSave';
 import { usePreviewLiveTemplate } from './hooks/usePreviewLiveTemplate';
@@ -89,13 +89,12 @@ interface SeasonalStoreProps {
   previewLiveTemplate?: any;
   hideEditorButtons?: boolean;
   onTemplateLoaded?: () => void; // Callback when template is fully loaded on frontend
-  onNavigateToStorePreview?: (backgroundStyle?: React.CSSProperties) => void; // Callback to navigate to StorePreview
   isStorePreview?: boolean; // Indicates if this SeasonalStore is being used in StorePreview context
   isActive?: boolean; // Indicates if this SeasonalStore is currently the active view
   updateSyncProps?: UpdateSyncProps; // Optional update sync props from AdminPanel
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, onNavigateToStorePreview, isStorePreview = false, isActive = false, updateSyncProps }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps }) => {
   // Extract experienceId from user object
   const experienceId = user?.experienceId;
   
@@ -124,6 +123,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   
   // Store ResourceLibrary state
   const [showStoreResourceLibrary, setShowStoreResourceLibrary] = useState(false);
+  
+  // Preview mode state
+  const [previewTemplate, setPreviewTemplate] = useState<any>(null);
+  const [isInPreviewMode, setIsInPreviewMode] = useState(false);
+  
+  // Determine if we're in preview mode (either from prop or internal state)
+  const effectiveIsStorePreview = isStorePreview || isInPreviewMode;
+  
+  // Track unsaved changes
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -538,8 +548,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   // Use preview live template hook
   // CRITICAL: Pass Market Stall resources to filter template products
+  // Use previewTemplate if in preview mode, otherwise use previewLiveTemplate prop
+  const activePreviewTemplate = isInPreviewMode ? previewTemplate : previewLiveTemplate;
   const { isTemplateLoaded } = usePreviewLiveTemplate({
-    previewLiveTemplate,
+    previewLiveTemplate: activePreviewTemplate,
     onTemplateLoaded,
     setBackground,
     setLogoAsset,
@@ -554,24 +566,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
 
 
-  // Use template auto-save hook
-  useTemplateAutoSave({
-    products: themeProducts[currentSeason] || [], // Use only products in current theme
-    floatingAssets,
-    currentSeason,
-    theme,
-    fixedTextStyles,
-    logoAsset,
-    generatedBackground,
-    uploadedBackground,
-    backgroundAttachmentId: backgroundAttachmentId ?? '',
-    backgroundAttachmentUrl: backgroundAttachmentUrl ?? '',
-    logoAttachmentId: logoAttachmentId ?? '',
-    logoAttachmentUrl: logoAttachmentUrl ?? '',
-    saveTemplate,
-    experienceId: experienceId || 'default-experience',
-    promoButton,
-  });
 
   // Use product image upload hook
   const { handleProductImageUpload } = useProductImageUpload({
@@ -621,6 +615,38 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setTemplateManagerAnimOpen(false);
     setTimeout(() => setTemplateManagerOpen(false), 300);
   };
+  
+  // Preview handler - loads template and enters preview mode
+  const handlePreviewTemplate = useCallback(async (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) {
+      console.error('Template not found:', templateId);
+      return;
+    }
+    
+    console.log('👁️ Entering preview mode for template:', template.name);
+    
+    // Set preview mode and template
+    setIsInPreviewMode(true);
+    setPreviewTemplate(template);
+    
+    // Switch to page view (not editor view) for preview
+    if (editorState.isEditorView) {
+      toggleEditorView();
+    }
+  }, [templates, editorState.isEditorView, toggleEditorView]);
+  
+  // Exit preview mode handler - also opens Store Manager modal
+  const handleExitPreview = useCallback(() => {
+    setIsInPreviewMode(false);
+    setPreviewTemplate(null);
+    // Switch back to editor view so buttons are visible
+    if (!editorState.isEditorView) {
+      toggleEditorView();
+    }
+    // Open Store Manager modal when exiting preview
+    setTemplateManagerOpen(true);
+  }, [editorState.isEditorView, toggleEditorView]);
 
   // Live funnel loading function
   const loadLiveFunnel = useCallback(async () => {
@@ -710,10 +736,38 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       setTimeout(() => {
         setHighlightedTemplateId(undefined);
       }, 10000);
+      // Update snapshot after save
+      const snapshot = JSON.stringify({
+        products: themeProducts[currentSeason] || [],
+        floatingAssets,
+        currentSeason,
+        fixedTextStyles,
+        logoAsset,
+        generatedBackground,
+        uploadedBackground,
+        backgroundAttachmentId,
+        backgroundAttachmentUrl,
+        logoAttachmentId,
+        logoAttachmentUrl,
+        promoButton,
+      });
+      setLastSavedSnapshot(snapshot);
+      setHasUnsavedChanges(false);
     },
     onOpenTemplateManager: () => {
       // Open template manager
       openTemplateManager();
+    },
+    onTemplateLimitReached: () => {
+      // Close saving notification if it was shown
+      setTemplateSaveNotification({ isOpen: false, isSaving: false, templateName: '' });
+      // Show limit notification and automatically open Shop Manager
+      setTemplateLimitNotification(true);
+      openTemplateManager();
+    },
+    canAddTemplate: () => {
+      // Match backend limit check (counts all templates)
+      return templates.length < MAX_CUSTOM_TEMPLATES;
     },
   });
 
@@ -723,6 +777,76 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setLogoAsset(result);
   }, [logoAsset, setLogoAsset]);
 
+
+  // Detect unsaved changes
+  useEffect(() => {
+    if (!editorState.isEditorView || isInPreviewMode) {
+      return; // Don't track changes in preview mode or page view
+    }
+    
+    const currentSnapshot = JSON.stringify({
+      products: themeProducts[currentSeason] || [],
+      floatingAssets,
+      currentSeason,
+      fixedTextStyles,
+      logoAsset,
+      generatedBackground,
+      uploadedBackground,
+      backgroundAttachmentId,
+      backgroundAttachmentUrl,
+      logoAttachmentId,
+      logoAttachmentUrl,
+      promoButton,
+    });
+    
+    if (lastSavedSnapshot === null) {
+      // First time - set initial snapshot
+      setLastSavedSnapshot(currentSnapshot);
+      setHasUnsavedChanges(false);
+    } else {
+      // Compare with last saved snapshot
+      setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
+    }
+  }, [
+    themeProducts,
+    floatingAssets,
+    currentSeason,
+    fixedTextStyles,
+    logoAsset,
+    generatedBackground,
+    uploadedBackground,
+    backgroundAttachmentId,
+    backgroundAttachmentUrl,
+    logoAttachmentId,
+    logoAttachmentUrl,
+    promoButton,
+    lastSavedSnapshot,
+    editorState.isEditorView,
+    isInPreviewMode,
+  ]);
+
+  // Reset snapshot when template is loaded (to avoid false positives)
+  useEffect(() => {
+    if (isTemplateLoaded && !isInPreviewMode) {
+      // Template has been loaded, reset snapshot to current state
+      const snapshot = JSON.stringify({
+        products: themeProducts[currentSeason] || [],
+        floatingAssets,
+        currentSeason,
+        fixedTextStyles,
+        logoAsset,
+        generatedBackground,
+        uploadedBackground,
+        backgroundAttachmentId,
+        backgroundAttachmentUrl,
+        logoAttachmentId,
+        logoAttachmentUrl,
+        promoButton,
+      });
+      setLastSavedSnapshot(snapshot);
+      setHasUnsavedChanges(false);
+    }
+  }, [isTemplateLoaded, isInPreviewMode]);
 
   // Load live funnel on mount
   useEffect(() => {
@@ -1235,6 +1359,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     isOpen: boolean;
     templateName: string;
   }>({ isOpen: false, templateName: '' });
+
+  // Template limit notification state
+  const [templateLimitNotification, setTemplateLimitNotification] = useState(false);
   
   // Highlighted template state
   const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | undefined>(undefined);
@@ -1529,11 +1656,32 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       {isStoreContentReady && isConditionalReturnsReady && (
         <div 
           ref={appRef} 
-          className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''}`}
+          className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''} ${editorState.isEditorView ? 'cursor-pointer' : ''}`}
           style={getBackgroundStyle}
+          onClick={(e) => {
+            // Only open AdminSheet if clicking directly on background (not on child elements)
+            if (editorState.isEditorView) {
+              const target = e.target as HTMLElement;
+              
+              // Check if click is on the background div itself
+              if (target === e.currentTarget) {
+                toggleAdminSheet();
+                return;
+              }
+              
+              // Check if click is on empty space (not on any interactive or content elements)
+              const isInteractive = target.closest('button, a, input, select, textarea, [role="button"], [onclick], .product-container, .floating-asset, img, svg, canvas');
+              const isContentArea = target.closest('[class*="product"], [class*="header"], [class*="logo"], [class*="promo"]');
+              
+              // If clicking on empty background area (main content container but not on content)
+              if (!isInteractive && !isContentArea && target.classList.contains('relative')) {
+                toggleAdminSheet();
+              }
+            }
+          }}
         >
       <TopNavbar
-        onBack={onBack}
+        onBack={isInPreviewMode ? handleExitPreview : onBack}
         editorState={editorState}
         showGenerateBgInNavbar={showGenerateBgInNavbar}
         isChatOpen={isChatOpen}
@@ -1544,14 +1692,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         allThemes={allThemes}
         legacyTheme={legacyTheme}
         hideEditorButtons={hideEditorButtons}
-        isStorePreview={isStorePreview}
+        isStorePreview={effectiveIsStorePreview}
         highlightSaveButton={highlightSaveButton}
+        hasUnsavedChanges={hasUnsavedChanges}
+        isTemplateManagerOpen={templateManagerOpen}
         toggleEditorView={toggleEditorView}
         handleGenerateBgClick={handleGenerateBgClick}
         handleBgImageUpload={handleBgImageUpload}
         handleSaveTemplate={handleSaveTemplateForNavbar}
         toggleAdminSheet={toggleAdminSheet}
         openTemplateManager={openTemplateManager}
+        handleAddProduct={handleAddProduct}
         setIsChatOpen={setIsChatOpen}
         setCurrentSeason={setCurrentSeason}
         getHoverRingClass={getHoverRingClass}
@@ -1608,6 +1759,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
               // Reload themes from database to update the themes state
               await loadThemes();
             }}
+            handleGenerateBgClick={handleGenerateBgClick}
+            handleBgImageUpload={handleBgImageUpload}
+            setCurrentSeason={setCurrentSeason}
+            loadingState={loadingState}
             handleUpdateTheme={async (season, updates) => {
               try {
                 console.log('🎨 Updating theme for season:', season, updates);
@@ -1672,7 +1827,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       {/* Main Content Container */}
       <div 
         className={`relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto overflow-x-hidden h-full w-full`}
-        onClick={() => editorState.isEditorView && setSelectedAsset(null)}
+        onClick={(e) => {
+          if (editorState.isEditorView) {
+            const target = e.target as HTMLElement;
+            // If clicking on empty space in the content container, open AdminSheet
+            if (target === e.currentTarget || (!target.closest('button, a, input, select, textarea, [role="button"], [onclick], .product-container, .floating-asset, img, svg, canvas, [class*="product"], [class*="header"], [class*="logo"], [class*="promo"]'))) {
+              toggleAdminSheet();
+            } else {
+              setSelectedAsset(null);
+            }
+          }
+        }}
         onDragOver={(e) => editorState.isEditorView && e.preventDefault()}
         onDrop={editorState.isEditorView ? handleDropAsset : undefined}
       >
@@ -1705,16 +1870,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             <AlertTriangleIcon className="w-6 h-6 mr-3 flex-shrink-0 text-red-300" />
             <p className="font-medium text-sm sm:text-base">{apiError}</p>
           </div>
-        )}
-
-        {/* Floating Add Product Button - Only in Edit View, hide in StorePreview */}
-        {editorState.isEditorView && !hideEditorButtons && !isStorePreview && (
-           <button
-             onClick={handleAddProduct}
-             className="fixed top-24 right-6 z-50 flex items-center px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 backdrop-blur-sm border border-green-500/20"
-           >
-             <PlusCircleIcon className="w-4 h-4 mr-2" /> Add New Product
-           </button>
         )}
         
         <ProductShowcase
@@ -1818,74 +1973,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         loadTemplate={loadTemplate}
         deleteTemplate={deleteTemplate}
         setLiveTemplate={setLiveTemplate}
-        redirectToPublicShop={async () => {
-            // Preload the background image BEFORE showing loading screen
-          const preloadBackground = async () => {
-            // Use background image if available, otherwise use theme-specific placeholder
-            const backgroundUrl = backgroundAttachmentUrl || generatedBackground;
-            let placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
-            
-            // Use theme-specific placeholder if available
-            if (currentSeason === 'Cyber Sale') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
-            } else if (currentSeason === 'Spring Renewal') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/rSJXS5NKttt8u2117kcOOwxIS6i46EjvNolcNoHEr0U/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/27a182d3-b2fb-4b67-9675-3361e7dd6820.png';
-            } else if (currentSeason === 'Holiday Cheer') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/NZ7GNGGID4Xa4x8v6MggFBmA1OvefQKzR51uNiE4ZF8/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/ac7a903a-f73f-4c15-a3b8-62dcf5337742.png';
-            } else if (currentSeason === 'Fall' || currentSeason === 'Spooky Night') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/aqN_MUYyIWK1YPCflECQlExGsDTd_rftFEEh4zp59vI/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/3a3e7c27-e3aa-43fb-8bbd-d18ef28f7e33.png';
-            } else if (currentSeason === 'Summer') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
-            } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png';
-            } else if (currentSeason === 'Autumn' || currentSeason === 'Autumn Harvest') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/zx2JzitsjsKHimZ-sTR6BLdvR7Ecn41Hzy1JPOUt7-c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/6911df86-f29f-4e0f-ace6-43e20f9a3820.png';
-            } else if (currentSeason === 'Black Friday') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/LpAWtPhmyrvfSLDlQbkLwzdL4wwZI_9R4RJtSjIukeQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/edbb3d96-0248-4ecf-8345-921c100a064d.png';
-            }
-            
-            const imageToPreload = backgroundUrl || placeholderUrl;
-            
-            console.log('🖼️ [View Shop] Preloading background image:', imageToPreload);
-            return new Promise<void>((resolve) => {
-              const img = new Image();
-              img.onload = () => {
-                console.log('🖼️ [View Shop] Background image preloaded successfully');
-                resolve();
-              };
-              img.onerror = () => {
-                console.log('🖼️ [View Shop] Background image preload failed, continuing anyway');
-                resolve();
-              };
-              img.src = imageToPreload;
-            });
-          };
-          
-          try {
-            // Preload background image FIRST
-            await preloadBackground();
-            
-            // Only navigate AFTER background is loaded (this will show loading screen with preloaded background)
-            if (onNavigateToStorePreview) {
-              console.log('🖼️ [View Shop] Background preloaded, now navigating to StorePreview');
-              // Pass the background style to StorePreview so it can use it immediately
-              onNavigateToStorePreview(getBackgroundStyle);
-            } else {
-              // Fallback: Open the public shop in a new tab
-              const publicUrl = `/experiences/${experienceId}`;
-              window.open(publicUrl, '_blank');
-            }
-          } catch (error) {
-            console.error('Error preloading background for View Shop:', error);
-            // Continue with navigation even if preload fails
-            if (onNavigateToStorePreview) {
-              onNavigateToStorePreview(undefined);
-            } else {
-              const publicUrl = `/experiences/${experienceId}`;
-              window.open(publicUrl, '_blank');
-            }
-          }
-        }}
+        onPreview={handlePreviewTemplate}
+        maxTemplates={MAX_CUSTOM_TEMPLATES}
         onMakePublic={async (templateId) => {
           // Find the template name
           const template = templates.find(t => t.id === templateId);
@@ -1893,78 +1982,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           
           // Show make public notification
           setMakePublicNotification({ isOpen: true, templateName });
-          
-          // Preload the background image before redirecting
-          const preloadBackground = async () => {
-            // Use background image if available, otherwise use theme-specific placeholder
-            const backgroundUrl = backgroundAttachmentUrl || generatedBackground;
-            let placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
-            
-            // Use theme-specific placeholder if available
-            if (currentSeason === 'Cyber Sale') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
-            } else if (currentSeason === 'Spring Renewal') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/rSJXS5NKttt8u2117kcOOwxIS6i46EjvNolcNoHEr0U/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/27a182d3-b2fb-4b67-9675-3361e7dd6820.png';
-            } else if (currentSeason === 'Holiday Cheer') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/NZ7GNGGID4Xa4x8v6MggFBmA1OvefQKzR51uNiE4ZF8/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/ac7a903a-f73f-4c15-a3b8-62dcf5337742.png';
-            } else if (currentSeason === 'Fall' || currentSeason === 'Spooky Night') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/aqN_MUYyIWK1YPCflECQlExGsDTd_rftFEEh4zp59vI/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/3a3e7c27-e3aa-43fb-8bbd-d18ef28f7e33.png';
-            } else if (currentSeason === 'Summer') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
-            } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png';
-            } else if (currentSeason === 'Autumn' || currentSeason === 'Autumn Harvest') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/zx2JzitsjsKHimZ-sTR6BLdvR7Ecn41Hzy1JPOUt7-c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/6911df86-f29f-4e0f-ace6-43e20f9a3820.png';
-            } else if (currentSeason === 'Black Friday') {
-              placeholderUrl = 'https://img-v2-prod.whop.com/LpAWtPhmyrvfSLDlQbkLwzdL4wwZI_9R4RJtSjIukeQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/edbb3d96-0248-4ecf-8345-921c100a064d.png';
-            }
-            
-            const imageToPreload = backgroundUrl || placeholderUrl;
-            
-            console.log('🖼️ Preloading background image:', imageToPreload);
-            return new Promise<void>((resolve) => {
-              const img = new Image();
-              img.onload = () => {
-                console.log('🖼️ Background image preloaded successfully');
-                resolve();
-              };
-              img.onerror = () => {
-                console.log('🖼️ Background image preload failed, continuing anyway');
-                resolve();
-              };
-              img.src = imageToPreload;
-            });
-          };
-          
-          try {
-            // Preload background image
-            await preloadBackground();
-            
-            // Redirect to public shop after background is loaded
-            setTimeout(() => {
-              if (onNavigateToStorePreview) {
-                console.log('🖼️ [Make Public] Background preloaded, now navigating to StorePreview');
-                // Pass the background style to StorePreview so it can use it immediately
-                onNavigateToStorePreview(getBackgroundStyle);
-              } else {
-                // Fallback: Open the public shop in a new tab
-                const publicUrl = `/experiences/${experienceId}`;
-                window.open(publicUrl, '_blank');
-              }
-            }, 1000); // Reduced delay since background is preloaded
-          } catch (error) {
-            console.error('Error preloading background:', error);
-            // Continue with redirect even if preload fails
-            setTimeout(() => {
-              if (onNavigateToStorePreview) {
-                console.log('🖼️ [Make Public] Preload failed, navigating without background style');
-                onNavigateToStorePreview(undefined);
-              } else {
-                const publicUrl = `/experiences/${experienceId}`;
-                window.open(publicUrl, '_blank');
-              }
-            }, 1000);
-          }
         }}
       />
 
@@ -1989,6 +2006,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         isOpen={makePublicNotification.isOpen}
         templateName={makePublicNotification.templateName}
         onClose={() => setMakePublicNotification({ isOpen: false, templateName: '' })}
+      />
+
+      {/* Template Limit Notification */}
+      <TemplateLimitNotification
+        isOpen={templateLimitNotification}
+        onClose={() => setTemplateLimitNotification(false)}
+        onOpenShopManager={openTemplateManager}
       />
 
       {/* Seasonal Store Chat - Half View with Unfold/Fold Animation */}

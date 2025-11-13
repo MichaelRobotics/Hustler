@@ -22,14 +22,15 @@ interface TemplateManagerModalProps {
   backgroundAnalysis: {
     recommendedTextColor: string;
   };
+  maxTemplates?: number; // Maximum number of templates allowed
   
   // Handlers
   onClose: () => void;
   loadTemplate: (id: string) => void;
   deleteTemplate: (id: string) => void;
   setLiveTemplate: (id: string) => void;
-  redirectToPublicShop: () => void;
   onMakePublic?: (templateId: string) => void; // New callback for making public
+  onPreview?: (templateId: string) => void; // New callback for preview
 }
 
 export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
@@ -43,9 +44,12 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   loadTemplate,
   deleteTemplate,
   setLiveTemplate,
-  redirectToPublicShop,
   onMakePublic,
+  onPreview,
+  maxTemplates = 10,
 }) => {
+  // Check if at template limit
+  const isAtTemplateLimit = templates.length >= maxTemplates;
   
   if (!isOpen) return null;
 
@@ -66,6 +70,21 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
         }
+        @keyframes deleteIconPulse {
+          0%, 100% { 
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px rgba(239, 68, 68, 0.4);
+          }
+          50% { 
+            transform: scale(1.2);
+            box-shadow: 0 0 0 8px rgba(239, 68, 68, 0), 0 0 20px rgba(239, 68, 68, 0.6);
+          }
+        }
+        @keyframes deleteIconBounce {
+          0%, 100% { transform: translateY(0); }
+          25% { transform: translateY(-4px); }
+          75% { transform: translateY(2px); }
+        }
         .make-public-pulse {
           animation: makePublicPulse 3s ease-in-out infinite;
         }
@@ -73,6 +92,9 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
           background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
           background-size: 200% 100%;
           animation: makePublicShine 4s ease-in-out infinite;
+        }
+        .delete-icon-animate {
+          animation: deleteIconPulse 2s ease-in-out infinite, deleteIconBounce 1.5s ease-in-out infinite;
         }
       `}</style>
       <div
@@ -132,25 +154,22 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   {liveTemplate.templateData.products.length} products • {liveTemplate.templateData.floatingAssets.length} assets • {liveTemplate.currentSeason} theme
                 </div>
                 <div className="flex space-x-2">
-                  <button
-                    onClick={() => {
-                      loadTemplate(liveTemplate.id);
-                      onClose();
-                    }}
-                    className="flex-1 px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm rounded transition-colors"
-                  >
-                    Load
-                  </button>
-                  <button
-                    onClick={redirectToPublicShop}
-                    className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm rounded transition-colors flex items-center"
-                    title="View Public Shop"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    View Shop
-                  </button>
+                  {onPreview && (
+                    <button
+                      onClick={() => {
+                        onPreview(liveTemplate.id);
+                        onClose();
+                      }}
+                      className="flex-1 px-3 py-1 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white text-sm rounded transition-colors flex items-center justify-center"
+                      title="Preview Shop"
+                    >
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Preview
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -165,23 +184,6 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   No template is live - customers see the default shop appearance
                 </div>
                 <div className="flex space-x-2">
-                  <button
-                    disabled
-                    className="flex-1 px-3 py-1 bg-gray-600 text-gray-400 text-sm rounded cursor-not-allowed transition-colors"
-                    title="Default template cannot be loaded"
-                  >
-                    Load
-                  </button>
-                  <button
-                    onClick={redirectToPublicShop}
-                    className="px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm rounded transition-colors flex items-center"
-                    title="View Public Shop"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    View Shop
-                  </button>
                 </div>
               </div>
             )}
@@ -280,7 +282,9 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                             deleteTemplate(template.id);
                           }
                         }}
-                        className="p-1 text-gray-400 hover:text-red-400 hover:bg-gradient-to-r hover:from-red-500 hover:to-pink-600 rounded transition-colors"
+                        className={`p-1 text-gray-400 hover:text-red-400 hover:bg-gradient-to-r hover:from-red-500 hover:to-pink-600 rounded transition-colors ${
+                          isAtTemplateLimit ? 'delete-icon-animate text-red-400' : ''
+                        }`}
                         title="Delete Template"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -291,16 +295,23 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                     <div className="text-xs text-gray-400 mb-3">
                       {template.templateData.products.length} products • {template.templateData.floatingAssets.length} assets • {template.currentSeason} theme
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          loadTemplate(template.id);
-                          onClose();
-                        }}
-                        className="flex-1 px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm rounded transition-colors"
-                      >
-                        Load
-                      </button>
+                    <div className="flex flex-col space-y-2">
+                      {onPreview && (
+                        <button
+                          onClick={() => {
+                            onPreview(template.id);
+                            onClose();
+                          }}
+                          className="w-full px-3 py-1 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white text-sm rounded transition-colors flex items-center justify-center"
+                          title="Preview Shop"
+                        >
+                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          Preview
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setLiveTemplate(template.id);
@@ -309,7 +320,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                           }
                           onClose();
                         }}
-                        className={`px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm font-bold rounded-lg transition-all duration-300 transform hover:scale-110 relative overflow-hidden flex items-center shadow-lg hover:shadow-xl ${
+                        className={`w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm font-bold rounded-lg transition-all duration-300 transform hover:scale-110 relative overflow-hidden flex items-center justify-center shadow-lg hover:shadow-xl ${
                           template.id === highlightedTemplateId 
                             ? 'make-public-pulse make-public-shine' 
                             : 'hover:shadow-green-500/50'

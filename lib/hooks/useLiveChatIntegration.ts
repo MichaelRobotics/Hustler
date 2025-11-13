@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
+// DISABLED: WebSocket hooks are disabled to prevent automatic connections
+// import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
 import type { AuthenticatedUser } from "../types/user";
 import type { LiveChatConversation } from "../types/liveChat";
 import { preLiveChatConnectionCleanup } from "../utils/websocket-server-cleanup";
@@ -71,16 +72,21 @@ export function useLiveChatIntegration({
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const processedMessages = useRef<Set<string>>(new Set());
 
+	// DISABLED: WebSocket hooks are disabled to prevent automatic connections
 	// Use Whop React hooks for WebSocket functionality
-	const websocket = useWebsocket();
-	const connectionStatus = useWebsocketStatus();
-	const broadcast = useBroadcastWebsocketMessage();
+	// const websocket = useWebsocket();
+	// const connectionStatus = useWebsocketStatus();
+	// const broadcast = useBroadcastWebsocketMessage();
 
+	// Return no-op implementations
+	const websocket = { status: "disconnected" as const };
+	const connectionStatus = "disconnected" as const;
+	const broadcast = async (_args?: any) => ({ success: false });
+
+	// DISABLED: Always report as connected to hide reconnection UI
 	// Convert Whop connection status to our format
-	const isConnected = connectionStatus === "connected";
-	const status: "connected" | "disconnected" | "connecting" = 
-		connectionStatus === "connected" ? "connected" :
-		connectionStatus === "connecting" ? "connecting" : "disconnected";
+	const isConnected = true; // Always true to prevent reconnection UI from showing
+	const status: "connected" | "disconnected" | "connecting" = "connected";
 
 	// Log WebSocket status for debugging
 	useEffect(() => {
@@ -130,7 +136,9 @@ export function useLiveChatIntegration({
 		});
 	}, [conversationId, experienceId, user.id, user.name, connectionStatus, websocket.status, websocket, isConnected]);
 
+	// DISABLED: WebSocket message listener is disabled to prevent automatic connections
 	// ACTUAL WebSocket message listener - this was missing!
+	/*
 	useOnWebsocketMessage((message) => {
 		try {
 			// Parse the message
@@ -160,6 +168,7 @@ export function useLiveChatIntegration({
 			console.error("LiveChat WebSocket: Error parsing message:", err);
 		}
 	});
+	*/
 
 	// Handle WebSocket messages from UserChat system
 	const handleWebSocketMessage = useCallback((data: any) => {

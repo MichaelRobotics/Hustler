@@ -3,11 +3,10 @@
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
 import StorePreviewChat from "./StorePreviewChat";
-import { SeasonalStore } from "./SeasonalStore";
 import { apiGet, apiPost } from "../../utils/api-client";
 import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
-import { ArrowLeft, Sun, Moon, Store } from "lucide-react";
+import { ArrowLeft, Sun, Moon } from "lucide-react";
 import type { AuthenticatedUser } from "../../types/user";
 
 interface StorePreviewProps {
@@ -40,9 +39,6 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 }) => {
 	// Extract experienceId from user object
 	const experienceId = user?.experienceId;
-	// Store type toggle
-	const [useSeasonalStore, setUseSeasonalStore] = useState(false);
-	
 	const [liveFunnel, setLiveFunnel] = useState<any>(null);
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [isFunnelActive, setIsFunnelActive] = useState(false);
@@ -493,73 +489,6 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 
 	// isFunnelActive is now a state variable
 
-	// Show SeasonalStore if live template is found (with loading overlay until ready)
-	if (hasLiveTemplate) {
-		return <SeasonalStore 
-			user={user}
-			allResources={allResources}
-			setAllResources={setAllResources}
-			previewLiveTemplate={liveTemplate}
-			hideEditorButtons={true}
-			isStorePreview={true}
-			isActive={true}
-			onTemplateLoaded={() => {
-				console.log('[StorePreview] Template is fully loaded on frontend');
-				// Template is now fully loaded on frontend, safe to remove overlay
-				setTemplateReady(true);
-			}}
-			onBack={() => {
-				// Go back to SeasonalStore view (main onBack prop)
-				if (onBack) {
-					onBack();
-				} else {
-					// Fallback: Switch back to StorePreview immediately
-					setUseSeasonalStore(false);
-					// Trigger loading overlay like TemplateRenderer
-					setTemplateLoading(true);
-					setFunnelLoading(true);
-					setTemplateReady(false);
-					// Match TemplateRenderer loading duration: 3.5 seconds total
-					setTimeout(() => {
-						setTemplateLoading(false);
-						setFunnelLoading(false);
-						setTemplateReady(true);
-					}, 3500);
-				}
-			}}
-		/>;
-	}
-
-	// Show SeasonalStore if enabled
-	if (useSeasonalStore) {
-		return <SeasonalStore 
-			user={user}
-			allResources={allResources}
-			setAllResources={setAllResources}
-			isStorePreview={true}
-			isActive={true}
-			onBack={() => {
-				// Go back to SeasonalStore view (main onBack prop)
-				if (onBack) {
-					onBack();
-				} else {
-					// Fallback: Switch back to StorePreview immediately
-					setUseSeasonalStore(false);
-					// Trigger loading overlay like TemplateRenderer
-					setTemplateLoading(true);
-					setFunnelLoading(true);
-					setTemplateReady(false);
-					// Match TemplateRenderer loading duration: 3.5 seconds total
-					setTimeout(() => {
-						setTemplateLoading(false);
-						setFunnelLoading(false);
-						setTemplateReady(true);
-					}, 3500);
-				}
-			}}
-		/>;
-	}
-
 	// Render with view modes like CustomerView
 	return (
 		<div className="h-screen w-full relative flex flex-col">
@@ -703,21 +632,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 							)}
 						</div>
 
-						{/* Right Side: Edit Store and Theme Toggle Buttons */}
+						{/* Right Side: Theme Toggle Button */}
 						<div className="flex items-center space-x-2 justify-end">
-							{/* Edit Store Button */}
-							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20" data-testid="edit-store-button">
-								<button
-									onClick={() => setUseSeasonalStore(true)}
-									className="flex items-center space-x-2 px-3 py-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
-									style={{ WebkitTapHighlightColor: "transparent" }}
-									title="Edit Store"
-								>
-									<Store size={14} className="text-foreground/70 dark:text-foreground/70" />
-									<span className="text-xs font-medium text-foreground/70 dark:text-foreground/70">Edit Store</span>
-								</button>
-							</div>
-							
 							{/* Theme Toggle Button - Icon Only */}
 							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 								<button

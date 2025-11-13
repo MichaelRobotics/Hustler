@@ -294,18 +294,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                   />
                 </div>
                 
-                {/* Button Link (per-product) */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">Button Link (Where to redirect when clicked)</label>
-                  <input
-                    type="url"
-                    value={products.find(p => p.id === productEditor.productId)?.buttonLink || ''}
-                    onChange={(e) => updateProduct(productEditor.productId!, { buttonLink: e.target.value })}
-                    placeholder="https://example.com or /product-page"
-                    className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 placeholder-black"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">Enter a full URL (https://...) or a relative path (/page)</p>
-                </div>
               </>
             )}
             
@@ -398,41 +386,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 {/* Card Transparency */}
                 <div className="mt-3">
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Card Transparency</label>
-                  
-                  {/* Quick preset buttons for common transparency values */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {[0, 25, 50, 75, 90, 95].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => {
-                          console.log('🎨 Setting transparency preset:', preset);
-                          setIsUserInteracting(true);
-                          setTransparencyValue(preset);
-                          
-                          const current = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
-                          const baseMatch = current.match(/bg-[^\s/]+(?:\[[^\]]+\])?/);
-                          if (baseMatch) {
-                            const baseClass = baseMatch[0];
-                            const restOfClasses = current.replace(/bg-[^\s/]+(?:\[[^\]]+\])?(?:\/\d{1,3})?/, '').trim();
-                            const newCardClass = `${baseClass}/${preset}${restOfClasses ? ' ' + restOfClasses : ''}`;
-                            updateProduct(productEditor.productId!, { cardClass: newCardClass });
-                          } else {
-                            const newCardClass = `bg-white/${preset} backdrop-blur-sm shadow-xl`;
-                            updateProduct(productEditor.productId!, { cardClass: newCardClass });
-                          }
-                          
-                          setTimeout(() => setIsUserInteracting(false), 100);
-                        }}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
-                          transparencyValue === preset
-                            ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        {preset === 0 ? 'Solid' : `${preset}%`}
-                      </button>
-                    ))}
-                  </div>
                   
                   {/* Slider */}
                   <div className="flex items-center gap-3">

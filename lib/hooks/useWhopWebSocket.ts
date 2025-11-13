@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from "react";
-import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
+// DISABLED: WebSocket hooks are disabled to prevent automatic connections
+// import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage, useOnWebsocketMessage } from "@whop/react";
 import { apiPost } from "../utils/api-client";
 import { cache, CacheKeys, CACHE_TTL } from "../middleware/cache";
 import { preUserChatConnectionCleanup } from "../utils/websocket-server-cleanup";
@@ -26,6 +27,8 @@ export interface WhopWebSocketConfig {
  * Custom hook for UserChat WebSocket integration using Whop React hooks
  * 
  * Uses the official @whop/react WebSocket hooks for proper integration
+ * 
+ * DISABLED: WebSocket is currently disabled to prevent automatic connections
  */
 export function useWhopWebSocket(config: WhopWebSocketConfig) {
 	const [isConnected, setIsConnected] = useState(false);
@@ -40,95 +43,53 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 	const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const processedMessages = useRef<Set<string>>(new Set());
 	
-	// Use Whop React hooks
-	const websocketContext = useWebsocket();
-	const connectionStatus = useWebsocketStatus();
-	const broadcast = useBroadcastWebsocketMessage();
+	// DISABLED: WebSocket hooks are disabled to prevent automatic connections
+	// Use Whop React hooks - DISABLED
+	// const websocketContext = useWebsocket();
+	// const connectionStatus = useWebsocketStatus();
+	// const broadcast = useBroadcastWebsocketMessage();
 	
-	// Debug broadcast function availability
-	useEffect(() => {
-		console.log("🔌 [useWhopWebSocket] Broadcast function check:", {
-			broadcastType: typeof broadcast,
-			broadcastFunction: broadcast,
-			isFunction: typeof broadcast === 'function',
-			connectionStatus,
-			websocketContext: websocketContext.status
-		});
-	}, [broadcast, connectionStatus, websocketContext.status]);
+	// Return no-op implementations
+	const websocketContext = { status: "disconnected" as const, websocket: null };
+	const connectionStatus = "disconnected" as "connected" | "disconnected" | "connecting";
+	const broadcast = async (_args?: any) => ({ success: false });
+	
+	// DISABLED: WebSocket debug logging
+	// useEffect(() => {
+	// 	console.log("🔌 [useWhopWebSocket] Broadcast function check:", {
+	// 		broadcastType: typeof broadcast,
+	// 		broadcastFunction: broadcast,
+	// 		isFunction: typeof broadcast === 'function',
+	// 		connectionStatus,
+	// 		websocketContext: websocketContext.status
+	// 	});
+	// }, [broadcast, connectionStatus, websocketContext.status]);
 
-	// Get the actual websocket client from context
-	const websocket = websocketContext.status === "initializing" ? null : websocketContext.websocket;
+	// DISABLED: Get the actual websocket client from context
+	const websocket = null;
 
-	// ✅ ENHANCED: WebSocket connection instance identification
-	useEffect(() => {
-		console.log("🔌 [UserChat] WebSocket Connection Instance:", {
-			instanceId: `userchat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-			conversationId: config.conversationId,
-			experienceId: config.experienceId,
-			userId: config.userId,
-			connectionStatus,
-			websocketContext: websocketContext.status,
-			websocketClient: websocket,
-			isConnected,
-			channels: [`experience:${config.experienceId}`, `livechat:${config.experienceId}`],
-			timestamp: new Date().toISOString()
-		});
-	}, [config.conversationId, config.experienceId, config.userId, connectionStatus, websocketContext.status, websocket, isConnected]);
+	// DISABLED: WebSocket connection instance identification
+	// useEffect(() => {
+	// 	console.log("🔌 [UserChat] WebSocket Connection Instance:", {
+	// 		instanceId: `userchat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+	// 		conversationId: config.conversationId,
+	// 		experienceId: config.experienceId,
+	// 		userId: config.userId,
+	// 		connectionStatus,
+	// 		websocketContext: websocketContext.status,
+	// 		websocketClient: websocket,
+	// 		isConnected,
+	// 		channels: [`experience:${config.experienceId}`, `livechat:${config.experienceId}`],
+	// 		timestamp: new Date().toISOString()
+	// 	});
+	// }, [config.conversationId, config.experienceId, config.userId, connectionStatus, websocketContext.status, websocket, isConnected]);
 
-	// Update connection status with reconnection logic (background initialization)
-	useEffect(() => {
-		const connected = connectionStatus === "connected";
-		setIsConnected(connected);
-		
-		if (connected) {
-			// ✅ FIXED: Clear server queue before establishing connection
-			console.log("🧹 [UserChat] Clearing WebSocket server queue before connection establishment");
-			preUserChatConnectionCleanup(config.experienceId, config.conversationId)
-				.then(success => {
-					if (success) {
-						console.log("✅ [UserChat] Server queue cleared - ready for clean connection");
-					} else {
-						console.warn("⚠️ [UserChat] Server queue clearing failed - proceeding with connection");
-					}
-				})
-				.catch(error => {
-					console.error("❌ [UserChat] Server queue clearing error:", error);
-				});
-
-			// ✅ FIXED: Clear local message queue before establishing connection
-			console.log("🧹 [UserChat] Clearing local message queue before WebSocket connection establishment");
-			messageQueue.current = [];
-			processedMessages.current.clear();
-			console.log("✅ [UserChat] Local message queue cleared - starting with clean slate");
-			
-			setError(null);
-			setReconnectAttempts(0);
-			// Process any queued messages (should be empty now)
-			processMessageQueue();
-			console.log("🔌 [UserChat] WebSocket: Connected for real-time updates", {
-				experienceId: config.experienceId,
-				conversationId: config.conversationId,
-				userId: config.userId,
-				channels: [`experience:${config.experienceId}`, `livechat:${config.experienceId}`],
-				websocketStatus: connectionStatus,
-				websocketContext: websocketContext.status
-			});
-		} else if (connectionStatus === "disconnected" && reconnectAttempts < 5) {
-			// Exponential backoff reconnection (background only)
-			const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-			reconnectTimeoutRef.current = setTimeout(() => {
-				setReconnectAttempts(prev => prev + 1);
-				console.log("UserChat WebSocket: Attempting reconnection...");
-				// The WebSocket will automatically reconnect
-			}, delay);
-		}
-		
-		return () => {
-			if (reconnectTimeoutRef.current) {
-				clearTimeout(reconnectTimeoutRef.current);
-			}
-		};
-	}, [connectionStatus, reconnectAttempts]);
+	// DISABLED: Update connection status with reconnection logic
+	// useEffect(() => {
+	// 	const connected = connectionStatus === "connected";
+	// 	setIsConnected(connected);
+	// 	...
+	// }, [connectionStatus, reconnectAttempts]);
 
 	// Process queued messages
 	const processMessageQueue = useCallback(() => {
@@ -145,7 +106,10 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 		isProcessing.current = false;
 	}, [config]);
 
-	// Handle incoming messages using the proper React hook
+	// DISABLED: Handle incoming messages using the proper React hook
+	// useOnWebsocketMessage hook is disabled to prevent automatic WebSocket connections
+	// The entire message handling logic is commented out below:
+	/*
 	useOnWebsocketMessage((message) => {
 		try {
 			// Parse the message
@@ -240,6 +204,7 @@ export function useWhopWebSocket(config: WhopWebSocketConfig) {
 			config.onError?.("Failed to process message");
 		}
 	});
+	*/
 
 	// Send message with caching and optimization
 	const sendMessage = useCallback(async (

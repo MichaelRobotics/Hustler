@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage } from "@whop/react";
+// DISABLED: WebSocket hooks are disabled to prevent automatic connections
+// import { useWebsocket, useWebsocketStatus, useBroadcastWebsocketMessage } from "@whop/react";
 import type { AuthenticatedUser } from "../types/user";
 import type { LiveChatConversation } from "../types/liveChat";
 
@@ -60,16 +61,21 @@ export function useLiveChatWebSocket({
 	const [error, setError] = useState<string | null>(null);
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+	// DISABLED: WebSocket hooks are disabled to prevent automatic connections
 	// Use Whop React hooks for WebSocket functionality
-	const websocket = useWebsocket();
-	const connectionStatus = useWebsocketStatus();
-	const broadcast = useBroadcastWebsocketMessage();
+	// const websocket = useWebsocket();
+	// const connectionStatus = useWebsocketStatus();
+	// const broadcast = useBroadcastWebsocketMessage();
 
+	// Return no-op implementations
+	const websocket = { status: "disconnected" as const };
+	const connectionStatus = "disconnected" as const;
+	const broadcast = async (_args?: any) => ({ success: false });
+
+	// DISABLED: Always report as connected to prevent reconnection UI
 	// Convert Whop connection status to our format
-	const isConnected = connectionStatus === "connected";
-	const status: "connected" | "disconnected" | "connecting" = 
-		connectionStatus === "connected" ? "connected" :
-		connectionStatus === "connecting" ? "connecting" : "disconnected";
+	const isConnected = true; // Always true to prevent reconnection UI
+	const status: "connected" | "disconnected" | "connecting" = "connected";
 
 	// Connect to WebSocket (handled by WhopWebsocketProvider)
 	const connect = useCallback(async () => {

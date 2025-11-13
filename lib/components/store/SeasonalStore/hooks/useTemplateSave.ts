@@ -22,10 +22,12 @@ interface UseTemplateSaveProps {
   setError: (error: string | null) => void;
   experienceId: string;
   allResources?: any[]; // Add allResources to check ResourceLibrary
+  canAddTemplate?: () => boolean; // Function to check if we can add a template
   // Callbacks for UI updates
   onSavingStarted?: (templateName: string) => void;
   onTemplateSaved?: (templateName: string, templateId: string) => void;
   onOpenTemplateManager?: () => void;
+  onTemplateLimitReached?: () => void; // New callback for template limit
 }
 
 export const useTemplateSave = ({
@@ -48,12 +50,23 @@ export const useTemplateSave = ({
   setError,
   experienceId,
   allResources = [],
+  canAddTemplate,
   onSavingStarted,
   onTemplateSaved,
   onOpenTemplateManager,
+  onTemplateLimitReached,
 }: UseTemplateSaveProps) => {
   const handleSaveTemplate = useCallback(async () => {
     try {
+      // Check template limit BEFORE showing saving notification
+      if (canAddTemplate && !canAddTemplate()) {
+        // Don't show saving notification, just trigger limit callback
+        if (onTemplateLimitReached) {
+          onTemplateLimitReached();
+        }
+        return; // Exit early, don't attempt to save
+      }
+      
       // Auto-generate template name with theme name + date
       const now = new Date();
       const dateStr = now.toLocaleDateString('en-US', { 
@@ -363,7 +376,19 @@ export const useTemplateSave = ({
       }
       
     } catch (error) {
-      setError(`Failed to save template: ${(error as Error).message}`);
+      const errorMessage = (error as Error).message;
+      // Check if it's a template limit error
+      if (errorMessage.includes('Maximum of') && errorMessage.includes('templates allowed')) {
+        // Make sure we don't call onTemplateSaved - close any saving notification
+        // Don't set error, instead trigger the limit notification callback
+        if (onTemplateLimitReached) {
+          onTemplateLimitReached();
+        }
+        // Don't proceed - return early to prevent any "Saved" notification
+        return;
+      } else {
+        setError(`Failed to save template: ${errorMessage}`);
+      }
     }
   }, [
     saveTemplate, 
@@ -383,9 +408,11 @@ export const useTemplateSave = ({
     promoButton, 
     setError,
     allResources,
+    canAddTemplate,
     onSavingStarted,
     onTemplateSaved,
-    onOpenTemplateManager
+    onOpenTemplateManager,
+    onTemplateLimitReached
   ]);
 
   return {

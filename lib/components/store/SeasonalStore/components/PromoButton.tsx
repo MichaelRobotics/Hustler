@@ -82,30 +82,8 @@ export const PromoButton: React.FC<PromoButtonProps> = ({
         ? 'opacity-100' 
         : 'opacity-0'
     }`}>
-      {/* Promo Message */}
-      <p
-        onClick={() => {
-          if (editorState.isEditorView) {
-            // If modal is open for any text, don't handle clicks on page text elements
-            if (false) { // editingText.isOpen check would go here
-              return; // Do nothing when modal is open
-            }
-            // First click: open modal and immediately activate inline editing
-            // setEditingText({ isOpen: true, targetId: 'promoMessage' });
-            // setTimeout(() => setInlineEditTarget('promoMessage'), 100);
-          }
-        }}
-        className={`${applyThemeColorsToText(fixedTextStyles.promoMessage, 'promo')} mb-8 drop-shadow-md ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 rounded-lg p-2 transition-colors duration-200' : ''}`}
-        style={{ 
-          color: fixedTextStyles.promoMessage?.color, 
-          textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
-        }}
-      >
-        {fixedTextStyles.promoMessage?.content || ''}
-      </p>
-      
       {/* Claim Button */}
-      <div className="relative w-full mt-8">
+      <div className="relative w-full">
         <button
           onClick={() => {
             if (editorState.isEditorView) {

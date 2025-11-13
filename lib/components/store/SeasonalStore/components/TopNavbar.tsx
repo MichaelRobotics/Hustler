@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Home, ArrowLeft, Sun, Moon } from 'lucide-react';
-import { EyeIcon, EditIcon } from './Icons';
+import { EyeIcon, EditIcon, PlusCircleIcon, SettingsIcon } from './Icons';
 
 interface TopNavbarProps {
   onBack?: () => void;
@@ -28,6 +28,8 @@ interface TopNavbarProps {
   hideEditorButtons?: boolean;
   isStorePreview?: boolean; // New prop to indicate StorePreview context
   highlightSaveButton?: boolean; // New prop to highlight save button after generation
+  hasUnsavedChanges?: boolean; // Track if there are unsaved changes
+  isTemplateManagerOpen?: boolean; // Track if Shop Manager modal is open
   
   // Handlers
   toggleEditorView: () => void;
@@ -36,6 +38,7 @@ interface TopNavbarProps {
   handleSaveTemplate: () => void;
   toggleAdminSheet: () => void;
   openTemplateManager: () => void;
+  handleAddProduct: () => void;
   setIsChatOpen: (open: boolean) => void;
   setCurrentSeason: (season: string) => void;
   getHoverRingClass: (ringClass: string) => string;
@@ -57,12 +60,15 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   hideEditorButtons = false,
   isStorePreview = false,
   highlightSaveButton = false,
+  hasUnsavedChanges = false,
+  isTemplateManagerOpen = false,
   toggleEditorView,
   handleGenerateBgClick,
   handleBgImageUpload,
   handleSaveTemplate,
   toggleAdminSheet,
   openTemplateManager,
+  handleAddProduct,
   setIsChatOpen,
   setCurrentSeason,
   getHoverRingClass,
@@ -130,32 +136,63 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         }
       `}</style>
       
-      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem] overflow-y-hidden">
+      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem] overflow-y-hidden relative">
       <div className="px-3 py-2 h-full flex items-center overflow-x-auto overflow-y-hidden scrollbar-hide md:overflow-x-visible">
         <div className="flex items-center justify-between w-full md:w-full" style={{ minWidth: 'max-content' }}>
           <div className="flex items-center gap-4 flex-shrink-0">
-            {/* Home/Back Button */}
+            {/* AI Merchant Button */}
             <button
               onClick={onBack || (() => window.history.back())}
-              className="p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white flex-shrink-0"
-              title={isStorePreview ? "Go Back" : "Go Home"}
+              className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white flex-shrink-0 flex items-center space-x-2"
+              title="AI Merchant"
             >
-              <div className="flex items-center justify-center">
                 {isStorePreview ? (
                   <ArrowLeft className="w-5 h-5" />
                 ) : (
+                <>
                   <Home className="w-5 h-5" />
+                  <span className="font-semibold text-sm hidden sm:inline">AI Merchant</span>
+                </>
                 )}
-              </div>
             </button>
           </div>
 
-          {/* Center: Hide Chat Button (Page view) */}
-          <div className="flex-1 flex justify-center">
-            {/* Generate Background Button hidden in Page View - only available in Editor View */}
+          {/* Center: Save Button (when there are unsaved changes) - Absolutely positioned */}
+          {!hideEditorButtons && editorState.isEditorView && hasUnsavedChanges && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+              <button 
+                onClick={handleSaveTemplate}
+                className={`px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 ${
+                  highlightSaveButton 
+                    ? 'bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50 hover:shadow-green-500/60 save-highlight save-pulse' 
+                    : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
+                } flex items-center space-x-2`}
+                title="Save Changes"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+                <span className="font-semibold">Save</span>
+              </button>
+            </div>
+          )}
+
+          {/* Center: Shop Button (when there are no unsaved changes and Shop Manager is not open) - Absolutely positioned */}
+          {!hideEditorButtons && editorState.isEditorView && !hasUnsavedChanges && !isTemplateManagerOpen && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+              <button 
+                onClick={openTemplateManager}
+                className="px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
+                title="Shop Manager"
+              >
+                <span className="font-semibold">Store Manager</span>
+              </button>
+            </div>
+          )}
             
-            {/* Hide Chat Button when chat is open */}
-            {isChatOpen && (
+          {/* Center: Hide Chat Button when chat is open and no unsaved changes */}
+          {isChatOpen && (!hasUnsavedChanges || hideEditorButtons || !editorState.isEditorView) && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
               <div className="relative">
                 <button 
                   onClick={() => setIsChatOpen(false)}
@@ -182,159 +219,21 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-full max-w-[110%] h-6 opacity-0 group-hover:opacity-60 blur-xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
                 <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-full max-w-[90%] h-4 opacity-0 group-hover:opacity-90 blur-lg transition-opacity duration-500 ${getGlowBgStrongClass(promoButton.ringHoverClass)}`}></span>
               </div>
+              </div>
             )}
-          </div>
 
           {/* Right Side: Admin Controls */}
-          {!hideEditorButtons && (
-            <div className="p-1 rounded-lg bg-black/50 backdrop-blur text-white text-xs shadow-2xl flex items-center space-x-2 min-h-[2.5rem] h-full flex-shrink-0 overflow-x-auto scrollbar-hide">
-              {/* View Toggle */}
+          {!hideEditorButtons && editorState.isEditorView && (
+            <div className="flex items-center gap-4 flex-shrink-0">
+              {/* Products */}
               <button 
-              onClick={() => {
-                toggleEditorView();
-                // Close chat when switching to editor view
-                if (!editorState.isEditorView && isChatOpen) {
-                  setIsChatOpen(false);
-                }
-              }}
-              className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
-                editorState.isEditorView 
-                ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 shadow-red-500/25 hover:shadow-red-500/40' 
-                : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40'
-              } text-white`}
-              title={editorState.isEditorView ? 'Switch to Customer Page View' : 'Switch to Editor View'}
-            >
-              <div className="flex items-center justify-center">
-                  {editorState.isEditorView ? (
-                    <EyeIcon className="w-5 h-5" />
-                  ) : (
-                    <EditIcon className="w-5 h-5" />
-                  )}
-              </div>
-            </button>
-
-            {/* Generate Background Button - Icon in theme bar (Editor view only) */}
-            {editorState.isEditorView && showGenerateBgInNavbar && !isChatOpen && (
-              <button 
-                onClick={handleGenerateBgClick}
-                disabled={loadingState.isImageLoading}
-                className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
-                  loadingState.isImageLoading 
-                    ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
-                }`}
-                title="Generate AI Background"
+                onClick={handleAddProduct}
+                className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 flex items-center space-x-2"
+                title="Select Products"
               >
-                <div className="flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
+                <PlusCircleIcon className="w-5 h-5" />
+                <span className="font-semibold text-sm">Select Products</span>
               </button>
-            )}
-
-            {editorState.isEditorView && (
-              <div className="flex items-center space-x-2 flex-shrink-0 flex-nowrap">
-                {/* Background Upload - Moved to left of theme selector */}
-                <label htmlFor="bg-upload" className="cursor-pointer p-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40" title="Upload Background">
-                  <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
-                  <input 
-                    type="file" 
-                    id="bg-upload" 
-                    className="hidden" 
-                    accept="image/*"
-                    onChange={(e) => handleBgImageUpload(e.target.files?.[0]!)}
-                    disabled={loadingState.isImageLoading}
-                  />
-                </label>
-
-                {/* Theme Selector */}
-                <div className="flex items-center space-x-2">
-                  <label htmlFor="season" className="font-semibold flex-shrink-0 hidden sm:inline text-white">Theme:</label>
-                  <select
-                    id="season"
-                    value={currentSeason}
-                    onChange={(e) => { 
-                      setCurrentSeason(e.target.value);
-                    }}
-                    className="px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
-                  >
-                    {Object.keys(allThemes).map(s => (
-                      <option key={s} value={s}>{allThemes[s].name}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                
-                {/* Background Generate - Icon only when moved from navbar */}
-                {!showGenerateBgInNavbar && (
-                  <button 
-                    onClick={handleGenerateBgClick}
-                    disabled={loadingState.isImageLoading}
-                    className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg ${
-                      loadingState.isImageLoading 
-                        ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40'
-                    }`}
-                    title="Generate AI Background"
-                  >
-                    <div className="flex items-center justify-center">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                  </button>
-                )}
-                
-                {/* Save Template */}
-                <button 
-                  onClick={handleSaveTemplate}
-                  className={`p-2 rounded-xl transition-all duration-300 transform hover:scale-105 ${
-                    highlightSaveButton 
-                      ? 'bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50 hover:shadow-green-500/60 save-highlight save-pulse' 
-                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
-                  }`}
-                  title="Save Current Store as Template"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                    </svg>
-                  </div>
-                </button>
-                
-                {/* Elements */}
-                <button 
-                  onClick={toggleAdminSheet}
-                  className="p-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40"
-                  title="Manage Elements & AI Tools"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-                    </svg>
-                  </div>
-                </button>
-                
-                {/* Templates */}
-                <button 
-                  onClick={openTemplateManager}
-                  className="p-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40"
-                  title="Manage Shop"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                </button>
-              </div>
-            )}
-
             </div>
           )}
         </div>

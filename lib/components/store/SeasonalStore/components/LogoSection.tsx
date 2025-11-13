@@ -84,22 +84,6 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
                 />
               </label>
               
-              {/* Zap Button - Middle */}
-              <button
-                onClick={() => handleLogoGeneration(logoAsset, logoAsset.shape, legacyTheme.name)}
-                disabled={loadingState.isGeneratingImage || loadingState.isTextLoading}
-                className={`p-2 rounded-xl group transition-all duration-300 shadow-lg hover:scale-105 ${
-                  (loadingState.isGeneratingImage || loadingState.isTextLoading) 
-                    ? 'bg-indigo-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
-                }`}
-                title={logoAsset.src.includes('placehold.co') ? `Generate ${currentSeason} Logo` : `Refine to ${currentSeason}`}
-              >
-                <div className="flex items-center justify-center">
-                  <ZapIcon className="w-3 h-3" />
-                </div>
-              </button>
-              
               {/* Shape Toggle - Bottom */}
               <button
                 onClick={() => setLogoAsset((prev) => ({ 

@@ -8,7 +8,9 @@ import {
   TrashIcon, 
   GrabIcon, 
   LayersIcon,
-  ZapIcon
+  ZapIcon,
+  PaletteIcon,
+  EditIcon
 } from './Icons';
 import { emojiToSvgDataURL } from '../services/aiService';
 import { useBackgroundAnalysis } from '../utils/backgroundAnalyzer';
@@ -51,6 +53,13 @@ interface AdminAssetSheetProps {
   onDeleteTheme?: (themeId: string) => Promise<void>;
   // Theme generation notification callback
   onThemeGeneration?: (isGenerating: boolean, themeName: string) => void;
+  // Background controls props
+  handleGenerateBgClick?: () => void;
+  handleBgImageUpload?: (file: File) => void;
+  setCurrentSeason?: (season: string) => void;
+  loadingState?: {
+    isImageLoading: boolean;
+  };
 }
 
 
@@ -86,6 +95,10 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   experienceId,
   onDeleteTheme,
   onThemeGeneration,
+  handleGenerateBgClick,
+  handleBgImageUpload,
+  setCurrentSeason,
+  loadingState,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -99,6 +112,11 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   const [newThemeName, setNewThemeName] = useState('');
   const [newThemePrompt, setNewThemePrompt] = useState('');
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
+  
+  // Section visibility state
+  const [showCustomThemeDesigner, setShowCustomThemeDesigner] = useState(false);
+  const [showEditThemePrompt, setShowEditThemePrompt] = useState(false);
+  const [showDeleteCustomThemes, setShowDeleteCustomThemes] = useState(false);
   
   // Theme deletion notification state
   const [deleteNotification, setDeleteNotification] = useState<{
@@ -393,14 +411,14 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       role="dialog"
       aria-modal="true"
-      aria-label="Assets Manager"
+      aria-label="Background & Theme Manager"
     >
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
         <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis?.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
           <svg className="w-4 h-4 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </svg>
-          Assets
+          Background & Theme
         </h3>
         <button onClick={onClose} className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors">
           <XIcon className="w-4 h-4" />
@@ -409,6 +427,33 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-6">
+        {/* Background Controls */}
+        <div>
+          <div className="space-y-3">
+            {/* Upload Background */}
+            {handleBgImageUpload && (
+              <label htmlFor="bg-upload-modal" className="cursor-pointer w-full px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 flex items-center justify-center space-x-2" title="Upload Background">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span className="font-semibold">Upload Background</span>
+                <input 
+                  type="file" 
+                  id="bg-upload-modal" 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files?.[0] && handleBgImageUpload) {
+                      handleBgImageUpload(e.target.files[0]);
+                    }
+                  }}
+                  disabled={loadingState?.isImageLoading}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
         {/* Manual Emoji Bank */}
         <div>
           <h4 className="text-3xl font-extrabold text-cyan-400 mb-6 flex items-center">
@@ -474,6 +519,49 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                 </div>
               ));
             })()}
+          </div>
+        </div>
+
+        {/* Theme Controls */}
+        <div>
+          <div className="space-y-3">
+            {/* Theme Selector */}
+            {setCurrentSeason && (
+              <div className="space-y-2">
+                <label htmlFor="season-select" className="text-sm font-semibold text-gray-300">Theme:</label>
+                <select
+                  id="season-select"
+                  value={currentSeason}
+                  onChange={(e) => { 
+                    setCurrentSeason(e.target.value);
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50 transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  {Object.keys(allThemes).map(s => (
+                    <option key={s} value={s}>{allThemes[s].name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Theme Up Background */}
+            {handleGenerateBgClick && (
+              <button 
+                onClick={handleGenerateBgClick}
+                disabled={loadingState?.isImageLoading}
+                className={`w-full px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2 ${
+                  loadingState?.isImageLoading 
+                    ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
+                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40 text-white'
+                }`}
+                title="Theme Up Background"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="font-semibold">Theme Up Background</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -888,12 +976,19 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
 
         {/* Custom Theme Designer */}
         <div>
-          <h4 className="text-3xl font-extrabold text-fuchsia-400 mb-6 flex items-center">
-            <ZapIcon className="w-8 h-8 mr-3" />
-            Custom Theme Designer
-          </h4>
-          <div className="mb-8"></div>
+          <button
+            onClick={() => setShowCustomThemeDesigner(!showCustomThemeDesigner)}
+            className="w-full mb-4 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-fuchsia-500 to-pink-600 hover:from-fuchsia-600 hover:to-pink-700 text-white shadow-lg shadow-fuchsia-500/25 hover:shadow-fuchsia-500/40 flex items-center justify-center space-x-2"
+          >
+            <PaletteIcon className="w-5 h-5" />
+            <span className="font-semibold">Custom Theme Designer</span>
+            <svg className={`w-5 h-5 transition-transform duration-300 ${showCustomThemeDesigner ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
           
+          {showCustomThemeDesigner && (
+            <div className="mb-6">
           {/* Limit warning */}
           {!canAddCustomTheme && (
             <div className="mb-4 p-3 bg-red-900/20 border border-red-500/50 rounded-lg">
@@ -947,16 +1042,26 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               </>
             )}
           </button>
+            </div>
+          )}
         </div>
 
 
-        {/* Edit Current Theme Prompt - Moved to Bottom */}
+        {/* Edit Theme - Moved to Bottom */}
         <div>
-          <h4 className="text-3xl font-extrabold text-blue-400 mb-6 flex items-center">
-            <SettingsIcon className="w-8 h-8 mr-3" />
-            Edit Current Theme Prompt
-          </h4>
-          <div className="mb-8"></div>
+          <button
+            onClick={() => setShowEditThemePrompt(!showEditThemePrompt)}
+            className="w-full mb-4 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 flex items-center justify-center space-x-2"
+          >
+            <EditIcon className="w-5 h-5" />
+            <span className="font-semibold">Edit Theme</span>
+            <svg className={`w-5 h-5 transition-transform duration-300 ${showEditThemePrompt ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {showEditThemePrompt && (
+            <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-300 mb-2">
             Current Theme: <span className="text-blue-400">{theme?.name || currentSeason}</span>
           </label>
@@ -979,6 +1084,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             <SettingsIcon className="w-4 h-4 mr-2" /> 
             Apply Changes
           </button>
+            </div>
+          )}
         </div>
         
         
@@ -1000,13 +1107,21 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </div>
         )}
 
-        {/* Custom Theme Management - Moved to Bottom */}
+        {/* Delete Custom Themes - Moved to Bottom */}
         <div>
-          <h4 className="text-3xl font-extrabold text-red-400 mb-6 flex items-center">
-            <TrashIcon className="w-8 h-8 mr-3" />
-            Manage Custom Themes
-          </h4>
-          <div className="mb-8"></div>
+          <button
+            onClick={() => setShowDeleteCustomThemes(!showDeleteCustomThemes)}
+            className="w-full mb-4 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 flex items-center justify-center space-x-2"
+          >
+            <TrashIcon className="w-5 h-5" />
+            <span className="font-semibold">Delete Custom Themes</span>
+            <svg className={`w-5 h-5 transition-transform duration-300 ${showDeleteCustomThemes ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {showDeleteCustomThemes && (
+            <div className="mb-6">
           <p className="text-sm text-gray-300 mb-4">
             Remove custom themes you've created. Default themes cannot be deleted.
           </p>
@@ -1102,6 +1217,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               });
             })()}
           </div>
+            </div>
+          )}
         </div>
         </div>
       </div>

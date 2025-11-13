@@ -45,15 +45,22 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   const { headerMessage, subHeader } = fixedTextStyles || {};
 
   return (
-    <div className="text-center mb-2 relative w-full">
+    <div 
+      className="text-center mb-2 relative w-full"
+      onClick={(e) => {
+        // Stop propagation to prevent background modal from opening when clicking on header area
+        e.stopPropagation();
+      }}
+    >
       {/* Header Message */}
       <p 
-        className={`${applyThemeColorsToText(headerMessage, 'header')} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
+        className={`${applyThemeColorsToText(headerMessage, 'header')} text-2xl md:text-4xl lg:text-5xl xl:text-6xl ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
         style={{ 
           color: headerMessage?.color, 
           textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
         }}
-        onClick={() => {
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent background modal from opening
           if (editorState.isEditorView) {
             // If modal is open for any text, don't handle clicks on page text elements
             if (false) { // editingText.isOpen check would go here
@@ -70,12 +77,13 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
       
       {/* Sub Header */}
       <p 
-        className={`${applyThemeColorsToText(subHeader, 'subheader')} ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
+        className={`${applyThemeColorsToText(subHeader, 'subheader')} text-sm md:text-base lg:text-lg xl:text-xl ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
         style={{ 
           color: subHeader?.color, 
           textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
         }}
-        onClick={() => {
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent background modal from opening
           if (editorState.isEditorView) {
             // If modal is open for any text, don't handle clicks on page text elements
             if (false) { // editingText.isOpen check would go here
