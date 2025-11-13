@@ -778,41 +778,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   }, [logoAsset, setLogoAsset]);
 
 
-  // Detect unsaved changes - Only track after initialization is complete
-  useEffect(() => {
-    // Don't track changes until initialization is complete
-    if (!isInitialLoadComplete || !isStoreContentReady) {
-      return; // Wait for initialization to complete
-    }
-    
-    // Don't track if snapshot hasn't been set yet (will be set by the other effect)
-    if (lastSavedSnapshot === null) {
-      return; // Wait for initial snapshot to be set
-    }
-    
-    if (!editorState.isEditorView || isInPreviewMode) {
-      return; // Don't track changes in preview mode or page view
-    }
-    
-    const currentSnapshot = JSON.stringify({
-      products: themeProducts[currentSeason] || [],
-      floatingAssets,
-      currentSeason,
-      fixedTextStyles,
-      logoAsset,
-      generatedBackground,
-      uploadedBackground,
-      backgroundAttachmentId,
-      backgroundAttachmentUrl,
-      logoAttachmentId,
-      logoAttachmentUrl,
-      promoButton,
-    });
-    
-    // Compare with last saved snapshot
-    setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
-  }, [
-    themeProducts,
+  // Track whether the initial snapshot has been established
+  const hasInitializedSnapshotRef = useRef(false);
+  const prevTemplateLoadedRef = useRef(false);
+
+  const computeStoreSnapshot = useCallback(() => JSON.stringify({
+    products: themeProducts[currentSeason] || [],
     floatingAssets,
     currentSeason,
     fixedTextStyles,
@@ -824,59 +795,71 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     logoAttachmentId,
     logoAttachmentUrl,
     promoButton,
+  }), [
+    themeProducts,
+    currentSeason,
+    floatingAssets,
+    fixedTextStyles,
+    logoAsset,
+    generatedBackground,
+    uploadedBackground,
+    backgroundAttachmentId,
+    backgroundAttachmentUrl,
+    logoAttachmentId,
+    logoAttachmentUrl,
+    promoButton,
+  ]);
+
+  // Initialize snapshot after initial load completes or when a template is fully loaded
+  useEffect(() => {
+    if (!isInitialLoadComplete || !isStoreContentReady || isInPreviewMode) {
+      return;
+    }
+
+    const snapshot = computeStoreSnapshot();
+
+    // Initialize snapshot once after initial load
+    if (!hasInitializedSnapshotRef.current) {
+      setLastSavedSnapshot(snapshot);
+      setHasUnsavedChanges(false);
+      hasInitializedSnapshotRef.current = true;
+      prevTemplateLoadedRef.current = isTemplateLoaded;
+      return;
+    }
+
+    // Reset snapshot when a template finishes loading (transition from false -> true)
+    if (isTemplateLoaded && !prevTemplateLoadedRef.current) {
+      setLastSavedSnapshot(snapshot);
+      setHasUnsavedChanges(false);
+    }
+
+    prevTemplateLoadedRef.current = isTemplateLoaded;
+  }, [
+    isInitialLoadComplete,
+    isStoreContentReady,
+    isTemplateLoaded,
+    isInPreviewMode,
+    computeStoreSnapshot,
+  ]);
+
+  // Detect unsaved changes once the initial snapshot is established
+  useEffect(() => {
+    if (!hasInitializedSnapshotRef.current) {
+      return;
+    }
+
+    if (!editorState.isEditorView || isInPreviewMode) {
+      return;
+    }
+
+    const currentSnapshot = computeStoreSnapshot();
+    setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
+  }, [
+    computeStoreSnapshot,
     lastSavedSnapshot,
     editorState.isEditorView,
     isInPreviewMode,
-    isInitialLoadComplete,
-    isStoreContentReady,
   ]);
-
-  // Reset snapshot when template is loaded (to avoid false positives)
-  // Also set initial snapshot after initialization completes
-  useEffect(() => {
-    // Only set snapshot after initialization is complete
-    if (!isInitialLoadComplete || !isStoreContentReady) {
-      return;
-    }
-    
-    if (isTemplateLoaded && !isInPreviewMode) {
-      // Template has been loaded, reset snapshot to current state
-      const snapshot = JSON.stringify({
-        products: themeProducts[currentSeason] || [],
-        floatingAssets,
-        currentSeason,
-        fixedTextStyles,
-        logoAsset,
-        generatedBackground,
-        uploadedBackground,
-        backgroundAttachmentId,
-        backgroundAttachmentUrl,
-        logoAttachmentId,
-        logoAttachmentUrl,
-        promoButton,
-      });
-      setLastSavedSnapshot(snapshot);
-      setHasUnsavedChanges(false);
-    } else if (lastSavedSnapshot === null && !isInPreviewMode) {
-      // Initial snapshot after initialization completes (no template loaded yet)
-      const snapshot = JSON.stringify({
-        products: themeProducts[currentSeason] || [],
-        floatingAssets,
-        currentSeason,
-        fixedTextStyles,
-        logoAsset,
-        generatedBackground,
-        uploadedBackground,
-        backgroundAttachmentId,
-        backgroundAttachmentUrl,
-        logoAttachmentId,
-        logoAttachmentUrl,
-        promoButton,
-      });
-      setLastSavedSnapshot(snapshot);
-      setHasUnsavedChanges(false);
-    }
-  }, [isTemplateLoaded, isInPreviewMode, isInitialLoadComplete, isStoreContentReady, lastSavedSnapshot, themeProducts, currentSeason, floatingAssets, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, backgroundAttachmentId, backgroundAttachmentUrl, logoAttachmentId, logoAttachmentUrl, promoButton]);
 
   // Load live funnel on mount
   useEffect(() => {
@@ -1228,12 +1211,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   useEffect(() => {
     // Always sync Claim button to current theme on theme change
-    const ringToken = legacyTheme.accent.split(' ').find(cls => cls.startsWith('ring-') && !cls.startsWith('ring-offset')) || 'ring-indigo-400';
+    // Use ring-2 to match ProductCard buttons (default gray ring)
     setPromoButton(prev => ({
       ...prev,
       buttonClass: legacyTheme.accent,
-      ringClass: ringToken,
-      ringHoverClass: ringToken,
+      ringClass: '', // Empty string - will use default ring-2 from ProductCard style
+      ringHoverClass: '', // Empty string - will use default ring-2 from ProductCard style
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legacyTheme.accent]);

@@ -169,10 +169,10 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Edit Product"
-        className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}
         style={{ pointerEvents: 'auto' }}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
           <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
             {productEditor.target === 'button' ? (
               productEditor.productId === null ? (
@@ -531,29 +531,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 >
                   Apply to All Buttons
                 </button>
-              </div>
-            </div>
-            
-            {/* Claim Button Outer Ring Color */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-2">Outer Ring Color</label>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {['ring-indigo-400', 'ring-cyan-400', 'ring-fuchsia-400', 'ring-emerald-400', 'ring-amber-400', 'ring-rose-400', 'ring-blue-400', 'ring-slate-400', 'ring-orange-400'].map(cls => {
-                  const isSelected = promoButton.ringHoverClass === cls;
-                  return (
-                    <button
-                      key={cls}
-                      onClick={() => setPromoButton(prev => ({ ...prev, ringClass: 'ring-white/30', ringHoverClass: cls }))}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ring-2 ring-offset-2 transition-all duration-200 ${
-                        isSelected 
-                          ? 'ring-white ring-offset-gray-900 scale-105 shadow-lg' 
-                          : 'ring-white/30 hover:ring-white/50'
-                      } bg-gray-800 hover:bg-gray-700 ${cls.replace('ring-', 'hover:ring-')}`}
-                    >
-                      {cls.replace('ring-', '')}
-                    </button>
-                  );
-                })}
               </div>
             </div>
             <div className="h-24" />
