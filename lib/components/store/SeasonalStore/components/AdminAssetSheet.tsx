@@ -987,8 +987,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             </svg>
           </button>
           
-          {showCustomThemeDesigner && (
-            <div className="mb-6">
+          <div className={`mb-6 overflow-hidden transition-all duration-500 ${showCustomThemeDesigner ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
           {/* Limit warning */}
           {!canAddCustomTheme && (
             <div className="mb-4 p-3 bg-red-900/20 border border-red-500/50 rounded-lg">
@@ -1043,7 +1042,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             )}
           </button>
             </div>
-          )}
         </div>
 
 
@@ -1060,8 +1058,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             </svg>
           </button>
           
-          {showEditThemePrompt && (
-            <div className="mb-6">
+          <div className={`mb-6 overflow-hidden transition-all duration-500 ${showEditThemePrompt ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
           <label className="block text-sm font-semibold text-gray-300 mb-2">
             Current Theme: <span className="text-blue-400">{theme?.name || currentSeason}</span>
           </label>
@@ -1085,7 +1082,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             Apply Changes
           </button>
             </div>
-          )}
         </div>
         
         
@@ -1120,8 +1116,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             </svg>
           </button>
           
-          {showDeleteCustomThemes && (
-            <div className="mb-6">
+          <div className={`mb-6 overflow-hidden transition-all duration-500 ${showDeleteCustomThemes ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
           <p className="text-sm text-gray-300 mb-4">
             Remove custom themes you've created. Default themes cannot be deleted.
           </p>
@@ -1218,7 +1213,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             })()}
           </div>
             </div>
-          )}
         </div>
         </div>
       </div>

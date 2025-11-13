@@ -5,7 +5,6 @@ import { XIcon, TrashIcon } from './Icons';
 
 interface TextEditorModalProps {
   isOpen: boolean;
-  isAnimating: boolean;
   editingText: {
     isOpen: boolean;
     targetId: string;
@@ -28,7 +27,6 @@ interface TextEditorModalProps {
 
 export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   isOpen,
-  isAnimating,
   editingText,
   fixedTextStyles,
   backgroundAnalysis,
@@ -55,34 +53,28 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit Text"
+      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       onClick={(e) => {
+        // Close on background click (when clicking on the modal itself, not its children)
         if (e.target === e.currentTarget) onClose();
       }}
-      style={{
-        // Remove overlay blocking when modal is open for the same text element
-        pointerEvents: editingText.targetId === 'headerMessage' || editingText.targetId === 'subHeader' || editingText.targetId === 'promoMessage' ? 'none' : 'auto'
-      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit Text"
-        className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ pointerEvents: 'auto' }}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
-          <h3 className={`text-sm font-semibold tracking-wide ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>Edit Text</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-300 hover:text-white transition-colors"
-            aria-label="Close"
-          >
-            <XIcon className="w-5 h-5" />
-          </button>
-        </div>
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
+        <h3 className={`text-sm font-semibold tracking-wide ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>Edit Text</h3>
+        <button
+          onClick={onClose}
+          className="text-gray-300 hover:text-white transition-colors"
+          aria-label="Close"
+        >
+          <XIcon className="w-5 h-5" />
+        </button>
+      </div>
 
-        <div className="space-y-4 px-4 py-4 overflow-y-auto h-full pb-28">
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="space-y-4">
           {/* Content */}
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Content</label>
@@ -284,8 +276,6 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="h-24" />
         </div>
       </div>
     </div>

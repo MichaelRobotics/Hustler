@@ -34,7 +34,6 @@ interface Product {
 
 interface ProductEditorModalProps {
   isOpen: boolean;
-  isAnimating: boolean;
   productEditor: {
     isOpen: boolean;
     productId: number | string | null;
@@ -65,7 +64,6 @@ interface ProductEditorModalProps {
 
 export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   isOpen,
-  isAnimating,
   productEditor,
   products,
   promoButton,
@@ -158,54 +156,50 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{
-        // Remove overlay blocking when product editor modal is open
-        pointerEvents: 'none'
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit Product"
+      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      onClick={(e) => {
+        // Close on background click (when clicking on the modal itself, not its children)
+        if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit Product"
-        className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{ pointerEvents: 'auto' }}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
-          <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
-            {productEditor.target === 'button' ? (
-              productEditor.productId === null ? (
-                <>
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
-                  </svg>
-                  Edit Claim Button
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                  </svg>
-                  Edit Button
-                </>
-              )
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
+        <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
+          {productEditor.target === 'button' ? (
+            productEditor.productId === null ? (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
+                </svg>
+                Edit Claim Button
+              </>
             ) : (
               <>
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
                 </svg>
-                Edit Product
+                Edit Button
               </>
-            )}
-          </h3>
-          <button onClick={onClose} className="text-gray-300 hover:text-white transition-colors" aria-label="Close">
-            <XIcon className="w-5 h-5" />
-          </button>
-        </div>
-        
+            )
+          ) : (
+            <>
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit Product
+            </>
+          )}
+        </h3>
+        <button onClick={onClose} className="text-gray-300 hover:text-white transition-colors" aria-label="Close">
+          <XIcon className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4">
         {productEditor.productId !== null && (
-          <div className="space-y-4 px-4 py-4 overflow-y-auto h-full pb-28">
+          <div className="space-y-4">
             {productEditor.target !== 'button' && (
               <>
                 {/* Name */}
@@ -462,13 +456,12 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 </div>
               </div>
             )}
-            <div className="h-24" />
           </div>
         )}
         
         {/* Button-only section for Claim button (no productId) */}
         {productEditor.productId === null && productEditor.target === 'button' && (
-          <div className="space-y-4 px-4 py-4 overflow-y-auto h-full pb-28">
+          <div className="space-y-4">
             {/* Claim Button Text */}
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-2">Button Text</label>
@@ -533,7 +526,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 </button>
               </div>
             </div>
-            <div className="h-24" />
           </div>
         )}
       </div>

@@ -1348,7 +1348,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
 
   // Slide-over animations (match AdminAssetSheet feel)
-  const [textSheetAnimOpen, setTextSheetAnimOpen] = useState(false);
   // Initialize animation state to match initial isAdminSheetOpen state (true)
   const [adminSheetAnimOpen, setAdminSheetAnimOpen] = useState(editorState.isAdminSheetOpen);
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
@@ -1378,15 +1377,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   
   // Highlighted template state
   const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (editingText.isOpen) {
-      // next tick to trigger transition
-      const id = requestAnimationFrame(() => setTextSheetAnimOpen(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setTextSheetAnimOpen(false);
-    }
-  }, [editingText.isOpen]);
 
 
   // Close modal when clicking outside the edit panel
@@ -1461,8 +1451,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   }, [editorState.isAdminSheetOpen]);
 
   const closeTextEditorAnimated = () => {
-    setTextSheetAnimOpen(false);
-    setTimeout(() => setEditingText({ isOpen: false, targetId: 'mainHeader' }), 500);
+    setEditingText({ isOpen: false, targetId: 'mainHeader' });
   };
 
   const closeAdminSheetAnimated = () => {
@@ -1470,19 +1459,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setTimeout(() => toggleAdminSheet(), 500);
   };
 
-  const [productSheetAnimOpen, setProductSheetAnimOpen] = useState(false);
-  useEffect(() => {
-    if (productEditor.isOpen) {
-      const id = requestAnimationFrame(() => setProductSheetAnimOpen(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setProductSheetAnimOpen(false);
-    }
-  }, [productEditor.isOpen]);
-
   const closeProductEditorAnimated = () => {
-    setProductSheetAnimOpen(false);
-    setTimeout(() => closeProductEditor(), 500);
+    closeProductEditor();
   };
 
   // Inline text editing on page
@@ -1951,7 +1929,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
       <TextEditorModal
         isOpen={editingText.isOpen}
-        isAnimating={textSheetAnimOpen}
         editingText={editingText}
         fixedTextStyles={fixedTextStyles}
         backgroundAnalysis={backgroundAnalysis}
@@ -1963,7 +1940,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
       <ProductEditorModal
         isOpen={productEditor.isOpen}
-        isAnimating={productSheetAnimOpen}
         productEditor={productEditorWrapper}
                       products={(themeProducts[currentSeason] || []) as any}
         promoButton={promoButton}
