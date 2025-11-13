@@ -1206,44 +1206,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   const { mainHeader, headerMessage, subHeader, promoMessage } = fixedTextStyles || {};
 
-  // Initialize fixedTextStyles with product names/descriptions when products load
-  useEffect(() => {
-    const currentProducts = themeProducts[currentSeason] || [];
-    if (currentProducts.length > 0) {
-      setFixedTextStyles(prev => {
-        const updated = { ...prev };
-        let hasChanges = false;
-        
-        currentProducts.forEach(product => {
-          const nameKey = `productName-${product.id}`;
-          const descKey = `productDesc-${product.id}`;
-          
-          // Initialize product name if not exists
-          if (!(updated as any)[nameKey]) {
-            (updated as any)[nameKey] = {
-              content: product.name,
-              color: '#FFFFFF',
-              styleClass: 'text-lg font-bold'
-            };
-            hasChanges = true;
-          }
-          
-          // Initialize product description if not exists
-          if (!(updated as any)[descKey]) {
-            (updated as any)[descKey] = {
-              content: product.description,
-              color: '#FFFFFF',
-              styleClass: 'text-xs'
-            };
-            hasChanges = true;
-          }
-        });
-        
-        return hasChanges ? updated : prev;
-      });
-    }
-  }, [themeProducts, currentSeason, setFixedTextStyles]);
-
 
 
 
@@ -1937,8 +1899,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           handleRemoveSticker={handleRemoveSticker}
           handleDropOnProduct={handleDropOnProductWrapper}
           openProductEditor={openProductEditorWrapper}
-          fixedTextStyles={fixedTextStyles}
-          setEditingText={setEditingTextWrapper}
         />
 
         <PromoButton
@@ -1990,7 +1950,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         onClose={closeTextEditorAnimated}
         setFixedTextStyles={setFixedTextStyles}
         getThemeQuickColors={getThemeQuickColors}
-        updateProduct={updateProduct}
       />
 
       <ProductEditorModal

@@ -244,6 +244,40 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           <div className="space-y-4">
             {productEditor.target !== 'button' && (
               <>
+                {/* Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">Name</label>
+                  <input
+                    ref={nameInputRef}
+                    type="text"
+                    value={products.find(p => p.id === productEditor.productId)?.name || ''}
+                    onChange={(e) => updateProduct(productEditor.productId!, { name: e.target.value })}
+                    placeholder="Enter name"
+                    className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 placeholder-black"
+                    style={{ fontSize: '16px' }}
+                    onFocus={(e) => {
+                      // Prevent iOS zoom on focus
+                      e.target.style.fontSize = '16px';
+                    }}
+                  />
+                </div>
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">Description</label>
+                  <textarea
+                    ref={descInputRef}
+                    value={products.find(p => p.id === productEditor.productId)?.description || ''}
+                    onChange={(e) => updateProduct(productEditor.productId!, { description: e.target.value })}
+                    placeholder="Enter description"
+                    className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 h-24 placeholder-black"
+                    style={{ fontSize: '16px' }}
+                    onFocus={(e) => {
+                      // Prevent iOS zoom on focus
+                      e.target.style.fontSize = '16px';
+                    }}
+                  />
+                </div>
+                
                 {/* Badge Selector */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Badge</label>

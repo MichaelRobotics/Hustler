@@ -23,7 +23,6 @@ interface TextEditorModalProps {
   onClose: () => void;
   setFixedTextStyles: (fn: (prev: any) => any) => void;
   getThemeQuickColors: (theme: any) => string[];
-  updateProduct?: (id: number | string, updates: any) => void;
 }
 
 export const TextEditorModal: React.FC<TextEditorModalProps> = ({
@@ -35,7 +34,6 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   onClose,
   setFixedTextStyles,
   getThemeQuickColors,
-  updateProduct,
 }) => {
   // Note: We don't lock body scroll for TextEditorModal since it's a slide-over modal
   // that doesn't cover the entire screen. Body scroll lock would cause the background
@@ -49,19 +47,6 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
     currentStyle: fixedTextStyles[editingText.targetId],
     allFixedTextStyles: fixedTextStyles
   });
-
-  // Check if editing a product text
-  const isProductText = editingText.targetId.startsWith('productName-') || editingText.targetId.startsWith('productDesc-');
-  let productId: string | null = null;
-  if (isProductText) {
-    if (editingText.targetId.startsWith('productName-')) {
-      productId = editingText.targetId.replace('productName-', '');
-    } else if (editingText.targetId.startsWith('productDesc-')) {
-      productId = editingText.targetId.replace('productDesc-', '');
-    }
-  }
-  const isProductName = isProductText && editingText.targetId.startsWith('productName-');
-  const isProductDesc = isProductText && editingText.targetId.startsWith('productDesc-');
 
   // Ensure we have proper fallback values for the current target
   const currentTextStyle = fixedTextStyles[editingText.targetId] || {
@@ -100,28 +85,15 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
             <textarea
               rows={4}
               value={currentTextStyle.content}
-              onChange={(e) => {
-                const newContent = e.target.value;
-                // Update fixedTextStyles
-                setFixedTextStyles(prev => ({
-                  ...prev,
-                  [editingText.targetId]: { 
-                    ...prev[editingText.targetId],
-                    content: newContent,
-                    color: prev[editingText.targetId]?.color || currentTextStyle.color,
-                    styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-                  }
-                }));
-                
-                // Sync to product if editing product text
-                if (isProductText && updateProduct && productId) {
-                  if (isProductName) {
-                    updateProduct(productId, { name: newContent });
-                  } else if (isProductDesc) {
-                    updateProduct(productId, { description: newContent });
-                  }
+              onChange={(e) => setFixedTextStyles(prev => ({
+                ...prev,
+                [editingText.targetId]: { 
+                  ...prev[editingText.targetId],
+                  content: e.target.value,
+                  color: prev[editingText.targetId]?.color || currentTextStyle.color,
+                  styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
                 }
-              }}
+              }))}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
               style={{ fontSize: '16px' }}
               onFocus={(e) => {
