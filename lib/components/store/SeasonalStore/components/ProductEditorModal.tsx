@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { XIcon } from './Icons';
 import { ButtonColorControls } from './ButtonColorControls';
 import EmojiBank from '../EmojiBank';
@@ -84,6 +84,41 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   // Local state for transparency slider
   const [transparencyValue, setTransparencyValue] = useState(90);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
+  
+  // Memoize current product to avoid repeated finds
+  const currentProduct = useMemo(() => 
+    productEditor.productId !== null 
+      ? products.find(p => p.id === productEditor.productId)
+      : null,
+    [products, productEditor.productId]
+  );
+  
+  // Local state for inputs to prevent lag
+  const [localName, setLocalName] = useState(currentProduct?.name || '');
+  const [localDescription, setLocalDescription] = useState(currentProduct?.description || '');
+  
+  // Sync local state when product changes
+  useEffect(() => {
+    if (currentProduct) {
+      setLocalName(currentProduct.name || '');
+      setLocalDescription(currentProduct.description || '');
+    }
+  }, [currentProduct?.id, currentProduct?.name, currentProduct?.description]);
+  
+  // Optimized update handlers
+  const updateName = useCallback((value: string) => {
+    setLocalName(value);
+    if (productEditor.productId !== null) {
+      updateProduct(productEditor.productId, { name: value });
+    }
+  }, [productEditor.productId, updateProduct]);
+  
+  const updateDescription = useCallback((value: string) => {
+    setLocalDescription(value);
+    if (productEditor.productId !== null) {
+      updateProduct(productEditor.productId, { description: value });
+    }
+  }, [productEditor.productId, updateProduct]);
   
   // Update transparency value when product changes
   useEffect(() => {
@@ -250,8 +285,8 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                   <input
                     ref={nameInputRef}
                     type="text"
-                    value={products.find(p => p.id === productEditor.productId)?.name || ''}
-                    onChange={(e) => updateProduct(productEditor.productId!, { name: e.target.value })}
+                    value={localName}
+                    onChange={(e) => updateName(e.target.value)}
                     placeholder="Enter name"
                     className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 placeholder-black"
                     style={{ fontSize: '16px' }}
@@ -266,8 +301,8 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Description</label>
                   <textarea
                     ref={descInputRef}
-                    value={products.find(p => p.id === productEditor.productId)?.description || ''}
-                    onChange={(e) => updateProduct(productEditor.productId!, { description: e.target.value })}
+                    value={localDescription}
+                    onChange={(e) => updateDescription(e.target.value)}
                     placeholder="Enter description"
                     className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 h-24 placeholder-black"
                     style={{ fontSize: '16px' }}

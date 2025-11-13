@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { XIcon } from './Icons';
 
 interface TextEditorModalProps {
@@ -39,21 +39,71 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   // that doesn't cover the entire screen. Body scroll lock would cause the background
   // to resize due to backgroundAttachment: 'fixed' on the background image.
 
+  // Use local state for input to prevent lag on every keystroke
+  const currentTextStyle = useMemo(() => 
+    fixedTextStyles[editingText.targetId] || {
+      content: '',
+      color: '#FFFFFF',
+      styleClass: 'text-lg font-normal'
+    },
+    [fixedTextStyles, editingText.targetId]
+  );
+
+  const [localContent, setLocalContent] = useState(currentTextStyle.content);
+  const [localColor, setLocalColor] = useState(currentTextStyle.color);
+  const [localStyleClass, setLocalStyleClass] = useState(currentTextStyle.styleClass);
+
+  // Sync local state when modal opens or target changes
+  useEffect(() => {
+    if (isOpen) {
+      setLocalContent(currentTextStyle.content);
+      setLocalColor(currentTextStyle.color);
+      setLocalStyleClass(currentTextStyle.styleClass);
+    }
+  }, [isOpen, currentTextStyle.content, currentTextStyle.color, currentTextStyle.styleClass]);
+
+  // Debounced update to fixedTextStyles
+  const updateContent = useCallback((value: string) => {
+    setLocalContent(value);
+    // Update immediately for better UX
+    setFixedTextStyles(prev => ({
+      ...prev,
+      [editingText.targetId]: { 
+        ...prev[editingText.targetId],
+        content: value,
+        color: prev[editingText.targetId]?.color || currentTextStyle.color,
+        styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
+      }
+    }));
+  }, [editingText.targetId, setFixedTextStyles, currentTextStyle.color, currentTextStyle.styleClass]);
+
+  const updateColor = useCallback((value: string) => {
+    setLocalColor(value);
+    setFixedTextStyles(prev => ({
+      ...prev,
+      [editingText.targetId]: { 
+        ...prev[editingText.targetId],
+        color: value,
+        content: prev[editingText.targetId]?.content || currentTextStyle.content,
+        styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
+      }
+    }));
+  }, [editingText.targetId, setFixedTextStyles, currentTextStyle.content, currentTextStyle.styleClass]);
+
+  const updateStyleClass = useCallback((value: string) => {
+    setLocalStyleClass(value);
+    setFixedTextStyles(prev => ({
+      ...prev,
+      [editingText.targetId]: { 
+        ...prev[editingText.targetId],
+        styleClass: value,
+        content: prev[editingText.targetId]?.content || currentTextStyle.content,
+        color: prev[editingText.targetId]?.color || currentTextStyle.color
+      }
+    }));
+  }, [editingText.targetId, setFixedTextStyles, currentTextStyle.content, currentTextStyle.color]);
+
   if (!isOpen) return null;
-
-  // Debug: Log the current values when modal opens
-  console.log('[TextEditorModal] Current values:', {
-    targetId: editingText.targetId,
-    currentStyle: fixedTextStyles[editingText.targetId],
-    allFixedTextStyles: fixedTextStyles
-  });
-
-  // Ensure we have proper fallback values for the current target
-  const currentTextStyle = fixedTextStyles[editingText.targetId] || {
-    content: '',
-    color: '#FFFFFF',
-    styleClass: 'text-lg font-normal'
-  };
 
   return (
     <div
@@ -84,16 +134,8 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
             <label className="block text-sm font-semibold text-gray-300 mb-2">Content</label>
             <textarea
               rows={4}
-              value={currentTextStyle.content}
-              onChange={(e) => setFixedTextStyles(prev => ({
-                ...prev,
-                [editingText.targetId]: { 
-                  ...prev[editingText.targetId],
-                  content: e.target.value,
-                  color: prev[editingText.targetId]?.color || currentTextStyle.color,
-                  styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-                }
-              }))}
+              value={localContent}
+              onChange={(e) => updateContent(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
               style={{ fontSize: '16px' }}
               onFocus={(e) => {
@@ -109,33 +151,14 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
             <div className="flex items-center space-x-2">
               <input
                 type="color"
-                value={currentTextStyle.color}
-                onChange={(e) => {
-                  console.log('[TextEditorModal] Color changed:', e.target.value);
-                  setFixedTextStyles(prev => ({
-                    ...prev,
-                    [editingText.targetId]: { 
-                      ...prev[editingText.targetId],
-                      color: e.target.value,
-                      content: prev[editingText.targetId]?.content || currentTextStyle.content,
-                      styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-                    }
-                  }));
-                }}
+                value={localColor}
+                onChange={(e) => updateColor(e.target.value)}
                 className="w-10 h-8 rounded border-none cursor-pointer"
               />
               <input
                 type="text"
-                value={currentTextStyle.color}
-                onChange={(e) => setFixedTextStyles(prev => ({
-                  ...prev,
-                  [editingText.targetId]: { 
-                    ...prev[editingText.targetId],
-                    color: e.target.value,
-                    content: prev[editingText.targetId]?.content || currentTextStyle.content,
-                    styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-                  }
-                }))}
+                value={localColor}
+                onChange={(e) => updateColor(e.target.value)}
                 className="flex-1 px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
               />
             </div>
@@ -145,19 +168,8 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Typography</label>
             <select
-              value={currentTextStyle.styleClass}
-              onChange={(e) => {
-                console.log('[TextEditorModal] Typography changed:', e.target.value);
-                setFixedTextStyles(prev => ({
-                  ...prev,
-                  [editingText.targetId]: { 
-                    ...prev[editingText.targetId],
-                    styleClass: e.target.value,
-                    content: prev[editingText.targetId]?.content || currentTextStyle.content,
-                    color: prev[editingText.targetId]?.color || currentTextStyle.color
-                  }
-                }));
-              }}
+              value={localStyleClass}
+              onChange={(e) => updateStyleClass(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
             >
               <option value="text-8xl sm:text-9xl font-extrabold tracking-tight drop-shadow-lg">Display Extra Large</option>
@@ -182,25 +194,16 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
                 <label className="text-sm text-gray-300">Bold:</label>
                 <button
                   onClick={() => {
-                    const currentStyle = fixedTextStyles[editingText.targetId]?.styleClass || '';
-                    const isBold = currentStyle.includes('font-bold') || currentStyle.includes('font-extrabold') || currentStyle.includes('font-black');
+                    const isBold = localStyleClass.includes('font-bold') || localStyleClass.includes('font-extrabold') || localStyleClass.includes('font-black');
                     const newStyleClass = isBold 
-                      ? currentStyle.replace(/font-\w+/g, 'font-normal')
-                      : currentStyle.replace(/font-\w+/g, 'font-bold');
-                    setFixedTextStyles(prev => ({
-                      ...prev,
-                      [editingText.targetId]: { 
-                        ...prev[editingText.targetId],
-                        styleClass: newStyleClass,
-                        content: prev[editingText.targetId]?.content || '',
-                        color: prev[editingText.targetId]?.color || '#FFFFFF'
-                      }
-                    }));
+                      ? localStyleClass.replace(/font-\w+/g, 'font-normal')
+                      : localStyleClass.replace(/font-\w+/g, 'font-bold');
+                    updateStyleClass(newStyleClass);
                   }}
                   className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                    fixedTextStyles[editingText.targetId]?.styleClass?.includes('font-bold') || 
-                    fixedTextStyles[editingText.targetId]?.styleClass?.includes('font-extrabold') || 
-                    fixedTextStyles[editingText.targetId]?.styleClass?.includes('font-black')
+                    localStyleClass.includes('font-bold') || 
+                    localStyleClass.includes('font-extrabold') || 
+                    localStyleClass.includes('font-black')
                       ? 'bg-indigo-600 text-white' 
                       : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                   }`}
@@ -213,23 +216,14 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
                 <label className="text-sm text-gray-300">Italic:</label>
                 <button
                   onClick={() => {
-                    const currentStyle = fixedTextStyles[editingText.targetId]?.styleClass || '';
-                    const isItalic = currentStyle.includes('italic');
+                    const isItalic = localStyleClass.includes('italic');
                     const newStyleClass = isItalic 
-                      ? currentStyle.replace(' italic', '').replace('italic', '')
-                      : currentStyle + ' italic';
-                    setFixedTextStyles(prev => ({
-                      ...prev,
-                      [editingText.targetId]: { 
-                        ...prev[editingText.targetId],
-                        styleClass: newStyleClass,
-                        content: prev[editingText.targetId]?.content || '',
-                        color: prev[editingText.targetId]?.color || '#FFFFFF'
-                      }
-                    }));
+                      ? localStyleClass.replace(' italic', '').replace('italic', '')
+                      : localStyleClass + ' italic';
+                    updateStyleClass(newStyleClass);
                   }}
                   className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                    fixedTextStyles[editingText.targetId]?.styleClass?.includes('italic')
+                    localStyleClass.includes('italic')
                       ? 'bg-indigo-600 text-white' 
                       : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                   }`}
@@ -247,15 +241,7 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
               {getThemeQuickColors(legacyTheme).map((color, index) => (
                 <button
                   key={`${color}-${index}`}
-                  onClick={() => setFixedTextStyles(prev => ({
-                    ...prev,
-                    [editingText.targetId]: { 
-                      ...prev[editingText.targetId],
-                      color: color,
-                      content: prev[editingText.targetId]?.content || currentTextStyle.content,
-                      styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-                    }
-                  }))}
+                  onClick={() => updateColor(color)}
                   className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-gray-400 transition-colors"
                   style={{ backgroundColor: color }}
                   title={color}
