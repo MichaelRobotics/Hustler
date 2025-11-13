@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Home, ArrowLeft, Sun, Moon } from 'lucide-react';
-import { EyeIcon, EditIcon, PlusCircleIcon, SettingsIcon } from './Icons';
+import { ArrowLeft } from 'lucide-react';
 
 interface TopNavbarProps {
   onBack?: () => void;
@@ -143,16 +142,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             {/* AI Merchant Button */}
             <button
               onClick={onBack || (() => window.history.back())}
-              className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 hover:shadow-green-500/40 text-white flex-shrink-0 flex items-center space-x-2"
+              className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex-shrink-0"
               title="AI Merchant"
             >
                 {isStorePreview ? (
                   <ArrowLeft className="w-5 h-5" />
                 ) : (
-                <>
-                  <Home className="w-5 h-5 hidden sm:block" />
                   <span className="font-semibold text-sm">Merchant</span>
-                </>
                 )}
             </button>
           </div>
@@ -177,15 +173,15 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             </div>
           )}
 
-          {/* Center: Shop Button (when there are no unsaved changes and Shop Manager is not open) - Absolutely positioned */}
+          {/* Store Manager Button (when there are no unsaved changes and Shop Manager is not open) - Inline with other buttons */}
           {!hideEditorButtons && editorState.isEditorView && !hasUnsavedChanges && !isTemplateManagerOpen && (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+            <div className="flex items-center gap-4 flex-shrink-0">
               <button 
                 onClick={openTemplateManager}
-                className="px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
+                className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
                 title="Shop Manager"
               >
-                <span className="font-semibold">Store Manager</span>
+                <span className="font-semibold text-sm">Store Manager</span>
               </button>
             </div>
           )}
@@ -228,10 +224,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               {/* Products */}
               <button 
                 onClick={handleAddProduct}
-                className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 flex items-center space-x-2"
+                className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
                 title="Select Products"
               >
-                <PlusCircleIcon className="w-5 h-5 hidden sm:block" />
                 <span className="font-semibold text-sm">Products</span>
               </button>
             </div>
