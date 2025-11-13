@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { XIcon, TrashIcon } from './Icons';
+import { XIcon } from './Icons';
 
 interface TextEditorModalProps {
   isOpen: boolean;
@@ -92,27 +92,6 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
               }))}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
             />
-          </div>
-
-          {/* Delete Button */}
-          <div className="pt-4 border-t border-gray-700">
-            <button
-              onClick={() => {
-                setFixedTextStyles(prev => ({
-                  ...prev,
-                  [editingText.targetId]: { 
-                    content: '',
-                    color: prev[editingText.targetId]?.color || currentTextStyle.color,
-                    styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-                  }
-                }));
-                onClose();
-              }}
-              className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center"
-            >
-              <TrashIcon className="w-4 h-4 mr-2" />
-              Remove Text
-            </button>
           </div>
 
           {/* Color */}

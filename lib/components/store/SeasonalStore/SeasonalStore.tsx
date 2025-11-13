@@ -2005,7 +2005,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       />
 
       {/* Seasonal Store Chat - Half View with Unfold/Fold Animation */}
-      <div className={`fixed inset-x-0 bottom-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-md text-gray-900 dark:text-gray-100 shadow-2xl border-t border-b-0 border-white/20 dark:border-gray-700/20 transition-all duration-300 ease-in-out transform ${
+      {/* When text editing modals are open, show chat as overlay above them */}
+      <div className={`fixed inset-x-0 bottom-0 ${(editingText.isOpen || productEditor.isOpen) ? 'z-[70]' : 'z-50'} bg-white/40 dark:bg-black/40 backdrop-blur-md text-gray-900 dark:text-gray-100 shadow-2xl border-t border-b-0 border-white/20 dark:border-gray-700/20 transition-all duration-300 ease-in-out transform ${
         isChatOpen 
           ? 'translate-y-0 opacity-100' 
           : 'translate-y-full opacity-0'
