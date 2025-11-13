@@ -1,15 +1,20 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
-import { XIcon } from './Icons';
 
-// Memoized Quick Colors component to prevent re-renders on every keystroke
+// Memoized Quick Colors component - only recalculates when theme changes
 const QuickColorsSection = memo(({ legacyTheme, getThemeQuickColors, updateColor }: {
   legacyTheme: any;
   getThemeQuickColors: (theme: any) => string[];
   updateColor: (color: string) => void;
 }) => {
-  const quickColors = useMemo(() => getThemeQuickColors(legacyTheme), [legacyTheme, getThemeQuickColors]);
+  const quickColors = useMemo(() => {
+    try {
+      return getThemeQuickColors(legacyTheme);
+    } catch {
+      return ['#FFFFFF', '#000000', '#F3F4F6', '#1F2937'];
+    }
+  }, [legacyTheme?.name, legacyTheme?.accent, getThemeQuickColors]);
   
   return (
     <div>
@@ -67,77 +72,58 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   // that doesn't cover the entire screen. Body scroll lock would cause the background
   // to resize due to backgroundAttachment: 'fixed' on the background image.
 
-  // Use local state for input to prevent lag on every keystroke
-  // Only recalculate when targetId changes or when modal opens
-  const currentTextStyle = useMemo(() => {
-    const style = fixedTextStyles[editingText.targetId];
-    return style || {
-      content: '',
-      color: '#FFFFFF',
-      styleClass: 'text-lg font-normal'
-    };
-  }, [editingText.targetId, isOpen ? fixedTextStyles[editingText.targetId] : null]);
-
-  const [localContent, setLocalContent] = useState(currentTextStyle.content);
-  const [localColor, setLocalColor] = useState(currentTextStyle.color);
-  const [localStyleClass, setLocalStyleClass] = useState(currentTextStyle.styleClass);
+  // Simple local state - no expensive computations
+  const [localContent, setLocalContent] = useState('');
+  const [localColor, setLocalColor] = useState('#FFFFFF');
+  const [localStyleClass, setLocalStyleClass] = useState('text-lg font-normal');
 
   // Track initial values when modal opens to detect changes
   const initialContentRef = useRef<string>('');
   const initialColorRef = useRef<string>('');
   const initialStyleClassRef = useRef<string>('');
 
-  // Sync local state when modal opens or target changes
+  // Sync local state when modal opens or target changes - simplified
   useEffect(() => {
-    if (isOpen) {
-      const content = currentTextStyle.content;
-      const color = currentTextStyle.color;
-      const styleClass = currentTextStyle.styleClass;
+    if (isOpen && editingText.targetId) {
+      const style = fixedTextStyles[editingText.targetId] || {
+        content: '',
+        color: '#FFFFFF',
+        styleClass: 'text-lg font-normal'
+      };
       
-      setLocalContent(content);
-      setLocalColor(color);
-      setLocalStyleClass(styleClass);
+      setLocalContent(style.content);
+      setLocalColor(style.color);
+      setLocalStyleClass(style.styleClass);
       
       // Store initial values for comparison
-      initialContentRef.current = content;
-      initialColorRef.current = color;
-      initialStyleClassRef.current = styleClass;
+      initialContentRef.current = style.content;
+      initialColorRef.current = style.color;
+      initialStyleClassRef.current = style.styleClass;
     }
-  }, [isOpen, editingText.targetId, currentTextStyle.content, currentTextStyle.color, currentTextStyle.styleClass]);
+  }, [isOpen, editingText.targetId, fixedTextStyles]);
 
-  // Save changes when modal closes - use refs to avoid dependency on local state
-  const localContentRef = useRef(localContent);
-  const localColorRef = useRef(localColor);
-  const localStyleClassRef = useRef(localStyleClass);
-  
-  // Update refs on every change (this doesn't cause re-renders)
-  useEffect(() => {
-    localContentRef.current = localContent;
-    localColorRef.current = localColor;
-    localStyleClassRef.current = localStyleClass;
-  }, [localContent, localColor, localStyleClass]);
-
-  // Save changes when modal closes - only depends on isOpen, not local state
-  useEffect(() => {
-    if (!isOpen && editingText.targetId) {
-      // Check if there are any changes to save (compare with initial values)
-      const hasContentChange = localContentRef.current !== initialContentRef.current;
-      const hasColorChange = localColorRef.current !== initialColorRef.current;
-      const hasStyleClassChange = localStyleClassRef.current !== initialStyleClassRef.current;
-      
-      if (hasContentChange || hasColorChange || hasStyleClassChange) {
-        setFixedTextStyles(prev => ({
-          ...prev,
-          [editingText.targetId]: { 
-            ...prev[editingText.targetId],
-            content: localContentRef.current,
-            color: localColorRef.current,
-            styleClass: localStyleClassRef.current
-          }
-        }));
-      }
+  // Save changes handler - called when modal closes
+  const handleClose = useCallback(() => {
+    // Check if there are any changes to save
+    const hasContentChange = localContent !== initialContentRef.current;
+    const hasColorChange = localColor !== initialColorRef.current;
+    const hasStyleClassChange = localStyleClass !== initialStyleClassRef.current;
+    
+    if (hasContentChange || hasColorChange || hasStyleClassChange) {
+      setFixedTextStyles(prev => ({
+        ...prev,
+        [editingText.targetId]: { 
+          ...prev[editingText.targetId],
+          content: localContent,
+          color: localColor,
+          styleClass: localStyleClass
+        }
+      }));
     }
-  }, [isOpen, editingText.targetId, setFixedTextStyles]);
+    
+    // Close the modal
+    onClose();
+  }, [localContent, localColor, localStyleClass, editingText.targetId, setFixedTextStyles, onClose]);
 
   // Simple local state updates - no immediate fixedTextStyles updates
   const updateContent = useCallback((value: string) => {
@@ -162,17 +148,17 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
       className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       onClick={(e) => {
         // Close on background click (when clicking on the modal itself, not its children)
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
         <h3 className={`text-sm font-semibold tracking-wide ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>Edit Text</h3>
         <button
-          onClick={onClose}
-          className="text-gray-300 hover:text-white transition-colors"
+          onClick={handleClose}
+          className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
           aria-label="Close"
         >
-          <XIcon className="w-5 h-5" />
+          Close
         </button>
       </div>
 

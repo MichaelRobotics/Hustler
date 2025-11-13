@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { XIcon } from './Icons';
 import { ButtonColorControls } from './ButtonColorControls';
 import EmojiBank from '../EmojiBank';
 
@@ -287,8 +286,12 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
             </>
           )}
         </h3>
-        <button onClick={onClose} className="text-gray-300 hover:text-white transition-colors" aria-label="Close">
-          <XIcon className="w-5 h-5" />
+        <button 
+          onClick={onClose} 
+          className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" 
+          aria-label="Close"
+        >
+          Close
         </button>
       </div>
 

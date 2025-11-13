@@ -454,8 +454,12 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
           </svg>
           Background & Theme
         </h3>
-        <button onClick={onClose} className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors">
-          <XIcon className="w-4 h-4" />
+        <button 
+          onClick={onClose} 
+          className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          aria-label="Close"
+        >
+          Close
         </button>
       </div>
       
