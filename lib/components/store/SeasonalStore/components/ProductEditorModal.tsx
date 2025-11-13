@@ -85,17 +85,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   const [transparencyValue, setTransparencyValue] = useState(90);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
   
-  // Focus inputs when inline editing is activated
-  useEffect(() => {
-    if (isOpen && inlineEditTarget && inlineProductId === productEditor.productId) {
-      if (inlineEditTarget === 'productName' && productEditor.target === 'name') {
-        setTimeout(() => nameInputRef.current?.focus(), 150);
-      } else if (inlineEditTarget === 'productDesc' && productEditor.target === 'description') {
-        setTimeout(() => descInputRef.current?.focus(), 150);
-      }
-    }
-  }, [isOpen, inlineEditTarget, inlineProductId, productEditor.productId, productEditor.target]);
-  
   // Update transparency value when product changes
   useEffect(() => {
     if (productEditor.productId !== null && !isUserInteracting) {
