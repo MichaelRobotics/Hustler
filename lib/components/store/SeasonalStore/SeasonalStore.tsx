@@ -1343,7 +1343,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   // Product editor slide-over state
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | string | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });
-  const openProductEditor = (productId: number | string | null, target: 'name' | 'description' | 'card' | 'button') => setProductEditor({ isOpen: true, productId, target });
+  const openProductEditor = (productId: number | string | null, target: 'name' | 'description' | 'card' | 'button') => {
+    setProductEditor({ isOpen: true, productId, target });
+    // Activate inline editing immediately (like header/subheader)
+    if (target === 'name' && productId !== null) {
+      setTimeout(() => {
+        setInlineEditTarget('productName');
+        setInlineProductId(productId as number);
+      }, 100);
+    } else if (target === 'description' && productId !== null) {
+      setTimeout(() => {
+        setInlineEditTarget('productDesc');
+        setInlineProductId(productId as number);
+      }, 100);
+    }
+  };
   const closeProductEditor = () => setProductEditor({ isOpen: false, productId: null, target: null });
 
 
@@ -1941,14 +1955,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       <ProductEditorModal
         isOpen={productEditor.isOpen}
         productEditor={productEditorWrapper}
-                      products={(themeProducts[currentSeason] || []) as any}
+        products={(themeProducts[currentSeason] || []) as any}
         promoButton={promoButton}
         legacyTheme={legacyTheme}
         backgroundAnalysis={backgroundAnalysis}
+        inlineEditTarget={(inlineEditTarget === 'productName' || inlineEditTarget === 'productDesc') ? inlineEditTarget : null}
+        inlineProductId={inlineProductId}
         onClose={closeProductEditorAnimated}
-                      updateProduct={updateProduct}
-                      setPromoButton={setPromoButton}
-                    />
+        updateProduct={updateProduct}
+        setPromoButton={setPromoButton}
+      />
 
 
       <TemplateManagerModal

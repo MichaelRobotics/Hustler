@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { XIcon } from './Icons';
 import { ButtonColorControls } from './ButtonColorControls';
 import EmojiBank from '../EmojiBank';
@@ -55,6 +55,8 @@ interface ProductEditorModalProps {
   backgroundAnalysis: {
     recommendedTextColor: string;
   };
+  inlineEditTarget?: 'productName' | 'productDesc' | null;
+  inlineProductId?: number | null;
   
   // Handlers
   onClose: () => void;
@@ -69,13 +71,30 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   promoButton,
   legacyTheme,
   backgroundAnalysis,
+  inlineEditTarget,
+  inlineProductId,
   onClose,
   updateProduct,
   setPromoButton,
 }) => {
+  // Refs for inline editing focus
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const descInputRef = useRef<HTMLTextAreaElement>(null);
+  
   // Local state for transparency slider
   const [transparencyValue, setTransparencyValue] = useState(90);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
+  
+  // Focus inputs when inline editing is activated
+  useEffect(() => {
+    if (isOpen && inlineEditTarget && inlineProductId === productEditor.productId) {
+      if (inlineEditTarget === 'productName' && productEditor.target === 'name') {
+        setTimeout(() => nameInputRef.current?.focus(), 150);
+      } else if (inlineEditTarget === 'productDesc' && productEditor.target === 'description') {
+        setTimeout(() => descInputRef.current?.focus(), 150);
+      }
+    }
+  }, [isOpen, inlineEditTarget, inlineProductId, productEditor.productId, productEditor.target]);
   
   // Update transparency value when product changes
   useEffect(() => {
@@ -206,6 +225,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Name</label>
                   <input
+                    ref={nameInputRef}
                     type="text"
                     value={products.find(p => p.id === productEditor.productId)?.name || ''}
                     onChange={(e) => updateProduct(productEditor.productId!, { name: e.target.value })}
@@ -217,6 +237,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Description</label>
                   <textarea
+                    ref={descInputRef}
                     value={products.find(p => p.id === productEditor.productId)?.description || ''}
                     onChange={(e) => updateProduct(productEditor.productId!, { description: e.target.value })}
                     placeholder="Enter description"

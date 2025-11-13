@@ -46,13 +46,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     }
   }, [product.id, onProductImageUpload]);
 
-  const handleNameChange = useCallback((e: React.FocusEvent<HTMLHeadingElement>) => {
-    onUpdateProduct(product.id, { name: e.currentTarget.textContent || ' ' });
-  }, [product.id, onUpdateProduct]);
-
-  const handleDescriptionChange = useCallback((e: React.FocusEvent<HTMLParagraphElement>) => {
-    onUpdateProduct(product.id, { description: e.currentTarget.textContent || ' ' });
-  }, [product.id, onUpdateProduct]);
 
   const handlePriceChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onUpdateProduct(product.id, { price: parseFloat(e.target.value) });
@@ -293,23 +286,27 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="px-3 py-2 flex flex-col flex-grow text-center relative z-30">
         {/* Editable Product Name */}
         <h2 
-          className={`text-lg font-bold mb-0.5 ${titleClass}`}
-          contentEditable={isEditorView}
-          suppressContentEditableWarning={true}
-          onBlur={handleNameChange}
-          style={{ cursor: isEditorView ? 'text' : 'default' }}
+          className={`text-lg font-bold mb-0.5 ${titleClass} ${isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
+          style={{ cursor: isEditorView ? 'pointer' : 'default' }}
           data-inline-product-name={product.id}
-          onClick={() => { if (isEditorView && onOpenEditor && !inlineNameActive) onOpenEditor(product.id, 'name'); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isEditorView && onOpenEditor) {
+              // Open modal and immediately activate inline editing (like header/subheader)
+              onOpenEditor(product.id, 'name');
+              // The parent will handle setting inlineEditTarget
+            }
+          }}
         >
           {product.name}
         </h2>
         
         {/* Editable Product Description (Fixed min height for alignment, max 2 lines) */}
         <p 
-          className={`text-xs mb-1 ${descClass} ${isEditorView ? 'flex-grow' : ''}`}
+          className={`text-xs mb-1 ${descClass} ${isEditorView ? 'flex-grow cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
           style={{ 
             minHeight: '1.5rem', 
-            cursor: isEditorView ? 'text' : 'default',
+            cursor: isEditorView ? 'pointer' : 'default',
             display: '-webkit-box',
             WebkitLineClamp: inlineDescActive ? 'unset' : 2,
             WebkitBoxOrient: 'vertical',
@@ -317,11 +314,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             textOverflow: 'ellipsis',
             wordBreak: 'break-word'
           }}
-          contentEditable={isEditorView}
-          suppressContentEditableWarning={true}
-          onBlur={handleDescriptionChange}
           data-inline-product-desc={product.id}
-          onClick={() => { if (isEditorView && onOpenEditor && !inlineDescActive) onOpenEditor(product.id, 'description'); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isEditorView && onOpenEditor) {
+              // Open modal and immediately activate inline editing (like header/subheader)
+              onOpenEditor(product.id, 'description');
+              // The parent will handle setting inlineEditTarget
+            }
+          }}
         >
           {product.description}
         </p>
