@@ -1445,60 +1445,187 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     };
   }, [productEditor.isOpen]);
 
-  // Prevent keyboard from moving the page when editing text
+  // Prevent keyboard from moving the page - overlay keyboard on top without layout shifts (Mobile-optimized)
   useEffect(() => {
     const isEditing = editingText.isOpen || productEditor.isOpen;
     
     if (isEditing) {
-      // Lock viewport to prevent keyboard from moving the page
-      const originalOverflow = document.body.style.overflow;
-      const originalPosition = document.body.style.position;
-      const originalHeight = document.body.style.height;
-      const originalTop = document.body.style.top;
-      const originalWidth = document.body.style.width;
-      
-      // Get current scroll position
+      // Store original values
       const scrollY = window.scrollY;
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalBodyPosition = document.body.style.position;
+      const originalBodyHeight = document.body.style.height;
+      const originalBodyWidth = document.body.style.width;
+      const originalBodyTop = document.body.style.top;
+      const originalBodyLeft = document.body.style.left;
+      const originalBodyRight = document.body.style.right;
+      const originalHtmlHeight = document.documentElement.style.height;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
       
-      // Lock body to prevent scrolling and viewport movement
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-      document.body.style.height = '100%';
-      document.body.style.top = `-${scrollY}px`;
+      // Get the main app container (appRef)
+      const appContainer = appRef.current;
       
-      // Also lock the main container
-      const mainContainer = document.querySelector('[class*="relative z-30 flex flex-col"]') as HTMLElement;
-      if (mainContainer) {
-        mainContainer.style.position = 'fixed';
-        mainContainer.style.top = `-${scrollY}px`;
-        mainContainer.style.width = '100%';
-        mainContainer.style.height = '100vh';
-        mainContainer.style.overflowY = 'auto';
+      // Store original app container styles
+      let originalAppPosition = '';
+      let originalAppTop = '';
+      let originalAppHeight = '';
+      let originalAppWidth = '';
+      let originalAppOverflow = '';
+      let originalAppLeft = '';
+      let originalAppRight = '';
+      
+      if (appContainer) {
+        originalAppPosition = appContainer.style.position;
+        originalAppTop = appContainer.style.top;
+        originalAppHeight = appContainer.style.height;
+        originalAppWidth = appContainer.style.width;
+        originalAppOverflow = appContainer.style.overflow;
+        originalAppLeft = appContainer.style.left;
+        originalAppRight = appContainer.style.right;
+      }
+      
+      // Detect mobile device
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      // Lock the viewport - prevent keyboard from resizing viewport (Mobile-specific)
+      if (isMobile) {
+        // iOS and Android: Lock viewport to prevent keyboard from moving page
+        document.documentElement.style.height = '100%';
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.left = '0';
+        document.body.style.right = '0';
+        // Prevent iOS bounce scrolling
+        (document.body.style as any).webkitOverflowScrolling = 'touch';
+        document.body.style.overscrollBehavior = 'none';
+      }
+      
+      // Make app container fixed so it doesn't move
+      if (appContainer) {
+        appContainer.style.position = 'fixed';
+        appContainer.style.top = `-${scrollY}px`;
+        appContainer.style.left = '0';
+        appContainer.style.right = '0';
+        appContainer.style.width = '100%';
+        appContainer.style.height = isMobile && window.visualViewport 
+          ? `${window.visualViewport.height}px` 
+          : '100vh';
+        appContainer.style.overflowY = 'auto';
+        appContainer.style.overflowX = 'hidden';
+        // iOS momentum scrolling
+        if (isIOS) {
+          (appContainer.style as any).webkitOverflowScrolling = 'touch';
+        }
+        // Prevent overscroll bounce
+        appContainer.style.overscrollBehavior = 'contain';
+      }
+      
+      // Handle visual viewport changes (keyboard appearing/disappearing) - Mobile-specific
+      const handleViewportChange = () => {
+        if (appContainer && window.visualViewport) {
+          // Adjust container height based on visual viewport (accounts for keyboard)
+          const viewportHeight = window.visualViewport.height;
+          appContainer.style.height = `${viewportHeight}px`;
+          
+          // On mobile, also adjust body height to match
+          if (isMobile) {
+            document.body.style.height = `${viewportHeight}px`;
+          }
+        }
+      };
+      
+      // Listen to visual viewport changes (Mobile keyboard detection)
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleViewportChange);
+        window.visualViewport.addEventListener('scroll', handleViewportChange);
+        // Initial adjustment
+        handleViewportChange();
+      } else if (isMobile) {
+        // Fallback for older mobile browsers: use window resize
+        const handleResize = () => {
+          if (appContainer) {
+            const windowHeight = window.innerHeight;
+            appContainer.style.height = `${windowHeight}px`;
+            document.body.style.height = `${windowHeight}px`;
+          }
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        
+        return () => {
+          window.removeEventListener('resize', handleResize);
+          // Restore styles
+          document.documentElement.style.height = originalHtmlHeight;
+          document.documentElement.style.overflow = originalHtmlOverflow;
+          document.body.style.overflow = originalBodyOverflow;
+          document.body.style.position = originalBodyPosition;
+          document.body.style.width = originalBodyWidth;
+          document.body.style.height = originalBodyHeight;
+          document.body.style.top = originalBodyTop;
+          document.body.style.left = originalBodyLeft;
+          document.body.style.right = originalBodyRight;
+          (document.body.style as any).webkitOverflowScrolling = '';
+          document.body.style.overscrollBehavior = '';
+          
+          if (appContainer) {
+            appContainer.style.position = originalAppPosition;
+            appContainer.style.top = originalAppTop;
+            appContainer.style.height = originalAppHeight;
+            appContainer.style.width = originalAppWidth;
+            appContainer.style.overflow = originalAppOverflow;
+            appContainer.style.left = originalAppLeft;
+            appContainer.style.right = originalAppRight;
+            (appContainer.style as any).webkitOverflowScrolling = '';
+            appContainer.style.overscrollBehavior = '';
+          }
+          
+          window.scrollTo(0, scrollY);
+        };
       }
       
       return () => {
-        // Restore body styles
-        document.body.style.overflow = originalOverflow;
-        document.body.style.position = originalPosition;
-        document.body.style.width = originalWidth;
-        document.body.style.height = originalHeight;
-        document.body.style.top = originalTop;
+        // Remove viewport listeners
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener('resize', handleViewportChange);
+          window.visualViewport.removeEventListener('scroll', handleViewportChange);
+        }
         
-        // Restore main container styles
-        if (mainContainer) {
-          mainContainer.style.position = '';
-          mainContainer.style.top = '';
-          mainContainer.style.width = '';
-          mainContainer.style.height = '';
-          mainContainer.style.overflowY = '';
+        // Restore body styles
+        document.documentElement.style.height = originalHtmlHeight;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+        document.body.style.overflow = originalBodyOverflow;
+        document.body.style.position = originalBodyPosition;
+        document.body.style.width = originalBodyWidth;
+        document.body.style.height = originalBodyHeight;
+        document.body.style.top = originalBodyTop;
+        document.body.style.left = originalBodyLeft;
+        document.body.style.right = originalBodyRight;
+        (document.body.style as any).webkitOverflowScrolling = '';
+        document.body.style.overscrollBehavior = '';
+        
+        // Restore app container styles
+        if (appContainer) {
+          appContainer.style.position = originalAppPosition;
+          appContainer.style.top = originalAppTop;
+          appContainer.style.height = originalAppHeight;
+          appContainer.style.width = originalAppWidth;
+          appContainer.style.overflow = originalAppOverflow;
+          appContainer.style.left = originalAppLeft;
+          appContainer.style.right = originalAppRight;
+          (appContainer.style as any).webkitOverflowScrolling = '';
+          appContainer.style.overscrollBehavior = '';
         }
         
         // Restore scroll position
         window.scrollTo(0, scrollY);
       };
     }
-  }, [editingText.isOpen, productEditor.isOpen]);
+  }, [editingText.isOpen, productEditor.isOpen, appRef]);
 
   useEffect(() => {
     if (templateManagerOpen) {
