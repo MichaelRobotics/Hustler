@@ -1445,6 +1445,61 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     };
   }, [productEditor.isOpen]);
 
+  // Prevent keyboard from moving the page when editing text
+  useEffect(() => {
+    const isEditing = editingText.isOpen || productEditor.isOpen;
+    
+    if (isEditing) {
+      // Lock viewport to prevent keyboard from moving the page
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalHeight = document.body.style.height;
+      const originalTop = document.body.style.top;
+      const originalWidth = document.body.style.width;
+      
+      // Get current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body to prevent scrolling and viewport movement
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      
+      // Also lock the main container
+      const mainContainer = document.querySelector('[class*="relative z-30 flex flex-col"]') as HTMLElement;
+      if (mainContainer) {
+        mainContainer.style.position = 'fixed';
+        mainContainer.style.top = `-${scrollY}px`;
+        mainContainer.style.width = '100%';
+        mainContainer.style.height = '100vh';
+        mainContainer.style.overflowY = 'auto';
+      }
+      
+      return () => {
+        // Restore body styles
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.width = originalWidth;
+        document.body.style.height = originalHeight;
+        document.body.style.top = originalTop;
+        
+        // Restore main container styles
+        if (mainContainer) {
+          mainContainer.style.position = '';
+          mainContainer.style.top = '';
+          mainContainer.style.width = '';
+          mainContainer.style.height = '';
+          mainContainer.style.overflowY = '';
+        }
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [editingText.isOpen, productEditor.isOpen]);
+
   useEffect(() => {
     if (templateManagerOpen) {
       const id = requestAnimationFrame(() => setTemplateManagerAnimOpen(true));

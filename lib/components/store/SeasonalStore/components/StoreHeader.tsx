@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 
 interface StoreHeaderProps {
   editorState: {
@@ -31,7 +31,7 @@ interface StoreHeaderProps {
   setInlineEditTarget: (target: string | null) => void;
 }
 
-export const StoreHeader: React.FC<StoreHeaderProps> = ({
+export const StoreHeader: React.FC<StoreHeaderProps> = memo(({
   editorState,
   fixedTextStyles,
   backgroundAnalysis,
@@ -107,5 +107,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
       </p>
     </div>
   );
-};
+});
+
+StoreHeader.displayName = 'StoreHeader';
 

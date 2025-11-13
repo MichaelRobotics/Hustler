@@ -246,14 +246,13 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
+  // Keep modal mounted to prevent remounting/flicker - use CSS to hide/show
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Edit Product"
-      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'} ${!isOpen ? 'pointer-events-none' : ''}`}
       onClick={(e) => {
         // Close on background click (when clicking on the modal itself, not its children)
         if (e.target === e.currentTarget) onClose();

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, memo } from 'react';
 import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, ZapIcon } from './Icons';
 
@@ -21,7 +21,7 @@ interface ProductCardProps {
   inlineDescActive?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({
+export const ProductCard: React.FC<ProductCardProps> = memo(({
   product,
   theme,
   isEditorView,
@@ -406,5 +406,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     </div>
     </div>
   );
-};
+});
+
+ProductCard.displayName = 'ProductCard';
 
