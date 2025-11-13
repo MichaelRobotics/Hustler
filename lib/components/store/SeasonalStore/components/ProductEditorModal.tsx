@@ -169,7 +169,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Edit Product"
-        className={`fixed inset-y-0 right-0 w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}
         style={{ pointerEvents: 'auto' }}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
@@ -559,11 +559,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
             <div className="h-24" />
           </div>
         )}
-        
-        <div className="sticky bottom-0 z-10 px-4 py-3 border-t border-gray-800/50 bg-transparent backdrop-blur-sm flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-gray-300 hover:text-white transition-colors">Cancel</button>
-          <button onClick={onClose} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:shadow-indigo-500/30 dark:hover:shadow-indigo-500/50">Done</button>
-        </div>
       </div>
     </div>
   );

@@ -264,38 +264,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
         
-        {/* Image Upload Overlay - covers image section in editor view */}
-        {isEditorView && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity rounded-t-2xl z-20">
-            <label htmlFor={`upload-${product.id}`} className="cursor-pointer px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl shadow-lg transition-colors flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <span className="font-semibold text-sm">Upload Image</span>
-              <input 
-                type="file" 
-                id={`upload-${product.id}`} 
-                className="hidden" 
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={loadingState.isImageLoading}
-              />
-            </label>
-          </div>
-        )}
       </div>
-      {/* Delete Button - Top Left (Only visible in Editor View and on hover) */}
-      {isEditorView && (
-            <button
-          onClick={() => onDeleteProduct(product.id)}
-          className="absolute top-2 left-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-2 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300"
-          title="Delete"
-            >
-          <TrashIcon className="w-4 h-4" />
-            </button>
-          )}
-
-      {/* AI Refine Button - Top Right (Only visible in Editor View and on hover) */}
+      {/* Theme Up Button - Top Right (Only visible in Editor View and on hover) */}
       {isEditorView && (
           <button
             onClick={() => onRefineProduct(product)}
@@ -303,12 +273,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           className={`absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 px-3 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center space-x-2 ${
               (loadingState.isTextLoading || loadingState.isImageLoading) 
                 ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-gray-300 cursor-not-allowed shadow-gray-500/25' 
-                : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-green-500/25 hover:shadow-green-500/40'
             }`}
-          title="Refine with AI"
+          title="Theme Up!"
           >
           <ZapIcon className="w-4 h-4" />
-          <span className="font-semibold text-xs">Refine with AI</span>
+          <span className="font-semibold text-xs">Theme Up!</span>
           </button>
       )}
 

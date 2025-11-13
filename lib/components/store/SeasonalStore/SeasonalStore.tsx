@@ -778,8 +778,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   }, [logoAsset, setLogoAsset]);
 
 
-  // Detect unsaved changes
+  // Detect unsaved changes - Only track after initialization is complete
   useEffect(() => {
+    // Don't track changes until initialization is complete
+    if (!isInitialLoadComplete || !isStoreContentReady) {
+      return; // Wait for initialization to complete
+    }
+    
+    // Don't track if snapshot hasn't been set yet (will be set by the other effect)
+    if (lastSavedSnapshot === null) {
+      return; // Wait for initial snapshot to be set
+    }
+    
     if (!editorState.isEditorView || isInPreviewMode) {
       return; // Don't track changes in preview mode or page view
     }
@@ -799,14 +809,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       promoButton,
     });
     
-    if (lastSavedSnapshot === null) {
-      // First time - set initial snapshot
-      setLastSavedSnapshot(currentSnapshot);
-      setHasUnsavedChanges(false);
-    } else {
-      // Compare with last saved snapshot
-      setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
-    }
+    // Compare with last saved snapshot
+    setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
   }, [
     themeProducts,
     floatingAssets,
@@ -823,10 +827,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     lastSavedSnapshot,
     editorState.isEditorView,
     isInPreviewMode,
+    isInitialLoadComplete,
+    isStoreContentReady,
   ]);
 
   // Reset snapshot when template is loaded (to avoid false positives)
+  // Also set initial snapshot after initialization completes
   useEffect(() => {
+    // Only set snapshot after initialization is complete
+    if (!isInitialLoadComplete || !isStoreContentReady) {
+      return;
+    }
+    
     if (isTemplateLoaded && !isInPreviewMode) {
       // Template has been loaded, reset snapshot to current state
       const snapshot = JSON.stringify({
@@ -845,8 +857,26 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       });
       setLastSavedSnapshot(snapshot);
       setHasUnsavedChanges(false);
+    } else if (lastSavedSnapshot === null && !isInPreviewMode) {
+      // Initial snapshot after initialization completes (no template loaded yet)
+      const snapshot = JSON.stringify({
+        products: themeProducts[currentSeason] || [],
+        floatingAssets,
+        currentSeason,
+        fixedTextStyles,
+        logoAsset,
+        generatedBackground,
+        uploadedBackground,
+        backgroundAttachmentId,
+        backgroundAttachmentUrl,
+        logoAttachmentId,
+        logoAttachmentUrl,
+        promoButton,
+      });
+      setLastSavedSnapshot(snapshot);
+      setHasUnsavedChanges(false);
     }
-  }, [isTemplateLoaded, isInPreviewMode]);
+  }, [isTemplateLoaded, isInPreviewMode, isInitialLoadComplete, isStoreContentReady, lastSavedSnapshot, themeProducts, currentSeason, floatingAssets, fixedTextStyles, logoAsset, generatedBackground, uploadedBackground, backgroundAttachmentId, backgroundAttachmentUrl, logoAttachmentId, logoAttachmentUrl, promoButton]);
 
   // Load live funnel on mount
   useEffect(() => {

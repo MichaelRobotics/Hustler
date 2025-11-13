@@ -150,8 +150,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <ArrowLeft className="w-5 h-5" />
                 ) : (
                 <>
-                  <Home className="w-5 h-5" />
-                  <span className="font-semibold text-sm hidden sm:inline">AI Merchant</span>
+                  <Home className="w-5 h-5 hidden sm:block" />
+                  <span className="font-semibold text-sm">Merchant</span>
                 </>
                 )}
             </button>
@@ -169,7 +169,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 } flex items-center space-x-2`}
                 title="Save Changes"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                 </svg>
                 <span className="font-semibold">Save</span>
@@ -182,7 +182,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
               <button 
                 onClick={openTemplateManager}
-                className="px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
+                className="px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
                 title="Shop Manager"
               >
                 <span className="font-semibold">Store Manager</span>
@@ -231,8 +231,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 className="px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 flex items-center space-x-2"
                 title="Select Products"
               >
-                <PlusCircleIcon className="w-5 h-5" />
-                <span className="font-semibold text-sm">Select Products</span>
+                <PlusCircleIcon className="w-5 h-5 hidden sm:block" />
+                <span className="font-semibold text-sm">Products</span>
               </button>
             </div>
           )}
