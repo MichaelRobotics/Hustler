@@ -97,36 +97,55 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   const [localName, setLocalName] = useState(currentProduct?.name || '');
   const [localDescription, setLocalDescription] = useState(currentProduct?.description || '');
   
-  // Sync local state when product changes
-  useEffect(() => {
-    if (currentProduct) {
-      setLocalName(currentProduct.name || '');
-      setLocalDescription(currentProduct.description || '');
-    }
-  }, [currentProduct?.id, currentProduct?.name, currentProduct?.description]);
+  // Track initial values when modal opens to detect changes
+  const initialNameRef = useRef<string>('');
+  const initialDescRef = useRef<string>('');
   
-  // Optimized update handlers
+  // Sync local state when modal opens or product changes
+  useEffect(() => {
+    if (isOpen && currentProduct) {
+      const name = currentProduct.name || '';
+      const desc = currentProduct.description || '';
+      setLocalName(name);
+      setLocalDescription(desc);
+      // Store initial values for comparison
+      initialNameRef.current = name;
+      initialDescRef.current = desc;
+    }
+  }, [isOpen, currentProduct?.id]);
+  
+  // Simple local state updates - no immediate product updates
   const updateName = useCallback((value: string) => {
     setLocalName(value);
-    if (productEditor.productId !== null) {
-      updateProduct(productEditor.productId, { name: value });
-    }
-  }, [productEditor.productId, updateProduct]);
+  }, []);
   
   const updateDescription = useCallback((value: string) => {
     setLocalDescription(value);
-    if (productEditor.productId !== null) {
-      updateProduct(productEditor.productId, { description: value });
+  }, []);
+  
+  // Save changes when modal closes
+  useEffect(() => {
+    if (!isOpen && productEditor.productId !== null) {
+      // Check if there are any changes to save (compare with initial values)
+      const hasNameChange = localName !== initialNameRef.current;
+      const hasDescChange = localDescription !== initialDescRef.current;
+      
+      if (hasNameChange || hasDescChange) {
+        const updates: Partial<Product> = {};
+        if (hasNameChange) updates.name = localName;
+        if (hasDescChange) updates.description = localDescription;
+        
+        // Batch update all changes at once
+        updateProduct(productEditor.productId, updates);
+      }
     }
-  }, [productEditor.productId, updateProduct]);
+  }, [isOpen, productEditor.productId, localName, localDescription, updateProduct]);
   
   // Update transparency value when product changes
   useEffect(() => {
-    if (productEditor.productId !== null && !isUserInteracting) {
-      const currentProduct = products.find(p => p.id === productEditor.productId!);
-      const current = currentProduct?.cardClass || legacyTheme.card;
+    if (productEditor.productId !== null && !isUserInteracting && currentProduct) {
+      const current = currentProduct.cardClass || legacyTheme.card;
       console.log('🎨 Updating transparency from product:', current);
-      console.log('🎨 Current product:', currentProduct);
       
       // Enhanced regex patterns to catch more transparency formats
       const patterns = [
@@ -158,10 +177,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
         setTransparencyValue(90);
       }
     }
-  }, [productEditor.productId, products, legacyTheme.card, isUserInteracting]);
+  }, [productEditor.productId, currentProduct, legacyTheme.card, isUserInteracting]);
 
   // Watch for changes in the specific product's cardClass
-  const currentProduct = productEditor.productId !== null ? products.find(p => p.id === productEditor.productId!) : null;
   const currentCardClass = currentProduct?.cardClass || legacyTheme.card;
   
   useEffect(() => {
@@ -396,7 +414,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     'bg-slate-800 hover:bg-slate-700 text-white',
                     'bg-orange-600 hover:bg-orange-700 text-white'
                   ].map((cls, idx) => {
-                    const currentProduct = products.find(p => p.id === productEditor.productId!);
                     const isSelected = currentProduct?.buttonClass === cls;
                     return (
                       <button
