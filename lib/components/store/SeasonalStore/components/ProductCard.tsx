@@ -287,7 +287,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Editable Product Name */}
         <h2 
           className={`text-lg font-bold mb-0.5 ${titleClass} ${isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
-          style={{ cursor: isEditorView ? 'pointer' : 'default' }}
+          style={{ 
+            cursor: isEditorView ? 'pointer' : 'default',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          }}
           data-inline-product-name={product.id}
           onClick={(e) => {
             e.stopPropagation();
@@ -310,7 +316,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            wordBreak: 'break-word'
+            wordBreak: 'break-word',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
           }}
           data-inline-product-desc={product.id}
           onClick={(e) => {

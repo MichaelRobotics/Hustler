@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { XIcon } from './Icons';
 
 interface TextEditorModalProps {
@@ -53,55 +53,63 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   const [localColor, setLocalColor] = useState(currentTextStyle.color);
   const [localStyleClass, setLocalStyleClass] = useState(currentTextStyle.styleClass);
 
+  // Track initial values when modal opens to detect changes
+  const initialContentRef = useRef<string>('');
+  const initialColorRef = useRef<string>('');
+  const initialStyleClassRef = useRef<string>('');
+
   // Sync local state when modal opens or target changes
   useEffect(() => {
     if (isOpen) {
-      setLocalContent(currentTextStyle.content);
-      setLocalColor(currentTextStyle.color);
-      setLocalStyleClass(currentTextStyle.styleClass);
+      const content = currentTextStyle.content;
+      const color = currentTextStyle.color;
+      const styleClass = currentTextStyle.styleClass;
+      
+      setLocalContent(content);
+      setLocalColor(color);
+      setLocalStyleClass(styleClass);
+      
+      // Store initial values for comparison
+      initialContentRef.current = content;
+      initialColorRef.current = color;
+      initialStyleClassRef.current = styleClass;
     }
-  }, [isOpen, currentTextStyle.content, currentTextStyle.color, currentTextStyle.styleClass]);
+  }, [isOpen, editingText.targetId]);
 
-  // Debounced update to fixedTextStyles
+  // Save changes when modal closes
+  useEffect(() => {
+    if (!isOpen && editingText.targetId) {
+      // Check if there are any changes to save
+      const hasContentChange = localContent !== initialContentRef.current;
+      const hasColorChange = localColor !== initialColorRef.current;
+      const hasStyleClassChange = localStyleClass !== initialStyleClassRef.current;
+      
+      if (hasContentChange || hasColorChange || hasStyleClassChange) {
+        setFixedTextStyles(prev => ({
+          ...prev,
+          [editingText.targetId]: { 
+            ...prev[editingText.targetId],
+            content: localContent,
+            color: localColor,
+            styleClass: localStyleClass
+          }
+        }));
+      }
+    }
+  }, [isOpen, editingText.targetId, localContent, localColor, localStyleClass, setFixedTextStyles]);
+
+  // Simple local state updates - no immediate fixedTextStyles updates
   const updateContent = useCallback((value: string) => {
     setLocalContent(value);
-    // Update immediately for better UX
-    setFixedTextStyles(prev => ({
-      ...prev,
-      [editingText.targetId]: { 
-        ...prev[editingText.targetId],
-        content: value,
-        color: prev[editingText.targetId]?.color || currentTextStyle.color,
-        styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-      }
-    }));
-  }, [editingText.targetId, setFixedTextStyles, currentTextStyle.color, currentTextStyle.styleClass]);
+  }, []);
 
   const updateColor = useCallback((value: string) => {
     setLocalColor(value);
-    setFixedTextStyles(prev => ({
-      ...prev,
-      [editingText.targetId]: { 
-        ...prev[editingText.targetId],
-        color: value,
-        content: prev[editingText.targetId]?.content || currentTextStyle.content,
-        styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
-      }
-    }));
-  }, [editingText.targetId, setFixedTextStyles, currentTextStyle.content, currentTextStyle.styleClass]);
+  }, []);
 
   const updateStyleClass = useCallback((value: string) => {
     setLocalStyleClass(value);
-    setFixedTextStyles(prev => ({
-      ...prev,
-      [editingText.targetId]: { 
-        ...prev[editingText.targetId],
-        styleClass: value,
-        content: prev[editingText.targetId]?.content || currentTextStyle.content,
-        color: prev[editingText.targetId]?.color || currentTextStyle.color
-      }
-    }));
-  }, [editingText.targetId, setFixedTextStyles, currentTextStyle.content, currentTextStyle.color]);
+  }, []);
 
   if (!isOpen) return null;
 

@@ -57,7 +57,11 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         className={`${applyThemeColorsToText(headerMessage, 'header')} text-2xl md:text-4xl lg:text-5xl xl:text-6xl ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
         style={{ 
           color: headerMessage?.color, 
-          textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+          textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
         }}
         onClick={(e) => {
           e.stopPropagation(); // Prevent background modal from opening
@@ -80,7 +84,11 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         className={`${applyThemeColorsToText(subHeader, 'subheader')} text-sm md:text-base lg:text-lg xl:text-xl ${editorState.isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
         style={{ 
           color: subHeader?.color, 
-          textShadow: '1px 1px 2px rgba(0,0,0,0.3)' 
+          textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
         }}
         onClick={(e) => {
           e.stopPropagation(); // Prevent background modal from opening
