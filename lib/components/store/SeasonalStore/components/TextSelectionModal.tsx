@@ -133,10 +133,46 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
     setLocalStyleClass(newStyleClass);
   };
 
+  // Prevent body scroll and viewport movement on mobile when modal is open
+  useEffect(() => {
+    if (isOpen && selectedText) {
+      // Lock body scroll to prevent background movement
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalHeight = document.body.style.height;
+      const originalTop = document.body.style.top;
+      const originalWidth = document.body.style.width;
+      
+      // Get current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body to prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      
+      return () => {
+        // Restore body styles
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.width = originalWidth;
+        document.body.style.height = originalHeight;
+        document.body.style.top = originalTop;
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen, selectedText]);
+
   if (!isOpen || !selectedText) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+    >
       <div 
         className="bg-gray-800/80 border border-cyan-400 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
@@ -166,6 +202,11 @@ export const TextSelectionModal: React.FC<TextSelectionModalProps> = ({
               className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none"
               rows={3}
               placeholder="Enter your text here..."
+              style={{ fontSize: '16px' }}
+              onFocus={(e) => {
+                // Prevent iOS zoom on focus
+                e.target.style.fontSize = '16px';
+              }}
             />
           </div>
 

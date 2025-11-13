@@ -103,6 +103,40 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
   
+  // Prevent body scroll and viewport movement on mobile when modal is open
+  useEffect(() => {
+    if (isOpen && isEditorView) {
+      // Lock body scroll to prevent background movement
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalHeight = document.body.style.height;
+      const originalTop = document.body.style.top;
+      const originalWidth = document.body.style.width;
+      
+      // Get current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body to prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      
+      return () => {
+        // Restore body styles
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.width = originalWidth;
+        document.body.style.height = originalHeight;
+        document.body.style.top = originalTop;
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen, isEditorView]);
+  
   // Early return before any hooks
   if (!isOpen || !isEditorView) return null;
 
@@ -582,6 +616,11 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                      selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.content : 
                      selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.content : 
                      fixedTextStyles.promoMessage.content}
+              style={{ fontSize: '16px' }}
+              onFocus={(e) => {
+                // Prevent iOS zoom on focus
+                e.target.style.fontSize = '16px';
+              }}
               onChange={(e) => {
                 const newContent = e.target.value;
                 if (selectedAssetId === 'mainHeader') {
@@ -1012,6 +1051,11 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             onChange={(e) => setNewThemePrompt(e.target.value)}
             rows={3}
             className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
+            style={{ fontSize: '16px' }}
+            onFocus={(e) => {
+              // Prevent iOS zoom on focus
+              e.target.style.fontSize = '16px';
+            }}
           />
 
           <button 
@@ -1068,6 +1112,11 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             placeholder="Enter AI prompt description (e.g., 'A mystical forest with glowing mushrooms and ethereal lighting')"
             rows={3}
             className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 mb-4"
+            style={{ fontSize: '16px' }}
+            onFocus={(e) => {
+              // Prevent iOS zoom on focus
+              e.target.style.fontSize = '16px';
+            }}
           />
           <button 
             onClick={() => {

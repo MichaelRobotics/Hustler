@@ -35,6 +35,40 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   setFixedTextStyles,
   getThemeQuickColors,
 }) => {
+  // Prevent body scroll and viewport movement on mobile when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Lock body scroll to prevent background movement
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalHeight = document.body.style.height;
+      const originalTop = document.body.style.top;
+      const originalWidth = document.body.style.width;
+      
+      // Get current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body to prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      
+      return () => {
+        // Restore body styles
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.width = originalWidth;
+        document.body.style.height = originalHeight;
+        document.body.style.top = originalTop;
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   // Debug: Log the current values when modal opens
@@ -50,50 +84,6 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
     color: '#FFFFFF',
     styleClass: 'text-lg font-normal'
   };
-
-  // Prevent viewport resizing and body scroll on mobile when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      // Lock body scroll
-      const originalOverflow = document.body.style.overflow;
-      const originalPosition = document.body.style.position;
-      const originalHeight = document.body.style.height;
-      const originalTop = document.body.style.top;
-      
-      // Get current scroll position
-      const scrollY = window.scrollY;
-      
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.height = '100vh';
-      
-      // Prevent viewport resize on mobile when keyboard opens
-      const viewport = document.querySelector('meta[name="viewport"]');
-      const originalViewport = viewport?.getAttribute('content') || '';
-      if (viewport) {
-        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
-      }
-      
-      return () => {
-        // Restore body styles
-        document.body.style.overflow = originalOverflow;
-        document.body.style.position = originalPosition;
-        document.body.style.width = '';
-        document.body.style.height = originalHeight;
-        document.body.style.top = originalTop;
-        
-        // Restore scroll position
-        window.scrollTo(0, scrollY);
-        
-        // Restore viewport
-        if (viewport) {
-          viewport.setAttribute('content', originalViewport);
-        }
-      };
-    }
-  }, [isOpen]);
 
   return (
     <div
@@ -135,8 +125,10 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
                 }
               }))}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
-              style={{
-                fontSize: '16px', // Prevent zoom on iOS
+              style={{ fontSize: '16px' }}
+              onFocus={(e) => {
+                // Prevent iOS zoom on focus
+                e.target.style.fontSize = '16px';
               }}
             />
           </div>
