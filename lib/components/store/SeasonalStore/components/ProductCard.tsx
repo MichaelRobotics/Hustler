@@ -19,6 +19,8 @@ interface ProductCardProps {
   onInlineButtonEnd?: () => void;
   inlineNameActive?: boolean;
   inlineDescActive?: boolean;
+  fixedTextStyles?: Record<string, { content: string; color: string; styleClass: string }>;
+  setEditingText?: (state: { isOpen: boolean; targetId: string }) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -38,6 +40,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onInlineButtonEnd,
   inlineNameActive,
   inlineDescActive,
+  fixedTextStyles,
+  setEditingText,
 }) => {
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -291,14 +295,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           data-inline-product-name={product.id}
           onClick={(e) => {
             e.stopPropagation();
-            if (isEditorView && onOpenEditor) {
-              // Open modal and immediately activate inline editing (like header/subheader)
+            if (isEditorView && setEditingText) {
+              // Use same method as MainHeader/SubHeader - open TextEditorModal
+              setEditingText({ isOpen: true, targetId: `productName-${product.id}` });
+            } else if (isEditorView && onOpenEditor) {
+              // Fallback to old method for card/button editing
               onOpenEditor(product.id, 'name');
-              // The parent will handle setting inlineEditTarget
             }
           }}
         >
-          {product.name}
+          {fixedTextStyles?.[`productName-${product.id}`]?.content || product.name}
         </h2>
         
         {/* Editable Product Description (Fixed min height for alignment, max 2 lines) */}
@@ -317,14 +323,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           data-inline-product-desc={product.id}
           onClick={(e) => {
             e.stopPropagation();
-            if (isEditorView && onOpenEditor) {
-              // Open modal and immediately activate inline editing (like header/subheader)
+            if (isEditorView && setEditingText) {
+              // Use same method as MainHeader/SubHeader - open TextEditorModal
+              setEditingText({ isOpen: true, targetId: `productDesc-${product.id}` });
+            } else if (isEditorView && onOpenEditor) {
+              // Fallback to old method for card/button editing
               onOpenEditor(product.id, 'description');
-              // The parent will handle setting inlineEditTarget
             }
           }}
         >
-          {product.description}
+          {fixedTextStyles?.[`productDesc-${product.id}`]?.content || product.description}
         </p>
         
         {/* Editable Price */}

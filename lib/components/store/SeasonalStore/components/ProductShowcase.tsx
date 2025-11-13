@@ -33,6 +33,8 @@ interface ProductShowcaseProps {
   handleRemoveSticker: (id: number | string) => void;
   handleDropOnProduct: (productId: number | string, asset: any) => void;
   openProductEditor: (id: number | string | null, target: string) => void;
+  fixedTextStyles?: Record<string, { content: string; color: string; styleClass: string }>;
+  setEditingText?: (state: { isOpen: boolean; targetId: string }) => void;
 }
 
 export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
@@ -57,6 +59,8 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   handleRemoveSticker,
   handleDropOnProduct,
   openProductEditor,
+  fixedTextStyles,
+  setEditingText,
 }) => {
   const [showNavigation, setShowNavigation] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -248,6 +252,8 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   onOpenEditor={(id, target) => openProductEditor(id, target)}
                   inlineNameActive={inlineEditTarget === 'productName' && inlineProductId === product.id}
                   inlineDescActive={inlineEditTarget === 'productDesc' && inlineProductId === product.id}
+                  fixedTextStyles={fixedTextStyles}
+                  setEditingText={setEditingText}
                 />
               </div>
             ))}
