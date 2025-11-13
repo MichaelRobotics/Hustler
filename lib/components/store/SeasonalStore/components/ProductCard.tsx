@@ -14,7 +14,6 @@ interface ProductCardProps {
   onRemoveSticker: (productId: number | string) => void;
   onDropAsset: (e: React.DragEvent, productId: number | string) => void;
   onOpenEditor?: (productId: number | string, target: 'name' | 'description' | 'card' | 'button') => void;
-  setEditingText?: (state: { isOpen: boolean; targetId: string }) => void;
   inlineButtonEditing?: boolean;
   onInlineButtonSave?: (text: string) => void;
   onInlineButtonEnd?: () => void;
@@ -34,7 +33,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onRemoveSticker,
   onDropAsset,
   onOpenEditor,
-  setEditingText,
   inlineButtonEditing,
   onInlineButtonSave,
   onInlineButtonEnd,
@@ -289,28 +287,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Editable Product Name */}
         <h2 
           className={`text-lg font-bold mb-0.5 ${titleClass} ${isEditorView ? 'cursor-pointer hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1' : ''}`}
-          style={{ 
-            cursor: isEditorView ? 'pointer' : 'default',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            MozUserSelect: 'none',
-            msUserSelect: 'none'
-          }}
+          style={{ cursor: isEditorView ? 'pointer' : 'default' }}
           data-inline-product-name={product.id}
-          onMouseDown={(e) => {
-            // Prevent text selection
-            if (isEditorView) {
-              e.preventDefault();
-            }
-          }}
           onClick={(e) => {
             e.stopPropagation();
-            if (isEditorView && setEditingText) {
-              // Use TextEditorModal like MainHeader/SubHeader
-              setEditingText({ isOpen: true, targetId: `productName-${product.id}` });
-            } else if (isEditorView && onOpenEditor) {
-              // Fallback to old method
+            if (isEditorView && onOpenEditor) {
+              // Open modal and immediately activate inline editing (like header/subheader)
               onOpenEditor(product.id, 'name');
+              // The parent will handle setting inlineEditTarget
             }
           }}
         >
@@ -328,27 +312,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            wordBreak: 'break-word',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            MozUserSelect: 'none',
-            msUserSelect: 'none'
+            wordBreak: 'break-word'
           }}
           data-inline-product-desc={product.id}
-          onMouseDown={(e) => {
-            // Prevent text selection
-            if (isEditorView) {
-              e.preventDefault();
-            }
-          }}
           onClick={(e) => {
             e.stopPropagation();
-            if (isEditorView && setEditingText) {
-              // Use TextEditorModal like MainHeader/SubHeader
-              setEditingText({ isOpen: true, targetId: `productDesc-${product.id}` });
-            } else if (isEditorView && onOpenEditor) {
-              // Fallback to old method
+            if (isEditorView && onOpenEditor) {
+              // Open modal and immediately activate inline editing (like header/subheader)
               onOpenEditor(product.id, 'description');
+              // The parent will handle setting inlineEditTarget
             }
           }}
         >

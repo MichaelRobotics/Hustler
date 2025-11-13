@@ -1899,7 +1899,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           handleRemoveSticker={handleRemoveSticker}
           handleDropOnProduct={handleDropOnProductWrapper}
           openProductEditor={openProductEditorWrapper}
-          setEditingText={setEditingTextWrapper}
         />
 
         <PromoButton
@@ -1951,8 +1950,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         onClose={closeTextEditorAnimated}
         setFixedTextStyles={setFixedTextStyles}
         getThemeQuickColors={getThemeQuickColors}
-        updateProduct={updateProduct}
-        products={themeProducts[currentSeason] || []}
       />
 
       <ProductEditorModal
