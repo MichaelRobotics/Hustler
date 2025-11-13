@@ -23,6 +23,8 @@ interface TextEditorModalProps {
   onClose: () => void;
   setFixedTextStyles: (fn: (prev: any) => any) => void;
   getThemeQuickColors: (theme: any) => string[];
+  updateProduct?: (id: number | string, updates: any) => void;
+  products?: Array<{ id: number | string; name: string; description: string }>;
 }
 
 export const TextEditorModal: React.FC<TextEditorModalProps> = ({
@@ -34,6 +36,8 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   onClose,
   setFixedTextStyles,
   getThemeQuickColors,
+  updateProduct,
+  products = [],
 }) => {
   // Prevent body scroll and viewport movement on mobile when modal is open
   useEffect(() => {
@@ -78,12 +82,27 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
     allFixedTextStyles: fixedTextStyles
   });
 
+  // Check if editing a product text
+  const isProductText = editingText.targetId.startsWith('productName-') || editingText.targetId.startsWith('productDesc-');
+  const productId = isProductText ? editingText.targetId.split('-')[1] : null;
+  const isProductName = isProductText && editingText.targetId.startsWith('productName-');
+  const isProductDesc = isProductText && editingText.targetId.startsWith('productDesc-');
+  
+  // Get product if editing product text
+  const currentProduct = productId ? products.find(p => String(p.id) === String(productId)) : null;
+  
   // Ensure we have proper fallback values for the current target
-  const currentTextStyle = fixedTextStyles[editingText.targetId] || {
-    content: '',
-    color: '#FFFFFF',
-    styleClass: 'text-lg font-normal'
-  };
+  const currentTextStyle = isProductText && currentProduct
+    ? {
+        content: isProductName ? currentProduct.name : currentProduct.description,
+        color: '#FFFFFF', // Product text uses theme colors, not custom colors
+        styleClass: 'text-lg font-normal' // Product text uses theme classes, not custom classes
+      }
+    : fixedTextStyles[editingText.targetId] || {
+        content: '',
+        color: '#FFFFFF',
+        styleClass: 'text-lg font-normal'
+      };
 
   return (
     <div
@@ -115,15 +134,27 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
             <textarea
               rows={4}
               value={currentTextStyle.content}
-              onChange={(e) => setFixedTextStyles(prev => ({
-                ...prev,
-                [editingText.targetId]: { 
-                  ...prev[editingText.targetId],
-                  content: e.target.value,
-                  color: prev[editingText.targetId]?.color || currentTextStyle.color,
-                  styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
+              onChange={(e) => {
+                if (isProductText && updateProduct && productId) {
+                  // Update product directly
+                  if (isProductName) {
+                    updateProduct(productId, { name: e.target.value });
+                  } else if (isProductDesc) {
+                    updateProduct(productId, { description: e.target.value });
+                  }
+                } else {
+                  // Update fixed text styles (for headers, etc.)
+                  setFixedTextStyles(prev => ({
+                    ...prev,
+                    [editingText.targetId]: { 
+                      ...prev[editingText.targetId],
+                      content: e.target.value,
+                      color: prev[editingText.targetId]?.color || currentTextStyle.color,
+                      styleClass: prev[editingText.targetId]?.styleClass || currentTextStyle.styleClass
+                    }
+                  }));
                 }
-              }))}
+              }}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 min-h-[96px]"
               style={{ fontSize: '16px' }}
               onFocus={(e) => {
@@ -133,8 +164,9 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
             />
           </div>
 
-          {/* Color */}
-          <div>
+          {/* Color - Only show for non-product text */}
+          {!isProductText && (
+            <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Color</label>
             <div className="flex items-center space-x-2">
               <input
@@ -170,8 +202,11 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
               />
             </div>
           </div>
+          )}
 
-          {/* Typography */}
+          {/* Typography - Only show for non-product text */}
+          {!isProductText && (
+          <>
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Typography</label>
             <select
@@ -293,6 +328,8 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
               ))}
             </div>
           </div>
+          </>
+          )}
 
         </div>
       </div>
