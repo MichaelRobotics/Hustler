@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo } from 'react';
+import React from 'react';
 
 interface StoreHeaderProps {
   editorState: {
@@ -28,10 +28,9 @@ interface StoreHeaderProps {
   applyThemeColorsToText: (textStyle: any, type: string) => string;
   getThemeColors: any;
   setEditingText: (text: any) => void;
-  setInlineEditTarget: (target: string | null) => void;
 }
 
-export const StoreHeader: React.FC<StoreHeaderProps> = memo(({
+export const StoreHeader: React.FC<StoreHeaderProps> = ({
   editorState,
   fixedTextStyles,
   backgroundAnalysis,
@@ -40,7 +39,6 @@ export const StoreHeader: React.FC<StoreHeaderProps> = memo(({
   applyThemeColorsToText,
   getThemeColors,
   setEditingText,
-  setInlineEditTarget,
 }) => {
   const { headerMessage, subHeader } = fixedTextStyles || {};
 
@@ -64,15 +62,9 @@ export const StoreHeader: React.FC<StoreHeaderProps> = memo(({
           msUserSelect: 'none'
         }}
         onClick={(e) => {
-          e.stopPropagation(); // Prevent background modal from opening
+          e.stopPropagation();
           if (editorState.isEditorView) {
-            // If modal is open for any text, don't handle clicks on page text elements
-            if (false) { // editingText.isOpen check would go here
-              return; // Do nothing when modal is open
-            }
-            // First click: open modal and immediately activate inline editing
             setEditingText({ isOpen: true, targetId: 'headerMessage' });
-            setTimeout(() => setInlineEditTarget('headerMessage'), 100);
           }
         }}
       >
@@ -91,15 +83,9 @@ export const StoreHeader: React.FC<StoreHeaderProps> = memo(({
           msUserSelect: 'none'
         }}
         onClick={(e) => {
-          e.stopPropagation(); // Prevent background modal from opening
+          e.stopPropagation();
           if (editorState.isEditorView) {
-            // If modal is open for any text, don't handle clicks on page text elements
-            if (false) { // editingText.isOpen check would go here
-              return; // Do nothing when modal is open
-            }
-            // First click: open modal and immediately activate inline editing
             setEditingText({ isOpen: true, targetId: 'subHeader' });
-            setTimeout(() => setInlineEditTarget('subHeader'), 100);
           }
         }}
       >
@@ -107,7 +93,5 @@ export const StoreHeader: React.FC<StoreHeaderProps> = memo(({
       </p>
     </div>
   );
-});
-
-StoreHeader.displayName = 'StoreHeader';
+};
 

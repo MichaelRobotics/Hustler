@@ -16,8 +16,6 @@ interface ProductShowcaseProps {
     isUploadingImage: boolean;
     isGeneratingImage: boolean;
   };
-  inlineEditTarget: string | null;
-  inlineProductId: number | null;
   isProductsReady: boolean; // Updated prop name for products-specific loading
   
   // Handlers
@@ -42,8 +40,6 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   editorState,
   legacyTheme,
   loadingState,
-  inlineEditTarget,
-  inlineProductId,
   isProductsReady,
   navigateToPrevious,
   navigateToNext,
@@ -246,8 +242,6 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   onRemoveSticker={handleRemoveSticker}
                   onDropAsset={(e) => handleDropOnProduct(product.id, e)}
                   onOpenEditor={(id, target) => openProductEditor(id, target)}
-                  inlineNameActive={inlineEditTarget === 'productName' && inlineProductId === product.id}
-                  inlineDescActive={inlineEditTarget === 'productDesc' && inlineProductId === product.id}
                 />
               </div>
             ))}

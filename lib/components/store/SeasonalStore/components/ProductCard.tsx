@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, memo } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, ZapIcon } from './Icons';
 
@@ -17,11 +17,9 @@ interface ProductCardProps {
   inlineButtonEditing?: boolean;
   onInlineButtonSave?: (text: string) => void;
   onInlineButtonEnd?: () => void;
-  inlineNameActive?: boolean;
-  inlineDescActive?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = memo(({
+export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   theme,
   isEditorView,
@@ -36,8 +34,6 @@ export const ProductCard: React.FC<ProductCardProps> = memo(({
   inlineButtonEditing,
   onInlineButtonSave,
   onInlineButtonEnd,
-  inlineNameActive,
-  inlineDescActive,
 }) => {
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -312,7 +308,7 @@ export const ProductCard: React.FC<ProductCardProps> = memo(({
             minHeight: '1.5rem', 
             cursor: isEditorView ? 'pointer' : 'default',
             display: '-webkit-box',
-            WebkitLineClamp: inlineDescActive ? 'unset' : 2,
+            WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -406,7 +402,5 @@ export const ProductCard: React.FC<ProductCardProps> = memo(({
     </div>
     </div>
   );
-});
-
-ProductCard.displayName = 'ProductCard';
+};
 

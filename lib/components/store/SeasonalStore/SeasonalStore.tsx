@@ -1345,18 +1345,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | string | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });
   const openProductEditor = (productId: number | string | null, target: 'name' | 'description' | 'card' | 'button') => {
     setProductEditor({ isOpen: true, productId, target });
-    // Activate inline editing immediately (like header/subheader)
-    if (target === 'name' && productId !== null) {
-      setTimeout(() => {
-        setInlineEditTarget('productName');
-        setInlineProductId(productId as number);
-      }, 100);
-    } else if (target === 'description' && productId !== null) {
-      setTimeout(() => {
-        setInlineEditTarget('productDesc');
-        setInlineProductId(productId as number);
-      }, 100);
-    }
   };
   const closeProductEditor = () => setProductEditor({ isOpen: false, productId: null, target: null });
 
@@ -1445,188 +1433,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     };
   }, [productEditor.isOpen]);
 
-  // Prevent keyboard from moving the page - overlay keyboard on top without layout shifts (Mobile-optimized)
-  useEffect(() => {
-    const isEditing = editingText.isOpen || productEditor.isOpen;
-    
-    if (isEditing) {
-      // Store original values
-      const scrollY = window.scrollY;
-      const originalBodyOverflow = document.body.style.overflow;
-      const originalBodyPosition = document.body.style.position;
-      const originalBodyHeight = document.body.style.height;
-      const originalBodyWidth = document.body.style.width;
-      const originalBodyTop = document.body.style.top;
-      const originalBodyLeft = document.body.style.left;
-      const originalBodyRight = document.body.style.right;
-      const originalHtmlHeight = document.documentElement.style.height;
-      const originalHtmlOverflow = document.documentElement.style.overflow;
-      
-      // Get the main app container (appRef)
-      const appContainer = appRef.current;
-      
-      // Store original app container styles
-      let originalAppPosition = '';
-      let originalAppTop = '';
-      let originalAppHeight = '';
-      let originalAppWidth = '';
-      let originalAppOverflow = '';
-      let originalAppLeft = '';
-      let originalAppRight = '';
-      
-      if (appContainer) {
-        originalAppPosition = appContainer.style.position;
-        originalAppTop = appContainer.style.top;
-        originalAppHeight = appContainer.style.height;
-        originalAppWidth = appContainer.style.width;
-        originalAppOverflow = appContainer.style.overflow;
-        originalAppLeft = appContainer.style.left;
-        originalAppRight = appContainer.style.right;
-      }
-      
-      // Detect mobile device
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      
-      // Lock the viewport - prevent keyboard from resizing viewport (Mobile-specific)
-      if (isMobile) {
-        // iOS and Android: Lock viewport to prevent keyboard from moving page
-        document.documentElement.style.height = '100%';
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        document.body.style.height = '100%';
-        document.body.style.top = `-${scrollY}px`;
-        document.body.style.left = '0';
-        document.body.style.right = '0';
-        // Prevent iOS bounce scrolling
-        (document.body.style as any).webkitOverflowScrolling = 'touch';
-        document.body.style.overscrollBehavior = 'none';
-      }
-      
-      // Make app container fixed so it doesn't move
-      if (appContainer) {
-        appContainer.style.position = 'fixed';
-        appContainer.style.top = `-${scrollY}px`;
-        appContainer.style.left = '0';
-        appContainer.style.right = '0';
-        appContainer.style.width = '100%';
-        appContainer.style.height = isMobile && window.visualViewport 
-          ? `${window.visualViewport.height}px` 
-          : '100vh';
-        appContainer.style.overflowY = 'auto';
-        appContainer.style.overflowX = 'hidden';
-        // iOS momentum scrolling
-        if (isIOS) {
-          (appContainer.style as any).webkitOverflowScrolling = 'touch';
-        }
-        // Prevent overscroll bounce
-        appContainer.style.overscrollBehavior = 'contain';
-      }
-      
-      // Handle visual viewport changes (keyboard appearing/disappearing) - Mobile-specific
-      const handleViewportChange = () => {
-        if (appContainer && window.visualViewport) {
-          // Adjust container height based on visual viewport (accounts for keyboard)
-          const viewportHeight = window.visualViewport.height;
-          appContainer.style.height = `${viewportHeight}px`;
-          
-          // On mobile, also adjust body height to match
-          if (isMobile) {
-            document.body.style.height = `${viewportHeight}px`;
-          }
-        }
-      };
-      
-      // Listen to visual viewport changes (Mobile keyboard detection)
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', handleViewportChange);
-        window.visualViewport.addEventListener('scroll', handleViewportChange);
-        // Initial adjustment
-        handleViewportChange();
-      } else if (isMobile) {
-        // Fallback for older mobile browsers: use window resize
-        const handleResize = () => {
-          if (appContainer) {
-            const windowHeight = window.innerHeight;
-            appContainer.style.height = `${windowHeight}px`;
-            document.body.style.height = `${windowHeight}px`;
-          }
-        };
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        
-        return () => {
-          window.removeEventListener('resize', handleResize);
-          // Restore styles
-          document.documentElement.style.height = originalHtmlHeight;
-          document.documentElement.style.overflow = originalHtmlOverflow;
-          document.body.style.overflow = originalBodyOverflow;
-          document.body.style.position = originalBodyPosition;
-          document.body.style.width = originalBodyWidth;
-          document.body.style.height = originalBodyHeight;
-          document.body.style.top = originalBodyTop;
-          document.body.style.left = originalBodyLeft;
-          document.body.style.right = originalBodyRight;
-          (document.body.style as any).webkitOverflowScrolling = '';
-          document.body.style.overscrollBehavior = '';
-          
-          if (appContainer) {
-            appContainer.style.position = originalAppPosition;
-            appContainer.style.top = originalAppTop;
-            appContainer.style.height = originalAppHeight;
-            appContainer.style.width = originalAppWidth;
-            appContainer.style.overflow = originalAppOverflow;
-            appContainer.style.left = originalAppLeft;
-            appContainer.style.right = originalAppRight;
-            (appContainer.style as any).webkitOverflowScrolling = '';
-            appContainer.style.overscrollBehavior = '';
-          }
-          
-          window.scrollTo(0, scrollY);
-        };
-      }
-      
-      return () => {
-        // Remove viewport listeners
-        if (window.visualViewport) {
-          window.visualViewport.removeEventListener('resize', handleViewportChange);
-          window.visualViewport.removeEventListener('scroll', handleViewportChange);
-        }
-        
-        // Restore body styles
-        document.documentElement.style.height = originalHtmlHeight;
-        document.documentElement.style.overflow = originalHtmlOverflow;
-        document.body.style.overflow = originalBodyOverflow;
-        document.body.style.position = originalBodyPosition;
-        document.body.style.width = originalBodyWidth;
-        document.body.style.height = originalBodyHeight;
-        document.body.style.top = originalBodyTop;
-        document.body.style.left = originalBodyLeft;
-        document.body.style.right = originalBodyRight;
-        (document.body.style as any).webkitOverflowScrolling = '';
-        document.body.style.overscrollBehavior = '';
-        
-        // Restore app container styles
-        if (appContainer) {
-          appContainer.style.position = originalAppPosition;
-          appContainer.style.top = originalAppTop;
-          appContainer.style.height = originalAppHeight;
-          appContainer.style.width = originalAppWidth;
-          appContainer.style.overflow = originalAppOverflow;
-          appContainer.style.left = originalAppLeft;
-          appContainer.style.right = originalAppRight;
-          (appContainer.style as any).webkitOverflowScrolling = '';
-          appContainer.style.overscrollBehavior = '';
-        }
-        
-        // Restore scroll position
-        window.scrollTo(0, scrollY);
-      };
-    }
-  }, [editingText.isOpen, productEditor.isOpen, appRef]);
-
   useEffect(() => {
     if (templateManagerOpen) {
       const id = requestAnimationFrame(() => setTemplateManagerAnimOpen(true));
@@ -1659,60 +1465,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     closeProductEditor();
   };
 
-  // Inline text editing on page
-  const [inlineEditTarget, setInlineEditTarget] = useState<null | 'headerMessage' | 'subHeader' | 'promoMessage' | 'productName' | 'productDesc' | 'buttonText'>(null);
-  const [inlineProductId, setInlineProductId] = useState<number | null>(null);
-  const headerInputRef = useRef<HTMLInputElement | null>(null);
-  const subHeaderInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const promoInputRef = useRef<HTMLTextAreaElement | null>(null);
-  
   // Generate background button location state
   const [showGenerateBgInNavbar, setShowGenerateBgInNavbar] = useState(true); // Start in navbar
   
   // State for coordinating with ConditionalReturns loading
   const [isConditionalReturnsReady, setIsConditionalReturnsReady] = useState(false);
   
-  useEffect(() => {
-    if (inlineEditTarget === 'headerMessage') headerInputRef.current?.focus();
-    if (inlineEditTarget === 'subHeader') subHeaderInputRef.current?.focus();
-    if (inlineEditTarget === 'promoMessage') promoInputRef.current?.focus();
-  }, [inlineEditTarget]);
-
-
-  // Exit inline editing when clicking outside the active input/textarea
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!inlineEditTarget) return;
-      const target = e.target as HTMLElement;
-      const isInsideHeader = headerInputRef.current && headerInputRef.current.contains(target as Node);
-      const isInsideSub = subHeaderInputRef.current && subHeaderInputRef.current.contains(target as Node);
-      const isInsidePromo = promoInputRef.current && promoInputRef.current.contains(target as Node);
-      const isInsideProdName = inlineEditTarget === 'productName' && inlineProductId !== null && !!target.closest(`[data-inline-product-name="${inlineProductId}"]`);
-      const isInsideProdDesc = inlineEditTarget === 'productDesc' && inlineProductId !== null && !!target.closest(`[data-inline-product-desc="${inlineProductId}"]`);
-      if (!isInsideHeader && !isInsideSub && !isInsidePromo && !isInsideProdName && !isInsideProdDesc) {
-        setInlineEditTarget(null);
-        setInlineProductId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [inlineEditTarget, inlineProductId]);
-
-  // While in edit mode, clicking any text opens inline editing instead of opening the modal again
-  const beginInlineFromPanel = (target: 'headerMessage' | 'subHeader' | 'promoMessage') => {
-    // Close the modal first
-    setEditingText({ isOpen: false, targetId: 'mainHeader' });
-    // Then activate inline editing with a small delay to ensure modal closes first
-    setTimeout(() => {
-      setInlineEditTarget(target);
-    }, 100);
-  };
-
   // Wrapper functions for component prop type mismatches
-  const setInlineEditTargetWrapper = useCallback((target: string | null) => {
-    setInlineEditTarget(target as any);
-  }, [setInlineEditTarget]);
-
   const setEditingTextWrapper = useCallback((state: { isOpen: boolean; targetId: string }) => {
     setEditingText(state as any);
   }, [setEditingText]);
@@ -1722,10 +1481,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   }, [applyThemeColorsToText]);
 
 
-  // Ref wrappers to handle null types
-  const headerInputRefWrapper = headerInputRef as React.RefObject<HTMLInputElement>;
-  const subHeaderInputRefWrapper = subHeaderInputRef as React.RefObject<HTMLTextAreaElement>;
-  const promoInputRefWrapper = promoInputRef as React.RefObject<HTMLTextAreaElement>;
 
   // Product wrapper to handle type mismatch
   const productsWrapper = (themeProducts[currentSeason] || []).map(product => ({
@@ -2048,7 +1803,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           applyThemeColorsToText={applyThemeColorsToTextWrapper}
           getThemeColors={getThemeColors}
           setEditingText={setEditingTextWrapper}
-          setInlineEditTarget={setInlineEditTargetWrapper}
         />
 
         {/* API Error Display */}
@@ -2066,8 +1820,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           editorState={editorState}
           legacyTheme={legacyTheme}
           loadingState={loadingState}
-          inlineEditTarget={inlineEditTarget}
-          inlineProductId={inlineProductId}
           isProductsReady={isProductsReady}
           navigateToPrevious={navigateToPrevious}
           navigateToNext={navigateToNext}
@@ -2141,8 +1893,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         promoButton={promoButton}
         legacyTheme={legacyTheme}
         backgroundAnalysis={backgroundAnalysis}
-        inlineEditTarget={(inlineEditTarget === 'productName' || inlineEditTarget === 'productDesc') ? inlineEditTarget : null}
-        inlineProductId={inlineProductId}
         onClose={closeProductEditorAnimated}
         updateProduct={updateProduct}
         setPromoButton={setPromoButton}

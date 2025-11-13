@@ -54,9 +54,6 @@ interface ProductEditorModalProps {
   backgroundAnalysis: {
     recommendedTextColor: string;
   };
-  inlineEditTarget?: 'productName' | 'productDesc' | null;
-  inlineProductId?: number | null;
-  
   // Handlers
   onClose: () => void;
   updateProduct: (id: number | string, updates: Partial<Product>) => void;
@@ -70,8 +67,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   promoButton,
   legacyTheme,
   backgroundAnalysis,
-  inlineEditTarget,
-  inlineProductId,
   onClose,
   updateProduct,
   setPromoButton,
@@ -246,13 +241,14 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     }
   }, [isOpen]);
 
-  // Keep modal mounted to prevent remounting/flicker - use CSS to hide/show
+  if (!isOpen) return null;
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Edit Product"
-      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'} ${!isOpen ? 'pointer-events-none' : ''}`}
+      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       onClick={(e) => {
         // Close on background click (when clicking on the modal itself, not its children)
         if (e.target === e.currentTarget) onClose();
