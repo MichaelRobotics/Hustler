@@ -1,7 +1,35 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { XIcon } from './Icons';
+
+// Memoized Quick Colors component to prevent re-renders on every keystroke
+const QuickColorsSection = memo(({ legacyTheme, getThemeQuickColors, updateColor }: {
+  legacyTheme: any;
+  getThemeQuickColors: (theme: any) => string[];
+  updateColor: (color: string) => void;
+}) => {
+  const quickColors = useMemo(() => getThemeQuickColors(legacyTheme), [legacyTheme, getThemeQuickColors]);
+  
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-gray-300 mb-2">Quick Colors</label>
+      <div className="flex flex-wrap gap-2">
+        {quickColors.map((color, index) => (
+          <button
+            key={`${color}-${index}`}
+            onClick={() => updateColor(color)}
+            className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-gray-400 transition-colors"
+            style={{ backgroundColor: color }}
+            title={color}
+          />
+        ))}
+      </div>
+    </div>
+  );
+});
+
+QuickColorsSection.displayName = 'QuickColorsSection';
 
 interface TextEditorModalProps {
   isOpen: boolean;
@@ -40,14 +68,15 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   // to resize due to backgroundAttachment: 'fixed' on the background image.
 
   // Use local state for input to prevent lag on every keystroke
-  const currentTextStyle = useMemo(() => 
-    fixedTextStyles[editingText.targetId] || {
+  // Only recalculate when targetId changes or when modal opens
+  const currentTextStyle = useMemo(() => {
+    const style = fixedTextStyles[editingText.targetId];
+    return style || {
       content: '',
       color: '#FFFFFF',
       styleClass: 'text-lg font-normal'
-    },
-    [fixedTextStyles, editingText.targetId]
-  );
+    };
+  }, [editingText.targetId, isOpen ? fixedTextStyles[editingText.targetId] : null]);
 
   const [localContent, setLocalContent] = useState(currentTextStyle.content);
   const [localColor, setLocalColor] = useState(currentTextStyle.color);
@@ -74,29 +103,41 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
       initialColorRef.current = color;
       initialStyleClassRef.current = styleClass;
     }
-  }, [isOpen, editingText.targetId]);
+  }, [isOpen, editingText.targetId, currentTextStyle.content, currentTextStyle.color, currentTextStyle.styleClass]);
 
-  // Save changes when modal closes
+  // Save changes when modal closes - use refs to avoid dependency on local state
+  const localContentRef = useRef(localContent);
+  const localColorRef = useRef(localColor);
+  const localStyleClassRef = useRef(localStyleClass);
+  
+  // Update refs on every change (this doesn't cause re-renders)
+  useEffect(() => {
+    localContentRef.current = localContent;
+    localColorRef.current = localColor;
+    localStyleClassRef.current = localStyleClass;
+  }, [localContent, localColor, localStyleClass]);
+
+  // Save changes when modal closes - only depends on isOpen, not local state
   useEffect(() => {
     if (!isOpen && editingText.targetId) {
-      // Check if there are any changes to save
-      const hasContentChange = localContent !== initialContentRef.current;
-      const hasColorChange = localColor !== initialColorRef.current;
-      const hasStyleClassChange = localStyleClass !== initialStyleClassRef.current;
+      // Check if there are any changes to save (compare with initial values)
+      const hasContentChange = localContentRef.current !== initialContentRef.current;
+      const hasColorChange = localColorRef.current !== initialColorRef.current;
+      const hasStyleClassChange = localStyleClassRef.current !== initialStyleClassRef.current;
       
       if (hasContentChange || hasColorChange || hasStyleClassChange) {
         setFixedTextStyles(prev => ({
           ...prev,
           [editingText.targetId]: { 
             ...prev[editingText.targetId],
-            content: localContent,
-            color: localColor,
-            styleClass: localStyleClass
+            content: localContentRef.current,
+            color: localColorRef.current,
+            styleClass: localStyleClassRef.current
           }
         }));
       }
     }
-  }, [isOpen, editingText.targetId, localContent, localColor, localStyleClass, setFixedTextStyles]);
+  }, [isOpen, editingText.targetId, setFixedTextStyles]);
 
   // Simple local state updates - no immediate fixedTextStyles updates
   const updateContent = useCallback((value: string) => {
@@ -243,20 +284,11 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
           </div>
 
           {/* Quick Colors (Theme-matched) */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-2">Quick Colors</label>
-            <div className="flex flex-wrap gap-2">
-              {getThemeQuickColors(legacyTheme).map((color, index) => (
-                <button
-                  key={`${color}-${index}`}
-                  onClick={() => updateColor(color)}
-                  className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-gray-400 transition-colors"
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
-            </div>
-          </div>
+          <QuickColorsSection 
+            legacyTheme={legacyTheme}
+            getThemeQuickColors={getThemeQuickColors}
+            updateColor={updateColor}
+          />
 
         </div>
       </div>
