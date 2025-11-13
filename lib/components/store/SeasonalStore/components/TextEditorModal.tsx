@@ -37,39 +37,9 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
   getThemeQuickColors,
   updateProduct,
 }) => {
-  // Prevent body scroll and viewport movement on mobile when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      // Lock body scroll to prevent background movement
-      const originalOverflow = document.body.style.overflow;
-      const originalPosition = document.body.style.position;
-      const originalHeight = document.body.style.height;
-      const originalTop = document.body.style.top;
-      const originalWidth = document.body.style.width;
-      
-      // Get current scroll position
-      const scrollY = window.scrollY;
-      
-      // Lock body to prevent scrolling
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-      document.body.style.height = '100%';
-      document.body.style.top = `-${scrollY}px`;
-      
-      return () => {
-        // Restore body styles
-        document.body.style.overflow = originalOverflow;
-        document.body.style.position = originalPosition;
-        document.body.style.width = originalWidth;
-        document.body.style.height = originalHeight;
-        document.body.style.top = originalTop;
-        
-        // Restore scroll position
-        window.scrollTo(0, scrollY);
-      };
-    }
-  }, [isOpen]);
+  // Note: We don't lock body scroll for TextEditorModal since it's a slide-over modal
+  // that doesn't cover the entire screen. Body scroll lock would cause the background
+  // to resize due to backgroundAttachment: 'fixed' on the background image.
 
   if (!isOpen) return null;
 
