@@ -380,12 +380,12 @@ export class UpdateProductSync {
       };
     }
 
-    // Check image changes - fetch from Whop SDK galleryImages
+    // Check image changes - fetch from Whop SDK galleryImages ONLY (no product.logo/bannerImage/imageUrl)
     const currentImage = currentResource.image || '';
-    let newImage = whopProduct.logo || whopProduct.bannerImage || 
-      'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    const defaultPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    let newImage = defaultPlaceholder;
     
-    // Try to fetch product image from galleryImages
+    // Fetch product image from galleryImages using Whop SDK
     try {
       const productResult = await whopSdk.accessPasses.getAccessPass({
         accessPassId: whopProduct.id,
@@ -395,11 +395,16 @@ export class UpdateProductSync {
         const firstImage = productResult.galleryImages.nodes[0];
         if (firstImage?.source?.url) {
           newImage = firstImage.source.url;
+          console.log(`✅ [UPDATE-SYNC] Fetched product image from galleryImages for ${whopProduct.title}`);
+        } else {
+          console.log(`⚠️ [UPDATE-SYNC] galleryImages found but no source.url for ${whopProduct.title}, using placeholder`);
         }
+      } else {
+        console.log(`⚠️ [UPDATE-SYNC] No galleryImages found for ${whopProduct.title}, using placeholder`);
       }
     } catch (imageError) {
-      // Use fallback if SDK fetch fails
-      console.warn(`⚠️ [UPDATE-SYNC] Failed to fetch product image for ${whopProduct.title}:`, imageError);
+      // Use placeholder if SDK fetch fails
+      console.warn(`⚠️ [UPDATE-SYNC] Failed to fetch product image for ${whopProduct.title}, using placeholder:`, imageError);
     }
     
     if (currentImage !== newImage) {

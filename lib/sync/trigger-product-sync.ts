@@ -356,11 +356,11 @@ export async function triggerProductSyncForNewAdmin(
 							console.log(`� FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
 						}
 						
-						// Fetch product image from Whop SDK if available
-						let productImage = product.logo || product.bannerImage || 
-							'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+						// Fetch product image from Whop SDK galleryImages ONLY (no product.logo/bannerImage/imageUrl)
+						const defaultPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+						let productImage = defaultPlaceholder;
 						
-						// Try to fetch product image from galleryImages
+						// Fetch product image from galleryImages using Whop SDK
 						try {
 							const productResult = await whopSdk.accessPasses.getAccessPass({
 								accessPassId: product.id,
@@ -370,11 +370,16 @@ export async function triggerProductSyncForNewAdmin(
 								const firstImage = productResult.galleryImages.nodes[0];
 								if (firstImage?.source?.url) {
 									productImage = firstImage.source.url;
-									console.log(`✅ Fetched product image from gallery for ${product.title}`);
+									console.log(`✅ [TRIGGER-SYNC] Fetched product image from galleryImages for ${product.title}: ${productImage.substring(0, 50)}...`);
+								} else {
+									console.log(`⚠️ [TRIGGER-SYNC] galleryImages found but no source.url for ${product.title}, using placeholder`);
 								}
+							} else {
+								console.log(`⚠️ [TRIGGER-SYNC] No galleryImages found for ${product.title}, using placeholder`);
 							}
 						} catch (imageError) {
-							console.warn(`⚠️ Failed to fetch product image for ${product.title}, using fallback:`, imageError);
+							// Use placeholder if SDK fetch fails
+							console.warn(`⚠️ [TRIGGER-SYNC] Failed to fetch product image for ${product.title}, using placeholder:`, imageError);
 						}
 						
 						// Format price for database storage

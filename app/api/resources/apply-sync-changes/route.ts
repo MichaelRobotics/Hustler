@@ -144,12 +144,13 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     }
   }
   
-  // Fetch product image from Whop SDK if available
-  let productImage = product.logo || product.bannerImage || 
-    'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  // Fetch product image from Whop SDK galleryImages ONLY (no product.logo/bannerImage/imageUrl)
+  // Only for products, not apps (apps use logo/bannerImage)
+  const defaultPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  let productImage = defaultPlaceholder;
   
-  // Try to fetch product image from galleryImages (only for products, not apps)
   if (!whopProductId.startsWith('app_')) {
+    // For products, fetch from galleryImages using Whop SDK
     try {
       const productResult = await whopSdk.accessPasses.getAccessPass({
         accessPassId: whopProductId,
@@ -159,12 +160,20 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
         const firstImage = productResult.galleryImages.nodes[0];
         if (firstImage?.source?.url) {
           productImage = firstImage.source.url;
-          console.log(`✅ [API] Fetched product image from gallery for ${product.title}`);
+          console.log(`✅ [API] Fetched product image from galleryImages for ${product.title}`);
+        } else {
+          console.log(`⚠️ [API] galleryImages found but no source.url for ${product.title}, using placeholder`);
         }
+      } else {
+        console.log(`⚠️ [API] No galleryImages found for ${product.title}, using placeholder`);
       }
     } catch (imageError) {
-      console.warn(`⚠️ [API] Failed to fetch product image for ${product.title}, using fallback:`, imageError);
+      // Use placeholder if SDK fetch fails
+      console.warn(`⚠️ [API] Failed to fetch product image for ${product.title}, using placeholder:`, imageError);
     }
+  } else {
+    // For apps, use logo/bannerImage (apps don't have galleryImages)
+    productImage = product.logo || product.bannerImage || defaultPlaceholder;
   }
   
   // Format price for database storage
@@ -329,12 +338,13 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     }
   }
   
-  // Fetch product image from Whop SDK if available
-  let productImage = product.logo || product.bannerImage || 
-    'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  // Fetch product image from Whop SDK galleryImages ONLY (no product.logo/bannerImage/imageUrl)
+  // Only for products, not apps (apps use logo/bannerImage)
+  const defaultPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  let productImage = defaultPlaceholder;
   
-  // Try to fetch product image from galleryImages (only for products, not apps)
   if (!whopProductId.startsWith('app_')) {
+    // For products, fetch from galleryImages using Whop SDK
     try {
       const productResult = await whopSdk.accessPasses.getAccessPass({
         accessPassId: whopProductId,
@@ -344,12 +354,20 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
         const firstImage = productResult.galleryImages.nodes[0];
         if (firstImage?.source?.url) {
           productImage = firstImage.source.url;
-          console.log(`✅ [API] Fetched product image from gallery for ${product.title}`);
+          console.log(`✅ [API] Fetched product image from galleryImages for ${product.title}`);
+        } else {
+          console.log(`⚠️ [API] galleryImages found but no source.url for ${product.title}, using placeholder`);
         }
+      } else {
+        console.log(`⚠️ [API] No galleryImages found for ${product.title}, using placeholder`);
       }
     } catch (imageError) {
-      console.warn(`⚠️ [API] Failed to fetch product image for ${product.title}, using fallback:`, imageError);
+      // Use placeholder if SDK fetch fails
+      console.warn(`⚠️ [API] Failed to fetch product image for ${product.title}, using placeholder:`, imageError);
     }
+  } else {
+    // For apps, use logo/bannerImage (apps don't have galleryImages)
+    productImage = product.logo || product.bannerImage || defaultPlaceholder;
   }
   
   // Format price for database storage
