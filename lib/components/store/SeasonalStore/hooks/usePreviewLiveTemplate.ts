@@ -1,5 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { truncateDescription } from '../utils';
+import { filterProductsAgainstMarketStall } from '../utils/productUtils';
+import type { FloatingAsset, DiscountSettings } from '../types';
 
 interface PreviewLiveTemplateHookProps {
   previewLiveTemplate?: any;
@@ -7,8 +9,10 @@ interface PreviewLiveTemplateHookProps {
   setBackground: (type: 'generated' | 'uploaded', data: any) => Promise<void>;
   setLogoAsset: (asset: any) => void;
   setFixedTextStyles: (styles: any) => void;
-  setThemeProducts: (products: any) => void;
+  setProducts: (products: any[] | ((prev: any[]) => any[])) => void;
   setPromoButton: (button: any) => void;
+  setFloatingAssets: (assets: FloatingAsset[]) => void;
+  setDiscountSettings?: (settings: DiscountSettings) => void;
   allResources?: any[]; // Market Stall resources for filtering
   experienceId?: string; // For fetching Market Stall resources if allResources not provided
 }
@@ -19,8 +23,10 @@ export const usePreviewLiveTemplate = ({
   setBackground,
   setLogoAsset,
   setFixedTextStyles,
-  setThemeProducts,
+  setProducts,
   setPromoButton,
+  setFloatingAssets,
+  setDiscountSettings,
   allResources = [],
   experienceId,
 }: PreviewLiveTemplateHookProps) => {
@@ -139,6 +145,17 @@ export const usePreviewLiveTemplate = ({
             buttonAnimColor: templateProduct.buttonAnimColor, // Template button animation
             titleClass: templateProduct.titleClass, // Template title styling
             descClass: templateProduct.descClass, // Template description styling
+            badge: templateProduct.badge ?? null,
+            promoDiscountType: templateProduct.promoDiscountType,
+            promoDiscountAmount: templateProduct.promoDiscountAmount,
+            promoLimitQuantity: templateProduct.promoLimitQuantity,
+            promoQuantityLeft: templateProduct.promoQuantityLeft,
+            promoShowFireIcon: templateProduct.promoShowFireIcon,
+            salesCount: templateProduct.salesCount,
+            showSalesCount: templateProduct.showSalesCount,
+            starRating: templateProduct.starRating,
+            reviewCount: templateProduct.reviewCount,
+            showRatingInfo: templateProduct.showRatingInfo,
             
             // Use template image if available, otherwise Market Stall image
             image: templateProduct.image || templateProduct.imageAttachmentUrl || matchedResource.image || '',
@@ -169,82 +186,154 @@ export const usePreviewLiveTemplate = ({
     }
   }, [allResources, experienceId]);
 
+  // Track previous template ID to detect actual template changes
+  const prevTemplateIdRef = useRef<string | null>(null);
+  
   // Handle previewLiveTemplate - override database data when provided
   useEffect(() => {
+    let isCancelled = false; // Track if this effect was cancelled
+    
     const applyTemplateData = async () => {
-      if (previewLiveTemplate && previewLiveTemplate.templateData) {
-        console.log('[usePreviewLiveTemplate] Using previewLiveTemplate:', previewLiveTemplate);
-        
-        // Apply template data to the component state
-        const templateData = previewLiveTemplate.templateData;
-        
-        // Set background if available (now async)
-        // Check all possible background sources in priority order:
-        // 1. Theme-specific backgrounds (for custom themes)
-        // 2. WHOP attachment URL
-        // 3. Legacy backgrounds
-        // 4. Custom theme placeholderImage (from currentTheme or themeSnapshot)
-        const currentSeason = previewLiveTemplate.currentSeason || 'Fall';
-        const backgroundUrl = templateData.themeGeneratedBackgrounds?.[currentSeason]
-          || templateData.themeUploadedBackgrounds?.[currentSeason]
-          || templateData.backgroundAttachmentUrl
-          || templateData.generatedBackground
-          || templateData.uploadedBackground
-          || templateData.currentTheme?.placeholderImage
-          || previewLiveTemplate.themeSnapshot?.placeholderImage
-          || null;
-        
-        if (backgroundUrl) {
-          // Determine if it's generated or uploaded based on source
-          const isGenerated = !!(templateData.themeGeneratedBackgrounds?.[currentSeason] || templateData.generatedBackground);
-          await setBackground(isGenerated ? 'generated' : 'uploaded', backgroundUrl);
-        }
-        
-        // Set logo if available
-        if (templateData.logoAsset) {
-          setLogoAsset(templateData.logoAsset);
-        }
-        
-        // Set text styles if available
-        if (templateData.fixedTextStyles) {
+      // If no preview template, do nothing - let other code manage products
+      // We should NOT clear products here as they may be loaded from useSeasonalStoreDatabase
+      if (!previewLiveTemplate || !previewLiveTemplate.templateData) {
+        prevTemplateIdRef.current = null;
+        return;
+      }
+      
+      // Only clear products if we're switching to a different template
+      const currentTemplateId = previewLiveTemplate.id;
+      const isTemplateChange = prevTemplateIdRef.current !== null && prevTemplateIdRef.current !== currentTemplateId;
+      
+      if (isTemplateChange) {
+        console.log('[usePreviewLiveTemplate] Template changed, clearing products:', {
+          from: prevTemplateIdRef.current,
+          to: currentTemplateId,
+        });
+        setProducts([]);
+      }
+      
+      prevTemplateIdRef.current = currentTemplateId;
+      
+      if (isCancelled) return;
+      
+      console.log('[usePreviewLiveTemplate] Using previewLiveTemplate:', previewLiveTemplate);
+      
+      // Apply template data to the component state
+      const templateData = previewLiveTemplate.templateData;
+      
+      // Set background if available (now async)
+      // Check all possible background sources in priority order:
+      // 1. Theme-specific backgrounds (for custom themes)
+      // 2. WHOP attachment URL
+      // 3. Legacy backgrounds
+      // 4. Custom theme placeholderImage (from currentTheme or themeSnapshot)
+      const currentSeason = previewLiveTemplate.currentSeason || 'Fall';
+      const backgroundUrl = templateData.themeGeneratedBackgrounds?.[currentSeason]
+        || templateData.themeUploadedBackgrounds?.[currentSeason]
+        || templateData.backgroundAttachmentUrl
+        || templateData.generatedBackground
+        || templateData.uploadedBackground
+        || templateData.currentTheme?.placeholderImage
+        || previewLiveTemplate.themeSnapshot?.placeholderImage
+        || null;
+      
+      if (backgroundUrl && !isCancelled) {
+        // Determine if it's generated or uploaded based on source
+        const isGenerated = !!(templateData.themeGeneratedBackgrounds?.[currentSeason] || templateData.generatedBackground);
+        await setBackground(isGenerated ? 'generated' : 'uploaded', backgroundUrl);
+      }
+      
+      if (isCancelled) return;
+      
+      // Set logo if available
+      if (templateData.logoAsset) {
+        setLogoAsset(templateData.logoAsset);
+      }
+      
+      // Set text styles if available AND has actual content
+      // Don't overwrite with empty values
+      if (templateData.fixedTextStyles) {
+        const hasActualContent = 
+          templateData.fixedTextStyles.headerMessage?.content || 
+          templateData.fixedTextStyles.mainHeader?.content ||
+          templateData.fixedTextStyles.subHeader?.content;
+        if (hasActualContent) {
           setFixedTextStyles(templateData.fixedTextStyles);
         }
-        
-        // CRITICAL: Filter products - only keep ones that exist in Market Stall
-        // Apply template design to matching Market Stall products
-        if (templateData.products && templateData.products.length > 0) {
-          const filteredProducts = await filterTemplateProducts(templateData.products);
-          setThemeProducts((prev: Record<string, any[]>) => ({
-            ...prev,
-            [previewLiveTemplate.currentSeason || 'Fall']: filteredProducts
-          }));
-        } else if (templateData.themeProducts) {
-          // Handle themeProducts format (for current season)
-          const currentSeason = previewLiveTemplate.currentSeason || 'Fall';
-          const seasonProducts = templateData.themeProducts[currentSeason] || [];
-          if (seasonProducts.length > 0) {
-            const filteredProducts = await filterTemplateProducts(seasonProducts);
-            setThemeProducts((prev: Record<string, any[]>) => ({
-              ...prev,
-              [currentSeason]: filteredProducts
-            }));
-          } else {
-            setThemeProducts((prev: Record<string, any[]>) => ({
-              ...prev,
-              [currentSeason]: []
-            }));
+      }
+      
+      // CRITICAL: Filter products - only keep ones that exist in Market Stall
+      // Apply template design to matching Market Stall products
+      if (isCancelled) return;
+      
+      if (templateData.products && templateData.products.length > 0) {
+        const filteredProducts = await filterTemplateProducts(templateData.products);
+        if (!isCancelled) {
+          setProducts(filteredProducts);
+        }
+      } else if (templateData.themeProducts) {
+        // Handle themeProducts format (for current season) - backward compatibility
+        const seasonProducts = templateData.themeProducts[currentSeason] || [];
+        if (seasonProducts.length > 0) {
+          const filteredProducts = await filterTemplateProducts(seasonProducts);
+          if (!isCancelled) {
+            setProducts(filteredProducts);
+          }
+        } else {
+          if (!isCancelled) {
+            setProducts([]);
           }
         }
-        
-        // Set promo button if available
-        if (templateData.promoButton) {
-          setPromoButton(templateData.promoButton);
+      } else {
+        if (!isCancelled) {
+          setProducts([]);
         }
+      }
+      
+      if (isCancelled) return;
+      
+      // Set promo button if available
+      if (templateData.promoButton) {
+        setPromoButton(templateData.promoButton);
+      }
+
+      // Set floating assets if available
+      if (Array.isArray(templateData.floatingAssets)) {
+        setFloatingAssets(templateData.floatingAssets as FloatingAsset[]);
+      } else if (templateData.themeFloatingAssets?.[currentSeason]) {
+        setFloatingAssets(templateData.themeFloatingAssets[currentSeason] as FloatingAsset[]);
+      } else {
+        setFloatingAssets([]);
+      }
+
+      // Set discount settings if available
+      if (templateData.discountSettings && setDiscountSettings) {
+        setDiscountSettings(templateData.discountSettings);
+      } else if (setDiscountSettings) {
+        setDiscountSettings({
+          enabled: false,
+          globalDiscount: false,
+          globalDiscountType: 'percentage',
+          globalDiscountAmount: 20,
+          percentage: 20,
+          startDate: '',
+          endDate: '',
+          discountText: '',
+          promoCode: '',
+          prePromoMessages: [],
+          activePromoMessages: [],
+        });
       }
     };
     
     applyTemplateData();
-  }, [previewLiveTemplate, setBackground, setLogoAsset, setFixedTextStyles, setThemeProducts, setPromoButton, filterTemplateProducts]);
+    
+    // Cleanup function to cancel async operations if template changes
+    return () => {
+      isCancelled = true;
+    };
+  }, [previewLiveTemplate, setBackground, setLogoAsset, setFixedTextStyles, setProducts, setPromoButton, setFloatingAssets, setDiscountSettings, filterTemplateProducts]);
 
   // Update template loaded state when template data is applied
   useEffect(() => {

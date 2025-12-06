@@ -1,31 +1,25 @@
 "use client";
 
 import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react';
-import { useSeasonalStoreDatabase } from '@/lib/hooks/useSeasonalStoreDatabase';
+import { useSeasonalStoreDatabase } from './hooks/useSeasonalStoreDatabase';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
 import { useTheme } from '../../common/ThemeProvider';
 import AIFunnelBuilderPage from '../../funnelBuilder/AIFunnelBuilderPage';
 import { FloatingAsset as FloatingAssetType, FixedTextStyles, LegacyTheme } from './types';
-import { ProductCard } from './components/ProductCard';
 import { FloatingAsset } from './components/FloatingAsset';
 import { AdminAssetSheet } from './components/AdminAssetSheet';
 import { TopNavbar } from './components/TopNavbar';
-import { LoadingOverlay } from './components/LoadingOverlay';
+import { LoadingScreen } from './components/LoadingScreen';
 import { ProductShowcase } from './components/ProductShowcase';
 import { TemplateManagerModal } from './components/TemplateManagerModal';
-import { TemplateSaveNotification } from './components/TemplateSaveNotification';
-import { ThemeGenerationNotification } from './components/ThemeGenerationNotification';
-import { MakePublicNotification } from './components/MakePublicNotification';
-import { TemplateLimitNotification } from './components/TemplateLimitNotification';
+import { Notifications } from './components/Notifications';
 import { PromoButton } from './components/PromoButton';
 import { ProductEditorModal } from './components/ProductEditorModal';
 import { TextEditorModal } from './components/TextEditorModal';
-import { ButtonColorControls } from './components/ButtonColorControls';
 import { LogoSection } from './components/LogoSection';
 import { StoreResourceLibrary } from '../../products/StoreResourceLibrary';
 import { StoreHeader } from './components/StoreHeader';
 import { ConditionalReturns } from './components/ConditionalReturns';
-import EmojiBank from './EmojiBank';
 import { 
   PresentIcon, 
   XIcon, 
@@ -38,16 +32,7 @@ import {
   EditIcon,
   TrashIcon
 } from './components/Icons';
-import { Sun, Moon, ArrowLeft } from 'lucide-react';
-import { 
-  generateProductText, 
-  generateProductImage, 
-  generateBackgroundImage, 
-  generateResponsiveBackgroundImage,
-  generateLogo, 
-  generateEmojiMatch,
-  fileToBase64 
-} from './services/aiService';
+// AI service functions are now handled by useAIGeneration hook
 import { uploadUrlToWhop } from '../../../utils/whop-image-upload';
 import { useIframeDimensions } from './utils/iframeDimensions';
 import { useBackgroundAnalysis } from './utils/backgroundAnalyzer';
@@ -58,8 +43,22 @@ import { useProductImageUpload } from './hooks/useProductImageUpload';
 import { useTemplateSave } from './hooks/useTemplateSave';
 import { usePreviewLiveTemplate } from './hooks/usePreviewLiveTemplate';
 import { useAutoAddResources } from './hooks/useAutoAddResources';
-import { SyncChangesPopup } from './components/SyncChangesPopup';
-import { convertThemeToLegacy, formatPrice, generateAssetId, truncateDescription } from './utils';
+import { useClickOutside } from './hooks/useClickOutside';
+import { useStoreSnapshot } from './hooks/useStoreSnapshot';
+import { useThemeApplication } from './hooks/useThemeApplication';
+import { useLiveFunnel } from './hooks/useLiveFunnel';
+import { usePreviewMode } from './hooks/usePreviewMode';
+import { useModalAnimation } from './hooks/useModalAnimation';
+import { useNotifications } from './hooks/useNotifications';
+import { useProductHandlers } from './hooks/useProductHandlers';
+import { useDragAndDrop } from './hooks/useDragAndDrop';
+import { useResourceLibraryProducts } from './hooks/useResourceLibraryProducts';
+import { useTemplateManager } from './hooks/useTemplateManager';
+import { useStateRestoration } from './hooks/useStateRestoration';
+import { convertThemeToLegacy, truncateDescription } from './utils';
+import { applyThemeStylesToProducts, convertResourcesToProducts } from './utils/productUtils';
+import { getBackgroundStyle as getBackgroundStyleUtil } from './utils/getThemePlaceholder';
+import { handleUpdateTheme as handleUpdateThemeUtil } from './utils/themeUpdate';
 import SeasonalStoreChat from './components/SeasonalStoreChat';
 import { apiGet } from '../../../utils/api-client';
 import type { FunnelFlow } from '../../../types/funnel';
@@ -112,10 +111,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const [highlightSaveButton, setHighlightSaveButton] = useState(false);
   
   // Chat functionality
-  const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
-  const [liveFunnel, setLiveFunnel] = useState<any>(null);
-  const [isFunnelActive, setIsFunnelActive] = useState(false);
-  const [isFunnelCheckComplete, setIsFunnelCheckComplete] = useState(false); // Track if funnel check is complete
   const [isChatOpen, setIsChatOpen] = useState(false);
   
   // FunnelBuilder view state
@@ -124,16 +119,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Store ResourceLibrary state
   const [showStoreResourceLibrary, setShowStoreResourceLibrary] = useState(false);
   
-  // Preview mode state
-  const [previewTemplate, setPreviewTemplate] = useState<any>(null);
-  const [isInPreviewMode, setIsInPreviewMode] = useState(false);
+  // Use live funnel hook
+  const {
+    funnelFlow,
+    liveFunnel,
+    isFunnelActive,
+    isFunnelCheckComplete,
+  } = useLiveFunnel({ experienceId });
   
-  // Determine if we're in preview mode (either from prop or internal state)
-  const effectiveIsStorePreview = isStorePreview || isInPreviewMode;
-  
-  // Track unsaved changes
-  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // Preview mode state (will be synced from usePreviewMode hook)
+  const [isInPreviewModeLocal, setIsInPreviewModeLocal] = useState(false);
+  const [previewTemplateLocal, setPreviewTemplateLocal] = useState<any>(null);
   
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -141,10 +137,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Notification state
   const [showNotification, setShowNotification] = useState(false);
   
-  // ResourceLibrary integration state
-  const [resourceLibraryProducts, setResourceLibraryProducts] = useState<any[]>([]);
-  const [hasLoadedResourceLibrary, setHasLoadedResourceLibrary] = useState(false);
-  const [deletedResourceLibraryProducts, setDeletedResourceLibraryProducts] = useState<Record<string, Set<string>>>({});
+  // Track deleted ResourceLibrary products (template-based, not theme-based)
+  const [deletedResourceLibraryProducts, setDeletedResourceLibraryProducts] = useState<Set<string>>(new Set());
   
   // Update sync functionality - ONLY use props from AdminPanel (no local hook)
   const {
@@ -226,7 +220,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     themes,
     currentSeason,
     theme,
-    themeProducts,
+    products,
     floatingAssets,
     availableAssets,
     fixedTextStyles,
@@ -242,6 +236,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     apiError,
     templates,
     liveTemplate,
+    currentlyLoadedTemplateId,
+    discountSettings,
+    setDiscountSettings,
     
     // Actions
     setCurrentSeason,
@@ -253,7 +250,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setBackgroundAttachmentUrl,
     setLogoAttachmentId,
     setLogoAttachmentUrl,
-    setThemeProducts,
+    setProducts,
     setError,
     
     // Product Management - REMOVED (frontend-only now)
@@ -262,6 +259,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     addFloatingAsset,
     updateFloatingAsset,
     deleteFloatingAsset,
+    setFloatingAssets,
     
     // Theme Management
     addCustomTheme,
@@ -283,10 +281,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     loadTemplate,
     deleteTemplate,
     setLiveTemplate,
+    updateTemplate,
     
     // Theme Management
     createTheme,
     updateTheme,
+    
+    // Origin template
+    originTemplate,
+    loadOriginTemplate,
     
     // Promo button management
     promoButton: dbPromoButton,
@@ -305,7 +308,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Loading state
     isInitialLoadComplete,
     isStoreContentReady,
-    setIsStoreContentReady,
     
     // Store Navigation State Management
     lastActiveTheme,
@@ -318,6 +320,13 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     loadThemes,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
   
+  // Load origin template on mount
+  useEffect(() => {
+    if (experienceId && loadOriginTemplate) {
+      loadOriginTemplate();
+    }
+  }, [experienceId, loadOriginTemplate]);
+
   // Auto-highlight save button after background generation completes
   useEffect(() => {
     if (!loadingState.isImageLoading && !loadingState.isGeneratingImage && !loadingState.isUploadingImage) {
@@ -339,12 +348,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   
   // Update sync is now handled entirely by AdminPanel - no local logic needed
   
-  // Use only products that are in the current theme
-  const combinedProducts = useMemo(() => {
-    const themeProductsList = themeProducts[currentSeason] || [];
-    console.log(`[SeasonalStore] Displaying ${themeProductsList.length} theme products`);
-    return [...themeProductsList];
-  }, [themeProducts, currentSeason]);
+  // Use products from the current template
+  const combinedProducts = useMemo(() => [...products], [products]);
+
+  // Check if resource is in current template
+  const isResourceInTemplate = useCallback((resourceId: string) => {
+    const productId = `resource-${resourceId}`;
+    return products.some((p: any) => p.id === productId);
+  }, [products]);
   
   // Product navigation state
   const [isSliding, setIsSliding] = useState(false);
@@ -376,47 +387,35 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // If theme is a database Theme, convert it to LegacyTheme
   const legacyTheme = theme && 'background' in theme ? theme : convertThemeToLegacy(theme);
   
-  // Frontend product management functions (no database calls)
-  const addProduct = useCallback(() => {
-    const newProduct = {
-      id: Date.now(),
-      name: 'New Product',
-      description: 'Product description',
-      price: 0,
-      image: 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
-      buttonText: 'VIEW DETAILS',
-      buttonLink: '',
-      cardClass: legacyTheme.card,
-      titleClass: legacyTheme.text,
-      descClass: legacyTheme.text,
-      buttonClass: legacyTheme.accent,
-    };
-    
-    // Update themeProducts
-    setThemeProducts(prev => ({
-      ...prev,
-      [currentSeason]: [newProduct, ...(prev[currentSeason] || [])]
-    }));
-    
-    console.log('🔄 Added product to themeProducts:', newProduct);
-  }, [legacyTheme, currentSeason, setThemeProducts]);
-  
-  const updateProduct = useCallback((id: number | string, updates: any) => {
-    console.log('🔄 Updating product:', id, updates);
-    
-    // All products (both ResourceLibrary and frontend) are now managed through themeProducts
-    console.log('🔄 Updating product in themeProducts state');
-    setThemeProducts(prev => ({
-      ...prev,
-      [currentSeason]: (prev[currentSeason] || []).map((p: any) =>
-        p.id === id ? { ...p, ...updates } : p
-      )
-    }));
-    
-    console.log('🔄 Product updated successfully in themeProducts');
-  }, [currentSeason, setThemeProducts]);
-  
-  // deleteProduct function moved after handleDeleteResourceLibraryProduct is defined
+  // Use ResourceLibrary products hook (must be before product handlers)
+  const {
+    resourceLibraryProducts,
+    hasLoadedResourceLibrary,
+    handleDeleteResourceLibraryProduct: handleDeleteResourceLibraryProductFromHook,
+  } = useResourceLibraryProducts({
+    experienceId,
+    allResources,
+    deletedResourceLibraryProducts,
+    legacyTheme,
+    products,
+    setProducts,
+  });
+
+  // Use product handlers hook
+  const {
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    handleAddToTemplate,
+    handleRemoveFromTemplate,
+  } = useProductHandlers({
+    setProducts,
+    legacyTheme,
+    handleDeleteResourceLibraryProduct: (productId: string) => {
+      const resourceId = handleDeleteResourceLibraryProductFromHook(productId);
+      setDeletedResourceLibraryProducts(prev => new Set([...prev, resourceId]));
+    },
+  });
 
   // Use theme utilities hook
   const {
@@ -453,7 +452,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       const result = fn(logoAsset);
       setLogoAsset(result);
     },
-    setThemeProducts,
+    setProducts,
     currentSeason,
     backgroundAttachmentUrl: backgroundAttachmentUrl ?? undefined,
     generatedBackground: generatedBackground ?? undefined,
@@ -469,49 +468,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setShowStoreResourceLibrary(true);
   }, []);
 
-  // Get the same filtered products that SeasonalStore uses
+  // Get filtered paid resources
   const getFilteredPaidResources = useCallback(() => {
     if (!experienceId || allResources.length === 0) return [];
-    
     return allResources.filter(resource => 
-      resource.category === "PAID" && 
-      resource.name && 
-      resource.price
+      resource.category === "PAID" && resource.name && resource.price
     );
   }, [experienceId, allResources]);
 
   // Store ResourceLibrary handlers will be declared after handleProductImageUpload
 
-  const handleRemoveFromTheme = useCallback((resource: any) => {
-    const productId = `resource-${resource.id}`;
-    
-    // Only remove from theme products (not from resourceLibraryProducts)
-    // This way the product stays in Market Stall but is removed from SeasonalStore
-    setThemeProducts(prev => ({
-      ...prev,
-      [currentSeason]: (prev[currentSeason] || []).filter(p => p.id !== productId)
-    }));
-    
-    console.log('🔄 Removed resource from theme (kept in Market Stall):', resource.name);
-  }, [currentSeason, setThemeProducts]);
-
-  const isResourceInTheme = useCallback((resourceId: string) => {
-    const productId = `resource-${resourceId}`;
-    
-    // Check if the product exists in the current theme's products (authoritative source)
-    const currentThemeProducts = themeProducts[currentSeason] || [];
-    const isInThemeProducts = currentThemeProducts.some(p => p.id === productId);
-    
-    console.log('🔍 isResourceInTheme check:', {
-      resourceId,
-      productId,
-      isInThemeProducts,
-      currentSeason,
-      themeProductsCount: currentThemeProducts.length
-    });
-    
-    return isInThemeProducts;
-  }, [themeProducts, currentSeason]);
+  // Product handlers are now managed by useProductHandlers hook
 
 
   // Analyze background brightness for dynamic text colors
@@ -549,15 +516,20 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Use preview live template hook
   // CRITICAL: Pass Market Stall resources to filter template products
   // Use previewTemplate if in preview mode, otherwise use previewLiveTemplate prop
-  const activePreviewTemplate = isInPreviewMode ? previewTemplate : previewLiveTemplate;
+  // Calculate active preview template reactively (will be updated when preview mode state changes)
+  const activePreviewTemplate = useMemo(() => {
+    return (isInPreviewModeLocal && previewTemplateLocal) ? previewTemplateLocal : previewLiveTemplate;
+  }, [isInPreviewModeLocal, previewTemplateLocal, previewLiveTemplate]);
+  
   const { isTemplateLoaded } = usePreviewLiveTemplate({
     previewLiveTemplate: activePreviewTemplate,
     onTemplateLoaded,
     setBackground,
     setLogoAsset,
     setFixedTextStyles,
-    setThemeProducts,
+    setProducts,
     setPromoButton,
+    setFloatingAssets,
     allResources, // Market Stall resources for filtering
     experienceId, // For fetching Market Stall if allResources not available
   });
@@ -571,140 +543,63 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const { handleProductImageUpload } = useProductImageUpload({
     setUploadingImage,
     setError,
-    setThemeProducts,
+    setProducts,
     updateProduct,
     currentSeason,
   });
 
-  // Store ResourceLibrary handlers
-  const handleAddToTheme = useCallback(async (resource: any) => {
-    console.log('🔄 Adding resource to theme:', resource.name, 'ID:', resource.id);
-    
-    // Convert resource to product format and add to theme
-    const newProduct = {
-      id: `resource-${resource.id}`,
-      name: resource.name,
-      description: resource.description || '',
-      price: parseFloat(resource.price) || 0,
-      image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
-      buttonText: 'VIEW DETAILS',
-      buttonLink: resource.link || '',
-      cardClass: legacyTheme.card,
-      titleClass: legacyTheme.text,
-      descClass: legacyTheme.text,
-      buttonClass: legacyTheme.accent,
-    };
-    
-    console.log('🔄 Created new product:', newProduct);
-    
-    // Add to theme products (this will trigger database save)
-    setThemeProducts(prev => ({
-      ...prev,
-      [currentSeason]: [newProduct, ...(prev[currentSeason] || [])]
-    }));
-    
-    // Trigger a reload of the theme to get complete resource data from database
-    // This will cause the theme loading effect to run and load the complete resource data
-    console.log('🔄 Added resource to theme, will trigger database reload:', resource.name);
-  }, [legacyTheme, currentSeason, setThemeProducts, handleProductImageUpload]);
+  // Use template manager hook
+  const {
+    templateManagerOpen,
+    setTemplateManagerOpen,
+    templateManagerAnimOpen,
+    adminSheetAnimOpen,
+    openTemplateManager,
+    closeTemplateManager,
+    closeTemplateManagerAnimated,
+    closeAdminSheetAnimated: closeAdminSheetAnimatedFromHook,
+  } = useTemplateManager(editorState);
 
-  // Template manager functions
-  const openTemplateManager = () => setTemplateManagerOpen(true);
-  const closeTemplateManager = () => setTemplateManagerOpen(false);
-  const closeTemplateManagerAnimated = () => {
-    setTemplateManagerAnimOpen(false);
-    setTimeout(() => setTemplateManagerOpen(false), 300);
-  };
-  
-  // Preview handler - loads template and enters preview mode
-  const handlePreviewTemplate = useCallback(async (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
-    if (!template) {
-      console.error('Template not found:', templateId);
-      return;
-    }
-    
-    console.log('👁️ Entering preview mode for template:', template.name);
-    
-    // Set preview mode and template
-    setIsInPreviewMode(true);
-    setPreviewTemplate(template);
-    
-    // Switch to page view (not editor view) for preview
-    if (editorState.isEditorView) {
-      toggleEditorView();
-    }
-  }, [templates, editorState.isEditorView, toggleEditorView]);
-  
-  // Exit preview mode handler - also opens Store Manager modal
-  const handleExitPreview = useCallback(() => {
-    setIsInPreviewMode(false);
-    setPreviewTemplate(null);
-    // Switch back to editor view so buttons are visible
-    if (!editorState.isEditorView) {
-      toggleEditorView();
-    }
-    // Open Store Manager modal when exiting preview
-    setTemplateManagerOpen(true);
-  }, [editorState.isEditorView, toggleEditorView]);
-
-  // Live funnel loading function
-  const loadLiveFunnel = useCallback(async () => {
-    if (!experienceId) return;
-    
-    try {
-      console.log('[SeasonalStore] Loading live funnel for experience:', experienceId);
-      const response = await apiGet(`/api/funnels/live`, experienceId);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.hasLiveFunnel && data.funnelFlow) {
-          // Create complete funnel data object like StorePreview does
-          const funnelData = {
-            id: data.funnel.id,
-            name: data.funnel.name,
-            flow: data.funnelFlow,
-            isDeployed: data.funnel.isDeployed,
-            resources: data.resources || []
-          };
-          setLiveFunnel(funnelData);
-          setFunnelFlow(data.funnelFlow);
-          setIsFunnelActive(true);
-          console.log('[SeasonalStore] Live funnel loaded:', funnelData);
-        } else {
-          console.log('[SeasonalStore] No live funnel found for experience:', experienceId);
-          setLiveFunnel(null);
-          setFunnelFlow(null);
-          setIsFunnelActive(false);
-        }
-      } else {
-        console.log('[SeasonalStore] No live funnel found for experience:', experienceId);
-        setLiveFunnel(null);
-        setFunnelFlow(null);
-        setIsFunnelActive(false);
-      }
-      
-      // Mark funnel check as complete
-      setIsFunnelCheckComplete(true);
-    } catch (error) {
-      console.error('[SeasonalStore] Error loading live funnel:', error);
-      setLiveFunnel(null);
-      setFunnelFlow(null);
-      setIsFunnelActive(false);
-      
-      // Mark funnel check as complete even on error
-      setIsFunnelCheckComplete(true);
-    }
-  }, [experienceId]);
 
   // Template save handler
   const handleSaveTemplate = useCallback((templateData: any) => {
     saveTemplate(templateData);
   }, [saveTemplate]);
 
+  // Use store snapshot hook (needed for updateSnapshot in useTemplateSave)
+  const {
+    lastSavedSnapshot,
+    hasUnsavedChanges,
+    updateSnapshot,
+    computeStoreSnapshot,
+    restoreFromSnapshot,
+    resetSnapshot,
+  } = useStoreSnapshot({
+    snapshotData: {
+      products,
+      floatingAssets,
+      currentSeason,
+      fixedTextStyles,
+      logoAsset,
+      generatedBackground,
+      uploadedBackground,
+      backgroundAttachmentId,
+      backgroundAttachmentUrl,
+      logoAttachmentId,
+      logoAttachmentUrl,
+      promoButton,
+    },
+    isInitialLoadComplete,
+    isStoreContentReady,
+    isTemplateLoaded,
+    isInPreviewMode: isInPreviewModeLocal,
+    currentlyLoadedTemplateId,
+  });
+
   // Use template save hook
   const { handleSaveTemplateForNavbar } = useTemplateSave({
     saveTemplate,
+    updateTemplate,
     createTheme,
     experienceId: experienceId || 'default-experience',
     currentSeason,
@@ -718,11 +613,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     backgroundAttachmentUrl,
     logoAttachmentId,
     logoAttachmentUrl,
-    products: themeProducts[currentSeason] || [], // Use only products in current theme
+    products: products, // Use template products (not theme-specific)
     floatingAssets,
     promoButton,
     setError,
     allResources, // Pass allResources for ResourceLibrary product checking
+    currentTemplateId: currentlyLoadedTemplateId, // Pass currently loaded template ID for updates
     onSavingStarted: (templateName: string) => {
       // Show saving notification
       setTemplateSaveNotification({ isOpen: true, isSaving: true, templateName });
@@ -736,24 +632,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       setTimeout(() => {
         setHighlightedTemplateId(undefined);
       }, 10000);
-      // Update snapshot after save
-      const snapshot = JSON.stringify({
-        products: themeProducts[currentSeason] || [],
-        floatingAssets,
-        currentSeason,
-        fixedTextStyles,
-        logoAsset,
-        generatedBackground,
-        uploadedBackground,
-        backgroundAttachmentId,
-        backgroundAttachmentUrl,
-        logoAttachmentId,
-        logoAttachmentUrl,
-        promoButton,
-      });
-      setLastSavedSnapshot(snapshot);
-      setHasUnsavedChanges(false);
     },
+    updateSnapshot: updateSnapshot,
     onOpenTemplateManager: () => {
       // Open template manager
       openTemplateManager();
@@ -771,337 +651,160 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     },
   });
 
-  // Wrapper for setLogoAsset to handle function signature mismatch
+  // Wrapper for setLogoAsset (needed for component prop signature)
   const setLogoAssetWrapper = useCallback((fn: (prev: any) => any) => {
-    const result = fn(logoAsset);
-    setLogoAsset(result);
+    setLogoAsset(fn(logoAsset));
   }, [logoAsset, setLogoAsset]);
 
 
-  // Track whether the initial snapshot has been established
-  const hasInitializedSnapshotRef = useRef(false);
-  const prevTemplateLoadedRef = useRef(false);
 
-  const computeStoreSnapshot = useCallback(() => JSON.stringify({
-    products: themeProducts[currentSeason] || [],
-    floatingAssets,
-    currentSeason,
-    fixedTextStyles,
-    logoAsset,
-    generatedBackground,
-    uploadedBackground,
-    backgroundAttachmentId,
-    backgroundAttachmentUrl,
-    logoAttachmentId,
-    logoAttachmentUrl,
-    promoButton,
-  }), [
-    themeProducts,
-    currentSeason,
-    floatingAssets,
-    fixedTextStyles,
-    logoAsset,
-    generatedBackground,
-    uploadedBackground,
-    backgroundAttachmentId,
-    backgroundAttachmentUrl,
-    logoAttachmentId,
-    logoAttachmentUrl,
-    promoButton,
-  ]);
-
-  // Initialize snapshot after initial load completes or when a template is fully loaded
-  useEffect(() => {
-    if (!isInitialLoadComplete || !isStoreContentReady || isInPreviewMode) {
-      return;
-    }
-
-    const snapshot = computeStoreSnapshot();
-
-    // Initialize snapshot once after initial load
-    if (!hasInitializedSnapshotRef.current) {
-      setLastSavedSnapshot(snapshot);
-      setHasUnsavedChanges(false);
-      hasInitializedSnapshotRef.current = true;
-      prevTemplateLoadedRef.current = isTemplateLoaded;
-      return;
-    }
-
-    // Reset snapshot when a template finishes loading (transition from false -> true)
-    if (isTemplateLoaded && !prevTemplateLoadedRef.current) {
-      setLastSavedSnapshot(snapshot);
-      setHasUnsavedChanges(false);
-    }
-
-    prevTemplateLoadedRef.current = isTemplateLoaded;
-  }, [
-    isInitialLoadComplete,
-    isStoreContentReady,
+  // Use preview mode hook (after snapshot hook)
+  const {
+    previewTemplate: previewTemplateFromHook,
+    isInPreviewMode: isInPreviewModeFromHook,
+    handlePreviewTemplate: handlePreviewTemplateFromHook,
+    handleExitPreview: handleExitPreviewFromHook,
+  } = usePreviewMode({
+    templates,
+    editorState,
+    toggleEditorView,
     isTemplateLoaded,
-    isInPreviewMode,
     computeStoreSnapshot,
-  ]);
+    setLastSavedSnapshot: updateSnapshot,
+    currentlyLoadedTemplateId,
+    snapshotData: {
+      products,
+      floatingAssets,
+      currentSeason,
+      fixedTextStyles,
+      logoAsset,
+      generatedBackground,
+      uploadedBackground,
+      backgroundAttachmentId,
+      backgroundAttachmentUrl,
+      logoAttachmentId,
+      logoAttachmentUrl,
+      promoButton,
+    },
+  });
 
-  // Detect unsaved changes once the initial snapshot is established
+  // Sync preview mode state from hook
   useEffect(() => {
-    if (!hasInitializedSnapshotRef.current) {
+    setIsInPreviewModeLocal(isInPreviewModeFromHook);
+    setPreviewTemplateLocal(previewTemplateFromHook);
+  }, [isInPreviewModeFromHook, previewTemplateFromHook]);
+
+  const previewTemplate = previewTemplateLocal;
+  const isInPreviewMode = isInPreviewModeLocal;
+
+  // Exit preview handler - loads latest non-live template if exiting from Live Preview, otherwise loads previewed template
+  const handleExitPreview = useCallback(async () => {
+    const templateToLoad = previewTemplate;
+    
+    // Exit preview mode first
+    handleExitPreviewFromHook();
+    
+    // Check if we were previewing the live template
+    const isPreviewingLiveTemplate = liveTemplate && templateToLoad && templateToLoad.id === liveTemplate.id;
+    
+    if (isPreviewingLiveTemplate) {
+      // If previewing live template, load the latest non-live template instead
+      const nonLiveTemplates = templates.filter(t => !t.isLive);
+      const latestTemplate = nonLiveTemplates.length > 0
+        ? [...nonLiveTemplates].sort((a, b) => {
+            const timeB = new Date((b.updatedAt || b.createdAt || new Date(0))).getTime();
+            const timeA = new Date((a.updatedAt || a.createdAt || new Date(0))).getTime();
+            return timeB - timeA;
+          })[0]
+        : null;
+      
+      if (latestTemplate) {
+        console.log('📂 Exiting Live Preview - loading latest non-live template:', latestTemplate.name);
+        // Load the latest non-live template
+        // Snapshot will be taken automatically by useStoreSnapshot when template finishes loading
+        await loadTemplate(latestTemplate.id);
+      } else {
+        console.log('⚠️ No non-live templates found to load after exiting Live Preview');
+      }
+    } else if (templateToLoad) {
+      // If previewing a regular template, load that template
+      console.log('📂 Exiting preview - loading previewed template:', templateToLoad.name);
+      // Load the template that was being previewed
+      // Snapshot will be taken automatically by useStoreSnapshot when template finishes loading
+      await loadTemplate(templateToLoad.id);
+    }
+  }, [previewTemplate, liveTemplate, templates, loadTemplate, handleExitPreviewFromHook]);
+
+  // Preview handler - use hook's function directly
+  const handlePreviewTemplate = handlePreviewTemplateFromHook;
+
+  // Reset handler - restores store to last saved snapshot
+  const handleResetChanges = useCallback(() => {
+    const snapshotData = restoreFromSnapshot();
+    if (!snapshotData) {
+      console.warn('No snapshot available to restore from');
       return;
     }
 
-    if (!editorState.isEditorView || isInPreviewMode) {
-      return;
+    console.log('🔄 Resetting store to snapshot state');
+    
+    // Immediately reset the snapshot flag to prevent diff detection during state restoration
+    resetSnapshot();
+    
+    // Restore all state from snapshot
+    setProducts(snapshotData.products);
+    setFloatingAssets(snapshotData.floatingAssets);
+    setCurrentSeason(snapshotData.currentSeason);
+    setFixedTextStyles(snapshotData.fixedTextStyles);
+    setLogoAsset(snapshotData.logoAsset);
+    
+    // Restore background - use setBackground which handles both generated and uploaded
+    if (snapshotData.generatedBackground) {
+      setBackground('generated', snapshotData.generatedBackground);
+    } else if (snapshotData.uploadedBackground) {
+      setBackground('uploaded', snapshotData.uploadedBackground);
+    } else {
+      // Clear both backgrounds if neither exists
+      setBackground('generated', null);
+      setBackground('uploaded', null);
     }
-
-    const currentSnapshot = computeStoreSnapshot();
-    setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
-  }, [
-    computeStoreSnapshot,
-    lastSavedSnapshot,
-    editorState.isEditorView,
-    isInPreviewMode,
-  ]);
-
-  // Load live funnel on mount
-  useEffect(() => {
-    console.log('[SeasonalStore] useEffect triggered, experienceId:', experienceId);
-    loadLiveFunnel();
-  }, [loadLiveFunnel]);
-
-  // Save current state when theme or template changes
-  useEffect(() => {
-    if (currentSeason) {
-      saveLastActiveTheme(currentSeason);
-      console.log(`💾 Auto-saving current theme: ${currentSeason}`);
-    }
-  }, [currentSeason, saveLastActiveTheme]);
-
-  useEffect(() => {
-    if (liveTemplate) {
-      saveLastActiveTemplate(liveTemplate);
-      console.log(`💾 Auto-saving current template: ${liveTemplate.name}`);
-    }
-  }, [liveTemplate, saveLastActiveTemplate]);
-
-  // Restore last active state when store loads (but only if no live template is being loaded)
-  useEffect(() => {
-    if (isStoreContentReady && !liveTemplate && lastActiveTemplate) {
-      console.log(`🔄 Restoring last active state on store load`);
-      restoreLastActiveState();
-    }
-  }, [isStoreContentReady, liveTemplate, lastActiveTemplate, restoreLastActiveState]);
-
-  // Restore last active state when store becomes active (user switches back to store view)
-  useEffect(() => {
-    if (isActive && isStoreContentReady && !liveTemplate && lastActiveTemplate) {
-      console.log(`🔄 Restoring last active state - store became active`);
-      restoreLastActiveState();
-    }
-  }, [isActive, isStoreContentReady, liveTemplate, lastActiveTemplate, restoreLastActiveState]);
-
-  // Load ResourceLibrary products on mount and when theme changes
-  useEffect(() => {
-    if (!experienceId || allResources.length === 0) return;
     
-    console.log('[SeasonalStore] Loading ResourceLibrary products, experienceId:', experienceId, 'theme:', currentSeason, 'themeName:', theme?.name || 'No theme loaded');
+    setBackgroundAttachmentId(snapshotData.backgroundAttachmentId);
+    setBackgroundAttachmentUrl(snapshotData.backgroundAttachmentUrl);
+    setLogoAttachmentId(snapshotData.logoAttachmentId);
+    setLogoAttachmentUrl(snapshotData.logoAttachmentUrl);
+    setPromoButton(snapshotData.promoButton);
     
-    // Filter for "Paid" products only and exclude deleted ones for current theme
-    const paidResources = allResources.filter(resource => 
-      resource.category === "PAID" && 
-      resource.name && 
-      resource.price &&
-      !(deletedResourceLibraryProducts[currentSeason]?.has(resource.id)) // Exclude deleted products for current theme only
-    );
-    
-    console.log(`[SeasonalStore] Found ${paidResources.length} paid resources (${allResources.filter(r => r.category === "PAID" && r.name && r.price).length - paidResources.length} deleted in ${currentSeason})`);
-    console.log('[SeasonalStore] Deleted resource IDs for current theme:', Array.from(deletedResourceLibraryProducts[currentSeason] || []));
-    console.log('[SeasonalStore] All theme deletions:', Object.keys(deletedResourceLibraryProducts).map(theme => `${theme}: ${Array.from(deletedResourceLibraryProducts[theme] || []).length} deleted`));
-    console.log('[SeasonalStore] Sample resource data:', paidResources[0]);
-    console.log('[SeasonalStore] Sample price data:', paidResources[0]?.price, 'parsed:', paidResources[0]?.price ? parseFloat(paidResources[0].price) : 'N/A', 'formatted:', paidResources[0]?.price ? `$${(Math.round(parseFloat(paidResources[0].price) * 100) / 100).toFixed(2)}` : 'N/A');
-    console.log('[SeasonalStore] Current theme properties:', {
-      name: theme?.name || 'No theme loaded',
-      accent: theme?.accent || 'default',
-      card: theme?.card || 'default',
-      text: theme?.text || 'default'
-    });
-    
-    // Convert ResourceLibrary products to SeasonalStore format
-    const convertedProducts = paidResources.map((resource, index) => {
-      // Format price with dollar sign and ensure cents are shown
-      const rawPrice = resource.price ? parseFloat(resource.price) : 0;
-      const formattedPrice = Math.round(rawPrice * 100) / 100; // Ensure 2 decimal places
-      
-      console.log(`[SeasonalStore] Converting ResourceLibrary product ${resource.name}:`, {
-        id: resource.id,
-        name: resource.name,
-        image: resource.image,
-        hasImage: !!resource.image,
-        imageType: typeof resource.image
-      });
-      
-      // Use the current theme's styling (don't override name, description, image)
-      return {
-        id: `resource-${resource.id}`,
-        name: resource.name, // Keep original name
-        description: truncateDescription(resource.description || ''), // Truncate description to 2 lines
-        price: formattedPrice,
-        image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Keep original image or use placeholder
-        imageAttachmentUrl: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp', // Map to imageAttachmentUrl for ProductCard
-        buttonText: 'View Details',
-        buttonClass: theme?.accent || 'bg-indigo-500', // Use theme's accent color
-        buttonLink: resource.link, // Always use the resource link for navigation
-        whopProductId: resource.whopProductId, // Track Whop product ID for synced products
-        // Use theme's styling for everything else
-        cardClass: theme?.card || 'bg-white', // Use theme's card styling
-        titleClass: theme?.text || 'text-gray-900', // Use theme's text color
-        descClass: theme?.text || 'text-gray-600', // Use theme's text color
-        buttonAnimColor: theme?.accent?.includes('blue') ? 'blue' : 
-                        theme?.accent?.includes('yellow') ? 'yellow' :
-                        theme?.accent?.includes('orange') ? 'orange' :
-                        theme?.accent?.includes('red') ? 'red' :
-                        theme?.accent?.includes('pink') ? 'pink' :
-                        theme?.accent?.includes('cyan') ? 'cyan' :
-                        'indigo' // Default fallback
-      };
-    });
-    
-    setResourceLibraryProducts(convertedProducts);
-    setHasLoadedResourceLibrary(true);
-    
-    console.log(`[SeasonalStore] Converted ${convertedProducts.length} ResourceLibrary products (no default products)`);
-    console.log('[SeasonalStore] Sample converted product:', convertedProducts[0]);
-    console.log('[SeasonalStore] Sample converted price:', convertedProducts[0]?.price, 'formatted as:', convertedProducts[0]?.price ? `$${convertedProducts[0].price.toFixed(2)}` : 'N/A');
-    console.log('[SeasonalStore] Sample converted image:', convertedProducts[0]?.image, 'imageAttachmentUrl:', convertedProducts[0]?.imageAttachmentUrl);
-    
-  }, [experienceId, allResources, currentSeason, deletedResourceLibraryProducts]);
+    // Snapshot will be updated automatically by useStoreSnapshot when state stabilizes
+  }, [restoreFromSnapshot, resetSnapshot, setProducts, setFloatingAssets, setCurrentSeason, setFixedTextStyles, setLogoAsset, setBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl, setLogoAttachmentId, setLogoAttachmentUrl, setPromoButton]);
 
-  // Debug chat state
-  useEffect(() => {
-    console.log('[SeasonalStore] Chat state changed:', {
-      isChatOpen,
-      funnelFlow: !!funnelFlow,
-      isFunnelActive,
-      experienceId
-    });
-  }, [isChatOpen, funnelFlow, isFunnelActive, experienceId]);
+  // Determine if we're in preview mode (either from prop or internal state)
+  const effectiveIsStorePreview = isStorePreview || isInPreviewMode;
+
+
+  // Use state restoration hook
+  useStateRestoration({
+    isStoreContentReady,
+    isActive,
+    liveTemplate,
+    lastActiveTemplate,
+    currentSeason,
+    restoreLastActiveState,
+    saveLastActiveTheme,
+    saveLastActiveTemplate,
+  });
+
+  // ResourceLibrary products are managed by useResourceLibraryProducts hook
+
 
 
   const handleRemoveSticker = useCallback((productId: number | string) => {
     updateProduct(productId, { containerAsset: undefined });
   }, [updateProduct]);
 
-  // Handle delete for ResourceLibrary products
-  const handleDeleteResourceLibraryProduct = useCallback((productId: string) => {
-    // Extract the original resource ID from the product ID
-    const resourceId = productId.replace('resource-', '');
-    
-    // Only remove from theme products (NOT from resourceLibraryProducts)
-    // This way the product stays in Market Stall but is removed from SeasonalStore
-    setThemeProducts(prev => ({
-      ...prev,
-      [currentSeason]: (prev[currentSeason] || []).filter(product => product.id !== productId)
-    }));
-    
-    // Track this product as deleted for the current theme only
-    setDeletedResourceLibraryProducts(prev => ({
-      ...prev,
-      [currentSeason]: new Set([...(prev[currentSeason] || []), resourceId])
-    }));
-    
-    console.log(`[SeasonalStore] Removed ResourceLibrary product from theme (kept in Market Stall): ${productId} (resource ID: ${resourceId}) from theme: ${currentSeason}`);
-  }, [currentSeason, setThemeProducts]);
+  // ResourceLibrary product deletion is handled by useProductHandlers hook
 
-  // Load products from theme when theme changes (initial load from DB)
-  useEffect(() => {
-    // Get products from themeProducts for current season
-    const currentThemeProducts = themeProducts?.[currentSeason] || [];
-    if (currentThemeProducts.length > 0) {
-      console.log(`[SeasonalStore] Loading ${currentThemeProducts.length} products from theme:`, currentSeason);
-      
-      // Debug: Log buttonLink data in themeProducts
-      currentThemeProducts.forEach((product, index) => {
-        console.log(`[SeasonalStore] 🔍 Theme product ${index + 1} (${product.name}):`, {
-          id: product.id,
-          hasButtonLink: !!product.buttonLink,
-          buttonLink: product.buttonLink,
-          isResourceProduct: typeof product.id === 'string' && product.id.startsWith('resource-')
-        });
-      });
-      
-      // Separate ResourceLibrary products from frontend products
-      const resourceLibraryProducts = currentThemeProducts.filter(product => 
-        typeof product.id === 'string' && product.id.startsWith('resource-')
-      );
-      const frontendOnlyProducts = currentThemeProducts.filter(product => 
-        !(typeof product.id === 'string' && product.id.startsWith('resource-'))
-      );
-      
-      console.log(`[SeasonalStore] Separated products:`, {
-        resourceLibrary: resourceLibraryProducts.length,
-        frontend: frontendOnlyProducts.length,
-        total: currentThemeProducts.length
-      });
-      
-      // Debug: Check buttonLink in resourceLibraryProducts before setting state
-      if (resourceLibraryProducts.length > 0) {
-        resourceLibraryProducts.forEach((product, index) => {
-          console.log(`[SeasonalStore] 🔍 ResourceLibrary product ${index + 1} (${product.name}) before setting state:`, {
-            id: product.id,
-            hasButtonLink: !!product.buttonLink,
-            buttonLink: product.buttonLink
-          });
-        });
-      }
-      
-      // Load ResourceLibrary products into resourceLibraryProducts state
-      if (resourceLibraryProducts.length > 0) {
-        console.log(`[SeasonalStore] Loading ${resourceLibraryProducts.length} ResourceLibrary products`);
-        
-        // Fix: Restore buttonLink from allResources if missing
-        const productsWithLinks = resourceLibraryProducts.map(product => {
-          // If buttonLink is missing, try to find it in allResources
-          if (!product.buttonLink && typeof product.id === 'string' && product.id.startsWith('resource-')) {
-            const resourceId = product.id.replace('resource-', '');
-            const matchingResource = allResources.find(r => r.id === resourceId);
-            
-            if (matchingResource?.link) {
-              console.log(`[SeasonalStore] 🔧 Restoring buttonLink for product "${product.name}" from resource:`, matchingResource.link);
-              return {
-                ...product,
-                buttonLink: matchingResource.link
-              };
-            } else {
-              console.warn(`[SeasonalStore] ⚠️ Could not find resource ${resourceId} in allResources to restore buttonLink for product "${product.name}"`);
-            }
-          }
-          return product;
-        });
-        
-        // Update both resourceLibraryProducts state AND themeProducts to persist the fix
-        setResourceLibraryProducts(productsWithLinks);
-        
-        // Also update themeProducts to persist the restored buttonLink
-        if (productsWithLinks.some(p => p.buttonLink && !resourceLibraryProducts.find(op => op.id === p.id && op.buttonLink))) {
-          console.log(`[SeasonalStore] 🔧 Updating themeProducts to persist restored buttonLinks`);
-          setThemeProducts(prev => ({
-            ...prev,
-            [currentSeason]: (prev[currentSeason] || []).map(product => {
-              const restoredProduct = productsWithLinks.find(p => p.id === product.id);
-              if (restoredProduct && restoredProduct.buttonLink && !product.buttonLink) {
-                return restoredProduct;
-              }
-              return product;
-            })
-          }));
-        }
-      }
-      
-      // Load frontend products into frontendProducts state
-      if (frontendOnlyProducts.length > 0) {
-        console.log(`[SeasonalStore] Loading ${frontendOnlyProducts.length} frontend products`);
-        // Frontend products are now handled through resourceLibraryProducts
-      }
-    }
-  }, [themeProducts, currentSeason, allResources]);
+  // ResourceLibrary product management is handled by useResourceLibraryProducts hook
 
   // Use auto-add resources hook
   // IMPORTANT: allResources prop MUST contain ONLY Market Stall (global ResourceLibrary) products
@@ -1109,14 +812,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const { hasAutoAddedResources, isAutoAddComplete } = useAutoAddResources({
     allResources, // Market Stall (global ResourceLibrary) products only
     hasLoadedResourceLibrary,
-    currentSeason,
-    themeProducts,
+    products, // Pass template products
     deletedResourceLibraryProducts,
     legacyTheme,
-    setThemeProducts,
+    setProducts, // Use setProducts instead of setThemeProducts
     handleProductImageUpload,
     templateResourceLibraryProductIds, // Pass template ResourceLibrary product IDs
-    setIsStoreContentReady, // Pass callback to notify when store content is ready
     isTemplateLoaded, // Pass internal template loaded state
   });
 
@@ -1129,79 +830,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Promo button is ready when store content is ready
   const isPromoButtonReady = isStoreContentReady;
 
-  // Combined delete handler that routes to appropriate delete function
-  const deleteProduct = useCallback((productId: number | string) => {
-    if (typeof productId === 'string' && productId.startsWith('resource-')) {
-      // This is a ResourceLibrary product
-      handleDeleteResourceLibraryProduct(productId);
-    } else {
-      // This is a regular SeasonalStore product - update both states
-      setThemeProducts(prev => ({
-        ...prev,
-        [currentSeason]: (prev[currentSeason] || []).filter(product => product.id !== productId)
-      }));
-      console.log('🔄 Deleted product from themeProducts:', productId);
-    }
-  }, [handleDeleteResourceLibraryProduct, currentSeason, setThemeProducts]);
+  // Product deletion is handled by useProductHandlers hook
 
-  // Combined delete handler is now defined above with frontend product management
 
-  // Drop Handlers
-  const handleDropAsset = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.target instanceof HTMLElement && e.target.closest('.product-container-drop-zone')) return;
-    if (!editorState.isEditorView) return;
-
-    const assetJson = e.dataTransfer.getData("asset/json");
-    if (!assetJson) return;
-
-    const droppedAsset = JSON.parse(assetJson);
-    const containerRect = appRef.current?.getBoundingClientRect();
-    if (!containerRect) return;
-
-    const newX = e.clientX - containerRect.left;
-    const newY = e.clientY - containerRect.top;
-
-    addFloatingAsset({
-      ...droppedAsset,
-      x: `${((newX / containerRect.width) * 100).toFixed(2)}%`,
-      y: `${newY.toFixed(0)}px`,
-    });
-
-    setAvailableAssets(prev => prev.filter(a => a.id !== droppedAsset.id));
-  }, [editorState.isEditorView, addFloatingAsset, setAvailableAssets]);
-
-  const handleDropOnProduct = useCallback((e: React.DragEvent, productId: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!editorState.isEditorView) return;
-
-    const assetJson = e.dataTransfer.getData("asset/json");
-    if (!assetJson) return;
-
-    const droppedAsset = JSON.parse(assetJson);
-    
-    updateProduct(productId, {
-      containerAsset: {
-        src: droppedAsset.src,
-        alt: droppedAsset.alt,
-        id: droppedAsset.id,
-        scale: 1.0,
-        rotation: 0,
-      }
-    });
-    
-    setAvailableAssets(prev => prev.filter(a => a.id !== droppedAsset.id));
-  }, [editorState.isEditorView, updateProduct, setAvailableAssets]);
-
-  // Drag Start Handler
-  const handleDragStart = useCallback((e: React.DragEvent, asset: any) => {
-    e.dataTransfer.setData("asset/json", JSON.stringify(asset));
-    const dragImg = new Image(100, 100);
-    dragImg.src = asset.src; 
-    e.dataTransfer.setDragImage(dragImg, 50, 50);
-  }, []);
+  // Use drag and drop hook
+  const {
+    handleDropAsset,
+    handleDropOnProduct,
+    handleDragStart,
+  } = useDragAndDrop({
+    editorState,
+    addFloatingAsset,
+    updateProduct,
+    setAvailableAssets,
+    appRef,
+  });
 
 
   const { mainHeader, headerMessage, subHeader, promoMessage } = fixedTextStyles || {};
@@ -1212,7 +855,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   useEffect(() => {
     // Always sync Claim button to current theme on theme change
     // Use ring-2 to match ProductCard buttons (default gray ring)
-    setPromoButton(prev => ({
+    setPromoButton((prev: any) => ({
       ...prev,
       buttonClass: legacyTheme.accent,
       ringClass: '', // Empty string - will use default ring-2 from ProductCard style
@@ -1221,31 +864,21 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legacyTheme.accent]);
 
-  // Keep all buttons (including Claim) in sync with theme changes when they still use previous theme accent
-  const prevAccentRef = useRef(legacyTheme.accent);
-  useEffect(() => {
-    const prevAccent = prevAccentRef.current;
-    if (prevAccent !== legacyTheme.accent) {
-      // Update product buttons that were using previous theme accent
-      const currentThemeProductsList = themeProducts[currentSeason] || [];
-      currentThemeProductsList.forEach(product => {
-        if (product.buttonClass === prevAccent) {
-          updateProduct(product.id, { buttonClass: legacyTheme.accent });
-        }
-      });
-
-      // Update claim button if it matched previous accent (or was empty)
-      setPromoButton(prev => ({
-        ...prev,
-        buttonClass: (!prev.buttonClass || prev.buttonClass === prevAccent) ? legacyTheme.accent : prev.buttonClass,
-        // If ring was derived from previous accent ring token, try to carry forward
-        ringClass: prev.ringClass && prev.ringClass.includes(prevAccent.split(' ').find(c => c.startsWith('ring-') || '')!) ? (legacyTheme.accent.split(' ').find(c => c.startsWith('ring-') && !c.startsWith('ring-offset')) || prev.ringClass) : prev.ringClass,
-        ringHoverClass: prev.ringHoverClass
-      }));
-
-      prevAccentRef.current = legacyTheme.accent;
-    }
-  }, [legacyTheme.accent, themeProducts, currentSeason, updateProduct]);
+  // Apply theme styles when theme changes (managed by useThemeApplication hook)
+  useThemeApplication({
+    currentSeason,
+    isTemplateLoaded,
+    products,
+    legacyTheme,
+    fixedTextStyles,
+    backgroundAttachmentUrl,
+    originTemplate,
+    applyThemeColorsToText,
+    setProducts,
+    setFixedTextStyles,
+    setPromoButton,
+    setBackground,
+  });
 
 
 
@@ -1274,71 +907,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   // Determine background style with smooth transitions
   const getBackgroundStyle = useMemo(() => {
-    // Only use WHOP attachment URL - no base64 fallbacks
-    if (backgroundAttachmentUrl) {
-      console.log('🎨 Using WHOP attachment background:', backgroundAttachmentUrl);
-      return {
-        backgroundImage: `url(${backgroundAttachmentUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-        minHeight: '100vh',
-        width: '100%',
-        transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
-        opacity: 1
-      };
-    }
-    // If no background image, use theme-specific placeholder
-    // First check if theme has a custom placeholderImage (for custom themes)
-    let placeholderUrl = (legacyTheme as any)?.placeholderImage || null;
-    let placeholderFilter: string | undefined;
-    
-    // If no custom placeholder, use theme-specific placeholder
-    if (!placeholderUrl) {
-      placeholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
-      
-      // Use theme-specific placeholder if available
-      if (currentSeason === 'Cyber Sale') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/Hyt2HKOnK0RRv7Y3AKEKx4D6q2pgaS6zIJ0O4nXz9IE/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/9bc22c82-ac07-4aa8-8a80-3609b273a384.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Spring Renewal') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/rSJXS5NKttt8u2117kcOOwxIS6i46EjvNolcNoHEr0U/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/27a182d3-b2fb-4b67-9675-3361e7dd6820.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Holiday Cheer') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/NZ7GNGGID4Xa4x8v6MggFBmA1OvefQKzR51uNiE4ZF8/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/ac7a903a-f73f-4c15-a3b8-62dcf5337742.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Fall' || currentSeason === 'Spooky Night') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/aqN_MUYyIWK1YPCflECQlExGsDTd_rftFEEh4zp59vI/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/3a3e7c27-e3aa-43fb-8bbd-d18ef28f7e33.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Summer') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/43qiVSNwFVt0p1Yl0FwS76ArpS_MaMTP0vN5fVz3svA/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/96ffbe3b-f279-4850-9ae3-5aa471201ea4.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Winter' || currentSeason === 'Winter Frost') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/Ni_KZbrHHlNz2gw5zWinFI1_s4Q7mZ92vVANhQCu9eQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-30/db5bf662-2cdf-461d-b55c-7d20e77c6662.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Autumn' || currentSeason === 'Autumn Harvest') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/zx2JzitsjsKHimZ-sTR6BLdvR7Ecn41Hzy1JPOUt7-c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/6911df86-f29f-4e0f-ace6-43e20f9a3820.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    } else if (currentSeason === 'Black Friday') {
-      placeholderUrl = 'https://img-v2-prod.whop.com/LpAWtPhmyrvfSLDlQbkLwzdL4wwZI_9R4RJtSjIukeQ/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-11-04/edbb3d96-0248-4ecf-8345-921c100a064d.png';
-      placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
-    }
-    }
-    
-    console.log('🎨 No background image, using placeholder for theme:', currentSeason, placeholderUrl ? '(custom placeholder)' : '(default placeholder)');
-    return {
-      backgroundImage: `url(${placeholderUrl})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      backgroundAttachment: 'fixed',
-      minHeight: '100vh',
-      width: '100%',
-      transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
-      opacity: 1,
-      filter: placeholderFilter
-    };
+    return getBackgroundStyleUtil(backgroundAttachmentUrl, currentSeason, legacyTheme);
   }, [backgroundAttachmentUrl, currentSeason, legacyTheme]);
 
   // Product editor slide-over state
@@ -1349,121 +918,41 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const closeProductEditor = () => setProductEditor({ isOpen: false, productId: null, target: null });
 
 
-  // Slide-over animations (match AdminAssetSheet feel)
-  // Initialize animation state to match initial isAdminSheetOpen state (true)
-  const [adminSheetAnimOpen, setAdminSheetAnimOpen] = useState(editorState.isAdminSheetOpen);
-  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
-  const [templateManagerAnimOpen, setTemplateManagerAnimOpen] = useState(false);
+  // Template manager state is managed by useTemplateManager hook
   
-  // Template save notification state
-  const [templateSaveNotification, setTemplateSaveNotification] = useState<{
-    isOpen: boolean;
-    isSaving: boolean;
-    templateName: string;
-  }>({ isOpen: false, isSaving: false, templateName: '' });
-
-  const [themeGenerationNotification, setThemeGenerationNotification] = useState<{
-    isOpen: boolean;
-    isGenerating: boolean;
-    themeName: string;
-  }>({ isOpen: false, isGenerating: false, themeName: '' });
-  
-  // Make public notification state
-  const [makePublicNotification, setMakePublicNotification] = useState<{
-    isOpen: boolean;
-    templateName: string;
-  }>({ isOpen: false, templateName: '' });
-
-  // Template limit notification state
-  const [templateLimitNotification, setTemplateLimitNotification] = useState(false);
+  // Use notifications hook
+  const {
+    templateSaveNotification,
+    setTemplateSaveNotification,
+    themeGenerationNotification,
+    setThemeGenerationNotification,
+    makePublicNotification,
+    setMakePublicNotification,
+    templateLimitNotification,
+    setTemplateLimitNotification,
+  } = useNotifications();
   
   // Highlighted template state
   const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | undefined>(undefined);
 
 
-  // Close modal when clicking outside the edit panel
-  useEffect(() => {
-    if (!editingText.isOpen) return;
 
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Check if click is on the edit panel or inside it
-      const editPanel = document.querySelector('[role="dialog"][aria-label="Edit Text"]');
-      if (editPanel && editPanel.contains(target)) {
-        return; // Don't close if clicking inside the edit panel
-      }
-      // Close the modal
-      closeTextEditorAnimated();
-    };
-
-    // Add small delay to prevent immediate closure
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [editingText.isOpen]);
-
-  // Close product editor modal when clicking outside the edit panel
-  useEffect(() => {
-    if (!productEditor.isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Check if click is on the product edit panel or inside it
-      const productEditPanel = document.querySelector('[role="dialog"][aria-label="Edit Product"]');
-      if (productEditPanel && productEditPanel.contains(target)) {
-        return; // Don't close if clicking inside the product edit panel
-      }
-      // Close the modal
-      closeProductEditorAnimated();
-    };
-
-    // Add small delay to prevent immediate closure
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [productEditor.isOpen]);
-
-  useEffect(() => {
-    if (templateManagerOpen) {
-      const id = requestAnimationFrame(() => setTemplateManagerAnimOpen(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setTemplateManagerAnimOpen(false);
-    }
-  }, [templateManagerOpen]);
-
-  useEffect(() => {
-    if (editorState.isAdminSheetOpen) {
-      // next tick to trigger transition
-      const id = requestAnimationFrame(() => setAdminSheetAnimOpen(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setAdminSheetAnimOpen(false);
-    }
-  }, [editorState.isAdminSheetOpen]);
 
   const closeTextEditorAnimated = () => {
     setEditingText({ isOpen: false, targetId: 'mainHeader' });
   };
 
   const closeAdminSheetAnimated = () => {
-    setAdminSheetAnimOpen(false);
-    setTimeout(() => toggleAdminSheet(), 500);
+    closeAdminSheetAnimatedFromHook(toggleAdminSheet);
   };
 
   const closeProductEditorAnimated = () => {
     closeProductEditor();
   };
+
+  // Close modals when clicking outside (must be after function definitions)
+  useClickOutside(editingText.isOpen, closeTextEditorAnimated, '[role="dialog"][aria-label="Edit Text"]');
+  useClickOutside(productEditor.isOpen, closeProductEditorAnimated, '[role="dialog"][aria-label="Edit Product"]');
 
   // Generate background button location state
   const [showGenerateBgInNavbar, setShowGenerateBgInNavbar] = useState(true); // Start in navbar
@@ -1471,7 +960,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // State for coordinating with ConditionalReturns loading
   const [isConditionalReturnsReady, setIsConditionalReturnsReady] = useState(false);
   
-  // Wrapper functions for component prop type mismatches
+  // Wrapper functions for component prop type mismatches (required by child components)
   const setEditingTextWrapper = useCallback((state: { isOpen: boolean; targetId: string }) => {
     setEditingText(state as any);
   }, [setEditingText]);
@@ -1479,25 +968,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const applyThemeColorsToTextWrapper = useCallback((text: any, type: string) => {
     return applyThemeColorsToText(text, type as any);
   }, [applyThemeColorsToText]);
-
-
-
-  // Product wrapper to handle type mismatch
-  const productsWrapper = (themeProducts[currentSeason] || []).map(product => ({
-    ...product,
-    buttonText: product.buttonText || '',
-    buttonLink: product.buttonLink || '',
-    cardClass: product.cardClass || '',
-    titleClass: product.titleClass || '',
-    descClass: product.descClass || '',
-    buttonClass: product.buttonClass || ''
-  }));
-
-  // Function wrappers for parameter mismatches
-  const handleDropOnProductWrapper = useCallback((productId: number | string, asset: any) => {
-    // This is a simplified version - the original function expects a drag event
-    console.log('Drop on product:', productId, asset);
-  }, []);
 
   const deleteProductWrapper = useCallback((product: any) => {
     deleteProduct(product.id);
@@ -1507,6 +977,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     openProductEditor(id, target as any);
   }, [openProductEditor]);
 
+  const handleDropOnProductWrapper = useCallback((productId: number | string, asset: any) => {
+    // Convert to drag event format for handleDropOnProduct
+    const mockEvent = {
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      dataTransfer: { getData: () => JSON.stringify(asset) },
+    } as any;
+    handleDropOnProduct(mockEvent, typeof productId === 'number' ? productId : parseInt(productId.toString()) || 0);
+  }, [handleDropOnProduct]);
+
   // ALL CONDITIONAL RETURNS MUST BE AFTER ALL HOOKS
   // Use ConditionalReturns component to handle all conditional rendering
   const conditionalReturn = ConditionalReturns({
@@ -1514,7 +994,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     showFunnelBuilder,
     liveFunnel,
     setShowFunnelBuilder,
-    setLiveFunnel,
+    setLiveFunnel: () => {}, // Managed by useLiveFunnel hook
     isFunnelActive,
     experienceId,
     user,
@@ -1526,12 +1006,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     currentSeason,
     theme,
     resourceLibraryProducts,
-    themeProducts,
+    products, // Pass template products instead of themeProducts
     allResources,
     setAllResources,
-    handleAddToTheme,
-    handleRemoveFromTheme,
-    isResourceInTheme,
+    handleAddToTemplate,
+    handleRemoveFromTemplate,
+    isResourceInTemplate,
     getFilteredPaidResources,
 
     // Loading overlay props
@@ -1642,6 +1122,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         handleGenerateBgClick={handleGenerateBgClick}
         handleBgImageUpload={handleBgImageUpload}
         handleSaveTemplate={handleSaveTemplateForNavbar}
+        onResetChanges={handleResetChanges}
         toggleAdminSheet={toggleAdminSheet}
         openTemplateManager={openTemplateManager}
         handleAddProduct={handleAddProduct}
@@ -1654,7 +1135,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
 
 
-      <LoadingOverlay loadingState={loadingState} />
+      <LoadingScreen loadingState={loadingState} />
 
 
       {/* Admin Asset Management Sheet */}
@@ -1706,48 +1187,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             setCurrentSeason={setCurrentSeason}
             loadingState={loadingState}
             handleUpdateTheme={async (season, updates) => {
-              try {
-                console.log('🎨 Updating theme for season:', season, updates);
-                
-                // Find existing theme for this season
-                const existingTheme = themes.find(t => t.season === season);
-                
-                if (existingTheme) {
-                  // Update existing theme
-                  console.log('📝 Updating existing theme:', existingTheme.id);
-                  await updateTheme(existingTheme.id, {
-                    name: updates.name || existingTheme.name,
-                    themePrompt: updates.themePrompt,
-                    accentColor: updates.accent,
-                    ringColor: updates.accent
-                  });
-                } else {
-                  // Create new theme for this season
-                  console.log('🆕 Creating new theme for season:', season);
-                  const newTheme = await createTheme({
-                    name: updates.name || `${season} Custom Theme`,
-                    season: season,
-                    themePrompt: updates.themePrompt || '',
-                    accentColor: updates.accent || 'bg-blue-600',
-                    ringColor: updates.accent || 'bg-blue-600'
-                  });
-                  console.log('✅ Created new theme:', newTheme.id);
-                }
-                
-                // Update local state
-                setAllThemes(prev => ({
-                  ...prev,
-                  [season]: {
-                    ...prev[season],
-                    ...updates
-                  }
-                }));
-                
-                console.log('✅ Theme updated successfully');
-              } catch (error) {
-                console.error('❌ Failed to update theme:', error);
-                setError(`Failed to update theme: ${(error as Error).message}`);
-              }
+              await handleUpdateThemeUtil(season, updates, themes, setAllThemes, setError, experienceId || '');
             }}
             handleUpdateAsset={updateFloatingAsset}
             handleAddFloatingAsset={(assetData) => {
@@ -1785,7 +1225,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       >
         <LogoSection
           editorState={editorState}
-          logoAsset={logoAsset}
+          logoAsset={logoAsset || { src: '', shape: 'round' }}
           currentSeason={currentSeason}
           legacyTheme={legacyTheme}
           loadingState={loadingState}
@@ -1856,7 +1296,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
 
         {/* Floating Thematic Assets - Now positioned relative to content */}
-        {floatingAssets.map(asset => (
+        {floatingAssets.map((asset: any) => (
           <FloatingAsset
             key={asset.id}
             asset={asset}
@@ -1889,7 +1329,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       <ProductEditorModal
         isOpen={productEditor.isOpen}
         productEditor={productEditorWrapper}
-        products={(themeProducts[currentSeason] || []) as any}
+        products={products as any}
         promoButton={promoButton}
         legacyTheme={legacyTheme}
         backgroundAnalysis={backgroundAnalysis}
@@ -1905,6 +1345,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         templates={templates}
         liveTemplate={liveTemplate}
         highlightedTemplateId={highlightedTemplateId}
+        originTemplate={originTemplate}
         backgroundAnalysis={backgroundAnalysis}
         onClose={closeTemplateManagerAnimated}
         loadTemplate={loadTemplate}
@@ -1912,44 +1353,170 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         setLiveTemplate={setLiveTemplate}
         onPreview={handlePreviewTemplate}
         maxTemplates={MAX_CUSTOM_TEMPLATES}
+        onCreateNewShop={async () => {
+          if (!originTemplate) return;
+          
+          try {
+            // Create new template from origin template data
+            const originData = originTemplate.defaultThemeData;
+            const newTemplateName = `Shop ${templates.length + 1}`;
+            
+            // Use saveTemplate with origin template data
+            const originProducts = originData.products || [];
+            const originFloatingAssets = originData.floatingAssets || [];
+            const originTextStyles = originData.fixedTextStyles || fixedTextStyles;
+            const originLogo = originData.logo || logoAsset;
+            const originBackground = originData.background;
+            const originPromoButton = originData.promoButton || promoButton;
+            const originDiscountSettings = discountSettings || {
+              enabled: false,
+              globalDiscount: false,
+              globalDiscountType: 'percentage',
+              globalDiscountAmount: 0,
+              percentage: 0,
+              startDate: '',
+              endDate: '',
+              discountText: '',
+              promoCode: '',
+              prePromoMessages: [],
+              activePromoMessages: [],
+            };
+            
+            const newTemplate = await saveTemplate({
+              name: newTemplateName,
+              experienceId: experienceId || '',
+              userId: user?.whopUserId || '',
+              themeId: null,
+              themeSnapshot: {
+                id: `theme_${Date.now()}`,
+                experienceId: experienceId || '',
+                name: 'Company Theme',
+                season: 'Company',
+                themePrompt: originTemplate.themePrompt || '',
+                accentColor: 'bg-indigo-500',
+                ringColor: 'bg-indigo-500',
+                placeholderImage: originBackground,
+                mainHeader: null,
+                subHeader: null,
+                card: 'bg-white/95 backdrop-blur-sm shadow-xl',
+                text: 'text-gray-800',
+                welcomeColor: 'text-yellow-300',
+                background: originBackground || '',
+                aiMessage: '',
+                emojiTip: '🎁',
+                createdAt: new Date(),
+                updatedAt: new Date()
+              },
+              currentSeason: 'Company',
+              templateData: {
+                // PRIMARY DATA: Flat structure
+                products: originProducts,
+                floatingAssets: originFloatingAssets,
+                fixedTextStyles: originTextStyles,
+                logoAsset: originLogo,
+                generatedBackground: originBackground,
+                uploadedBackground: originBackground,
+                backgroundAttachmentId: null,
+                backgroundAttachmentUrl: originBackground,
+                logoAttachmentId: null,
+                logoAttachmentUrl: originLogo?.src || null,
+                currentTheme: {
+                  name: 'Company Theme',
+                  themePrompt: originTemplate.themePrompt || '',
+                  accent: 'bg-indigo-500',
+                  card: 'bg-white/95 backdrop-blur-sm shadow-xl',
+                  text: 'text-gray-800',
+                  welcomeColor: 'text-yellow-300',
+                  background: originBackground || '',
+                  backgroundImage: originBackground,
+                  placeholderImage: originBackground,
+                  aiMessage: '',
+                  mainHeader: null,
+                  emojiTip: '🎁'
+                },
+                promoButton: originPromoButton,
+                discountSettings: originDiscountSettings,
+                
+                // LEGACY COMPATIBILITY: Theme-specific nested structures
+                themeTextStyles: { 'Company': originTextStyles },
+                themeLogos: { 'Company': originLogo },
+                themeGeneratedBackgrounds: { 'Company': originBackground },
+                themeUploadedBackgrounds: { 'Company': originBackground },
+                themeProducts: { 'Company': originProducts },
+                themeFloatingAssets: { 'Company': originFloatingAssets },
+              },
+              isLive: false,
+              isLastEdited: false,
+            });
+            
+            // Load the new template
+            await loadTemplate(newTemplate.id);
+            
+            // Close template manager
+            closeTemplateManagerAnimated();
+          } catch (error) {
+            console.error('Error creating new shop from origin template:', error);
+            setError(`Failed to create new shop: ${(error as Error).message}`);
+          }
+        }}
         onMakePublic={async (templateId) => {
           // Find the template name
-          const template = templates.find(t => t.id === templateId);
+          const template = templates.find((t: any) => t.id === templateId);
           const templateName = template?.name || 'Template';
           
           // Show make public notification
           setMakePublicNotification({ isOpen: true, templateName });
         }}
+        onRenameTemplate={async (templateId, updates) => {
+          if (!experienceId) {
+            throw new Error('Experience ID is required to rename template');
+          }
+          return await updateTemplate(templateId, updates);
+        }}
+        discountSettings={discountSettings}
+        onSaveDiscountSettings={async (templateId, newDiscountSettings) => {
+          if (!experienceId) {
+            throw new Error('Experience ID is required to save discount settings');
+          }
+          const template = templates.find((t: any) => t.id === templateId);
+          if (!template) {
+            throw new Error('Template not found');
+          }
+          await updateTemplate(templateId, {
+            templateData: {
+              ...template.templateData,
+              discountSettings: newDiscountSettings
+            }
+          });
+          // Update local state
+          setDiscountSettings(newDiscountSettings);
+        }}
+        products={products}
       />
 
-      {/* Template Save Notification */}
-      <TemplateSaveNotification
-        isOpen={templateSaveNotification.isOpen}
-        isSaving={templateSaveNotification.isSaving}
-        templateName={templateSaveNotification.templateName}
-        onClose={() => setTemplateSaveNotification({ isOpen: false, isSaving: false, templateName: '' })}
-      />
-
-      {/* Theme Generation Notification */}
-      <ThemeGenerationNotification
-        isOpen={themeGenerationNotification.isOpen}
-        isGenerating={themeGenerationNotification.isGenerating}
-        themeName={themeGenerationNotification.themeName}
-        onClose={() => setThemeGenerationNotification({ isOpen: false, isGenerating: false, themeName: '' })}
-      />
-
-      {/* Make Public Notification */}
-      <MakePublicNotification
-        isOpen={makePublicNotification.isOpen}
-        templateName={makePublicNotification.templateName}
-        onClose={() => setMakePublicNotification({ isOpen: false, templateName: '' })}
-      />
-
-      {/* Template Limit Notification */}
-      <TemplateLimitNotification
-        isOpen={templateLimitNotification}
-        onClose={() => setTemplateLimitNotification(false)}
+      {/* All Notifications */}
+      <Notifications
+        notifications={{
+          templateSave: templateSaveNotification,
+          themeGeneration: themeGenerationNotification,
+          makePublic: makePublicNotification,
+          templateLimit: templateLimitNotification,
+          sync: {
+            isOpen: showSyncPopup,
+            syncResult,
+            isLoading: isCheckingUpdates,
+            isApplying: isApplyingSync,
+          },
+        }}
+        onCloseTemplateSave={() => setTemplateSaveNotification({ isOpen: false, isSaving: false, templateName: '' })}
+        onCloseThemeGeneration={() => setThemeGenerationNotification({ isOpen: false, isGenerating: false, themeName: '' })}
+        onCloseMakePublic={() => setMakePublicNotification({ isOpen: false, templateName: '' })}
+        onCloseTemplateLimit={() => setTemplateLimitNotification(false)}
         onOpenShopManager={openTemplateManager}
+        onCloseSync={closeSyncPopup}
+        onApplySyncChanges={handleApplyChanges}
+        onSyncSuccess={handleSyncSuccess}
+        isActive={isActive}
       />
 
       {/* Seasonal Store Chat - Half View with Unfold/Fold Animation */}
@@ -2008,10 +1575,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
                        </p>
                        
                        <button
-                         onClick={() => {
-                           console.log('[SeasonalStore] Manual refresh triggered');
-                           loadLiveFunnel();
-                         }}
+                        onClick={() => {
+                          console.log('[SeasonalStore] Manual refresh triggered');
+                          window.location.reload();
+                        }}
                          className="px-4 py-2 bg-blue-500/90 dark:bg-blue-600/90 backdrop-blur-sm text-white rounded-lg hover:bg-blue-600/90 dark:hover:bg-blue-700/90 transition-colors border border-blue-400/30 dark:border-blue-500/30 shadow-lg"
                        >
                          Refresh
@@ -2056,18 +1623,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         </div>
       )}
 
-      {/* Sync Changes Popup - Only show in store view */}
-      {isActive && (
-        <SyncChangesPopup
-          isOpen={showSyncPopup}
-          onClose={closeSyncPopup}
-          onApplyChanges={handleApplyChanges}
-          syncResult={syncResult}
-          isLoading={isCheckingUpdates}
-          isApplying={isApplyingSync}
-          onSyncSuccess={handleSyncSuccess}
-        />
-      )}
     </>
   );
 };

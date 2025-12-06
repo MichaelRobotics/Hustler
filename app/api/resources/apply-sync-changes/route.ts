@@ -7,6 +7,7 @@ import { db } from '@/lib/supabase/db-server';
 import { resources } from '@/lib/supabase/schema';
 import { eq, and } from 'drizzle-orm';
 import { getWhopApiClient } from '@/lib/whop-api-client';
+import { whopSdk } from '@/lib/whop-sdk';
 import type { AuthenticatedUser } from '@/lib/context/user-context';
 
 /**
@@ -143,9 +144,28 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     }
   }
   
-  // Generate placeholder image if no logo available
-  const productImage = product.imageUrl || 
-    'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  // Fetch product image from Whop SDK if available
+  let productImage = product.logo || product.bannerImage || 
+    'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  
+  // Try to fetch product image from galleryImages (only for products, not apps)
+  if (!whopProductId.startsWith('app_')) {
+    try {
+      const productResult = await whopSdk.accessPasses.getAccessPass({
+        accessPassId: whopProductId,
+      });
+      
+      if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
+        const firstImage = productResult.galleryImages.nodes[0];
+        if (firstImage?.source?.url) {
+          productImage = firstImage.source.url;
+          console.log(`✅ [API] Fetched product image from gallery for ${product.title}`);
+        }
+      }
+    } catch (imageError) {
+      console.warn(`⚠️ [API] Failed to fetch product image for ${product.title}, using fallback:`, imageError);
+    }
+  }
   
   // Format price for database storage
   const formattedPrice = product.price > 0 ? product.price.toString() : null;
@@ -309,9 +329,28 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     }
   }
   
-  // Generate placeholder image if no logo available
-  const productImage = product.imageUrl || 
-    'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  // Fetch product image from Whop SDK if available
+  let productImage = product.logo || product.bannerImage || 
+    'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  
+  // Try to fetch product image from galleryImages (only for products, not apps)
+  if (!whopProductId.startsWith('app_')) {
+    try {
+      const productResult = await whopSdk.accessPasses.getAccessPass({
+        accessPassId: whopProductId,
+      });
+      
+      if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
+        const firstImage = productResult.galleryImages.nodes[0];
+        if (firstImage?.source?.url) {
+          productImage = firstImage.source.url;
+          console.log(`✅ [API] Fetched product image from gallery for ${product.title}`);
+        }
+      }
+    } catch (imageError) {
+      console.warn(`⚠️ [API] Failed to fetch product image for ${product.title}, using fallback:`, imageError);
+    }
+  }
   
   // Format price for database storage
   const formattedPrice = product.price > 0 ? product.price.toString() : null;

@@ -10,6 +10,8 @@ import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
 import { experiences, resources, users } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct, type WhopApp } from "../whop-api-client";
+import { updateOriginTemplateFromProduct, shouldUpdateOriginTemplate, shouldCreateOriginTemplate, createOriginTemplateFromProduct } from "../services/origin-template-service";
+import { whopSdk } from "../whop-sdk";
 
 export interface ProductChange {
   type: 'created' | 'updated' | 'deleted';
@@ -132,10 +134,10 @@ export class UpdateProductSync {
       });
 
       // Check for updated products/apps
-      whopProductsMap.forEach((product, productId) => {
+      const updatePromises = Array.from(whopProductsMap.entries()).map(async ([productId, product]) => {
         const currentResource = currentResourcesMap.get(productId);
         if (currentResource) {
-          const changes = this.detectChanges(currentResource, product);
+          const changes = await this.detectChanges(currentResource, product);
           if (changes && Object.keys(changes).length > 0) {
             result.changes.push({
               type: 'updated',
@@ -148,6 +150,7 @@ export class UpdateProductSync {
           }
         }
       });
+      await Promise.all(updatePromises);
 
       whopAppsMap.forEach((app, appId) => {
         const currentResource = currentResourcesMap.get(appId);
@@ -189,6 +192,58 @@ export class UpdateProductSync {
         total: result.summary.total,
         hasChanges: result.hasChanges,
       });
+
+      // Check if origin template exists and needs update, or should be created
+      try {
+        // Get first product with whopProductId to check company data
+        const firstProduct = await db.query.resources.findFirst({
+          where: and(
+            eq(resources.experienceId, user.experience.id),
+            eq(resources.type, "MY_PRODUCTS"),
+            isNotNull(resources.whopProductId)
+          ),
+        });
+
+        if (firstProduct?.whopProductId) {
+          // Check if origin template should be created (doesn't exist yet)
+          const shouldCreate = await shouldCreateOriginTemplate(experienceId);
+          if (shouldCreate) {
+            console.log(`[UPDATE-SYNC] 📦 Creating origin template for experience ${experienceId}...`);
+            try {
+              const originTemplate = await createOriginTemplateFromProduct(experienceId, firstProduct.whopProductId);
+              if (originTemplate) {
+                console.log(`[UPDATE-SYNC] ✅ Origin template created successfully`);
+              } else {
+                console.log(`[UPDATE-SYNC] ⚠️ Origin template creation returned null (may already exist)`);
+              }
+            } catch (createError) {
+              console.error(`[UPDATE-SYNC] ⚠️ Error creating origin template:`, createError);
+            }
+          } else {
+            // Origin template exists, check if it needs update (company logo/banner changes)
+            try {
+              const productResult = await whopSdk.accessPasses.getAccessPass({
+                accessPassId: firstProduct.whopProductId,
+              });
+              if (productResult) {
+                const shouldUpdate = await shouldUpdateOriginTemplate(experienceId, productResult);
+                if (shouldUpdate) {
+                  console.log(`[UPDATE-SYNC] 📦 Updating origin template for company logo/banner changes...`);
+                  await updateOriginTemplateFromProduct(experienceId, firstProduct.whopProductId);
+                  console.log(`[UPDATE-SYNC] ✅ Origin template updated successfully`);
+                }
+              }
+            } catch (error) {
+              console.error(`[UPDATE-SYNC] ⚠️ Error fetching product data for origin template update:`, error);
+            }
+          }
+        } else {
+          console.log(`[UPDATE-SYNC] ℹ️ No products with whopProductId found, skipping origin template check`);
+        }
+      } catch (originTemplateError) {
+        // Don't fail the update check if origin template creation/update fails
+        console.error(`[UPDATE-SYNC] ⚠️ Error with origin template (non-critical):`, originTemplateError);
+      }
 
       return result;
 
@@ -279,7 +334,7 @@ export class UpdateProductSync {
   /**
    * Detect changes between current resource and Whop product
    */
-  private detectChanges(currentResource: any, whopProduct: ApiWhopProduct): any {
+  private async detectChanges(currentResource: any, whopProduct: ApiWhopProduct): Promise<any> {
     const changes: any = {};
 
     // Check name changes - trim whitespace before comparison to avoid false positives
@@ -325,10 +380,28 @@ export class UpdateProductSync {
       };
     }
 
-    // Check image changes - use same logic as main sync
+    // Check image changes - fetch from Whop SDK galleryImages
     const currentImage = currentResource.image || '';
-    const newImage = whopProduct.imageUrl || 
-      'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    let newImage = whopProduct.logo || whopProduct.bannerImage || 
+      'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    
+    // Try to fetch product image from galleryImages
+    try {
+      const productResult = await whopSdk.accessPasses.getAccessPass({
+        accessPassId: whopProduct.id,
+      });
+      
+      if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
+        const firstImage = productResult.galleryImages.nodes[0];
+        if (firstImage?.source?.url) {
+          newImage = firstImage.source.url;
+        }
+      }
+    } catch (imageError) {
+      // Use fallback if SDK fetch fails
+      console.warn(`⚠️ [UPDATE-SYNC] Failed to fetch product image for ${whopProduct.title}:`, imageError);
+    }
+    
     if (currentImage !== newImage) {
       changes.image = {
         old: currentImage,
@@ -367,10 +440,10 @@ export class UpdateProductSync {
 
     // Skip description checking for apps - not needed for update sync
 
-    // Check image changes - use same logic as main sync
+    // Check image changes - apps use logo/banner (no gallery images)
     const currentImage = currentResource.image || '';
     const newImage = whopApp.logo || whopApp.bannerImage || 
-      'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+      'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
     if (currentImage !== newImage) {
       changes.image = {
         old: currentImage,

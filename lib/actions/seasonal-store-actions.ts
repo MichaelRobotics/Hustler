@@ -7,7 +7,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { Theme } from "@/lib/components/store/SeasonalStore/types";
-import { nanoBananaService } from "@/lib/services/nanobananaService";
+import { nanoBananaService } from "@/lib/components/store/SeasonalStore/actions/nanobananaService";
 
 // Custom error types for better error handling
 export class SeasonalStoreAIError extends Error {

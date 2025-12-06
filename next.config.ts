@@ -27,7 +27,15 @@ const nextConfig: NextConfig = {
 				zlib: false,
 				querystring: false,
 				child_process: false,
+				sharp: false,
 			};
+			// Exclude sharp from client bundle
+			config.externals = config.externals || [];
+			if (Array.isArray(config.externals)) {
+				config.externals.push('sharp');
+			} else {
+				config.externals = [config.externals, 'sharp'];
+			}
 		}
 		return config;
 	},

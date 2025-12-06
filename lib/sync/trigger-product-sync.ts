@@ -7,6 +7,7 @@ import { createResource } from "@/lib/actions/resource-actions";
 import { whopSdk } from "@/lib/whop-sdk";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 import { updateProductSync } from "./index";
+import { createOriginTemplateFromProduct, shouldCreateOriginTemplate } from "@/lib/services/origin-template-service";
 
 // App type classification based on name patterns
 function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
@@ -355,9 +356,26 @@ export async function triggerProductSyncForNewAdmin(
 							console.log(`� FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
 						}
 						
-						// Generate placeholder image if no logo available
-						const productImage = product.logo || product.bannerImage || 
-							'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+						// Fetch product image from Whop SDK if available
+						let productImage = product.logo || product.bannerImage || 
+							'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+						
+						// Try to fetch product image from galleryImages
+						try {
+							const productResult = await whopSdk.accessPasses.getAccessPass({
+								accessPassId: product.id,
+							});
+							
+							if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
+								const firstImage = productResult.galleryImages.nodes[0];
+								if (firstImage?.source?.url) {
+									productImage = firstImage.source.url;
+									console.log(`✅ Fetched product image from gallery for ${product.title}`);
+								}
+							}
+						} catch (imageError) {
+							console.warn(`⚠️ Failed to fetch product image for ${product.title}, using fallback:`, imageError);
+						}
 						
 						// Format price for database storage
 						const formattedPrice = product.price > 0 ? product.price.toString() : null;
@@ -534,7 +552,7 @@ export async function triggerProductSyncForNewAdmin(
           
           // Get app logo or generate placeholder if not available
           const appImage = app.logo || app.bannerImage || 
-            'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+            'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
           
           // Log image source for debugging
           if (app.logo) {
@@ -864,6 +882,41 @@ export async function triggerProductSyncForNewAdmin(
 			syncState.errors.forEach((error, index) => {
 				console.log(`[PRODUCT-SYNC]    ${index + 1}. ${error}`);
 			});
+		}
+
+		// Create origin template if it doesn't exist and products were synced
+		try {
+			const shouldCreate = await shouldCreateOriginTemplate(experienceId);
+			if (shouldCreate) {
+				console.log(`[PRODUCT-SYNC] 📦 Creating origin template for experience ${experienceId}...`);
+				
+				// Get first product with whopProductId to fetch company data
+				const firstProduct = await db.query.resources.findFirst({
+					where: and(
+						eq(resources.experienceId, experienceId),
+						eq(resources.type, "MY_PRODUCTS"),
+						isNotNull(resources.whopProductId)
+					),
+				});
+
+				if (firstProduct?.whopProductId) {
+					console.log(`[PRODUCT-SYNC] 📦 Using product ${firstProduct.whopProductId} for origin template creation`);
+					const originTemplate = await createOriginTemplateFromProduct(experienceId, firstProduct.whopProductId);
+					if (originTemplate) {
+						console.log(`[PRODUCT-SYNC] ✅ Origin template created successfully`);
+					} else {
+						console.log(`[PRODUCT-SYNC] ⚠️ Origin template creation returned null (may already exist)`);
+					}
+				} else {
+					console.log(`[PRODUCT-SYNC] ⚠️ No products with whopProductId found, skipping origin template creation`);
+				}
+			} else {
+				console.log(`[PRODUCT-SYNC] ℹ️ Origin template already exists or no products, skipping creation`);
+			}
+		} catch (originTemplateError) {
+			// Don't fail the sync if origin template creation fails
+			console.error(`[PRODUCT-SYNC] ⚠️ Error creating origin template (non-critical):`, originTemplateError);
+			syncState.errors.push(`Origin template creation failed: ${originTemplateError instanceof Error ? originTemplateError.message : 'Unknown error'}`);
 		}
 
 	} catch (error) {

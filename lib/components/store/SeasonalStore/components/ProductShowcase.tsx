@@ -31,6 +31,13 @@ interface ProductShowcaseProps {
   handleRemoveSticker: (id: number | string) => void;
   handleDropOnProduct: (productId: number | string, asset: any) => void;
   openProductEditor: (id: number | string | null, target: string) => void;
+  discountSettings?: {
+    enabled: boolean;
+    startDate: string;
+    endDate: string;
+  };
+  getThemeQuickColors?: (theme: any) => string[];
+  backgroundUrl?: string | null;
 }
 
 export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
@@ -53,6 +60,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   handleRemoveSticker,
   handleDropOnProduct,
   openProductEditor,
+  discountSettings,
+  getThemeQuickColors,
+  backgroundUrl,
 }) => {
   const [showNavigation, setShowNavigation] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -242,6 +252,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   onRemoveSticker={handleRemoveSticker}
                   onDropAsset={(e) => handleDropOnProduct(product.id, e)}
                   onOpenEditor={(id, target) => openProductEditor(id, target)}
+                  discountSettings={discountSettings}
+                  getThemeQuickColors={getThemeQuickColors}
+                  backgroundUrl={backgroundUrl}
                 />
               </div>
             ))}

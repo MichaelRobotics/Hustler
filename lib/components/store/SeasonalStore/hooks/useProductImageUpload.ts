@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
-import { fileToBase64 } from '../services/aiService';
+import { fileToBase64 } from '../actions/aiService';
 
 interface UseProductImageUploadProps {
   setUploadingImage: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setThemeProducts: (fn: (prev: any) => any) => void;
+  setProducts: (fn: (prev: any[]) => any[]) => void;
   updateProduct: (id: number, updates: any) => void;
   currentSeason: string;
 }
@@ -12,7 +12,7 @@ interface UseProductImageUploadProps {
 export const useProductImageUpload = ({
   setUploadingImage,
   setError,
-  setThemeProducts,
+  setProducts,
   updateProduct,
   currentSeason,
 }: UseProductImageUploadProps) => {
@@ -51,10 +51,8 @@ export const useProductImageUpload = ({
       
       // Check if this is a ResourceLibrary product (string ID) or regular product (numeric ID)
       if (typeof productId === 'string' && productId.startsWith('resource-')) {
-        // Update themeProducts for ResourceLibrary products
-        setThemeProducts(prev => ({
-          ...prev,
-          [currentSeason]: (prev[currentSeason] || []).map((product: any) => 
+        // Update template products for ResourceLibrary products
+        setProducts(prev => prev.map((product: any) => 
             product.id === productId 
               ? {
                   ...product,
@@ -63,8 +61,7 @@ export const useProductImageUpload = ({
                   imageAttachmentUrl: uploadedImage.url
                 }
               : product
-          )
-        }));
+          ));
       } else {
         // Update regular SeasonalStore product
         updateProduct(productId as number, {
@@ -82,7 +79,7 @@ export const useProductImageUpload = ({
     } finally {
       setUploadingImage(false);
     }
-  }, [setUploadingImage, setError, setThemeProducts, updateProduct, currentSeason]);
+  }, [setUploadingImage, setError, setProducts, updateProduct]);
 
   return {
     handleProductImageUpload,

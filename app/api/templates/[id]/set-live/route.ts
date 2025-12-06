@@ -116,11 +116,11 @@ async function setLiveTemplateHandler(
           themeSnapshot: {
             id: `theme_default_${Date.now()}`,
             experienceId: 'default-experience',
-            name: "Default Theme",
-            season: "Fall",
-            themePrompt: "A clean, default theme for the seasonal store",
-            accentColor: "bg-blue-600 hover:bg-blue-700 text-white ring-blue-500",
-            ringColor: "ring-blue-500",
+            name: "Black Friday",
+            season: "Black Friday",
+            themePrompt: "A bold, high-energy Black Friday sale scene with deep blacks, vibrant gold accents, and dramatic lighting.",
+            accentColor: "bg-yellow-500 hover:bg-yellow-600 text-gray-900 ring-yellow-400",
+            ringColor: "ring-yellow-400",
             createdAt: new Date(),
             updatedAt: new Date()
           },

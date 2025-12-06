@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { funnels, funnelResources, resources, conversations, funnelInteractions, experiences, users, funnelAnalytics, messages, funnelResourceAnalytics } from "./schema";
+import { funnels, funnelResources, resources, conversations, funnelInteractions, experiences, users, funnelAnalytics, originTemplates, messages, funnelResourceAnalytics, templates, themes } from "./schema";
 
 export const funnelResourcesRelations = relations(funnelResources, ({one}) => ({
 	funnel: one(funnels, {
@@ -65,8 +65,11 @@ export const experiencesRelations = relations(experiences, ({many}) => ({
 	resources: many(resources),
 	users: many(users),
 	funnelAnalytics: many(funnelAnalytics),
+	originTemplates: many(originTemplates),
 	conversations: many(conversations),
 	funnelResourceAnalytics: many(funnelResourceAnalytics),
+	templates: many(templates),
+	themes: many(themes),
 }));
 
 export const usersRelations = relations(users, ({one, many}) => ({
@@ -76,6 +79,7 @@ export const usersRelations = relations(users, ({one, many}) => ({
 		fields: [users.experienceId],
 		references: [experiences.id]
 	}),
+	templates: many(templates),
 }));
 
 export const funnelAnalyticsRelations = relations(funnelAnalytics, ({one}) => ({
@@ -86,6 +90,13 @@ export const funnelAnalyticsRelations = relations(funnelAnalytics, ({one}) => ({
 	funnel: one(funnels, {
 		fields: [funnelAnalytics.funnelId],
 		references: [funnels.id]
+	}),
+}));
+
+export const originTemplatesRelations = relations(originTemplates, ({one}) => ({
+	experience: one(experiences, {
+		fields: [originTemplates.experienceId],
+		references: [experiences.id]
 	}),
 }));
 
@@ -108,5 +119,28 @@ export const funnelResourceAnalyticsRelations = relations(funnelResourceAnalytic
 	resource: one(resources, {
 		fields: [funnelResourceAnalytics.resourceId],
 		references: [resources.id]
+	}),
+}));
+
+export const templatesRelations = relations(templates, ({one}) => ({
+	experience: one(experiences, {
+		fields: [templates.experienceId],
+		references: [experiences.id]
+	}),
+	theme: one(themes, {
+		fields: [templates.themeId],
+		references: [themes.id]
+	}),
+	user: one(users, {
+		fields: [templates.userId],
+		references: [users.id]
+	}),
+}));
+
+export const themesRelations = relations(themes, ({one, many}) => ({
+	templates: many(templates),
+	experience: one(experiences, {
+		fields: [themes.experienceId],
+		references: [experiences.id]
 	}),
 }));

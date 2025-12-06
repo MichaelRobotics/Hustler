@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoBananaService } from '@/lib/services/nanobananaService';
+import { nanoBananaService } from '@/lib/components/store/SeasonalStore/actions/nanobananaService';
 
 export async function POST(request: NextRequest) {
   try {

@@ -412,7 +412,7 @@ export const funnelResourceAnalytics = pgTable(
 );
 
 // ===== RELATIONS =====
-export const experiencesRelations = relations(experiences, ({ many }) => ({
+export const experiencesRelations = relations(experiences, ({ one, many }) => ({
 	users: many(users),
 	funnels: many(funnels),
 	resources: many(resources),
@@ -420,6 +420,7 @@ export const experiencesRelations = relations(experiences, ({ many }) => ({
 	funnelAnalytics: many(funnelAnalytics),
 	themes: many(themes),
 	templates: many(templates),
+	originTemplate: one(originTemplates),
 }));
 
 // Companies relations removed - using experiences for multitenancy
@@ -578,6 +579,31 @@ export const templates = pgTable(
 	}),
 );
 
+// ===== ORIGIN TEMPLATES TABLE =====
+export const originTemplates = pgTable(
+	"origin_templates",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		companyLogoUrl: text("company_logo_url"),
+		companyBannerImageUrl: text("company_banner_image_url"),
+		themePrompt: text("theme_prompt"),
+		defaultThemeData: jsonb("default_theme_data").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		experienceIdIdx: index("origin_templates_experience_id_idx").on(
+			table.experienceId,
+		),
+		experienceUnique: unique("origin_templates_experience_unique").on(
+			table.experienceId,
+		),
+	}),
+);
+
 
 export const funnelAnalyticsRelations = relations(
 	funnelAnalytics,
@@ -632,5 +658,12 @@ export const templatesRelations = relations(templates, ({ one }) => ({
 	theme: one(themes, {
 		fields: [templates.themeId],
 		references: [themes.id],
+	}),
+}));
+
+export const originTemplatesRelations = relations(originTemplates, ({ one }) => ({
+	experience: one(experiences, {
+		fields: [originTemplates.experienceId],
+		references: [experiences.id],
 	}),
 }));

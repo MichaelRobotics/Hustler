@@ -1,6 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { LiveTemplateCard } from './templates/LiveTemplateCard';
+import { ShopCarousel } from './templates/ShopCarousel';
+import { SeasonalDiscountPanel } from './templates/SeasonalDiscountPanel';
+import { OneTimeDiscountPanel } from './templates/OneTimeDiscountPanel';
+import { MessageEditorModal, type DiscountMessage } from './templates/MessageEditorModal';
+import type { DiscountSettings } from '../types';
 
 interface Template {
   id: string;
@@ -8,9 +14,12 @@ interface Template {
   templateData: {
     products: any[];
     floatingAssets: any[];
+    discountSettings?: DiscountSettings;
+    oneTimeDiscounts?: any[];
   };
   currentSeason: string;
   createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface TemplateManagerModalProps {
@@ -18,19 +27,25 @@ interface TemplateManagerModalProps {
   isAnimating: boolean;
   templates: Template[];
   liveTemplate: Template | null;
-  highlightedTemplateId?: string; // New prop for highlighting
+  highlightedTemplateId?: string;
+  originTemplate?: any | null;
   backgroundAnalysis: {
     recommendedTextColor: string;
   };
-  maxTemplates?: number; // Maximum number of templates allowed
+  maxTemplates?: number;
+  discountSettings?: DiscountSettings;
+  products?: any[];
   
   // Handlers
   onClose: () => void;
   loadTemplate: (id: string) => void;
   deleteTemplate: (id: string) => void;
   setLiveTemplate: (id: string) => void;
-  onMakePublic?: (templateId: string) => void; // New callback for making public
-  onPreview?: (templateId: string) => void; // New callback for preview
+  onMakePublic?: (templateId: string) => void;
+  onPreview?: (templateId: string) => void;
+  onRenameTemplate?: (templateId: string, updates: { name?: string }) => Promise<any>;
+  onSaveDiscountSettings?: (templateId: string, settings: DiscountSettings) => Promise<void>;
+  onCreateNewShop?: () => void;
 }
 
 export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
@@ -39,6 +54,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   templates,
   liveTemplate,
   highlightedTemplateId,
+  originTemplate,
   backgroundAnalysis,
   onClose,
   loadTemplate,
@@ -46,11 +62,91 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   setLiveTemplate,
   onMakePublic,
   onPreview,
+  onRenameTemplate,
+  onSaveDiscountSettings,
+  onCreateNewShop,
+  discountSettings,
+  products = [],
   maxTemplates = 10,
 }) => {
-  // Check if at template limit
-  const isAtTemplateLimit = templates.length >= maxTemplates;
-  
+  const [showSeasonalDiscountPanel, setShowSeasonalDiscountPanel] = useState(false);
+  const [showOneTimeDiscountPanel, setShowOneTimeDiscountPanel] = useState(false);
+  const [messageEditorState, setMessageEditorState] = useState<{
+    isOpen: boolean;
+    type?: 'prePromo' | 'activePromo' | 'oneTime';
+    index?: number;
+  }>({ isOpen: false });
+  const [currentMessage, setCurrentMessage] = useState<DiscountMessage | undefined>(undefined);
+  const [oneTimeDiscounts, setOneTimeDiscounts] = useState<any[]>(
+    liveTemplate?.templateData?.oneTimeDiscounts || []
+  );
+  const [oneTimeDiscountsSnapshot, setOneTimeDiscountsSnapshot] = useState<any[] | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
+  // Refs for scrolling
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const seasonalDiscountPanelRef = useRef<HTMLDivElement>(null);
+  const oneTimeDiscountPanelRef = useRef<HTMLDivElement>(null);
+
+  // Get discount settings for the live template
+  const templateDiscountSettings = liveTemplate?.templateData?.discountSettings || discountSettings;
+
+  // Scroll to seasonal discount panel when it's shown
+  useEffect(() => {
+    if (showSeasonalDiscountPanel && seasonalDiscountPanelRef.current && contentScrollRef.current) {
+      // Delay to ensure the panel is fully rendered and expanded
+      const timeoutId = setTimeout(() => {
+        const panelElement = seasonalDiscountPanelRef.current;
+        const scrollContainer = contentScrollRef.current;
+        if (panelElement && scrollContainer) {
+          // Get the position of the panel relative to the scroll container
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const panelRect = panelElement.getBoundingClientRect();
+          
+          // Calculate scroll position: panel top relative to container top
+          const scrollTop = scrollContainer.scrollTop;
+          const panelTopRelativeToContainer = panelRect.top - containerRect.top + scrollTop;
+          
+          // Scroll to show the panel with some padding from the top
+          scrollContainer.scrollTo({
+            top: panelTopRelativeToContainer - 20, // 20px padding from top
+            behavior: 'smooth',
+          });
+        }
+      }, 150); // Delay to ensure panel is fully expanded
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [showSeasonalDiscountPanel]);
+
+  // Scroll to one-time discount panel when it's shown
+  useEffect(() => {
+    if (showOneTimeDiscountPanel && oneTimeDiscountPanelRef.current && contentScrollRef.current) {
+      // Delay to ensure the panel is fully rendered and expanded
+      const timeoutId = setTimeout(() => {
+        const panelElement = oneTimeDiscountPanelRef.current;
+        const scrollContainer = contentScrollRef.current;
+        if (panelElement && scrollContainer) {
+          // Get the position of the panel relative to the scroll container
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const panelRect = panelElement.getBoundingClientRect();
+          
+          // Calculate scroll position: panel top relative to container top
+          const scrollTop = scrollContainer.scrollTop;
+          const panelTopRelativeToContainer = panelRect.top - containerRect.top + scrollTop;
+          
+          // Scroll to show the panel with some padding from the top
+          scrollContainer.scrollTo({
+            top: panelTopRelativeToContainer - 20, // 20px padding from top
+            behavior: 'smooth',
+          });
+        }
+      }, 150); // Delay to ensure panel is fully expanded
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [showOneTimeDiscountPanel]);
+
   if (!isOpen) return null;
 
   return (
@@ -66,279 +162,216 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
             box-shadow: 0 0 0 12px rgba(34, 197, 94, 0), 0 0 40px rgba(34, 197, 94, 0.5);
           }
         }
-        @keyframes makePublicShine {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        @keyframes deleteIconPulse {
-          0%, 100% { 
-            transform: scale(1);
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px rgba(239, 68, 68, 0.4);
-          }
-          50% { 
-            transform: scale(1.2);
-            box-shadow: 0 0 0 8px rgba(239, 68, 68, 0), 0 0 20px rgba(239, 68, 68, 0.6);
-          }
-        }
-        @keyframes deleteIconBounce {
-          0%, 100% { transform: translateY(0); }
-          25% { transform: translateY(-4px); }
-          75% { transform: translateY(2px); }
-        }
         .make-public-pulse {
           animation: makePublicPulse 3s ease-in-out infinite;
         }
-        .make-public-shine {
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-          background-size: 200% 100%;
-          animation: makePublicShine 4s ease-in-out infinite;
-        }
-        .delete-icon-animate {
-          animation: deleteIconPulse 2s ease-in-out infinite, deleteIconBounce 1.5s ease-in-out infinite;
-        }
       `}</style>
       <div
-      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Shop Manager"
-        className={`w-full max-w-md bg-gray-900/70 backdrop-blur-md text-white shadow-2xl transform transition-transform duration-300 ${
-          isAnimating ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm">
-          <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Shop Manager
-          </h3>
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            aria-label="Close"
-          >
-            Close
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {/* Public Shop Section */}
-          <div className="mb-6">
-            <h4 className="text-sm font-semibold uppercase text-gray-300 mb-3 flex items-center">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Shop Manager"
+          className={`w-full max-w-md h-full flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xl transform transition-transform duration-300 ${
+            isAnimating ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+            <h3 className="text-lg font-semibold tracking-wide flex items-center">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              Public Shop
-            </h4>
-            
-            {liveTemplate ? (
-              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-                    <h5 className="font-semibold text-white truncate">{liveTemplate.name}</h5>
-                    <span className="ml-2 px-2 py-1 bg-green-600 text-green-100 text-xs rounded-full">LIVE</span>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-400 mb-3">
-                  {liveTemplate.templateData.products.length} products • {liveTemplate.templateData.floatingAssets.length} assets • {liveTemplate.currentSeason} theme
-                </div>
-                <div className="flex space-x-2">
-                  {onPreview && (
-                    <button
-                      onClick={() => {
-                        onPreview(liveTemplate.id);
-                        onClose();
-                      }}
-                      className="flex-1 px-3 py-1 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white text-sm rounded transition-colors flex items-center justify-center"
-                      title="Preview Shop"
-                    >
-                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      Preview
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center">
-                    <h5 className="font-semibold text-white truncate">Default Template</h5>
-                    <span className="ml-2 px-2 py-1 bg-blue-600 text-blue-100 text-xs rounded-full">PUBLIC</span>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-400 mb-3">
-                  No template is live - customers see the default shop appearance
-                </div>
-                <div className="flex space-x-2">
-                </div>
-              </div>
-            )}
+              Shop Manager
+            </h3>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              aria-label="Close"
+            >
+              Close
+            </button>
           </div>
 
-          {/* Templates List */}
-          <div>
-            <h4 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">Templates {templates.filter(template => {
-              // Always hide Default template from TEMPLATES list
-              if (template.name === "Default") {
-                return false;
-              }
-              // Hide the currently live template
-              return template.id !== liveTemplate?.id;
-            }).length}</h4>
-            {templates.length > 10 && (
-              <div className="mb-2 text-xs text-gray-400">
-                Showing first 10 templates
-              </div>
+          {/* Content */}
+          <div ref={contentScrollRef} className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-950 min-h-0">
+            {/* Live Template Section */}
+            {liveTemplate && (
+              <LiveTemplateCard
+                template={liveTemplate}
+                onPreview={onPreview ? (id) => {
+                  onPreview(id);
+                  onClose();
+                } : undefined}
+                onClose={onClose}
+              />
             )}
-            <div className="mb-8"></div>
-            {templates.filter(template => {
-              // Always hide Default template from TEMPLATES list
-              if (template.name === "Default") {
-                return false;
-              }
-              // Hide the currently live template
-              return template.id !== liveTemplate?.id;
-            }).length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <svg className="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p>No templates saved yet</p>
-                <p className="text-xs mt-1">Create your first template by clicking "Save as New Template"</p>
-              </div>
-            ) : (
-              <div className="max-h-[30rem] overflow-y-auto space-y-3">
-                {/* Default Template Option - Show when NO template is live AND no default template is public */}
-                {!liveTemplate && !templates.some(t => t.name === "Default") && (
-                  <div className="bg-gray-700 rounded-lg p-3 border border-gray-600">
-                    <div className="flex items-center justify-between mb-2">
-                      <h5 className="font-semibold text-white">Default (No Template Live)</h5>
-                      <div className="w-4 h-4"></div> {/* Spacer for alignment */}
-                    </div>
-                    <div className="text-xs text-gray-400 mb-3">
-                      Clear all live templates - use default shop appearance
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          setLiveTemplate("default");
-                          onClose();
-                        }}
-                        className="flex-1 px-3 py-1 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white text-sm rounded transition-colors"
-                      >
-                        Make Shop Public
-                      </button>
-                      <div className="w-16"></div> {/* Spacer for alignment */}
-                    </div>
+
+            {/* Templates Carousel */}
+            <ShopCarousel
+              templates={templates}
+              liveTemplateId={liveTemplate?.id}
+              highlightedTemplateId={highlightedTemplateId}
+              originTemplate={originTemplate}
+              onDeleteTemplate={deleteTemplate}
+              onSetLive={(id) => {
+                setLiveTemplate(id);
+                if (onMakePublic) {
+                  onMakePublic(id);
+                }
+                onClose();
+              }}
+              onPreview={onPreview ? (id) => {
+                onPreview(id);
+                onClose();
+              } : undefined}
+              onRenameTemplate={onRenameTemplate}
+              onMakePublic={onMakePublic}
+              onCreateNewShop={onCreateNewShop}
+              onClose={onClose}
+            />
+
+            {/* Discount Management Panels - Only show if live template exists */}
+            {liveTemplate && templateDiscountSettings && (
+              <>
+                <div className="mt-4 space-y-3">
+                  <div ref={seasonalDiscountPanelRef}>
+                    <SeasonalDiscountPanel
+                    discountSettings={templateDiscountSettings}
+                    onSettingsChange={(settings) => {
+                      // Update local state - will be saved when user clicks save
+                      if (onSaveDiscountSettings) {
+                        onSaveDiscountSettings(liveTemplate.id, settings);
+                      }
+                    }}
+                    onSave={async () => {
+                      if (onSaveDiscountSettings && templateDiscountSettings) {
+                        await onSaveDiscountSettings(liveTemplate.id, templateDiscountSettings);
+                      }
+                    }}
+                    onDelete={async () => {
+                      // Delete discount settings
+                      if (onSaveDiscountSettings) {
+                        const emptySettings: DiscountSettings = {
+                          enabled: false,
+                          globalDiscount: false,
+                          globalDiscountType: 'percentage',
+                          globalDiscountAmount: 0,
+                          percentage: 0,
+                          startDate: '',
+                          endDate: '',
+                          discountText: '',
+                          promoCode: '',
+                          prePromoMessages: [],
+                          activePromoMessages: [],
+                        };
+                        await onSaveDiscountSettings(liveTemplate.id, emptySettings);
+                      }
+                    }}
+                    onOpenMessageEditor={(type, index) => {
+                      setMessageEditorState({ isOpen: true, type, index });
+                    }}
+                    isPromoActive={false} // TODO: Calculate from dates
+                    timeRemaining={null} // TODO: Calculate from dates
+                    timeUntilStart={null} // TODO: Calculate from dates
+                    showPanel={showSeasonalDiscountPanel}
+                    onTogglePanel={() => setShowSeasonalDiscountPanel(!showSeasonalDiscountPanel)}
+                  />
                   </div>
-                )}
-                
-                {templates
-                  .filter(template => {
-                    // Always hide Default template from TEMPLATES list
-                    if (template.name === "Default") {
-                      return false;
+
+                  <div ref={oneTimeDiscountPanelRef}>
+                    <OneTimeDiscountPanel
+                    products={products}
+                    discounts={oneTimeDiscounts}
+                    onDiscountsChange={setOneTimeDiscounts}
+                    selectedProductId={selectedProductId}
+                    onSelectProduct={setSelectedProductId}
+                    onOpenMessageEditor={(index) => {
+                      // Get the one-time discount message
+                      const discount = oneTimeDiscounts[index];
+                      const message = discount?.messages?.[0] as DiscountMessage | undefined;
+                      setCurrentMessage(message);
+                      setMessageEditorState({ isOpen: true, type: 'oneTime', index });
+                    }}
+                    showPanel={showOneTimeDiscountPanel}
+                    onTogglePanel={() => setShowOneTimeDiscountPanel(!showOneTimeDiscountPanel)}
+                    onSave={() => {
+                      // Save one-time discounts to template
+                      if (onSaveDiscountSettings && liveTemplate) {
+                        // TODO: Save one-time discounts to template data
+                        console.log('Saving one-time discounts:', oneTimeDiscounts);
+                      }
+                    }}
+                    discountsSnapshot={oneTimeDiscountsSnapshot}
+                    onSetSnapshot={setOneTimeDiscountsSnapshot}
+                  />
+                  </div>
+                </div>
+
+                {/* Message Editor Modal */}
+                <MessageEditorModal
+                  isOpen={messageEditorState.isOpen}
+                  onClose={() => {
+                    setMessageEditorState({ isOpen: false });
+                    setCurrentMessage(undefined);
+                  }}
+                  title={
+                    messageEditorState.type === 'oneTime'
+                      ? 'One-Time Discount Message'
+                      : messageEditorState.type === 'prePromo'
+                      ? 'Pre-Promo Message'
+                      : 'Active Promo Message'
+                  }
+                  timingLabel={
+                    messageEditorState.type === 'oneTime'
+                      ? 'when discount is applied'
+                      : messageEditorState.type === 'prePromo'
+                      ? 'before discount starts'
+                      : 'after discount starts'
+                  }
+                  message={currentMessage}
+                  onMessageChange={(updates: Partial<DiscountMessage>) => {
+                    const updatedMessage = { ...currentMessage, ...updates } as DiscountMessage;
+                    setCurrentMessage(updatedMessage);
+                    
+                    // Save to appropriate discount settings
+                    if (messageEditorState.type === 'oneTime' && messageEditorState.index !== undefined) {
+                      const updatedDiscounts = [...oneTimeDiscounts];
+                      if (!updatedDiscounts[messageEditorState.index].messages) {
+                        updatedDiscounts[messageEditorState.index].messages = [];
+                      }
+                      if (updatedDiscounts[messageEditorState.index].messages.length === 0) {
+                        updatedDiscounts[messageEditorState.index].messages.push(updatedMessage);
+                      } else {
+                        updatedDiscounts[messageEditorState.index].messages[0] = updatedMessage;
+                      }
+                      setOneTimeDiscounts(updatedDiscounts);
+                    } else if (messageEditorState.type === 'prePromo' && messageEditorState.index !== undefined && onSaveDiscountSettings) {
+                      const updatedSettings = {
+                        ...templateDiscountSettings,
+                        prePromoMessages: [...(templateDiscountSettings.prePromoMessages || [])],
+                      };
+                      updatedSettings.prePromoMessages[messageEditorState.index] = updatedMessage;
+                      onSaveDiscountSettings(liveTemplate.id, updatedSettings);
+                    } else if (messageEditorState.type === 'activePromo' && messageEditorState.index !== undefined && onSaveDiscountSettings) {
+                      const updatedSettings = {
+                        ...templateDiscountSettings,
+                        activePromoMessages: [...(templateDiscountSettings.activePromoMessages || [])],
+                      };
+                      updatedSettings.activePromoMessages[messageEditorState.index] = updatedMessage;
+                      onSaveDiscountSettings(liveTemplate.id, updatedSettings);
                     }
-                    // Hide the currently live template
-                    return template.id !== liveTemplate?.id;
-                  })
-                  .sort((a, b) => {
-                    // Sort by creation date (newest first)
-                    // Primary: Use createdAt if available
-                    // Fallback: Use template ID (assuming newer IDs are created later)
-                    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : a.id.localeCompare(b.id);
-                    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : b.id.localeCompare(a.id);
-                    return dateB - dateA;
-                  })
-                  .slice(0, 10)
-                  .map((template) => (
-                  <div 
-                    key={template.id} 
-                    className={`rounded-lg p-3 border transition-all duration-[10000ms] ${
-                      template.id === highlightedTemplateId 
-                        ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-400 shadow-lg shadow-green-500/25' 
-                        : 'bg-gray-800 border-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h5 className="font-semibold text-white truncate">{template.name}</h5>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete template "${template.name}"?`)) {
-                            deleteTemplate(template.id);
-                          }
-                        }}
-                        className={`p-1 text-gray-400 hover:text-red-400 hover:bg-gradient-to-r hover:from-red-500 hover:to-pink-600 rounded transition-colors ${
-                          isAtTemplateLimit ? 'delete-icon-animate text-red-400' : ''
-                        }`}
-                        title="Delete Template"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="text-xs text-gray-400 mb-3">
-                      {template.templateData.products.length} products • {template.templateData.floatingAssets.length} assets • {template.currentSeason} theme
-                    </div>
-                    <div className="flex flex-col space-y-2">
-                      {onPreview && (
-                        <button
-                          onClick={() => {
-                            onPreview(template.id);
-                            onClose();
-                          }}
-                          className="w-full px-3 py-1 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white text-sm rounded transition-colors flex items-center justify-center"
-                          title="Preview Shop"
-                        >
-                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          Preview
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setLiveTemplate(template.id);
-                          if (onMakePublic) {
-                            onMakePublic(template.id);
-                          }
-                          onClose();
-                        }}
-                        className={`w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm font-bold rounded-lg transition-all duration-300 transform hover:scale-110 relative overflow-hidden flex items-center justify-center shadow-lg hover:shadow-xl ${
-                          template.id === highlightedTemplateId 
-                            ? 'make-public-pulse make-public-shine' 
-                            : 'hover:shadow-green-500/50'
-                        }`}
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                        Make Shop Public
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  }}
+                />
+              </>
             )}
           </div>
         </div>
-      </div>
       </div>
     </>
   );
 };
-

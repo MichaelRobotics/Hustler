@@ -89,7 +89,10 @@ export async function updateTemplate(
 ): Promise<StoreTemplate> {
   const response = await apiPut(`/api/templates/${templateId}`, updates, experienceId);
   if (!response.ok) {
-    throw new Error("Failed to update template");
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    const errorMessage = errorData.error || errorData.message || `Failed to update template (${response.status})`;
+    console.error('❌ [updateTemplate] API error:', errorMessage, 'Status:', response.status);
+    throw new Error(errorMessage);
   }
   const data = await response.json();
   return data.template;

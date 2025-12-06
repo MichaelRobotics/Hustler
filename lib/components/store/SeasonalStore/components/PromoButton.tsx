@@ -85,6 +85,7 @@ export const PromoButton: React.FC<PromoButtonProps> = ({
       {/* Claim Button */}
       <div className="relative w-full">
         <button
+          data-prevent-bg-toggle="true"
           onClick={() => {
             if (editorState.isEditorView) {
               onOpenProductEditor(null, 'button');
@@ -100,7 +101,7 @@ export const PromoButton: React.FC<PromoButtonProps> = ({
               {promoButton.icon}
             </span>
           )}
-          {promoButton.text}
+          <span dangerouslySetInnerHTML={{ __html: promoButton.text || '' }} />
         </button>
       </div>
     </div>

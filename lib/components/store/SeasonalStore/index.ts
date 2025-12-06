@@ -7,8 +7,18 @@ export { FloatingAsset } from './components/FloatingAsset';
 export * from './components/Icons';
 
 // Services
-export * from './services/aiService';
-export * from './services/constants';
+export * from './actions/aiService';
+export * from './actions/constants';
+
+// Utils - Color utilities
+export {
+  TAILWIND_COLOR_MAP,
+  tailwindTextColorToHex,
+  tailwindBgColorToHex,
+  getTextColorsFromCardClass,
+  isDarkColor,
+  getContrastingTextColor,
+} from './utils/colors';
 
 // Types
 export * from './types';

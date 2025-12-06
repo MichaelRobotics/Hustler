@@ -2,31 +2,32 @@ import { useEffect, useState } from 'react';
 import { truncateDescription } from '../utils';
 
 interface AutoAddResourcesHookProps {
-  allResources: any[]; // IMPORTANT: MUST contain ONLY Market Stall (global ResourceLibrary) products
+  allResources: any[]; // Market Stall (global ResourceLibrary) products
   hasLoadedResourceLibrary: boolean;
-  currentSeason: string;
-  themeProducts: Record<string, any[]>;
-  deletedResourceLibraryProducts: Record<string, Set<string>>;
-  legacyTheme: any;
-  setThemeProducts: (fn: (prev: Record<string, any[]>) => Record<string, any[]>) => void;
+  products: any[];
+  deletedResourceLibraryProducts: Set<string>; // Template-based deletion tracking (not theme-based)
+  legacyTheme: any; // Only used for applying visual styles
+  setProducts: (products: any[] | ((prev: any[]) => any[])) => void;
   handleProductImageUpload: (productId: number | string, file: File) => Promise<void>;
   templateResourceLibraryProductIds?: string[]; // Market Stall ResourceLibrary product IDs from loaded template
-  setIsStoreContentReady?: (ready: boolean) => void; // Callback to notify when store content is ready
-  isTemplateLoaded?: boolean; // Check if any template is loaded internally
+  isTemplateLoaded?: boolean; // Check if any template is loaded internally (from usePreviewLiveTemplate)
+  isLoadingTemplate?: boolean; // Check if a template is currently being loaded (from useSeasonalStoreDatabase)
+  hasAnyTemplates?: boolean; // Whether any templates exist in the database (if true, skip auto-add)
+  setIsStoreContentReady?: (ready: boolean) => void; // Optional callback to notify when store content is ready
 }
 
 export const useAutoAddResources = ({
   allResources,
   hasLoadedResourceLibrary,
-  currentSeason,
-  themeProducts,
+  products,
   deletedResourceLibraryProducts,
   legacyTheme,
-  setThemeProducts,
+  setProducts,
   handleProductImageUpload,
   templateResourceLibraryProductIds = [],
-  setIsStoreContentReady,
   isTemplateLoaded = false,
+  isLoadingTemplate = false,
+  hasAnyTemplates = false,
 }: AutoAddResourcesHookProps) => {
   const [hasAutoAddedResources, setHasAutoAddedResources] = useState(false);
   const [isAutoAddComplete, setIsAutoAddComplete] = useState(false);
@@ -50,98 +51,19 @@ export const useAutoAddResources = ({
       
       if (existingResources.length > 0) {
         // Convert existing resources to products and add to theme
-        const templateProducts = existingResources.map(resource => ({
-          id: `resource-${resource.id}`,
-          name: resource.name,
-          description: truncateDescription(resource.description || ''),
-          price: parseFloat(resource.price) || 0,
-          image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
-          buttonText: 'VIEW DETAILS',
-          buttonLink: resource.link || '',
-          whopProductId: resource.whopProductId, // Track Whop product ID for synced products
-          cardClass: legacyTheme.card,
-          titleClass: legacyTheme.text,
-          descClass: legacyTheme.text,
-          buttonClass: legacyTheme.accent,
-        }));
-        
-        // Add template products to theme
-        setThemeProducts(prev => ({
-          ...prev,
-          [currentSeason]: templateProducts
-        }));
-        
-        console.log(`[useAutoAddResources] Successfully loaded ${templateProducts.length} legacy template products`);
-      } else {
-        console.log(`[useAutoAddResources] No template products found in ResourceLibrary`);
-      }
-    }
-  }, [templateResourceLibraryProductIds, allResources, currentSeason, legacyTheme, setThemeProducts]);
-
-  // Auto-add ONLY Market Stall (ResourceLibrary) products to theme on initial load
-  useEffect(() => {
-    // Run this when:
-    // 1. Market Stall resources are available
-    // 2. We haven't already auto-added resources for this session
-    // IMPORTANT: allResources prop contains ONLY Market Stall (global ResourceLibrary) products
-    if (!hasLoadedResourceLibrary && !hasAutoAddedResources && allResources.length > 0) {
-      console.log(`[useAutoAddResources] Auto-adding Market Stall products to theme on initial load`);
-      
-      // Get all PAID Market Stall resources that aren't already in the theme
-      // allResources comes from Market Stall (global ResourceLibrary context)
-      const paidMarketStallResources = allResources.filter(resource => 
-        resource.category === "PAID" && 
-        resource.name && 
-        resource.price &&
-        !(deletedResourceLibraryProducts[currentSeason]?.has(resource.id))
-      );
-      
-      // Check which resources are already in the theme
-      const currentThemeProducts = themeProducts[currentSeason] || [];
-      const existingResourceIds = new Set(
-        currentThemeProducts
-          .filter(p => typeof p.id === 'string' && p.id.startsWith('resource-'))
-          .map(p => String(p.id).replace('resource-', ''))
-      );
-      
-      // Find Market Stall resources that aren't in the theme yet
-      const marketStallResourcesToAdd = paidMarketStallResources.filter(resource => 
-        !existingResourceIds.has(resource.id)
-      );
-      
-      if (marketStallResourcesToAdd.length > 0) {
-        console.log(`[useAutoAddResources] Adding ${marketStallResourcesToAdd.length} Market Stall products to theme:`, marketStallResourcesToAdd.map(r => r.name));
-        
-        // Debug: Log resource link data
-        marketStallResourcesToAdd.forEach(resource => {
-          console.log(`[useAutoAddResources] 🔍 Resource "${resource.name}" link data:`, {
-            hasLink: !!resource.link,
-            link: resource.link,
-            linkType: typeof resource.link,
-            linkLength: resource.link?.length || 0,
-            resourceId: resource.id,
-            fullResource: resource
-          });
-        });
-        
-        // Convert Market Stall resources to products and add to theme
-        const newProducts = marketStallResourcesToAdd.map(resource => {
-          const buttonLink = resource.link || '';
-          console.log(`[useAutoAddResources] 🔍 Creating product from resource "${resource.name}":`, {
-            resourceId: resource.id,
-            resourceLink: resource.link,
-            assignedButtonLink: buttonLink,
-            hasButtonLink: !!buttonLink
-          });
+        // Images are already synced from Whop SDK in the sync process
+        const templateProducts = existingResources.map((resource) => {
+          const productImage = resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
           
           return {
             id: `resource-${resource.id}`,
             name: resource.name,
             description: truncateDescription(resource.description || ''),
             price: parseFloat(resource.price) || 0,
-            image: resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
+            image: productImage,
+            imageAttachmentUrl: productImage,
             buttonText: 'VIEW DETAILS',
-            buttonLink: buttonLink,
+            buttonLink: resource.link || '',
             whopProductId: resource.whopProductId, // Track Whop product ID for synced products
             cardClass: legacyTheme.card,
             titleClass: legacyTheme.text,
@@ -150,44 +72,100 @@ export const useAutoAddResources = ({
           };
         });
         
-        // Debug: Log created products
-        console.log(`[useAutoAddResources] 🔍 Created products with buttonLink:`, newProducts.map(p => ({
-          id: p.id,
-          name: p.name,
-          hasButtonLink: !!p.buttonLink,
-          buttonLink: p.buttonLink
-        })));
+        // Add template products to theme
+        setProducts(() => templateProducts);
         
-        // Add all new products to theme
-        setThemeProducts(prev => ({
-          ...prev,
-          [currentSeason]: [...(prev[currentSeason] || []), ...newProducts]
-        }));
-        
-        console.log(`[useAutoAddResources] Successfully added ${newProducts.length} Market Stall products to theme`);
+        console.log(`[useAutoAddResources] Successfully loaded ${templateProducts.length} legacy template products`);
       } else {
-        console.log(`[useAutoAddResources] All available Market Stall products are already in theme`);
+        console.log(`[useAutoAddResources] No template products found in ResourceLibrary`);
+      }
+    }
+  }, [templateResourceLibraryProductIds, allResources, legacyTheme, setProducts]);
+
+  // Auto-add ONLY Market Stall (ResourceLibrary) products to theme on initial load
+  // IMPORTANT: This should ONLY run on fresh app install (no templates exist)
+  useEffect(() => {
+    // Skip auto-add while a template is being loaded from the database
+    if (isLoadingTemplate) {
+      return;
+    }
+    
+    // CRITICAL: Skip auto-add if ANY templates exist in the database
+    // Auto-add is ONLY for fresh app installs with no templates
+    if (hasAnyTemplates) {
+      // Mark as complete to prevent future auto-adds
+      if (!hasAutoAddedResources) {
+        setHasAutoAddedResources(true);
+        setIsAutoAddComplete(true);
+      }
+      return;
+    }
+    
+    // Also skip if a template is loaded via preview
+    if (isTemplateLoaded) {
+      setHasAutoAddedResources(true);
+      setIsAutoAddComplete(true);
+      return;
+    }
+    
+    // Run this ONLY when:
+    // 1. NO templates exist (fresh install)
+    // 2. Market Stall resources are available
+    // 3. We haven't already auto-added resources for this session
+    if (!hasLoadedResourceLibrary && !hasAutoAddedResources && allResources.length > 0) {
+      
+      // Get all PAID Market Stall resources that aren't already in the template
+      // allResources comes from Market Stall (global ResourceLibrary context)
+      const paidMarketStallResources = allResources.filter(resource => 
+        resource.category === "PAID" && 
+        resource.name && 
+        resource.price &&
+        !deletedResourceLibraryProducts.has(resource.id)
+      );
+      
+      // Check which resources are already in the template
+      const existingResourceIds = new Set(
+        products
+          .filter(p => typeof p.id === 'string' && p.id.startsWith('resource-'))
+          .map(p => String(p.id).replace('resource-', ''))
+      );
+      
+      // Find Market Stall resources that aren't in the template yet
+      const marketStallResourcesToAdd = paidMarketStallResources.filter(resource => 
+        !existingResourceIds.has(resource.id)
+      );
+      
+      if (marketStallResourcesToAdd.length > 0) {
+        // Convert Market Stall resources to products and add to template (with current theme styles)
+        // Images are already synced from Whop SDK in the sync process
+        const newProducts = marketStallResourcesToAdd.map((resource) => {
+          const productImage = resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+          
+          return {
+            id: `resource-${resource.id}`,
+            name: resource.name,
+            description: truncateDescription(resource.description || ''),
+            price: parseFloat(resource.price) || 0,
+            image: productImage,
+            imageAttachmentUrl: productImage,
+            buttonText: 'VIEW DETAILS',
+            buttonLink: resource.link || '',
+            whopProductId: resource.whopProductId,
+            cardClass: legacyTheme.card,
+            titleClass: legacyTheme.text,
+            descClass: legacyTheme.text,
+            buttonClass: legacyTheme.accent,
+          };
+        });
+        
+        setProducts(prev => [...prev, ...newProducts]);
+        console.log(`[useAutoAddResources] Added ${newProducts.length} Market Stall products (fresh install)`);
       }
       
       setHasAutoAddedResources(true);
       setIsAutoAddComplete(true);
-      
-      // Notify that store content is ready
-      if (setIsStoreContentReady) {
-        setIsStoreContentReady(true);
-        console.log(`[useAutoAddResources] Store content ready - Market Stall auto-add complete`);
-      }
-      
-      console.log(`[useAutoAddResources] Market Stall auto-add process complete`);
-    } else if (isTemplateLoaded) {
-      console.log(`[useAutoAddResources] Template loaded internally - skipping auto-add`);
-      // Mark as complete even when template is loaded to prevent future auto-adds
-      setIsAutoAddComplete(true);
-      if (setIsStoreContentReady) {
-        setIsStoreContentReady(true);
-      }
     }
-  }, [isTemplateLoaded, allResources, hasLoadedResourceLibrary, hasAutoAddedResources, currentSeason, themeProducts, deletedResourceLibraryProducts, legacyTheme, setThemeProducts, handleProductImageUpload, setIsStoreContentReady]);
+  }, [isTemplateLoaded, isLoadingTemplate, hasAnyTemplates, allResources, hasLoadedResourceLibrary, hasAutoAddedResources, products, deletedResourceLibraryProducts, legacyTheme, setProducts, handleProductImageUpload]);
 
   return {
     hasAutoAddedResources,

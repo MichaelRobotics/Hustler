@@ -141,8 +141,8 @@ async function createTemplateHandler(
     const finalThemeId = themeId || null;
     console.log("🔍 Templates POST - Using themeId:", finalThemeId);
 
-    // Provide default themeSnapshot if undefined
-    const finalThemeSnapshot = themeSnapshot || { name: "Default Theme", season: currentSeason };
+    // Provide default themeSnapshot if undefined - use Black Friday as fallback
+    const finalThemeSnapshot = themeSnapshot || { name: "Black Friday", season: currentSeason || "Black Friday" };
     console.log("🔍 Templates POST - Using themeSnapshot:", finalThemeSnapshot);
 
     console.log("🔍 Templates POST - Creating template with:", {
@@ -169,10 +169,23 @@ async function createTemplateHandler(
       success: true,
       template: newTemplate[0],
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating template:", error);
+    
+    // Handle duplicate name error specifically
+    if (error?.code === '23505' && error?.constraint_name === 'templates_experience_name_unique') {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `A template with the name "${name}" already exists. Please use a different name.`,
+          code: 'DUPLICATE_NAME'
+        },
+        { status: 409 }
+      );
+    }
+    
     return NextResponse.json(
-      { success: false, error: "Failed to create template" },
+      { success: false, error: error?.message || "Failed to create template" },
       { status: 500 }
     );
   }
@@ -255,7 +268,7 @@ async function createTemplateDevModeWithBody(body: any) {
     console.log("🔍 Templates POST (Dev Mode) - Using themeId:", finalThemeId);
 
     // Provide default themeSnapshot if undefined
-    const finalThemeSnapshot = themeSnapshot || { name: "Default Theme", season: currentSeason };
+    const finalThemeSnapshot = themeSnapshot || { name: "Black Friday", season: currentSeason || "Black Friday" };
     console.log("🔍 Templates POST (Dev Mode) - Using themeSnapshot:", finalThemeSnapshot);
 
     // Create template using hardcoded development values

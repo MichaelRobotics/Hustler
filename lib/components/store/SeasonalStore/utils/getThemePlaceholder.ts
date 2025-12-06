@@ -23,3 +23,45 @@ export function getThemePlaceholderUrl(themeName: string): string {
   return themePlaceholders[themeName] || defaultPlaceholder;
 }
 
+/**
+ * Get background style object for SeasonalStore
+ * Returns CSS style object with background image or placeholder
+ */
+export function getBackgroundStyle(
+  backgroundAttachmentUrl: string | null | undefined,
+  currentSeason: string,
+  legacyTheme: any
+): Record<string, string | number> {
+  // Use WHOP attachment URL if available
+  if (backgroundAttachmentUrl) {
+    return {
+      backgroundImage: `url(${backgroundAttachmentUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed',
+      minHeight: '100vh',
+      width: '100%',
+      transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
+      opacity: 1
+    };
+  }
+
+  // Use theme's custom placeholder if available
+  const placeholderUrl = (legacyTheme as any)?.placeholderImage || getThemePlaceholderUrl(currentSeason);
+  const placeholderFilter = 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)';
+
+  return {
+    backgroundImage: `url(${placeholderUrl})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundAttachment: 'fixed',
+    minHeight: '100vh',
+    width: '100%',
+    transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
+    opacity: 1,
+    filter: placeholderFilter
+  };
+}
+

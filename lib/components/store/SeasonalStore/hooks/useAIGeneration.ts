@@ -7,7 +7,7 @@ import {
   generateLogo, 
   generateEmojiMatch,
   fileToBase64 
-} from '../services/aiService';
+} from '../actions/aiService';
 import { uploadUrlToWhop } from '../../../../utils/whop-image-upload';
 
 interface UseAIGenerationProps {
@@ -22,7 +22,7 @@ interface UseAIGenerationProps {
   setBackground: (type: "generated" | "uploaded", url: string | null) => Promise<void>;
   setBackgroundAttachmentId: (id: string | null) => void;
   setLogoAsset: (fn: (prev: any) => any) => void;
-  setThemeProducts: (fn: (prev: any) => any) => void;
+  setProducts: (fn: (prev: any[]) => any[]) => void;
   currentSeason: string;
   backgroundAttachmentUrl?: string;
   generatedBackground?: string;
@@ -44,7 +44,7 @@ export const useAIGeneration = ({
   setBackground,
   setBackgroundAttachmentId,
   setLogoAsset,
-  setThemeProducts,
+  setProducts,
   currentSeason,
   backgroundAttachmentUrl,
   generatedBackground,
@@ -93,9 +93,7 @@ export const useAIGeneration = ({
       // Check if this is a ResourceLibrary product (string ID) or regular product (numeric ID)
       if (typeof product.id === 'string' && product.id.startsWith('resource-')) {
         console.log('🔄 Updating ResourceLibrary product in themeProducts');
-        setThemeProducts(prev => ({
-          ...prev,
-          [currentSeason]: (prev[currentSeason] || []).map((p: any) => 
+        setProducts(prev => prev.map((p: any) => 
             p.id === product.id 
               ? {
                   ...p,
@@ -106,8 +104,7 @@ export const useAIGeneration = ({
                   imageAttachmentUrl: uploadResult.url,
                 }
               : p
-          )
-        }));
+          ));
       } else {
         console.log('🔄 Updating SeasonalStore product in frontend and database');
         // Update frontend state
@@ -120,9 +117,7 @@ export const useAIGeneration = ({
         });
         
         // Also update database theme state to persist across theme switches
-        setThemeProducts(prev => ({
-          ...prev,
-          [currentSeason]: (prev[currentSeason] || []).map((p: any) =>
+        setProducts(prev => prev.map((p: any) =>
             p.id === product.id ? {
               ...p,
               name: refinedText.newName,
@@ -131,8 +126,7 @@ export const useAIGeneration = ({
               imageAttachmentId: uploadResult.attachmentId,
               imageAttachmentUrl: uploadResult.url,
             } : p
-          )
-        }));
+          ));
       }
       
       console.log('✅ Product refinement complete');
@@ -143,7 +137,7 @@ export const useAIGeneration = ({
       setTextLoading(false);
       setGeneratingImage(false);
     }
-  }, [theme, updateProduct, setThemeProducts, currentSeason, setTextLoading, setGeneratingImage, setError]);
+  }, [theme, updateProduct, setProducts, setTextLoading, setGeneratingImage, setError]);
 
   const handleGenerateAssetFromText = useCallback(async (userPrompt: string) => {
     setTextLoading(true);

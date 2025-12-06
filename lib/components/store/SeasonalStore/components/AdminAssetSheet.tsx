@@ -1,18 +1,26 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { FloatingAsset, LegacyTheme, FixedTextStyles } from '../types/index';
+'use client';
+
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Button, Heading, Text, Card, Separator } from 'frosted-ui';
 import { 
-  SettingsIcon, 
-  XIcon, 
-  ImagePlusIcon, 
-  SearchIcon, 
-  TrashIcon, 
-  GrabIcon, 
-  LayersIcon,
-  ZapIcon,
-  PaletteIcon,
-  EditIcon
-} from './Icons';
-import { emojiToSvgDataURL } from '../services/aiService';
+  Settings, 
+  X, 
+  ImagePlus, 
+  Search, 
+  Trash2, 
+  GripVertical, 
+  Layers,
+  Zap,
+  Palette,
+  Edit,
+  Upload,
+  ChevronDown,
+  Type
+} from 'lucide-react';
+import { FloatingAsset, LegacyTheme, FixedTextStyles } from '../types/index';
+import { emojiToSvgDataURL } from '../actions/aiService';
 import { useBackgroundAnalysis } from '../utils/backgroundAnalyzer';
 import { DeleteThemeNotification } from './DeleteThemeNotification';
 
@@ -136,9 +144,6 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
       };
     }
   }, [isOpen, isEditorView]);
-  
-  // Early return before any hooks
-  if (!isOpen || !isEditorView) return null;
 
   // Use background analysis from parent for dynamic text colors
 
@@ -148,9 +153,68 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
   
   // Section visibility state
-  const [showCustomThemeDesigner, setShowCustomThemeDesigner] = useState(false);
-  const [showEditThemePrompt, setShowEditThemePrompt] = useState(false);
-  const [showDeleteCustomThemes, setShowDeleteCustomThemes] = useState(false);
+  const [showThemeSettingsDropdown, setShowThemeSettingsDropdown] = useState(false);
+  const [selectedThemeSetting, setSelectedThemeSetting] = useState<'custom' | 'edit' | 'delete' | null>(null);
+  const themeSettingsDropdownRef = React.useRef<HTMLDivElement>(null);
+  const themeSettingsButtonRef = React.useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  
+  // Calculate dropdown position when it opens
+  useEffect(() => {
+    if (showThemeSettingsDropdown) {
+      // Calculate position immediately and also after a small delay to ensure DOM is updated
+      const calculatePosition = () => {
+        if (themeSettingsButtonRef.current) {
+          const rect = themeSettingsButtonRef.current.getBoundingClientRect();
+          const dropdownHeight = 150; // Approximate height of dropdown (3 buttons)
+          setDropdownPosition({
+            top: rect.top - dropdownHeight - 8, // Position above the button with 8px margin
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      };
+      
+      // Try immediately
+      calculatePosition();
+      
+      // Also try after a small delay to ensure DOM is updated
+      const timer = setTimeout(calculatePosition, 10);
+      return () => clearTimeout(timer);
+    } else {
+      setDropdownPosition(null);
+    }
+  }, [showThemeSettingsDropdown]);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showThemeSettingsDropdown) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // Don't close if clicking on the button or dropdown menu
+      if (
+        themeSettingsButtonRef.current?.contains(target as Node) ||
+        target.closest('[data-dropdown-menu]')
+      ) {
+        return;
+      }
+      
+      // Close the dropdown
+      setShowThemeSettingsDropdown(false);
+    };
+
+    // Use a longer delay to avoid closing immediately when opening
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
+  }, [showThemeSettingsDropdown]);
   
   // Theme deletion notification state
   const [deleteNotification, setDeleteNotification] = useState<{
@@ -269,10 +333,10 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   };
 
   // Get filtered results
-  const filteredEmojis = searchEmojis(manualSearch);
+  const filteredEmojis = useMemo(() => searchEmojis(manualSearch), [manualSearch]);
 
   // Group by category for display
-  const groupedEmojis = filteredEmojis.reduce((acc, item) => {
+  const groupedEmojis = useMemo(() => filteredEmojis.reduce((acc, item) => {
     let category = 'General & Symbols';
     
     if (['🎃', '👻', '💀', '🕷️', '🦇', '🧙‍♀️', '🧹', '🍭', '⚰️', '🔮', '🧟‍♂️', '🧛‍♂️'].includes(item.emoji)) {
@@ -290,7 +354,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
     if (!acc[category]) acc[category] = [];
     acc[category].push(item);
     return acc;
-  }, {} as Record<string, typeof EMOJI_DATABASE>);
+  }, {} as Record<string, typeof EMOJI_DATABASE>), [filteredEmojis]);
 
   // Handler to manually select an emoji from the bank
   const handleSelectEmoji = useCallback((emoji: string) => {
@@ -440,186 +504,589 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
     }
   }, [newThemeName, newThemePrompt, handleAddCustomTheme, isGeneratingTheme, onClose, onThemeGeneration]);
 
+  if (!isEditorView) {
+    return null;
+  }
+
   return (
-    <div
-      className={`fixed inset-y-0 right-0 w-full md:w-80 bg-gray-900 text-white shadow-2xl transform transition-transform duration-500 z-[60] p-0 border-l border-gray-700/50 overflow-hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Background & Theme Manager"
-    >
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-gray-900">
-        <h3 className={`text-sm font-semibold tracking-wide flex items-center ${backgroundAnalysis?.recommendedTextColor === 'white' ? 'text-white' : 'text-black'}`}>
-          <svg className="w-4 h-4 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-          Background & Theme
-        </h3>
-        <button 
-          onClick={onClose} 
-          className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-          aria-label="Close"
+    <Dialog.Root open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        onClose();
+      }
+    }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-transparent z-50" />
+        <Dialog.Description className="sr-only">
+          Background and Theme Manager
+        </Dialog.Description>
+        <Dialog.Content
+          className={`fixed inset-y-0 right-0 w-full md:w-[420px] bg-white dark:bg-gray-900 text-foreground shadow-2xl z-[60] flex flex-col transform transition-transform duration-500 ${
+            isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+          onEscapeKeyDown={onClose}
+          onPointerDownOutside={(e) => {
+            // Don't close if clicking on the dropdown menu
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-dropdown-menu]')) {
+              e.preventDefault();
+              return;
+            }
+            onClose();
+          }}
+          onInteractOutside={(e) => {
+            // Don't close if clicking on the dropdown menu
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-dropdown-menu]')) {
+              e.preventDefault();
+              return;
+            }
+            onClose();
+          }}
         >
-          Close
-        </button>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="space-y-6">
-        {/* Background Controls */}
-        <div>
-          <div className="space-y-3">
-            {/* Upload Background */}
-            {handleBgImageUpload && (
-              <label htmlFor="bg-upload-modal" className="cursor-pointer w-full px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 flex items-center justify-center space-x-2" title="Upload Background">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <span className="font-semibold">Upload Background</span>
-                <input 
-                  type="file" 
-                  id="bg-upload-modal" 
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={(e) => {
-                    if (e.target.files?.[0] && handleBgImageUpload) {
-                      handleBgImageUpload(e.target.files[0]);
-                    }
-                  }}
-                  disabled={loadingState?.isImageLoading}
-                />
-              </label>
-            )}
+          {/* Header */}
+          <div className="px-8 py-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+            <div className="flex items-center justify-between mb-4">
+              <Dialog.Title asChild>
+                <Heading
+                  size="5"
+                  weight="bold"
+                  className="flex items-center gap-3 text-gray-900 dark:text-white text-2xl font-bold tracking-tight"
+                >
+                  <Settings className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                  Background & Theme
+                </Heading>
+              </Dialog.Title>
+              <Dialog.Close asChild>
+                <Button
+                  size="2"
+                  variant="soft"
+                  color="gray"
+                  className="!px-4 !py-2"
+                >
+                  Close
+                </Button>
+              </Dialog.Close>
+            </div>
+            <Separator size="1" color="gray" />
           </div>
-        </div>
-
-        {/* Manual Emoji Bank */}
-        <div>
-          <h4 className="text-3xl font-extrabold text-cyan-400 mb-6 flex items-center">
-            <SearchIcon className="w-8 h-8 mr-3"/> Emoji Bank
-          </h4>
-          <div className="mb-8"></div>
           
-          <input
-            type="search"
-            placeholder="Search emojis (e.g., 'gift', 'heart')"
-            value={manualSearch}
-            onChange={(e) => setManualSearch(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
-          />
-
-          <div className="max-h-60 overflow-y-auto space-y-3 p-1 rounded-lg">
-            {(() => {
-              // If searching, show all results in one section
-              if (manualSearch.trim()) {
-                return (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">
-                      🔍 Search Results ({filteredEmojis.length})
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {filteredEmojis.map((item, idx) => (
-                        <button
-                          key={idx}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectEmoji(item.emoji);
-                          }}
-                          className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
-                          title={`${item.name} (${item.keywords.slice(0, 3).join(', ')})`}
-                        >
-                          {item.emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              }
-
-              // Show categorized view when not searching
-              return Object.entries(groupedEmojis).map(([category, items]) => (
-                <div key={category}>
-                  <h5 className="text-sm font-semibold uppercase text-gray-300 mt-2 mb-1">{category}</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {items.map((item, idx) => (
-                      <button
-                        key={idx}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectEmoji(item.emoji);
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-8 py-6 bg-gray-50 dark:bg-gray-950 overflow-x-visible">
+            <div className="space-y-6 min-w-0">
+              {/* Theme Controls */}
+              <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                <div className="fui-reset px-6 py-6">
+                  <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider">
+                    Theme
+                </Heading>
+                <div className="space-y-3">
+                  {/* Theme Selector */}
+                  {setCurrentSeason && (
+                    <div className="relative" style={{ zIndex: 1000 }}>
+                      <select
+                        id="season-select"
+                        value={currentSeason}
+                        onChange={(e) => { 
+                          setCurrentSeason(e.target.value);
                         }}
-                        className="text-2xl p-1 bg-gray-800 hover:bg-cyan-900/50 rounded-md transition-colors"
-                        title={item.name}
+                        className="w-full px-4 py-2.5 pr-10 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 text-sm appearance-none cursor-pointer"
+                        style={{ zIndex: 1000, boxSizing: 'border-box' }}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
                       >
-                        {item.emoji}
-                      </button>
-                    ))}
+                        {Object.keys(allThemes).map(s => (
+                          <option key={s} value={s}>{allThemes[s].name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" />
+                    </div>
+                  )}
+
+                  {/* Theme Up Background */}
+                  {handleGenerateBgClick && (
+                      <Button
+                        size="3"
+                        color="violet"
+                        variant="solid"
+                      onClick={handleGenerateBgClick}
+                        disabled={loadingState?.isImageLoading}
+                      className="w-full !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 flex items-center justify-center gap-2"
+                      >
+                      <Zap className="w-5 h-5" />
+                      <span>Theme Up Background</span>
+                      </Button>
+                  )}
                   </div>
                 </div>
-              ));
-            })()}
-          </div>
-        </div>
+              </Card>
 
-        {/* Theme Controls */}
-        <div>
-          <div className="space-y-3">
-            {/* Theme Selector */}
-            {setCurrentSeason && (
-              <div className="space-y-2">
-                <label htmlFor="season-select" className="text-sm font-semibold text-gray-300">Theme:</label>
-                <select
-                  id="season-select"
-                  value={currentSeason}
-                  onChange={(e) => { 
-                    setCurrentSeason(e.target.value);
-                  }}
-                  className="w-full px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50 transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  {Object.keys(allThemes).map(s => (
-                    <option key={s} value={s}>{allThemes[s].name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+              {/* Dropdown Menu - Rendered in Portal to escape Dialog overflow */}
+              {showThemeSettingsDropdown && typeof window !== 'undefined' && createPortal(
+                <>
+                  {/* Backdrop overlay to ensure dropdown is on top layer */}
+                  <div 
+                    className="fixed inset-0 z-[99998] bg-transparent pointer-events-auto"
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      // Only close if clicking directly on backdrop, not on dropdown
+                      if (!target.closest('[data-dropdown-menu]')) {
+                        setShowThemeSettingsDropdown(false);
+                      }
+                    }}
+                  />
+                  {/* Dropdown Menu */}
+                  <div 
+                    data-dropdown-menu
+                    className="fixed z-[99999] bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-xl overflow-hidden min-w-[200px] pointer-events-auto"
+                    style={dropdownPosition ? {
+                      top: `${dropdownPosition.top}px`,
+                      left: `${dropdownPosition.left}px`,
+                      width: `${dropdownPosition.width}px`
+                    } : { 
+                      top: '50%', 
+                      left: '50%', 
+                      transform: 'translate(-50%, -50%)',
+                      width: '200px'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedThemeSetting('custom');
+                        setShowThemeSettingsDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:!bg-violet-100 dark:hover:!bg-violet-900/40 active:!bg-violet-200 dark:active:!bg-violet-900/60 transition-all duration-200 flex items-center gap-2 text-gray-900 dark:text-white group cursor-pointer"
+                    >
+                      <Palette className="w-5 h-5 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors" />
+                      <span className="group-hover:text-violet-700 dark:group-hover:text-violet-300 transition-colors">Custom Theme...</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedThemeSetting('edit');
+                        setShowThemeSettingsDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:!bg-violet-100 dark:hover:!bg-violet-900/40 active:!bg-violet-200 dark:active:!bg-violet-900/60 transition-all duration-200 flex items-center gap-2 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-700 group cursor-pointer"
+                    >
+                      <Edit className="w-5 h-5 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors" />
+                      <span className="group-hover:text-violet-700 dark:group-hover:text-violet-300 transition-colors">Edit Theme</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedThemeSetting('delete');
+                        setShowThemeSettingsDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:!bg-red-100 dark:hover:!bg-red-900/40 active:!bg-red-200 dark:active:!bg-red-900/60 transition-all duration-200 flex items-center gap-2 text-red-600 dark:text-red-400 border-t border-gray-200 dark:border-gray-700 group cursor-pointer"
+                    >
+                      <Trash2 className="w-5 h-5 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors" />
+                      <span className="group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors">Delete Theme...</span>
+                    </button>
+                </div>
+                </>,
+                document.body
+              )}
 
-            {/* Theme Up Background */}
-            {handleGenerateBgClick && (
-              <button 
-                onClick={handleGenerateBgClick}
-                disabled={loadingState?.isImageLoading}
-                className={`w-full px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2 ${
-                  loadingState?.isImageLoading 
-                    ? 'bg-gradient-to-r from-indigo-800 to-purple-800 text-indigo-400 cursor-not-allowed shadow-indigo-500/25' 
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-500/25 hover:shadow-indigo-500/40 text-white'
-                }`}
-                title="Theme Up Background"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="font-semibold">Theme Up Background</span>
-              </button>
-            )}
-          </div>
-        </div>
+              {/* Emoji Bank */}
+              <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                <div className="fui-reset px-6 py-6">
+                  <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                  <Search className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                  Emoji Bank
+                </Heading>
+                
+                <input
+                  type="search"
+                  placeholder="Search emojis (e.g., 'gift', 'heart')"
+                  value={manualSearch}
+                  onChange={(e) => setManualSearch(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 mb-4 text-sm"
+                />
 
-        {/* Text Editor */}
-        {selectedAssetId && ['mainHeader', 'headerMessage', 'subHeader', 'promoMessage'].includes(selectedAssetId) && (
-          <div className="p-3 bg-gray-900 rounded-xl border border-blue-600/50">
-            <h4 className="text-base font-semibold text-blue-400 mb-2 flex items-center">
-              <SettingsIcon className="w-4 h-4 mr-2" />
-              Text Editor
-            </h4>
-            <p className="text-xs text-gray-400 mb-3">
-              Edit the selected text content. Changes are applied immediately.
-            </p>
+                <div className="max-h-60 overflow-y-auto space-y-3 p-1 rounded-lg">
+                  {(() => {
+                    // If searching, show all results in one section
+                    if (manualSearch.trim()) {
+                      return (
+                        <div>
+                          <Text size="2" weight="semi-bold" className="text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
+                            🔍 Search Results ({filteredEmojis.length})
+                          </Text>
+                          <div className="flex flex-wrap gap-2">
+                            {filteredEmojis.map((item, idx) => (
+                              <button
+                                key={idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectEmoji(item.emoji);
+                                }}
+                                className="text-2xl p-1 bg-gray-100 dark:bg-gray-800 hover:bg-violet-100 dark:hover:bg-violet-900/50 rounded-md transition-colors"
+                                title={`${item.name} (${item.keywords.slice(0, 3).join(', ')})`}
+                              >
+                                {item.emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Show categorized view when not searching
+                    return Object.entries(groupedEmojis).map(([category, items]) => (
+                      <div key={category}>
+                        <Text size="2" weight="semi-bold" className="text-gray-700 dark:text-gray-300 mt-2 mb-1 uppercase">
+                          {category}
+                        </Text>
+                        <div className="flex flex-wrap gap-2">
+                          {items.map((item, idx) => (
+                            <button
+                              key={idx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectEmoji(item.emoji);
+                              }}
+                              className="text-2xl p-1 bg-gray-100 dark:bg-gray-800 hover:bg-violet-100 dark:hover:bg-violet-900/50 rounded-md transition-colors"
+                              title={item.name}
+                            >
+                              {item.emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+                </div>
+              </Card>
+
+              {/* Background Controls */}
+              <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                <div className="fui-reset px-6 py-6">
+                  <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider">
+                    Background
+                </Heading>
+                <div className="space-y-3">
+                  {/* Upload Background */}
+                  {handleBgImageUpload && (
+                    <label htmlFor="bg-upload-modal" className="cursor-pointer">
+                      <Button
+                        size="3"
+                        color="violet"
+                        variant="solid"
+                        className="w-full !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 flex items-center justify-center gap-2"
+                        disabled={loadingState?.isImageLoading}
+                        asChild
+                      >
+                        <span>
+                          <Upload className="w-5 h-5" />
+                          <span>Upload Background</span>
+                        </span>
+                      </Button>
+                      <input 
+                        type="file" 
+                        id="bg-upload-modal" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={(e) => { 
+                          if (e.target.files?.[0] && handleBgImageUpload) {
+                            handleBgImageUpload(e.target.files[0]);
+                          }
+                        }}
+                        disabled={loadingState?.isImageLoading}
+                      />
+                    </label>
+                  )}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Theme Settings Section */}
+              <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                <div className="fui-reset px-6 py-6">
+                  <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider">
+                    Theme Settings
+                  </Heading>
+                  
+                  {/* Theme Settings Dropdown */}
+                  <div className="relative" ref={themeSettingsDropdownRef}>
+                    <div ref={themeSettingsButtonRef}>
+                      <Button
+                        size="3"
+                        color="violet"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setShowThemeSettingsDropdown(!showThemeSettingsDropdown);
+                        }}
+                        className="w-full !px-6 !py-3 mb-4 flex items-center justify-between shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Settings className="w-5 h-5" />
+                          <span>Theme Settings</span>
+                        </div>
+                        <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${showThemeSettingsDropdown ? 'rotate-180' : ''}`} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Theme Settings Content Sections - Below Theme Settings Section */}
+              {selectedThemeSetting === 'custom' && (
+                <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                  <div className="fui-reset px-6 py-6">
+                    <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                      <Palette className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                      Custom Theme Designer
+                    </Heading>
+                    
+                    {/* Limit warning */}
+                    {!canAddCustomTheme && (
+                      <div className="mb-4 p-3 border border-red-500/50 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <Text size="2" className="text-red-600 dark:text-red-400">
+                          ⚠️ Maximum of {maxCustomThemes} custom themes reached. Delete some custom themes to create new ones.
+                        </Text>
+                    </div>
+                  )}
+                    <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-2">Theme name</Text>
+                    <input
+                      type="text"
+                      value={newThemeName}
+                      onChange={(e) => setNewThemeName(e.target.value)}
+                      placeholder="Theme name (e.g., 'Neon Summer')"
+                      className="w-full px-4 py-2.5 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 mb-4 text-sm"
+                    />
+
+                    <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-2">Prompt</Text>
+                    <textarea
+                      value={newThemePrompt}
+                      placeholder="Enter AI prompt description (e.g., 'An underwater scene with bright bioluminescence')"
+                      onChange={(e) => setNewThemePrompt(e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-2.5 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 mb-4 text-sm"
+                      style={{ fontSize: '16px' }}
+                      onFocus={(e) => {
+                        e.target.style.fontSize = '16px';
+                      }}
+                    />
+
+                    <Button
+                      size="3"
+                      color="violet"
+                      variant="solid"
+                      onClick={() => {
+                        console.log('🎨 [AdminAssetSheet] Button clicked!', { 
+                          newThemeName: newThemeName.trim(), 
+                          newThemePrompt: newThemePrompt.trim(), 
+                          isGeneratingTheme,
+                          canAddCustomTheme
+                        });
+                        handleNewThemeSave();
+                      }}
+                      disabled={!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme || !canAddCustomTheme}
+                      className="w-full !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 flex items-center justify-center gap-2"
+                    >
+                      {isGeneratingTheme ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Generating AI Theme...</span>
+                        </>
+                      ) : (
+                        <>
+                      <Zap className="w-5 h-5" />
+                          <span>Generate AI Theme</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </Card>
+              )}
+
+              {selectedThemeSetting === 'edit' && (
+                <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                  <div className="fui-reset px-6 py-6">
+                    <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                      <Edit className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                      Edit Theme
+                    </Heading>
+                    
+                    <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-2">
+                      Current Theme: <span className="text-violet-600 dark:text-violet-400">{theme?.name || currentSeason}</span>
+                    </Text>
+                    <textarea
+                      value={currentPromptValue}
+                      onChange={(e) => setCurrentPromptValue(e.target.value)}
+                      placeholder="Enter AI prompt description (e.g., 'A mystical forest with glowing mushrooms and ethereal lighting')"
+                      rows={3}
+                      className="w-full px-4 py-2.5 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 mb-4 text-sm"
+                      style={{ fontSize: '16px' }}
+                      onFocus={(e) => {
+                        e.target.style.fontSize = '16px';
+                      }}
+                    />
+                    <Button
+                      size="3"
+                      color="violet"
+                      variant="solid"
+                      onClick={() => {
+                        handleUpdateTheme(currentSeason, { themePrompt: currentPromptValue });
+                      }}
+                      disabled={!currentPromptValue.trim()}
+                      className="w-full !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 flex items-center justify-center gap-2"
+                    >
+                      <Settings className="w-5 h-5" />
+                      <span>Apply Changes</span>
+                    </Button>
+                </div>
+              </Card>
+              )}
+
+              {selectedThemeSetting === 'delete' && (
+                <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                  <div className="fui-reset px-6 py-6">
+                    <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                      <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                      Delete Custom Themes
+                    </Heading>
+                    
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {(() => {
+                        // Default theme names that should not be deletable
+                        const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky', 'Spooky Night'];
+                        
+                        // Get custom themes by excluding default themes and checking for custom_ or db_ prefix in keys
+                        // This includes both frontend-created themes (custom_) and database-loaded themes (db_)
+                        const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => {
+                          // Include themes with custom_ or db_ prefix (these are custom themes)
+                          const isCustomKey = key.startsWith('custom_') || key.startsWith('db_');
+                          // Also exclude default theme names (in case they're stored with different keys)
+                          const isNotDefaultName = !defaultThemeNames.includes(themeData.name);
+                          return isCustomKey && isNotDefaultName;
+                        });
+                        
+                        // Convert to array of theme objects with their keys
+                        const uniqueCustomThemes = customThemeEntries.map(([key, theme]) => ({ ...theme, _key: key }));
+                        
+                        console.log('🔍 Custom themes for deletion:', uniqueCustomThemes);
+                        console.log('🔍 Current theme:', theme?.name);
+                        console.log('🔍 Current theme key (if custom):', theme && Object.entries(allThemes).find(([k, t]) => t.name === theme.name)?.[0]);
+                        console.log('🔍 All themes keys:', Object.keys(allThemes));
+                        
+                        if (uniqueCustomThemes.length === 0) {
+                          return (
+                            <div className="text-center text-gray-400 dark:text-gray-500 text-sm py-8">
+                              No custom themes created yet
+                            </div>
+                          );
+                        }
+                        
+                        return uniqueCustomThemes.map((themeData, index) => {
+                          const isCurrentTheme = theme?.name === themeData.name;
+                          return (
+                            <div 
+                              key={`${themeData._key}-${index}`} 
+                              className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                                isCurrentTheme 
+                                  ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-700' 
+                                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                  <span className="truncate" title={themeData.name}>{themeData.name}</span>
+                                  {isCurrentTheme && (
+                                    <span className="flex-shrink-0 text-xs bg-violet-600 dark:bg-violet-500 text-white px-2 py-1 rounded-md font-semibold">
+                                      CURRENT
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  // Show deleting notification immediately
+                                  setDeleteNotification({ isOpen: true, isDeleting: true, themeName: themeData.name });
+                                  
+                                  try {
+                                    // Check if this is a database theme (db_ prefix) or frontend-only theme (custom_ prefix)
+                                    if (themeData._key.startsWith('db_')) {
+                                      // Extract theme ID from key (format: db_${themeId})
+                                      const themeId = themeData._key.replace('db_', '');
+                                      
+                                      // Call onDeleteTheme if available (for database themes)
+                                      if (onDeleteTheme && experienceId) {
+                                        await onDeleteTheme(themeId);
+                                        console.log('✅ [AdminAssetSheet] Database theme deleted:', themeId);
+                                      }
+                                    }
+                                    
+                                    // Remove from allThemes state (works for both custom_ and db_ themes)
+                                    setAllThemes(prev => {
+                                      const updated = { ...prev };
+                                      delete updated[themeData._key];
+                                      return updated;
+                                    });
+                                    
+                                    // If this was the current theme, switch to a built-in theme
+                                    if (isCurrentTheme) {
+                                      const builtInThemeKey = Object.keys(allThemes).find(key => 
+                                        !key.startsWith('custom_') && !key.startsWith('db_')
+                                      );
+                                      if (builtInThemeKey && setCurrentSeason) {
+                                        setCurrentSeason(builtInThemeKey);
+                                      }
+                                    }
+                                    
+                                    // Show success notification
+                                    setDeleteNotification({ isOpen: true, isDeleting: false, themeName: themeData.name });
+                                    
+                                    // Auto-close notification after 2 seconds
+                                    setTimeout(() => {
+                                      setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' });
+                                    }, 2000);
+                                  } catch (error) {
+                                    console.error('❌ [AdminAssetSheet] Error deleting theme:', error);
+                                    alert(`Failed to delete theme: ${(error as Error).message}`);
+                                    setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' });
+                                  }
+                                }}
+                                disabled={deleteNotification.isDeleting}
+                                className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete theme"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* Text Editor */}
+              {selectedAssetId && ['mainHeader', 'headerMessage', 'subHeader', 'promoMessage'].includes(selectedAssetId) && (
+                <Card className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+                  <div className="fui-reset px-6 py-6">
+                    <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                    <Type className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                    Text Editor
+                  </Heading>
+                  <Text size="2" className="text-gray-600 dark:text-gray-400 mb-4">
+                    Edit the selected text content. Changes are applied immediately.
+                  </Text>
             
             <textarea
-              placeholder="Edit text content"
+              placeholder="Edit text"
               value={selectedAssetId === 'mainHeader' ? fixedTextStyles.mainHeader.content : 
                      selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.content : 
                      selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.content : 
                      fixedTextStyles.promoMessage.content}
+              maxLength={selectedAssetId === 'mainHeader' ? 20 : undefined}
               style={{ fontSize: '16px' }}
               onFocus={(e) => {
                 // Prevent iOS zoom on focus
@@ -628,9 +1095,11 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               onChange={(e) => {
                 const newContent = e.target.value;
                 if (selectedAssetId === 'mainHeader') {
+                  // Enforce 20 character limit for mainHeader
+                  const limitedContent = newContent.slice(0, 20);
                   setFixedTextStyles(prev => ({
                     ...prev, 
-                    mainHeader: {...prev.mainHeader, content: newContent}
+                    mainHeader: {...prev.mainHeader, content: limitedContent}
                   }));
                 } else if (selectedAssetId === 'headerMessage') {
                   setFixedTextStyles(prev => ({
@@ -649,12 +1118,12 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                   }));
                 }
               }}
-              className="w-full p-2 mb-3 text-sm rounded-lg bg-gray-800 text-white placeholder-gray-500 border-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
-            />
-            
-            {/* Typography Controls */}
-            <div className="space-y-3 mb-4">
-              <h5 className="text-sm font-semibold text-gray-300">Typography</h5>
+                  className="w-full px-4 py-2.5 mb-4 text-sm rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 h-20 resize-none"
+                />
+                
+                {/* Typography Controls */}
+                <div className="space-y-3 mb-4">
+                  <Text size="2" weight="semi-bold" className="text-gray-700 dark:text-gray-300">Typography</Text>
               
               {/* Font Size */}
               <div className="flex items-center space-x-2">
@@ -1013,270 +1482,44 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                 Done
               </button>
             </div>
-          </div>
-        )}
-
-
-        {/* Custom Theme Designer */}
-        <div>
-          <button
-            onClick={() => setShowCustomThemeDesigner(!showCustomThemeDesigner)}
-            className="w-full mb-4 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-fuchsia-500 to-pink-600 hover:from-fuchsia-600 hover:to-pink-700 text-white shadow-lg shadow-fuchsia-500/25 hover:shadow-fuchsia-500/40 flex items-center justify-center space-x-2"
-          >
-            <PaletteIcon className="w-5 h-5" />
-            <span className="font-semibold">Custom Theme Designer</span>
-            <svg className={`w-5 h-5 transition-transform duration-300 ${showCustomThemeDesigner ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          
-          <div className={`mb-6 overflow-hidden transition-all duration-500 ${showCustomThemeDesigner ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-          {/* Limit warning */}
-          {!canAddCustomTheme && (
-            <div className="mb-4 p-3 bg-red-900/20 border border-red-500/50 rounded-lg">
-              <p className="text-red-400 text-sm">
-                ⚠️ Maximum of {maxCustomThemes} custom themes reached. Delete some custom themes to create new ones.
-              </p>
-            </div>
-          )}
-          <label className="block text-sm font-semibold text-gray-300 mb-2">Theme name</label>
-          <input
-            type="text"
-            value={newThemeName}
-            onChange={(e) => setNewThemeName(e.target.value)}
-            placeholder="Theme name (e.g., 'Neon Summer')"
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
-          />
-
-          <label className="block text-sm font-semibold text-gray-300 mb-2">Prompt</label>
-          <textarea
-            value={newThemePrompt}
-            placeholder="Enter AI prompt description (e.g., 'An underwater scene with bright bioluminescence')"
-            onChange={(e) => setNewThemePrompt(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 mb-4"
-            style={{ fontSize: '16px' }}
-            onFocus={(e) => {
-              // Prevent iOS zoom on focus
-              e.target.style.fontSize = '16px';
-            }}
-          />
-
-          <button 
-            onClick={() => {
-              console.log('🎨 [AdminAssetSheet] Button clicked!', { 
-                newThemeName: newThemeName.trim(), 
-                newThemePrompt: newThemePrompt.trim(), 
-                isGeneratingTheme,
-                canAddCustomTheme
-              });
-              handleNewThemeSave();
-            }} 
-            className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
-              (newThemeName.trim() && newThemePrompt.trim() && !isGeneratingTheme && canAddCustomTheme) ? 'bg-gradient-to-r from-fuchsia-500 to-pink-600 hover:from-fuchsia-600 hover:to-pink-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
-            }`}
-            disabled={!newThemeName.trim() || !newThemePrompt.trim() || isGeneratingTheme || !canAddCustomTheme}
-          >
-            {isGeneratingTheme ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Generating AI Theme...
-              </>
-            ) : (
-              <>
-                <ZapIcon className="w-4 h-4 mr-2" /> 
-                Generate AI Theme
-              </>
-            )}
-          </button>
-            </div>
-        </div>
-
-
-        {/* Edit Theme - Moved to Bottom */}
-        <div>
-          <button
-            onClick={() => setShowEditThemePrompt(!showEditThemePrompt)}
-            className="w-full mb-4 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 flex items-center justify-center space-x-2"
-          >
-            <EditIcon className="w-5 h-5" />
-            <span className="font-semibold">Edit Theme</span>
-            <svg className={`w-5 h-5 transition-transform duration-300 ${showEditThemePrompt ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          
-          <div className={`mb-6 overflow-hidden transition-all duration-500 ${showEditThemePrompt ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-          <label className="block text-sm font-semibold text-gray-300 mb-2">
-            Current Theme: <span className="text-blue-400">{theme?.name || currentSeason}</span>
-          </label>
-          <textarea
-            value={currentPromptValue}
-            onChange={(e) => setCurrentPromptValue(e.target.value)}
-            placeholder="Enter AI prompt description (e.g., 'A mystical forest with glowing mushrooms and ethereal lighting')"
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 mb-4"
-            style={{ fontSize: '16px' }}
-            onFocus={(e) => {
-              // Prevent iOS zoom on focus
-              e.target.style.fontSize = '16px';
-            }}
-          />
-          <button 
-            onClick={() => {
-              handleUpdateTheme(currentSeason, { themePrompt: currentPromptValue });
-            }}
-            className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold ${
-              currentPromptValue.trim() ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
-            }`}
-            disabled={!currentPromptValue.trim()}
-          >
-            <SettingsIcon className="w-4 h-4 mr-2" /> 
-            Apply Changes
-          </button>
-            </div>
-        </div>
-        
-        
-        {/* Selected Asset Info */}
-        {selectedAsset && (
-          <div className="p-3 bg-cyan-900/30 rounded-xl border border-cyan-400 shadow-lg sticky top-[5.5rem] z-20">
-            
-            <p className="text-sm text-gray-300 mb-3">
-              Drag to move, corner to resize, top handle to rotate.
-            </p>
-
-            <button 
-              onClick={() => onDeleteFloatingAsset(selectedAsset.id)} 
-              className={`w-full mt-4 py-2 text-sm rounded-lg bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 transition-colors flex items-center justify-center font-semibold ${selectedAsset.isLogo ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={selectedAsset.isLogo}
-            >
-              <TrashIcon className={`w-4 h-4 mr-2`} /> Delete Asset
-            </button>
-          </div>
-        )}
-
-        {/* Delete Custom Themes - Moved to Bottom */}
-        <div>
-          <button
-            onClick={() => setShowDeleteCustomThemes(!showDeleteCustomThemes)}
-            className="w-full mb-4 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 flex items-center justify-center space-x-2"
-          >
-            <TrashIcon className="w-5 h-5" />
-            <span className="font-semibold">Delete Custom Themes</span>
-            <svg className={`w-5 h-5 transition-transform duration-300 ${showDeleteCustomThemes ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          
-          <div className={`mb-6 overflow-hidden transition-all duration-500 ${showDeleteCustomThemes ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-          <p className="text-sm text-gray-300 mb-4">
-            Remove custom themes you've created. Default themes cannot be deleted.
-          </p>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {(() => {
-              // Default theme names that should not be deletable
-              const defaultThemeNames = ['Winter Frost', 'Summer Sun', 'Autumn Harvest', 'Holiday Cheer', 'Spring Renewal', 'Cyber Monday', 'Halloween Spooky', 'Spooky Night'];
-              
-              // Get custom themes by excluding default themes and checking for custom_ or db_ prefix in keys
-              // This includes both frontend-created themes (custom_) and database-loaded themes (db_)
-              const customThemeEntries = Object.entries(allThemes).filter(([key, themeData]) => {
-                // Include themes with custom_ or db_ prefix (these are custom themes)
-                const isCustomKey = key.startsWith('custom_') || key.startsWith('db_');
-                // Also exclude default theme names (in case they're stored with different keys)
-                const isNotDefaultName = !defaultThemeNames.includes(themeData.name);
-                return isCustomKey && isNotDefaultName;
-              });
-              
-              // Convert to array of theme objects with their keys
-              const uniqueCustomThemes = customThemeEntries.map(([key, theme]) => ({ ...theme, _key: key }));
-              
-              console.log('🔍 Custom themes for deletion:', uniqueCustomThemes);
-              console.log('🔍 Current theme:', theme?.name);
-              console.log('🔍 Current theme key (if custom):', theme && Object.entries(allThemes).find(([k, t]) => t.name === theme.name)?.[0]);
-              console.log('🔍 All themes keys:', Object.keys(allThemes));
-              
-              if (uniqueCustomThemes.length === 0) {
-                return (
-                  <div className="text-center text-gray-400 text-sm py-4">
-                    No custom themes created yet
                   </div>
-                );
-              }
-              
-              return uniqueCustomThemes.map((themeData, index) => {
-                const isCurrentTheme = theme?.name === themeData.name;
-                return (
-                  <div key={`${themeData._key}-${index}`} className={`flex items-center gap-2 p-3 rounded-lg border ${isCurrentTheme ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-800/50 border-gray-600'}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-white flex items-center gap-2">
-                        <span className="truncate" title={themeData.name}>{themeData.name}</span>
-                        {isCurrentTheme && <span className="flex-shrink-0 text-xs bg-blue-500 text-white px-2 py-1 rounded">CURRENT</span>}
-                      </div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        // Show deleting notification immediately
-                        setDeleteNotification({ isOpen: true, isDeleting: true, themeName: themeData.name });
-                        
-                        try {
-                          // Check if this is a database theme (db_ prefix) or frontend-only theme (custom_ prefix)
-                          if (themeData._key.startsWith('db_')) {
-                            // Extract theme ID from key (format: db_${themeId})
-                            const themeId = themeData._key.replace('db_', '');
-                            
-                            // Delete from database if onDeleteTheme callback is provided
-                            if (onDeleteTheme && experienceId) {
-                              await onDeleteTheme(themeId);
-                              console.log('✅ Theme deleted from database:', themeId);
-                            } else if (!onDeleteTheme || !experienceId) {
-                              console.warn('⚠️ Cannot delete theme from database: missing onDeleteTheme or experienceId');
-                            }
-                          }
-                          
-                          // Remove from frontend state
-                          const updatedThemes = { ...allThemes };
-                          delete updatedThemes[themeData._key];
-                          setAllThemes(updatedThemes);
-                          
-                          console.log('✅ Theme removed from frontend:', themeData._key);
-                          
-                          // Update notification to show success
-                          setDeleteNotification({ isOpen: true, isDeleting: false, themeName: themeData.name });
-                          
-                          // Note: If deleting the currently active theme, currentSeason will still point to the deleted key
-                          // The parent component should handle switching to a fallback theme if needed
-                        } catch (error) {
-                          console.error('❌ Failed to delete theme:', error);
-                          // Still show error in notification briefly
-                          setDeleteNotification({ isOpen: true, isDeleting: false, themeName: `Error: ${(error as Error).message}` });
-                          setTimeout(() => {
-                            setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' });
-                          }, 3000);
-                        }
-                      }}
-                      className="flex-shrink-0 p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
-                      title="Delete custom theme"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                    </Card>
+                  )}
+        
+              {/* Selected Asset Info */}
+              {selectedAsset && (
+                <Card className="p-6 border border-violet-200 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 sticky top-[5.5rem] z-20 overflow-visible min-w-0">
+                  <div className="fui-reset px-6 py-6">
+                  <Text size="2" className="text-gray-700 dark:text-gray-300 mb-4">
+                    Drag to move, corner to resize, top handle to rotate.
+                  </Text>
+
+                  <Button
+                    size="3"
+                    color="red"
+                    variant="solid"
+                    onClick={() => onDeleteFloatingAsset(selectedAsset.id)}
+                    disabled={selectedAsset.isLogo}
+                    className="w-full !px-6 !py-3 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300 dark:shadow-red-500/30 dark:hover:shadow-red-500/50 flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    <span>Delete Asset</span>
+                  </Button>
                   </div>
-                );
-              });
-            })()}
+                </Card>
+              )}
+                  </div>
           </div>
-            </div>
-        </div>
-        </div>
-      </div>
-      
-      {/* Delete Theme Notification - Same style as Save notification */}
-      <DeleteThemeNotification
-        isOpen={deleteNotification.isOpen}
-        isDeleting={deleteNotification.isDeleting}
-        themeName={deleteNotification.themeName}
-        onClose={() => setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' })}
-      />
-    </div>
+          
+          {/* Delete Theme Notification */}
+          <DeleteThemeNotification
+            isOpen={deleteNotification.isOpen}
+            isDeleting={deleteNotification.isDeleting}
+            themeName={deleteNotification.themeName}
+            onClose={() => setDeleteNotification({ isOpen: false, isDeleting: false, themeName: '' })}
+          />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 };

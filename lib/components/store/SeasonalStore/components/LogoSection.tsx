@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { ZapIcon } from './Icons';
+import { Button } from 'frosted-ui';
+import { Upload, Square, Circle } from 'lucide-react';
 
 interface LogoAsset {
   src: string;
@@ -42,10 +44,11 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
 }) => {
   if (editorState.isEditorView) {
     return (
-      <div className="w-full max-w-5xl mx-auto mb-4">
+      <div className="w-full max-w-5xl mx-auto">
         <div className="text-center">
           <div 
-            className="relative w-24 h-24 mb-2 mx-auto overflow-hidden group"
+            className="relative w-24 h-24 mx-auto overflow-hidden group"
+            data-prevent-bg-toggle="true"
             onMouseEnter={() => {
               // Show controls when hovering over entire logo
               const controls = document.querySelector('.logo-controls') as HTMLElement;
@@ -68,34 +71,67 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
             />
             
             {/* Logo Controls - Only visible when hovering over entire logo */}
-            <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-2 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
+            <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-4 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
               {/* Upload Button - Top */}
-              <label htmlFor="logo-upload" className="cursor-pointer p-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <input 
-                  type="file" 
-                  id="logo-upload" 
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={(e) => handleLogoImageUpload(e.target.files?.[0]!)}
-                  disabled={loadingState.isUploadingImage}
+              <input 
+                type="file" 
+                id="logo-upload" 
+                className="hidden" 
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleLogoImageUpload(file);
+                  }
+                }}
+                disabled={loadingState.isUploadingImage}
+              />
+              <Button
+                size="2"
+                color="green"
+                onClick={() => {
+                  const input = document.getElementById('logo-upload') as HTMLInputElement;
+                  if (input) {
+                    input.click();
+                  }
+                }}
+                className="p-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group"
+                disabled={loadingState.isUploadingImage}
+                title="Upload Logo"
+              >
+                <Upload
+                  size={16}
+                  strokeWidth={2.5}
+                  className="group-hover:scale-110 transition-transform duration-300"
                 />
-              </label>
+              </Button>
               
               {/* Shape Toggle - Bottom */}
-              <button
+              <Button
+                size="2"
+                color="violet"
                 onClick={() => setLogoAsset((prev) => ({ 
                   ...prev, 
                   shape: prev.shape === 'round' ? 'square' : 'round' 
                 }))}
-                className="px-3 py-1 text-xs font-medium rounded-xl transition-all duration-300 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-105"
                 disabled={loadingState.isImageLoading}
+                className="p-2 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
                 title={`Switch to ${logoAsset.shape === 'round' ? 'Square' : 'Round'}`}
               >
-                {logoAsset.shape === 'round' ? 'Round' : 'Square'}
-              </button>
+                {logoAsset.shape === 'round' ? (
+                  <Circle
+                    size={16}
+                    strokeWidth={2.5}
+                    className="group-hover:scale-110 transition-transform duration-300"
+                  />
+                ) : (
+                  <Square
+                    size={16}
+                    strokeWidth={2.5}
+                    className="group-hover:scale-110 transition-transform duration-300"
+                  />
+                )}
+              </Button>
             </div>
           </div>
         </div>
@@ -105,8 +141,11 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
 
   // Customer view - just display the logo
   return (
-    <div className="w-full max-w-5xl mx-auto mb-4 pt-2">
-      <div className={`w-24 h-24 mx-auto overflow-hidden ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}>
+    <div className="w-full max-w-5xl mx-auto pt-2">
+      <div 
+        className={`w-24 h-24 mx-auto overflow-hidden ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}
+        data-prevent-bg-toggle="true"
+      >
         <div 
           className={`w-full h-full ${logoAsset.shape === 'round' ? 'rounded-full' : 'rounded-3xl'}`}
           style={{

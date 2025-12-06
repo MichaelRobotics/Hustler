@@ -60,14 +60,17 @@ export const funnels = pgTable("funnels", {
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 	experienceId: uuid("experience_id").notNull(),
 	visualizationState: jsonb("visualization_state").default({}),
+	whopProductId: text("whop_product_id"),
 }, (table) => [
 	index("funnels_experience_deployed_idx").using("btree", table.experienceId.asc().nullsLast().op("bool_ops"), table.isDeployed.asc().nullsLast().op("uuid_ops")),
 	index("funnels_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
+	index("funnels_experience_product_deployed_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.whopProductId.asc().nullsLast().op("uuid_ops"), table.isDeployed.asc().nullsLast().op("uuid_ops")),
 	index("funnels_experience_user_updated_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops"), table.updatedAt.asc().nullsLast().op("timestamp_ops")),
 	index("funnels_generation_status_idx").using("btree", table.generationStatus.asc().nullsLast().op("enum_ops")),
 	index("funnels_is_deployed_idx").using("btree", table.isDeployed.asc().nullsLast().op("bool_ops")),
 	index("funnels_user_id_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 	index("funnels_visualization_state_idx").using("gin", table.visualizationState.asc().nullsLast().op("jsonb_ops")),
+	index("funnels_whop_product_id_idx").using("btree", table.whopProductId.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.experienceId],
 			foreignColumns: [experiences.id],
@@ -95,7 +98,10 @@ export const resources = pgTable("resources", {
 	experienceId: uuid("experience_id").notNull(),
 	whopAppId: text("whop_app_id"),
 	whopMembershipId: text("whop_membership_id"),
-	productApps: jsonb("product_apps"), // JSON field for product apps data
+	productApps: jsonb("product_apps"),
+	price: numeric({ precision: 10, scale:  2 }),
+	image: text(),
+	storageUrl: text("storage_url"),
 }, (table) => [
 	index("resources_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
 	index("resources_experience_user_updated_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops"), table.updatedAt.asc().nullsLast().op("timestamp_ops")),
@@ -187,6 +193,42 @@ export const funnelAnalytics = pgTable("funnel_analytics", {
 	unique("unique_funnel").on(table.funnelId),
 ]);
 
+export const originTemplates = pgTable("origin_templates", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	experienceId: uuid("experience_id").notNull(),
+	companyLogoUrl: text("company_logo_url"),
+	companyBannerImageUrl: text("company_banner_image_url"),
+	themePrompt: text("theme_prompt"),
+	defaultThemeData: jsonb("default_theme_data").notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("origin_templates_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.experienceId],
+			foreignColumns: [experiences.id],
+			name: "origin_templates_experience_id_experiences_id_fk"
+		}).onDelete("cascade"),
+	unique("origin_templates_experience_unique").on(table.experienceId),
+]);
+
+export const experiences = pgTable("experiences", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	whopExperienceId: text("whop_experience_id").notNull(),
+	whopCompanyId: text("whop_company_id").notNull(),
+	name: text().notNull(),
+	description: text(),
+	logo: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+	link: text(),
+}, (table) => [
+	index("experiences_updated_at_idx").using("btree", table.updatedAt.asc().nullsLast().op("timestamp_ops")),
+	index("experiences_whop_company_id_idx").using("btree", table.whopCompanyId.asc().nullsLast().op("text_ops")),
+	index("experiences_whop_experience_id_idx").using("btree", table.whopExperienceId.asc().nullsLast().op("text_ops")),
+	unique("experiences_whop_experience_id_unique").on(table.whopExperienceId),
+]);
+
 export const conversations = pgTable("conversations", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	funnelId: uuid("funnel_id").notNull(),
@@ -199,8 +241,10 @@ export const conversations = pgTable("conversations", {
 	whopUserId: text("whop_user_id").notNull(),
 	phase2StartTime: timestamp("phase2_start_time", { mode: 'string' }),
 	membershipId: text("membership_id"),
-	whopProductId: text("whop_product_id"),
 	myAffiliateLink: text("my_affiliate_link"),
+	affiliateSend: boolean("affiliate_send").default(false).notNull(),
+	whopProductId: text("whop_product_id"),
+	flow: jsonb(),
 }, (table) => [
 	index("conversations_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
 	index("conversations_funnel_id_idx").using("btree", table.funnelId.asc().nullsLast().op("uuid_ops")),
@@ -217,22 +261,6 @@ export const conversations = pgTable("conversations", {
 			name: "conversations_funnel_id_funnels_id_fk"
 		}).onDelete("cascade"),
 	unique("unique_active_user_conversation").on(table.experienceId, table.whopUserId),
-]);
-
-export const experiences = pgTable("experiences", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	whopExperienceId: text("whop_experience_id").notNull(),
-	whopCompanyId: text("whop_company_id").notNull(),
-	name: text().notNull(),
-	description: text(),
-	logo: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("experiences_updated_at_idx").using("btree", table.updatedAt.asc().nullsLast().op("timestamp_ops")),
-	index("experiences_whop_company_id_idx").using("btree", table.whopCompanyId.asc().nullsLast().op("text_ops")),
-	index("experiences_whop_experience_id_idx").using("btree", table.whopExperienceId.asc().nullsLast().op("text_ops")),
-	unique("experiences_whop_experience_id_unique").on(table.whopExperienceId),
 ]);
 
 export const messages = pgTable("messages", {
@@ -283,5 +311,69 @@ export const funnelResourceAnalytics = pgTable("funnel_resource_analytics", {
 			columns: [table.resourceId],
 			foreignColumns: [resources.id],
 			name: "funnel_resource_analytics_resource_id_resources_id_fk"
+		}).onDelete("cascade"),
+]);
+
+export const templates = pgTable("templates", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	experienceId: uuid("experience_id").notNull(),
+	userId: uuid("user_id").notNull(),
+	name: text().notNull(),
+	themeId: uuid("theme_id"),
+	themeSnapshot: jsonb("theme_snapshot").notNull(),
+	currentSeason: text("current_season").notNull(),
+	isLive: boolean("is_live").default(false).notNull(),
+	isLastEdited: boolean("is_last_edited").default(false).notNull(),
+	templateData: jsonb("template_data").notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+	isBannerImageBackground: boolean("is_banner_image_background").default(false).notNull(),
+}, (table) => [
+	index("templates_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
+	index("templates_experience_last_edited_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops"), table.isLastEdited.asc().nullsLast().op("uuid_ops")),
+	index("templates_experience_live_idx").using("btree", table.experienceId.asc().nullsLast().op("bool_ops"), table.isLive.asc().nullsLast().op("uuid_ops")),
+	index("templates_is_last_edited_idx").using("btree", table.isLastEdited.asc().nullsLast().op("bool_ops")),
+	index("templates_is_live_idx").using("btree", table.isLive.asc().nullsLast().op("bool_ops")),
+	index("templates_theme_id_idx").using("btree", table.themeId.asc().nullsLast().op("uuid_ops")),
+	index("templates_user_id_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.experienceId],
+			foreignColumns: [experiences.id],
+			name: "templates_experience_id_experiences_id_fk"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.themeId],
+			foreignColumns: [themes.id],
+			name: "templates_theme_id_themes_id_fk"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "templates_user_id_users_id_fk"
+		}).onDelete("cascade"),
+	unique("templates_experience_name_unique").on(table.experienceId, table.name),
+]);
+
+export const themes = pgTable("themes", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	experienceId: uuid("experience_id").notNull(),
+	name: text().notNull(),
+	season: text().notNull(),
+	themePrompt: text("theme_prompt"),
+	accentColor: text("accent_color"),
+	ringColor: text("ring_color"),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+	placeholderImage: text("placeholder_image"),
+	mainHeader: text("main_header"),
+	subHeader: text("sub_header"),
+}, (table) => [
+	index("themes_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
+	index("themes_experience_season_idx").using("btree", table.experienceId.asc().nullsLast().op("text_ops"), table.season.asc().nullsLast().op("uuid_ops")),
+	index("themes_season_idx").using("btree", table.season.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.experienceId],
+			foreignColumns: [experiences.id],
+			name: "themes_experience_id_experiences_id_fk"
 		}).onDelete("cascade"),
 ]);

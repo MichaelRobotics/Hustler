@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AIFunnelBuilderPage from '../../../funnelBuilder/AIFunnelBuilderPage';
 import { StoreResourceLibrary } from '../../../products/StoreResourceLibrary';
 import type { AuthenticatedUser } from '../../../../types/user';
@@ -20,12 +20,12 @@ interface ConditionalReturnsProps {
   currentSeason: string;
   theme: any;
   resourceLibraryProducts: any[];
-  themeProducts: Record<string, any[]>;
+  products: any[];
   allResources: any[];
   setAllResources: (resources: any[]) => void;
-  handleAddToTheme: (resource: any) => void;
-  handleRemoveFromTheme: (resource: any) => void;
-  isResourceInTheme: (resourceId: string) => boolean;
+  handleAddToTemplate: (resource: any) => void;
+  handleRemoveFromTemplate: (resource: any) => void;
+  isResourceInTemplate: (resourceId: string) => boolean;
   getFilteredPaidResources: () => any[];
 
   // Loading overlay props
@@ -51,12 +51,12 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
   currentSeason,
   theme,
   resourceLibraryProducts,
-  themeProducts,
+  products,
   allResources,
   setAllResources,
-  handleAddToTheme,
-  handleRemoveFromTheme,
-  isResourceInTheme,
+  handleAddToTemplate,
+  handleRemoveFromTemplate,
+  isResourceInTemplate,
   getFilteredPaidResources,
 
   // Loading overlay props
@@ -66,6 +66,21 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
 }) => {
   // State for background preloading
   const [isBackgroundPreloaded, setIsBackgroundPreloaded] = useState(false);
+  const overlayBackgroundStyle = useMemo<React.CSSProperties>(() => {
+    const stableBase: React.CSSProperties = {
+      backgroundColor: '#f9fafb',
+      minHeight: '100%',
+      height: '100%',
+      width: '100%',
+      backgroundAttachment: 'scroll'
+    };
+    if (previewLiveTemplate) {
+      return stableBase;
+    }
+    return backgroundStyle
+      ? { ...stableBase, ...backgroundStyle, backgroundAttachment: 'scroll' }
+      : stableBase;
+  }, [previewLiveTemplate, backgroundStyle]);
 
   // Preload background image when template is loading
   useEffect(() => {
@@ -137,17 +152,16 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
           themeName: theme?.name || 'Current Theme'
         }}
         frontendState={{
-          products: resourceLibraryProducts,
-          themeProducts: themeProducts,
+          products: products,
           currentSeason: currentSeason
         }}
         allResources={allResources}
         setAllResources={setAllResources}
         onBack={() => setShowStoreResourceLibrary(false)}
         user={user || null}
-        onAddToTheme={handleAddToTheme}
-        onRemoveFromTheme={handleRemoveFromTheme}
-        isResourceInTheme={isResourceInTheme}
+        onAddToTheme={handleAddToTemplate}
+        onRemoveFromTheme={handleRemoveFromTemplate}
+        isResourceInTheme={isResourceInTemplate}
         autoOpenCreateModal={false}
       />
     );
@@ -158,7 +172,7 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
     return (
       <div 
         className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden"
-        style={backgroundStyle || { backgroundColor: 'white' }}
+        style={overlayBackgroundStyle}
       >
         {/* Main content */}
         <div className="text-center relative z-10">

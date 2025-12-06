@@ -1,28 +1,41 @@
 import { LegacyTheme } from '../types';
 
+// Re-export color utilities
+export {
+  TAILWIND_COLOR_MAP,
+  tailwindTextColorToHex,
+  tailwindBgColorToHex,
+  getTextColorsFromCardClass,
+  isDarkColor,
+  getContrastingTextColor,
+} from './colors';
+
 /**
  * Convert database Theme to LegacyTheme for UI components
  */
 export const convertThemeToLegacy = (dbTheme: any): LegacyTheme => {
-  // Handle undefined/null theme
+  // Handle undefined/null theme - use Black Friday as fallback (default season)
   if (!dbTheme) {
-    console.warn('convertThemeToLegacy: dbTheme is undefined/null, returning default theme');
+    console.warn('convertThemeToLegacy: dbTheme is undefined/null, returning Black Friday theme as fallback');
     return {
-      name: 'Default Theme',
-      themePrompt: 'A beautiful default theme',
-      accent: 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400',
-      card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
-      text: 'text-gray-800',
+      name: 'Black Friday',
+      themePrompt: 'A bold, high-energy sale theme with dark backgrounds and vibrant accents.',
+      accent: 'bg-yellow-500 hover:bg-yellow-600 text-gray-900 ring-yellow-400',
+      card: 'bg-gray-900/95 backdrop-blur-md shadow-2xl hover:shadow-2xl shadow-yellow-500/30 border border-yellow-500/30',
+      text: 'text-white',
       welcomeColor: 'text-yellow-300',
-      background: 'bg-gradient-to-br from-indigo-500 to-purple-600',
+      background: 'bg-gradient-to-br from-gray-900 to-black',
       backgroundImage: null,
-      aiMessage: 'Welcome to our collection!',
-      emojiTip: "✨"
+      aiMessage: 'Discover exclusive deals and limited-time offers',
+      emojiTip: "🔥💥⚡"
     };
   }
 
+  // Normalize "Default Theme" to "Black Friday"
+  const themeName = dbTheme.name === 'Default Theme' ? 'Black Friday' : (dbTheme.name || 'Unnamed Theme');
+
   return {
-    name: dbTheme.name || 'Unnamed Theme',
+    name: themeName,
     themePrompt: dbTheme.themePrompt || 'A beautiful theme',
     accent: dbTheme.accentColor || 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400',
     card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',

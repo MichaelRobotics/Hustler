@@ -18,6 +18,17 @@ export interface Product {
   whopProductId?: string; // ID of the actual Whop product/app (for synced products)
   // Badge support
   badge?: 'new' | '5star' | 'bestseller' | null;
+  // Promo support
+  promoDiscountType?: 'percentage' | 'fixed';
+  promoDiscountAmount?: number;
+  promoLimitQuantity?: number; // Limit amount of sold products on discounted price
+  promoShowFireIcon?: boolean; // Show red fire icon + "X left" text on right corner
+  promoQuantityLeft?: number; // Track remaining quantity (calculated from limit - sold)
+  salesCount?: number;
+  showSalesCount?: boolean;
+  starRating?: number;
+  reviewCount?: number;
+  showRatingInfo?: boolean;
 }
 
 export interface ContainerAsset {
@@ -120,6 +131,30 @@ export interface LoadingState {
   isGeneratingImage: boolean;
 }
 
+export interface DiscountMessage {
+  message: string;
+  offsetHours: number;
+  sendAsEmail?: boolean;
+  emailSubject?: string;
+  emailContent?: string;
+  fromEmail?: string;
+  isEmailHtml?: boolean;
+}
+
+export interface DiscountSettings {
+  enabled: boolean;
+  globalDiscount: boolean;
+  globalDiscountType: 'percentage' | 'fixed';
+  globalDiscountAmount: number;
+  percentage: number;
+  startDate: string;
+  endDate: string;
+  discountText: string;
+  promoCode: string;
+  prePromoMessages: DiscountMessage[];
+  activePromoMessages: DiscountMessage[];
+}
+
 export interface StoreTemplate {
   id: string;
   name: string;
@@ -163,6 +198,9 @@ export interface StoreTemplate {
       ringHoverClass: string;
       icon: string;
     };
+    
+    // Discount settings
+    discountSettings?: DiscountSettings;
   };
   isLive: boolean;
   isLastEdited: boolean;
@@ -196,6 +234,7 @@ export interface SeasonalStoreState {
   floatingAssets: FloatingAsset[];
   availableAssets: FloatingAsset[];
   currentSeason: string;
+  discountSettings: DiscountSettings;
   allThemes: Record<string, Theme>;
   fixedTextStyles: FixedTextStyles;
   logoAsset: LogoAsset;

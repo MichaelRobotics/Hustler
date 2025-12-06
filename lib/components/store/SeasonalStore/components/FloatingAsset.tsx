@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { FloatingAsset as FloatingAssetType } from '../types';
-import { emojiToSvgDataURL } from '../services/aiService';
+import { emojiToSvgDataURL } from '../actions/aiService';
 
 interface FloatingAssetProps {
   asset: FloatingAssetType;

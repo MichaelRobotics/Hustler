@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { nanoBananaService } from '@/lib/services/nanobananaService';
+import { nanoBananaService } from '@/lib/components/store/SeasonalStore/actions/nanobananaService';
 
 // Validate environment variables
 const validateEnvironment = () => {
