@@ -68,6 +68,25 @@ interface AdminAssetSheetProps {
   loadingState?: {
     isImageLoading: boolean;
   };
+  // Origin template for company theme
+  originTemplate?: {
+    defaultThemeData: {
+      name?: string;
+      card?: string;
+      text?: string;
+      welcomeColor?: string;
+      accent?: string;
+      ringColor?: string;
+      mainHeader?: string | null;
+      subHeader?: string | null;
+      aiMessage?: string;
+      emojiTip?: string;
+      themePrompt?: string;
+      placeholderImage?: string | null;
+      background?: string | null;
+    };
+    themePrompt?: string | null;
+  } | null;
 }
 
 
@@ -107,6 +126,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
   handleBgImageUpload,
   setCurrentSeason,
   loadingState,
+  originTemplate,
 }) => {
   // Debug logging
   console.log('🎨 AdminAssetSheet render:', { isOpen, isEditorView, selectedAssetId });
@@ -581,26 +601,67 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                 </Heading>
                 <div className="space-y-3">
                   {/* Theme Selector */}
-                  {setCurrentSeason && (
-                    <div className="relative" style={{ zIndex: 1000 }}>
-                      <select
-                        id="season-select"
-                        value={currentSeason}
-                        onChange={(e) => { 
-                          setCurrentSeason(e.target.value);
-                        }}
-                        className="w-full px-4 py-2.5 pr-10 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 text-sm appearance-none cursor-pointer"
-                        style={{ zIndex: 1000, boxSizing: 'border-box' }}
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        {Object.keys(allThemes).map(s => (
-                          <option key={s} value={s}>{allThemes[s].name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" />
-                    </div>
-                  )}
+                  {setCurrentSeason && (() => {
+                    // Filter themes to only show those from the "themes" table
+                    // Include: initial themes, database themes (db_*), Company (if from database), and origin template theme
+                    // Exclude: template themes (template_*) and custom themes (custom_*)
+                    const initialThemeKeys = ['Winter', 'Summer', 'Fall', 'Autumn', 'Holiday Cheer', 'Spring Renewal', 'Cyber Sale', 'Black Friday'];
+                    
+                    // Build available themes map including origin template theme if it exists
+                    const availableThemesMap: Record<string, LegacyTheme> = { ...allThemes };
+                    
+                    // Add origin template theme if it exists
+                    if (originTemplate?.defaultThemeData) {
+                      const originData = originTemplate.defaultThemeData;
+                      const originTheme: LegacyTheme = {
+                        name: originData.name || 'Company Theme',
+                        themePrompt: originData.themePrompt || originTemplate.themePrompt || '',
+                        accent: originData.accent || 'bg-indigo-500',
+                        card: originData.card || 'bg-white/95 backdrop-blur-sm shadow-xl',
+                        text: originData.text || 'text-gray-800',
+                        welcomeColor: originData.welcomeColor || 'text-yellow-300',
+                        background: originData.background || '',
+                        placeholderImage: originData.placeholderImage || originData.background || null,
+                        mainHeader: originData.mainHeader || null,
+                        aiMessage: originData.aiMessage || originData.subHeader || '',
+                        emojiTip: originData.emojiTip || '🎁',
+                      };
+                      // Use 'Company' key for origin template theme
+                      availableThemesMap['Company'] = originTheme;
+                    }
+                    
+                    const availableThemeKeys = Object.keys(availableThemesMap).filter(key => {
+                      // Include initial themes
+                      if (initialThemeKeys.includes(key)) return true;
+                      // Include database themes (keys starting with db_)
+                      if (key.startsWith('db_')) return true;
+                      // Include Company theme (from database or origin template)
+                      if (key === 'Company') return true;
+                      // Exclude template themes and custom themes
+                      return false;
+                    });
+                    
+                    return (
+                      <div className="relative" style={{ zIndex: 1000 }}>
+                        <select
+                          id="season-select"
+                          value={currentSeason}
+                          onChange={(e) => { 
+                            setCurrentSeason(e.target.value);
+                          }}
+                          className="w-full px-4 py-2.5 pr-10 rounded-lg bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 text-sm appearance-none cursor-pointer"
+                          style={{ zIndex: 1000, boxSizing: 'border-box' }}
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          {availableThemeKeys.map(s => (
+                            <option key={s} value={s}>{availableThemesMap[s].name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" />
+                      </div>
+                    );
+                  })()}
 
                   {/* Theme Up Background */}
                   {handleGenerateBgClick && (

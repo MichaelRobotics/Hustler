@@ -188,8 +188,8 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 			...selectedFunnelForLibrary,
 			resources: selectedFunnelForLibrary.resources?.map(r => ({
 				...r,
-				type: r.type as "AFFILIATE" | "MY_PRODUCTS" | "CONTENT" | "TOOL"
-			}))
+				type: (r.type === "LINK" || r.type === "FILE" ? r.type : "LINK") as "LINK" | "FILE"
+			})) as any
 		} : { id: "", name: "", flow: null },
 		(updatedFunnel) => {
 			// Convert back to the expected type and update state
@@ -197,7 +197,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				...updatedFunnel,
 				resources: updatedFunnel.resources?.map(r => ({
 					...r,
-					type: r.type as "AFFILIATE" | "MY_PRODUCTS",
+					type: r.type as "LINK" | "FILE",
 					category: (r.category as "PAID" | "FREE_VALUE") || "FREE_VALUE"
 				}))
 			};

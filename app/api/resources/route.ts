@@ -28,10 +28,6 @@ async function getResourcesHandler(request: NextRequest, context: AuthContext) {
 		const page = Number.parseInt(url.searchParams.get("page") || "1");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "10");
 		const search = url.searchParams.get("search") || undefined;
-		const type = url.searchParams.get("type") as
-			| "AFFILIATE"
-			| "MY_PRODUCTS"
-			| undefined;
 		const category = url.searchParams.get("category") as
 			| "PAID"
 			| "FREE_VALUE"
@@ -68,7 +64,6 @@ async function getResourcesHandler(request: NextRequest, context: AuthContext) {
 			page,
 			limit,
 			search,
-			type,
 			category,
 		);
 
@@ -99,17 +94,17 @@ async function createResourceHandler(
 		}
 		
 		// Validate required fields based on type
-		if (input.type === "AFFILIATE" && !input.link) {
+		if (input.type === "LINK" && !input.link) {
 			return createErrorResponse(
 				"MISSING_REQUIRED_FIELDS",
-				"Link is required for Affiliate products",
+				"Link is required for LINK type",
 			);
 		}
 		
-		if (input.type === "MY_PRODUCTS" && !input.storageUrl) {
+		if (input.type === "FILE" && !input.storageUrl) {
 			return createErrorResponse(
 				"MISSING_REQUIRED_FIELDS",
-				"Digital asset (storageUrl) is required for Owned products",
+				"File upload is required for FILE type",
 			);
 		}
 		
@@ -129,10 +124,10 @@ async function createResourceHandler(
 			);
 		}
 
-		if (!["AFFILIATE", "MY_PRODUCTS"].includes(input.type)) {
+		if (!["LINK", "FILE"].includes(input.type)) {
 			return createErrorResponse(
 				"INVALID_INPUT",
-				"Type must be either AFFILIATE or MY_PRODUCTS",
+				"Type must be either LINK or FILE",
 			);
 		}
 

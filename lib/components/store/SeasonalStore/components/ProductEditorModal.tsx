@@ -4,10 +4,12 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button, Heading, Text, Card, Separator } from 'frosted-ui';
-import { Edit, X, Package, Sparkles, Star, Award, ChevronDown, Flame, Bold, Italic, Palette, Type } from 'lucide-react';
+import { Edit, X, Package, Sparkles, Star, Award, ChevronDown, Flame, Bold, Italic, Palette, Type, Eye } from 'lucide-react';
 import { ButtonColorControls } from './ButtonColorControls';
 import { tailwindTextColorToHex } from '../utils/colors';
 import { EMOJI_DATABASE } from '../actions/constants';
+import { ProductPageModal } from './ProductPageModal';
+import type { LegacyTheme } from '../types';
 
 interface Product {
   id: number | string;
@@ -33,6 +35,10 @@ interface Product {
   imageAttachmentId?: string | null;
   imageAttachmentUrl?: string | null;
   whopProductId?: string; // ID of the actual Whop product/app (for synced products)
+  // Product type and file support
+  type?: "LINK" | "FILE"; // Product type: LINK for external links, FILE for downloadable files
+  storageUrl?: string; // File download URL for FILE type products
+  productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
   // Badge support
   badge?: 'new' | '5star' | 'bestseller' | null;
   // Promo support
@@ -87,6 +93,7 @@ interface ProductEditorModalProps {
   isStoreContentReady?: boolean;
   isTemplateLoaded?: boolean;
   lastSavedSnapshot?: string | null;
+  experienceId?: string; // Experience ID for API calls
 }
 
 export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
@@ -106,12 +113,16 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   isStoreContentReady = true,
   isTemplateLoaded = false,
   lastSavedSnapshot = null,
+  experienceId,
 }) => {
   // Refs for inline editing focus
   
   // Local state for transparency slider
   const [transparencyValue, setTransparencyValue] = useState(90);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
+  
+  // State for ProductPageModal
+  const [showProductPageModal, setShowProductPageModal] = useState(false);
   
   // Memoize current product to avoid repeated finds
   const currentProduct = useMemo(() => 
@@ -1295,7 +1306,8 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
               {productEditor.productId !== null && (
                 <>
                   {productEditor.target !== 'button' && (
-                    <Card 
+                    <>
+                      <Card 
                       className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
                       onClick={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -1528,7 +1540,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         </div>
                       </div>
                     </Card>
-                  )}
 
                   {/* Product Discount Section */}
                   {productEditor.target !== 'button' && discountSettings && discountSettings.startDate && discountSettings.endDate && discountSettings.startDate.trim() !== '' && discountSettings.endDate.trim() !== '' && (
@@ -1695,10 +1706,14 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                       </div>
                     </Card>
                   )}
+
+                    </>
+                  )}
             
                   {/* Button-only section (distinct modal experience) */}
                   {productEditor.target === 'button' && (
-                    <Card 
+                    <>
+                      <Card 
                       className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
                       onClick={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -1941,6 +1956,28 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         </div>
                       </div>
                     </Card>
+                    
+                    {/* Edit Product Page Button - Only for FILE type products */}
+                    {currentProduct?.type === "FILE" && (
+                      <Card 
+                        className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="fui-reset px-6 py-6">
+                          <Button
+                            size="3"
+                            color="blue"
+                            onClick={() => setShowProductPageModal(true)}
+                            className="w-full shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
+                          >
+                            <Eye className="w-5 h-5 mr-2" />
+                            Edit Product Page
+                          </Button>
+                        </div>
+                      </Card>
+                    )}
+                    </>
                   )}
             
                   {/* Card Style Presets (apply per-card or all) */}
@@ -2314,6 +2351,28 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+      
+      {/* Product Page Modal */}
+      {currentProduct && showProductPageModal && (
+        <ProductPageModal
+          isOpen={showProductPageModal}
+          onClose={() => setShowProductPageModal(false)}
+          product={currentProduct}
+          theme={{
+            name: 'Store',
+            accent: legacyTheme.accent,
+            card: legacyTheme.card,
+            text: legacyTheme.text,
+            welcomeColor: legacyTheme.text,
+            background: '',
+            aiMessage: '',
+            emojiTip: '',
+          } as LegacyTheme}
+          storeName="Store"
+          experienceId={experienceId}
+          isEditMode={true}
+        />
+      )}
     </Dialog.Root>
     </>
   );

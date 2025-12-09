@@ -66,7 +66,6 @@ export class UpdateProductSync {
       const currentResources = await db.query.resources.findMany({
         where: and(
           eq(resources.experienceId, user.experience.id), // Use database UUID
-          eq(resources.type, "MY_PRODUCTS"),
           isNotNull(resources.whopProductId)
         ),
         columns: {
@@ -195,22 +194,41 @@ export class UpdateProductSync {
 
       // Check if origin template exists and needs update, or should be created
       try {
-        // Get first product with whopProductId to check company data
-        const firstProduct = await db.query.resources.findFirst({
+        // Get products with whopProductId to check company data
+        const productsWithIds = await db.query.resources.findMany({
           where: and(
             eq(resources.experienceId, user.experience.id),
-            eq(resources.type, "MY_PRODUCTS"),
             isNotNull(resources.whopProductId)
           ),
         });
 
-        if (firstProduct?.whopProductId) {
+        // Find a valid product by trying to fetch it from Whop SDK
+        let validProduct = null;
+        for (const product of productsWithIds) {
+          if (!product.whopProductId) continue;
+          
+          try {
+            const productResult = await whopSdk.accessPasses.getAccessPass({
+              accessPassId: product.whopProductId,
+            });
+            if (productResult) {
+              validProduct = product;
+              break;
+            }
+          } catch (error) {
+            // Product doesn't exist, try next one
+            console.log(`[UPDATE-SYNC] ⚠️ Product ${product.whopProductId} not found, trying next...`);
+            continue;
+          }
+        }
+
+        if (validProduct?.whopProductId) {
           // Check if origin template should be created (doesn't exist yet)
           const shouldCreate = await shouldCreateOriginTemplate(experienceId);
           if (shouldCreate) {
-            console.log(`[UPDATE-SYNC] 📦 Creating origin template for experience ${experienceId}...`);
+            console.log(`[UPDATE-SYNC] 📦 Creating origin template for experience ${experienceId} using product ${validProduct.whopProductId}...`);
             try {
-              const originTemplate = await createOriginTemplateFromProduct(experienceId, firstProduct.whopProductId);
+              const originTemplate = await createOriginTemplateFromProduct(experienceId, validProduct.whopProductId);
               if (originTemplate) {
                 console.log(`[UPDATE-SYNC] ✅ Origin template created successfully`);
               } else {
@@ -223,13 +241,13 @@ export class UpdateProductSync {
             // Origin template exists, check if it needs update (company logo/banner changes)
             try {
               const productResult = await whopSdk.accessPasses.getAccessPass({
-                accessPassId: firstProduct.whopProductId,
+                accessPassId: validProduct.whopProductId,
               });
               if (productResult) {
                 const shouldUpdate = await shouldUpdateOriginTemplate(experienceId, productResult);
                 if (shouldUpdate) {
                   console.log(`[UPDATE-SYNC] 📦 Updating origin template for company logo/banner changes...`);
-                  await updateOriginTemplateFromProduct(experienceId, firstProduct.whopProductId);
+                  await updateOriginTemplateFromProduct(experienceId, validProduct.whopProductId);
                   console.log(`[UPDATE-SYNC] ✅ Origin template updated successfully`);
                 }
               }
@@ -237,6 +255,8 @@ export class UpdateProductSync {
               console.error(`[UPDATE-SYNC] ⚠️ Error fetching product data for origin template update:`, error);
             }
           }
+        } else if (productsWithIds.length > 0) {
+          console.log(`[UPDATE-SYNC] ⚠️ No valid products found for origin template creation (all products may have been deleted)`);
         } else {
           console.log(`[UPDATE-SYNC] ℹ️ No products with whopProductId found, skipping origin template check`);
         }

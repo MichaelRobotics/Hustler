@@ -16,8 +16,8 @@ import {
 
 // ===== ENUMS =====
 export const resourceTypeEnum = pgEnum("resource_type", [
-	"AFFILIATE",
-	"MY_PRODUCTS",
+	"LINK",
+	"FILE",
 ]);
 export const resourceCategoryEnum = pgEnum("resource_category", [
 	"PAID",
@@ -167,7 +167,7 @@ export const resources = pgTable(
 		name: text("name").notNull(),
 		type: resourceTypeEnum("type").notNull(),
 		category: resourceCategoryEnum("category").notNull(),
-		link: text("link").notNull(),
+		link: text("link"),
 		code: text("code"), // Promo code
 		description: text("description"),
 		whopProductId: text("whop_product_id"), // For MY_PRODUCTS sync
@@ -177,6 +177,8 @@ export const resources = pgTable(
 		price: decimal("price", { precision: 10, scale: 2 }), // Price from access pass plan or user input
 		image: text("image"), // Link to icon of app/product/digital resource image
 		storageUrl: text("storage_url"), // Link that triggers digital asset upload
+		productImages: jsonb("product_images"), // Array of up to 3 product image URLs for FILE type products
+		displayOrder: integer("display_order"), // Order for displaying resources in Market Stall
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -199,6 +201,10 @@ export const resources = pgTable(
 		typeCategoryIdx: index("resources_type_category_idx").on(
 			table.type,
 			table.category,
+		),
+		experienceDisplayOrderIdx: index("resources_experience_display_order_idx").on(
+			table.experienceId,
+			table.displayOrder,
 		),
 	}),
 );
@@ -521,6 +527,9 @@ export const themes = pgTable(
 		themePrompt: text("theme_prompt"),
 		accentColor: text("accent_color"),
 		ringColor: text("ring_color"),
+		card: text("card"), // Tailwind CSS classes for product cards
+		text: text("text"), // Tailwind CSS classes for body text
+		welcomeColor: text("welcome_color"), // Tailwind CSS classes for welcome/accent text
 		placeholderImage: text("placeholder_image"), // Refined product placeholder image for custom themes
 		mainHeader: text("main_header"), // AI-generated main header text
 		subHeader: text("sub_header"), // AI-generated subheader text

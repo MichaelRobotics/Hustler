@@ -222,7 +222,7 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   console.log(`[API] 🔍 About to create resource with link: ${trackingUrl}`);
   console.log(`[API] 🔍 Full createResource input:`, {
     name: resourceName,
-    type: "MY_PRODUCTS",
+    type: "LINK",
     category: productCategory,
     link: trackingUrl,
     description: product.description,
@@ -233,7 +233,7 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   });
   const resource = await createResource(user, {
     name: resourceName,
-    type: "MY_PRODUCTS",
+    type: "LINK",
     category: productCategory,
     link: trackingUrl,
     description: product.description,

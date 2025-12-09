@@ -4,49 +4,47 @@ interface UseStateRestorationProps {
   isStoreContentReady: boolean;
   isActive: boolean;
   liveTemplate: any;
-  lastActiveTemplate: any;
+  lastEditedTemplate: any;
   currentSeason: string;
-  restoreLastActiveState: () => void;
+  loadTemplate: (templateId: string) => Promise<any>;
   saveLastActiveTheme: (theme: string) => void;
-  saveLastActiveTemplate: (template: any) => void;
 }
 
 export function useStateRestoration({
   isStoreContentReady,
   isActive,
   liveTemplate,
-  lastActiveTemplate,
+  lastEditedTemplate,
   currentSeason,
-  restoreLastActiveState,
+  loadTemplate,
   saveLastActiveTheme,
-  saveLastActiveTemplate,
 }: UseStateRestorationProps) {
-  // Save current state when theme or template changes
+  // Save current theme when it changes
   useEffect(() => {
     if (currentSeason) {
       saveLastActiveTheme(currentSeason);
     }
   }, [currentSeason, saveLastActiveTheme]);
 
+  // Load latest edited template when store loads (if no live template)
   useEffect(() => {
-    if (liveTemplate) {
-      saveLastActiveTemplate(liveTemplate);
+    if (isStoreContentReady && !liveTemplate && lastEditedTemplate?.id) {
+      console.log(`🔄 Loading latest edited template: ${lastEditedTemplate.name}`);
+      loadTemplate(lastEditedTemplate.id).catch((error) => {
+        console.error('Error loading latest template:', error);
+      });
     }
-  }, [liveTemplate, saveLastActiveTemplate]);
+  }, [isStoreContentReady, liveTemplate, lastEditedTemplate, loadTemplate]);
 
-  // Restore last active state when store loads
+  // Load latest edited template when store becomes active (if no live template)
   useEffect(() => {
-    if (isStoreContentReady && !liveTemplate && lastActiveTemplate) {
-      restoreLastActiveState();
+    if (isActive && isStoreContentReady && !liveTemplate && lastEditedTemplate?.id) {
+      console.log(`🔄 Loading latest edited template on activation: ${lastEditedTemplate.name}`);
+      loadTemplate(lastEditedTemplate.id).catch((error) => {
+        console.error('Error loading latest template:', error);
+      });
     }
-  }, [isStoreContentReady, liveTemplate, lastActiveTemplate, restoreLastActiveState]);
-
-  // Restore last active state when store becomes active
-  useEffect(() => {
-    if (isActive && isStoreContentReady && !liveTemplate && lastActiveTemplate) {
-      restoreLastActiveState();
-    }
-  }, [isActive, isStoreContentReady, liveTemplate, lastActiveTemplate, restoreLastActiveState]);
+  }, [isActive, isStoreContentReady, liveTemplate, lastEditedTemplate, loadTemplate]);
 }
 
 

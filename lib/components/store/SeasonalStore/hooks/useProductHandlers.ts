@@ -46,7 +46,7 @@ export function useProductHandlers({
 
   const handleAddToTemplate = useCallback(async (resource: any) => {
     // Use resource image directly (already synced from Whop SDK in sync process)
-    const productImage = resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    const productImage = resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
     
     const newProduct = {
       id: `resource-${resource.id}`,
@@ -58,6 +58,9 @@ export function useProductHandlers({
       buttonText: 'VIEW DETAILS',
       buttonLink: resource.link || '',
       whopProductId: resource.whopProductId,
+      type: resource.type, // Include type (LINK or FILE)
+      storageUrl: resource.storageUrl, // Include storageUrl for FILE type
+      productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined, // Include productImages array
       cardClass: legacyTheme.card,
       titleClass: legacyTheme.text,
       descClass: legacyTheme.text,

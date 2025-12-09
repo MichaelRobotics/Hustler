@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Get default product image placeholder to refine
     // Use the same default product placeholder that's used in ProductCard
-    const defaultProductPlaceholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+    const defaultProductPlaceholderUrl = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
     console.log('🎨 [Custom Theme] Using default product placeholder URL for refinement:', defaultProductPlaceholderUrl);
 
     // Refine the product placeholder image to match the custom theme using Nano Banana service

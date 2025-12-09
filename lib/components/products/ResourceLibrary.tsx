@@ -196,11 +196,15 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 	// Handle inline product creation
 	const handleCreateNewProductInline = () => {
+		// Close edit modal first if open
+		setIsEditingProduct(false);
+		setEditingResource(null);
+		// Open create modal
 		setIsCreatingNewProduct(true);
 		setNewResource({
 			name: "",
 			link: "",
-			type: "MY_PRODUCTS",
+			type: "LINK",
 			category: "FREE_VALUE",
 			description: "",
 			promoCode: "",
@@ -247,6 +251,9 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 	// Handle starting product edit
 	const handleStartEditProduct = (resource: any) => {
+		// Close create modal first if open
+		setIsCreatingNewProduct(false);
+		// Open edit modal
 		setIsEditingProduct(true);
 		setEditingResource(resource);
 	};
@@ -442,26 +449,30 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
           {/* Create Product Form */}
 							{isCreatingNewProduct && (
-            <ResourceCreateForm
-              onSave={handleSaveNewProduct}
-              onCancel={handleCancelNewProduct}
-              allResources={allResources}
-              isSingleFunnel={isSingleFunnel}
-              error={error}
-              setError={setError}
-            />
+            <div className="mt-8">
+              <ResourceCreateForm
+                onSave={handleSaveNewProduct}
+                onCancel={handleCancelNewProduct}
+                allResources={allResources}
+                isSingleFunnel={isSingleFunnel}
+                error={error}
+                setError={setError}
+              />
+            </div>
 							)}
 
 							{/* Edit Product Form */}
 							{isEditingProduct && editingResource && (
-            <ResourceEditForm
-              resource={editingResource}
-              onSave={handleSaveEditedProduct}
-              onCancel={handleCancelEditProduct}
-              allResources={allResources}
-              error={error}
-              setError={setError}
-            />
+            <div className="mt-8">
+              <ResourceEditForm
+                resource={editingResource}
+                onSave={handleSaveEditedProduct}
+                onCancel={handleCancelEditProduct}
+                allResources={allResources}
+                error={error}
+                setError={setError}
+              />
+            </div>
           )}
 
           {/* Resources Grid */}

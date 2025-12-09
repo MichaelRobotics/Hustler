@@ -38,6 +38,9 @@ interface ProductShowcaseProps {
   };
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;
+  onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
+  storeName?: string; // Store name for modal
+  experienceId?: string; // Experience ID for payment
 }
 
 export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
@@ -63,6 +66,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   discountSettings,
   getThemeQuickColors,
   backgroundUrl,
+  onOpenProductPage,
+  storeName,
+  experienceId,
 }) => {
   const [showNavigation, setShowNavigation] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -255,6 +261,9 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   discountSettings={discountSettings}
                   getThemeQuickColors={getThemeQuickColors}
                   backgroundUrl={backgroundUrl}
+                  onOpenProductPage={onOpenProductPage}
+                  storeName={storeName}
+                  experienceId={experienceId}
                 />
               </div>
             ))}

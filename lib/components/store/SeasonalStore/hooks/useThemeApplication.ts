@@ -57,10 +57,44 @@ export function useThemeApplication({
     // Get theme text color
     const textColor = getThemeTextColor(legacyTheme.welcomeColor || 'text-yellow-300');
 
+    // Helper function to strip theme color classes from styleClass
+    // This ensures we don't carry over old theme colors when applying new theme
+    const stripThemeColorClasses = (styleClass: string): string => {
+      if (!styleClass) return '';
+      // Remove all text-* color classes (e.g., text-blue-600, text-indigo-500, etc.)
+      // Keep only base styling classes (font size, weight, tracking, etc.)
+      // Pattern: text-{color}-{shade} or text-{color} (but not text-center, text-left, etc.)
+      return styleClass
+        .split(' ')
+        .filter(cls => {
+          // Remove text color classes (text-{color}-{number} or text-{color} where color is a color name)
+          // But keep utility classes like text-center, text-left, text-uppercase, etc.
+          if (cls.startsWith('text-')) {
+            // Check if it's a color class (has a color name followed by optional number)
+            const colorNames = ['blue', 'indigo', 'purple', 'pink', 'red', 'orange', 'yellow', 
+                              'green', 'emerald', 'teal', 'cyan', 'sky', 'violet', 'fuchsia', 
+                              'rose', 'amber', 'lime', 'slate', 'gray', 'zinc', 'neutral', 'stone',
+                              'white', 'black', 'transparent'];
+            const parts = cls.split('-');
+            if (parts.length >= 2 && colorNames.includes(parts[1])) {
+              return false; // This is a color class, remove it
+            }
+          }
+          return true; // Keep all other classes
+        })
+        .join(' ')
+        .trim();
+    };
+
     // Apply theme colors and styles to headerMessage (this is what's displayed in StoreHeader)
-    // Pass text style without color so applyThemeColorsToText applies theme color class
+    // Strip old theme color classes first to ensure clean base style
+    const headerBaseStyleClass = stripThemeColorClasses(
+      fixedTextStyles.headerMessage?.styleClass || 
+      fixedTextStyles.mainHeader?.styleClass || 
+      'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
+    );
     const headerMessageStyleWithoutColor = {
-      styleClass: fixedTextStyles.headerMessage?.styleClass || fixedTextStyles.mainHeader?.styleClass || '',
+      styleClass: headerBaseStyleClass,
       color: undefined, // Don't pass color so theme color class gets applied
     };
     const styledHeaderMessageClass = applyThemeColorsToText(headerMessageStyleWithoutColor, 'header');
@@ -81,9 +115,13 @@ export function useThemeApplication({
     console.log('🎨 Applied theme colors and styles to headerMessage:', styledHeaderMessageClass);
 
     // Apply theme colors and styles to sub header (preserve content)
-    // Pass text style without color so applyThemeColorsToText applies theme color class
+    // Strip old theme color classes first to ensure clean base style
+    const subHeaderBaseStyleClass = stripThemeColorClasses(
+      fixedTextStyles.subHeader?.styleClass || 
+      'text-lg sm:text-xl font-normal'
+    );
     const subHeaderStyleWithoutColor = {
-      styleClass: fixedTextStyles.subHeader?.styleClass || '',
+      styleClass: subHeaderBaseStyleClass,
       color: undefined, // Don't pass color so theme color class gets applied
     };
     const styledSubHeaderClass = applyThemeColorsToText(subHeaderStyleWithoutColor, 'subheader');

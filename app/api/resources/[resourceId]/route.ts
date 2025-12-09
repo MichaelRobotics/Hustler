@@ -37,10 +37,10 @@ async function updateResourceHandler(
 		const input = await request.json();
 
 		// Validation
-		if (input.type && !["AFFILIATE", "MY_PRODUCTS"].includes(input.type)) {
+		if (input.type && !["LINK", "FILE"].includes(input.type)) {
 			return createErrorResponse(
 				"INVALID_INPUT",
-				"Type must be either AFFILIATE or MY_PRODUCTS",
+				"Type must be either LINK or FILE",
 			);
 		}
 

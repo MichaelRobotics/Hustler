@@ -145,6 +145,35 @@ async function createTemplateHandler(
     const finalThemeSnapshot = themeSnapshot || { name: "Black Friday", season: currentSeason || "Black Friday" };
     console.log("🔍 Templates POST - Using themeSnapshot:", finalThemeSnapshot);
 
+    // Check if a template with this name already exists for this experience
+    const existingTemplate = await db.query.templates.findFirst({
+      where: and(
+        eq(templates.experienceId, userContext.user.experience.id),
+        eq(templates.name, name)
+      ),
+    });
+
+    if (existingTemplate) {
+      // If template exists, update it instead of creating a new one
+      console.log("🔍 Templates POST - Template with same name exists, updating instead:", existingTemplate.id);
+      const updatedTemplate = await db.update(templates)
+        .set({
+          themeId: finalThemeId,
+          themeSnapshot: finalThemeSnapshot,
+          currentSeason,
+          templateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(templates.id, existingTemplate.id))
+        .returning();
+      
+      return NextResponse.json({
+        success: true,
+        template: updatedTemplate[0],
+        wasUpdated: true,
+      });
+    }
+
     console.log("🔍 Templates POST - Creating template with:", {
       experienceId: userContext.user.experience.id,
       userId: userContext.user.id,

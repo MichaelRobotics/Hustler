@@ -3,8 +3,8 @@ import { useMemo } from 'react';
 interface Resource {
   id: string;
   name: string;
+  type: 'LINK' | 'FILE';
   category: 'PAID' | 'FREE_VALUE';
-  type: 'AFFILIATE' | 'MY_PRODUCTS';
   price?: string;
   link?: string;
   storageUrl?: string;
@@ -59,14 +59,14 @@ export const useResourceValidation = (): ValidationActions => {
       }
     }
 
-    // Link validation for affiliate products
-    if (resource.type === 'AFFILIATE' && !resource.link?.trim()) {
-      errors.push('Affiliate URL is required');
+    // Link validation for LINK type
+    if (resource.type === 'LINK' && !resource.link?.trim()) {
+      errors.push('Product link is required for LINK type');
     }
 
-    // Storage URL validation for owned products that are NOT Whop products
-    if (resource.type === 'MY_PRODUCTS' && !resource.whopProductId && !resource.storageUrl?.trim()) {
-      errors.push('Digital asset is required for owned products');
+    // Storage URL validation for FILE type
+    if (resource.type === 'FILE' && !resource.whopProductId && !resource.storageUrl?.trim()) {
+      errors.push('File upload is required for FILE type');
     }
 
     return {

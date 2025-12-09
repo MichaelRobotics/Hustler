@@ -74,7 +74,19 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
   });
 
   // Filter for PAID resources only (Market Stall only shows paid products)
-  const paidResources = allResources.filter(resource => resource.category === "PAID");
+  // Sort by displayOrder (resources with displayOrder first, then by updatedAt)
+  const paidResources = allResources
+    .filter(resource => resource.category === "PAID")
+    .sort((a, b) => {
+      // Resources with displayOrder come first
+      if (a.displayOrder !== undefined && b.displayOrder !== undefined) {
+        return a.displayOrder - b.displayOrder;
+      }
+      if (a.displayOrder !== undefined) return -1;
+      if (b.displayOrder !== undefined) return 1;
+      // Both undefined, maintain original order
+      return 0;
+    });
 
   // Auto-open create modal if requested
   useEffect(() => {
@@ -89,6 +101,10 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
 
   // Handle creating new resource
   const handleCreateNewProductInline = useCallback(() => {
+    // Close edit modal first if open
+    setIsEditingProduct(false);
+    setEditingResource(null);
+    // Open create modal
     setIsCreatingNewProduct(true);
   }, []);
 
@@ -127,8 +143,57 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
     setError(null);
   }, []);
 
+  // Handle reordering resources (only called on actual drop)
+  const handleReorder = useCallback(async (reorderedResources: Resource[]) => {
+    if (!user?.experienceId) {
+      console.error('❌ Cannot reorder: Experience ID is required');
+      setError('Experience ID is required. Please refresh the page.');
+      return;
+    }
+
+    try {
+      setError(null);
+      
+      // Prepare update payload with new displayOrder values
+      const updates = reorderedResources.map((resource, index) => ({
+        id: resource.id,
+        displayOrder: index + 1, // Start from 1
+      }));
+
+      // Call API to update order using apiPost utility which handles auth
+      const response = await apiPost('/api/resources/reorder', {
+        resources: updates,
+      }, user.experienceId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to save resource order');
+      }
+
+      // Update local state with new order
+      const updatedResources = allResources.map((resource) => {
+        const update = updates.find((u) => u.id === resource.id);
+        if (update) {
+          return { ...resource, displayOrder: update.displayOrder };
+        }
+        return resource;
+      });
+
+      setAllResources(updatedResources);
+      
+      console.log('✅ Resource order updated successfully');
+    } catch (error) {
+      console.error('❌ Error reordering resources:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save resource order');
+      // Optionally revert the UI state here if needed
+    }
+  }, [allResources, setAllResources, user?.experienceId]);
+
   // Handle editing resource
   const handleStartEditProduct = useCallback((resource: Resource) => {
+    // Close create modal first if open
+    setIsCreatingNewProduct(false);
+    // Open edit modal
     setEditingResource(resource);
     setIsEditingProduct(true);
   }, []);
@@ -290,7 +355,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
 
           {/* Create Product Form */}
           {isCreatingNewProduct && (
-            <div data-create-form>
+            <div data-create-form className="mt-8">
               <ResourceCreateForm
                 onSave={handleSaveNewProduct}
                 onCancel={handleCancelNewProduct}
@@ -304,14 +369,16 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
 
           {/* Edit Product Form */}
           {isEditingProduct && editingResource && (
-            <ResourceEditForm
-              resource={editingResource}
-              onSave={handleSaveEditedProduct}
-              onCancel={handleCancelEditProduct}
-              allResources={allResources}
-              error={error}
-              setError={setError}
-            />
+            <div className="mt-8">
+              <ResourceEditForm
+                resource={editingResource}
+                onSave={handleSaveEditedProduct}
+                onCancel={handleCancelEditProduct}
+                allResources={allResources}
+                error={error}
+                setError={setError}
+              />
+            </div>
           )}
 
           {/* Resources Grid */}
@@ -330,6 +397,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
               onRemoveFromTheme={onRemoveFromTheme}
               isResourceInTheme={isResourceInTheme}
               editingResourceId={editingResource?.id || null}
+              onReorder={handleReorder}
             />
             </div>
           )}

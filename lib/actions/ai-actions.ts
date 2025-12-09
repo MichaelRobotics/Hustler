@@ -568,9 +568,9 @@ const validateResourcesForGeneration = (resources: Resource[]): void => {
 		}
 
 		// Validate type is valid
-		if (!["AFFILIATE", "MY_PRODUCTS"].includes(resource.type)) {
+		if (!["LINK", "FILE"].includes(resource.type)) {
 			throw new ValidationError(
-				`Invalid resource type for "${resource.name}": ${resource.type}. Must be "AFFILIATE" or "MY_PRODUCTS"`
+				`Invalid resource type for "${resource.name}": ${resource.type}. Must be "LINK" or "FILE"`
 			);
 		}
 	});
@@ -628,7 +628,7 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 				
 				// FIRST PRIORITY: FREE apps with product_apps (regardless of category)
 				const freeAppsWithProductApps = freeResources.filter(r => 
-					(r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") && 
+					(r.link || r.whopProductId) && 
 					r.productApps && 
 					Object.keys(r.productApps).length > 0
 				);
@@ -664,7 +664,7 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 						const remainingResources = freeResources.filter(r => {
 							const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
 							return !alreadyConverted && 
-								   (r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") &&
+								   (r.type === "LINK" || r.type === "FILE") &&
 								   (r.name.toLowerCase().includes(category) || 
 								    (r.productApps && typeof r.productApps === 'object' && 
 								     Object.values(r.productApps).some((app: any) => 
@@ -698,7 +698,7 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 						const remainingSlots = maxToConvert - totalConverted;
 						const remainingFreeResources = freeResources.filter(r => {
 							const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
-							return !alreadyConverted && (r.type === "MY_PRODUCTS" || r.type === "AFFILIATE");
+							return !alreadyConverted && (r.type === "LINK" || r.type === "FILE");
 						});
 						
 						const resourcesToConvert = remainingFreeResources.slice(0, remainingSlots);
@@ -734,7 +734,7 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 			if (freeResources.length >= 1) {
 				// FIRST PRIORITY: FREE apps with product_apps
 				const freeAppsWithProductApps = freeResources.filter(r => 
-					(r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") && 
+					(r.type === "LINK" || r.type === "FILE") && 
 					r.productApps && 
 					Object.keys(r.productApps).length > 0
 				);
@@ -751,7 +751,7 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 					
 					for (const category of hierarchy) {
 						const categoryResources = freeResources.filter(r => 
-							(r.type === "MY_PRODUCTS" || r.type === "AFFILIATE") &&
+							(r.link || r.whopProductId) &&
 							(r.name.toLowerCase().includes(category) || 
 							 (r.productApps && typeof r.productApps === 'object' && 
 							  Object.values(r.productApps).some((app: any) => 

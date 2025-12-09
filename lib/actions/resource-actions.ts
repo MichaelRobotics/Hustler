@@ -7,21 +7,23 @@ import { whopSdk } from "../whop-sdk";
 
 export interface CreateResourceInput {
 	name: string;
-	type: "AFFILIATE" | "MY_PRODUCTS";
+	type: "LINK" | "FILE";
 	category: "PAID" | "FREE_VALUE";
-	link: string;
+	link?: string;
 	code?: string;
 	description?: string;
-	whopProductId?: string; // For MY_PRODUCTS sync
+	whopProductId?: string; // For Whop product sync
 	productApps?: string[]; // Array of app names associated with this product
 	price?: string; // Price from access pass plan or user input
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
+	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
+	displayOrder?: number; // Order for displaying resources in Market Stall
 }
 
 export interface UpdateResourceInput {
 	name?: string;
-	type?: "AFFILIATE" | "MY_PRODUCTS";
+	type?: "LINK" | "FILE";
 	category?: "PAID" | "FREE_VALUE";
 	link?: string;
 	code?: string;
@@ -30,14 +32,16 @@ export interface UpdateResourceInput {
 	price?: string; // Price from access pass plan or user input
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
+	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
+	displayOrder?: number; // Order for displaying resources in Market Stall
 }
 
 export interface ResourceWithFunnels {
 	id: string;
 	name: string;
-	type: "AFFILIATE" | "MY_PRODUCTS";
+	type: "LINK" | "FILE";
 	category: "PAID" | "FREE_VALUE";
-	link: string;
+	link?: string;
 	code?: string;
 	promoCode?: string; // Frontend compatibility field
 	description?: string;
@@ -46,6 +50,8 @@ export interface ResourceWithFunnels {
 	price?: string; // Price from access pass plan or user input
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
+	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
+	displayOrder?: number; // Order for displaying resources in Market Stall
 	createdAt: Date;
 	updatedAt: Date;
 	funnels: Array<{
@@ -120,12 +126,24 @@ export async function createResource(
 		}
 
 		// Validate WHOP product ID if provided
-		// Note: WHOP SDK products API might not be available in current version
-		if (input.type === "MY_PRODUCTS" && input.whopProductId) {
+		if (input.whopProductId) {
 			// For now, just validate that the product ID is not empty
 			if (!input.whopProductId.trim()) {
 				throw new Error("WHOP product ID cannot be empty");
 			}
+		}
+
+		// Determine displayOrder: use provided value or set to max + 1
+		let displayOrderValue = input.displayOrder;
+		if (displayOrderValue === undefined) {
+			// Get max displayOrder for this experience
+			const maxOrderResult = await db
+				.select({ max: sql<number>`MAX(${resources.displayOrder})` })
+				.from(resources)
+				.where(eq(resources.experienceId, user.experience.id));
+			
+			const maxOrder = maxOrderResult[0]?.max ?? 0;
+			displayOrderValue = maxOrder + 1;
 		}
 
 		// Create the resource
@@ -137,7 +155,7 @@ export async function createResource(
 				name: trimmedName,
 				type: input.type,
 				category: input.category,
-				link: input.link,
+				link: input.link || null,
 				code: input.code || null,
 				description: input.description || null,
 				whopProductId: input.whopProductId || null,
@@ -145,6 +163,8 @@ export async function createResource(
 				price: input.price || null,
 				image: input.image || null,
 				storageUrl: input.storageUrl || null,
+				productImages: input.productImages && input.productImages.length > 0 ? input.productImages : null,
+				displayOrder: displayOrderValue,
 			})
 			.returning();
 
@@ -154,7 +174,7 @@ export async function createResource(
 			name: newResource.name,
 			type: newResource.type,
 			category: newResource.category,
-			link: newResource.link,
+			link: newResource.link || undefined,
 			code: newResource.code || undefined,
 			promoCode: newResource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: newResource.description || undefined,
@@ -162,6 +182,8 @@ export async function createResource(
 			price: newResource.price || undefined,
 			image: newResource.image || undefined,
 			storageUrl: newResource.storageUrl || undefined,
+			productImages: Array.isArray(newResource.productImages) ? newResource.productImages : undefined,
+			displayOrder: newResource.displayOrder ?? undefined,
 			createdAt: newResource.createdAt,
 			updatedAt: newResource.updatedAt,
 			funnels: [],
@@ -208,7 +230,7 @@ export async function getResourceById(
 			name: resource.name,
 			type: resource.type,
 			category: resource.category,
-			link: resource.link,
+			link: resource.link || undefined,
 			code: resource.code || undefined,
 			promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: resource.description || undefined,
@@ -216,7 +238,9 @@ export async function getResourceById(
 			productApps: resource.productApps || undefined,
 			image: resource.image || undefined,
 			storageUrl: resource.storageUrl || undefined,
+			productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined,
 			price: resource.price || undefined,
+			displayOrder: resource.displayOrder ?? undefined,
 			createdAt: resource.createdAt,
 			updatedAt: resource.updatedAt,
 			funnels: resource.funnelResources.map((fr: any) => ({
@@ -239,7 +263,6 @@ export async function getResources(
 	page = 1,
 	limit = 10,
 	search?: string,
-	type?: "AFFILIATE" | "MY_PRODUCTS",
 	category?: "PAID" | "FREE_VALUE",
 ): Promise<ResourceListResponse> {
 	try {
@@ -261,11 +284,6 @@ export async function getResources(
 			)!;
 		}
 
-		// Add type filter
-		if (type) {
-			whereConditions = and(whereConditions, eq(resources.type, type))!;
-		}
-
 		// Add category filter
 		if (category) {
 			whereConditions = and(whereConditions, eq(resources.category, category))!;
@@ -280,11 +298,15 @@ export async function getResources(
 		const total = totalResult.count;
 
 		// First get the resources with pagination
+		// Order by displayOrder ASC (NULLS LAST), then updatedAt DESC
 		const paginatedResources = await db
 			.select()
 			.from(resources)
 			.where(whereConditions)
-			.orderBy(desc(resources.updatedAt))
+			.orderBy(
+				sql`${resources.displayOrder} ASC NULLS LAST`,
+				desc(resources.updatedAt)
+			)
 			.limit(limit)
 			.offset(offset);
 
@@ -314,7 +336,7 @@ export async function getResources(
 					name: resource.name,
 					type: resource.type,
 					category: resource.category,
-					link: resource.link,
+					link: resource.link || undefined,
 					code: resource.code || undefined,
 					promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 					description: resource.description || undefined,
@@ -322,7 +344,9 @@ export async function getResources(
 					productApps: resource.productApps || undefined,
 					image: resource.image || undefined,
 					storageUrl: resource.storageUrl || undefined,
+					productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined,
 					price: resource.price || undefined,
+					displayOrder: resource.displayOrder ?? undefined,
 					createdAt: resource.createdAt,
 					updatedAt: resource.updatedAt,
 					funnels: [],
@@ -388,8 +412,7 @@ export async function updateResource(
 		}
 
 		// Validate WHOP product ID if provided
-		// Note: WHOP SDK products API might not be available in current version
-		if (input.type === "MY_PRODUCTS" && input.whopProductId) {
+		if (input.whopProductId) {
 			// For now, just validate that the product ID is not empty
 			if (!input.whopProductId.trim()) {
 				throw new Error("WHOP product ID cannot be empty");
@@ -412,7 +435,7 @@ export async function updateResource(
 				name: input.name || existingResource.name,
 				type: input.type || existingResource.type,
 				category: input.category || existingResource.category,
-				link: input.link || existingResource.link,
+				link: input.link !== undefined ? input.link : existingResource.link,
 				code: input.code !== undefined ? input.code : existingResource.code,
 				description:
 					input.description !== undefined
@@ -424,7 +447,11 @@ export async function updateResource(
 						: existingResource.whopProductId,
 				image: input.image !== undefined ? input.image : existingResource.image,
 				storageUrl: input.storageUrl !== undefined ? input.storageUrl : existingResource.storageUrl,
+				productImages: input.productImages !== undefined 
+					? (input.productImages && input.productImages.length > 0 ? input.productImages : null)
+					: existingResource.productImages,
 				price: input.price !== undefined ? input.price : existingResource.price,
+				displayOrder: input.displayOrder !== undefined ? input.displayOrder : existingResource.displayOrder,
 				updatedAt: new Date(),
 			})
 			.where(eq(resources.id, resourceId))

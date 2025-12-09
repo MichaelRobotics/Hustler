@@ -696,7 +696,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
               ? `url(${product.imageAttachmentUrl})` 
               : product.image
                 ? `url(${product.image})`
-                : `url(https://placehold.co/400x400/c2410c/ffffff?text=${encodeURIComponent((product.name || 'Product').toUpperCase())})`,
+                : `url(https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp)`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',

@@ -61,7 +61,6 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   // Store Navigation State (persists across view switches)
   const [lastActiveTheme, setLastActiveTheme] = useState<string>('Black Friday');
-  const [lastActiveTemplate, setLastActiveTemplate] = useState<StoreTemplate | null>(null);
   
   // Market Stall State (single state for all themes)
   const [fixedTextStyles, setFixedTextStyles] = useState<FixedTextStyles>({
@@ -572,6 +571,32 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setOriginTemplate(originTemplateData);
       if (originTemplateData) {
         console.log('✅ Origin template loaded:', originTemplateData.id);
+        
+        // Add origin template theme to allThemes if it exists
+        if (originTemplateData.defaultThemeData) {
+          const originData = originTemplateData.defaultThemeData as any;
+          const originTheme: LegacyTheme = {
+            name: originData.name || 'Company Theme',
+            themePrompt: originData.themePrompt || originTemplateData.themePrompt || '',
+            accent: originData.accent || 'bg-indigo-500',
+            card: originData.card || 'bg-white/95 backdrop-blur-sm shadow-xl',
+            text: originData.text || 'text-gray-800',
+            welcomeColor: originData.welcomeColor || 'text-yellow-300',
+            background: originData.background || '',
+            placeholderImage: originData.placeholderImage || originData.background || null,
+            mainHeader: originData.mainHeader || null,
+            aiMessage: originData.aiMessage || originData.subHeader || '',
+            emojiTip: originData.emojiTip || '🎁',
+          };
+          
+          // Add to allThemes with 'Company' key
+          setAllThemes(prev => ({
+            ...prev,
+            'Company': originTheme,
+          }));
+          
+          console.log('🎨 [loadOriginTemplate] Added origin template theme to allThemes:', originTheme.name);
+        }
       }
     } catch (error) {
       console.error('Error loading origin template:', error);
@@ -582,7 +607,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         console.warn('Failed to load origin template:', (error as Error).message);
       }
     }
-  }, [experienceId]);
+  }, [experienceId, setAllThemes]);
 
   // Load themes from database
   const loadThemes = useCallback(async () => {
@@ -603,6 +628,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         (legacyTheme as any).mainHeader = theme.mainHeader || null;
         themesMap[dbThemeKey] = legacyTheme;
         
+        // Special handling for company themes: also map to 'Company' key for easy access
+        if (theme.season === 'Company') {
+          themesMap['Company'] = legacyTheme;
+          console.log('🎨 [loadThemes] Mapped company theme to "Company" key:', theme.name);
+        }
+        
         // Initialize text styles with saved values from database
         if (theme.mainHeader || theme.subHeader) {
           const savedMainHeader = theme.mainHeader || theme.name.toUpperCase();
@@ -610,7 +641,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           const themeDefaults = getThemeDefaultText(theme.name, savedSubHeader);
           const textColor = getThemeTextColor(legacyTheme.welcomeColor);
           
-          newThemeTextStyles[dbThemeKey] = {
+          // Use 'Company' key for company themes, otherwise use dbThemeKey
+          const textStylesKey = theme.season === 'Company' ? 'Company' : dbThemeKey;
+          newThemeTextStyles[textStylesKey] = {
             mainHeader: {
               content: savedMainHeader, // Use saved mainHeader from database
               color: textColor,
@@ -811,6 +844,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             imageAttachmentId: templateProduct.imageAttachmentId || null,
             imageAttachmentUrl: templateProduct.imageAttachmentUrl || templateProduct.image || matchedResource.image || null,
             containerAsset: templateProduct.containerAsset,
+
+            // Include type, storageUrl, and productImages from Market Stall resource
+            // Prefer template product type if it exists, otherwise use resource type
+            // If resource has storageUrl but no type, infer FILE type
+            type: templateProduct.type || matchedResource.type || (matchedResource.storageUrl ? 'FILE' : 'LINK'),
+            storageUrl: templateProduct.storageUrl || matchedResource.storageUrl,
+            productImages: templateProduct.productImages || (Array.isArray(matchedResource.productImages) ? matchedResource.productImages : undefined),
           };
           filteredProducts.push(mergedProduct);
         }
@@ -857,7 +897,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       const allThemeKeys = [...defaultSeasons, ...customThemeKeys];
       
       // Market Stall placeholder image
-      const marketStallPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+      const marketStallPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
       
       // Convert PAID Market Stall resources to products with Market Stall placeholders
       // IMPORTANT: Only Market Stall products are being added
@@ -869,7 +909,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         image: resource.image || marketStallPlaceholder, // Use Market Stall placeholder if no image
         link: resource.link || '',
         category: resource.category || 'PAID',
-        type: resource.type || 'MY_PRODUCTS',
+        type: resource.type || 'LINK',
         // Add Market Stall placeholders
         placeholder: true,
         marketStallProduct: true
@@ -1075,7 +1115,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         let processedProducts: Product[];
         
         if (skipProductFiltering) {
-          processedProducts = sanitizeProducts(templateProducts);
+          // When loading directly from template, ensure type field is set
+          // Infer type from storageUrl if type is missing
+          processedProducts = sanitizeProducts(templateProducts.map(product => ({
+            ...product,
+            type: product.type || (product.storageUrl ? 'FILE' : 'LINK'),
+          })));
         } else {
           const filteredProducts = await filterTemplateProductsAgainstMarketStall(templateProducts);
           processedProducts = sanitizeProducts(filteredProducts);
@@ -1182,13 +1227,85 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           const originData = currentOriginTemplate.defaultThemeData;
           const newTemplateName = 'Shop 1';
           
+          // Extract theme data directly from default_theme_data
+          const companyThemeName = originData.name || 'Company Theme';
+          const companyThemeCard = originData.card || 'bg-white/95 backdrop-blur-sm shadow-xl';
+          const companyThemeText = originData.text || 'text-gray-800';
+          const companyThemeWelcomeColor = originData.welcomeColor || 'text-yellow-300';
+          const companyThemeAccent = originData.accent || 'bg-indigo-500';
+          const companyThemeRing = originData.ringColor || companyThemeAccent;
+          const companyThemePrompt = originData.themePrompt || currentOriginTemplate.themePrompt || '';
+          const companyThemeAiMessage = originData.aiMessage || originData.subHeader || '';
+          const companyThemeEmojiTip = originData.emojiTip || '🎁';
+          const companyThemeMainHeader = originData.mainHeader || null;
+          const companyThemePlaceholderImage = originData.placeholderImage || originData.background;
+          
+          // Fetch Market Stall products to add to the template
+          let marketStallProducts: Product[] = [];
+          try {
+            const response = await fetch(`/api/resources?experienceId=${experienceId}`);
+            if (response.ok) {
+              const data = await response.json();
+              const marketStallResources = data.data?.resources || [];
+              const paidMarketStallResources = marketStallResources.filter((resource: Resource) => 
+                resource.category === 'PAID'
+              );
+              
+              const marketStallPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+              
+              // Convert to products with company theme styles applied
+              marketStallProducts = paidMarketStallResources.map((resource: Resource) => {
+                const productImage = resource.image || marketStallPlaceholder;
+                return {
+                  id: `resource-${resource.id}`,
+                  name: resource.name,
+                  description: resource.description || '',
+                  price: parseFloat(resource.price || '0'),
+                  image: productImage,
+                  imageAttachmentUrl: productImage,
+                  buttonText: 'VIEW DETAILS',
+                  buttonLink: resource.link || '',
+                  whopProductId: resource.whopProductId,
+                  // Apply company theme styles
+                  cardClass: companyThemeCard,
+                  titleClass: companyThemeText,
+                  descClass: companyThemeText,
+                  buttonClass: companyThemeAccent,
+                };
+              });
+              
+              console.log(`📦 [loadApplicationData] Fetched ${marketStallProducts.length} Market Stall products for initial template`);
+            }
+          } catch (error) {
+            console.warn('⚠️ [loadApplicationData] Failed to fetch Market Stall products:', error);
+          }
+          
           const originProducts = originData.products || [];
+          const allProducts = [...marketStallProducts, ...originProducts];
           const originFloatingAssets = originData.floatingAssets || [];
-          const originTextStyles = originData.fixedTextStyles || {
-            mainHeader: { content: '', color: '', styleClass: '' },
-            headerMessage: { content: '', color: '', styleClass: '' },
-            subHeader: { content: '', color: '', styleClass: '' },
-            promoMessage: { content: '', color: '', styleClass: '' }
+          
+          // Use text styles from origin template (already have correct colors)
+          const originTextStyles: FixedTextStyles = originData.fixedTextStyles || {
+            mainHeader: { 
+              content: companyThemeMainHeader || 'Edit Headline', 
+              color: getThemeTextColor(companyThemeWelcomeColor), 
+              styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg' 
+            },
+            headerMessage: { 
+              content: companyThemeMainHeader || 'Edit Headline',
+              color: getThemeTextColor(companyThemeWelcomeColor), 
+              styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg' 
+            },
+            subHeader: { 
+              content: companyThemeAiMessage || 'Add a short supporting subheader', 
+              color: getThemeTextColor(companyThemeWelcomeColor), 
+              styleClass: 'text-lg sm:text-xl font-normal' 
+            },
+            promoMessage: { 
+              content: '', 
+              color: getThemeTextColor(companyThemeWelcomeColor), 
+              styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md' 
+            }
           };
           const originLogo = originData.logo || logoAsset;
           const originBackground = originData.background;
@@ -1202,27 +1319,27 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             themeSnapshot: {
               id: `theme_${Date.now()}`,
               experienceId: experienceId || '',
-              name: 'Company Theme',
+              name: companyThemeName,
               season: 'Company',
-              themePrompt: currentOriginTemplate.themePrompt || '',
-              accentColor: 'bg-indigo-500',
-              ringColor: 'bg-indigo-500',
-              placeholderImage: originBackground,
-              mainHeader: null,
-              subHeader: null,
-              card: 'bg-white/95 backdrop-blur-sm shadow-xl',
-              text: 'text-gray-800',
-              welcomeColor: 'text-yellow-300',
+              themePrompt: companyThemePrompt,
+              accentColor: companyThemeAccent,
+              ringColor: companyThemeRing,
+              placeholderImage: companyThemePlaceholderImage || originBackground,
+              mainHeader: companyThemeMainHeader,
+              subHeader: companyThemeAiMessage,
+              card: companyThemeCard,
+              text: companyThemeText,
+              welcomeColor: companyThemeWelcomeColor,
               background: originBackground || '',
-              aiMessage: '',
-              emojiTip: '🎁',
+              aiMessage: companyThemeAiMessage,
+              emojiTip: companyThemeEmojiTip,
               createdAt: new Date(),
               updatedAt: new Date()
             },
             currentSeason: 'Company',
             templateData: {
               // PRIMARY DATA: Flat structure
-              products: originProducts,
+              products: allProducts, // Include Market Stall products with company theme styles
               floatingAssets: originFloatingAssets,
               fixedTextStyles: originTextStyles,
               logoAsset: originLogo,
@@ -1233,18 +1350,18 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
               logoAttachmentId: null,
               logoAttachmentUrl: originLogo?.src || null,
               currentTheme: {
-                name: 'Company Theme',
-                themePrompt: currentOriginTemplate.themePrompt || '',
-                accent: 'bg-indigo-500',
-                card: 'bg-white/95 backdrop-blur-sm shadow-xl',
-                text: 'text-gray-800',
-                welcomeColor: 'text-yellow-300',
+                name: companyThemeName,
+                themePrompt: companyThemePrompt,
+                accent: companyThemeAccent,
+                card: companyThemeCard,
+                text: companyThemeText,
+                welcomeColor: companyThemeWelcomeColor,
                 background: originBackground || '',
                 backgroundImage: originBackground,
-                placeholderImage: originBackground,
-                aiMessage: '',
-                mainHeader: null,
-                emojiTip: '🎁'
+                placeholderImage: companyThemePlaceholderImage || originBackground,
+                aiMessage: companyThemeAiMessage,
+                mainHeader: companyThemeMainHeader,
+                emojiTip: companyThemeEmojiTip
               },
               promoButton: originPromoButton,
               discountSettings: {
@@ -1266,7 +1383,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
               themeLogos: { 'Company': originLogo },
               themeGeneratedBackgrounds: { 'Company': originBackground },
               themeUploadedBackgrounds: { 'Company': originBackground },
-              themeProducts: { 'Company': originProducts },
+              themeProducts: { 'Company': allProducts }, // Include Market Stall products
               themeFloatingAssets: { 'Company': originFloatingAssets },
             },
             isLive: false,
@@ -1323,34 +1440,11 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         // isStoreContentReady will become true when fixedTextStyles has content
         setIsLoadingTemplate(false);
       } else {
-        // No templates - set up default theme with text
-        setCurrentSeason('Black Friday');
+        // No templates and no origin template - wait for origin template to be created
+        // Don't set up default theme - only auto-create from origin template
+        console.log('📦 [loadApplicationData] No templates found and no origin template available. Waiting for origin template creation...');
         setProducts([]);
-        
-        const themeDefaults = getThemeDefaultText('Black Friday', allThemes['Black Friday']?.aiMessage);
-        const textColor = getThemeTextColor(allThemes['Black Friday']?.welcomeColor);
-        setFixedTextStyles({
-          mainHeader: {
-            content: themeDefaults.mainHeader,
-            color: textColor,
-            styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
-          },
-          headerMessage: {
-            content: themeDefaults.headerMessage,
-            color: textColor,
-            styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
-          },
-          subHeader: {
-            content: themeDefaults.subHeader,
-            color: textColor,
-            styleClass: 'text-lg sm:text-xl font-normal'
-          },
-          promoMessage: {
-            content: themeDefaults.promoMessage,
-            color: textColor,
-            styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
-          }
-        });
+        setCurrentSeason('Company');
       }
       
       // Step 5: Ensure Market Stall products are available
@@ -1376,15 +1470,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       } else {
         setApiError(`Failed to load application data: ${(error as Error).message}`);
       }
-      // On error, set default text so isStoreContentReady can become true
-      const themeDefaults = getThemeDefaultText('Black Friday', allThemes['Black Friday']?.aiMessage);
-      const textColor = getThemeTextColor(allThemes['Black Friday']?.welcomeColor);
-      setFixedTextStyles({
-        mainHeader: { content: themeDefaults.mainHeader, color: textColor, styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg' },
-        headerMessage: { content: themeDefaults.headerMessage, color: textColor, styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg' },
-        subHeader: { content: themeDefaults.subHeader, color: textColor, styleClass: 'text-lg sm:text-xl font-normal' },
-        promoMessage: { content: themeDefaults.promoMessage, color: textColor, styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md' }
-      });
+      // On error, don't set default text - wait for origin template creation
+      console.log('⚠️ [loadApplicationData] Error loading application data, waiting for origin template creation...');
+      setProducts([]);
+      setCurrentSeason('Company');
       // Mark initial load as complete even on error
       setIsInitialLoadComplete(true);
     }
@@ -1438,6 +1527,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   const updateThemeHandler = useCallback(async (themeId: string, updates: Partial<Pick<Theme, "name" | "themePrompt" | "accentColor" | "ringColor">>) => {
     try {
+      // Prevent company theme updates (company theme should not be modified)
+      const themeToUpdate = themes.find(t => t.id === themeId);
+      if (themeToUpdate && themeToUpdate.season === 'Company') {
+        console.log('🔒 [updateThemeHandler] Company theme detected - skipping update (company theme is protected)');
+        throw new Error('Company theme cannot be updated');
+      }
+      
       const updatedTheme = await updateTheme(experienceId, themeId, updates);
       setThemes(prev => prev.map(t => t.id === themeId ? updatedTheme : t));
       setAllThemes(prev => ({ ...prev, [`db_${updatedTheme.id}`]: convertThemeToLegacy(updatedTheme) }));
@@ -1447,7 +1543,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setApiError(`Failed to update theme: ${(error as Error).message}`);
       throw error;
     }
-  }, [experienceId]);
+  }, [experienceId, themes]);
   
   // Template management functions
   const saveTemplate = useCallback(async (templateData: Omit<StoreTemplate, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -1785,17 +1881,11 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   
   const setLiveTemplateHandler = useCallback(async (templateId: string) => {
     try {
-      if (templateId === "default") {
-        // Handle default case - clear all live templates
-        await setLiveTemplateAction(experienceId, "default");
-        setLiveTemplate(null);
-      } else {
-        await setLiveTemplateAction(experienceId, templateId);
-        // Find the template and set it as live
-        const template = templates.find(t => t.id === templateId);
-        if (template) {
-          setLiveTemplate(template);
-        }
+      await setLiveTemplateAction(experienceId, templateId);
+      // Find the template and set it as live
+      const template = templates.find(t => t.id === templateId);
+      if (template) {
+        setLiveTemplate(template);
       }
     } catch (error) {
       console.error('Error setting live template:', error);
@@ -1941,7 +2031,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       }
       
       // Market Stall placeholder image
-      const marketStallPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+      const marketStallPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
       
       // Convert PAID resources to products with Market Stall placeholders
       const marketStallProducts = paidResources.map((resource: Resource) => ({
@@ -1952,7 +2042,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         image: resource.image || marketStallPlaceholder, // Use Market Stall placeholder if no image
         link: resource.link || '',
         category: resource.category || 'PAID',
-        type: resource.type || 'MY_PRODUCTS',
+        type: resource.type || 'LINK',
         // Add Market Stall placeholders
         placeholder: true,
         marketStallProduct: true
@@ -2167,123 +2257,6 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     console.log(`💾 Saved last active theme: ${theme}`);
   }, []);
   
-  const saveLastActiveTemplate = useCallback((template: StoreTemplate | null) => {
-    setLastActiveTemplate(template);
-    console.log(`💾 Saved last active template: ${template?.name || 'none'}`);
-  }, []);
-  
-  const restoreLastActiveState = useCallback(() => {
-    if (lastActiveTemplate) {
-      console.log(`🔄 Restoring last active template: ${lastActiveTemplate.name}`);
-      setCurrentSeason(lastActiveTemplate.currentSeason);
-      
-      // Derive theme for defaults
-      const templateTheme = lastActiveTemplate.templateData.currentTheme || 
-                           convertTemplateThemeToLegacy(lastActiveTemplate.themeSnapshot);
-      
-      // Load text styles from template - TEMPLATE DATA TAKES PRIORITY
-      let savedTextStyles = lastActiveTemplate.templateData.fixedTextStyles;
-      
-      if (!savedTextStyles?.headerMessage?.content && !savedTextStyles?.mainHeader?.content) {
-        savedTextStyles = lastActiveTemplate.templateData.themeTextStyles?.[lastActiveTemplate.currentSeason];
-      }
-      
-      if (!savedTextStyles?.headerMessage?.content && !savedTextStyles?.mainHeader?.content) {
-        const themeTextStyles = lastActiveTemplate.templateData.themeTextStyles;
-        if (themeTextStyles) {
-          const firstSeason = Object.keys(themeTextStyles)[0];
-          if (firstSeason) {
-            savedTextStyles = themeTextStyles[firstSeason];
-          }
-        }
-      }
-      
-      console.log('📝 [restoreLastActiveState] Loading text styles:', {
-        templateName: lastActiveTemplate.name,
-        savedHeaderContent: savedTextStyles?.headerMessage?.content?.substring(0, 30),
-      });
-      
-      if (savedTextStyles?.headerMessage?.content || savedTextStyles?.mainHeader?.content || savedTextStyles?.subHeader?.content) {
-        setFixedTextStyles(savedTextStyles);
-      } else {
-        console.warn('⚠️ [restoreLastActiveState] No text styles found, using theme defaults');
-        const themeDefaults = getThemeDefaultText(templateTheme.name, templateTheme.aiMessage);
-        const textColor = getThemeTextColor(templateTheme.welcomeColor);
-        setFixedTextStyles({
-          mainHeader: {
-            content: themeDefaults.mainHeader,
-            color: textColor,
-            styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg'
-          },
-          headerMessage: {
-            content: themeDefaults.headerMessage,
-            color: textColor,
-            styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'
-          },
-          subHeader: {
-            content: themeDefaults.subHeader,
-            color: textColor,
-            styleClass: 'text-lg sm:text-xl font-normal'
-          },
-          promoMessage: {
-            content: themeDefaults.promoMessage,
-            color: textColor,
-            styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md'
-          }
-        });
-      }
-      
-      if (lastActiveTemplate.templateData.logoAsset) {
-        setLogoAsset(lastActiveTemplate.templateData.logoAsset);
-      } else if (lastActiveTemplate.templateData.themeLogos?.[lastActiveTemplate.currentSeason]) {
-        setLogoAsset(lastActiveTemplate.templateData.themeLogos[lastActiveTemplate.currentSeason]);
-      }
-      
-      const bgUrl = lastActiveTemplate.templateData.backgroundAttachmentUrl || 
-                   lastActiveTemplate.templateData.themeUploadedBackgrounds?.[lastActiveTemplate.currentSeason] ||
-                   lastActiveTemplate.templateData.themeGeneratedBackgrounds?.[lastActiveTemplate.currentSeason] ||
-                   lastActiveTemplate.templateData.uploadedBackground ||
-                   lastActiveTemplate.templateData.generatedBackground;
-      if (bgUrl) {
-        const isGenerated = !!(lastActiveTemplate.templateData.themeGeneratedBackgrounds?.[lastActiveTemplate.currentSeason] || lastActiveTemplate.templateData.generatedBackground);
-        if (isGenerated) {
-          setGeneratedBackground(bgUrl);
-        } else {
-          setUploadedBackground(bgUrl);
-        }
-      }
-      
-      if (lastActiveTemplate.templateData.products) {
-        setProducts(sanitizeProducts(lastActiveTemplate.templateData.products));
-      } else if (lastActiveTemplate.templateData.themeProducts?.[lastActiveTemplate.currentSeason]) {
-        setProducts(sanitizeProducts(lastActiveTemplate.templateData.themeProducts[lastActiveTemplate.currentSeason]));
-      }
-      
-      if (lastActiveTemplate.templateData.floatingAssets) {
-        setFloatingAssets(lastActiveTemplate.templateData.floatingAssets);
-      } else if (lastActiveTemplate.templateData.themeFloatingAssets?.[lastActiveTemplate.currentSeason]) {
-        setFloatingAssets(lastActiveTemplate.templateData.themeFloatingAssets[lastActiveTemplate.currentSeason]);
-      }
-      if (lastActiveTemplate.templateData.promoButton) {
-        setPromoButton(lastActiveTemplate.templateData.promoButton);
-      }
-      if (lastActiveTemplate.templateData.backgroundAttachmentId) {
-        setBackgroundAttachmentId(lastActiveTemplate.templateData.backgroundAttachmentId);
-      }
-      if (lastActiveTemplate.templateData.backgroundAttachmentUrl) {
-        setBackgroundAttachmentUrl(lastActiveTemplate.templateData.backgroundAttachmentUrl);
-      }
-      if (lastActiveTemplate.templateData.logoAttachmentId) {
-        setLogoAttachmentId(lastActiveTemplate.templateData.logoAttachmentId);
-      }
-      if (lastActiveTemplate.templateData.logoAttachmentUrl) {
-        setLogoAttachmentUrl(lastActiveTemplate.templateData.logoAttachmentUrl);
-      }
-    } else if (lastActiveTheme) {
-      console.log(`🔄 Restoring last active theme: ${lastActiveTheme}`);
-      setCurrentSeason(lastActiveTheme);
-    }
-  }, [lastActiveTemplate, lastActiveTheme]);
   
   return {
     // Core state
@@ -2394,10 +2367,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     
     // Store Navigation State Management
     lastActiveTheme,
-    lastActiveTemplate,
     saveLastActiveTheme,
-    saveLastActiveTemplate,
-    restoreLastActiveState,
     
     // Theme loading
     loadThemes,

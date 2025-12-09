@@ -1,191 +1,97 @@
 <!-- afa15515-f0c2-40cb-90da-a4825afbbc5d 1013fe54-9169-4ec2-8ad9-efc2ddbb5a9f -->
-# Company Theme Banner Analysis and Save Protection
+# Fix default_theme_data Structure and Remove Theme Creation
 
 ## Overview
 
-Update company theme generation to analyze banner images directly with Gemini Flash for instant style generation, use company.title as theme name, prevent company theme updates on save, and ensure theme switching preserves banner background while allowing other styles to change.
+Update the origin template service to store complete theme data in `default_theme_data` instead of creating themes in the "themes" table. Templates should use theme data directly from `default_theme_data` without referencing the themes table.
 
 ## Implementation Plan
 
-### 1. Create Banner Image Direct Analysis Function
-
-**File to modify:** `lib/services/origin-template-service.ts`
-
-**Changes:**
-
-- Create new function `generateThemeStylesFromBannerImage(bannerImageUrl: string)` that:
-- Uses Gemini Flash (`gemini-2.5-flash`) to analyze the banner image directly
-- Generates full theme data (accent, card, text, welcomeColor, mainHeader, aiMessage, emojiTip, colorPalette) from image analysis
-- Returns theme data object similar to custom theme generation
-- Uses same prompt structure as `generate-custom-theme/route.ts` but with image input instead of text prompt
-- If banner image analysis fails or no banner exists, fallback to default theme styles (from default theme)
-
-**Implementation:**
-
-- Fetch banner image and convert to base64
-- Use Gemini Flash with image input to generate theme styles
-- Parse JSON response with theme data (accent, card, text, welcomeColor, etc.)
-- Handle errors gracefully with default theme fallback
-
-### 2. Update Company Theme Creation to Use Direct Banner Analysis
-
-**File to modify:** `lib/services/origin-template-service.ts`
-
-**Changes:**
-
-- Modify `createCompanyTheme` function to:
-- Accept `bannerImageUrl` parameter instead of just `themePrompt`
-- Call `generateThemeStylesFromBannerImage` if banner exists
-- If no banner, use default theme styles (from default theme constants)
-- Use `companyTitle` parameter for theme name instead of hardcoded "Company Theme"
-- Store theme with `season: 'Company'` to identify it as company theme
-
-**Implementation:**
-
-- Update function signature: `createCompanyTheme(experienceId: string, bannerImageUrl: string | null, companyTitle: string)`
-- If `bannerImageUrl` exists, call `generateThemeStylesFromBannerImage(bannerImageUrl)`
-- If no banner or analysis fails, extract default theme styles from default theme constants
-- Use `companyTitle` for theme name
-- Store card, text, welcomeColor fields in theme record (may need schema update)
-
-### 3. Update Origin Template Creation to Pass Company Title
+### 1. Update default_theme_data Structure in Origin Template Creation
 
 **File to modify:** `lib/services/origin-template-service.ts`
 
 **Changes:**
 
 - In `createOriginTemplateFromProduct`:
-- Extract `companyTitle` from `productResult.company.title`
-- Pass `companyTitle` to `createCompanyTheme` instead of hardcoded "Company Theme"
-- Pass `companyBannerUrl` directly to `createCompanyTheme` instead of themePrompt
+- Remove or make optional the call to `createCompanyTheme` (don't create theme in themes table)
+- Generate theme styles directly from banner image (or use Black Friday fallback)
+- Include complete theme data in `defaultThemeData`:
+- `name`: Use `companyTitle` (from `productResult.company.title`)
+- `card`: From banner analysis or Black Friday fallback
+- `text`: From banner analysis or Black Friday fallback
+- `welcomeColor`: From banner analysis or Black Friday fallback
+- `accent`: From banner analysis or Black Friday fallback
+- `ringColor`: Same as accent
+- `mainHeader`: From banner analysis or Black Friday fallback
+- `subHeader`/`aiMessage`: From banner analysis or Black Friday fallback
+- `emojiTip`: From banner analysis or Black Friday fallback
+- `themePrompt`: Generated from banner or default
+- `placeholderImage`: Refined product placeholder or default
+- Update text styles to use proper colors from `welcomeColor`
+- Update `promoButton.buttonClass` to use theme `accent` instead of hardcoded 'bg-indigo-500'
 
 **Implementation:**
 
-- Extract: `const companyTitle = productResult.company?.title || 'Company Theme'`
-- Update call: `createCompanyTheme(experienceId, companyBannerUrl, companyTitle)`
-- Remove themePrompt generation step (no longer needed for company theme)
+- Call `generateThemeStylesFromBannerImage` directly (or use Black Friday fallback)
+- Build complete theme object with all fields
+- Store in `defaultThemeData` with structure matching what templates expect
 
-### 4. Prevent Company Theme Updates on Save
+### 2. Update default_theme_data in Origin Template Updates
 
-**File to modify:** `lib/components/store/SeasonalStore/hooks/useTemplateSave.ts`
+**File to modify:** `lib/services/origin-template-service.ts`
 
 **Changes:**
 
-- In `saveOrUpdateTemplate` function:
-- Check if `currentSeason === 'Company'` before saving
-- If company theme, skip theme update but still save template
-- Log that company theme update was skipped
+- In `updateOriginTemplateFromProduct`:
+- Remove call to `createCompanyTheme` when banner changes
+- Instead, regenerate theme styles from new banner image
+- Update `defaultThemeData` with new theme data (name, card, text, welcomeColor, accent, etc.)
+- Preserve existing `defaultThemeData` fields that aren't changing
 
 **Implementation:**
 
-- Add check: `if (currentSeason === 'Company') { /* skip theme update */ }`
-- Still allow template save/update to proceed
-- Only skip the theme-related updates
+- Generate new theme styles if banner changed
+- Merge new theme data into existing `defaultThemeData`
+- Update origin template with merged data
 
-### 5. Update Theme Schema to Store Card, Text, WelcomeColor
-
-**File to modify:** `lib/supabase/schema.ts`
-
-**Changes:**
-
-- Add optional fields to `themes` table:
-- `card: text("card")` - Tailwind CSS classes for product cards
-- `text: text("text")` - Tailwind CSS classes for body text  
-- `welcomeColor: text("welcome_color")` - Tailwind CSS classes for welcome/accent text
-
-**Note:** May need to create migration if these fields don't exist
-
-### 6. Preserve Banner Background on Theme Switch
-
-**File to modify:** `lib/components/store/SeasonalStore/hooks/useThemeApplication.ts`
-
-**Changes:**
-
-- In theme switching logic:
-- Check if `originTemplate?.companyBannerImageUrl` exists
-- If banner exists and current theme is "Company", preserve banner as background
-- For all other themes, allow background to change normally
-- Ensure other styles (colors, card styles, text) can still change when switching themes
-
-**Implementation:**
-
-- Add condition: `if (currentSeason === 'Company' && originTemplate?.companyBannerImageUrl) { /* preserve banner */ }`
-- Otherwise, use theme placeholder as normal
-- Ensure product styles, text colors, etc. still update on theme switch
-
-### 7. Update Theme Loading to Use Company Theme Styles
+### 3. Update Template Creation to Use default_theme_data Directly
 
 **File to modify:** `lib/components/store/SeasonalStore/hooks/useSeasonalStoreDatabase.ts`
 
 **Changes:**
 
-- When loading company theme:
-- Apply card, text, welcomeColor styles from theme record
-- Ensure these styles are applied to products and text elements
-- Use same logic as custom theme application
+- In auto-creation logic (around line 1187-1350):
+- Remove logic that fetches company theme from themes table
+- Use theme data directly from `originTemplate.defaultThemeData`
+- Extract theme fields from `defaultThemeData`:
+- `name`: `originData.name` or `originData.themeName`
+- `card`: `originData.card`
+- `text`: `originData.text`
+- `welcomeColor`: `originData.welcomeColor`
+- `accent`: `originData.accent`
+- `ringColor`: `originData.ringColor`
+- `mainHeader`: `originData.mainHeader`
+- `subHeader`/`aiMessage`: `originData.subHeader` or `originData.aiMessage`
+- `emojiTip`: `originData.emojiTip`
+- `themePrompt`: `originData.themePrompt`
+- `placeholderImage`: `originData.placeholderImage`
+- Use these values for `themeSnapshot` and `currentTheme` in template creation
+- Apply theme styles to Market Stall products using theme data from `defaultThemeData`
 
 **Implementation:**
 
-- Check if theme has `card`, `text`, `welcomeColor` fields
-- Apply these to products via `applyThemeStylesToProducts`
-- Apply to text styles via theme color application
+- Extract theme data from `originData` (which is `defaultThemeData`)
+- Use extracted theme data for all theme-related fields
+- Don't query themes table for company theme
 
-## Key Technical Details
+### 4. Update "Create new Shop" Button Logic
 
-### Banner Image Analysis Flow
-
-1. Fetch banner image from `companyBannerImageUrl`
-2. Convert to base64
-3. Send to Gemini Flash with image analysis prompt
-4. Parse JSON response with theme styles (accent, card, text, welcomeColor, etc.)
-5. Use directly for theme creation (no intermediate prompt step)
-
-### Company Theme Identification
-
-- Theme with `season: 'Company'` is the company theme
-- Check `currentSeason === 'Company'` to identify company theme context
-
-### Save Protection
-
-- When `currentSeason === 'Company'`, skip theme update
-- Still allow template save/update to proceed
-- Log skip action for debugging
-
-### Theme Switching Behavior
-
-- If company theme with banner: preserve banner background
-- All other styles (colors, cards, text) can change on theme switch
-- If no banner: normal theme switching applies
-
-## Files to Modify
-
-1. `lib/services/origin-template-service.ts` - Banner analysis and company theme creation
-2. `lib/components/store/SeasonalStore/hooks/useTemplateSave.ts` - Save protection
-3. `lib/components/store/SeasonalStore/hooks/useThemeApplication.ts` - Background preservation
-4. `lib/supabase/schema.ts` - Theme schema updates (if needed)
-5. `lib/components/store/SeasonalStore/hooks/useSeasonalStoreDatabase.ts` - Theme style application
-
-## Testing Considerations
-
-- Test banner image analysis with various banner images
-- Test fallback to default theme when no banner exists
-- Test company theme save protection (should skip theme update)
-- Test theme switching preserves banner background for company theme
-- Test theme switching allows other styles to change
-- Verify company.title is used as theme name
+**File to m
 
 ### To-dos
 
-- [ ] Extract product CRUD handlers to useProductHandlers hook
-- [ ] Extract drag and drop handlers to useDragAndDrop hook
-- [ ] Extract ResourceLibrary product management to useResourceLibraryProducts hook
-- [ ] Extract template manager handlers to useTemplateManager hook
-- [ ] Remove unnecessary wrapper functions
-- [ ] Consolidate state restoration logic
-- [ ] Create generateThemeStylesFromBannerImage function in origin-template-service.ts that analyzes banner image directly with Gemini Flash to generate theme styles
-- [ ] Update createCompanyTheme to use banner image analysis directly instead of themePrompt, and use companyTitle parameter
-- [ ] Update createOriginTemplateFromProduct to extract company.title and pass it to createCompanyTheme along with banner URL
-- [ ] Add check in useTemplateSave to skip theme update when currentSeason === Company, but still allow template save
-- [ ] Update useThemeApplication to preserve banner background when switching to/from company theme, while allowing other styles to change
-- [ ] Add card, text, welcomeColor fields to themes schema if they do not exist
-- [ ] Ensure company theme styles (card, text, welcomeColor) are applied when loading company theme
+- [x] Create generateThemeStylesFromBannerImage function in origin-template-service.ts that analyzes banner image directly with Gemini Flash to generate theme styles
+- [x] Update createCompanyTheme to use banner image analysis directly instead of themePrompt, and use companyTitle parameter with Black Friday fallback
+- [x] Update createOriginTemplateFromProduct to extract company.title and pass it to createCompanyTheme along with banner URL
+- [x] Update useThemeApplication to preserve banner background when switching to/from company theme, while allowing other styles to change

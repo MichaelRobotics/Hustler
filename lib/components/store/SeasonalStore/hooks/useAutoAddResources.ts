@@ -53,22 +53,25 @@ export const useAutoAddResources = ({
         // Convert existing resources to products and add to theme
         // Images are already synced from Whop SDK in the sync process
         const templateProducts = existingResources.map((resource) => {
-          const productImage = resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+          const productImage = resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
           
           return {
-            id: `resource-${resource.id}`,
-            name: resource.name,
-            description: truncateDescription(resource.description || ''),
-            price: parseFloat(resource.price) || 0,
+          id: `resource-${resource.id}`,
+          name: resource.name,
+          description: truncateDescription(resource.description || ''),
+          price: parseFloat(resource.price) || 0,
             image: productImage,
             imageAttachmentUrl: productImage,
-            buttonText: 'VIEW DETAILS',
-            buttonLink: resource.link || '',
-            whopProductId: resource.whopProductId, // Track Whop product ID for synced products
-            cardClass: legacyTheme.card,
-            titleClass: legacyTheme.text,
-            descClass: legacyTheme.text,
-            buttonClass: legacyTheme.accent,
+          buttonText: 'VIEW DETAILS',
+          buttonLink: resource.link || '',
+          whopProductId: resource.whopProductId, // Track Whop product ID for synced products
+          type: resource.type, // Include type (LINK or FILE)
+          storageUrl: resource.storageUrl, // Include storageUrl for FILE type
+          productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined, // Include productImages array
+          cardClass: legacyTheme.card,
+          titleClass: legacyTheme.text,
+          descClass: legacyTheme.text,
+          buttonClass: legacyTheme.accent,
           };
         });
         
@@ -139,22 +142,25 @@ export const useAutoAddResources = ({
         // Convert Market Stall resources to products and add to template (with current theme styles)
         // Images are already synced from Whop SDK in the sync process
         const newProducts = marketStallResourcesToAdd.map((resource) => {
-          const productImage = resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+          const productImage = resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
           
           return {
-            id: `resource-${resource.id}`,
-            name: resource.name,
-            description: truncateDescription(resource.description || ''),
-            price: parseFloat(resource.price) || 0,
+          id: `resource-${resource.id}`,
+          name: resource.name,
+          description: truncateDescription(resource.description || ''),
+          price: parseFloat(resource.price) || 0,
             image: productImage,
             imageAttachmentUrl: productImage,
-            buttonText: 'VIEW DETAILS',
-            buttonLink: resource.link || '',
-            whopProductId: resource.whopProductId,
-            cardClass: legacyTheme.card,
-            titleClass: legacyTheme.text,
-            descClass: legacyTheme.text,
-            buttonClass: legacyTheme.accent,
+          buttonText: 'VIEW DETAILS',
+          buttonLink: resource.link || '',
+          whopProductId: resource.whopProductId,
+          type: resource.type, // Include type (LINK or FILE)
+          storageUrl: resource.storageUrl, // Include storageUrl for FILE type
+          productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined, // Include productImages array
+          cardClass: legacyTheme.card,
+          titleClass: legacyTheme.text,
+          descClass: legacyTheme.text,
+          buttonClass: legacyTheme.accent,
           };
         });
         

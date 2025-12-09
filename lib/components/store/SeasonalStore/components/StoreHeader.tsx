@@ -121,18 +121,35 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   // Track previous colors to detect theme changes
   const prevHeaderColorRef = React.useRef<string | undefined>(headerMessage?.color);
   const prevSubHeaderColorRef = React.useRef<string | undefined>(subHeader?.color);
+  // Track previous fixedTextStyles object reference to detect full resets
+  const prevFixedTextStylesRef = React.useRef(fixedTextStyles);
+
+  // Reset color refs when fixedTextStyles object reference changes (e.g., after reset)
+  // This ensures colors are reapplied even if the color value is the same
+  React.useEffect(() => {
+    // If the fixedTextStyles object reference changed, it might be a reset
+    // Reset the color refs to force reapplication
+    if (prevFixedTextStylesRef.current !== fixedTextStyles) {
+      prevFixedTextStylesRef.current = fixedTextStyles;
+      // Reset refs to force color reapplication on next render
+      prevHeaderColorRef.current = undefined;
+      prevSubHeaderColorRef.current = undefined;
+    }
+  }, [fixedTextStyles]);
 
   // Apply theme color changes to contentEditable elements (same as button styles override)
   React.useEffect(() => {
     // Only apply if color changed and element exists
-    if (headerMessageRef && headerMessage?.color && prevHeaderColorRef.current !== headerMessage.color) {
+    // Also apply if ref is undefined (was reset) to force reapplication
+    const isReset = prevHeaderColorRef.current === undefined;
+    if (headerMessageRef && headerMessage?.color && (prevHeaderColorRef.current !== headerMessage.color || isReset)) {
       // Check if content is already synced (to avoid overwriting template content during load)
       const currentContent = getNormalizedContent(headerMessageRef);
       const expectedContent = normalizeHtmlContent(headerMessage.content || '');
       
-      // If content doesn't match, wait for content sync to complete first
-      // Only apply color if content is already synced or if element is empty (initial state)
-      if (currentContent && expectedContent && currentContent !== expectedContent && currentContent.trim() !== '') {
+      // If content doesn't match and it's not a reset, wait for content sync to complete first
+      // On reset, always apply color even if content doesn't match (to force color update)
+      if (!isReset && currentContent && expectedContent && currentContent !== expectedContent && currentContent.trim() !== '') {
         // Content is not synced yet, skip color application for now
         // The content sync effect will handle it, and color will be applied on next render
         prevHeaderColorRef.current = headerMessage.color;
@@ -184,14 +201,16 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
   React.useEffect(() => {
     // Only apply if color changed and element exists
-    if (subHeaderRef && subHeader?.color && prevSubHeaderColorRef.current !== subHeader.color) {
+    // Also apply if ref is undefined (was reset) to force reapplication
+    const isReset = prevSubHeaderColorRef.current === undefined;
+    if (subHeaderRef && subHeader?.color && (prevSubHeaderColorRef.current !== subHeader.color || isReset)) {
       // Check if content is already synced (to avoid overwriting template content during load)
       const currentContent = getNormalizedContent(subHeaderRef);
       const expectedContent = normalizeHtmlContent(subHeader.content || '');
       
-      // If content doesn't match, wait for content sync to complete first
-      // Only apply color if content is already synced or if element is empty (initial state)
-      if (currentContent && expectedContent && currentContent !== expectedContent && currentContent.trim() !== '') {
+      // If content doesn't match and it's not a reset, wait for content sync to complete first
+      // On reset, always apply color even if content doesn't match (to force color update)
+      if (!isReset && currentContent && expectedContent && currentContent !== expectedContent && currentContent.trim() !== '') {
         // Content is not synced yet, skip color application for now
         // The content sync effect will handle it, and color will be applied on next render
         prevSubHeaderColorRef.current = subHeader.color;

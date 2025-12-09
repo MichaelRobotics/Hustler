@@ -1,5 +1,6 @@
 import React from 'react';
-import { CheckCircle, Upload } from 'lucide-react';
+import { Button } from 'frosted-ui';
+import { CheckCircle, Upload, X } from 'lucide-react';
 
 interface FormFieldsProps {
   resource: any;
@@ -10,19 +11,21 @@ interface FormFieldsProps {
   onImageUpload: (file: File) => void;
   onAssetUpload: (file: File) => void;
   onGenerateImage: () => void;
-  onRefineImage: () => void;
   isUploadingImage: boolean;
   isDragOverImage: boolean;
   isUploadingAsset: boolean;
   isDragOverAsset: boolean;
   isGeneratingImage: boolean;
-  isRefiningImage: boolean;
   onImageDragOver: (e: React.DragEvent) => void;
   onImageDragLeave: (e: React.DragEvent) => void;
   onImageDrop: (e: React.DragEvent) => void;
   onAssetDragOver: (e: React.DragEvent) => void;
   onAssetDragLeave: (e: React.DragEvent) => void;
   onAssetDrop: (e: React.DragEvent) => void;
+  isCreating?: boolean;
+  onSave?: () => void;
+  isFormValid?: boolean;
+  saveButtonText?: string;
 }
 
 export const FormFields: React.FC<FormFieldsProps> = ({
@@ -34,20 +37,24 @@ export const FormFields: React.FC<FormFieldsProps> = ({
   onImageUpload,
   onAssetUpload,
   onGenerateImage,
-  onRefineImage,
   isUploadingImage,
   isDragOverImage,
   isUploadingAsset,
   isDragOverAsset,
   isGeneratingImage,
-  isRefiningImage,
   onImageDragOver,
   onImageDragLeave,
   onImageDrop,
   onAssetDragOver,
   onAssetDragLeave,
   onAssetDrop,
+  isCreating = false,
+  onSave,
+  isFormValid = false,
+  saveButtonText = "Save",
 }) => {
+  // Determine if we're creating (no id) or editing (has id)
+  const isEditMode = !isCreating && !!resource.id;
   const getFieldClassName = (hasError = false) => {
     const baseClasses = "w-full px-3 py-2 text-sm border-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
     
@@ -63,38 +70,49 @@ export const FormFields: React.FC<FormFieldsProps> = ({
   };
 
   return (
-    <div className="space-y-3">
-      {/* Type and Category Selectors */}
-      <div className="flex gap-2">
+    <div className="space-y-3 flex flex-col flex-1 min-h-0">
+      {/* Category and Type Selectors - Side by side during creation */}
+      {!isEditMode && (
+        <div className="grid grid-cols-2 gap-3">
+          {/* Category Selector */}
         <select
-          value={resource.type || "MY_PRODUCTS"}
-          onChange={(e) =>
+            value={resource.category || "FREE_VALUE"}
+            onChange={(e) => {
+              const newCategory = e.target.value as "PAID" | "FREE_VALUE";
             setResource({
               ...resource,
-              type: e.target.value as "AFFILIATE" | "MY_PRODUCTS",
-            })
-          }
+                category: newCategory,
+                // Clear price when switching to FREE_VALUE
+                ...(newCategory === "FREE_VALUE" ? { price: "" } : {}),
+              });
+            }}
           disabled={isSaving}
-          className="flex-1 px-3 py-2 text-sm border-2 border-gray-400 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 hover:border-violet-500 dark:hover:border-violet-400 hover:shadow-sm hover:shadow-violet-200 dark:hover:shadow-violet-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={getFieldClassName()}
         >
-          <option value="AFFILIATE">Affiliate</option>
-          <option value="MY_PRODUCTS">Owned</option>
+            <option value="FREE_VALUE">Gift</option>
+            <option value="PAID">Paid</option>
         </select>
+
+          {/* Type Selector */}
         <select
-          value={resource.category || "FREE_VALUE"}
-          onChange={(e) =>
+            value={resource.type || "LINK"}
+            onChange={(e) => {
+              const newType = e.target.value as "LINK" | "FILE";
             setResource({
               ...resource,
-              category: e.target.value as "PAID" | "FREE_VALUE",
-            })
-          }
+                type: newType,
+                // Clear opposite field when switching types
+                ...(newType === "LINK" ? { storageUrl: "" } : { link: "" }),
+              });
+            }}
           disabled={isSaving}
           className={getFieldClassName()}
         >
-          <option value="FREE_VALUE" className="bg-white dark:bg-black text-gray-900 dark:text-white">Gift</option>
-          <option value="PAID" className="bg-white dark:bg-black text-gray-900 dark:text-white">Paid</option>
+            <option value="LINK">Link</option>
+            <option value="FILE">File</option>
         </select>
       </div>
+      )}
 
       {/* Name Field */}
       <input
@@ -140,36 +158,66 @@ export const FormFields: React.FC<FormFieldsProps> = ({
         </div>
       )}
 
-      {/* URL Field - For Affiliate products and actual Whop products */}
-      {(resource.type === "AFFILIATE" || (resource.type === "MY_PRODUCTS" && resource.whopProductId)) && (
+      {/* URL Field - Show for LINK type or Whop products */}
+      {(resource.type === "LINK" || resource.whopProductId) && (
         <input
           type="url"
           value={resource.link || ""}
           onChange={(e) => setResource({ ...resource, link: e.target.value })}
-          placeholder={resource.type === "AFFILIATE" ? "Affiliate URL" : "Product link"}
+          placeholder={resource.link && (resource.link.includes('app=') || resource.link.includes('ref=')) ? "Affiliate URL" : "Product link"}
           disabled={isSaving}
           className={getFieldClassName()}
         />
       )}
 
-      {/* Description Field */}
+      {/* Description Field - Adjust size based on category for LINK type */}
+      {(resource.type === "LINK" || resource.whopProductId) && (
+        <textarea
+          value={resource.description || ""}
+          onChange={(e) => setResource({ ...resource, description: e.target.value })}
+          placeholder="Product description (optional)..."
+          disabled={isSaving}
+          className={`${getFieldClassName()} resize-none ${
+            resource.category === "PAID" 
+              ? "flex-1" 
+              : "flex-1 min-h-[200px]"
+          }`}
+        />
+      )}
+
+      {/* Save Button - Right below description for LINK type */}
+      {onSave && (resource.type === "LINK" || resource.whopProductId) && (
+        <div className="mt-3">
+          <Button
+            size="3"
+            color="violet"
+            onClick={onSave}
+            disabled={isSaving || !isFormValid}
+            className="w-full"
+          >
+            {saveButtonText}
+          </Button>
+        </div>
+      )}
+
+      {/* Description and Digital Asset Upload - Show for FILE type (not Whop products) */}
+      {resource.type === "FILE" && !resource.whopProductId && (
+        <div className="flex flex-col gap-3 flex-1 min-h-0">
+          {/* Description Field for FILE type - Above upload */}
       <textarea
         value={resource.description || ""}
         onChange={(e) => setResource({ ...resource, description: e.target.value })}
         placeholder="Product description (optional)..."
         disabled={isSaving}
-        rows={3}
-        className={`${getFieldClassName()} resize-none`}
+            className={`${getFieldClassName()} resize-none flex-1 min-h-[120px]`}
       />
 
-      {/* Digital Asset Upload - Only for Owned products that are NOT actual Whop products */}
-      {resource.type === "MY_PRODUCTS" && !resource.whopProductId && (
-        <div className="space-y-2">
+          {/* Upload Area - Below description */}
           <div
             onDragOver={onAssetDragOver}
             onDragLeave={onAssetDragLeave}
             onDrop={onAssetDrop}
-            className={`relative border-2 border-solid rounded-xl p-4 text-center transition-all duration-200 h-24 flex items-center justify-center ${
+            className={`relative border-2 border-solid rounded-xl p-4 text-center transition-all duration-200 h-32 flex items-center justify-center ${
               isDragOverAsset
                 ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 ring-4 ring-blue-300 dark:ring-blue-700 shadow-lg shadow-blue-200 dark:shadow-blue-800"
                 : isUploadingAsset
@@ -235,16 +283,19 @@ export const FormFields: React.FC<FormFieldsProps> = ({
         </div>
       )}
 
-      {/* Promo Code Field - Only for Paid products */}
-      {resource.category === "PAID" && (
-        <input
-          type="text"
-          value={resource.promoCode || ""}
-          onChange={(e) => setResource({ ...resource, promoCode: e.target.value })}
-          placeholder="Promo code (optional)..."
-          disabled={isSaving}
-          className={getFieldClassName()}
-        />
+      {/* Save Button - Right below file upload for FILE type */}
+      {onSave && resource.type === "FILE" && !resource.whopProductId && (
+        <div className="mt-3">
+          <Button
+            size="3"
+            color="violet"
+            onClick={onSave}
+            disabled={isSaving || !isFormValid}
+            className="w-full"
+          >
+            {saveButtonText}
+          </Button>
+        </div>
       )}
     </div>
   );

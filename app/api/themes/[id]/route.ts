@@ -47,6 +47,30 @@ async function updateThemeHandler(
       );
     }
 
+    // Check if this is a company theme - prevent updates
+    const existingTheme = await db.query.themes.findFirst({
+      where: and(
+        eq(themes.id, themeId),
+        eq(themes.experienceId, experience.id)
+      ),
+    });
+
+    if (!existingTheme) {
+      return NextResponse.json(
+        { success: false, error: "Theme not found" },
+        { status: 404 }
+      );
+    }
+
+    // Prevent company theme updates (company theme should not be modified)
+    if (existingTheme.season === 'Company') {
+      console.log('🔒 [API] Company theme update blocked - company theme is protected');
+      return NextResponse.json(
+        { success: false, error: "Company theme cannot be updated" },
+        { status: 403 }
+      );
+    }
+
     // Update theme
     const updatedTheme = await db.update(themes)
       .set({

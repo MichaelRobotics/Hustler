@@ -132,8 +132,8 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 								</span>
 							</Button>
 						) : (
-							// Only show the create button in Warehouse (global) context
-							context === "global" ? (
+							// Show the create button in Warehouse (global), MarketStall (store), and Merchant Market Stall (funnel) contexts
+							(context === "global" || context === "store" || context === "funnel") ? (
 								/* Create Resource Button - When not at limit */
 								<Button
 									size="3"

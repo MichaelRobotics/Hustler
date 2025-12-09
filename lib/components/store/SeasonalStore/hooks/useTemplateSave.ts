@@ -134,20 +134,20 @@ export const useTemplateSave = ({
       themeSnapshot: {
         id: `theme_${Date.now()}`,
         experienceId: 'default-experience',
-        name: theme.name,
+        name: theme?.name || legacyTheme?.name || 'Theme',
         season: currentSeason,
-        themePrompt: theme.themePrompt,
-        accentColor: theme.accent,
+        themePrompt: theme?.themePrompt || legacyTheme?.themePrompt || '',
+        accentColor: theme?.accent || legacyTheme?.accent || 'bg-indigo-500',
         placeholderImage: resolvedBackgroundUrl,
-        mainHeader: (theme as any).mainHeader || (legacyTheme as any).mainHeader || null,
-        subHeader: theme.aiMessage || (legacyTheme as any).subHeader || null,
-        ringColor: theme.accent,
-        card: theme.card,
-        text: theme.text,
-        welcomeColor: theme.welcomeColor,
+        mainHeader: (theme as any)?.mainHeader || (legacyTheme as any)?.mainHeader || null,
+        subHeader: theme?.aiMessage || legacyTheme?.aiMessage || (legacyTheme as any)?.subHeader || null,
+        ringColor: theme?.accent || legacyTheme?.accent || 'bg-indigo-500',
+        card: theme?.card || legacyTheme?.card || 'bg-white/95 backdrop-blur-sm shadow-xl',
+        text: theme?.text || legacyTheme?.text || 'text-gray-800',
+        welcomeColor: theme?.welcomeColor || legacyTheme?.welcomeColor || 'text-yellow-300',
         background: resolvedBackgroundUrl,
-        aiMessage: theme.aiMessage,
-        emojiTip: theme.emojiTip,
+        aiMessage: theme?.aiMessage || legacyTheme?.aiMessage || '',
+        emojiTip: theme?.emojiTip || legacyTheme?.emojiTip || '🎁',
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -165,18 +165,18 @@ export const useTemplateSave = ({
         logoAttachmentId,
         logoAttachmentUrl,
         currentTheme: {
-          name: theme.name,
-          themePrompt: theme.themePrompt,
-          accent: theme.accent,
-          card: theme.card,
-          text: theme.text,
-          welcomeColor: theme.welcomeColor,
-          background: theme.background,
-          backgroundImage: theme.backgroundImage,
+          name: theme?.name || legacyTheme?.name || 'Theme',
+          themePrompt: theme?.themePrompt || legacyTheme?.themePrompt || '',
+          accent: theme?.accent || legacyTheme?.accent || 'bg-indigo-500',
+          card: theme?.card || legacyTheme?.card || 'bg-white/95 backdrop-blur-sm shadow-xl',
+          text: theme?.text || legacyTheme?.text || 'text-gray-800',
+          welcomeColor: theme?.welcomeColor || legacyTheme?.welcomeColor || 'text-yellow-300',
+          background: theme?.background || legacyTheme?.background || resolvedBackgroundUrl,
+          backgroundImage: theme?.backgroundImage || legacyTheme?.backgroundImage || resolvedBackgroundUrl,
           placeholderImage: resolvedBackgroundUrl,
-          aiMessage: theme.aiMessage,
-          mainHeader: (theme as any).mainHeader || (legacyTheme as any).mainHeader || null,
-          emojiTip: theme.emojiTip
+          aiMessage: theme?.aiMessage || legacyTheme?.aiMessage || '',
+          mainHeader: (theme as any)?.mainHeader || (legacyTheme as any)?.mainHeader || null,
+          emojiTip: theme?.emojiTip || legacyTheme?.emojiTip || '🎁'
         },
         promoButton: {
           text: promoButton.text,
@@ -214,8 +214,9 @@ export const useTemplateSave = ({
     });
     // Add milliseconds to ensure uniqueness
     const milliseconds = now.getMilliseconds();
-    return `${theme.name || 'Theme'} ${dateStr}.${milliseconds}`;
-  }, [theme.name]);
+    const themeName = theme?.name || legacyTheme?.name || 'Theme';
+    return `${themeName} ${dateStr}.${milliseconds}`;
+  }, [theme?.name, legacyTheme?.name]);
 
   // Core save logic - handles both update and create
   const saveOrUpdateTemplate = useCallback(async (options: {
@@ -239,6 +240,12 @@ export const useTemplateSave = ({
     // Build template data
     const templateData = buildTemplateData(templateName || generateTemplateName());
     templateData.themeId = null; // Templates use themeSnapshot, not database themes
+    
+    // Prevent company theme updates on save (company theme should not be modified)
+    if (currentSeason === 'Company') {
+      console.log('🔒 [useTemplateSave] Company theme detected - skipping theme update (company theme is protected)');
+      // Still allow template save/update to proceed, just skip any theme-related updates
+    }
     
     console.log(`💾 ${isUpdating ? 'Updating' : 'Creating'} template:`, templateData.name, 
       `(${templateData.templateData.products?.length || 0} products)`);

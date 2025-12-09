@@ -38,9 +38,9 @@ export const convertThemeToLegacy = (dbTheme: any): LegacyTheme => {
     name: themeName,
     themePrompt: dbTheme.themePrompt || 'A beautiful theme',
     accent: dbTheme.accentColor || 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400',
-    card: 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
-    text: 'text-gray-800',
-    welcomeColor: 'text-yellow-300',
+    card: dbTheme.card || 'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30',
+    text: dbTheme.text || 'text-gray-800',
+    welcomeColor: dbTheme.welcomeColor || 'text-yellow-300',
     background: dbTheme.placeholderImage 
       ? `bg-cover bg-center` 
       : `bg-[url('https://placehold.co/1920x1080/000000/ffffff?text=${encodeURIComponent(dbTheme.name || 'Theme')}')] bg-cover bg-center`,

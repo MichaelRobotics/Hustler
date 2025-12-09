@@ -1,4 +1,4 @@
-import { Button, Text } from "frosted-ui";
+import { Button, Text, Switch } from "frosted-ui";
 import {
 	Check,
 	PenLine,
@@ -10,6 +10,8 @@ import {
 	DollarSign,
 	Gift,
 	CheckCircle,
+	Link2,
+	FileText,
 } from "lucide-react";
 import type React from "react";
 import { useState, useEffect } from "react";
@@ -86,27 +88,34 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 		}
 	};
 
-	const getTypeLabel = (type: string) => {
+	const getTypeIcon = (type: string) => {
 		switch (type) {
-			case "AFFILIATE":
-				return "Affiliate";
-			case "MY_PRODUCTS":
-				return "Owned";
+			case "LINK":
+				return (
+					<Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+				);
+			case "FILE":
+				return (
+					<FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" strokeWidth={2.5} />
+				);
 			default:
-				return "Product";
+				return null;
 		}
 	};
 
+
 	const handleStartEdit = () => {
-		// For global context, use the new edit form above the Paid section
-		if (context === "global" && onEdit) {
+		// For both global and funnel contexts, use the edit form above the grid (same as Market Stall)
+		if (onEdit) {
 			onEdit(resource);
 			return;
 		}
 		
-		// For funnel context, use inline editing
+		// Fallback to inline editing if onEdit is not provided
 		setIsEditing(true);
-		setEditedResource(resource);
+		// Infer type from fields if not present
+		const inferredType = resource.storageUrl && !resource.link ? "FILE" : "LINK";
+		setEditedResource({ ...resource, type: resource.type || inferredType });
 		onEditingChange?.(true);
 	};
 
@@ -134,13 +143,13 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			}
 		}
 		
-		// For Affiliate products, link is required
-		if (editedResource.type === "AFFILIATE" && !editedResource.link?.trim()) {
+		// For LINK type, link is required
+		if (editedResource.type === "LINK" && !editedResource.link?.trim()) {
 			return;
 		}
 		
-		// For Owned products that are NOT actual Whop products, digital asset (storageUrl) is required
-		if (editedResource.type === "MY_PRODUCTS" && !editedResource.whopProductId && !editedResource.storageUrl?.trim()) {
+		// For FILE type (not Whop products), storageUrl is required
+		if (editedResource.type === "FILE" && !editedResource.whopProductId && !editedResource.storageUrl?.trim()) {
 			return;
 		}
 
@@ -247,7 +256,6 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 					<div className="flex items-center gap-2">
 						<div className="w-5 h-5 bg-violet-400 rounded-full animate-pulse" />
 						<span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300">
-							{getTypeLabel(editedResource.type || "AFFILIATE")}
 						</span>
 						<span
 							className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -291,18 +299,21 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 					{/* Type and Category Selectors */}
 					<div className="flex gap-2">
 						<select
-							value={editedResource.type || "MY_PRODUCTS"}
-							onChange={(e) =>
+							value={editedResource.type || "LINK"}
+							onChange={(e) => {
+								const newType = e.target.value as "LINK" | "FILE";
 								setEditedResource({
 									...editedResource,
-									type: e.target.value as "AFFILIATE" | "MY_PRODUCTS",
-								})
-							}
+									type: newType,
+									// Clear opposite field when switching types
+									...(newType === "LINK" ? { storageUrl: "" } : { link: "" }),
+								});
+							}}
 							disabled={isSaving}
 							className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							<option value="AFFILIATE">Affiliate</option>
-							<option value="MY_PRODUCTS">Owned</option>
+							<option value="LINK">Link</option>
+							<option value="FILE">File</option>
 						</select>
 						<select
 							value={editedResource.category || "FREE_VALUE"}
@@ -354,15 +365,15 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						</div>
 					)}
 
-					{/* URL Field - Only for Affiliate products */}
-					{editedResource.type === "AFFILIATE" && (
+					{/* URL Field - Show for LINK type or Whop products */}
+					{(editedResource.type === "LINK" || editedResource.whopProductId) && (
 						<input
 							type="url"
 							value={editedResource.link || ""}
 							onChange={(e) =>
 								setEditedResource({ ...editedResource, link: e.target.value })
 							}
-							placeholder="Affiliate URL"
+							placeholder={editedResource.link && (editedResource.link.includes('app=') || editedResource.link.includes('ref=')) ? "Affiliate URL" : "Product link"}
 							disabled={isSaving}
 							className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 						/>
@@ -423,7 +434,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						<div className="border-2 border-dashed border-violet-300 dark:border-violet-600 rounded-lg p-4 text-center">
 							<div className="space-y-2">
 								<img
-									src={editedResource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'}
+									src={editedResource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'}
 									alt="Product preview"
 									className="w-20 h-20 object-cover rounded-lg mx-auto"
 								/>
@@ -439,25 +450,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						</div>
 					</div>
 
-					{/* Link Field - For actual Whop products */}
-					{editedResource.type === "MY_PRODUCTS" && editedResource.whopProductId && (
-						<input
-							type="url"
-							value={editedResource.link || ""}
-							onChange={(e) =>
-								setEditedResource({
-									...editedResource,
-									link: e.target.value,
-								})
-							}
-							placeholder="Product link..."
-							disabled={isSaving}
-							className="w-full px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-						/>
-					)}
-
-					{/* Digital Asset Upload Field - Only for MY_PRODUCTS that are NOT actual Whop products */}
-					{editedResource.type === "MY_PRODUCTS" && !editedResource.whopProductId && (
+					{/* Digital Asset Upload Field - Show for FILE type (not Whop products) */}
+					{editedResource.type === "FILE" && !editedResource.whopProductId && (
 						<div className="space-y-2">
 							<label className="text-sm font-medium text-gray-700 dark:text-gray-300">
 								Digital Asset
@@ -509,7 +503,9 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	}
 
 	return (
-		<div className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 rounded-xl border transition-all duration-300 overflow-hidden ${
+		<div 
+			onClick={handleStartEdit}
+			className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 rounded-xl border transition-all duration-300 overflow-hidden cursor-pointer ${
 			isJustAdded 
 				? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40" 
 				: isJustRemoved
@@ -526,7 +522,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 				<div 
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
 					style={{
-						backgroundImage: `url(${resource.image || 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'})`,
+						backgroundImage: `url(${resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'})`,
 					}}
 				/>
 				
@@ -534,18 +530,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 				<div className="absolute inset-0 bg-black/20 dark:bg-black/40" />
 				<div className="absolute top-2 left-2 flex items-center gap-1">
 					{getCategoryIcon(resource.category)}
-					<span className="px-2 py-1 rounded-full text-xs font-medium bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-300 backdrop-blur-sm">
-						{getTypeLabel(resource.type)}
-					</span>
-					<span
-						className={`px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm ${
-							resource.category === "PAID"
-								? "bg-orange-100/90 dark:bg-orange-900/90 text-orange-700 dark:text-orange-300"
-								: "bg-green-100/90 dark:bg-green-900/90 text-green-700 dark:text-green-300"
-						}`}
-					>
-						{resource.category === "PAID" ? "Paid" : "Gift"}
-					</span>
+					{resource.type && getTypeIcon(resource.type)}
 				</div>
 				
 				{/* Action Button in Top Right */}
@@ -558,79 +543,38 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						</span>
 					) : (
 						<>
-							{context === "funnel" && !hideAssignmentOptions &&
-								(isResourceInFunnel(resource.id) ? (
-									<Button
-										size="1"
-										color={isJustRemoved ? "red" : "red"}
-										onClick={handleUnassignFromFunnel}
-										disabled={isRemovingState}
-										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 backdrop-blur-sm ${
-											isJustRemoved ? "animate-pulse shadow-lg shadow-red-500/30" : ""
-										}`}
-									>
-										{isJustRemoved ? (
-											<CheckCircle size={12} strokeWidth={2.5} className="mr-1 animate-bounce" />
-										) : (
-											<X size={12} strokeWidth={2.5} className="mr-1" />
-										)}
-										{isJustRemoved ? "Removed!" : (isRemovingState ? "Removing..." : "Remove")}
-									</Button>
-								) : funnel && !canAssignResource(funnel, resource) ? (
-									<div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100/90 dark:bg-red-900/90 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 backdrop-blur-sm">
-										<span className="font-bold">MAX</span>
-									</div>
-								) : (
-									<Button
-										size="1"
-										color={isJustAdded ? "green" : (resource.category === "PAID" ? "orange" : "green")}
-										onClick={handleAssignToFunnel}
-										disabled={isAdding}
-										className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 backdrop-blur-sm ${
-											isJustAdded ? "animate-pulse shadow-lg shadow-green-500/30" : ""
-										} ${
-											isHighlighted ? "ring-4 ring-blue-500/50 shadow-lg shadow-blue-500/20 animate-pulse bg-gradient-to-r from-blue-500/20 to-blue-400/20 dark:from-blue-400/20 dark:to-blue-300/20" : ""
-										}`}
-									>
-										{isJustAdded ? (
-											<CheckCircle size={12} strokeWidth={2.5} className="mr-1 animate-bounce" />
-										) : (
-											<Plus size={12} strokeWidth={2.5} className="mr-1" />
-										)}
-										{isJustAdded ? "Added!" : (isAdding ? "Adding..." : "Add")}
-									</Button>
-								))}
-
-							{context === "global" &&
-								!isResourceAssignedToAnyFunnel(resource.id) &&
-								!isBeingEdited &&
-								(isSaving ? (
-									<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/60 dark:to-blue-800/60 text-blue-800 dark:text-blue-200 border-2 border-blue-300 dark:border-blue-600 shadow-sm backdrop-blur-sm">
-										<div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full mr-2 animate-pulse" />
-										<span className="hidden sm:inline font-semibold">
-											Saving
-										</span>
-										<span className="sm:hidden">●</span>
-									</span>
-								) : (
-									<Button
-										size="1"
+							{/* Funnel context Switch - Replace Add/Remove buttons */}
+							{context === "funnel" && !hideAssignmentOptions && !isBeingEdited && (
+								<div
+									onClick={(e) => e.stopPropagation()}
+									className="cursor-pointer"
+								>
+									<Switch
 										color="violet"
-										onClick={handleStartEdit}
-										className="px-2 py-1 text-xs backdrop-blur-sm"
-									>
-										<PenLine size={12} strokeWidth={2.5} className="mr-1" />
-										Edit
-									</Button>
-								))}
+										checked={isResourceInFunnel(resource.id)}
+										size="2"
+										onCheckedChange={(checked) => {
+											if (checked) {
+												handleAssignToFunnel();
+											} else {
+												handleUnassignFromFunnel();
+											}
+										}}
+										disabled={isAdding || isRemovingState || (funnel && !canAssignResource(funnel, resource) && !isResourceInFunnel(resource.id))}
+									/>
+								</div>
+							)}
 
-							{/* Delete Button - Only show when resource is not assigned to any funnel, not currently adding/removing, and not in funnel context */}
-							{!isResourceAssignedToAnyFunnel(resource.id) && !isAdding && !isRemovingState && context === "global" && (
+							{/* Delete Button - Show for both global and funnel contexts when not being edited */}
+							{!isBeingEdited && (
 								<Button
 									size="1"
 									variant="ghost"
 									color="red"
-									onClick={() => onDelete(resource.id, resource.name)}
+									onClick={(e) => {
+										e.stopPropagation();
+										onDelete(resource.id, resource.name);
+									}}
 									className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors backdrop-blur-sm"
 									aria-label="Delete product"
 								>

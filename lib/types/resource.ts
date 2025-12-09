@@ -3,28 +3,31 @@ import type { AuthenticatedUser } from "./user";
 export interface Resource {
 	id: string;
 	name: string;
-	link: string;
-	type: "AFFILIATE" | "MY_PRODUCTS";
+	type: "LINK" | "FILE";
+	link?: string;
 	category: "PAID" | "FREE_VALUE";
 	description?: string;
 	promoCode?: string;
 	productApps?: any; // JSON field for product apps data
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
+	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
 	price?: string; // Price from access pass plan or user input
 	whopProductId?: string; // ID of the actual Whop product/app (for synced products)
+	displayOrder?: number; // Order for displaying resources in Market Stall
 }
 
 export interface ResourceFormData {
 	id?: string;
 	name: string;
-	link: string;
-	type: "AFFILIATE" | "MY_PRODUCTS";
+	type: "LINK" | "FILE";
+	link?: string;
 	category: "PAID" | "FREE_VALUE";
 	description?: string;
 	promoCode?: string;
 	image?: string;
 	storageUrl?: string;
+	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
 	price?: string;
 	whopProductId?: string; // ID of the actual Whop product/app (for synced products)
 }

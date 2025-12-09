@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Button } from 'frosted-ui';
+import { Zap } from 'lucide-react';
 import { useFileUpload } from '../../../hooks/useFileUpload';
 import { useAIImageGeneration } from '../../../hooks/useAIImageGeneration';
 import { useResourceValidation } from '../../../hooks/useResourceValidation';
@@ -80,6 +82,7 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
 
   const handleImageUpload = (file: File) => {
     fileUpload.handleImageUpload(file, (url: string) => {
+      // Always set as main image (thumbnail)
       setEditingResource((prev: any) => ({ ...prev, image: url }));
     });
   };
@@ -98,14 +101,6 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
     );
   };
 
-  const handleRefineImage = () => {
-    aiImage.handleRefineImage(
-      editingResource.name,
-      editingResource.description,
-      editingResource.image,
-      (url: string) => setEditingResource((prev: any) => ({ ...prev, image: url }))
-    );
-  };
 
   const handleImageDrop = (e: React.DragEvent) => {
     fileUpload.handleImageDrop(e, (url: string) => {
@@ -129,9 +124,14 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 bg-blue-400 rounded-full animate-pulse" />
+          {(() => {
+            const inferredType = editingResource.storageUrl && !editingResource.link ? "FILE" : "LINK";
+            return (
           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-            {editingResource.type === "AFFILIATE" ? "Affiliate" : "My Product"}
+                {inferredType === "LINK" ? "Link" : "File"}
           </span>
+            );
+          })()}
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
               editingResource.category === "PAID"
@@ -142,35 +142,24 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
             {editingResource.category === "PAID" ? "Paid" : "Gift"}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !isFormValid()}
-            className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? "Saving..." : "Update"}
-          </button>
           <button
             onClick={handleCancel}
             disabled={isSaving}
-            className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          Close
           </button>
-        </div>
       </div>
 
       {/* Two-column layout: Image on left, Form on right */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-stretch">
         {/* Left Column: Image Upload */}
-        <div className="space-y-2 flex flex-col h-full">
+        <div className="space-y-2 flex flex-col">
           <div
             onDragOver={fileUpload.handleImageDragOver}
             onDragLeave={fileUpload.handleImageDragLeave}
             onDrop={handleImageDrop}
-            className={`relative border-2 border-solid rounded-xl text-center transition-all duration-200 flex-1 flex items-center justify-center overflow-hidden aspect-[320/224] ${
+            className={`relative border-2 border-solid rounded-xl text-center transition-all duration-200 flex items-center justify-center overflow-hidden aspect-[320/224] w-full group ${
               fileUpload.isDragOverImage
                 ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 ring-4 ring-blue-300 dark:ring-blue-700 shadow-lg shadow-blue-200 dark:shadow-blue-800 p-8"
                 : fileUpload.isUploadingImage
@@ -200,21 +189,21 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
             ) : editingResource.image ? (
               <div className="relative w-full h-full">
                 <div 
-                  className={`relative w-full h-full group overflow-hidden ${
-                    aiImage.isGeneratingImage || aiImage.isRefiningImage ? 'cursor-not-allowed' : 'cursor-pointer'
+                  className={`relative w-full h-full overflow-hidden ${
+                    aiImage.isGeneratingImage ? 'cursor-not-allowed' : 'cursor-pointer'
                   }`}
-                  onClick={aiImage.isGeneratingImage || aiImage.isRefiningImage ? undefined : () => document.getElementById('edit-image-upload')?.click()}
-                  title={aiImage.isGeneratingImage || aiImage.isRefiningImage ? "AI processing..." : "Click to change image"}
+                  onClick={aiImage.isGeneratingImage ? undefined : () => document.getElementById('edit-image-upload')?.click()}
+                  title={aiImage.isGeneratingImage ? "AI processing..." : "Click to change image"}
                 >
                   <img
-                    src={editingResource.image}
+                    src={editingResource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp'}
                     alt="Product preview"
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                   <div className={`absolute inset-0 bg-black/20 flex items-center justify-center transition-opacity duration-200 ${
-                    aiImage.isGeneratingImage || aiImage.isRefiningImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    aiImage.isGeneratingImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                   }`}>
-                    {aiImage.isGeneratingImage || aiImage.isRefiningImage ? (
+                    {aiImage.isGeneratingImage ? (
                       <div className="w-16 h-16 border-4 border-green-500 rounded-full animate-spin shadow-lg flex items-center justify-center">
                         <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -230,44 +219,26 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
                   </div>
                 </div>
                 
-                {/* AI Generation Buttons - Overlay */}
-                {!(aiImage.isGeneratingImage || aiImage.isRefiningImage) && (
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <button
+                {/* Generate Image Button - Hover show effect */}
+                {!aiImage.isGeneratingImage && (
+                  <Button
+                    size="3"
+                    color="green"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleGenerateImage();
                       }}
                       disabled={!editingResource.name || !editingResource.description}
-                      className={`px-2 py-1 text-xs font-medium rounded-lg transition-all duration-300 ${
-                        !editingResource.name || !editingResource.description
-                          ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-gray-300 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105'
-                      }`}
-                      title="Generate new AI image"
+                    className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group"
+                    title="Generate Image"
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRefineImage();
-                      }}
-                      disabled={!editingResource.name || !editingResource.description}
-                      className={`px-2 py-1 text-xs font-medium rounded-lg transition-all duration-300 ${
-                        !editingResource.name || !editingResource.description
-                          ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-gray-300 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105'
-                      }`}
-                      title="Refine current image with AI"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                      </svg>
-                    </button>
-                  </div>
+                    <Zap
+                      size={20}
+                      strokeWidth={2.5}
+                      className="group-hover:scale-110 transition-transform duration-300"
+                    />
+                    <span className="ml-1">Generate Image</span>
+                  </Button>
                 )}
               </div>
             ) : aiImage.isGeneratingImage ? (
@@ -279,48 +250,41 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2">
-                <img
-                  src="https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp"
-                  alt="WHOP Placeholder"
-                  className="w-16 h-16 object-cover rounded-lg opacity-50"
-                />
+              <div className="relative w-full h-full flex items-center justify-center">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Drag & drop an image here</span>
-                  <br />
-                  <span className="text-xs">or</span>
-                  <br />
                   <label
                     htmlFor="edit-image-upload"
-                    className="text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+                    className="font-medium cursor-pointer hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
                   >
-                    click to browse
+                    Drag & drop an image here
                   </label>
                 </div>
                 
-                {/* AI Generation Buttons */}
-                <div className="flex gap-2 mt-2">
-                  <button
+                {/* Generate Image Button - Corner position in empty state */}
+                {!aiImage.isGeneratingImage && (
+                  <Button
+                    size="3"
+                    color="green"
                     onClick={handleGenerateImage}
-                    disabled={aiImage.isGeneratingImage || aiImage.isRefiningImage || !editingResource.name || !editingResource.description}
-                    className={`px-3 py-1 text-xs font-medium rounded-lg transition-all duration-300 ${
-                      aiImage.isGeneratingImage || !editingResource.name || !editingResource.description
-                        ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-gray-300 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105'
-                    }`}
-                    title="Generate AI image based on name and description"
+                    disabled={!editingResource.name || !editingResource.description}
+                    className="absolute top-2 right-2 z-30 px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group"
+                    title="Generate Image"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </button>
-                </div>
+                    <Zap
+                      size={20}
+                      strokeWidth={2.5}
+                      className="group-hover:scale-110 transition-transform duration-300"
+                    />
+                    <span className="ml-1">Generate Image</span>
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </div>
 
         {/* Right Column: Form Fields */}
+        <div className="flex flex-col h-full min-h-[320px]">
         <FormFields
           resource={editingResource}
           setResource={setEditingResource}
@@ -330,20 +294,23 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
           onImageUpload={handleImageUpload}
           onAssetUpload={handleAssetUpload}
           onGenerateImage={handleGenerateImage}
-          onRefineImage={handleRefineImage}
           isUploadingImage={fileUpload.isUploadingImage}
           isDragOverImage={fileUpload.isDragOverImage}
           isUploadingAsset={fileUpload.isUploadingAsset}
           isDragOverAsset={fileUpload.isDragOverAsset}
           isGeneratingImage={aiImage.isGeneratingImage}
-          isRefiningImage={aiImage.isRefiningImage}
           onImageDragOver={fileUpload.handleImageDragOver}
           onImageDragLeave={fileUpload.handleImageDragLeave}
           onImageDrop={handleImageDrop}
           onAssetDragOver={fileUpload.handleAssetDragOver}
           onAssetDragLeave={fileUpload.handleAssetDragLeave}
           onAssetDrop={handleAssetDrop}
+          isCreating={false}
+          onSave={handleSave}
+          isFormValid={isFormValid()}
+          saveButtonText={isSaving ? "Saving..." : "Update"}
         />
+        </div>
       </div>
     </div>
   );

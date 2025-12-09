@@ -5,7 +5,7 @@ import { useSeasonalStoreDatabase } from './hooks/useSeasonalStoreDatabase';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
 import { useTheme } from '../../common/ThemeProvider';
 import AIFunnelBuilderPage from '../../funnelBuilder/AIFunnelBuilderPage';
-import { FloatingAsset as FloatingAssetType, FixedTextStyles, LegacyTheme } from './types';
+import { FloatingAsset as FloatingAssetType, FixedTextStyles, LegacyTheme, Product } from './types';
 import { FloatingAsset } from './components/FloatingAsset';
 import { AdminAssetSheet } from './components/AdminAssetSheet';
 import { TopNavbar } from './components/TopNavbar';
@@ -16,6 +16,7 @@ import { Notifications } from './components/Notifications';
 import { PromoButton } from './components/PromoButton';
 import { ProductEditorModal } from './components/ProductEditorModal';
 import { TextEditorModal } from './components/TextEditorModal';
+import { ProductPageModal } from './components/ProductPageModal';
 import { LogoSection } from './components/LogoSection';
 import { StoreResourceLibrary } from '../../products/StoreResourceLibrary';
 import { StoreHeader } from './components/StoreHeader';
@@ -42,6 +43,7 @@ import { useAIGeneration } from './hooks/useAIGeneration';
 import { useProductImageUpload } from './hooks/useProductImageUpload';
 import { useTemplateSave } from './hooks/useTemplateSave';
 import { usePreviewLiveTemplate } from './hooks/usePreviewLiveTemplate';
+import { useMarketStallOrderSnapshot } from './hooks/useMarketStallOrderSnapshot';
 import { useAutoAddResources } from './hooks/useAutoAddResources';
 import { useClickOutside } from './hooks/useClickOutside';
 import { useStoreSnapshot } from './hooks/useStoreSnapshot';
@@ -66,6 +68,7 @@ import type { AuthenticatedUser } from '../../../types/user';
 import { deleteTheme as deleteThemeAction } from '../../../actions/themes-actions';
 
 import type { UpdateSyncResult } from '../../../sync/update-product-sync';
+import type { Resource } from '@/lib/types/resource';
 
 interface UpdateSyncProps {
   isChecking: boolean;
@@ -311,10 +314,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     
     // Store Navigation State Management
     lastActiveTheme,
-    lastActiveTemplate,
     saveLastActiveTheme,
-    saveLastActiveTemplate,
-    restoreLastActiveState,
+    lastEditedTemplate,
     
     // Theme loading
     loadThemes,
@@ -514,6 +515,67 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const setPromoButton = setDbPromoButton;
 
   // Use preview live template hook
+  // Ref to track if initial reorder has been done for the current template load
+  const initialReorderDoneRef = useRef(false);
+  const lastTemplateIdRef = useRef<string | null>(null);
+
+  // Helper function to reorder products array to match Market Stall order
+  const reorderProductsArray = useCallback((productsToReorder: Product[]): Product[] => {
+    if (!allResources.length || !productsToReorder.length) return productsToReorder;
+
+    // Get Market Stall resources sorted by displayOrder
+    const marketStallOrdered = allResources
+      .filter((r) => r.category === 'PAID')
+      .sort((a, b) => {
+        if (a.displayOrder !== undefined && b.displayOrder !== undefined) {
+          return a.displayOrder - b.displayOrder;
+        }
+        if (a.displayOrder !== undefined) return -1;
+        if (b.displayOrder !== undefined) return 1;
+        return 0;
+      });
+
+    // Create a map of resource ID to resource
+    const resourceMap = new Map(marketStallOrdered.map((r) => [r.id, r]));
+
+    // Get current Market Stall order (resource IDs in displayOrder)
+    const marketStallOrder = marketStallOrdered.map((r) => r.id);
+
+    // Reorder products to match Market Stall order
+    const reorderedProducts = marketStallOrder
+      .map((resourceId) => {
+        // Find product that matches this resource ID
+        const product = productsToReorder.find(
+          (p) =>
+            (typeof p.id === 'string' && p.id === `resource-${resourceId}`) ||
+            (p.whopProductId && resourceMap.get(resourceId)?.whopProductId === p.whopProductId)
+        );
+        return product;
+      })
+      .filter((p): p is Product => p !== undefined);
+
+    // Add any products that weren't in the Market Stall order (shouldn't happen, but safety check)
+    const remainingProducts = productsToReorder.filter(
+      (p) => !reorderedProducts.includes(p)
+    );
+    return [...reorderedProducts, ...remainingProducts];
+  }, [allResources]);
+
+  // Wrapper function that sets products and immediately reorders them to Market Stall order
+  const setProductsAndReorder = useCallback((newProducts: Product[] | ((prev: Product[]) => Product[])) => {
+    // Handle function form
+    if (typeof newProducts === 'function') {
+      setProducts((prevProducts) => {
+        const updatedProducts = newProducts(prevProducts);
+        return reorderProductsArray(updatedProducts);
+      });
+    } else {
+      // Handle array form - reorder immediately
+      const reordered = reorderProductsArray(newProducts);
+      setProducts(reordered);
+    }
+  }, [setProducts, reorderProductsArray]);
+
   // CRITICAL: Pass Market Stall resources to filter template products
   // Use previewTemplate if in preview mode, otherwise use previewLiveTemplate prop
   // Calculate active preview template reactively (will be updated when preview mode state changes)
@@ -527,12 +589,103 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setBackground,
     setLogoAsset,
     setFixedTextStyles,
-    setProducts,
+    setProducts: setProductsAndReorder, // Use wrapper that auto-reorders to Market Stall order
     setPromoButton,
     setFloatingAssets,
     allResources, // Market Stall resources for filtering
     experienceId, // For fetching Market Stall if allResources not available
   });
+
+  // Track Market Stall order changes and detect conflicts
+  const {
+    hasOrderChanged,
+    currentOrder,
+    snapshotOrder,
+    updateSnapshot: updateOrderSnapshot,
+  } = useMarketStallOrderSnapshot({
+    allResources,
+    isTemplateLoaded,
+  });
+
+  // Track when allResources become available (for first template load)
+  const allResourcesAvailableRef = useRef(allResources.length > 0);
+  const previousResourcesLengthRef = useRef(allResources.length);
+  const productsSetBeforeResourcesRef = useRef(false);
+  
+  // Track when products are set before resources are available
+  useEffect(() => {
+    if (products.length > 0 && allResources.length === 0) {
+      productsSetBeforeResourcesRef.current = true;
+    }
+  }, [products.length, allResources.length]);
+  
+  useEffect(() => {
+    if (allResources.length > 0 && previousResourcesLengthRef.current === 0) {
+      // Resources just became available
+      allResourcesAvailableRef.current = true;
+      // Reset reorder flag if products were set before resources
+      if (productsSetBeforeResourcesRef.current && products.length > 0) {
+        initialReorderDoneRef.current = false;
+        productsSetBeforeResourcesRef.current = false;
+      }
+    }
+    previousResourcesLengthRef.current = allResources.length;
+  }, [allResources.length, products.length]);
+
+  // Auto-reorder products to Market Stall order when template is first loaded or products change
+  useEffect(() => {
+    // Check if template has changed (new template loaded)
+    // Use currentlyLoadedTemplateId from database hook, fallback to previewLiveTemplate
+    const currentTemplateId = currentlyLoadedTemplateId || previewLiveTemplate?.id || null;
+    if (currentTemplateId !== lastTemplateIdRef.current) {
+      // Template changed, reset the initial reorder flag
+      initialReorderDoneRef.current = false;
+      lastTemplateIdRef.current = currentTemplateId;
+    }
+
+    // Perform reorder when:
+    // 1. Template is loaded AND initial reorder not done yet, OR
+    // 2. Products exist and resources just became available (for first template load), OR
+    // 3. Products exist and resources are available (for database hook template loads, regardless of isTemplateLoaded)
+    const resourcesJustBecameAvailable = allResources.length > 0 && previousResourcesLengthRef.current === 0;
+    const shouldReorder = 
+      allResources.length > 0 && 
+      products.length > 0 &&
+      !initialReorderDoneRef.current;
+
+    if (shouldReorder) {
+      const reordered = reorderProductsArray(products);
+      // Only update if order actually changed
+      if (JSON.stringify(reordered.map(p => p.id)) !== JSON.stringify(products.map(p => p.id))) {
+        setProducts(reordered);
+        initialReorderDoneRef.current = true;
+        // Update snapshot after reorder to prevent false change detection
+        updateOrderSnapshot();
+        console.log('✅ Reordered products to Market Stall order:', {
+          templateId: currentTemplateId,
+          productCount: reordered.length,
+          reason: resourcesJustBecameAvailable ? 'resources became available' : (isTemplateLoaded ? 'template loaded' : 'products set')
+        });
+      } else {
+        // Order is already correct, just mark as done
+        initialReorderDoneRef.current = true;
+        updateOrderSnapshot();
+        console.log('✅ Products already in correct Market Stall order');
+      }
+    }
+  }, [isTemplateLoaded, allResources, products, reorderProductsArray, setProducts, updateOrderSnapshot, currentlyLoadedTemplateId, previewLiveTemplate?.id]);
+
+  // Auto-sync product order when Market Stall order changes (after initial load)
+  useEffect(() => {
+    if (hasOrderChanged && isTemplateLoaded && initialReorderDoneRef.current && allResources.length > 0 && products.length > 0) {
+      const reordered = reorderProductsArray(products);
+      if (JSON.stringify(reordered.map(p => p.id)) !== JSON.stringify(products.map(p => p.id))) {
+        setProducts(reordered);
+        updateOrderSnapshot();
+        console.log('✅ Auto-synced SeasonalStore products to Market Stall order');
+      }
+    }
+  }, [hasOrderChanged, isTemplateLoaded, allResources, products, reorderProductsArray, setProducts, updateOrderSnapshot]);
 
 
 
@@ -782,16 +935,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const effectiveIsStorePreview = isStorePreview || isInPreviewMode;
 
 
-  // Use state restoration hook
+  // Use state restoration hook - loads latest edited template when store is ready
   useStateRestoration({
     isStoreContentReady,
     isActive,
     liveTemplate,
-    lastActiveTemplate,
+    lastEditedTemplate,
     currentSeason,
-    restoreLastActiveState,
+    loadTemplate,
     saveLastActiveTheme,
-    saveLastActiveTemplate,
   });
 
   // ResourceLibrary products are managed by useResourceLibraryProducts hook
@@ -912,6 +1064,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   // Product editor slide-over state
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | string | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });
+  const [productPageModal, setProductPageModal] = useState<{ isOpen: boolean; product: Product | null }>({ isOpen: false, product: null });
+  
+  const openProductPageModal = useCallback((product: Product) => {
+    setProductPageModal({ isOpen: true, product });
+  }, []);
+  
+  const closeProductPageModal = useCallback(() => {
+    setProductPageModal({ isOpen: false, product: null });
+  }, []);
+  
   const openProductEditor = (productId: number | string | null, target: 'name' | 'description' | 'card' | 'button') => {
     setProductEditor({ isOpen: true, productId, target });
   };
@@ -1186,6 +1348,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             handleBgImageUpload={handleBgImageUpload}
             setCurrentSeason={setCurrentSeason}
             loadingState={loadingState}
+            originTemplate={originTemplate}
             handleUpdateTheme={async (season, updates) => {
               await handleUpdateThemeUtil(season, updates, themes, setAllThemes, setError, experienceId || '');
             }}
@@ -1273,6 +1436,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           handleRemoveSticker={handleRemoveSticker}
           handleDropOnProduct={handleDropOnProductWrapper}
           openProductEditor={openProductEditorWrapper}
+          onOpenProductPage={openProductPageModal}
+          storeName={legacyTheme.name || "Store"}
+          experienceId={experienceId}
         />
 
         <PromoButton
@@ -1326,6 +1492,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         getThemeQuickColors={getThemeQuickColors}
       />
 
+      {productPageModal.product && (
+        <ProductPageModal
+          isOpen={productPageModal.isOpen}
+          onClose={closeProductPageModal}
+          product={productPageModal.product}
+          theme={legacyTheme}
+          storeName={legacyTheme.name || "Store"}
+          experienceId={experienceId}
+        />
+      )}
+      
       <ProductEditorModal
         isOpen={productEditor.isOpen}
         productEditor={productEditorWrapper}
@@ -1336,6 +1513,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         onClose={closeProductEditorAnimated}
         updateProduct={updateProduct}
         setPromoButton={setPromoButton}
+        experienceId={experienceId}
       />
 
 
@@ -1361,8 +1539,62 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             const originData = originTemplate.defaultThemeData;
             const newTemplateName = `Shop ${templates.length + 1}`;
             
+            // Extract theme data directly from default_theme_data
+            const companyThemeName = originData.name || 'Company Theme';
+            const companyThemeCard = originData.card || 'bg-white/95 backdrop-blur-sm shadow-xl';
+            const companyThemeText = originData.text || 'text-gray-800';
+            const companyThemeWelcomeColor = originData.welcomeColor || 'text-yellow-300';
+            const companyThemeAccent = originData.accent || 'bg-indigo-500';
+            const companyThemeRing = originData.ringColor || companyThemeAccent;
+            const companyThemePrompt = originData.themePrompt || originTemplate.themePrompt || '';
+            const companyThemeAiMessage = originData.aiMessage || originData.subHeader || '';
+            const companyThemeEmojiTip = originData.emojiTip || '🎁';
+            const companyThemeMainHeader = originData.mainHeader || null;
+            const companyThemePlaceholderImage = originData.placeholderImage || originData.background;
+            
+            // Fetch Market Stall products to add to the template
+            let marketStallProducts: Product[] = [];
+            try {
+              const response = await fetch(`/api/resources?experienceId=${experienceId}`);
+              if (response.ok) {
+                const data = await response.json();
+                const marketStallResources = data.data?.resources || [];
+                const paidMarketStallResources = marketStallResources.filter((resource: Resource) => 
+                  resource.category === 'PAID'
+                );
+                
+                const marketStallPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+                
+                // Convert to products with company theme styles applied
+                marketStallProducts = paidMarketStallResources.map((resource: Resource) => {
+                  const productImage = resource.image || marketStallPlaceholder;
+                  return {
+                    id: `resource-${resource.id}`,
+                    name: resource.name,
+                    description: resource.description || '',
+                    price: parseFloat(resource.price || '0'),
+                    image: productImage,
+                    imageAttachmentUrl: productImage,
+                    buttonText: 'VIEW DETAILS',
+                    buttonLink: resource.link || '',
+                    whopProductId: resource.whopProductId,
+                    // Apply company theme styles
+                    cardClass: companyThemeCard,
+                    titleClass: companyThemeText,
+                    descClass: companyThemeText,
+                    buttonClass: companyThemeAccent,
+                  };
+                });
+                
+                console.log(`📦 [onCreateNewShop] Fetched ${marketStallProducts.length} Market Stall products for new template`);
+              }
+            } catch (error) {
+              console.warn('⚠️ [onCreateNewShop] Failed to fetch Market Stall products:', error);
+            }
+            
             // Use saveTemplate with origin template data
             const originProducts = originData.products || [];
+            const allProducts = [...marketStallProducts, ...originProducts];
             const originFloatingAssets = originData.floatingAssets || [];
             const originTextStyles = originData.fixedTextStyles || fixedTextStyles;
             const originLogo = originData.logo || logoAsset;
@@ -1390,27 +1622,27 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
               themeSnapshot: {
                 id: `theme_${Date.now()}`,
                 experienceId: experienceId || '',
-                name: 'Company Theme',
+                name: companyThemeName,
                 season: 'Company',
-                themePrompt: originTemplate.themePrompt || '',
-                accentColor: 'bg-indigo-500',
-                ringColor: 'bg-indigo-500',
-                placeholderImage: originBackground,
-                mainHeader: null,
-                subHeader: null,
-                card: 'bg-white/95 backdrop-blur-sm shadow-xl',
-                text: 'text-gray-800',
-                welcomeColor: 'text-yellow-300',
+                themePrompt: companyThemePrompt,
+                accentColor: companyThemeAccent,
+                ringColor: companyThemeRing,
+                placeholderImage: companyThemePlaceholderImage || originBackground,
+                mainHeader: companyThemeMainHeader,
+                subHeader: companyThemeAiMessage,
+                card: companyThemeCard,
+                text: companyThemeText,
+                welcomeColor: companyThemeWelcomeColor,
                 background: originBackground || '',
-                aiMessage: '',
-                emojiTip: '🎁',
+                aiMessage: companyThemeAiMessage,
+                emojiTip: companyThemeEmojiTip,
                 createdAt: new Date(),
                 updatedAt: new Date()
               },
               currentSeason: 'Company',
               templateData: {
                 // PRIMARY DATA: Flat structure
-                products: originProducts,
+                products: allProducts, // Include Market Stall products with company theme styles
                 floatingAssets: originFloatingAssets,
                 fixedTextStyles: originTextStyles,
                 logoAsset: originLogo,
@@ -1421,18 +1653,18 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
                 logoAttachmentId: null,
                 logoAttachmentUrl: originLogo?.src || null,
                 currentTheme: {
-                  name: 'Company Theme',
-                  themePrompt: originTemplate.themePrompt || '',
-                  accent: 'bg-indigo-500',
-                  card: 'bg-white/95 backdrop-blur-sm shadow-xl',
-                  text: 'text-gray-800',
-                  welcomeColor: 'text-yellow-300',
+                  name: companyThemeName,
+                  themePrompt: companyThemePrompt,
+                  accent: companyThemeAccent,
+                  card: companyThemeCard,
+                  text: companyThemeText,
+                  welcomeColor: companyThemeWelcomeColor,
                   background: originBackground || '',
                   backgroundImage: originBackground,
-                  placeholderImage: originBackground,
-                  aiMessage: '',
-                  mainHeader: null,
-                  emojiTip: '🎁'
+                  placeholderImage: companyThemePlaceholderImage || originBackground,
+                  aiMessage: companyThemeAiMessage,
+                  mainHeader: companyThemeMainHeader,
+                  emojiTip: companyThemeEmojiTip
                 },
                 promoButton: originPromoButton,
                 discountSettings: originDiscountSettings,
@@ -1442,7 +1674,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
                 themeLogos: { 'Company': originLogo },
                 themeGeneratedBackgrounds: { 'Company': originBackground },
                 themeUploadedBackgrounds: { 'Company': originBackground },
-                themeProducts: { 'Company': originProducts },
+                themeProducts: { 'Company': allProducts }, // Include Market Stall products
                 themeFloatingAssets: { 'Company': originFloatingAssets },
               },
               isLive: false,

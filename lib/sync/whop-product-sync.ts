@@ -177,7 +177,7 @@ export class WhopProductSync {
 
 			const resourceData = {
 				name: whopProduct.title,
-				type: "MY_PRODUCTS" as const,
+				type: "LINK" as const,
 				category: this.determineCategory(whopProduct),
 				link: this.generateProductLink(whopProduct.id),
 				description: whopProduct.description || null,
@@ -430,7 +430,6 @@ export class WhopProductSync {
 			const synced = await db.query.resources.findMany({
 				where: and(
 					eq(resources.experienceId, experience.id),
-					eq(resources.type, "MY_PRODUCTS"),
 					isNotNull(resources.whopProductId),
 				),
 			});
@@ -467,7 +466,7 @@ export class WhopProductSync {
 					experienceId: user.experienceId,
 					userId: user.id,
 					name: product.name,
-					type: "AFFILIATE",
+					type: "LINK",
 					category: product.category,
 					link: product.link,
 					code: product.code || null,

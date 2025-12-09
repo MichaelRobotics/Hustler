@@ -164,6 +164,13 @@ export const usePreviewLiveTemplate = ({
             
             // Keep template container asset if available
             containerAsset: templateProduct.containerAsset,
+
+            // Include type, storageUrl, and productImages from Market Stall resource
+            // Prefer template product type if it exists, otherwise use resource type
+            // If resource has storageUrl but no type, infer FILE type
+            type: templateProduct.type || matchedResource.type || (matchedResource.storageUrl ? 'FILE' : 'LINK'),
+            storageUrl: templateProduct.storageUrl || matchedResource.storageUrl,
+            productImages: templateProduct.productImages || (Array.isArray(matchedResource.productImages) ? matchedResource.productImages : undefined),
           };
           
           filteredProducts.push(mergedProduct);

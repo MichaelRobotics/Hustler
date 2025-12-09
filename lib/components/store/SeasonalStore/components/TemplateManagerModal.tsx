@@ -146,7 +146,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       return () => clearTimeout(timeoutId);
     }
   }, [showOneTimeDiscountPanel]);
-
+  
   if (!isOpen) return null;
 
   return (
@@ -167,37 +167,37 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
         }
       `}</style>
       <div
-        className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-      >
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Shop Manager"
+      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Shop Manager"
           className={`w-full max-w-md h-full flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xl transform transition-transform duration-300 ${
-            isAnimating ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          {/* Header */}
+          isAnimating ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
             <h3 className="text-lg font-semibold tracking-wide flex items-center">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Shop Manager
-            </h3>
-            <button
-              onClick={onClose}
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Shop Manager
+          </h3>
+          <button
+            onClick={onClose}
               className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              aria-label="Close"
-            >
-              Close
-            </button>
-          </div>
+            aria-label="Close"
+          >
+            Close
+          </button>
+        </div>
 
-          {/* Content */}
+        {/* Content */}
           <div ref={contentScrollRef} className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-950 min-h-0">
             {/* Live Template Section */}
             {liveTemplate && (
@@ -310,7 +310,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                     onSetSnapshot={setOneTimeDiscountsSnapshot}
                   />
                   </div>
-                </div>
+          </div>
 
                 {/* Message Editor Modal */}
                 <MessageEditorModal
@@ -369,8 +369,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                 />
               </>
             )}
-          </div>
         </div>
+      </div>
       </div>
     </>
   );

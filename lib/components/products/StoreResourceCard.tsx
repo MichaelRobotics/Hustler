@@ -1,4 +1,4 @@
-import { Button, Text } from "frosted-ui";
+import { Button, Text, Switch } from "frosted-ui";
 import {
 	Check,
 	PenLine,
@@ -10,6 +10,9 @@ import {
 	DollarSign,
 	Gift,
 	CheckCircle,
+	GripVertical,
+	Link2,
+	FileText,
 } from "lucide-react";
 import type React from "react";
 import { useState, useEffect } from "react";
@@ -35,6 +38,9 @@ interface StoreResourceCardProps {
   onRemoveFromTheme: (resource: Resource) => void;
   isResourceInTheme: (resourceId: string) => boolean;
   isBeingEdited?: boolean;
+  // Drag handle props
+  dragHandleProps?: any; // Props from @dnd-kit useSortable hook
+  isDragging?: boolean; // Whether this card is currently being dragged
 }
 
 export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
@@ -51,6 +57,8 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
   onRemoveFromTheme,
   isResourceInTheme,
   isBeingEdited = false,
+  dragHandleProps,
+  isDragging = false,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [isRemovingState, setIsRemovingState] = useState(false);
@@ -76,14 +84,18 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
     }
   };
 
-  const getTypeLabel = (type: string) => {
+  const getTypeIcon = (type: string) => {
     switch (type) {
-      case "AFFILIATE":
-        return "Affiliate";
-      case "MY_PRODUCTS":
-        return "Owned";
+      case "LINK":
+        return (
+          <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+        );
+      case "FILE":
+        return (
+          <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" strokeWidth={2.5} />
+        );
       default:
-        return "Product";
+        return null;
     }
   };
 
@@ -151,7 +163,13 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
 
 
   return (
-    <div className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 rounded-xl border transition-all duration-300 overflow-hidden ${
+    <div 
+      onClick={handleStartEdit}
+      className={`group relative bg-gradient-to-br from-orange-50/80 via-orange-100/60 to-gray-200/40 dark:from-orange-900/80 dark:via-gray-800/60 dark:to-gray-900/30 rounded-xl border transition-all duration-300 overflow-hidden cursor-pointer ${
+      isDragging
+        ? "opacity-20 shadow-2xl scale-95 z-50"
+        : ""
+      } ${
       isJustAdded 
         ? "border-green-500/80 dark:border-green-400/80 shadow-lg shadow-green-500/20 dark:shadow-green-400/20 animate-pulse bg-gradient-to-br from-green-50/90 via-green-100/70 to-green-200/50 dark:from-green-900/90 dark:via-green-800/70 dark:to-green-900/40" 
         : isJustRemoved
@@ -174,14 +192,22 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
         
         {/* Overlay with Icons and Badges */}
         <div className="absolute inset-0 bg-black/20 dark:bg-black/40" />
-        <div className="absolute top-2 left-2 flex items-center gap-1">
+        
+        {/* Drag Handle - Top Left Corner */}
+        {dragHandleProps && (
+          <div
+            {...dragHandleProps}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-2 left-2 z-10 p-1.5 rounded-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm cursor-grab active:cursor-grabbing hover:bg-white dark:hover:bg-gray-700 transition-colors shadow-sm"
+            aria-label="Drag to reorder"
+          >
+            <GripVertical className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
+          </div>
+        )}
+        
+        <div className={`absolute top-2 ${dragHandleProps ? 'left-12' : 'left-2'} flex items-center gap-1`}>
           {getCategoryIcon(resource.category)}
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-300 backdrop-blur-sm">
-            {getTypeLabel(resource.type)}
-          </span>
-          <span className="px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm bg-orange-100/90 dark:bg-orange-900/90 text-orange-700 dark:text-orange-300">
-            Paid
-          </span>
+          {resource.type && getTypeIcon(resource.type)}
         </div>
         
         {/* Action Button in Top Right */}
@@ -194,56 +220,26 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
             </span>
           ) : (
             <>
-              {/* Store context buttons */}
-              {isInTheme ? (
-                <Button
-                  size="1"
-                  color={isJustRemoved ? "red" : "red"}
-                  onClick={handleRemoveFromTheme}
-                  disabled={isRemovingState}
-                  className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 backdrop-blur-sm ${
-                    isJustRemoved ? "animate-pulse shadow-lg shadow-red-500/30" : ""
-                  }`}
+              {/* Store context Switch - Replace Add/Remove buttons */}
+              {!isBeingEdited && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="cursor-pointer"
                 >
-                  {isJustRemoved ? (
-                    <CheckCircle size={12} strokeWidth={2.5} className="mr-1 animate-bounce" />
-                  ) : (
-                    <X size={12} strokeWidth={2.5} className="mr-1" />
-                  )}
-                  {isJustRemoved ? "Removed!" : (isRemovingState ? "Removing..." : "Remove")}
-                </Button>
-              ) : !isBeingEdited ? (
-                <Button
-                  size="1"
-                  color={isJustAdded ? "green" : "orange"}
-                  onClick={handleAddToTheme}
-                  disabled={isAdding}
-                  className={`px-2 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 backdrop-blur-sm ${
-                    isJustAdded ? "animate-pulse shadow-lg shadow-green-500/30" : ""
-                  } ${
-                    isHighlighted ? "ring-4 ring-blue-500/50 shadow-lg shadow-blue-500/20 animate-pulse bg-gradient-to-r from-blue-500/20 to-blue-400/20 dark:from-blue-400/20 dark:to-blue-300/20" : ""
-                  }`}
-                >
-                  {isJustAdded ? (
-                    <CheckCircle size={12} strokeWidth={2.5} className="mr-1 animate-bounce" />
-                  ) : (
-                    <Plus size={12} strokeWidth={2.5} className="mr-1" />
-                  )}
-                  {isJustAdded ? "Added!" : (isAdding ? "Adding..." : "Add")}
-                </Button>
-              ) : null}
-
-              {/* Edit Button - Only show when resource is NOT in theme and NOT being edited */}
-              {!isInTheme && !isBeingEdited && (
-                <Button
-                  size="1"
-                  color="violet"
-                  onClick={handleStartEdit}
-                  className="px-2 py-1 text-xs backdrop-blur-sm"
-                >
-                  <PenLine size={12} strokeWidth={2.5} className="mr-1" />
-                  Edit
-                </Button>
+                  <Switch
+                    color="violet"
+                    checked={isInTheme}
+                    size="2"
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        handleAddToTheme();
+                      } else {
+                        handleRemoveFromTheme();
+                      }
+                    }}
+                    disabled={isAdding || isRemovingState}
+                  />
+                </div>
               )}
 
               {/* Delete Button */}
@@ -251,7 +247,10 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
                 size="1"
                 variant="ghost"
                 color="red"
-                onClick={handleDelete}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete();
+                }}
                 className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors backdrop-blur-sm"
                 aria-label="Delete product"
               >

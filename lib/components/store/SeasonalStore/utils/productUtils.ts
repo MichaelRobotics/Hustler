@@ -88,62 +88,51 @@ export const filterProductsAgainstMarketStall = async (
     `🎨 [filterProductsAgainstMarketStall] Filtering ${templateProducts.length} products against ${marketStallResources.length} resources`
   );
 
+  // Create a map of Market Stall resources for quick lookup
+  // Key: resource ID or whopProductId
+  const marketStallResourceMap = new Map<string, any>();
+  const marketStallResourceByWhopId = new Map<string, any>();
+  
+  for (const resource of marketStallResources) {
+    marketStallResourceMap.set(resource.id, resource);
+    if (resource.whopProductId) {
+      marketStallResourceByWhopId.set(resource.whopProductId, resource);
+    }
+  }
+
+  // Build filtered products in TEMPLATE ORDER (preserve template product order)
   const filteredProducts: Product[] = [];
   const skippedProducts: string[] = [];
+  const matchedResourceIds = new Set<string>();
 
+  // Iterate through template products in their original order
   for (const templateProduct of templateProducts) {
-    let matchedResource: any = null;
+    let matchedResource: any | null = null;
 
-    // Strategy 1: Match by whopProductId (for synced Whop products)
-    if (templateProduct.whopProductId) {
-      matchedResource = marketStallResources.find(
-        (resource: any) => resource.whopProductId === templateProduct.whopProductId
-      );
-
-      if (matchedResource) {
-        console.log(
-          `✅ [filterProductsAgainstMarketStall] Matched "${templateProduct.name}" by whopProductId`
-        );
-      }
+    // Strategy 1: Match by resource ID (if product.id starts with "resource-")
+    if (typeof templateProduct.id === 'string' && templateProduct.id.startsWith('resource-')) {
+      const resourceId = templateProduct.id.replace('resource-', '');
+      matchedResource = marketStallResourceMap.get(resourceId);
     }
 
-    // Strategy 2: Match by resource ID (if product.id starts with "resource-")
-    if (
-      !matchedResource &&
-      typeof templateProduct.id === 'string' &&
-      templateProduct.id.startsWith('resource-')
-    ) {
-      const resourceId = templateProduct.id.replace('resource-', '');
-      matchedResource = marketStallResources.find(
-        (resource: any) => resource.id === resourceId
-      );
-
-      if (matchedResource) {
-        console.log(
-          `✅ [filterProductsAgainstMarketStall] Matched "${templateProduct.name}" by resource ID`
-        );
-      }
+    // Strategy 2: Match by whopProductId (for synced Whop products)
+    if (!matchedResource && templateProduct.whopProductId) {
+      matchedResource = marketStallResourceByWhopId.get(templateProduct.whopProductId);
     }
 
     // Strategy 3: Match by exact name (fallback)
     if (!matchedResource && templateProduct.name) {
       const normalizedTemplateName = templateProduct.name.toLowerCase().trim();
-
       matchedResource = marketStallResources.find((resource: any) => {
         if (!resource.name) return false;
-        const normalizedResourceName = resource.name.toLowerCase().trim();
-        return normalizedResourceName === normalizedTemplateName;
-      });
-
-      if (matchedResource) {
-        console.log(
-          `✅ [filterProductsAgainstMarketStall] Matched "${templateProduct.name}" by exact name`
-        );
-      }
+        return resource.name.toLowerCase().trim() === normalizedTemplateName;
+      }) || null;
     }
 
-    // Only include products that exist in Market Stall
+    // If we found a matching Market Stall resource, merge them
     if (matchedResource) {
+      matchedResourceIds.add(matchedResource.id);
+      
       const mergedProduct: Product = {
         // Use Market Stall resource ID format
         id: `resource-${matchedResource.id}`,
@@ -193,10 +182,18 @@ export const filterProductsAgainstMarketStall = async (
 
         // Keep template container asset if available
         containerAsset: templateProduct.containerAsset,
+
+        // Include type, storageUrl, and productImages from Market Stall resource
+        // Prefer template product type if it exists, otherwise use resource type
+        // If resource has storageUrl but no type, infer FILE type
+        type: templateProduct.type || matchedResource.type || (matchedResource.storageUrl ? 'FILE' : 'LINK'),
+        storageUrl: templateProduct.storageUrl || matchedResource.storageUrl,
+        productImages: templateProduct.productImages || (Array.isArray(matchedResource.productImages) ? matchedResource.productImages : undefined),
       };
 
       filteredProducts.push(mergedProduct);
     } else {
+      // Template product doesn't exist in Market Stall
       skippedProducts.push(templateProduct.name || 'Unknown');
     }
   }
@@ -236,20 +233,35 @@ export const convertResourcesToProducts = (
       !excludeIds.has(resource.id)
   );
 
+  // Sort by displayOrder to preserve Market Stall order
+  // Resources with displayOrder come first, sorted by displayOrder ASC
+  // Resources without displayOrder come after, maintaining their original order
+  const sortedResources = [...filteredResources].sort((a, b) => {
+    if (a.displayOrder !== undefined && b.displayOrder !== undefined) {
+      return a.displayOrder - b.displayOrder;
+    }
+    if (a.displayOrder !== undefined) return -1;
+    if (b.displayOrder !== undefined) return 1;
+    return 0; // Maintain original order for resources without displayOrder
+  });
+
   const textColors = getTextColorsFromCardClass(theme.card, theme.text);
 
-  return filteredResources.map((resource) => ({
+  return sortedResources.map((resource) => ({
     id: `resource-${resource.id}`,
     name: resource.name,
     description: truncateDescription(resource.description || ''),
     price: parseFloat(resource.price) || 0,
     image:
       resource.image ||
-      'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
+      'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
     imageAttachmentUrl: resource.image || null,
     buttonText: 'VIEW DETAILS',
     buttonLink: resource.link || '',
     whopProductId: resource.whopProductId,
+    type: resource.type, // Include type (LINK or FILE)
+    storageUrl: resource.storageUrl, // Include storageUrl for FILE type
+    productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined, // Include productImages array
     cardClass: theme.card,
     titleClass: textColors.titleClass,
     descClass: textColors.descClass,

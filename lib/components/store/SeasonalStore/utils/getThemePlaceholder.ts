@@ -3,7 +3,7 @@
  * Returns the placeholder image URL for the given theme/season
  */
 export function getThemePlaceholderUrl(themeName: string): string {
-  const defaultPlaceholder = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+  const defaultPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
   
   // Map theme names to their placeholder URLs
   const themePlaceholders: Record<string, string> = {

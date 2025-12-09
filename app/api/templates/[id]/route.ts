@@ -44,6 +44,15 @@ async function getTemplateHandler(
       );
     }
 
+    // Validate templateId is a valid UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(templateId)) {
+      return NextResponse.json(
+        { success: false, error: `Invalid template ID format: ${templateId}. Expected UUID.` },
+        { status: 400 }
+      );
+    }
+
     // Get template
     const template = await db.query.templates.findFirst({
       where: and(

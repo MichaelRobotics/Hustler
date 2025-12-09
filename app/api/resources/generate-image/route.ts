@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       // Generate new image based on name and description
       imageUrl = await nanoBananaService.generateProductImage(name, description, {
         name: 'ResourceLibrary',
-        themePrompt: 'Professional e-commerce product image with clean, modern styling'
+        themePrompt: 'Professional e-commerce product thumbnail optimized for digital store display. High-quality product image with clean, modern styling, perfect for product listings and digital storefronts. Optimized for thumbnail display with clear product visibility and attractive presentation.'
       }, '');
     } else {
       // Refine existing image
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       }
       imageUrl = await nanoBananaService.generateProductImage(name, description, {
         name: 'ResourceLibrary',
-        themePrompt: 'Professional e-commerce product image with clean, modern styling'
+        themePrompt: 'Professional e-commerce product thumbnail optimized for digital store display. High-quality product image with clean, modern styling, perfect for product listings and digital storefronts. Optimized for thumbnail display with clear product visibility and attractive presentation.'
       }, existingImageUrl);
     }
 

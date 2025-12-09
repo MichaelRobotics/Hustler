@@ -4,7 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { generateThemePromptFromImage, getDefaultThemePrompt } from "./theme-prompt-generator";
 import { getThemePlaceholderUrl } from "@/lib/components/store/SeasonalStore/utils/getThemePlaceholder";
-import { getThemeDefaultText, initialThemes } from "@/lib/components/store/SeasonalStore/actions/constants";
+import { getThemeDefaultText, initialThemes, getThemeTextColor } from "@/lib/components/store/SeasonalStore/actions/constants";
 import { GoogleGenAI } from '@google/genai';
 import { nanoBananaService } from '@/lib/components/store/SeasonalStore/actions/nanobananaService';
 
@@ -21,6 +21,18 @@ export interface OriginTemplateData {
     fixedTextStyles: any;
     floatingAssets?: any[];
     promoButton?: any;
+    // Theme fields
+    name: string;
+    card: string;
+    text: string;
+    welcomeColor: string;
+    accent: string;
+    ringColor: string;
+    mainHeader?: string | null;
+    subHeader?: string | null;
+    aiMessage?: string;
+    emojiTip?: string;
+    placeholderImage?: string | null;
   };
 }
 
@@ -51,7 +63,6 @@ export async function shouldCreateOriginTemplate(experienceId: string): Promise<
     const productCount = await db.query.resources.findMany({
       where: and(
         eq(resources.experienceId, experience.id),
-        eq(resources.type, "MY_PRODUCTS")
       ),
       limit: 1,
     });
@@ -261,7 +272,7 @@ async function createCompanyTheme(
         console.log('✅ [Origin Template Service] Generated theme styles from banner image');
         
         // Refine product placeholder to match theme
-        const defaultProductPlaceholderUrl = 'https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+        const defaultProductPlaceholderUrl = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
         try {
           const themeObject = {
             name: companyTitle,
@@ -310,9 +321,7 @@ async function createCompanyTheme(
       refinedPlaceholderUrl = getThemePlaceholderUrl('Black Friday');
     }
 
-    // Create theme directly in database
-    // Note: card, text, welcomeColor will be stored in a JSONB field or we need to add them to schema
-    // For now, storing in themeSnapshot or we can extend the schema
+    // Create theme directly in database with all style fields
     const [theme] = await db.insert(themes).values({
       experienceId: experience.id,
       name: companyTitle,
@@ -320,6 +329,9 @@ async function createCompanyTheme(
       themePrompt: themeData.themePrompt || `Theme for ${companyTitle}`,
       accentColor: themeData.accent,
       ringColor: themeData.accent,
+      card: themeData.card,
+      text: themeData.text,
+      welcomeColor: themeData.welcomeColor,
       placeholderImage: refinedPlaceholderUrl,
       mainHeader: themeData.mainHeader,
       subHeader: themeData.aiMessage,
@@ -388,27 +400,82 @@ export async function createOriginTemplateFromProduct(
     console.log('📦 [Origin Template Service] Company logo:', companyLogoUrl ? 'Found' : 'Not found');
     console.log('📦 [Origin Template Service] Company title:', companyTitle);
 
-    // Create company theme directly from banner image (or fallback to Black Friday)
-    let companyThemeId: string | null = null;
+    // Generate theme styles directly from banner image (or use Black Friday fallback)
+    let themeData: {
+      accent: string;
+      card: string;
+      text: string;
+      welcomeColor: string;
+      mainHeader: string;
+      aiMessage: string;
+      emojiTip: string;
+      themePrompt?: string;
+    };
+    let refinedPlaceholderUrl = '';
     let themePrompt: string | null = null;
 
-    // Create company theme - this will analyze banner image directly or use Black Friday fallback
-    companyThemeId = await createCompanyTheme(experienceId, companyBannerUrl, companyTitle);
-    
-    if (companyThemeId) {
-      // Get theme prompt from created theme or use default
-      const createdTheme = await db.query.themes.findFirst({
-        where: eq(themes.id, companyThemeId),
-      });
-      themePrompt = createdTheme?.themePrompt || getDefaultThemePrompt();
+    // Try to generate theme styles from banner image
+    if (companyBannerUrl) {
+      const bannerThemeData = await generateThemeStylesFromBannerImage(companyBannerUrl);
+      if (bannerThemeData) {
+        themeData = bannerThemeData;
+        themePrompt = (bannerThemeData as any).themePrompt || await generateThemePromptFromImage(companyBannerUrl) || getDefaultThemePrompt();
+        console.log('✅ [Origin Template Service] Generated theme styles from banner image');
+        
+        // Refine product placeholder to match theme
+        const defaultProductPlaceholderUrl = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+        try {
+          const themeObject = {
+            name: companyTitle,
+            themePrompt: themePrompt
+          };
+          refinedPlaceholderUrl = await nanoBananaService.generateProductImage(
+            'Product',
+            themePrompt || getDefaultThemePrompt(),
+            themeObject,
+            defaultProductPlaceholderUrl
+          );
+        } catch (error) {
+          console.warn('⚠️ [Origin Template Service] Failed to refine placeholder, using default:', error);
+          refinedPlaceholderUrl = defaultProductPlaceholderUrl;
+        }
+      } else {
+        // Fallback to Black Friday theme
+        console.log('⚠️ [Origin Template Service] Banner analysis failed, using Black Friday theme as fallback');
+        const blackFridayTheme = initialThemes['Black Friday'];
+        themeData = {
+          accent: blackFridayTheme.accent,
+          card: blackFridayTheme.card,
+          text: blackFridayTheme.text,
+          welcomeColor: blackFridayTheme.welcomeColor,
+          mainHeader: blackFridayTheme.name.toUpperCase(),
+          aiMessage: blackFridayTheme.aiMessage,
+          emojiTip: blackFridayTheme.emojiTip,
+          themePrompt: blackFridayTheme.themePrompt,
+        };
+        themePrompt = blackFridayTheme.themePrompt || null;
+        refinedPlaceholderUrl = getThemePlaceholderUrl('Black Friday');
+      }
     } else {
-      // Fallback if theme creation failed
-      themePrompt = getDefaultThemePrompt();
-      console.log('📦 [Origin Template Service] Theme creation failed, using default theme prompt');
+      // No banner image - use Black Friday theme as fallback
+      console.log('📦 [Origin Template Service] No banner image, using Black Friday theme as fallback');
+      const blackFridayTheme = initialThemes['Black Friday'];
+      themeData = {
+        accent: blackFridayTheme.accent,
+        card: blackFridayTheme.card,
+        text: blackFridayTheme.text,
+        welcomeColor: blackFridayTheme.welcomeColor,
+        mainHeader: blackFridayTheme.name.toUpperCase(),
+        aiMessage: blackFridayTheme.aiMessage,
+        emojiTip: blackFridayTheme.emojiTip,
+        themePrompt: blackFridayTheme.themePrompt,
+      };
+      themePrompt = blackFridayTheme.themePrompt || null;
+      refinedPlaceholderUrl = getThemePlaceholderUrl('Black Friday');
     }
 
     // Get default background (banner or placeholder)
-    const defaultBackground = companyBannerUrl || getThemePlaceholderUrl('Black Friday');
+    const defaultBackground = companyBannerUrl || refinedPlaceholderUrl || getThemePlaceholderUrl('Black Friday');
 
     // Get default logo (company logo or placeholder)
     const defaultLogo = companyLogoUrl ? {
@@ -421,56 +488,93 @@ export async function createOriginTemplateFromProduct(
       shape: 'round' as const,
     };
 
-    // Get default text styles
-    const themeDefaults = getThemeDefaultText('Company Theme', '');
+    // Get text color from welcomeColor
+    const textColor = getThemeTextColor(themeData.welcomeColor);
+
+    // Get default text styles with "Edit..." placeholder text
+    const themeDefaults = getThemeDefaultText(companyTitle, themeData.aiMessage);
     const defaultTextStyles = {
       mainHeader: {
-        content: themeDefaults.mainHeader,
-        color: '',
+        content: 'Edit Headline', // Use placeholder text instead of theme content
+        color: textColor,
         styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg',
       },
       headerMessage: {
-        content: themeDefaults.headerMessage,
-        color: '',
+        content: 'Edit Headline', // Use placeholder text instead of theme content
+        color: textColor,
         styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg',
       },
       subHeader: {
-        content: themeDefaults.subHeader,
-        color: '',
+        content: 'Add a short supporting subheader', // Use placeholder text instead of theme content
+        color: textColor,
         styleClass: 'text-lg sm:text-xl font-normal',
       },
       promoMessage: {
         content: themeDefaults.promoMessage,
-        color: '',
+        color: textColor,
         styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md',
       },
     };
 
-    // Build default theme data
+    // Extract button class from accent (remove hover and ring classes, keep base)
+    const buttonClass = themeData.accent.split(' ').find(cls => cls.startsWith('bg-')) || 'bg-indigo-500';
+
+    // Build default theme data with complete theme information
     const defaultThemeData = {
       background: defaultBackground,
       logo: defaultLogo,
-      themePrompt: themePrompt,
+      themePrompt: themePrompt || getDefaultThemePrompt(),
       products: [], // Empty products array - will be populated from template
       fixedTextStyles: defaultTextStyles,
       floatingAssets: [],
       promoButton: {
         text: 'SHOP NOW',
-        buttonClass: 'bg-indigo-500',
+        buttonClass: buttonClass,
         ringClass: '',
         ringHoverClass: '',
         icon: '🛒',
       },
+      // Theme fields
+      name: companyTitle,
+      card: themeData.card,
+      text: themeData.text,
+      welcomeColor: themeData.welcomeColor,
+      accent: themeData.accent,
+      ringColor: themeData.accent,
+      mainHeader: 'Edit Headline', // Use placeholder text instead of theme content
+      subHeader: 'Add a short supporting subheader', // Use placeholder text instead of theme content
+      aiMessage: themeData.aiMessage,
+      emojiTip: themeData.emojiTip,
+      placeholderImage: refinedPlaceholderUrl || defaultBackground,
     };
 
     // Create origin template directly in database
-    const [created] = await db.insert(originTemplates).values({
-      experienceId: experience.id,
-      companyLogoUrl,
-      companyBannerImageUrl: companyBannerUrl,
-      themePrompt,
-      defaultThemeData,
-    }).returning();
+    // Handle race condition where template might be created by another process
+    let created;
+    try {
+      [created] = await db.insert(originTemplates).values({
+        experienceId: experience.id,
+        companyLogoUrl,
+        companyBannerImageUrl: companyBannerUrl,
+        themePrompt,
+        defaultThemeData,
+      }).returning();
+    } catch (error: any) {
+      // Handle duplicate key error (race condition - template was created by another process)
+      if (error?.code === '23505' || error?.cause?.code === '23505') {
+        console.log('⚠️ [Origin Template Service] Origin template already exists (race condition), fetching existing...');
+        // Fetch the existing template
+        const existing = await db.query.originTemplates.findFirst({
+          where: eq(originTemplates.experienceId, experience.id),
+        });
+        if (existing) {
+          console.log('✅ [Origin Template Service] Using existing origin template:', existing.id);
+          return existing;
+        }
+      }
+      // Re-throw if it's a different error
+      throw error;
+    }
 
     console.log('✅ [Origin Template Service] Origin template created:', created.id);
 
@@ -548,41 +652,151 @@ export async function updateOriginTemplateFromProduct(
 
     console.log('🔄 [Origin Template Service] Company data changed, updating origin template');
 
-    // Update theme prompt if banner changed
+    // Get company title from existing origin template
+    const existingDefaultThemeData = existing.defaultThemeData as any;
+    const companyTitle = existingDefaultThemeData?.name || 'Company Theme';
+
+    // Regenerate theme styles if banner changed
+    let themeData: {
+      accent: string;
+      card: string;
+      text: string;
+      welcomeColor: string;
+      mainHeader: string;
+      aiMessage: string;
+      emojiTip: string;
+      themePrompt?: string;
+    } | null = null;
     let themePrompt = existing.themePrompt;
+    let refinedPlaceholderUrl = '';
+
     if (bannerChanged && companyBannerUrl) {
-      const newPrompt = await generateThemePromptFromImage(companyBannerUrl);
-      if (newPrompt) {
-        themePrompt = newPrompt;
-        // Create new company theme if prompt changed (banner was added/changed)
-        // Get company title from existing origin template or use default
-        const existingOriginTemplate = await db.query.originTemplates.findFirst({
-          where: eq(originTemplates.experienceId, experience.id),
-        });
-        const companyTitle = existingOriginTemplate?.defaultThemeData 
-          ? (existingOriginTemplate.defaultThemeData as any).companyTitle || 'Company Theme'
-          : 'Company Theme';
-        await createCompanyTheme(experienceId, companyBannerUrl, companyTitle);
+      // Generate new theme styles from new banner image
+      const bannerThemeData = await generateThemeStylesFromBannerImage(companyBannerUrl);
+      if (bannerThemeData) {
+        themeData = bannerThemeData;
+        themePrompt = (bannerThemeData as any).themePrompt || await generateThemePromptFromImage(companyBannerUrl) || getDefaultThemePrompt();
+        console.log('✅ [Origin Template Service] Regenerated theme styles from new banner image');
+        
+        // Refine product placeholder to match theme
+        const defaultProductPlaceholderUrl = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
+        try {
+          const themeObject = {
+            name: companyTitle,
+            themePrompt: themePrompt
+          };
+          refinedPlaceholderUrl = await nanoBananaService.generateProductImage(
+            'Product',
+            themePrompt || getDefaultThemePrompt(),
+            themeObject,
+            defaultProductPlaceholderUrl
+          );
+        } catch (error) {
+          console.warn('⚠️ [Origin Template Service] Failed to refine placeholder, using default:', error);
+          refinedPlaceholderUrl = defaultProductPlaceholderUrl;
+        }
+      } else {
+        // Fallback to Black Friday theme
+        console.log('⚠️ [Origin Template Service] Banner analysis failed, using Black Friday theme as fallback');
+        const blackFridayTheme = initialThemes['Black Friday'];
+        themeData = {
+          accent: blackFridayTheme.accent,
+          card: blackFridayTheme.card,
+          text: blackFridayTheme.text,
+          welcomeColor: blackFridayTheme.welcomeColor,
+          mainHeader: blackFridayTheme.name.toUpperCase(),
+          aiMessage: blackFridayTheme.aiMessage,
+          emojiTip: blackFridayTheme.emojiTip,
+          themePrompt: blackFridayTheme.themePrompt,
+        };
+        themePrompt = blackFridayTheme.themePrompt || null;
+        refinedPlaceholderUrl = getThemePlaceholderUrl('Black Friday');
       }
     } else if (bannerChanged && !companyBannerUrl) {
-      // Banner removed, use default prompt
-      themePrompt = getDefaultThemePrompt();
+      // Banner removed, use Black Friday theme as fallback
+      console.log('📦 [Origin Template Service] Banner removed, using Black Friday theme as fallback');
+      const blackFridayTheme = initialThemes['Black Friday'];
+      themeData = {
+        accent: blackFridayTheme.accent,
+        card: blackFridayTheme.card,
+        text: blackFridayTheme.text,
+        welcomeColor: blackFridayTheme.welcomeColor,
+        mainHeader: blackFridayTheme.name.toUpperCase(),
+        aiMessage: blackFridayTheme.aiMessage,
+        emojiTip: blackFridayTheme.emojiTip,
+        themePrompt: blackFridayTheme.themePrompt,
+      };
+      themePrompt = blackFridayTheme.themePrompt || null;
+      refinedPlaceholderUrl = getThemePlaceholderUrl('Black Friday');
     }
 
     // Update default theme data
-    const defaultBackground = companyBannerUrl || existing.defaultThemeData.background || getThemePlaceholderUrl('Black Friday');
+    const defaultBackground = companyBannerUrl || refinedPlaceholderUrl || existing.defaultThemeData.background || getThemePlaceholderUrl('Black Friday');
     const defaultLogo = companyLogoUrl ? {
       src: companyLogoUrl,
       alt: 'Company Logo',
       shape: 'round' as const,
     } : existing.defaultThemeData.logo;
 
-    const updatedDefaultThemeData = {
+    // If theme data was regenerated, update all theme fields
+    // Otherwise, preserve existing theme data
+    const updatedDefaultThemeData: any = {
       ...existing.defaultThemeData,
       background: defaultBackground,
       logo: defaultLogo,
       themePrompt: themePrompt || existing.defaultThemeData.themePrompt,
     };
+
+    // Update theme fields if banner changed
+    if (themeData) {
+      const textColor = getThemeTextColor(themeData.welcomeColor);
+      const themeDefaults = getThemeDefaultText(companyTitle, themeData.aiMessage);
+      
+      // Extract button class from accent
+      const buttonClass = themeData.accent.split(' ').find(cls => cls.startsWith('bg-')) || 'bg-indigo-500';
+
+      updatedDefaultThemeData.name = companyTitle;
+      updatedDefaultThemeData.card = themeData.card;
+      updatedDefaultThemeData.text = themeData.text;
+      updatedDefaultThemeData.welcomeColor = themeData.welcomeColor;
+      updatedDefaultThemeData.accent = themeData.accent;
+      updatedDefaultThemeData.ringColor = themeData.accent;
+      updatedDefaultThemeData.mainHeader = 'Edit Headline'; // Use placeholder text instead of theme content
+      updatedDefaultThemeData.subHeader = 'Add a short supporting subheader'; // Use placeholder text instead of theme content
+      updatedDefaultThemeData.aiMessage = themeData.aiMessage;
+      updatedDefaultThemeData.emojiTip = themeData.emojiTip;
+      updatedDefaultThemeData.placeholderImage = refinedPlaceholderUrl || defaultBackground;
+
+      // Update text styles with "Edit..." placeholder text (not theme content)
+      updatedDefaultThemeData.fixedTextStyles = {
+        mainHeader: {
+          content: 'Edit Headline', // Use placeholder text instead of theme content
+          color: textColor,
+          styleClass: 'text-6xl sm:text-7xl font-extrabold tracking-tight drop-shadow-lg',
+        },
+        headerMessage: {
+          content: 'Edit Headline', // Use placeholder text instead of theme content
+          color: textColor,
+          styleClass: 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg',
+        },
+        subHeader: {
+          content: 'Add a short supporting subheader', // Use placeholder text instead of theme content
+          color: textColor,
+          styleClass: 'text-lg sm:text-xl font-normal',
+        },
+        promoMessage: {
+          content: themeDefaults.promoMessage,
+          color: textColor,
+          styleClass: 'text-2xl sm:text-3xl font-semibold drop-shadow-md',
+        },
+      };
+
+      // Update promo button with new accent
+      updatedDefaultThemeData.promoButton = {
+        ...(existing.defaultThemeData.promoButton || {}),
+        buttonClass: buttonClass,
+      };
+    }
 
     // Update origin template directly in database
     const [updated] = await db.update(originTemplates)

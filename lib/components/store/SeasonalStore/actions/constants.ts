@@ -96,7 +96,7 @@ export const initialThemes: Record<string, LegacyTheme> = {
 
 // Default Logo Asset
 export const defaultLogo = { 
-  src: "https://img-v2-prod.whop.com/dUwgsAK0vIQWvHpc6_HVbZ345kdPfToaPdKOv9EY45c/plain/https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp", 
+  src: "https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp", 
   shape: 'square' as const,
   alt: 'Default Store Logo'
 };

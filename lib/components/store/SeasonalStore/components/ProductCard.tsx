@@ -28,6 +28,9 @@ interface ProductCardProps {
   };
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;
+  onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
+  storeName?: string; // Store name for modal
+  experienceId?: string; // Experience ID for payment
 }
 
 // Helper to convert Tailwind text color class to hex
@@ -124,6 +127,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   discountSettings,
   getThemeQuickColors,
   backgroundUrl,
+  onOpenProductPage,
+  storeName,
+  experienceId,
 }) => {
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -733,7 +739,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               ? `url(${product.imageAttachmentUrl})` 
               : product.image
                 ? `url(${product.image})`
-                : `url(https://placehold.co/400x400/c2410c/ffffff?text=${encodeURIComponent(product.name.toUpperCase())})`,
+                : `url(https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp)`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1235,6 +1241,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 hasButtonLink: !!product.buttonLink,
                 buttonLink: product.buttonLink,
                 buttonText: buttonText,
+                productType: product.type,
+                hasStorageUrl: !!product.storageUrl,
                 buttonLinkType: product.buttonLink ? (product.buttonLink.startsWith('http') ? 'external' : 'relative') : 'none',
               });
               
@@ -1242,6 +1250,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 console.log('🔵 [ProductCard] Editor view - opening editor for button');
                 e.stopPropagation(); 
                 onOpenEditor(product.id, 'button'); 
+              } else if (product.type === "FILE" && onOpenProductPage) {
+                // For FILE type products, open ProductPageModal
+                console.log('🔵 [ProductCard] Opening ProductPageModal for FILE type product');
+                e.stopPropagation();
+                onOpenProductPage(product);
               } else if (product.buttonLink) {
                 console.log('🔵 [ProductCard] Redirecting to buttonLink:', product.buttonLink);
                 // Redirect to the specified link
@@ -1257,6 +1270,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   id: product.id,
                   name: product.name,
                   hasButtonLink: !!product.buttonLink,
+                  productType: product.type,
                   fullProduct: product
                 });
               }

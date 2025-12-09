@@ -207,10 +207,7 @@ export async function triggerProductSyncForNewAdmin(
 		const existingResources = await db.select()
 			.from(resources)
 			.where(
-				and(
-					eq(resources.experienceId, experienceId),
-					eq(resources.type, "MY_PRODUCTS")
-				)
+				eq(resources.experienceId, experienceId)
 			)
 			.limit(1);
 
@@ -394,7 +391,7 @@ export async function triggerProductSyncForNewAdmin(
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title.trim(),
-								type: "MY_PRODUCTS",
+								type: "LINK",
 								category: productCategory,
 								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
 								description: product.description,
@@ -589,7 +586,7 @@ export async function triggerProductSyncForNewAdmin(
 								console.log(`� Executing createResource for ${app.name.trim()}...`);
 									return createResource({ id: userId, experience: { id: experienceId } } as any, {
 									name: app.name.trim(),
-						type: "MY_PRODUCTS",
+						type: "LINK",
 						category: "FREE_VALUE",
 										link: directUrl,
 									description: app.description || `Free access to ${app.name.trim()}`,
@@ -899,7 +896,6 @@ export async function triggerProductSyncForNewAdmin(
 				const firstProduct = await db.query.resources.findFirst({
 					where: and(
 						eq(resources.experienceId, experienceId),
-						eq(resources.type, "MY_PRODUCTS"),
 						isNotNull(resources.whopProductId)
 					),
 				});
