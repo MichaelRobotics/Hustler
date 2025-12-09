@@ -30,6 +30,7 @@ interface UseAIGenerationProps {
   logoAttachmentUrl?: string;
   iframeDimensions?: { width: number; height: number };
   toggleEditorView?: () => void;
+  isEditorView?: boolean; // Current editor view state
 }
 
 export const useAIGeneration = ({
@@ -52,6 +53,7 @@ export const useAIGeneration = ({
   logoAttachmentUrl,
   iframeDimensions,
   toggleEditorView,
+  isEditorView = true, // Default to true if not provided
 }: UseAIGenerationProps) => {
   const isGeneratingRef = useRef(false);
 
@@ -214,10 +216,13 @@ export const useAIGeneration = ({
       setBackgroundAttachmentId(uploadResult.attachmentId);
       console.log('✅ Background generation and upload complete');
       
-      // Switch to editor view after successful background generation
-      if (toggleEditorView) {
+      // Ensure we're in editor view after successful background generation
+      // Only toggle if we're NOT already in editor view
+      if (toggleEditorView && !isEditorView) {
         console.log('🎨 Switching to editor view after background generation');
         toggleEditorView();
+      } else if (isEditorView) {
+        console.log('🎨 Already in editor view, no need to toggle');
       }
     } catch (error) {
       console.error('❌ Error generating background:', error);

@@ -54,7 +54,7 @@ interface ImageGenerationResponse {
 
 export class NanoBananaImageService {
   private genAI: GoogleGenAI;
-  private readonly BACKGROUND_MODEL = 'imagen-4.0-generate-001'; // Use correct Imagen model
+  private readonly BACKGROUND_MODEL = 'gemini-2.5-flash-image'; // Use Gemini for all image generation
   private readonly REFINEMENT_MODEL = 'gemini-2.5-flash-image'; // Use flash for refinement
   private readonly API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -300,7 +300,7 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
         console.log('🎨 [Nano Banana] Base64 contains valid image data:', imageBase64.length > 1000);
         
         // Use Gemini's generateContent with base64 image data
-        console.log('🎨 [Nano Banana] Using imagen4 for background editing');
+        console.log('🎨 [Nano Banana] Using Gemini (gemini-2.5-flash-image) for background editing');
         response = await this.genAI.models.generateContent({
           model: this.BACKGROUND_MODEL,
           contents: [
@@ -319,74 +319,58 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
         } as any);
       } else {
         console.log('🎨 [Nano Banana] Using text-to-image generation for new/regenerated background');
-        console.log('🎨 [Nano Banana] Using Imagen API for new background generation');
+        console.log('🎨 [Nano Banana] Using Gemini image generation (gemini-2.5-flash-image)');
         
-        // Calculate aspect ratio for Imagen API
-        const aspectRatio = this.calculateAspectRatio(targetWidth, targetHeight);
-        console.log('🎨 [Nano Banana] Calculated aspect ratio:', aspectRatio);
-        
-        // Use the correct Imagen API
-        response = await this.callImagenAPI(enhancedPrompt, aspectRatio);
+        // Use Gemini for text-to-image generation
+        response = await this.genAI.models.generateContent({
+          model: this.BACKGROUND_MODEL,
+          contents: [{
+            parts: [{ text: enhancedPrompt }]
+          }]
+        } as any);
       }
       
-      // Handle response from Imagen API
+      // Handle response from Gemini API (works for both refinement and new generation)
       let imageBytes: string;
       
-      if (shouldRefineBackground) {
-        // Handle Gemini response for image editing
-        const generateContentResponse = response as any;
-        const candidates = generateContentResponse?.candidates;
-        if (!candidates || candidates.length === 0) {
-          console.error('🎨 [Nano Banana] No candidates in response:', response);
-          throw new Error("Background generation failed to return image data.");
-        }
-        
-        const content = candidates[0]?.content;
-        if (!content) {
-          console.error('🎨 [Nano Banana] No content in response:', response);
-          throw new Error("Background generation failed to return image data.");
-        }
-        
-        const parts = content.parts;
-        if (!parts || parts.length === 0) {
-          console.error('🎨 [Nano Banana] No parts in response:', response);
-          throw new Error("Background generation failed to return image data.");
-        }
-        
-        // Look for image data in the response
-        const imagePart = parts.find((part: any) => part.inlineData || part.inline_data);
-        if (!imagePart) {
-          console.error('🎨 [Nano Banana] No image data in response:', response);
-          console.error('🎨 [Nano Banana] Available parts:', parts.map((part: any) => Object.keys(part)));
-          throw new Error("Background generation failed to return image data.");
-        }
-        
-        // Handle inlineData response (base64 image data)
-        if (imagePart.inlineData) {
-          imageBytes = imagePart.inlineData.data;
-          console.log('🎨 [Nano Banana] Got inlineData background image, length:', imageBytes.length);
-        } else if (imagePart.inline_data) {
-          imageBytes = imagePart.inline_data.data;
-          console.log('🎨 [Nano Banana] Got inline_data background image, length:', imageBytes.length);
-        } else {
-          console.error('🎨 [Nano Banana] No image data found in response part:', imagePart);
-          throw new Error("Background generation failed to return image data.");
-        }
+      // Handle Gemini response format (same for both refinement and new generation)
+      const generateContentResponse = response as any;
+      const candidates = generateContentResponse?.candidates;
+      if (!candidates || candidates.length === 0) {
+        console.error('🎨 [Nano Banana] No candidates in response:', response);
+        throw new Error("Background generation failed to return image data.");
+      }
+      
+      const content = candidates[0]?.content;
+      if (!content) {
+        console.error('🎨 [Nano Banana] No content in response:', response);
+        throw new Error("Background generation failed to return image data.");
+      }
+      
+      const parts = content.parts;
+      if (!parts || parts.length === 0) {
+        console.error('🎨 [Nano Banana] No parts in response:', response);
+        throw new Error("Background generation failed to return image data.");
+      }
+      
+      // Look for image data in the response
+      const imagePart = parts.find((part: any) => part.inlineData || part.inline_data);
+      if (!imagePart) {
+        console.error('🎨 [Nano Banana] No image data in response:', response);
+        console.error('🎨 [Nano Banana] Available parts:', parts.map((part: any) => Object.keys(part)));
+        throw new Error("Background generation failed to return image data.");
+      }
+      
+      // Handle inlineData response (base64 image data)
+      if (imagePart.inlineData) {
+        imageBytes = imagePart.inlineData.data;
+        console.log('🎨 [Nano Banana] Got inlineData background image, length:', imageBytes.length);
+      } else if (imagePart.inline_data) {
+        imageBytes = imagePart.inline_data.data;
+        console.log('🎨 [Nano Banana] Got inline_data background image, length:', imageBytes.length);
       } else {
-        // Handle Imagen API response for new image generation
-        if (!response.predictions || response.predictions.length === 0) {
-          console.error('🎨 [Nano Banana] No predictions in Imagen response:', response);
-          throw new Error("Background generation failed to return image data.");
-        }
-        
-        const firstPrediction = response.predictions[0];
-        if (!firstPrediction.bytesBase64Encoded) {
-          console.error('🎨 [Nano Banana] No image data in Imagen response:', response);
-          throw new Error("Background generation failed to return image data.");
-        }
-        
-        imageBytes = firstPrediction.bytesBase64Encoded;
-        console.log('🎨 [Nano Banana] Got image from Imagen API, length:', imageBytes.length);
+        console.error('🎨 [Nano Banana] No image data found in response part:', imagePart);
+        throw new Error("Background generation failed to return image data.");
       }
       
       // Upload base64 image to WHOP storage and return URL
@@ -926,7 +910,7 @@ Requirements:
   }
 
   /**
-   * Generate multiple image variations with styles using Imagen 3.0
+   * Generate multiple image variations with styles using Gemini (gemini-2.5-flash-image)
    */
   async generateImageVariations(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
     console.log('🎨 [Nano Banana] Starting image variations generation:', request);
@@ -948,21 +932,30 @@ Requirements:
         No text overlays, labels, or captions.
         Ensure the entire image is filled with thematic content.`;
         
-        const response = await this.genAI.models.generateImages({
-          model: 'imagen-4.0-generate-001',
-          prompt: enhancedPrompt,
-          config: {
-            numberOfImages: 1,
-            includeRaiReason: true,
-          },
-        });
+        // Use Gemini for image generation
+        const response = await this.genAI.models.generateContent({
+          model: this.BACKGROUND_MODEL,
+          contents: [{
+            parts: [{ text: enhancedPrompt }]
+          }]
+        } as any);
 
-        const generatedImages = response?.generatedImages;
-        if (generatedImages && generatedImages.length > 0) {
-          const imageBytes = generatedImages[0]?.image?.imageBytes;
-          if (imageBytes) {
-            const imageUrl = `data:image/png;base64,${imageBytes}`;
-            images.push(imageUrl);
+        // Handle Gemini response format
+        const candidates = response?.candidates;
+        if (candidates && candidates.length > 0) {
+          const content = candidates[0]?.content;
+          if (content) {
+            const parts = content.parts;
+            if (parts && parts.length > 0) {
+              const imagePart = parts.find((part: any) => part.inlineData || part.inline_data);
+              if (imagePart) {
+                const imageBytes = (imagePart as any).inlineData?.data || (imagePart as any).inline_data?.data;
+                if (imageBytes) {
+                  const imageUrl = `data:image/png;base64,${imageBytes}`;
+                  images.push(imageUrl);
+                }
+              }
+            }
           }
         }
       }

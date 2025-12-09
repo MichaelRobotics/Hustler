@@ -11,6 +11,7 @@ interface UseThemeApplicationProps {
   legacyTheme: LegacyTheme;
   fixedTextStyles: any;
   backgroundAttachmentUrl: string | null;
+  uploadedBackground: string | null;
   originTemplate: any | null;
   applyThemeColorsToText: (text: any, type: 'header' | 'subheader' | 'promo') => string;
   setProducts: (products: any[] | ((prev: any[]) => any[])) => void;
@@ -26,6 +27,7 @@ export function useThemeApplication({
   legacyTheme,
   fixedTextStyles,
   backgroundAttachmentUrl,
+  uploadedBackground,
   originTemplate,
   applyThemeColorsToText,
   setProducts,
@@ -144,22 +146,33 @@ export function useThemeApplication({
     }));
 
     // Update background image to match new theme
-    // When switching themes, preserve banner background if it's the company theme with a banner
+    // When switching themes, preserve background if:
+    // 1. Banner image is present (companyBannerImageUrl), OR
+    // 2. There is an uploaded background image (uploadedBackground or backgroundAttachmentUrl)
     // Otherwise, use theme's placeholder image
     let backgroundUrl: string | null = null;
     
-    if (currentSeason === 'Company' && originTemplate?.companyBannerImageUrl) {
-      // Preserve banner background for company theme
-      backgroundUrl = originTemplate.companyBannerImageUrl;
-      console.log('🎨 Preserving banner background for company theme:', backgroundUrl);
+    const hasBannerImage = originTemplate?.companyBannerImageUrl;
+    const hasUploadedBackground = uploadedBackground || backgroundAttachmentUrl;
+    
+    if (hasBannerImage || hasUploadedBackground) {
+      // Preserve existing background (banner or uploaded)
+      if (hasBannerImage) {
+        backgroundUrl = originTemplate.companyBannerImageUrl;
+        console.log('🎨 Preserving banner background when switching theme:', backgroundUrl);
+      } else if (hasUploadedBackground) {
+        backgroundUrl = uploadedBackground || backgroundAttachmentUrl;
+        console.log('🎨 Preserving uploaded background when switching theme:', backgroundUrl);
+      }
+      // Don't call setBackground - preserve the current background
+      console.log('🎨 Skipping background change - preserving existing background');
     } else {
-      // Use theme placeholder for all other themes
+      // Use theme placeholder for all other themes (no banner or uploaded background)
       const themePlaceholderUrl = (legacyTheme as any)?.placeholderImage || getThemePlaceholderUrl(currentSeason);
       backgroundUrl = themePlaceholderUrl;
       console.log('🎨 Applied theme background image (switching theme):', themePlaceholderUrl);
+      setBackground('generated', backgroundUrl);
     }
-    
-    setBackground('generated', backgroundUrl);
 
     prevSeasonRef.current = currentSeason;
   }, [
@@ -169,6 +182,7 @@ export function useThemeApplication({
     legacyTheme,
     fixedTextStyles,
     backgroundAttachmentUrl,
+    uploadedBackground,
     originTemplate,
     applyThemeColorsToText,
     setProducts,

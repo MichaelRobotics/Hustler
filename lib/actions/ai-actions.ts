@@ -223,11 +223,11 @@ ${badJson}
 \`\`\`
 `;
 
-			// Use the official SDK to generate content
-			const response = await genAI.models.generateContent({
-				model: "gemini-2.5-flash-preview-05-20",
-				contents: repairPrompt,
-			});
+		// Use the official SDK to generate content
+		const response = await genAI.models.generateContent({
+			model: "gemini-2.5-flash",
+			contents: repairPrompt,
+		});
 
 			let repairedText = response.text;
 			if (repairedText) {
@@ -1233,11 +1233,11 @@ export const generateFunnelFlow = async (
 			// Initialize the Google Gen AI SDK
 			const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-			// Use the official SDK to generate content
-			const response = await genAI.models.generateContent({
-				model: "gemini-2.5-flash-preview-05-20",
-				contents: prompt,
-			});
+		// Use the official SDK to generate content
+		const response = await genAI.models.generateContent({
+			model: "gemini-2.5-flash",
+			contents: prompt,
+		});
 
 			let textToProcess = response.text || "";
 
