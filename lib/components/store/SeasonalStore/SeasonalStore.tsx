@@ -253,7 +253,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setBackgroundAttachmentUrl,
     setLogoAttachmentId,
     setLogoAttachmentUrl,
-    setProducts,
+    setProducts: setProductsFromHook,
     setError,
     
     // Product Management - REMOVED (frontend-only now)
@@ -281,7 +281,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     
     // Template Management
     saveTemplate,
-    loadTemplate,
+    loadTemplate: loadTemplateFromHook,
     deleteTemplate,
     setLiveTemplate,
     updateTemplate,
@@ -320,6 +320,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Theme loading
     loadThemes,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
+  
+  // Create ref to store setProductsAndReorder for passing to hook
+  const setProductsAndReorderRef = useRef<((products: Product[] | ((prev: Product[]) => Product[])) => void) | undefined>(undefined);
   
   // Load origin template on mount
   useEffect(() => {
@@ -399,7 +402,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     deletedResourceLibraryProducts,
     legacyTheme,
     products,
-    setProducts,
+    setProducts: setProductsFromHook,
   });
 
   // Use product handlers hook
@@ -410,7 +413,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     handleAddToTemplate,
     handleRemoveFromTemplate,
   } = useProductHandlers({
-    setProducts,
+    setProducts: setProductsFromHook,
     legacyTheme,
     handleDeleteResourceLibraryProduct: (productId: string) => {
       const resourceId = handleDeleteResourceLibraryProductFromHook(productId);
@@ -453,7 +456,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       const result = fn(logoAsset);
       setLogoAsset(result);
     },
-    setProducts,
+    setProducts: setProductsFromHook,
     currentSeason,
     backgroundAttachmentUrl: backgroundAttachmentUrl ?? undefined,
     generatedBackground: generatedBackground ?? undefined,
@@ -565,16 +568,38 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const setProductsAndReorder = useCallback((newProducts: Product[] | ((prev: Product[]) => Product[])) => {
     // Handle function form
     if (typeof newProducts === 'function') {
-      setProducts((prevProducts) => {
+      setProductsFromHook((prevProducts) => {
         const updatedProducts = newProducts(prevProducts);
         return reorderProductsArray(updatedProducts);
       });
     } else {
       // Handle array form - reorder immediately
       const reordered = reorderProductsArray(newProducts);
-      setProducts(reordered);
+      setProductsFromHook(reordered);
     }
-  }, [setProducts, reorderProductsArray]);
+  }, [setProductsFromHook, reorderProductsArray]);
+
+  // Update ref so hook can access it
+  setProductsAndReorderRef.current = setProductsAndReorder;
+
+  // Wrap loadTemplate to use setProductsAndReorder
+  // Since we can't pass it to the hook at initialization, we'll intercept the call
+  // and manually reorder after loadTemplate completes
+  const loadTemplateWithReorder = useCallback(async (templateId: string) => {
+    await loadTemplateFromHook(templateId);
+    // After loadTemplate sets products, manually trigger reorder if resources are available
+    // The reordering effect should also catch this, but this ensures it happens
+    if (allResources.length > 0 && products.length > 0) {
+      const reordered = reorderProductsArray(products);
+      if (JSON.stringify(reordered.map(p => p.id)) !== JSON.stringify(products.map(p => p.id))) {
+        setProductsAndReorder(reordered);
+      }
+    }
+  }, [loadTemplateFromHook, setProductsAndReorder, reorderProductsArray, allResources, products]);
+
+  // Actually, better approach: Modify the hook to accept setProducts override
+  // But since we can't do that easily, let's use a different strategy:
+  // Create a wrapper that intercepts setProducts calls
 
   // CRITICAL: Pass Market Stall resources to filter template products
   // Use previewTemplate if in preview mode, otherwise use previewLiveTemplate prop
@@ -607,64 +632,103 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     isTemplateLoaded,
   });
 
-  // Track when allResources become available (for first template load)
-  const allResourcesAvailableRef = useRef(allResources.length > 0);
+  // Track previous values to detect changes
   const previousResourcesLengthRef = useRef(allResources.length);
-  const productsSetBeforeResourcesRef = useRef(false);
+  const previousProductsLengthRef = useRef(products.length);
+  const previousTemplateIdRef = useRef<string | null>(null);
+  const previousProductsIdsRef = useRef<string[]>([]);
+  const isFirstTemplateLoadRef = useRef(true); // Track if this is the first template load
   
-  // Track when products are set before resources are available
-  useEffect(() => {
-    if (products.length > 0 && allResources.length === 0) {
-      productsSetBeforeResourcesRef.current = true;
-    }
-  }, [products.length, allResources.length]);
-  
-  useEffect(() => {
-    if (allResources.length > 0 && previousResourcesLengthRef.current === 0) {
-      // Resources just became available
-      allResourcesAvailableRef.current = true;
-      // Reset reorder flag if products were set before resources
-      if (productsSetBeforeResourcesRef.current && products.length > 0) {
-        initialReorderDoneRef.current = false;
-        productsSetBeforeResourcesRef.current = false;
-      }
-    }
-    previousResourcesLengthRef.current = allResources.length;
-  }, [allResources.length, products.length]);
-
   // Auto-reorder products to Market Stall order when template is first loaded or products change
   useEffect(() => {
     // Check if template has changed (new template loaded)
-    // Use currentlyLoadedTemplateId from database hook, fallback to previewLiveTemplate
     const currentTemplateId = currentlyLoadedTemplateId || previewLiveTemplate?.id || null;
-    if (currentTemplateId !== lastTemplateIdRef.current) {
+    const templateChanged = currentTemplateId !== previousTemplateIdRef.current;
+    
+    // Detect first template load: when templateId transitions from null to a value
+    const isFirstLoad = isFirstTemplateLoadRef.current && currentTemplateId !== null && previousTemplateIdRef.current === null;
+    if (isFirstLoad) {
+      console.log('🔄 First template load detected:', currentTemplateId);
+      initialReorderDoneRef.current = false; // Ensure reorder happens on first load
+    }
+    
+    // Check if products array changed (new products set, not just reordered)
+    const currentProductIds = products.map(p => String(p.id));
+    const productsChanged = JSON.stringify(currentProductIds) !== JSON.stringify(previousProductsIdsRef.current);
+    
+    // Check if products were just set (length changed from 0 to >0)
+    const productsJustSet = products.length > 0 && previousProductsLengthRef.current === 0;
+    
+    // Check if resources just became available (length transitioned from 0 to >0)
+    const resourcesJustBecameAvailable = allResources.length > 0 && previousResourcesLengthRef.current === 0;
+    
+    // CRITICAL: Check if resources became available AFTER products were already set
+    // This handles the first load race condition where products load before resources
+    const resourcesBecameAvailableWithProducts = 
+      resourcesJustBecameAvailable && 
+      products.length > 0 && 
+      previousProductsLengthRef.current > 0; // Products were already set before resources arrived
+    
+    if (templateChanged) {
       // Template changed, reset the initial reorder flag
       initialReorderDoneRef.current = false;
-      lastTemplateIdRef.current = currentTemplateId;
+      previousTemplateIdRef.current = currentTemplateId;
+      isFirstTemplateLoadRef.current = false; // No longer first load after first template change
+      console.log('🔄 Template changed, resetting reorder flag:', currentTemplateId);
     }
 
     // Perform reorder when:
-    // 1. Template is loaded AND initial reorder not done yet, OR
-    // 2. Products exist and resources just became available (for first template load), OR
-    // 3. Products exist and resources are available (for database hook template loads, regardless of isTemplateLoaded)
-    const resourcesJustBecameAvailable = allResources.length > 0 && previousResourcesLengthRef.current === 0;
+    // 1. Resources are available AND products exist AND initial reorder not done yet
+    // 2. AND (resources just became available OR products just set OR template changed OR products changed OR first load OR resources became available with existing products)
+    // 3. SAFETY FALLBACK: If products exist and resources exist and reorder not done, always attempt reorder (for first load safety)
     const shouldReorder = 
       allResources.length > 0 && 
       products.length > 0 &&
-      !initialReorderDoneRef.current;
+      !initialReorderDoneRef.current &&
+      (
+        resourcesJustBecameAvailable || 
+        productsJustSet || 
+        templateChanged || 
+        productsChanged || 
+        isFirstLoad ||
+        resourcesBecameAvailableWithProducts ||
+        // Safety fallback: if both exist and reorder not done, attempt it (catches edge cases)
+        (isFirstTemplateLoadRef.current && allResources.length > 0 && products.length > 0)
+      );
 
     if (shouldReorder) {
+      const reason = 
+        isFirstLoad ? 'first template load' :
+        resourcesBecameAvailableWithProducts ? 'resources became available after products were set' :
+        resourcesJustBecameAvailable ? 'resources became available' : 
+        productsJustSet ? 'products just set' : 
+        templateChanged ? 'template changed' : 
+        productsChanged ? 'products changed' : 
+        'safety fallback';
+        
+      console.log('🔄 Reordering products to Market Stall order:', {
+        templateId: currentTemplateId,
+        productCount: products.length,
+        resourceCount: allResources.length,
+        previousResourceCount: previousResourcesLengthRef.current,
+        previousProductCount: previousProductsLengthRef.current,
+        reason,
+        isFirstLoad: isFirstTemplateLoadRef.current
+      });
+      
       const reordered = reorderProductsArray(products);
       // Only update if order actually changed
       if (JSON.stringify(reordered.map(p => p.id)) !== JSON.stringify(products.map(p => p.id))) {
-        setProducts(reordered);
+        setProductsFromHook(reordered);
         initialReorderDoneRef.current = true;
         // Update snapshot after reorder to prevent false change detection
         updateOrderSnapshot();
         console.log('✅ Reordered products to Market Stall order:', {
           templateId: currentTemplateId,
           productCount: reordered.length,
-          reason: resourcesJustBecameAvailable ? 'resources became available' : (isTemplateLoaded ? 'template loaded' : 'products set')
+          originalOrder: products.map(p => p.id).slice(0, 3),
+          newOrder: reordered.map(p => p.id).slice(0, 3),
+          reason
         });
       } else {
         // Order is already correct, just mark as done
@@ -672,20 +736,31 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         updateOrderSnapshot();
         console.log('✅ Products already in correct Market Stall order');
       }
+      
+      // Mark first load as complete after successful reorder
+      if (isFirstLoad) {
+        isFirstTemplateLoadRef.current = false;
+      }
     }
-  }, [isTemplateLoaded, allResources, products, reorderProductsArray, setProducts, updateOrderSnapshot, currentlyLoadedTemplateId, previewLiveTemplate?.id]);
+    
+    // Update refs for next comparison
+    previousResourcesLengthRef.current = allResources.length;
+    previousProductsLengthRef.current = products.length;
+    previousTemplateIdRef.current = currentTemplateId;
+    previousProductsIdsRef.current = currentProductIds;
+  }, [isTemplateLoaded, allResources, products, reorderProductsArray, setProductsFromHook, updateOrderSnapshot, currentlyLoadedTemplateId, previewLiveTemplate?.id]);
 
   // Auto-sync product order when Market Stall order changes (after initial load)
   useEffect(() => {
     if (hasOrderChanged && isTemplateLoaded && initialReorderDoneRef.current && allResources.length > 0 && products.length > 0) {
       const reordered = reorderProductsArray(products);
       if (JSON.stringify(reordered.map(p => p.id)) !== JSON.stringify(products.map(p => p.id))) {
-        setProducts(reordered);
+        setProductsFromHook(reordered);
         updateOrderSnapshot();
         console.log('✅ Auto-synced SeasonalStore products to Market Stall order');
       }
     }
-  }, [hasOrderChanged, isTemplateLoaded, allResources, products, reorderProductsArray, setProducts, updateOrderSnapshot]);
+  }, [hasOrderChanged, isTemplateLoaded, allResources, products, reorderProductsArray, setProductsFromHook, updateOrderSnapshot]);
 
 
 
@@ -696,7 +771,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const { handleProductImageUpload } = useProductImageUpload({
     setUploadingImage,
     setError,
-    setProducts,
+    setProducts: setProductsFromHook,
     updateProduct,
     currentSeason,
   });
@@ -875,7 +950,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         console.log('📂 Exiting Live Preview - loading latest non-live template:', latestTemplate.name);
         // Load the latest non-live template
         // Snapshot will be taken automatically by useStoreSnapshot when template finishes loading
-        await loadTemplate(latestTemplate.id);
+        await loadTemplateWithReorder(latestTemplate.id);
       } else {
         console.log('⚠️ No non-live templates found to load after exiting Live Preview');
       }
@@ -884,9 +959,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       console.log('📂 Exiting preview - loading previewed template:', templateToLoad.name);
       // Load the template that was being previewed
       // Snapshot will be taken automatically by useStoreSnapshot when template finishes loading
-      await loadTemplate(templateToLoad.id);
+      await loadTemplateWithReorder(templateToLoad.id);
     }
-  }, [previewTemplate, liveTemplate, templates, loadTemplate, handleExitPreviewFromHook]);
+  }, [previewTemplate, liveTemplate, templates, loadTemplateWithReorder, handleExitPreviewFromHook]);
 
   // Preview handler - use hook's function directly
   const handlePreviewTemplate = handlePreviewTemplateFromHook;
@@ -905,7 +980,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     resetSnapshot();
     
     // Restore all state from snapshot
-    setProducts(snapshotData.products);
+    setProductsFromHook(snapshotData.products);
     setFloatingAssets(snapshotData.floatingAssets);
     setCurrentSeason(snapshotData.currentSeason);
     setFixedTextStyles(snapshotData.fixedTextStyles);
@@ -929,7 +1004,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setPromoButton(snapshotData.promoButton);
     
     // Snapshot will be updated automatically by useStoreSnapshot when state stabilizes
-  }, [restoreFromSnapshot, resetSnapshot, setProducts, setFloatingAssets, setCurrentSeason, setFixedTextStyles, setLogoAsset, setBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl, setLogoAttachmentId, setLogoAttachmentUrl, setPromoButton]);
+  }, [restoreFromSnapshot, resetSnapshot, setProductsFromHook, setFloatingAssets, setCurrentSeason, setFixedTextStyles, setLogoAsset, setBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl, setLogoAttachmentId, setLogoAttachmentUrl, setPromoButton]);
 
   // Determine if we're in preview mode (either from prop or internal state)
   const effectiveIsStorePreview = isStorePreview || isInPreviewMode;
@@ -942,7 +1017,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     liveTemplate,
     lastEditedTemplate,
     currentSeason,
-    loadTemplate,
+    loadTemplate: loadTemplateWithReorder,
     saveLastActiveTheme,
   });
 
@@ -967,7 +1042,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     products, // Pass template products
     deletedResourceLibraryProducts,
     legacyTheme,
-    setProducts, // Use setProducts instead of setThemeProducts
+    setProducts: setProductsFromHook, // Use setProducts instead of setThemeProducts
     handleProductImageUpload,
     templateResourceLibraryProductIds, // Pass template ResourceLibrary product IDs
     isTemplateLoaded, // Pass internal template loaded state
@@ -1026,7 +1101,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     backgroundAttachmentUrl,
     originTemplate,
     applyThemeColorsToText,
-    setProducts,
+    setProducts: setProductsFromHook,
     setFixedTextStyles,
     setPromoButton,
     setBackground,
@@ -1526,7 +1601,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         originTemplate={originTemplate}
         backgroundAnalysis={backgroundAnalysis}
         onClose={closeTemplateManagerAnimated}
-        loadTemplate={loadTemplate}
+        loadTemplate={loadTemplateWithReorder || loadTemplateFromHook}
         deleteTemplate={deleteTemplate}
         setLiveTemplate={setLiveTemplate}
         onPreview={handlePreviewTemplate}
@@ -1682,7 +1757,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             });
             
             // Load the new template
-            await loadTemplate(newTemplate.id);
+            await loadTemplateWithReorder(newTemplate.id);
             
             // Close template manager
             closeTemplateManagerAnimated();

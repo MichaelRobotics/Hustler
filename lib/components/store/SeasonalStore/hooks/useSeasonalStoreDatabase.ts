@@ -1780,11 +1780,106 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
           templateProducts = template.templateData.themeProducts[firstSeason];
         }
       }
+      
+      // CRITICAL: Update template product order to match Market Stall order BEFORE loading
+      // This ensures the template always has the correct order, eliminating need for reordering on display
+      if (Array.isArray(templateProducts) && templateProducts.length > 0 && typeof templateProducts[0] !== 'string') {
+        try {
+          // Fetch Market Stall resources to get current order
+          const response = await fetch(`/api/resources?experienceId=${experienceId}&limit=100`);
+          if (response.ok) {
+            const data = await response.json();
+            const marketStallResources = data.data?.resources || [];
+            const paidMarketStallResources = marketStallResources
+              .filter((r: any) => r.category === 'PAID')
+              .sort((a: any, b: any) => {
+                if (a.displayOrder !== undefined && b.displayOrder !== undefined) {
+                  return a.displayOrder - b.displayOrder;
+                }
+                if (a.displayOrder !== undefined) return -1;
+                if (b.displayOrder !== undefined) return 1;
+                return 0;
+              });
+            
+            if (paidMarketStallResources.length > 0) {
+              // Create a map of resource ID to resource
+              const resourceMap = new Map(paidMarketStallResources.map((r: any) => [r.id, r]));
+              
+              // Get Market Stall order (resource IDs in displayOrder)
+              const marketStallOrder = paidMarketStallResources.map((r: any): string => r.id);
+              
+              // Reorder template products to match Market Stall order
+              const reorderedTemplateProducts = marketStallOrder
+                .map((resourceId: string) => {
+                  const resource = resourceMap.get(resourceId) as any;
+                  // Find product that matches this resource ID
+                  const product = templateProducts.find(
+                    (p: Product) =>
+                      (typeof p.id === 'string' && p.id === `resource-${resourceId}`) ||
+                      (p.whopProductId && resource && resource.whopProductId === p.whopProductId)
+                  );
+                  return product;
+                })
+                .filter((p: Product | undefined): p is Product => p !== undefined);
+              
+              // Add any products that weren't in the Market Stall order
+              const remainingProducts = templateProducts.filter(
+                (p: Product) => !reorderedTemplateProducts.includes(p)
+              );
+              const finalReorderedProducts = [...reorderedTemplateProducts, ...remainingProducts];
+              
+              // Check if order actually changed
+              const orderChanged = JSON.stringify(finalReorderedProducts.map((p: Product) => p.id)) !== 
+                                  JSON.stringify(templateProducts.map((p: Product) => p.id));
+              
+              if (orderChanged) {
+                console.log('🔄 Updating template product order to match Market Stall order:', {
+                  templateId,
+                  templateName: template.name,
+                  originalCount: templateProducts.length,
+                  reorderedCount: finalReorderedProducts.length
+                });
+                
+                // Update template in database with reordered products
+                const updatedTemplateData = {
+                  ...template.templateData,
+                  products: finalReorderedProducts
+                };
+                
+                await updateTemplateWrapper(templateId, {
+                  templateData: updatedTemplateData
+                });
+                
+                // Update cached template
+                updateCachedTemplates(prev => {
+                  const newCache = new Map(prev);
+                  const updatedCachedTemplate = {
+                    ...template,
+                    templateData: updatedTemplateData
+                  };
+                  newCache.set(templateId, updatedCachedTemplate);
+                  return newCache;
+                });
+                
+                // Use reordered products for loading
+                templateProducts = finalReorderedProducts;
+                console.log('✅ Template product order updated to match Market Stall order');
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to update template product order, proceeding with original order:', error);
+          // Continue with original order if update fails
+        }
+      }
         
+      // Use internal setProducts (template order is now already correct, no reordering needed)
+      const setProductsFn = setProducts;
+      
       if (Array.isArray(templateProducts) && templateProducts.length > 0) {
         if (typeof templateProducts[0] === 'string') {
           // Legacy format: ResourceLibrary product IDs
-          setProducts([]);
+          setProductsFn([]);
           setTemplateResourceLibraryProductIds(templateProducts as unknown as string[]);
         } else {
           // New format: Complete frontend product state
@@ -1796,11 +1891,11 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             templateTheme,
             { preserveExisting: true }
           );
-          setProducts(processedProducts);
+          setProductsFn(processedProducts);
           setTemplateResourceLibraryProductIds([]);
         }
       } else {
-        setProducts([]);
+        setProductsFn([]);
         setTemplateResourceLibraryProductIds([]);
       }
       
