@@ -7,6 +7,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -138,10 +139,17 @@ export const StoreResourceGrid: React.FC<StoreResourceGridProps> = ({
   }, [resources]);
 
   // Configure sensors for drag and drop
+  // PointerSensor for desktop/mouse, TouchSensor for mobile/touch
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px of movement before activating drag
+        distance: 8, // Desktop: Require 8px of movement before activating drag
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200, // Mobile: Wait 200ms before activating drag to distinguish from tap
+        tolerance: 5, // Allow 5px of movement during delay period
       },
     }),
     useSensor(KeyboardSensor, {

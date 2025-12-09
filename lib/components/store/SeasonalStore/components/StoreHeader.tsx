@@ -553,7 +553,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     
     // Show sub-toolbar for color picker or font size
     if (activeSubToolbar === 'color' || activeSubToolbar === 'fontSize') {
-      return createPortal(
+    return createPortal(
         <>
           {/* Transparent overlay to intercept clicks outside toolbar */}
           <div
@@ -565,14 +565,34 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // Blur the contentEditable element to exit edit mode
-              if (elementRef) {
-                elementRef.blur();
-              }
+              // Close toolbar first to prevent onBlur handler from interfering
               setActiveSubToolbar(null);
               setShowColorPicker(false);
               setShowFontSize(false);
               onClose();
+              // Then blur the contentEditable element to exit edit mode
+              if (elementRef) {
+                // Clear selection first
+                const selection = window.getSelection();
+                if (selection) {
+                  selection.removeAllRanges();
+                }
+                // Force blur to exit edit mode
+                elementRef.blur();
+                // Focus on body to ensure contentEditable loses focus completely
+                if (document.body) {
+                  document.body.focus();
+                }
+                // Additional cleanup: ensure focus is removed
+                setTimeout(() => {
+                  if (document.activeElement === elementRef) {
+                    elementRef.blur();
+                    if (document.body) {
+                      document.body.focus();
+                    }
+                  }
+                }, 0);
+              }
             }}
             onMouseDown={(e) => {
               e.preventDefault();
@@ -708,32 +728,52 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            // Blur the contentEditable element to exit edit mode
-            if (elementRef) {
-              elementRef.blur();
-            }
+            // Close toolbar first to prevent onBlur handler from interfering
             onClose();
+            // Then blur the contentEditable element to exit edit mode
+            if (elementRef) {
+              // Clear selection first
+              const selection = window.getSelection();
+              if (selection) {
+                selection.removeAllRanges();
+              }
+              // Force blur to exit edit mode
+              elementRef.blur();
+              // Focus on body to ensure contentEditable loses focus completely
+              if (document.body) {
+                document.body.focus();
+              }
+              // Additional cleanup: ensure focus is removed
+              setTimeout(() => {
+                if (document.activeElement === elementRef) {
+                  elementRef.blur();
+                  if (document.body) {
+                    document.body.focus();
+                  }
+                }
+              }, 0);
+            }
           }}
           onMouseDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
           }}
         />
-        <div
-          ref={toolbarRef}
-          className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-          style={{
-            pointerEvents: 'auto',
-            zIndex: 999999,
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            transform: 'translateX(-50%)',
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
+      <div
+        ref={toolbarRef}
+        className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
+        style={{
+          pointerEvents: 'auto',
+          zIndex: 999999,
+          top: `${position.top}px`,
+          left: `${position.left}px`,
+          transform: 'translateX(-50%)',
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
         <button
           type="button"
           onMouseDown={(e) => {
@@ -768,79 +808,79 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         >
           <Italic className="w-4 h-4" />
         </button>
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (elementRef) {
-              elementRef.focus();
-              const selection = window.getSelection();
-              if (selection && selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                let element: Element | null = null;
-                if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-                  element = range.commonAncestorContainer.parentElement;
-                } else {
-                  element = range.commonAncestorContainer as Element;
-                }
-                while (element && element !== elementRef) {
-                  const style = element.getAttribute('style');
-                  if (style) {
-                    const colorMatch = style.match(/color:\s*([^;]+)/i);
-                    if (colorMatch) {
-                      const color = colorMatch[1].trim();
-                      if (color.startsWith('rgb')) {
-                        const rgb = color.match(/\d+/g);
-                        if (rgb && rgb.length >= 3) {
-                          const hex = '#' + rgb.slice(0, 3).map(x => {
-                            const hex = parseInt(x).toString(16);
-                            return hex.length === 1 ? '0' + hex : hex;
-                          }).join('');
-                          setSelectedColor(hex);
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (elementRef) {
+                elementRef.focus();
+                const selection = window.getSelection();
+                if (selection && selection.rangeCount > 0) {
+                  const range = selection.getRangeAt(0);
+                  let element: Element | null = null;
+                  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+                    element = range.commonAncestorContainer.parentElement;
+                  } else {
+                    element = range.commonAncestorContainer as Element;
+                  }
+                  while (element && element !== elementRef) {
+                    const style = element.getAttribute('style');
+                    if (style) {
+                      const colorMatch = style.match(/color:\s*([^;]+)/i);
+                      if (colorMatch) {
+                        const color = colorMatch[1].trim();
+                        if (color.startsWith('rgb')) {
+                          const rgb = color.match(/\d+/g);
+                          if (rgb && rgb.length >= 3) {
+                            const hex = '#' + rgb.slice(0, 3).map(x => {
+                              const hex = parseInt(x).toString(16);
+                              return hex.length === 1 ? '0' + hex : hex;
+                            }).join('');
+                            setSelectedColor(hex);
+                            break;
+                          }
+                        } else if (color.startsWith('#')) {
+                          setSelectedColor(color);
                           break;
                         }
-                      } else if (color.startsWith('#')) {
-                        setSelectedColor(color);
-                        break;
                       }
                     }
+                    element = element.parentElement;
                   }
-                  element = element.parentElement;
                 }
               }
-            }
             setActiveSubToolbar('color');
-            setShowFontSize(false);
-          }}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Text Color"
-        >
-          <Palette className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Save selection before opening dropdown
-            saveSelection();
+              setShowFontSize(false);
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            title="Text Color"
+          >
+            <Palette className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              // Save selection before opening dropdown
+              saveSelection();
             setActiveSubToolbar('fontSize');
-            setShowColorPicker(false);
-          }}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Font Size"
-        >
-          <Type className="w-4 h-4" />
-        </button>
+              setShowColorPicker(false);
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            title="Font Size"
+          >
+            <Type className="w-4 h-4" />
+          </button>
         </div>
       </>,
       document.body
@@ -880,14 +920,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               if (headerMessageRef) {
                 headerMessageRef.focus();
                 // Always select all text in the field
-                const range = document.createRange();
-                range.selectNodeContents(headerMessageRef);
+                  const range = document.createRange();
+                  range.selectNodeContents(headerMessageRef);
                 const selection = window.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
                 // Apply bold to all selected text
-                document.execCommand('bold', false);
-                selection?.removeAllRanges();
+                  document.execCommand('bold', false);
+                  selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(headerMessageRef);
@@ -904,14 +944,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               if (headerMessageRef) {
                 headerMessageRef.focus();
                 // Always select all text in the field
-                const range = document.createRange();
-                range.selectNodeContents(headerMessageRef);
+                  const range = document.createRange();
+                  range.selectNodeContents(headerMessageRef);
                 const selection = window.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
                 // Apply italic to all selected text
-                document.execCommand('italic', false);
-                selection?.removeAllRanges();
+                  document.execCommand('italic', false);
+                  selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(headerMessageRef);
@@ -928,14 +968,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               if (headerMessageRef) {
                 headerMessageRef.focus();
                 // Always select all text in the field
-                const range = document.createRange();
-                range.selectNodeContents(headerMessageRef);
+                  const range = document.createRange();
+                  range.selectNodeContents(headerMessageRef);
                 const selection = window.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
                 // Apply color to all selected text
-                document.execCommand('foreColor', false, color);
-                selection?.removeAllRanges();
+                  document.execCommand('foreColor', false, color);
+                  selection?.removeAllRanges();
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(headerMessageRef);
                 setFixedTextStyles(prev => ({
@@ -1087,14 +1127,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               if (subHeaderRef) {
                 subHeaderRef.focus();
                 // Always select all text in the field
-                const range = document.createRange();
-                range.selectNodeContents(subHeaderRef);
+                  const range = document.createRange();
+                  range.selectNodeContents(subHeaderRef);
                 const selection = window.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
                 // Apply bold to all selected text
-                document.execCommand('bold', false);
-                selection?.removeAllRanges();
+                  document.execCommand('bold', false);
+                  selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(subHeaderRef);
@@ -1111,14 +1151,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               if (subHeaderRef) {
                 subHeaderRef.focus();
                 // Always select all text in the field
-                const range = document.createRange();
-                range.selectNodeContents(subHeaderRef);
+                  const range = document.createRange();
+                  range.selectNodeContents(subHeaderRef);
                 const selection = window.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
                 // Apply italic to all selected text
-                document.execCommand('italic', false);
-                selection?.removeAllRanges();
+                  document.execCommand('italic', false);
+                  selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(subHeaderRef);
@@ -1135,14 +1175,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               if (subHeaderRef) {
                 subHeaderRef.focus();
                 // Always select all text in the field
-                const range = document.createRange();
-                range.selectNodeContents(subHeaderRef);
+                  const range = document.createRange();
+                  range.selectNodeContents(subHeaderRef);
                 const selection = window.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
                 // Apply color to all selected text
-                document.execCommand('foreColor', false, color);
-                selection?.removeAllRanges();
+                  document.execCommand('foreColor', false, color);
+                  selection?.removeAllRanges();
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(subHeaderRef);
                 setFixedTextStyles(prev => ({

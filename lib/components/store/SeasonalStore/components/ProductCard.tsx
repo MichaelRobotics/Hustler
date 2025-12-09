@@ -623,7 +623,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     
     // Show sub-toolbar only for color picker
     if (activeSubToolbar === 'color') {
-      return createPortal(
+    return createPortal(
         <>
           {/* Transparent overlay to intercept clicks outside toolbar */}
           <div
@@ -635,11 +635,31 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // Blur the contentEditable element to exit edit mode
-              if (elementRef) {
-                elementRef.blur();
-              }
+              // Close toolbar first to prevent onBlur handler from interfering
               onClose();
+              // Then blur the contentEditable element to exit edit mode
+              if (elementRef) {
+                // Clear selection first
+                const selection = window.getSelection();
+                if (selection) {
+                  selection.removeAllRanges();
+                }
+                // Force blur to exit edit mode
+                elementRef.blur();
+                // Focus on body to ensure contentEditable loses focus completely
+                if (document.body) {
+                  document.body.focus();
+                }
+                // Additional cleanup: ensure focus is removed
+                setTimeout(() => {
+                  if (document.activeElement === elementRef) {
+                    elementRef.blur();
+                    if (document.body) {
+                      document.body.focus();
+                    }
+                  }
+                }, 0);
+              }
             }}
             onMouseDown={(e) => {
               e.preventDefault();
@@ -734,6 +754,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            // Blur the contentEditable element to exit edit mode
+            if (elementRef) {
+              elementRef.blur();
+            }
             onClose();
           }}
           onMouseDown={(e) => {
@@ -741,21 +765,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             e.stopPropagation();
           }}
         />
-        <div
-          ref={toolbarRef}
-          className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-          style={{
-            pointerEvents: 'auto',
-            zIndex: 999999,
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            transform: 'translateX(-50%)',
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
+      <div
+        ref={toolbarRef}
+        className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
+        style={{
+          pointerEvents: 'auto',
+          zIndex: 999999,
+          top: `${position.top}px`,
+          left: `${position.left}px`,
+          transform: 'translateX(-50%)',
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
         <button
           type="button"
           onMouseDown={(e) => {
@@ -790,47 +814,47 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         >
           <Italic className="w-4 h-4" />
         </button>
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (elementRef) {
-              elementRef.focus();
-              const selection = window.getSelection();
-              if (selection && selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                let element: Element | null = null;
-                if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-                  element = range.commonAncestorContainer.parentElement;
-                } else {
-                  element = range.commonAncestorContainer as Element;
-                }
-                while (element && element !== elementRef) {
-                  const style = element.getAttribute('style');
-                  if (style) {
-                    const colorMatch = style.match(/color:\s*([^;]+)/i);
-                    if (colorMatch) {
-                      setSelectedColor(colorMatch[1].trim());
-                      break;
-                    }
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (elementRef) {
+                elementRef.focus();
+                const selection = window.getSelection();
+                if (selection && selection.rangeCount > 0) {
+                  const range = selection.getRangeAt(0);
+                  let element: Element | null = null;
+                  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+                    element = range.commonAncestorContainer.parentElement;
+                  } else {
+                    element = range.commonAncestorContainer as Element;
                   }
-                  element = element.parentElement;
+                  while (element && element !== elementRef) {
+                    const style = element.getAttribute('style');
+                    if (style) {
+                      const colorMatch = style.match(/color:\s*([^;]+)/i);
+                      if (colorMatch) {
+                        setSelectedColor(colorMatch[1].trim());
+                        break;
+                      }
+                    }
+                    element = element.parentElement;
+                  }
                 }
               }
-            }
             setActiveSubToolbar('color');
-          }}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Text Color"
-        >
-          <Palette className="w-4 h-4" />
-        </button>
-        </div>
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            title="Text Color"
+          >
+            <Palette className="w-4 h-4" />
+          </button>
+              </div>
       </>,
       document.body
     );
@@ -1110,6 +1134,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 onUpdateProduct(product.id, { name: content });
                 if (!isClickingToolbar) {
                   setTimeout(() => {
+                    // Check if toolbar was already closed by overlay click
+                    if (!showNameToolbar) return; // Skip if already closed
+                    
                     const activeElement = document.activeElement;
                     if (!toolbarElement?.contains(activeElement)) {
                       setShowNameToolbar(false);
@@ -1248,6 +1275,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 onUpdateProduct(product.id, { description: content });
                 if (!isClickingToolbar) {
                   setTimeout(() => {
+                    // Check if toolbar was already closed by overlay click
+                    if (!showDescToolbar) return; // Skip if already closed
+                    
                     const activeElement = document.activeElement;
                     if (!toolbarElement?.contains(activeElement)) {
                       setShowDescToolbar(false);
