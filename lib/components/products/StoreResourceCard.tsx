@@ -198,14 +198,11 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
           <div
             {...dragHandleProps}
             onClick={(e) => e.stopPropagation()}
-            className="absolute top-2 left-2 z-10 p-3 sm:p-1.5 rounded-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm cursor-grab active:cursor-grabbing hover:bg-white dark:hover:bg-gray-700 transition-colors shadow-sm touch-manipulation active:scale-95"
-            style={{
-              minWidth: '44px',
-              minHeight: '44px',
-            }}
+            style={{ touchAction: 'none' }}
+            className="absolute top-2 left-2 z-10 p-1.5 rounded-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm cursor-grab active:cursor-grabbing hover:bg-white dark:hover:bg-gray-700 transition-colors shadow-sm"
             aria-label="Drag to reorder"
           >
-            <GripVertical className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
+            <GripVertical className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
           </div>
         )}
         

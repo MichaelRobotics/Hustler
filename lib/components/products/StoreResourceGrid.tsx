@@ -6,7 +6,7 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -139,17 +139,18 @@ export const StoreResourceGrid: React.FC<StoreResourceGridProps> = ({
   }, [resources]);
 
   // Configure sensors for drag and drop
-  // PointerSensor for desktop/mouse, TouchSensor for mobile/touch
+  // Use MouseSensor for mouse/pointer devices and TouchSensor for touch devices
+  // TouchSensor with delay helps distinguish drag intent from scroll gestures
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 8, // Desktop: Require 8px of movement before activating drag
+        distance: 8, // Require 8px of movement before activating drag
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 200, // Mobile: Wait 200ms before activating drag to distinguish from tap
-        tolerance: 5, // Allow 5px of movement during delay period
+        delay: 250, // Wait 250ms before activating drag (prevents accidental drags during scroll)
+        tolerance: 5, // Allow 5px movement during delay (distinguishes drag intent from scroll)
       },
     }),
     useSensor(KeyboardSensor, {
