@@ -554,21 +554,42 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     // Show sub-toolbar for color picker or font size
     if (activeSubToolbar === 'color' || activeSubToolbar === 'fontSize') {
       return createPortal(
-        <div
-          ref={toolbarRef}
-          className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-          style={{
-            pointerEvents: 'auto',
-            zIndex: 999999,
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            transform: 'translateX(-50%)',
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
+        <>
+          {/* Transparent overlay to intercept clicks outside toolbar */}
+          <div
+            className="fixed inset-0 bg-transparent"
+            style={{
+              zIndex: 999998,
+              pointerEvents: 'auto',
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setActiveSubToolbar(null);
+              setShowColorPicker(false);
+              setShowFontSize(false);
+              onClose();
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          />
+          <div
+            ref={toolbarRef}
+            className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
+            style={{
+              pointerEvents: 'auto',
+              zIndex: 999999,
+              top: `${position.top}px`,
+              left: `${position.left}px`,
+              transform: 'translateX(-50%)',
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
           {/* Back button */}
           <button
             type="button"
@@ -664,28 +685,47 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               })}
             </div>
           )}
-        </div>,
+          </div>
+        </>,
         document.body
       );
     }
     
     // Main toolbar
     return createPortal(
-      <div
-        ref={toolbarRef}
-        className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-        style={{
-          pointerEvents: 'auto',
-          zIndex: 999999,
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-          transform: 'translateX(-50%)',
-        }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      >
+      <>
+        {/* Transparent overlay to intercept clicks outside toolbar */}
+        <div
+          className="fixed inset-0 bg-transparent"
+          style={{
+            zIndex: 999998,
+            pointerEvents: 'auto',
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        />
+        <div
+          ref={toolbarRef}
+          className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
+          style={{
+            pointerEvents: 'auto',
+            zIndex: 999999,
+            top: `${position.top}px`,
+            left: `${position.left}px`,
+            transform: 'translateX(-50%)',
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
         <button
           type="button"
           onMouseDown={(e) => {
@@ -793,7 +833,8 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         >
           <Type className="w-4 h-4" />
         </button>
-      </div>,
+        </div>
+      </>,
       document.body
     );
   };
