@@ -495,7 +495,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <ArrowLeft size={20} strokeWidth={2.5} />
                 </Button>
               )}
-              <div>
+              <div className="hidden sm:block">
                 <Heading
                   size="6"
                   weight="bold"
@@ -513,7 +513,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   color="violet"
                   variant="surface"
                   onClick={openTemplateManager}
-                  className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                  className="px-3 sm:px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
                   title="Market Manager"
                 >
                   <Settings
@@ -521,7 +521,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     strokeWidth={2.5}
                     className="group-hover:rotate-90 transition-transform duration-300"
                   />
-                  <span className="ml-1">Market Manager</span>
+                  <span className="ml-1 hidden sm:inline">Market Manager</span>
                 </Button>
               )}
               {/* Save and Reset Buttons (when there are unsaved changes) */}
@@ -552,20 +552,20 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     size="3"
                     color="violet"
                     onClick={handleSaveTemplate}
-                    className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group ${
+                    className={`px-3 sm:px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group ${
                       highlightSaveButton ? 'save-highlight save-pulse shadow-violet-500/50 hover:shadow-violet-500/60' : ''
                     }`}
                     title="Save Changes"
                   >
                     <svg 
-                      className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" 
+                      className="w-5 h-5 sm:mr-2 group-hover:scale-110 transition-transform duration-300" 
                       fill="none" 
                       stroke="currentColor" 
                       viewBox="0 0 24 24"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                     </svg>
-                    <span>Save</span>
+                    <span className="hidden sm:inline">Save</span>
                   </Button>
                 </>
               )}
@@ -574,7 +574,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 size="3"
                 color="violet"
                 onClick={handleAddProduct}
-                className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                className="px-3 sm:px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
                 title="Select Products"
               >
                 <Package
@@ -582,7 +582,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   strokeWidth={2.5}
                   className="group-hover:scale-110 transition-transform duration-300"
                 />
-                <span className="ml-1">Products</span>
+                <span className="ml-1 hidden sm:inline">Products</span>
               </Button>
             </div>
           </div>
@@ -594,11 +594,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="relative">
               <button 
                 onClick={() => setIsChatOpen(false)}
-                className={`group relative z-10 flex items-center justify-center px-6 py-3 text-sm rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass} ${getHoverRingClass(promoButton.ringHoverClass)} ${promoButton.buttonClass} shadow-2xl`}
+                className={`group relative z-10 flex items-center justify-center px-3 sm:px-6 py-3 text-sm rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ${promoButton.ringClass} ${getHoverRingClass(promoButton.ringHoverClass)} ${promoButton.buttonClass} shadow-2xl`}
                 title="Hide Chat"
               >
                 {/* Chat Icon with 3 dots for Hide Chat */}
-                <div className="w-5 h-5 text-white relative z-10 mr-2">
+                <div className="w-5 h-5 text-white relative z-10 sm:mr-2">
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
@@ -611,7 +611,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     </div>
                   </div>
                 </div>
-                <span className="text-sm font-bold">HIDE CHAT</span>
+                <span className="text-sm font-bold hidden sm:inline">HIDE CHAT</span>
               </button>
               {/* Below-button glow (positioned vertically lower than the button) */}
               <span className={`pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-full max-w-[110%] h-6 opacity-0 group-hover:opacity-60 blur-xl transition-opacity duration-500 ${getGlowBgClass(promoButton.ringHoverClass)}`}></span>
