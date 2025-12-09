@@ -1303,6 +1303,22 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-8 py-6 bg-gray-50 dark:bg-gray-950 overflow-x-visible">
             <div className="space-y-6 min-w-0">
+              {/* Edit Product Page Button - Only for FILE type products */}
+              {currentProduct?.type === "FILE" && (
+                <div className="mb-4">
+                  <Button
+                    size="3"
+                    color="violet"
+                    variant="solid"
+                    onClick={() => setShowProductPageModal(true)}
+                    className="w-full !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+                  >
+                    <Eye size={16} strokeWidth={2.5} />
+                    <span>Edit Product Page</span>
+                  </Button>
+                </div>
+              )}
+              
               {productEditor.productId !== null && (
                 <>
                   {productEditor.target !== 'button' && (
@@ -1724,149 +1740,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         </Heading>
                         
                         <div className="space-y-5 min-w-0">
-                        {/* Button Text (per-product) */}
-                        <div>
-                          <Text
-                            as="label"
-                            size="3"
-                            weight="medium"
-                            className="block mb-3"
-                          >
-                            Button Text (This card only)
-                          </Text>
-                          <div
-                            ref={setProductButtonTextRef}
-                            contentEditable
-                            onInput={(e) => {
-                              const target = e.target as HTMLDivElement;
-                              const html = target.innerHTML;
-                              updatePlaceholder(target);
-                              if (productEditor.productId !== null) {
-                                updateProduct(productEditor.productId, { buttonText: html });
-                              }
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (productButtonTextRef) {
-                                productButtonTextRef.focus();
-                                const selection = window.getSelection();
-                                if (selection && productButtonTextRef.textContent === '') {
-                                  const range = document.createRange();
-                                  range.selectNodeContents(productButtonTextRef);
-                                  range.collapse(false);
-                                  selection.removeAllRanges();
-                                  selection.addRange(range);
-                                }
-                              }
-                              setShowProductButtonToolbar(true);
-                            }}
-                            onSelect={() => {
-                              setShowProductButtonToolbar(true);
-                            }}
-                            onFocus={() => {
-                              if (productButtonTextRef && productButtonTextRef.textContent === '') {
-                                const selection = window.getSelection();
-                                if (selection) {
-                                  const range = document.createRange();
-                                  range.selectNodeContents(productButtonTextRef);
-                                  range.collapse(false);
-                                  selection.removeAllRanges();
-                                  selection.addRange(range);
-                                }
-                              }
-                            }}
-                            onBlur={(e) => {
-                              const html = (e.target as HTMLDivElement).innerHTML;
-                              if (productEditor.productId !== null) {
-                                updateProduct(productEditor.productId, { buttonText: html });
-                              }
-                              setTimeout(() => {
-                                if (!productButtonToolbarRef.current?.contains(document.activeElement)) {
-                                  setShowProductButtonToolbar(false);
-                                  setShowProductButtonColorPicker(false);
-                                  setShowProductButtonEmojiPicker(false);
-                                  setShowProductButtonFontSize(false);
-                                }
-                              }, 200);
-                            }}
-                            className="w-full px-4 py-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 min-h-[48px]"
-                            data-placeholder="Enter button text"
-                            style={{ boxSizing: 'border-box' }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          />
-                          <FormattingToolbar
-                            show={showProductButtonToolbar}
-                            elementRef={productButtonTextRef}
-                            toolbarRef={productButtonToolbarRef}
-                            showColorPicker={showProductButtonColorPicker}
-                            setShowColorPicker={setShowProductButtonColorPicker}
-                            showEmojiPicker={showProductButtonEmojiPicker}
-                            setShowEmojiPicker={setShowProductButtonEmojiPicker}
-                            showFontSize={showProductButtonFontSize}
-                            setShowFontSize={setShowProductButtonFontSize}
-                            selectedColor={selectedProductButtonColor}
-                            setSelectedColor={setSelectedProductButtonColor}
-                            quickColors={quickColors}
-                            fontSizeOptions={fontSizeOptions}
-                            emojiDatabase={EMOJI_DATABASE}
-                            hideFontSize={true}
-                            hideBoldItalic={true}
-                            onBold={() => {
-                              if (productButtonTextRef) {
-                                productButtonTextRef.focus();
-                                const selection = window.getSelection();
-                                if (selection && selection.rangeCount === 0) {
-                                  const range = document.createRange();
-                                  range.selectNodeContents(productButtonTextRef);
-                                  range.collapse(false);
-                                  selection.removeAllRanges();
-                                  selection.addRange(range);
-                                }
-                                document.execCommand('bold', false);
-                                const html = productButtonTextRef.innerHTML;
-                                if (productEditor.productId !== null) {
-                                  updateProduct(productEditor.productId, { buttonText: html });
-                                }
-                              }
-                            }}
-                            onItalic={() => {
-                              if (productButtonTextRef) {
-                                productButtonTextRef.focus();
-                                const selection = window.getSelection();
-                                if (selection && selection.rangeCount === 0) {
-                                  const range = document.createRange();
-                                  range.selectNodeContents(productButtonTextRef);
-                                  range.collapse(false);
-                                  selection.removeAllRanges();
-                                  selection.addRange(range);
-                                }
-                                document.execCommand('italic', false);
-                                const html = productButtonTextRef.innerHTML;
-                                if (productEditor.productId !== null) {
-                                  updateProduct(productEditor.productId, { buttonText: html });
-                                }
-                              }
-                            }}
-                            onColorChange={(color) => {
-                              if (productButtonTextRef) {
-                                document.execCommand('foreColor', false, color);
-                                const html = productButtonTextRef.innerHTML;
-                                if (productEditor.productId !== null) {
-                                  updateProduct(productEditor.productId, { buttonText: html });
-                                }
-                              }
-                            }}
-                            onEmojiSelect={(emoji) => {
-                              if (productButtonTextRef) {
-                                const html = productButtonTextRef.innerHTML;
-                                if (productEditor.productId !== null) {
-                                  updateProduct(productEditor.productId, { buttonText: html });
-                                }
-                              }
-                            }}
-                            onFontSizeChange={() => {}}
-                          />
-                        </div>
                         
                         {/* Button Style for individual products */}
                         <div>
@@ -1956,27 +1829,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         </div>
                       </div>
                     </Card>
-                    
-                    {/* Edit Product Page Button - Only for FILE type products */}
-                    {currentProduct?.type === "FILE" && (
-                      <Card 
-                        className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        <div className="fui-reset px-6 py-6">
-                          <Button
-                            size="3"
-                            color="blue"
-                            onClick={() => setShowProductPageModal(true)}
-                            className="w-full shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
-                          >
-                            <Eye className="w-5 h-5 mr-2" />
-                            Edit Product Page
-                          </Button>
-                        </div>
-                      </Card>
-                    )}
                     </>
                   )}
             
@@ -2125,137 +1977,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     </Heading>
                     
                     <div className="space-y-5 min-w-0">
-                    {/* Claim Button Text */}
-                    <div>
-                      <Text
-                        as="label"
-                        size="3"
-                        weight="medium"
-                        className="block mb-3"
-                      >
-                        Button Text
-                      </Text>
-                      <div
-                        ref={setClaimButtonTextRef}
-                        contentEditable
-                        onInput={(e) => {
-                          const target = e.target as HTMLDivElement;
-                          const html = target.innerHTML;
-                          updatePlaceholder(target);
-                          setPromoButton(prev => ({ ...prev, text: html }));
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (claimButtonTextRef) {
-                            claimButtonTextRef.focus();
-                            const selection = window.getSelection();
-                            if (selection && claimButtonTextRef.textContent === '') {
-                              const range = document.createRange();
-                              range.selectNodeContents(claimButtonTextRef);
-                              range.collapse(false);
-                              selection.removeAllRanges();
-                              selection.addRange(range);
-                            }
-                          }
-                          setShowClaimButtonToolbar(true);
-                        }}
-                        onSelect={() => {
-                          setShowClaimButtonToolbar(true);
-                        }}
-                        onFocus={() => {
-                          if (claimButtonTextRef && claimButtonTextRef.textContent === '') {
-                            const selection = window.getSelection();
-                            if (selection) {
-                              const range = document.createRange();
-                              range.selectNodeContents(claimButtonTextRef);
-                              range.collapse(false);
-                              selection.removeAllRanges();
-                              selection.addRange(range);
-                            }
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const html = (e.target as HTMLDivElement).innerHTML;
-                          setPromoButton(prev => ({ ...prev, text: html }));
-                          setTimeout(() => {
-                            if (!claimButtonToolbarRef.current?.contains(document.activeElement)) {
-                              setShowClaimButtonToolbar(false);
-                              setShowClaimButtonColorPicker(false);
-                              setShowClaimButtonEmojiPicker(false);
-                              setShowClaimButtonFontSize(false);
-                            }
-                          }, 200);
-                        }}
-                        className="w-full px-4 py-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 min-h-[48px]"
-                        data-placeholder="Enter claim button text"
-                        style={{ boxSizing: 'border-box' }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      />
-                      <FormattingToolbar
-                        show={showClaimButtonToolbar}
-                        elementRef={claimButtonTextRef}
-                        toolbarRef={claimButtonToolbarRef}
-                        showColorPicker={showClaimButtonColorPicker}
-                        setShowColorPicker={setShowClaimButtonColorPicker}
-                        showEmojiPicker={showClaimButtonEmojiPicker}
-                        setShowEmojiPicker={setShowClaimButtonEmojiPicker}
-                        showFontSize={showClaimButtonFontSize}
-                        setShowFontSize={setShowClaimButtonFontSize}
-                        selectedColor={selectedClaimButtonColor}
-                        setSelectedColor={setSelectedClaimButtonColor}
-                        quickColors={quickColors}
-                        fontSizeOptions={fontSizeOptions}
-                        emojiDatabase={EMOJI_DATABASE}
-                        hideFontSize={true}
-                        hideBoldItalic={true}
-                        onBold={() => {
-                          if (claimButtonTextRef) {
-                            claimButtonTextRef.focus();
-                            const selection = window.getSelection();
-                            if (selection && selection.rangeCount === 0) {
-                              const range = document.createRange();
-                              range.selectNodeContents(claimButtonTextRef);
-                              range.collapse(false);
-                              selection.removeAllRanges();
-                              selection.addRange(range);
-                            }
-                            document.execCommand('bold', false);
-                            const html = claimButtonTextRef.innerHTML;
-                            setPromoButton(prev => ({ ...prev, text: html }));
-                          }
-                        }}
-                        onItalic={() => {
-                          if (claimButtonTextRef) {
-                            claimButtonTextRef.focus();
-                            const selection = window.getSelection();
-                            if (selection && selection.rangeCount === 0) {
-                              const range = document.createRange();
-                              range.selectNodeContents(claimButtonTextRef);
-                              range.collapse(false);
-                              selection.removeAllRanges();
-                              selection.addRange(range);
-                            }
-                            document.execCommand('italic', false);
-                            const html = claimButtonTextRef.innerHTML;
-                            setPromoButton(prev => ({ ...prev, text: html }));
-                          }
-                        }}
-                        onColorChange={(color) => {
-                          if (claimButtonTextRef) {
-                            document.execCommand('foreColor', false, color);
-                            const html = claimButtonTextRef.innerHTML;
-                            setPromoButton(prev => ({ ...prev, text: html }));
-                          }
-                        }}
-                        onEmojiSelect={(emoji) => {
-                          if (claimButtonTextRef) {
-                            const html = claimButtonTextRef.innerHTML;
-                            setPromoButton(prev => ({ ...prev, text: html }));
-                          }
-                        }}
-                        onFontSizeChange={() => {}}
-                      />
-                    </div>
                     
                     {/* Claim Button Class via presets */}
                     <div>

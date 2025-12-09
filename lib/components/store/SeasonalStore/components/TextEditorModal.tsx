@@ -5,7 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Button, Heading, Text, Card, Separator } from 'frosted-ui';
 import { Type, X, ChevronDown } from 'lucide-react';
 import { getThemeTextColor as getThemeTextColorFromConstants } from '../actions/constants';
-import { normalizeHtmlContent } from '../utils/html';
+import { normalizeHtmlContent, decodeHtmlEntitiesForTextarea } from '../utils/html';
 
 // Helper to convert Tailwind text color class to hex
 const tailwindTextColorToHex = (textClass: string): string | null => {
@@ -206,12 +206,15 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
         styleClass: 'text-lg font-normal'
       };
       
+      // Normalize to prevent double-encoding, then decode entities for textarea display
       const normalizedContent = normalizeHtmlContent(style.content || '');
-      setLocalContent(normalizedContent);
+      // Decode HTML entities for textarea display (e.g., &nbsp; -> space)
+      const decodedContent = decodeHtmlEntitiesForTextarea(normalizedContent);
+      setLocalContent(decodedContent);
       setLocalColor(style.color);
       setLocalStyleClass(style.styleClass);
       
-      // Store initial values for comparison
+      // Store initial values for comparison (use normalized, not decoded, for comparison)
       initialContentRef.current = normalizedContent;
       initialColorRef.current = style.color;
       initialStyleClassRef.current = style.styleClass;
@@ -246,6 +249,7 @@ export const TextEditorModal: React.FC<TextEditorModalProps> = ({
     // Only save when transitioning from open to closed
     if (wasOpen && isNowClosed && editingText.targetId) {
       // Use refs to get current values (captured from local state)
+      // User input is plain text from textarea, normalize to prevent double-encoding
       const contentToSave = normalizeHtmlContent(localContentRef.current);
       const colorToSave = localColorRef.current;
       const styleClassToSave = localStyleClassRef.current;

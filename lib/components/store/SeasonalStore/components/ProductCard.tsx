@@ -4,7 +4,7 @@ import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, ZapIcon } from './Icons';
 import { Button } from 'frosted-ui';
 import { Zap, Flame, Star, Bold, Italic, Palette } from 'lucide-react';
-import { normalizeHtmlContent } from '../utils/html';
+import { normalizeHtmlContent, stripInlineColorTags } from '../utils/html';
 
 interface ProductCardProps {
   product: Product;
@@ -293,6 +293,57 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Track previous inline colors to avoid redundant DOM writes
   const prevTitleColorRef = React.useRef<string | undefined>(undefined);
   const prevDescColorRef = React.useRef<string | undefined>(undefined);
+
+  // Track previous titleClass and descClass to detect card style changes
+  const prevTitleClassRef = React.useRef<string | undefined>(product.titleClass);
+  const prevDescClassRef = React.useRef<string | undefined>(product.descClass);
+
+  // Strip inline color styles when card style changes (titleClass/descClass changes)
+  React.useEffect(() => {
+    // Only process if refs are available and values actually changed
+    if (!nameRef && !descRef) return;
+    
+    const titleClassChanged = product.titleClass !== prevTitleClassRef.current;
+    const descClassChanged = product.descClass !== prevDescClassRef.current;
+    
+    // If card style changed, strip inline colors from HTML content
+    if (titleClassChanged && nameRef) {
+      const currentContent = nameRef.innerHTML || nameRef.textContent || '';
+      if (currentContent) {
+        const cleanedContent = stripInlineColorTags(currentContent);
+        // Only update if content actually changed
+        if (cleanedContent !== currentContent) {
+          nameRef.innerHTML = cleanedContent;
+          // Update product state with cleaned content
+          onUpdateProduct(product.id, { name: cleanedContent });
+        }
+      }
+    }
+    
+    if (descClassChanged && descRef) {
+      const currentContent = descRef.innerHTML || descRef.textContent || '';
+      if (currentContent) {
+        const cleanedContent = stripInlineColorTags(currentContent);
+        // Only update if content actually changed
+        if (cleanedContent !== currentContent) {
+          descRef.innerHTML = cleanedContent;
+          // Update product state with cleaned content
+          onUpdateProduct(product.id, { description: cleanedContent });
+        }
+      }
+    }
+    
+    // Update refs for next comparison
+    prevTitleClassRef.current = product.titleClass;
+    prevDescClassRef.current = product.descClass;
+  }, [
+    product.titleClass,
+    product.descClass,
+    nameRef,
+    descRef,
+    product.id,
+    onUpdateProduct,
+  ]);
 
   // Apply card style color changes to product name and description (simplified)
   React.useEffect(() => {
@@ -895,62 +946,32 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               quickColors={quickColors}
               onBold={() => {
                 if (nameRef) {
-                  const savedSelection = window.getSelection();
-                  let savedRange: Range | null = null;
-                  if (savedSelection && savedSelection.rangeCount > 0) {
-                    savedRange = savedSelection.getRangeAt(0).cloneRange();
-                  }
                   nameRef.focus();
-                  if (savedRange) {
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                    selection?.addRange(savedRange);
-                  }
+                  // Select all text in the field
+                  const range = document.createRange();
+                  range.selectNodeContents(nameRef);
                   const selection = window.getSelection();
-                  if (selection && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    if (!range.collapsed) {
-                      document.execCommand('bold', false);
-                    } else {
-                      selection.modify('extend', 'backward', 'word');
-                      selection.modify('extend', 'forward', 'word');
-                      if (!selection.isCollapsed) {
-                        document.execCommand('bold', false);
-                      }
-                    }
-                  }
-                  nameRef.focus();
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                  // Apply bold to all selected text
+                  document.execCommand('bold', false);
+                  selection?.removeAllRanges();
                   const content = nameRef.innerHTML || nameRef.textContent || '';
                   onUpdateProduct(product.id, { name: content });
                 }
               }}
               onItalic={() => {
                 if (nameRef) {
-                  const savedSelection = window.getSelection();
-                  let savedRange: Range | null = null;
-                  if (savedSelection && savedSelection.rangeCount > 0) {
-                    savedRange = savedSelection.getRangeAt(0).cloneRange();
-                  }
                   nameRef.focus();
-                  if (savedRange) {
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                    selection?.addRange(savedRange);
-                  }
+                  // Select all text in the field
+                  const range = document.createRange();
+                  range.selectNodeContents(nameRef);
                   const selection = window.getSelection();
-                  if (selection && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    if (!range.collapsed) {
-                      document.execCommand('italic', false);
-                    } else {
-                      selection.modify('extend', 'backward', 'word');
-                      selection.modify('extend', 'forward', 'word');
-                      if (!selection.isCollapsed) {
-                        document.execCommand('italic', false);
-                      }
-                    }
-                  }
-                  nameRef.focus();
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                  // Apply italic to all selected text
+                  document.execCommand('italic', false);
+                  selection?.removeAllRanges();
                   const content = nameRef.innerHTML || nameRef.textContent || '';
                   onUpdateProduct(product.id, { name: content });
                 }
@@ -958,18 +979,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               onColorChange={(color) => {
                 if (nameRef) {
                   nameRef.focus();
+                  // Always select all text in the field
+                  const range = document.createRange();
+                  range.selectNodeContents(nameRef);
                   const selection = window.getSelection();
-                  if (selection && selection.rangeCount > 0) {
-                    document.execCommand('foreColor', false, color);
-                  } else {
-                    // If no selection, select all and apply color
-                    const range = document.createRange();
-                    range.selectNodeContents(nameRef);
-                    selection?.removeAllRanges();
-                    selection?.addRange(range);
-                    document.execCommand('foreColor', false, color);
-                    selection?.removeAllRanges();
-                  }
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                  // Apply color to all selected text
+                  document.execCommand('foreColor', false, color);
+                  selection?.removeAllRanges();
                   const content = nameRef.innerHTML || nameRef.textContent || '';
                   onUpdateProduct(product.id, { name: content });
                 }
@@ -1038,62 +1056,32 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               quickColors={quickColors}
               onBold={() => {
                 if (descRef) {
-                  const savedSelection = window.getSelection();
-                  let savedRange: Range | null = null;
-                  if (savedSelection && savedSelection.rangeCount > 0) {
-                    savedRange = savedSelection.getRangeAt(0).cloneRange();
-                  }
                   descRef.focus();
-                  if (savedRange) {
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                    selection?.addRange(savedRange);
-                  }
+                  // Select all text in the field
+                  const range = document.createRange();
+                  range.selectNodeContents(descRef);
                   const selection = window.getSelection();
-                  if (selection && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    if (!range.collapsed) {
-                      document.execCommand('bold', false);
-                    } else {
-                      selection.modify('extend', 'backward', 'word');
-                      selection.modify('extend', 'forward', 'word');
-                      if (!selection.isCollapsed) {
-                        document.execCommand('bold', false);
-                      }
-                    }
-                  }
-                  descRef.focus();
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                  // Apply bold to all selected text
+                  document.execCommand('bold', false);
+                  selection?.removeAllRanges();
                   const content = descRef.innerHTML || descRef.textContent || '';
                   onUpdateProduct(product.id, { description: content });
                 }
               }}
               onItalic={() => {
                 if (descRef) {
-                  const savedSelection = window.getSelection();
-                  let savedRange: Range | null = null;
-                  if (savedSelection && savedSelection.rangeCount > 0) {
-                    savedRange = savedSelection.getRangeAt(0).cloneRange();
-                  }
                   descRef.focus();
-                  if (savedRange) {
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                    selection?.addRange(savedRange);
-                  }
+                  // Select all text in the field
+                  const range = document.createRange();
+                  range.selectNodeContents(descRef);
                   const selection = window.getSelection();
-                  if (selection && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    if (!range.collapsed) {
-                      document.execCommand('italic', false);
-                    } else {
-                      selection.modify('extend', 'backward', 'word');
-                      selection.modify('extend', 'forward', 'word');
-                      if (!selection.isCollapsed) {
-                        document.execCommand('italic', false);
-                      }
-                    }
-                  }
-                  descRef.focus();
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                  // Apply italic to all selected text
+                  document.execCommand('italic', false);
+                  selection?.removeAllRanges();
                   const content = descRef.innerHTML || descRef.textContent || '';
                   onUpdateProduct(product.id, { description: content });
                 }
@@ -1101,18 +1089,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               onColorChange={(color) => {
                 if (descRef) {
                   descRef.focus();
+                  // Always select all text in the field
+                  const range = document.createRange();
+                  range.selectNodeContents(descRef);
                   const selection = window.getSelection();
-                  if (selection && selection.rangeCount > 0) {
-                    document.execCommand('foreColor', false, color);
-                  } else {
-                    // If no selection, select all and apply color
-                    const range = document.createRange();
-                    range.selectNodeContents(descRef);
-                    selection?.removeAllRanges();
-                    selection?.addRange(range);
-                    document.execCommand('foreColor', false, color);
-                    selection?.removeAllRanges();
-                  }
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                  // Apply color to all selected text
+                  document.execCommand('foreColor', false, color);
+                  selection?.removeAllRanges();
                   const content = descRef.innerHTML || descRef.textContent || '';
                   onUpdateProduct(product.id, { description: content });
                 }

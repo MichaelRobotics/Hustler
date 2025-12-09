@@ -23,6 +23,7 @@ import { FloatingAsset, LegacyTheme, FixedTextStyles } from '../types/index';
 import { emojiToSvgDataURL } from '../actions/aiService';
 import { useBackgroundAnalysis } from '../utils/backgroundAnalyzer';
 import { DeleteThemeNotification } from './DeleteThemeNotification';
+import { normalizeHtmlContent, decodeHtmlEntitiesForTextarea } from '../utils/html';
 
 interface AdminAssetSheetProps {
   isOpen: boolean;
@@ -1143,10 +1144,15 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
             
             <textarea
               placeholder="Edit text"
-              value={selectedAssetId === 'mainHeader' ? fixedTextStyles.mainHeader.content : 
-                     selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.content : 
-                     selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.content : 
-                     fixedTextStyles.promoMessage.content}
+              value={(() => {
+                const rawContent = selectedAssetId === 'mainHeader' ? fixedTextStyles.mainHeader.content : 
+                                 selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.content : 
+                                 selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.content : 
+                                 fixedTextStyles.promoMessage.content;
+                // First normalize to prevent double-encoding, then decode entities for textarea display
+                const normalized = normalizeHtmlContent(rawContent || '');
+                return decodeHtmlEntitiesForTextarea(normalized);
+              })()}
               maxLength={selectedAssetId === 'mainHeader' ? 20 : undefined}
               style={{ fontSize: '16px' }}
               onFocus={(e) => {
@@ -1155,9 +1161,12 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               }}
               onChange={(e) => {
                 const newContent = e.target.value;
+                // Normalize content before saving to prevent double-encoding
+                // User input is plain text, but normalize in case there are any entities
+                const normalizedContent = normalizeHtmlContent(newContent);
                 if (selectedAssetId === 'mainHeader') {
                   // Enforce 20 character limit for mainHeader
-                  const limitedContent = newContent.slice(0, 20);
+                  const limitedContent = normalizedContent.slice(0, 20);
                   setFixedTextStyles(prev => ({
                     ...prev, 
                     mainHeader: {...prev.mainHeader, content: limitedContent}
@@ -1165,17 +1174,17 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                 } else if (selectedAssetId === 'headerMessage') {
                   setFixedTextStyles(prev => ({
                     ...prev, 
-                    headerMessage: {...prev.headerMessage, content: newContent}
+                    headerMessage: {...prev.headerMessage, content: normalizedContent}
                   }));
                 } else if (selectedAssetId === 'subHeader') {
                   setFixedTextStyles(prev => ({
                     ...prev, 
-                    subHeader: {...prev.subHeader, content: newContent}
+                    subHeader: {...prev.subHeader, content: normalizedContent}
                   }));
                 } else if (selectedAssetId === 'promoMessage') {
                   setFixedTextStyles(prev => ({
                     ...prev, 
-                    promoMessage: {...prev.promoMessage, content: newContent}
+                    promoMessage: {...prev.promoMessage, content: normalizedContent}
                   }));
                 }
               }}

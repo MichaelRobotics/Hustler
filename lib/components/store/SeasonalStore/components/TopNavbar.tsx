@@ -495,15 +495,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <ArrowLeft size={20} strokeWidth={2.5} />
                 </Button>
               )}
-              <div className="hidden sm:block">
-                <Heading
-                  size="6"
-                  weight="bold"
-                  className="text-black dark:text-white"
-                >
-                  Seasonal Market
-                </Heading>
-              </div>
+              {!hasUnsavedChanges && (
+                <div className="hidden sm:block">
+                  <Heading
+                    size="6"
+                    weight="bold"
+                    className="text-black dark:text-white"
+                  >
+                    Market
+                  </Heading>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* Market Manager Button (when there are no unsaved changes and Market Manager is not open) */}

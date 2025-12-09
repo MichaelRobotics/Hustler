@@ -355,36 +355,22 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   };
 
   // Sync contentEditable with fixedTextStyles
+  // IMPORTANT: Always use innerHTML with normalizeHtmlContent to properly handle HTML entities like &nbsp;
+  // Using textContent would treat entities as literal text and cause double-encoding
   React.useEffect(() => {
     if (headerMessageRef && headerMessage) {
-      // Check if content contains HTML tags
-      const hasHTML = /<[^>]+>/.test(headerMessage.content);
-      if (hasHTML) {
-        const desiredContent = normalizeHtmlContent(headerMessage.content || '');
-        if (getNormalizedContent(headerMessageRef) !== desiredContent) {
-          headerMessageRef.innerHTML = desiredContent;
-        }
-      } else {
-        if (headerMessageRef.textContent !== headerMessage.content) {
-          headerMessageRef.textContent = headerMessage.content;
-        }
+      const normalizedContent = normalizeHtmlContent(headerMessage.content || '');
+      if (getNormalizedContent(headerMessageRef) !== normalizedContent) {
+        headerMessageRef.innerHTML = normalizedContent;
       }
     }
   }, [headerMessageRef, headerMessage?.content]);
   
   React.useEffect(() => {
     if (subHeaderRef && subHeader) {
-      // Check if content contains HTML tags
-      const hasHTML = /<[^>]+>/.test(subHeader.content);
-      if (hasHTML) {
-        const desiredContent = normalizeHtmlContent(subHeader.content || '');
-        if (getNormalizedContent(subHeaderRef) !== desiredContent) {
-          subHeaderRef.innerHTML = desiredContent;
-        }
-      } else {
-        if (subHeaderRef.textContent !== subHeader.content) {
-          subHeaderRef.textContent = subHeader.content;
-        }
+      const normalizedContent = normalizeHtmlContent(subHeader.content || '');
+      if (getNormalizedContent(subHeaderRef) !== normalizedContent) {
+        subHeaderRef.innerHTML = normalizedContent;
       }
     }
   }, [subHeaderRef, subHeader?.content]);
@@ -810,47 +796,16 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             getFontSizeFromStyleClass={getFontSizeFromStyleClass}
             onBold={() => {
               if (headerMessageRef) {
-                // Save the current selection before focusing
-                const savedSelection = window.getSelection();
-                let savedRange: Range | null = null;
-                if (savedSelection && savedSelection.rangeCount > 0) {
-                  savedRange = savedSelection.getRangeAt(0).cloneRange();
-                }
-                
                 headerMessageRef.focus();
-                
-                // Restore selection if we had one
-                if (savedRange) {
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
-                  selection?.addRange(savedRange);
-                }
-                
+                // Always select all text in the field
+                const range = document.createRange();
+                range.selectNodeContents(headerMessageRef);
                 const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  if (!range.collapsed) {
-                    document.execCommand('bold', false);
-                  } else {
-                    // If collapsed, select the word at cursor
-                    selection.modify('extend', 'backward', 'word');
-                    selection.modify('extend', 'forward', 'word');
-                    if (!selection.isCollapsed) {
-                      document.execCommand('bold', false);
-                    }
-                  }
-                } else {
-                  // If no selection, select all and apply bold
-                  const range = document.createRange();
-                  range.selectNodeContents(headerMessageRef);
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  document.execCommand('bold', false);
-                  selection?.removeAllRanges();
-                }
-                
-                // Refocus to maintain selection
-                headerMessageRef.focus();
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+                // Apply bold to all selected text
+                document.execCommand('bold', false);
+                selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(headerMessageRef);
@@ -865,47 +820,16 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             }}
             onItalic={() => {
               if (headerMessageRef) {
-                // Save the current selection before focusing
-                const savedSelection = window.getSelection();
-                let savedRange: Range | null = null;
-                if (savedSelection && savedSelection.rangeCount > 0) {
-                  savedRange = savedSelection.getRangeAt(0).cloneRange();
-                }
-                
                 headerMessageRef.focus();
-                
-                // Restore selection if we had one
-                if (savedRange) {
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
-                  selection?.addRange(savedRange);
-                }
-                
+                // Always select all text in the field
+                const range = document.createRange();
+                range.selectNodeContents(headerMessageRef);
                 const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  if (!range.collapsed) {
-                    document.execCommand('italic', false);
-                  } else {
-                    // If collapsed, select the word at cursor
-                    selection.modify('extend', 'backward', 'word');
-                    selection.modify('extend', 'forward', 'word');
-                    if (!selection.isCollapsed) {
-                      document.execCommand('italic', false);
-                    }
-                  }
-                } else {
-                  // If no selection, select all and apply italic
-                  const range = document.createRange();
-                  range.selectNodeContents(headerMessageRef);
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  document.execCommand('italic', false);
-                  selection?.removeAllRanges();
-                }
-                
-                // Refocus to maintain selection
-                headerMessageRef.focus();
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+                // Apply italic to all selected text
+                document.execCommand('italic', false);
+                selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(headerMessageRef);
@@ -921,18 +845,15 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             onColorChange={(color) => {
               if (headerMessageRef) {
                 headerMessageRef.focus();
+                // Always select all text in the field
+                const range = document.createRange();
+                range.selectNodeContents(headerMessageRef);
                 const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  document.execCommand('foreColor', false, color);
-                } else {
-                  // If no selection, select all and apply color
-                  const range = document.createRange();
-                  range.selectNodeContents(headerMessageRef);
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  document.execCommand('foreColor', false, color);
-                  selection?.removeAllRanges();
-                }
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+                // Apply color to all selected text
+                document.execCommand('foreColor', false, color);
+                selection?.removeAllRanges();
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(headerMessageRef);
                 setFixedTextStyles(prev => ({
@@ -1071,47 +992,16 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             getFontSizeFromStyleClass={getFontSizeFromStyleClass}
             onBold={() => {
               if (subHeaderRef) {
-                // Save the current selection before focusing
-                const savedSelection = window.getSelection();
-                let savedRange: Range | null = null;
-                if (savedSelection && savedSelection.rangeCount > 0) {
-                  savedRange = savedSelection.getRangeAt(0).cloneRange();
-                }
-                
                 subHeaderRef.focus();
-                
-                // Restore selection if we had one
-                if (savedRange) {
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
-                  selection?.addRange(savedRange);
-                }
-                
+                // Always select all text in the field
+                const range = document.createRange();
+                range.selectNodeContents(subHeaderRef);
                 const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  if (!range.collapsed) {
-                    document.execCommand('bold', false);
-                  } else {
-                    // If collapsed, select the word at cursor
-                    selection.modify('extend', 'backward', 'word');
-                    selection.modify('extend', 'forward', 'word');
-                    if (!selection.isCollapsed) {
-                      document.execCommand('bold', false);
-                    }
-                  }
-                } else {
-                  // If no selection, select all and apply bold
-                  const range = document.createRange();
-                  range.selectNodeContents(subHeaderRef);
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  document.execCommand('bold', false);
-                  selection?.removeAllRanges();
-                }
-                
-                // Refocus to maintain selection
-                subHeaderRef.focus();
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+                // Apply bold to all selected text
+                document.execCommand('bold', false);
+                selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(subHeaderRef);
@@ -1126,47 +1016,16 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             }}
             onItalic={() => {
               if (subHeaderRef) {
-                // Save the current selection before focusing
-                const savedSelection = window.getSelection();
-                let savedRange: Range | null = null;
-                if (savedSelection && savedSelection.rangeCount > 0) {
-                  savedRange = savedSelection.getRangeAt(0).cloneRange();
-                }
-                
                 subHeaderRef.focus();
-                
-                // Restore selection if we had one
-                if (savedRange) {
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
-                  selection?.addRange(savedRange);
-                }
-                
+                // Always select all text in the field
+                const range = document.createRange();
+                range.selectNodeContents(subHeaderRef);
                 const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  if (!range.collapsed) {
-                    document.execCommand('italic', false);
-                  } else {
-                    // If collapsed, select the word at cursor
-                    selection.modify('extend', 'backward', 'word');
-                    selection.modify('extend', 'forward', 'word');
-                    if (!selection.isCollapsed) {
-                      document.execCommand('italic', false);
-                    }
-                  }
-                } else {
-                  // If no selection, select all and apply italic
-                  const range = document.createRange();
-                  range.selectNodeContents(subHeaderRef);
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  document.execCommand('italic', false);
-                  selection?.removeAllRanges();
-                }
-                
-                // Refocus to maintain selection
-                subHeaderRef.focus();
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+                // Apply italic to all selected text
+                document.execCommand('italic', false);
+                selection?.removeAllRanges();
                 
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(subHeaderRef);
@@ -1182,18 +1041,15 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             onColorChange={(color) => {
               if (subHeaderRef) {
                 subHeaderRef.focus();
+                // Always select all text in the field
+                const range = document.createRange();
+                range.selectNodeContents(subHeaderRef);
                 const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  document.execCommand('foreColor', false, color);
-                } else {
-                  // If no selection, select all and apply color
-                  const range = document.createRange();
-                  range.selectNodeContents(subHeaderRef);
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  document.execCommand('foreColor', false, color);
-                  selection?.removeAllRanges();
-                }
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+                // Apply color to all selected text
+                document.execCommand('foreColor', false, color);
+                selection?.removeAllRanges();
                 // Save innerHTML to preserve formatting
                 const content = getNormalizedContent(subHeaderRef);
                 setFixedTextStyles(prev => ({

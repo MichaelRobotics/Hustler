@@ -33,6 +33,21 @@ export const normalizeHtmlContent = (value: string): string => {
 };
 
 /**
+ * Decodes HTML entities to plain text for display in textarea inputs.
+ * Converts entities like &nbsp; to spaces, &amp; to &, etc.
+ */
+export const decodeHtmlEntitiesForTextarea = (value: string): string => {
+  if (!value || typeof value !== 'string') {
+    return value;
+  }
+  
+  // Create a temporary element to decode HTML entities
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = value;
+  return tempDiv.textContent || tempDiv.innerText || '';
+};
+
+/**
  * Removes inline color tags (e.g. <font color="#fff">) and color styles so that
  * card styles can control text color consistently.
  */
