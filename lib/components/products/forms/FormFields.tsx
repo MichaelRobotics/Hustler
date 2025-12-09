@@ -202,7 +202,7 @@ export const FormFields: React.FC<FormFieldsProps> = ({
 
       {/* Description and Digital Asset Upload - Show for FILE type (not Whop products) */}
       {resource.type === "FILE" && !resource.whopProductId && (
-        <div className="flex flex-col gap-3 flex-1 min-h-0">
+        <div className="flex flex-col gap-1 flex-1 min-h-0">
           {/* Description Field for FILE type - Above upload */}
       <textarea
         value={resource.description || ""}
@@ -285,7 +285,7 @@ export const FormFields: React.FC<FormFieldsProps> = ({
 
       {/* Save Button - Right below file upload for FILE type */}
       {onSave && resource.type === "FILE" && !resource.whopProductId && (
-        <div className="mt-3">
+        <div className="mt-1">
           <Button
             size="3"
             color="violet"

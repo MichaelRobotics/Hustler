@@ -5,6 +5,10 @@ import UserChat from './UserChat';
 import type { FunnelFlow } from '../../types/funnel';
 import type { ConversationWithMessages } from '../../types/user';
 import { getThemePlaceholderUrl } from '../store/SeasonalStore/utils/getThemePlaceholder';
+import { filterProductsAgainstMarketStall } from '../store/SeasonalStore/utils/productUtils';
+import { ProductCard } from '../store/SeasonalStore/components/ProductCard';
+import { convertThemeToLegacy } from '../store/SeasonalStore/utils';
+import type { LegacyTheme } from '../store/SeasonalStore/types';
 
 interface TemplateRendererProps {
   liveTemplate: any;
@@ -56,12 +60,13 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   // Mobile detection
   const [isMobileDetected, setIsMobileDetected] = useState(false);
   
-  // Product navigation state (like SeasonalStore)
-  const [isSliding, setIsSliding] = useState(false);
+  // Product navigation state (like SeasonalStore ProductShowcase)
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [isFadingOut, setIsFadingOut] = useState(false);
   const autoSwitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Mobile detection effect
@@ -158,13 +163,13 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
     legacyLogo: templateData.logoAsset
   });
 
+  // Get theme snapshot for styling fallbacks (needed for product filtering and text styles)
+  const themeSnapshot = liveTemplate.themeSnapshot || templateData.currentTheme || {};
+  const currentTheme = templateData.currentTheme || liveTemplate.themeSnapshot || {};
+
   // Get text styles - check both theme-specific and legacy
   // Also check custom theme mainHeader/subHeader from currentTheme or themeSnapshot if not in textStyles
   let textStyles = templateData.themeTextStyles?.[currentSeason] || templateData.fixedTextStyles || {};
-  
-  // Get theme snapshot for styling fallbacks
-  const themeSnapshot = liveTemplate.themeSnapshot || templateData.currentTheme || {};
-  const currentTheme = templateData.currentTheme || liveTemplate.themeSnapshot || {};
   
   // If textStyles are missing mainHeader/subHeader, try to restore from custom theme metadata
   if (!textStyles.mainHeader && (currentTheme.mainHeader || themeSnapshot.mainHeader)) {
@@ -200,19 +205,74 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
     console.log('[TemplateRenderer] Restored subHeader from custom theme:', subHeaderText);
   }
 
-  // Get products - check both theme-specific and legacy, then apply styling fallbacks like SeasonalStore
-  const rawProducts = templateData.themeProducts?.[currentSeason] || templateData.products || [];
-  const products = rawProducts.map((p: any) => ({
-    ...p,
-    // Ensure imageAttachmentUrl fallback for ProductCard image logic
-    imageAttachmentUrl: p.imageAttachmentUrl || p.image || p.imageUrl || p.imageSrc || null,
-    // Styling fallbacks derived from theme snapshot when missing
-    cardClass: p.cardClass || themeSnapshot.card || 'bg-white',
-    titleClass: p.titleClass || themeSnapshot.text || 'text-gray-900',
-    descClass: p.descClass || themeSnapshot.text || 'text-gray-600',
-    buttonClass: p.buttonClass || 'bg-indigo-500 hover:bg-indigo-600 text-white',
-    buttonText: p.buttonText || 'View Details',
-  }));
+  // State for filtered products (filtered against Market Stall like Preview)
+  const [products, setProducts] = useState<any[]>([]);
+  const [isFilteringProducts, setIsFilteringProducts] = useState(true);
+
+  // Filter products against Market Stall resources (same as Preview)
+  useEffect(() => {
+    const filterProducts = async () => {
+      setIsFilteringProducts(true);
+      try {
+        // Get raw products from template
+        const rawProducts = templateData.themeProducts?.[currentSeason] || templateData.products || [];
+        
+        if (rawProducts.length === 0) {
+          setProducts([]);
+          setIsFilteringProducts(false);
+          return;
+        }
+
+        // Fetch Market Stall resources if experienceId is available
+        let marketStallResources: any[] = [];
+        if (experienceId) {
+          try {
+            const response = await fetch(`/api/resources?experienceId=${experienceId}`);
+            if (response.ok) {
+              const data = await response.json();
+              marketStallResources = data.data?.resources || [];
+            }
+          } catch (error) {
+            console.error('[TemplateRenderer] Error fetching Market Stall resources:', error);
+          }
+        }
+
+        // Filter products against Market Stall (same logic as Preview)
+        if (marketStallResources.length > 0) {
+          console.log(`[TemplateRenderer] Filtering ${rawProducts.length} template products against ${marketStallResources.length} Market Stall resources`);
+          // Get theme from template for filtering (same as Preview)
+          const theme = templateData.currentTheme || liveTemplate.themeSnapshot || null;
+          const filteredProducts = await filterProductsAgainstMarketStall(rawProducts, marketStallResources, theme);
+          setProducts(filteredProducts);
+          console.log(`[TemplateRenderer] Filtered to ${filteredProducts.length} products`);
+        } else {
+          // No Market Stall resources - use raw products with styling fallbacks
+          console.log('[TemplateRenderer] No Market Stall resources found, using raw template products');
+          const styledProducts = rawProducts.map((p: any) => ({
+            ...p,
+            // Ensure imageAttachmentUrl fallback for ProductCard image logic
+            imageAttachmentUrl: p.imageAttachmentUrl || p.image || p.imageUrl || p.imageSrc || null,
+            // Styling fallbacks derived from theme snapshot when missing
+            cardClass: p.cardClass || themeSnapshot.card || 'bg-white',
+            titleClass: p.titleClass || themeSnapshot.text || 'text-gray-900',
+            descClass: p.descClass || themeSnapshot.text || 'text-gray-600',
+            buttonClass: p.buttonClass || 'bg-indigo-500 hover:bg-indigo-600 text-white',
+            buttonText: p.buttonText || 'View Details',
+          }));
+          setProducts(styledProducts);
+        }
+      } catch (error) {
+        console.error('[TemplateRenderer] Error filtering products:', error);
+        // Fallback to raw products on error
+        const rawProducts = templateData.themeProducts?.[currentSeason] || templateData.products || [];
+        setProducts(rawProducts);
+      } finally {
+        setIsFilteringProducts(false);
+      }
+    };
+
+    filterProducts();
+  }, [templateData, currentSeason, experienceId, liveTemplate.themeSnapshot, themeSnapshot]);
 
   // Floating assets (emojis, tickets, etc.) - theme-specific or legacy
   const floatingAssets = (templateData.themeFloatingAssets?.[currentSeason] || templateData.floatingAssets || []) as any[];
@@ -220,68 +280,93 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   // Get promo button
   const promoButton = templateData.promoButton;
 
-  // Product navigation functions (like SeasonalStore)
-  const startAutoSwitch = useCallback(() => {
+  // Product navigation functions (like SeasonalStore ProductShowcase - fade animations)
+  const navigateToPrevious = useCallback((skipSlideAnimation?: boolean) => {
+    if (isNavigating) return;
+    if (currentProductIndex === 0) return;
+    
+    setIsNavigating(true);
+    setIsFadingOut(true);
+    
+    // After fade out completes, change products and wait for render
+    setTimeout(() => {
+      setCurrentProductIndex(prev => Math.max(0, prev - 1));
+      // Use requestAnimationFrame to ensure products are rendered before fade in
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsFadingOut(false); // This will trigger fade in
+          setIsNavigating(false);
+        });
+      });
+    }, 300);
+  }, [currentProductIndex, isNavigating]);
+
+  const navigateToNext = useCallback((skipSlideAnimation?: boolean) => {
+    if (isNavigating) return;
+    
+    setIsNavigating(true);
+    setIsFadingOut(true);
+    
+    // After fade out completes, change products and wait for render
+    setTimeout(() => {
+      // Switch products first (handles wrap-around)
+      setCurrentProductIndex(prev => {
+        const maxIndex = products.length - 2;
+        return prev >= maxIndex ? 0 : prev + 1;
+      });
+      // Use requestAnimationFrame to ensure products are rendered before fade in
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsFadingOut(false); // This will trigger fade in
+          setIsNavigating(false);
+        });
+      });
+    }, 300);
+  }, [currentProductIndex, products.length, isNavigating]);
+
+  // Auto-switch products with fade animation (same as ProductShowcase)
+  useEffect(() => {
     if (autoSwitchIntervalRef.current) {
       clearInterval(autoSwitchIntervalRef.current);
     }
     
-    if (products.length <= 2) return; // Don't auto-switch if 2 or fewer products
+    if (products.length <= 2) return;
+    if (isNavigating) return;
     
-    // Shorter timeout for mobile (5 seconds) vs desktop (10 seconds)
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    const switchTimeout = isMobile ? 5000 : 10000;
+    const switchTimeout = isMobile ? 3000 : 5000;
     
     autoSwitchIntervalRef.current = setInterval(() => {
-      if (!isSliding) {
-        setIsSliding(true);
-        setSwipeDirection('left'); // Auto-switch slides left
+      // Only auto-switch if not currently navigating
+      if (!isNavigating) {
+        // Use the same fade animation as manual navigation
+        setIsNavigating(true);
+        setIsFadingOut(true);
+        
+        // After fade out completes, change products and wait for render
         setTimeout(() => {
-          setCurrentProductIndex(prevIndex => {
+          // Switch products first (handles wrap-around)
+          setCurrentProductIndex(prev => {
             const maxIndex = products.length - 2;
-            return prevIndex >= maxIndex ? 0 : prevIndex + 1;
+            return prev >= maxIndex ? 0 : prev + 1;
           });
-          setSwipeDirection('right'); // Slide in from right
-          setTimeout(() => {
-            setSwipeDirection(null);
-            setIsSliding(false);
-          }, 150);
-        }, 100);
+          // Use requestAnimationFrame to ensure products are rendered before fade in
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setIsFadingOut(false); // This will trigger fade in
+              setIsNavigating(false);
+            });
+          });
+        }, 300);
       }
     }, switchTimeout);
-  }, [products.length, isSliding, setIsSliding]);
-
-  const navigateToPrevious = useCallback(() => {
-    if (currentProductIndex > 0 && !isSliding) {
-      setIsSliding(true);
-      setSwipeDirection('right');
-      setTimeout(() => {
-        setCurrentProductIndex(prev => Math.max(0, prev - 1));
-        setSwipeDirection('left'); // Slide in from left
-        setTimeout(() => {
-          setSwipeDirection(null);
-          setIsSliding(false);
-        }, 150);
-      }, 100);
-      startAutoSwitch();
-    }
-  }, [currentProductIndex, startAutoSwitch, isSliding, setIsSliding]);
-
-  const navigateToNext = useCallback(() => {
-    if (currentProductIndex < products.length - 2 && !isSliding) {
-      setIsSliding(true);
-      setSwipeDirection('left');
-      setTimeout(() => {
-        setCurrentProductIndex(prev => Math.min(products.length - 2, prev + 1));
-        setSwipeDirection('right'); // Slide in from right
-        setTimeout(() => {
-          setSwipeDirection(null);
-          setIsSliding(false);
-        }, 150);
-      }, 100);
-      startAutoSwitch();
-    }
-  }, [currentProductIndex, products.length, startAutoSwitch, isSliding, setIsSliding]);
+    
+    return () => {
+      if (autoSwitchIntervalRef.current) {
+        clearInterval(autoSwitchIntervalRef.current);
+      }
+    };
+  }, [products.length, isNavigating, currentProductIndex]);
 
   // Touch swipe handlers for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -312,16 +397,6 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
     setTouchEnd(null);
   }, [touchStart, touchEnd, currentProductIndex, products.length, navigateToNext, navigateToPrevious]);
 
-  // Auto-switch products every 10 seconds
-  useEffect(() => {
-    startAutoSwitch();
-    return () => {
-      if (autoSwitchIntervalRef.current) {
-        clearInterval(autoSwitchIntervalRef.current);
-      }
-    };
-  }, [startAutoSwitch]);
-
   // Reset index when products change
   useEffect(() => {
     if (currentProductIndex >= products.length - 1) {
@@ -338,14 +413,41 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   });
 
   return (
-    <div className="w-full h-full relative">
-      {/* Template Background - Full page coverage */}
-      <div 
-        className="w-full h-full bg-cover bg-center bg-no-repeat fixed inset-0"
-        style={{
-          backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined
-        }}
-      />
+    <>
+      <style jsx>{`
+        @keyframes productFadeOut {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+        @keyframes productFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes productLoadingAnimation {
+          0% { opacity: 0; transform: translateY(1rem); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .product-fade-out {
+          animation: productFadeOut 0.3s ease-in-out forwards;
+        }
+        .product-fade-in {
+          animation: productFadeIn 0.3s ease-in-out forwards;
+        }
+        .product-navigating {
+          pointer-events: none;
+        }
+        .product-loading-animation {
+          animation: productLoadingAnimation 0.5s ease-out forwards;
+        }
+      `}</style>
+      <div className="w-full h-full relative">
+        {/* Template Background - Full page coverage */}
+        <div 
+          className="w-full h-full bg-cover bg-center bg-no-repeat fixed inset-0"
+          style={{
+            backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined
+          }}
+        />
       
       {/* TopNavbar - matches SeasonalStore */}
       <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
@@ -430,33 +532,43 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
           </div>
         )}
         
-        {/* Header Message - matches StoreHeader exactly */}
+        {/* Header Message - matches StoreHeader exactly (non-editor view) */}
         {textStyles.headerMessage && textStyles.headerMessage.content && (
           <div className="text-center mb-2 relative w-full">
             <p 
-              className={`${textStyles.headerMessage.styleClass || 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'} mb-2`}
+              className={`${textStyles.headerMessage.styleClass || 'text-5xl sm:text-6xl font-bold tracking-tight drop-shadow-lg'} font-bold`}
               style={{ 
-                color: textStyles.headerMessage.color || 'rgb(255, 237, 213)',
-                textShadow: 'rgba(0, 0, 0, 0.3) 1px 1px 2px'
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                maxWidth: '48rem',
+                marginLeft: 'auto',
+                marginRight: 'auto',
+                color: textStyles.headerMessage.color || '#FFFFFF',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
               }}
-            >
-              {textStyles.headerMessage.content}
-            </p>
+              data-prevent-bg-toggle="true"
+              dangerouslySetInnerHTML={{ __html: textStyles.headerMessage.content || '' }}
+            />
           </div>
         )}
         
-        {/* Sub Header - matches StoreHeader exactly */}
+        {/* Sub Header - matches StoreHeader exactly (non-editor view) */}
         {textStyles.subHeader && textStyles.subHeader.content && (
           <div className="text-center mb-2 relative w-full">
             <p 
-              className={`${textStyles.subHeader.styleClass || 'text-lg sm:text-xl font-normal'} mb-2`}
+              className={`${textStyles.subHeader.styleClass || 'text-lg sm:text-xl font-normal'}`}
               style={{ 
-                color: textStyles.subHeader.color || 'rgb(255, 237, 213)',
-                textShadow: 'rgba(0, 0, 0, 0.3) 1px 1px 2px'
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                maxWidth: '48rem',
+                marginLeft: 'auto',
+                marginRight: 'auto',
+                color: textStyles.subHeader.color || '#FFFFFF',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
               }}
-            >
-              {textStyles.subHeader.content}
-            </p>
+              data-prevent-bg-toggle="true"
+              dangerouslySetInnerHTML={{ __html: textStyles.subHeader.content || '' }}
+            />
           </div>
         )}
         
@@ -467,8 +579,8 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                 {/* Left Arrow - Only show on desktop when there are more than 2 products */}
                 {products.length > 2 && (
                   <button
-                    onClick={navigateToPrevious}
-                    disabled={currentProductIndex === 0}
+                    onClick={() => navigateToPrevious()}
+                    disabled={currentProductIndex === 0 || isNavigating}
                     className="hidden md:flex p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                     title="Previous products"
                   >
@@ -478,33 +590,58 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                   </button>
                 )}
                 
-                {/* Product Grid - Show 1 product on mobile, 2 on desktop with slide-out and slide-in animation */}
+                {/* Product Grid - Show 1 product on mobile, 2 on desktop with fade animation (like ProductShowcase) */}
                 <div 
-                  className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden w-full"
+                  className={`flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto overflow-hidden w-full ${
+                    isNavigating ? 'product-navigating' : 
+                    isFadingOut ? 'product-fade-out' : 'product-fade-in'
+                  }`}
                   onTouchStart={handleTouchStart}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
                 >
                   {products.slice(currentProductIndex, currentProductIndex + 2).map((product: any, index: number) => (
                     <div 
-                      key={`${product.id}-${currentProductIndex}`}
-                      className={`transition-all duration-150 ease-in-out transform animate-in zoom-in-95 fade-in ${index === 1 ? 'hidden md:block' : ''}`}
+                      key={`${product.id}-${currentProductIndex}-${index}`}
+                      className={`${
+                        isNavigating ? 'product-navigating' :
+                        !isFilteringProducts && !isNavigating
+                          ? 'product-loading-animation'
+                          : !isFilteringProducts
+                          ? 'opacity-0 translate-y-8'
+                          : ''
+                      } ${index === 1 ? 'hidden md:block' : ''}`}
                       style={{ 
-                        animationDelay: `${index * 50}ms`,
-                        animationDuration: '150ms',
+                        animationDelay: !isFilteringProducts && !isNavigating ? `${index * 100}ms` : '0ms',
                         transform: swipeDirection === 'left' 
                           ? 'translateX(100%)' 
                           : swipeDirection === 'right'
                           ? 'translateX(-100%)'
                           : 'translateX(0%)',
-                        opacity: swipeDirection === 'left' || swipeDirection === 'right' ? 0 : 1,
+                        opacity: swipeDirection === 'left' || swipeDirection === 'right' ? 0 : undefined,
                         transitionDelay: swipeDirection ? `${index * 40}ms` : '0ms'
                       }}
                     >
                     <ProductCard
                       product={product}
-                      onProductClick={() => {}} // Disabled - product card click no longer opens chat
-                      onButtonClick={handleChatOpen}
+                      theme={convertThemeToLegacy(themeSnapshot) as LegacyTheme}
+                      isEditorView={false}
+                      loadingState={{
+                        isTextLoading: false,
+                        isImageLoading: false,
+                        isUploadingImage: false,
+                        isGeneratingImage: false,
+                      }}
+                      onUpdateProduct={() => {}}
+                      onDeleteProduct={() => {}}
+                      onProductImageUpload={() => {}}
+                      onRefineProduct={() => {}}
+                      onRemoveSticker={() => {}}
+                      onDropAsset={() => {}}
+                      onOpenEditor={() => {}}
+                      onOpenProductPage={product.type === 'FILE' ? () => handleChatOpen() : undefined}
+                      storeName=""
+                      experienceId={experienceId}
                     />
                     </div>
                   ))}
@@ -513,8 +650,8 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                 {/* Right Arrow - Only show on desktop when there are more than 2 products */}
                 {products.length > 2 && (
                   <button
-                    onClick={navigateToNext}
-                    disabled={currentProductIndex >= products.length - 2}
+                    onClick={() => navigateToNext()}
+                    disabled={currentProductIndex >= products.length - 2 || isNavigating}
                     className="hidden md:flex p-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex-shrink-0 hover:scale-110 active:scale-95"
                     title="Next products"
                   >
@@ -643,118 +780,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-/**
- * ProductCard Component
- * 
- * Renders individual product cards with animations and interactions
- */
-interface ProductCardProps {
-  product: any;
-  onProductClick: () => void;
-  onButtonClick: () => void;
-}
-
-const ProductCard: React.FC<ProductCardProps> = ({
-  product,
-  onProductClick,
-  onButtonClick,
-}) => {
-  // Use product styling classes like SeasonalStore
-  const cardClass = product.cardClass || 'bg-amber-50/90 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-orange-500/30';
-  const titleClass = product.titleClass || 'text-amber-900';
-  const descClass = product.descClass || 'text-amber-900';
-  const buttonBaseClass = product.buttonClass || 'bg-emerald-600 hover:bg-emerald-700 text-white';
-  const buttonText = product.buttonText || 'View Details';
-
-  return (
-    <div className="relative max-w-xs mx-auto">
-      {/* Blurred background for visual feedback - matches SeasonalStore exactly */}
-      <div 
-        className="absolute inset-0 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-lg"
-        style={{ 
-          zIndex: -1,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-          backdropFilter: 'blur(8px)'
-        }}
-      />
-      
-      {/* Main product card - matches SeasonalStore exactly */}
-      <div 
-        className={`rounded-2xl transition-all duration-300 ${cardClass} flex flex-col relative max-w-xs mx-auto overflow-hidden`}
-      >
-        {/* Image Section - Top Half - matches SeasonalStore exactly */}
-        <div className="relative h-56 w-full">
-          {/* Background Image - fills top half */}
-          <div 
-            className="absolute inset-0 rounded-t-2xl overflow-hidden"
-            style={{
-              backgroundImage: product.imageAttachmentUrl 
-              ? `url(${product.imageAttachmentUrl})` 
-              : product.image
-                ? `url(${product.image})`
-                : `url(https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp)`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              filter: 'drop-shadow(rgba(232, 160, 2, 0.5) 0px 10px 10px)'
-            }}
-          />
-        </div>
-        
-        {/* Drop Zone for Assets - covers entire card */}
-        <div className="absolute inset-0 product-container-drop-zone" />
-        
-        {/* Text Content Section - Bottom Half - matches SeasonalStore exactly */}
-        <div className="px-3 py-2 flex flex-col flex-grow text-center relative z-30">
-          {/* Product Name */}
-          <h2 
-            className={`text-lg font-bold mb-0.5 ${titleClass}`}
-            data-inline-product-name={product.id}
-            style={{ cursor: 'default' }}
-          >
-            {product.name || 'Product Name'}
-          </h2>
-          
-          {/* Product Description */}
-          <p 
-            className={`text-xs mb-1 ${descClass} flex-grow`}
-            data-inline-product-desc={product.id}
-            style={{ minHeight: '1.5rem', cursor: 'default' }}
-          >
-            {product.description || 'Product description'}
-          </p>
-          
-          {/* Product Price */}
-          <div className="text-xl font-extrabold mb-1 mt-auto">
-            <span className={titleClass}>{`$${product.price?.toFixed(2) || '0.00'}`}</span>
-          </div>
-          
-          {/* Product Button - matches SeasonalStore exactly */}
-          <button 
-            className={`w-full max-w-48 py-1.5 px-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.03] ${buttonBaseClass} shadow-xl ring-2 ring-offset-2 ring-offset-white mx-auto`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (product.buttonLink) {
-                // Handle button link navigation like SeasonalStore
-                if (product.buttonLink.startsWith('http')) {
-                  window.open(product.buttonLink, '_blank');
-                } else {
-                  window.location.href = product.buttonLink;
-                }
-              } else {
-                // Default behavior: open chat
-                onButtonClick();
-              }
-            }}
-          >
-            {buttonText}
-          </button>
-        </div>
       </div>
-    </div>
+    </>
   );
 };
