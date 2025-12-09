@@ -635,6 +635,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              // Blur the contentEditable element to exit edit mode
+              if (elementRef) {
+                elementRef.blur();
+              }
               onClose();
             }}
             onMouseDown={(e) => {
