@@ -495,8 +495,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <ArrowLeft size={20} strokeWidth={2.5} />
                 </Button>
               )}
+              {/* Mobile: Show "Market" (hidden when Save button appears) */}
               {!hasUnsavedChanges && (
-                <div className="hidden sm:block">
+                <div className="sm:hidden">
                   <Heading
                     size="6"
                     weight="bold"
@@ -506,6 +507,16 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   </Heading>
                 </div>
               )}
+              {/* Desktop: Show "Seasonal Store" (always visible) */}
+              <div className="hidden sm:block">
+                <Heading
+                  size="6"
+                  weight="bold"
+                  className="text-black dark:text-white"
+                >
+                  Seasonal Store
+                </Heading>
+              </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* Market Manager Button (when there are no unsaved changes and Market Manager is not open) */}

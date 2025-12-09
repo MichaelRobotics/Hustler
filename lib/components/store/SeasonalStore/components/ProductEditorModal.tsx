@@ -1314,7 +1314,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     className="w-full !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
                   >
                     <Eye size={16} strokeWidth={2.5} />
-                    <span>Edit Product Page</span>
+                    <span className="font-bold text-base antialiased subpixel-antialiased">Edit Product Page</span>
                   </Button>
                 </div>
               )}

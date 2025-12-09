@@ -167,18 +167,18 @@ export const filterProductsAgainstMarketStall = async (
         reviewCount: templateProduct.reviewCount,
         showRatingInfo: templateProduct.showRatingInfo,
 
-        // Use template image if available, otherwise Market Stall image
+        // Use template image if available, otherwise Market Stall image, fallback to default placeholder
         image:
           templateProduct.image ||
           templateProduct.imageAttachmentUrl ||
           matchedResource.image ||
-          '',
+          'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
         imageAttachmentId: templateProduct.imageAttachmentId || null,
         imageAttachmentUrl:
           templateProduct.imageAttachmentUrl ||
           templateProduct.image ||
           matchedResource.image ||
-          null,
+          'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
 
         // Keep template container asset if available
         containerAsset: templateProduct.containerAsset,
@@ -255,7 +255,7 @@ export const convertResourcesToProducts = (
     image:
       resource.image ||
       'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
-    imageAttachmentUrl: resource.image || null,
+    imageAttachmentUrl: resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
     buttonText: 'VIEW DETAILS',
     buttonLink: resource.link || '',
     whopProductId: resource.whopProductId,

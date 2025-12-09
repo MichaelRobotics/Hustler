@@ -551,7 +551,8 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
             <div className="flex flex-col gap-4">
               {/* Product Name */}
               <h1
-                className={`text-3xl font-bold ${titleClass}`}
+                className={`text-5xl font-black tracking-tight ${titleClass}`}
+                style={{ fontWeight: 900 }}
                 dangerouslySetInnerHTML={{ __html: product.name || 'Product Name' }}
               />
 

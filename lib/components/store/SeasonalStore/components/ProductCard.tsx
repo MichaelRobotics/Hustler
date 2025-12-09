@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, ZapIcon } from './Icons';
 import { Button } from 'frosted-ui';
-import { Zap, Flame, Star, Bold, Italic, Palette } from 'lucide-react';
+import { Zap, Flame, Star, Bold, Italic, Palette, ArrowLeft } from 'lucide-react';
 import { normalizeHtmlContent, stripInlineColorTags } from '../utils/html';
 
 interface ProductCardProps {
@@ -143,6 +143,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [showNameToolbar, setShowNameToolbar] = React.useState(false);
   const [showNameColorPicker, setShowNameColorPicker] = React.useState(false);
   const [selectedNameColor, setSelectedNameColor] = React.useState('#000000');
+  const [activeNameSubToolbar, setActiveNameSubToolbar] = React.useState<'color' | null>(null);
   const nameToolbarRef = React.useRef<HTMLDivElement | null>(null);
 
   // State for formatting toolbars (description)
@@ -150,6 +151,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [showDescToolbar, setShowDescToolbar] = React.useState(false);
   const [showDescColorPicker, setShowDescColorPicker] = React.useState(false);
   const [selectedDescColor, setSelectedDescColor] = React.useState('#000000');
+  const [activeDescSubToolbar, setActiveDescSubToolbar] = React.useState<'color' | null>(null);
   const descToolbarRef = React.useRef<HTMLDivElement | null>(null);
 
   // Helper to extract color theme from cardClass and generate quick colors
@@ -568,9 +570,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     selectedColor: string;
     setSelectedColor: (color: string) => void;
     quickColors: string[];
+    activeSubToolbar: 'color' | null;
+    setActiveSubToolbar: React.Dispatch<React.SetStateAction<'color' | null>>;
     onBold: () => void;
     onItalic: () => void;
     onColorChange: (color: string) => void;
+    onClose: () => void;
   }> = ({ 
     show, 
     elementRef, 
@@ -580,9 +585,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     selectedColor,
     setSelectedColor,
     quickColors,
+    activeSubToolbar,
+    setActiveSubToolbar,
     onBold,
     onItalic,
     onColorChange,
+    onClose,
   }) => {
     if (!show || !elementRef || typeof window === 'undefined') return null;
     
@@ -613,6 +621,84 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       }
     }, [show, elementRef]);
     
+    // Show sub-toolbar only for color picker
+    if (activeSubToolbar === 'color') {
+      return createPortal(
+        <div
+          ref={toolbarRef}
+          className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
+          style={{
+            pointerEvents: 'auto',
+            zIndex: 999999,
+            top: `${position.top}px`,
+            left: `${position.left}px`,
+            transform: 'translateX(-50%)',
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          {/* Back button */}
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setActiveSubToolbar(null);
+              setShowColorPicker(false);
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            title="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          
+          {/* Color picker grid */}
+          <div className="grid grid-cols-6 gap-1">
+            {quickColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (elementRef) {
+                    elementRef.focus();
+                    // If no selection, select all first
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                      const range = document.createRange();
+                      range.selectNodeContents(elementRef);
+                      selection?.removeAllRanges();
+                      selection?.addRange(range);
+                    }
+                    setSelectedColor(color);
+                    onColorChange(color);
+                    setActiveSubToolbar(null);
+                    onClose();
+                  }
+                }}
+                className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+          </div>
+        </div>,
+        document.body
+      );
+    }
+    
+    // Main toolbar
     return createPortal(
       <div
         ref={toolbarRef}
@@ -639,6 +725,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             e.preventDefault();
             e.stopPropagation();
             onBold();
+            onClose();
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           title="Bold"
@@ -655,101 +742,53 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             e.preventDefault();
             e.stopPropagation();
             onItalic();
+            onClose();
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           title="Italic"
         >
           <Italic className="w-4 h-4" />
         </button>
-        <div className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (elementRef) {
-                elementRef.focus();
-                const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  let element: Element | null = null;
-                  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-                    element = range.commonAncestorContainer.parentElement;
-                  } else {
-                    element = range.commonAncestorContainer as Element;
-                  }
-                  while (element && element !== elementRef) {
-                    const style = element.getAttribute('style');
-                    if (style) {
-                      const colorMatch = style.match(/color:\s*([^;]+)/i);
-                      if (colorMatch) {
-                        setSelectedColor(colorMatch[1].trim());
-                        break;
-                      }
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (elementRef) {
+              elementRef.focus();
+              const selection = window.getSelection();
+              if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                let element: Element | null = null;
+                if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+                  element = range.commonAncestorContainer.parentElement;
+                } else {
+                  element = range.commonAncestorContainer as Element;
+                }
+                while (element && element !== elementRef) {
+                  const style = element.getAttribute('style');
+                  if (style) {
+                    const colorMatch = style.match(/color:\s*([^;]+)/i);
+                    if (colorMatch) {
+                      setSelectedColor(colorMatch[1].trim());
+                      break;
                     }
-                    element = element.parentElement;
                   }
+                  element = element.parentElement;
                 }
               }
-              setShowColorPicker(!showColorPicker);
-            }}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Text Color"
-          >
-            <Palette className="w-4 h-4" />
-          </button>
-          {showColorPicker && createPortal(
-            <div
-              className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2"
-              style={{
-                pointerEvents: 'auto',
-                zIndex: 1000000,
-                top: `${position.top}px`,
-                left: `${position.left}px`,
-                transform: 'translateX(-50%)',
-              }}
-            >
-              <div className="grid grid-cols-6 gap-1">
-                {quickColors.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (elementRef) {
-                        elementRef.focus();
-                        // If no selection, select all first
-                        const selection = window.getSelection();
-                        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                          const range = document.createRange();
-                          range.selectNodeContents(elementRef);
-                          selection?.removeAllRanges();
-                          selection?.addRange(range);
-                        }
-                      setSelectedColor(color);
-                      onColorChange(color);
-                      setShowColorPicker(false);
-                      }
-                    }}
-                    className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
-                ))}
-              </div>
-            </div>,
-            document.body
-          )}
-        </div>
+            }
+            setActiveSubToolbar('color');
+          }}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+          title="Text Color"
+        >
+          <Palette className="w-4 h-4" />
+        </button>
       </div>,
       document.body
     );
@@ -944,17 +983,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               selectedColor={selectedNameColor}
               setSelectedColor={setSelectedNameColor}
               quickColors={quickColors}
+              activeSubToolbar={activeNameSubToolbar}
+              setActiveSubToolbar={setActiveNameSubToolbar}
+              onClose={() => {
+                setShowNameToolbar(false);
+                setShowNameColorPicker(false);
+                setActiveNameSubToolbar(null);
+              }}
               onBold={() => {
                 if (nameRef) {
                   nameRef.focus();
                   // Select all text in the field
                   const range = document.createRange();
                   range.selectNodeContents(nameRef);
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
                   selection?.addRange(range);
                   // Apply bold to all selected text
-                  document.execCommand('bold', false);
+                      document.execCommand('bold', false);
                   selection?.removeAllRanges();
                   const content = nameRef.innerHTML || nameRef.textContent || '';
                   onUpdateProduct(product.id, { name: content });
@@ -966,11 +1012,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   // Select all text in the field
                   const range = document.createRange();
                   range.selectNodeContents(nameRef);
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
                   selection?.addRange(range);
                   // Apply italic to all selected text
-                  document.execCommand('italic', false);
+                      document.execCommand('italic', false);
                   selection?.removeAllRanges();
                   const content = nameRef.innerHTML || nameRef.textContent || '';
                   onUpdateProduct(product.id, { name: content });
@@ -980,14 +1026,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 if (nameRef) {
                   nameRef.focus();
                   // Always select all text in the field
-                  const range = document.createRange();
-                  range.selectNodeContents(nameRef);
+                    const range = document.createRange();
+                    range.selectNodeContents(nameRef);
                   const selection = window.getSelection();
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
+                    selection?.removeAllRanges();
+                    selection?.addRange(range);
                   // Apply color to all selected text
-                  document.execCommand('foreColor', false, color);
-                  selection?.removeAllRanges();
+                    document.execCommand('foreColor', false, color);
+                    selection?.removeAllRanges();
                   const content = nameRef.innerHTML || nameRef.textContent || '';
                   onUpdateProduct(product.id, { name: content });
                 }
@@ -1002,12 +1048,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 // Hide description toolbar when clicking on name
                 setShowDescToolbar(false);
                 setShowDescColorPicker(false);
+                setActiveDescSubToolbar(null);
                 setShowNameToolbar(true);
               }}
               onSelect={() => {
                 // Hide description toolbar when selecting in name
                 setShowDescToolbar(false);
                 setShowDescColorPicker(false);
+                setActiveDescSubToolbar(null);
                 setShowNameToolbar(true);
               }}
               onBlur={(e) => {
@@ -1024,6 +1072,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     if (!toolbarElement?.contains(activeElement)) {
                       setShowNameToolbar(false);
                       setShowNameColorPicker(false);
+                      setActiveNameSubToolbar(null);
                     }
                   }, 200);
                 }
@@ -1054,17 +1103,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               selectedColor={selectedDescColor}
               setSelectedColor={setSelectedDescColor}
               quickColors={quickColors}
+              activeSubToolbar={activeDescSubToolbar}
+              setActiveSubToolbar={setActiveDescSubToolbar}
+              onClose={() => {
+                setShowDescToolbar(false);
+                setShowDescColorPicker(false);
+                setActiveDescSubToolbar(null);
+              }}
               onBold={() => {
                 if (descRef) {
                   descRef.focus();
                   // Select all text in the field
                   const range = document.createRange();
                   range.selectNodeContents(descRef);
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
                   selection?.addRange(range);
                   // Apply bold to all selected text
-                  document.execCommand('bold', false);
+                      document.execCommand('bold', false);
                   selection?.removeAllRanges();
                   const content = descRef.innerHTML || descRef.textContent || '';
                   onUpdateProduct(product.id, { description: content });
@@ -1076,11 +1132,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   // Select all text in the field
                   const range = document.createRange();
                   range.selectNodeContents(descRef);
-                  const selection = window.getSelection();
-                  selection?.removeAllRanges();
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
                   selection?.addRange(range);
                   // Apply italic to all selected text
-                  document.execCommand('italic', false);
+                      document.execCommand('italic', false);
                   selection?.removeAllRanges();
                   const content = descRef.innerHTML || descRef.textContent || '';
                   onUpdateProduct(product.id, { description: content });
@@ -1090,14 +1146,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 if (descRef) {
                   descRef.focus();
                   // Always select all text in the field
-                  const range = document.createRange();
-                  range.selectNodeContents(descRef);
+                    const range = document.createRange();
+                    range.selectNodeContents(descRef);
                   const selection = window.getSelection();
-                  selection?.removeAllRanges();
-                  selection?.addRange(range);
+                    selection?.removeAllRanges();
+                    selection?.addRange(range);
                   // Apply color to all selected text
-                  document.execCommand('foreColor', false, color);
-                  selection?.removeAllRanges();
+                    document.execCommand('foreColor', false, color);
+                    selection?.removeAllRanges();
                   const content = descRef.innerHTML || descRef.textContent || '';
                   onUpdateProduct(product.id, { description: content });
                 }
@@ -1124,12 +1180,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 // Hide name toolbar when clicking on description
                 setShowNameToolbar(false);
                 setShowNameColorPicker(false);
+                setActiveNameSubToolbar(null);
                 setShowDescToolbar(true);
               }}
               onSelect={() => {
                 // Hide name toolbar when selecting in description
                 setShowNameToolbar(false);
                 setShowNameColorPicker(false);
+                setActiveNameSubToolbar(null);
                 setShowDescToolbar(true);
               }}
               onBlur={(e) => {
@@ -1152,6 +1210,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     if (!toolbarElement?.contains(activeElement)) {
                       setShowDescToolbar(false);
                       setShowDescColorPicker(false);
+                      setActiveDescSubToolbar(null);
                     }
                   }, 200);
                 }

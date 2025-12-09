@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Bold, Italic, Palette, Type } from 'lucide-react';
+import { Bold, Italic, Palette, Type, ArrowLeft } from 'lucide-react';
 import { getThemeTextColor as getThemeTextColorFromConstants } from '../actions/constants';
 import { normalizeHtmlContent } from '../utils/html';
 const getNormalizedContent = (node?: HTMLElement | null, fallback = ''): string => {
@@ -102,8 +102,10 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   const [showSubHeaderToolbar, setShowSubHeaderToolbar] = React.useState(false);
   const [showHeaderColorPicker, setShowHeaderColorPicker] = React.useState(false);
   const [showSubHeaderColorPicker, setShowSubHeaderColorPicker] = React.useState(false);
+  const [activeHeaderSubToolbar, setActiveHeaderSubToolbar] = React.useState<'color' | 'fontSize' | null>(null);
   const [selectedHeaderColor, setSelectedHeaderColor] = React.useState(headerMessage?.color || '#FFFFFF');
   const [selectedSubHeaderColor, setSelectedSubHeaderColor] = React.useState(subHeader?.color || '#FFFFFF');
+  const [activeSubHeaderSubToolbar, setActiveSubHeaderSubToolbar] = React.useState<'color' | 'fontSize' | null>(null);
   
   // Update selected colors when fixedTextStyles change
   React.useEffect(() => {
@@ -390,10 +392,13 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     quickColors: string[];
     fontSizeOptions: number[];
     getFontSizeFromStyleClass: (styleClass: string) => number;
+    activeSubToolbar: 'color' | 'fontSize' | null;
+    setActiveSubToolbar: React.Dispatch<React.SetStateAction<'color' | 'fontSize' | null>>;
     onBold: () => void;
     onItalic: () => void;
     onColorChange: (color: string) => void;
     onFontSizeChange: (size: number) => void;
+    onClose: () => void;
   }> = ({ 
     show, 
     elementRef, 
@@ -408,10 +413,13 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     quickColors,
     fontSizeOptions,
     getFontSizeFromStyleClass,
+    activeSubToolbar,
+    setActiveSubToolbar,
     onBold,
     onItalic,
     onColorChange,
     onFontSizeChange,
+    onClose,
   }) => {
     if (!show || !elementRef || typeof window === 'undefined') return null;
     
@@ -543,6 +551,125 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
       }
     }, [show, elementRef]);
     
+    // Show sub-toolbar for color picker or font size
+    if (activeSubToolbar === 'color' || activeSubToolbar === 'fontSize') {
+      return createPortal(
+        <div
+          ref={toolbarRef}
+          className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
+          style={{
+            pointerEvents: 'auto',
+            zIndex: 999999,
+            top: `${position.top}px`,
+            left: `${position.left}px`,
+            transform: 'translateX(-50%)',
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          {/* Back button */}
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setActiveSubToolbar(null);
+              setShowColorPicker(false);
+              setShowFontSize(false);
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            title="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          
+          {/* Color picker grid */}
+          {activeSubToolbar === 'color' && (
+            <div className="grid grid-cols-6 gap-1">
+              {quickColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elementRef) {
+                      elementRef.focus();
+                      // If no selection, select all first
+                      const selection = window.getSelection();
+                      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                        const range = document.createRange();
+                        range.selectNodeContents(elementRef);
+                        selection?.removeAllRanges();
+                        selection?.addRange(range);
+                      }
+                      setSelectedColor(color);
+                      onColorChange(color);
+                      setActiveSubToolbar(null);
+                      onClose();
+                    }
+                  }}
+                  className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+          )}
+          
+          {/* Font size picker */}
+          {activeSubToolbar === 'fontSize' && (
+            <div className="max-h-64 overflow-y-auto min-w-[120px]">
+              {fontSizeOptions.map((size) => {
+                const currentSize = getFontSizeFromStyleClass(currentStyleClass);
+                const isSelected = currentSize === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Restore focus to element
+                      if (elementRef) {
+                        elementRef.focus();
+                        // Restore saved selection
+                        restoreSelection();
+                      }
+                      onFontSizeChange(size);
+                      setActiveSubToolbar(null);
+                      onClose();
+                    }}
+                    className={`w-full px-3 py-2 text-left rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                      isSelected ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 font-semibold' : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    {size}px
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>,
+        document.body
+      );
+    }
+    
+    // Main toolbar
     return createPortal(
       <div
         ref={toolbarRef}
@@ -569,6 +696,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             e.preventDefault();
             e.stopPropagation();
             onBold();
+            onClose();
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           title="Bold"
@@ -585,189 +713,86 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             e.preventDefault();
             e.stopPropagation();
             onItalic();
+            onClose();
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           title="Italic"
         >
           <Italic className="w-4 h-4" />
         </button>
-        <div className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (elementRef) {
-                elementRef.focus();
-                const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  let element: Element | null = null;
-                  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-                    element = range.commonAncestorContainer.parentElement;
-                  } else {
-                    element = range.commonAncestorContainer as Element;
-                  }
-                  while (element && element !== elementRef) {
-                    const style = element.getAttribute('style');
-                    if (style) {
-                      const colorMatch = style.match(/color:\s*([^;]+)/i);
-                      if (colorMatch) {
-                        const color = colorMatch[1].trim();
-                        if (color.startsWith('rgb')) {
-                          const rgb = color.match(/\d+/g);
-                          if (rgb && rgb.length >= 3) {
-                            const hex = '#' + rgb.slice(0, 3).map(x => {
-                              const hex = parseInt(x).toString(16);
-                              return hex.length === 1 ? '0' + hex : hex;
-                            }).join('');
-                            setSelectedColor(hex);
-                            break;
-                          }
-                        } else if (color.startsWith('#')) {
-                          setSelectedColor(color);
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (elementRef) {
+              elementRef.focus();
+              const selection = window.getSelection();
+              if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                let element: Element | null = null;
+                if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+                  element = range.commonAncestorContainer.parentElement;
+                } else {
+                  element = range.commonAncestorContainer as Element;
+                }
+                while (element && element !== elementRef) {
+                  const style = element.getAttribute('style');
+                  if (style) {
+                    const colorMatch = style.match(/color:\s*([^;]+)/i);
+                    if (colorMatch) {
+                      const color = colorMatch[1].trim();
+                      if (color.startsWith('rgb')) {
+                        const rgb = color.match(/\d+/g);
+                        if (rgb && rgb.length >= 3) {
+                          const hex = '#' + rgb.slice(0, 3).map(x => {
+                            const hex = parseInt(x).toString(16);
+                            return hex.length === 1 ? '0' + hex : hex;
+                          }).join('');
+                          setSelectedColor(hex);
                           break;
                         }
+                      } else if (color.startsWith('#')) {
+                        setSelectedColor(color);
+                        break;
                       }
                     }
-                    element = element.parentElement;
                   }
+                  element = element.parentElement;
                 }
               }
-              setShowColorPicker(!showColorPicker);
-              setShowFontSize(false);
-            }}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Text Color"
-          >
-            <Palette className="w-4 h-4" />
-          </button>
-          {showColorPicker && createPortal(
-            <div
-              className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2"
-              style={{
-                pointerEvents: 'auto',
-                zIndex: 1000000,
-                top: `${position.top}px`,
-                left: `${position.left}px`,
-                transform: 'translateX(-50%)',
-              }}
-            >
-              <div className="grid grid-cols-6 gap-1">
-                {quickColors.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (elementRef) {
-                        elementRef.focus();
-                        // If no selection, select all first
-                        const selection = window.getSelection();
-                        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                          const range = document.createRange();
-                          range.selectNodeContents(elementRef);
-                          selection?.removeAllRanges();
-                          selection?.addRange(range);
-                        }
-                      setSelectedColor(color);
-                      onColorChange(color);
-                      setShowColorPicker(false);
-                      }
-                    }}
-                    className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
-                ))}
-              </div>
-            </div>,
-            document.body
-          )}
-        </div>
-        <div className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Save selection before opening dropdown
-              saveSelection();
-              setShowFontSize(!showFontSize);
-              setShowColorPicker(false);
-            }}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Font Size"
-          >
-            <Type className="w-4 h-4" />
-          </button>
-          {showFontSize && createPortal(
-            <div
-              className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 max-h-64 overflow-y-auto"
-              style={{
-                pointerEvents: 'auto',
-                zIndex: 1000000,
-                top: `${position.top}px`,
-                left: `${position.left}px`,
-                transform: 'translateX(-50%)',
-                minWidth: '120px',
-              }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              {fontSizeOptions.map((size) => {
-                const currentSize = getFontSizeFromStyleClass(currentStyleClass);
-                const isSelected = currentSize === size;
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Restore focus to element
-                      if (elementRef) {
-                        elementRef.focus();
-                        // Restore saved selection
-                        restoreSelection();
-                      }
-                      onFontSizeChange(size);
-                      setShowFontSize(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-                      isSelected ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 font-semibold' : 'text-gray-900 dark:text-white'
-                    }`}
-                  >
-                    {size}px
-                  </button>
-                );
-              })}
-            </div>,
-            document.body
-          )}
-        </div>
+            }
+            setActiveSubToolbar('color');
+            setShowFontSize(false);
+          }}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+          title="Text Color"
+        >
+          <Palette className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Save selection before opening dropdown
+            saveSelection();
+            setActiveSubToolbar('fontSize');
+            setShowColorPicker(false);
+          }}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+          title="Font Size"
+        >
+          <Type className="w-4 h-4" />
+        </button>
       </div>,
       document.body
     );
@@ -794,6 +819,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             quickColors={quickColors}
             fontSizeOptions={fontSizeOptions}
             getFontSizeFromStyleClass={getFontSizeFromStyleClass}
+            activeSubToolbar={activeHeaderSubToolbar}
+            setActiveSubToolbar={setActiveHeaderSubToolbar}
+            onClose={() => {
+              setShowHeaderToolbar(false);
+              setShowHeaderColorPicker(false);
+              setShowHeaderFontSize(false);
+              setActiveHeaderSubToolbar(null);
+            }}
             onBold={() => {
               if (headerMessageRef) {
                 headerMessageRef.focus();
@@ -893,7 +926,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
           <div
             ref={setHeaderMessageRef}
             contentEditable
-            className={`${headerMessage?.styleClass || applyThemeColorsToText(headerMessage, 'header')} cursor-text hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1 outline-none`}
+            className={`${headerMessage?.styleClass || applyThemeColorsToText(headerMessage, 'header')} font-bold cursor-text hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1 outline-none`}
             style={{
               ...sharedTextContainerStyle,
               color: headerMessage?.color || '#FFFFFF',
@@ -906,6 +939,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               setShowSubHeaderToolbar(false);
               setShowSubHeaderColorPicker(false);
               setShowSubHeaderFontSize(false);
+              setActiveSubHeaderSubToolbar(null);
               setShowHeaderToolbar(true);
             }}
             onSelect={() => {
@@ -913,6 +947,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               setShowSubHeaderToolbar(false);
               setShowSubHeaderColorPicker(false);
               setShowSubHeaderFontSize(false);
+              setActiveSubHeaderSubToolbar(null);
               setShowHeaderToolbar(true);
             }}
             onBlur={(e) => {
@@ -943,6 +978,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                     setShowHeaderToolbar(false);
                     setShowHeaderColorPicker(false);
                     setShowHeaderFontSize(false);
+                    setActiveHeaderSubToolbar(null);
                   }
                 }, 200);
               }
@@ -962,7 +998,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         </div>
       ) : (
         <p 
-          className={`${headerMessage?.styleClass || applyThemeColorsToText(headerMessage, 'header')}`}
+          className={`${headerMessage?.styleClass || applyThemeColorsToText(headerMessage, 'header')} font-bold`}
           style={{ 
             ...sharedTextContainerStyle,
             color: headerMessage?.color, 
@@ -990,6 +1026,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             quickColors={quickColors}
             fontSizeOptions={fontSizeOptions}
             getFontSizeFromStyleClass={getFontSizeFromStyleClass}
+            activeSubToolbar={activeSubHeaderSubToolbar}
+            setActiveSubToolbar={setActiveSubHeaderSubToolbar}
+            onClose={() => {
+              setShowSubHeaderToolbar(false);
+              setShowSubHeaderColorPicker(false);
+              setShowSubHeaderFontSize(false);
+              setActiveSubHeaderSubToolbar(null);
+            }}
             onBold={() => {
               if (subHeaderRef) {
                 subHeaderRef.focus();
@@ -1102,6 +1146,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               setShowHeaderToolbar(false);
               setShowHeaderColorPicker(false);
               setShowHeaderFontSize(false);
+              setActiveHeaderSubToolbar(null);
               setShowSubHeaderToolbar(true);
             }}
             onSelect={() => {
@@ -1109,6 +1154,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               setShowHeaderToolbar(false);
               setShowHeaderColorPicker(false);
               setShowHeaderFontSize(false);
+              setActiveHeaderSubToolbar(null);
               setShowSubHeaderToolbar(true);
             }}
             onBlur={(e) => {
@@ -1139,6 +1185,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                     setShowSubHeaderToolbar(false);
                     setShowSubHeaderColorPicker(false);
                     setShowSubHeaderFontSize(false);
+                    setActiveSubHeaderSubToolbar(null);
                   }
                 }, 200);
               }

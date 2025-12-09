@@ -1146,8 +1146,8 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
               placeholder="Edit text"
               value={(() => {
                 const rawContent = selectedAssetId === 'mainHeader' ? fixedTextStyles.mainHeader.content : 
-                                 selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.content : 
-                                 selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.content : 
+                     selectedAssetId === 'headerMessage' ? fixedTextStyles.headerMessage.content : 
+                     selectedAssetId === 'subHeader' ? fixedTextStyles.subHeader.content : 
                                  fixedTextStyles.promoMessage.content;
                 // First normalize to prevent double-encoding, then decode entities for textarea display
                 const normalized = normalizeHtmlContent(rawContent || '');
