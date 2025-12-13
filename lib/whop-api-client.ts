@@ -162,8 +162,6 @@ export class WhopApiClient {
                 experienceId: exp.id, // Store the experience ID for this app installation
                 companyRoute: companyRoute || undefined, // Company route for URL generation
                 appSlug: experienceSlug, // Generated experience slug
-                // NEW: Add logo information from app data
-                logo: exp.app?.icon?.sourceUrl || exp.logo?.sourceUrl || undefined,
                 bannerImage: exp.bannerImage?.sourceUrl || undefined
               };
               

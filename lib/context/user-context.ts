@@ -187,7 +187,6 @@ async function createUserContext(
 					whopCompanyId: companyId,
 					name: companyName,
 					description: `Experience for ${companyName}`,
-					logo: companyLogo,
 				})
 				.returning();
 
@@ -466,7 +465,6 @@ async function createUserContext(
 				whopCompanyId: experience.whopCompanyId,
 				name: experience.name,
 				description: experience.description || undefined,
-				logo: experience.logo || undefined,
 				link: experience.link || undefined, // Include link field from database
 			},
 		};

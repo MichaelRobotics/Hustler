@@ -39,6 +39,11 @@ export const messageTypeEnum = pgEnum("message_type", [
 	"user",
 	"bot",
 ]);
+export const subscriptionTypeEnum = pgEnum("subscription_type", [
+	"Basic",
+	"Pro",
+	"Vip",
+]);
 
 
 // ===== CORE WHOP INTEGRATION TABLES =====
@@ -51,7 +56,7 @@ export const experiences = pgTable(
 		whopCompanyId: text("whop_company_id").notNull(), 
 		name: text("name").notNull(),
 		description: text("description"),
-		logo: text("logo"),
+		subscription: subscriptionTypeEnum("subscription"),
 		link: text("link"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),

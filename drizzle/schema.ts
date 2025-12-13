@@ -6,6 +6,7 @@ export const generationStatus = pgEnum("generation_status", ['idle', 'generating
 export const messageType = pgEnum("message_type", ['user', 'bot'])
 export const resourceCategory = pgEnum("resource_category", ['PAID', 'FREE_VALUE'])
 export const resourceType = pgEnum("resource_type", ['AFFILIATE', 'MY_PRODUCTS'])
+export const subscriptionType = pgEnum("subscription_type", ['Basic', 'Pro', 'Vip'])
 
 
 export const funnelResources = pgTable("funnel_resources", {
@@ -218,7 +219,7 @@ export const experiences = pgTable("experiences", {
 	whopCompanyId: text("whop_company_id").notNull(),
 	name: text().notNull(),
 	description: text(),
-	logo: text(),
+	subscription: subscriptionType("subscription"),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 	link: text(),
