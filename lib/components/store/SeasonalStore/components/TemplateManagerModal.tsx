@@ -305,11 +305,11 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
         }
       `}</style>
       <div
-        className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-      >
+      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -567,7 +567,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                         } catch (refreshError) {
                           console.error('Error refreshing discount after delete error:', refreshError);
                           setDatabaseDiscountData(null);
-                        }
+                          }
                       } finally {
                         setIsDeleting(false);
                       }

@@ -326,7 +326,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Theme loading
     loadThemes,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
-
+  
   // Create ref to store setProductsAndReorder for passing to hook
   const setProductsAndReorderRef = useRef<((products: Product[] | ((prev: Product[]) => Product[])) => void) | undefined>(undefined);
   
@@ -1159,41 +1159,41 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     
     // Batch all state updates in a transition to prevent cascading recalculations
     startTransition(() => {
-      // Restore all state from snapshot
-      setProductsFromHook(snapshotData.products);
-      setFloatingAssets(snapshotData.floatingAssets);
-      setCurrentSeason(snapshotData.currentSeason);
-      setFixedTextStyles(snapshotData.fixedTextStyles);
-      setLogoAsset(snapshotData.logoAsset);
-      
-      // Restore background - use setBackground which handles both generated and uploaded
-      if (snapshotData.generatedBackground) {
-        setBackground('generated', snapshotData.generatedBackground);
-      } else if (snapshotData.uploadedBackground) {
-        setBackground('uploaded', snapshotData.uploadedBackground);
-      } else {
-        // Clear both backgrounds if neither exists
-        setBackground('generated', null);
-        setBackground('uploaded', null);
-      }
-      
-      setBackgroundAttachmentId(snapshotData.backgroundAttachmentId);
-      setBackgroundAttachmentUrl(snapshotData.backgroundAttachmentUrl);
-      setLogoAttachmentId(snapshotData.logoAttachmentId);
-      setLogoAttachmentUrl(snapshotData.logoAttachmentUrl);
-      setPromoButton(snapshotData.promoButton);
-      setDiscountSettings(snapshotData.discountSettings || {
-        enabled: false,
-        globalDiscount: false,
-        globalDiscountType: 'percentage',
-        globalDiscountAmount: 20,
-        percentage: 20,
-        startDate: '',
-        endDate: '',
-        discountText: '',
-        promoCode: '',
-        prePromoMessages: [],
-        activePromoMessages: [],
+    // Restore all state from snapshot
+    setProductsFromHook(snapshotData.products);
+    setFloatingAssets(snapshotData.floatingAssets);
+    setCurrentSeason(snapshotData.currentSeason);
+    setFixedTextStyles(snapshotData.fixedTextStyles);
+    setLogoAsset(snapshotData.logoAsset);
+    
+    // Restore background - use setBackground which handles both generated and uploaded
+    if (snapshotData.generatedBackground) {
+      setBackground('generated', snapshotData.generatedBackground);
+    } else if (snapshotData.uploadedBackground) {
+      setBackground('uploaded', snapshotData.uploadedBackground);
+    } else {
+      // Clear both backgrounds if neither exists
+      setBackground('generated', null);
+      setBackground('uploaded', null);
+    }
+    
+    setBackgroundAttachmentId(snapshotData.backgroundAttachmentId);
+    setBackgroundAttachmentUrl(snapshotData.backgroundAttachmentUrl);
+    setLogoAttachmentId(snapshotData.logoAttachmentId);
+    setLogoAttachmentUrl(snapshotData.logoAttachmentUrl);
+    setPromoButton(snapshotData.promoButton);
+    setDiscountSettings(snapshotData.discountSettings || {
+      enabled: false,
+      globalDiscount: false,
+      globalDiscountType: 'percentage',
+      globalDiscountAmount: 20,
+      percentage: 20,
+      startDate: '',
+      endDate: '',
+      discountText: '',
+      promoCode: '',
+      prePromoMessages: [],
+      activePromoMessages: [],
       });
     });
     

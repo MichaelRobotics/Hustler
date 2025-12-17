@@ -64,8 +64,8 @@ todos: []
 
 - Add checks in `canCreateDiscount` useMemo:
 - If `globalDiscount === true`:
-  - `quantityPerProduct` must be defined (not undefined) - can be -1 for unlimited or >= 0
-  - `durationType` must be defined (not undefined) - must be one of the valid values
+- `quantityPerProduct` must be defined (not undefined) - can be -1 for unlimited or >= 0
+- `durationType` must be defined (not undefined) - must be one of the valid values
 
 ## Implementation Details
 

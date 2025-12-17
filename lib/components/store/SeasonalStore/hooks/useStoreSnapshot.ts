@@ -177,12 +177,12 @@ export function useStoreSnapshot({
     // Debounce change detection to prevent rapid-fire comparisons
     changeDetectionTimeoutRef.current = setTimeout(() => {
       // Double-check we're not resetting (might have changed during timeout)
-      if (isResettingRef.current) {
-        return;
-      }
+    if (isResettingRef.current) {
+      return;
+    }
 
-      const currentSnapshot = computeStoreSnapshot();
-      setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
+    const currentSnapshot = computeStoreSnapshot();
+    setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
     }, 100);
 
     return () => {

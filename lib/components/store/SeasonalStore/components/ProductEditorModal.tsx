@@ -12,7 +12,7 @@ import type { DiscountSettings } from '../types';
 import { ProductPageModal } from './ProductPageModal';
 import type { LegacyTheme } from '../types';
 import { apiPost, apiGet } from '@/lib/utils/api-client';
-import { removeProductPromoData } from '../utils/discountHelpers';
+import { removeProductPromoData, checkDiscountStatus, type DiscountData } from '../utils/discountHelpers';
 import { 
   FormattingToolbar, 
   BadgeSelector, 
@@ -231,6 +231,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     endDate?: string;
   } | null>(null);
   
+  // Store full discount data from database for use in handlers
+  const [databaseDiscountData, setDatabaseDiscountData] = useState<DiscountData | null>(null);
+  
   // Track if we've initiated promo loading (to prevent flicker)
   const [hasInitiatedPromoLoad, setHasInitiatedPromoLoad] = useState(false);
   
@@ -318,6 +321,20 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   const [isCreatingPromo, setIsCreatingPromo] = useState(false);
   const [isApplyingPromo, setIsApplyingPromo] = useState(false); // Track when API call is in progress
   const [generatedPromoName, setGeneratedPromoName] = useState<string>('');
+  
+  // Reset isCreatingPromo when modal opens/closes or product changes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsCreatingPromo(false);
+      setGeneratedPromoName('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    // Reset when product changes
+    setIsCreatingPromo(false);
+    setGeneratedPromoName('');
+  }, [productEditor.productId]);
   const [selectedPromoData, setSelectedPromoData] = useState<{
     code: string;
     amountOff: number;
@@ -564,11 +581,16 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     return Boolean(discountSettings?.seasonalDiscountId);
   }, [discountSettings?.seasonalDiscountId]);
   
-  // Show +New button when seasonal discount exists
+  // Show +New button when seasonal discount exists in database (approaching or active)
   // Users can create product-specific discounts regardless of global discount status
   const showNewPromoButton = useMemo(() => {
+    // Check if discount exists in database (via seasonalDiscountStatus)
+    if (seasonalDiscountStatus) {
+      return seasonalDiscountStatus.status === 'upcoming' || seasonalDiscountStatus.status === 'active';
+    }
+    // Fallback: check if discountSettings has seasonalDiscountId
     return hasSeasonalDiscount;
-  }, [hasSeasonalDiscount]);
+  }, [seasonalDiscountStatus, hasSeasonalDiscount]);
 
   // Generate promo name with price/percentage suffix
   const generatePromoName = useCallback((
@@ -995,8 +1017,10 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
 
   // Handle +New button click
   const handleNewPromoClick = useCallback(() => {
-    // Check if we have the base promo code from seasonal discount
-    if (!discountSettings?.promoCode) {
+    // Get promo code from discountSettings or database discount data
+    const promoCode = discountSettings?.promoCode || databaseDiscountData?.seasonalDiscountPromo;
+    
+    if (!promoCode) {
       console.warn('Cannot create promo: seasonal discount promo code is missing');
       return;
     }
@@ -1006,14 +1030,14 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     // But we can generate a placeholder name if they are set
     if (localPromoDiscountType && localPromoDiscountAmount) {
       const generatedName = generatePromoName(
-        discountSettings.promoCode,
+        promoCode,
         localPromoDiscountType,
         localPromoDiscountAmount
       );
       setGeneratedPromoName(generatedName);
     } else {
       // Set a placeholder name that will be updated when user sets discount type/amount
-      setGeneratedPromoName(discountSettings.promoCode);
+      setGeneratedPromoName(promoCode);
     }
 
     setIsCreatingPromo(true);
@@ -1023,7 +1047,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     if (!hasDiscountSelected) {
       setHasDiscountSelected(true);
     }
-  }, [discountSettings?.promoCode, localPromoDiscountType, localPromoDiscountAmount, generatePromoName, hasDiscountSelected]);
+  }, [discountSettings?.promoCode, databaseDiscountData?.seasonalDiscountPromo, localPromoDiscountType, localPromoDiscountAmount, generatePromoName, hasDiscountSelected]);
 
   // Helper function to find an available promo code
   const findAvailablePromoCode = useCallback((baseCode: string, existingCodes: Set<string>): string => {
@@ -1488,6 +1512,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   // Load seasonal discount from database (not template) for all resources
   useEffect(() => {
     if (!isOpen || !experienceId) {
+      setDatabaseDiscountData(null);
       setSeasonalDiscountStatus(null);
       return;
     }
@@ -1504,43 +1529,42 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           const data = await response.json();
           const discountData = data.discountData;
           
+          // Store discount data for use in handlers
+          setDatabaseDiscountData(discountData || null);
+          
           if (!discountData) {
             setSeasonalDiscountStatus({ status: 'none' });
             return;
           }
 
-          const now = new Date();
-          const startDate = discountData.startDate ? new Date(discountData.startDate) : null;
-          const endDate = discountData.endDate ? new Date(discountData.endDate) : null;
+          // Use checkDiscountStatus helper to properly determine status from experience record
+          // The API returns SeasonalDiscountData which matches DiscountData interface
+          const discountStatus = checkDiscountStatus(discountData as DiscountData);
 
-          if (endDate && now > endDate) {
-            setSeasonalDiscountStatus({ 
-              status: 'expired',
-              endDate: discountData.endDate 
-            });
-          } else if (startDate && now < startDate) {
-            setSeasonalDiscountStatus({ 
-              status: 'upcoming',
-              startDate: discountData.startDate,
-              endDate: discountData.endDate 
-            });
-          } else if (startDate && endDate && now >= startDate && now <= endDate) {
-            setSeasonalDiscountStatus({ 
-              status: 'active',
-              startDate: discountData.startDate,
-              endDate: discountData.endDate 
-            });
+          // Map to ProductDiscountStatus format
+          let status: 'none' | 'upcoming' | 'active' | 'expired';
+          if (discountStatus === 'non-existent') {
+            status = 'none';
+          } else if (discountStatus === 'approaching') {
+            status = 'upcoming';
+          } else if (discountStatus === 'active') {
+            status = 'active';
           } else {
-            setSeasonalDiscountStatus({ 
-              status: 'active',
-              endDate: discountData.endDate 
-            });
+            status = 'expired';
           }
+
+          setSeasonalDiscountStatus({
+            status,
+            startDate: discountData.seasonalDiscountStart ? (typeof discountData.seasonalDiscountStart === 'string' ? discountData.seasonalDiscountStart : discountData.seasonalDiscountStart.toISOString()) : undefined,
+            endDate: discountData.seasonalDiscountEnd ? (typeof discountData.seasonalDiscountEnd === 'string' ? discountData.seasonalDiscountEnd : discountData.seasonalDiscountEnd.toISOString()) : undefined
+          });
         } else {
+          setDatabaseDiscountData(null);
           setSeasonalDiscountStatus({ status: 'none' });
         }
       } catch (error) {
         console.error('Error loading seasonal discount from database:', error);
+        setDatabaseDiscountData(null);
         setSeasonalDiscountStatus({ status: 'none' });
       }
     };

@@ -835,15 +835,15 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                       </>
                     ) : (
                       <>
-                        {!isPremium && <Lock className="w-4 h-4" />}
-                        {hasDiscount && isPremium && <Edit className="w-4 h-4" />}
-                        {!isPremium ? (
-                          <>
-                            Locked
-                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                          </>
-                        ) : (
-                          hasDiscount ? 'Save' : 'Create Discount'
+                    {!isPremium && <Lock className="w-4 h-4" />}
+                    {hasDiscount && isPremium && <Edit className="w-4 h-4" />}
+                    {!isPremium ? (
+                      <>
+                        Locked
+                        <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      </>
+                    ) : (
+                      hasDiscount ? 'Save' : 'Create Discount'
                         )}
                       </>
                     )}
