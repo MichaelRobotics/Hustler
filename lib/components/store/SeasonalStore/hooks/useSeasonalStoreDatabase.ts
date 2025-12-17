@@ -43,6 +43,7 @@ import {
   filterProductsAgainstMarketStall,
   sanitizeProducts as sanitizeProductsUtil,
 } from '@/lib/components/store/SeasonalStore/utils/productUtils';
+import { apiPost } from '@/lib/utils/api-client';
 
 const sanitizeProductContent = (html?: string | null): string | undefined => {
   if (!html) return html || undefined;
@@ -432,6 +433,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     endDate: '',
     discountText: '',
     promoCode: '',
+    durationType: undefined,
+    durationMonths: undefined,
+    quantityPerProduct: undefined,
     prePromoMessages: [],
     activePromoMessages: [],
   }), []);
@@ -831,7 +835,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             id: `resource-${matchedResource.id}`,
             name: templateProduct.name || matchedResource.name,
             description: templateProduct.description || matchedResource.description || '',
-            price: templateProduct.price !== undefined && templateProduct.price !== null ? templateProduct.price : parseFloat(matchedResource.price || '0'),
+            price: parseFloat(matchedResource.price || '0'), // Always use MarketStall price
             buttonLink: templateProduct.buttonLink || matchedResource.link || '',
             whopProductId: matchedResource.whopProductId,
             cardClass: templateProduct.cardClass,
@@ -844,6 +848,27 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             imageAttachmentId: templateProduct.imageAttachmentId || null,
             imageAttachmentUrl: templateProduct.imageAttachmentUrl || templateProduct.image || matchedResource.image || null,
             containerAsset: templateProduct.containerAsset,
+
+            // Preserve promo-related fields from template
+            promoDiscountType: templateProduct.promoDiscountType,
+            promoDiscountAmount: templateProduct.promoDiscountAmount,
+            promoLimitQuantity: templateProduct.promoLimitQuantity,
+            promoQuantityLeft: templateProduct.promoQuantityLeft,
+            promoShowFireIcon: templateProduct.promoShowFireIcon,
+            promoCodeId: templateProduct.promoCodeId,
+            promoCode: templateProduct.promoCode,
+            promoScope: templateProduct.promoScope,
+            promoDurationType: templateProduct.promoDurationType,
+            promoDurationMonths: templateProduct.promoDurationMonths,
+            
+            // Preserve other fields from template
+            badge: templateProduct.badge ?? null,
+            salesCount: templateProduct.salesCount,
+            showSalesCount: templateProduct.showSalesCount,
+            starRating: templateProduct.starRating,
+            reviewCount: templateProduct.reviewCount,
+            showRatingInfo: templateProduct.showRatingInfo,
+            checkoutConfigurationId: templateProduct.checkoutConfigurationId,
 
             // Include type, storageUrl, and productImages from Market Stall resource
             // Prefer template product type if it exists, otherwise use resource type
@@ -1172,11 +1197,167 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setPromoButton(template.templateData.promoButton);
     }
     
-    // Load discount settings if available
+    // Load discount settings if available, with validation
     if (template.templateData.discountSettings) {
-      setDiscountSettings(template.templateData.discountSettings);
+      const discountSettings = template.templateData.discountSettings;
+      
+      // Validate seasonalDiscountId if it exists
+      if (discountSettings.seasonalDiscountId) {
+        try {
+          // Use API route instead of direct import to avoid bundling server code
+          const response = await apiPost(
+            '/api/seasonal-discount/validate',
+            {
+              experienceId,
+              seasonalDiscountId: discountSettings.seasonalDiscountId,
+            },
+            experienceId
+          );
+          
+          if (!response.ok) {
+            throw new Error('Failed to validate seasonal discount');
+          }
+          
+          const validation = await response.json();
+          
+          if (!validation.isValid || validation.isExpired) {
+            // Remove invalid/expired discount from template
+            const updatedTemplateData = {
+              ...template.templateData,
+              discountSettings: undefined,
+            };
+            
+            // Update template in database
+            try {
+              const updatedTemplate = await updateTemplate(experienceId, template.id, {
+                templateData: updatedTemplateData,
+              });
+              
+              // Update templates array to reflect the change
+              setTemplates(prev => prev.map(t => t.id === template.id ? updatedTemplate : t));
+              
+              // Update cache if it exists
+              updateCachedTemplates(prev => {
+                const newCache = new Map(prev);
+                newCache.set(template.id, updatedTemplate);
+                return newCache;
+              });
+            } catch (error) {
+              console.warn('⚠️ Failed to update template after removing invalid discount:', error);
+            }
+            
+            // Update local state with default settings
+            setDiscountSettings(createDefaultDiscountSettings());
+          } else {
+            // Valid discount, load it
+            setDiscountSettings(discountSettings);
+          }
+        } catch (error) {
+          console.warn('⚠️ Error validating seasonal discount, removing from template:', error);
+          // Remove discount on validation error
+          try {
+            const updatedTemplate = await updateTemplate(experienceId, template.id, {
+              templateData: {
+                ...template.templateData,
+                discountSettings: undefined,
+              },
+            });
+            
+            // Update templates array to reflect the change
+            setTemplates(prev => prev.map(t => t.id === template.id ? updatedTemplate : t));
+            
+            // Update cache if it exists
+            updateCachedTemplates(prev => {
+              const newCache = new Map(prev);
+              newCache.set(template.id, updatedTemplate);
+              return newCache;
+            });
+          } catch (updateError) {
+            console.warn('⚠️ Failed to update template:', updateError);
+          }
+          setDiscountSettings(createDefaultDiscountSettings());
+        }
+      } else {
+        // No seasonalDiscountId, just load the settings
+        setDiscountSettings(discountSettings);
+      }
     } else {
-      setDiscountSettings(createDefaultDiscountSettings());
+      // No discountSettings in template - check if they exist in experience
+      try {
+        const response = await apiPost(
+          '/api/seasonal-discount/get',
+          { experienceId },
+          experienceId
+        );
+
+        if (response.ok) {
+          const { discountData } = await response.json();
+          
+          if (discountData && discountData.seasonalDiscountId) {
+            // Convert SeasonalDiscountData to DiscountSettings format
+            const experienceDiscountSettings: DiscountSettings = {
+              enabled: true,
+              globalDiscount: discountData.globalDiscount || false,
+              globalDiscountType: 'percentage',
+              globalDiscountAmount: 0,
+              percentage: 0,
+              startDate: discountData.seasonalDiscountStart 
+                ? new Date(discountData.seasonalDiscountStart).toISOString() 
+                : '',
+              endDate: discountData.seasonalDiscountEnd 
+                ? new Date(discountData.seasonalDiscountEnd).toISOString() 
+                : '',
+              discountText: discountData.seasonalDiscountText || '',
+              promoCode: discountData.seasonalDiscountPromo || '',
+              durationType: discountData.seasonalDiscountDurationType,
+              durationMonths: discountData.seasonalDiscountDurationMonths,
+              quantityPerProduct: discountData.seasonalDiscountQuantityPerProduct,
+              seasonalDiscountId: discountData.seasonalDiscountId,
+              prePromoMessages: [],
+              activePromoMessages: [],
+            };
+
+            // Sync to template in database
+            try {
+              const updatedTemplate = await updateTemplate(experienceId, template.id, {
+                templateData: {
+                  ...template.templateData,
+                  discountSettings: experienceDiscountSettings,
+                },
+              });
+
+              // Update templates array to reflect the change
+              setTemplates(prev => prev.map(t => t.id === template.id ? updatedTemplate : t));
+
+              // Update cache if it exists
+              updateCachedTemplates(prev => {
+                const newCache = new Map(prev);
+                newCache.set(template.id, updatedTemplate);
+                return newCache;
+              });
+
+              console.log('✅ Synced discountSettings from experience to template:', template.id);
+              
+              // Load the synced settings
+              setDiscountSettings(experienceDiscountSettings);
+            } catch (error) {
+              console.warn('⚠️ Failed to sync discountSettings to template:', error);
+              // Still load the settings even if template update fails
+              setDiscountSettings(experienceDiscountSettings);
+            }
+          } else {
+            // No discount in experience, use defaults
+            setDiscountSettings(createDefaultDiscountSettings());
+          }
+        } else {
+          // API call failed, use defaults
+          setDiscountSettings(createDefaultDiscountSettings());
+        }
+      } catch (error) {
+        console.warn('⚠️ Error fetching discountSettings from experience:', error);
+        // On error, use defaults
+        setDiscountSettings(createDefaultDiscountSettings());
+      }
     }
     
     // Track which template is currently loaded/being edited
@@ -1585,6 +1766,15 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       console.log("🔍 updateTemplate - updates:", updates);
       const updatedTemplate = await updateTemplate(experienceId, templateId, updates);
       setTemplates(prev => prev.map(t => t.id === templateId ? updatedTemplate : t));
+      
+      // Update liveTemplate if this is the live template
+      setLiveTemplate(prev => {
+        if (prev && prev.id === templateId) {
+          return updatedTemplate;
+        }
+        return prev;
+      });
+      
       // Update cache
       updateCachedTemplates(prev => {
         const newCache = new Map(prev);
@@ -1870,6 +2060,99 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         } catch (error) {
           console.warn('⚠️ Failed to update template product order, proceeding with original order:', error);
           // Continue with original order if update fails
+        }
+      }
+      
+      // Check if seasonal discount is active - if not, clean promo data from products
+      if (Array.isArray(templateProducts) && templateProducts.length > 0 && typeof templateProducts[0] !== 'string') {
+        try {
+          // Call API endpoint to check for active seasonal discount
+          const response = await apiPost(
+            '/api/seasonal-discount/get',
+            { experienceId },
+            experienceId
+          );
+          
+          let hasActiveSeasonalDiscount = false;
+          if (response.ok) {
+            const data = await response.json();
+            // discountData will be null if no active discount or expired
+            hasActiveSeasonalDiscount = data.discountData !== null;
+          }
+          
+          if (!hasActiveSeasonalDiscount) {
+            // No active seasonal discount - clean promo data from all products
+            console.log('🧹 No active seasonal discount found - cleaning promo data from template products');
+            
+            let hasPromoData = false;
+            const cleanedProducts = templateProducts.map((product: Product) => {
+              // Check if product has any promo data
+              const hasPromo = product.promoCode || 
+                               product.promoCodeId || 
+                               product.promoDiscountType || 
+                               product.promoDiscountAmount !== undefined ||
+                               product.promoLimitQuantity !== undefined ||
+                               product.promoQuantityLeft !== undefined ||
+                               product.promoShowFireIcon ||
+                               product.promoScope ||
+                               product.promoDurationType ||
+                               product.promoDurationMonths !== undefined;
+              
+              if (hasPromo) {
+                hasPromoData = true;
+                // Remove all promo-related fields
+                const { 
+                  promoCode, 
+                  promoCodeId, 
+                  promoDiscountType, 
+                  promoDiscountAmount,
+                  promoLimitQuantity,
+                  promoQuantityLeft,
+                  promoShowFireIcon,
+                  promoScope,
+                  promoDurationType,
+                  promoDurationMonths,
+                  ...cleanedProduct 
+                } = product;
+                return cleanedProduct;
+              }
+              return product;
+            });
+            
+            if (hasPromoData) {
+              console.log('🧹 Cleaned promo data from products, updating template in database');
+              
+              // Update template in database with cleaned products
+              const updatedTemplateData = {
+                ...template.templateData,
+                products: cleanedProducts
+              };
+              
+              await updateTemplateWrapper(templateId, {
+                templateData: updatedTemplateData
+              });
+              
+              // Update cached template
+              updateCachedTemplates(prev => {
+                const newCache = new Map(prev);
+                const updatedCachedTemplate = {
+                  ...template,
+                  templateData: updatedTemplateData
+                };
+                newCache.set(templateId, updatedCachedTemplate);
+                return newCache;
+              });
+              
+              // Use cleaned products for loading
+              templateProducts = cleanedProducts;
+              console.log('✅ Template promo data cleaned and updated in database');
+            }
+          } else {
+            console.log('✅ Active seasonal discount found - keeping promo data in template');
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to check seasonal discount status, proceeding with original products:', error);
+          // Continue with original products if check fails
         }
       }
         

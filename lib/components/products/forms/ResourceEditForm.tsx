@@ -13,6 +13,7 @@ interface ResourceEditFormProps {
   allResources: any[];
   error?: string | null;
   setError: (error: string | null) => void;
+  experienceId?: string;
 }
 
 export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
@@ -22,6 +23,7 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
   allResources,
   error,
   setError,
+  experienceId,
 }) => {
   const [editingResource, setEditingResource] = useState(initialResource);
   const [isSaving, setIsSaving] = useState(false);
@@ -309,6 +311,7 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
           onSave={handleSave}
           isFormValid={isFormValid()}
           saveButtonText={isSaving ? "Saving..." : "Update"}
+          experienceId={experienceId}
         />
         </div>
       </div>

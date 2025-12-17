@@ -14,6 +14,9 @@ export interface Resource {
 	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
 	price?: string; // Price from access pass plan or user input
 	whopProductId?: string; // ID of the actual Whop product/app (for synced products)
+	planId?: string; // Whop plan ID associated with this resource
+	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
+	checkoutConfigurationId?: string; // Checkout configuration ID for resources created via checkout
 	displayOrder?: number; // Order for displaying resources in Market Stall
 }
 
@@ -30,6 +33,9 @@ export interface ResourceFormData {
 	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
 	price?: string;
 	whopProductId?: string; // ID of the actual Whop product/app (for synced products)
+	planId?: string; // Whop plan ID associated with this resource
+	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
+	checkoutConfigurationId?: string; // Checkout configuration ID for resources created via checkout
 }
 
 export interface Funnel {

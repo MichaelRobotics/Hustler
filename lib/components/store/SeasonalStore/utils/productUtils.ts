@@ -141,10 +141,7 @@ export const filterProductsAgainstMarketStall = async (
         description:
           templateProduct.description ||
           truncateDescription(matchedResource.description || ''),
-        price:
-          templateProduct.price !== undefined && templateProduct.price !== null
-            ? templateProduct.price
-            : parseFloat(matchedResource.price || '0'),
+        price: parseFloat(matchedResource.price || '0'), // Always use MarketStall price
         buttonLink: templateProduct.buttonLink || matchedResource.link || '',
         whopProductId: matchedResource.whopProductId,
 
@@ -161,6 +158,11 @@ export const filterProductsAgainstMarketStall = async (
         promoLimitQuantity: templateProduct.promoLimitQuantity,
         promoQuantityLeft: templateProduct.promoQuantityLeft,
         promoShowFireIcon: templateProduct.promoShowFireIcon,
+        promoCodeId: templateProduct.promoCodeId,
+        promoCode: templateProduct.promoCode, // Promo code string from template
+        promoScope: templateProduct.promoScope,
+        promoDurationType: templateProduct.promoDurationType,
+        promoDurationMonths: templateProduct.promoDurationMonths,
         salesCount: templateProduct.salesCount,
         showSalesCount: templateProduct.showSalesCount,
         starRating: templateProduct.starRating,

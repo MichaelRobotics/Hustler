@@ -457,6 +457,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                 isSingleFunnel={isSingleFunnel}
                 error={error}
                 setError={setError}
+                experienceId={user?.experienceId}
               />
             </div>
 							)}
@@ -471,6 +472,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
                 allResources={allResources}
                 error={error}
                 setError={setError}
+                experienceId={user?.experienceId}
               />
             </div>
           )}

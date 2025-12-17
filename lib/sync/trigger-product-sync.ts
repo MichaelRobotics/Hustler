@@ -388,6 +388,13 @@ export async function triggerProductSyncForNewAdmin(
 							return; // Skip this product
 						}
 
+						// Find purchase_url from product plans if available
+						let purchaseUrl: string | undefined = undefined;
+						if (cheapestPlan && product.plans) {
+							const planWithUrl = product.plans.find((p: any) => p.id === cheapestPlan.id && p.purchase_url);
+							purchaseUrl = planWithUrl?.purchase_url || undefined;
+						}
+
 						const resource = await retryDatabaseOperation(
 							() => createResource({ id: userId, experience: { id: experienceId } } as any, {
 								name: product.title.trim(),
@@ -399,7 +406,12 @@ export async function triggerProductSyncForNewAdmin(
 								productApps: productApps,
 								// NEW: Add image and price data
 								image: productImage,
-								price: formattedPrice
+								price: formattedPrice,
+								// Add plan selection if cheapestPlan exists
+								...(cheapestPlan ? {
+									planId: cheapestPlan.id,
+									purchaseUrl: purchaseUrl,
+								} : {}),
 							}),
 							`createResource-${productCategory}-${product.title.trim()}`
 						);

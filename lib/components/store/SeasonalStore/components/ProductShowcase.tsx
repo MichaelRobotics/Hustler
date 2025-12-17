@@ -35,6 +35,7 @@ interface ProductShowcaseProps {
     enabled: boolean;
     startDate: string;
     endDate: string;
+    promoCode?: string; // Promo code for seasonal discount
   };
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;

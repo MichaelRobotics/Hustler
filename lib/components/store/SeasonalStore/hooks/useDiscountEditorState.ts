@@ -75,6 +75,9 @@ export function useDiscountEditorState({
     endDate: '',
     discountText: '',
     promoCode: '',
+    durationType: undefined,
+    durationMonths: undefined,
+    quantityPerProduct: undefined,
     prePromoMessages: [],
     activePromoMessages: [],
   }), []);

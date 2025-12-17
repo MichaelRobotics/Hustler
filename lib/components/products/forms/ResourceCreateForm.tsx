@@ -14,6 +14,7 @@ interface ResourceCreateFormProps {
   error?: string | null;
   setError: (error: string | null) => void;
   defaultCategory?: "PAID" | "FREE_VALUE";
+  experienceId?: string;
 }
 
 export const ResourceCreateForm: React.FC<ResourceCreateFormProps> = ({
@@ -24,6 +25,7 @@ export const ResourceCreateForm: React.FC<ResourceCreateFormProps> = ({
   error,
   setError,
   defaultCategory = "FREE_VALUE",
+  experienceId,
 }) => {
   const [newResource, setNewResource] = useState({
     name: "",
@@ -330,6 +332,7 @@ export const ResourceCreateForm: React.FC<ResourceCreateFormProps> = ({
           onSave={handleSave}
           isFormValid={isFormValid()}
           saveButtonText={isSaving ? "Saving..." : "Create"}
+          experienceId={experienceId}
         />
         </div>
       </div>

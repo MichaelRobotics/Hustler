@@ -363,6 +363,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
                 error={error}
                 setError={setError}
                 defaultCategory="PAID"
+                experienceId={user?.experienceId}
               />
             </div>
           )}
@@ -377,6 +378,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
                 allResources={allResources}
                 error={error}
                 setError={setError}
+                experienceId={user?.experienceId}
               />
             </div>
           )}

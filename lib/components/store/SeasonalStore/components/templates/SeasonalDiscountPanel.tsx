@@ -3,7 +3,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Heading, Text, Card, Separator } from 'frosted-ui';
-import { Clock, Plus, Trash2, Edit, Bold, Italic, Palette } from 'lucide-react';
+import { Clock, Edit, Bold, Italic, Palette, Lock, Star } from 'lucide-react';
 import type { DiscountSettings } from '../../types';
 import { EMOJI_DATABASE } from '../../actions/constants';
 
@@ -12,12 +12,14 @@ interface SeasonalDiscountPanelProps {
   onSettingsChange: (settings: DiscountSettings) => void;
   onSave: () => Promise<void>;
   onDelete: () => Promise<void>;
-  onOpenMessageEditor: (type: 'prePromo' | 'activePromo', index: number) => void;
   isPromoActive: boolean;
   timeRemaining: { hours: number; minutes: number } | null;
   timeUntilStart: { hours: number; minutes: number; seconds: number } | null;
+  isExpired?: boolean; // Whether discount has expired (real-time)
   showPanel: boolean;
   onTogglePanel: () => void;
+  subscription?: "Basic" | "Pro" | "Vip" | null;
+  hasExistingDiscount?: boolean; // Whether discount already exists in saved template
 }
 
 export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
@@ -25,12 +27,14 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
   onSettingsChange,
   onSave,
   onDelete,
-  onOpenMessageEditor,
   isPromoActive,
   timeRemaining,
   timeUntilStart,
+  isExpired = false,
   showPanel,
   onTogglePanel,
+  subscription,
+  hasExistingDiscount = false,
 }) => {
   // Discount text editor state
   const [discountTextEditableRef, setDiscountTextEditableRef] = React.useState<HTMLDivElement | null>(null);
@@ -105,59 +109,32 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
     }
   }, [discountTextEditableRef, discountSettings.discountText, decodeHtmlEntities]);
 
-  const hasDiscount = discountSettings.startDate && discountSettings.endDate;
+  // Only consider discount as "existing" if it was already saved to the template
+  // Setting dates in local state doesn't mean the discount is created yet
+  const hasDiscount = hasExistingDiscount;
+  const isPremium = subscription === "Pro" || subscription === "Vip";
+  
+  // isExpired is now passed as prop (calculated in real-time by TemplateManagerModal)
+  // When discount exists, only discountText is editable
+  const isReadOnly = hasExistingDiscount;
 
-  const addPrePromoMessage = () => {
-    if (discountSettings.prePromoMessages.length < 3) {
-      onSettingsChange({
-        ...discountSettings,
-        prePromoMessages: [...discountSettings.prePromoMessages, { 
-          message: '', 
-          offsetHours: 24,
-          sendAsEmail: false,
-          emailSubject: undefined,
-          emailContent: undefined,
-          isEmailHtml: false
-        }]
-      });
-    }
-  };
-
-  const removePrePromoMessage = (index: number) => {
-    onSettingsChange({
-      ...discountSettings,
-      prePromoMessages: discountSettings.prePromoMessages.filter((_, i) => i !== index)
-    });
-  };
-
-  const addActivePromoMessage = () => {
-    if (discountSettings.activePromoMessages.length < 3) {
-      onSettingsChange({
-        ...discountSettings,
-        activePromoMessages: [...discountSettings.activePromoMessages, { 
-          message: '', 
-          offsetHours: 0,
-          sendAsEmail: false,
-          emailSubject: undefined,
-          emailContent: undefined,
-          isEmailHtml: false
-        }]
-      });
-    }
-  };
-
-  const removeActivePromoMessage = (index: number) => {
-    onSettingsChange({
-      ...discountSettings,
-      activePromoMessages: discountSettings.activePromoMessages.filter((_, i) => i !== index)
-    });
-  };
+  // Validation function for Create Discount button
+  const canCreateDiscount = React.useMemo(() => {
+    if (hasDiscount) return true; // Can always save existing discount
+    const hasStartDate = discountSettings.startDate && discountSettings.startDate.trim() !== '';
+    const hasEndDate = discountSettings.endDate && discountSettings.endDate.trim() !== '';
+    const discountTextContent = discountTextEditableRef?.textContent || discountSettings.discountText || '';
+    const hasDiscountText = discountTextContent.trim() !== '';
+    const hasPromoCode = discountSettings.promoCode && discountSettings.promoCode.trim() !== '';
+    return hasStartDate && hasEndDate && hasDiscountText && hasPromoCode;
+  }, [hasDiscount, discountSettings.startDate, discountSettings.endDate, discountSettings.discountText, discountSettings.promoCode, discountTextEditableRef]);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 text-sm font-medium uppercase tracking-wider">
+        <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
           Seasonal Discount
+          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
         </Heading>
         <div className="flex items-center gap-2">
           <Button
@@ -173,7 +150,7 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
       </div>
       
       {/* Countdown Timer */}
-      {discountSettings.startDate && discountSettings.endDate && String(discountSettings.startDate).trim() !== '' && String(discountSettings.endDate).trim() !== '' && (
+      {hasExistingDiscount && discountSettings.startDate && discountSettings.endDate && String(discountSettings.startDate).trim() !== '' && String(discountSettings.endDate).trim() !== '' && (
         <div className="flex justify-center mb-5">
           {isPromoActive && timeRemaining ? (
             <Button size="2" variant="soft" color="red" className="!px-3 !py-1.5 !h-auto">
@@ -235,7 +212,15 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                           e.stopPropagation();
                           if (discountTextEditableRef) {
                             discountTextEditableRef.focus();
+                            // Select all text to apply formatting to entire content
+                            const range = document.createRange();
+                            range.selectNodeContents(discountTextEditableRef);
+                            const selection = window.getSelection();
+                            selection?.removeAllRanges();
+                            selection?.addRange(range);
                             document.execCommand('bold', false);
+                            // Clear selection
+                            selection?.removeAllRanges();
                             const cleanContent = getCleanContent(discountTextEditableRef);
                             onSettingsChange({ ...discountSettings, discountText: cleanContent });
                           }
@@ -253,7 +238,15 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                           e.stopPropagation();
                           if (discountTextEditableRef) {
                             discountTextEditableRef.focus();
+                            // Select all text to apply formatting to entire content
+                            const range = document.createRange();
+                            range.selectNodeContents(discountTextEditableRef);
+                            const selection = window.getSelection();
+                            selection?.removeAllRanges();
+                            selection?.addRange(range);
                             document.execCommand('italic', false);
+                            // Clear selection
+                            selection?.removeAllRanges();
                             const cleanContent = getCleanContent(discountTextEditableRef);
                             onSettingsChange({ ...discountSettings, discountText: cleanContent });
                           }
@@ -314,7 +307,15 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                                     e.stopPropagation();
                                     if (discountTextEditableRef) {
                                       discountTextEditableRef.focus();
+                                      // Select all text to apply formatting to entire content
+                                      const range = document.createRange();
+                                      range.selectNodeContents(discountTextEditableRef);
+                                      const selection = window.getSelection();
+                                      selection?.removeAllRanges();
+                                      selection?.addRange(range);
                                       document.execCommand('foreColor', false, color.value);
+                                      // Clear selection
+                                      selection?.removeAllRanges();
                                       setSelectedDiscountTextColor(color.value);
                                       const cleanContent = getCleanContent(discountTextEditableRef);
                                       onSettingsChange({ ...discountSettings, discountText: cleanContent });
@@ -336,7 +337,15 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                                   setSelectedDiscountTextColor(color);
                                   if (discountTextEditableRef) {
                                     discountTextEditableRef.focus();
+                                    // Select all text to apply formatting to entire content
+                                    const range = document.createRange();
+                                    range.selectNodeContents(discountTextEditableRef);
+                                    const selection = window.getSelection();
+                                    selection?.removeAllRanges();
+                                    selection?.addRange(range);
                                     document.execCommand('foreColor', false, color);
+                                    // Clear selection
+                                    selection?.removeAllRanges();
                                     const cleanContent = getCleanContent(discountTextEditableRef);
                                     onSettingsChange({ ...discountSettings, discountText: cleanContent });
                                   }
@@ -463,7 +472,7 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                       }
                     }}
                     data-placeholder="e.g., 20% OFF - Limited Time!"
-                    className="w-full min-h-[42px] max-h-[200px] px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white overflow-y-auto focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500"
+                    className="w-full min-h-[42px] max-h-[200px] px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 overflow-y-auto"
                     style={{ outline: 'none' }}
                   />
                   {!discountSettings.discountText && (
@@ -479,7 +488,7 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
 
               {/* Promo Code */}
               <div>
-                <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-2">
+                <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
                   Promo Code
                 </Text>
                 <input
@@ -488,17 +497,26 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                   onChange={(e) => onSettingsChange({ ...discountSettings, promoCode: e.target.value.toUpperCase() })}
                   placeholder="e.g., SAVE20"
                   maxLength={20}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 uppercase"
+                  disabled={isReadOnly}
+                  readOnly={isReadOnly}
+                  className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 uppercase ${
+                    isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
-              
+
               {/* Global Discount Toggle */}
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
+              <div className="space-y-5">
+                <label className={`flex items-center gap-3 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={discountSettings.globalDiscount}
-                    onChange={(e) => onSettingsChange({ ...discountSettings, globalDiscount: e.target.checked })}
+                    onChange={(e) => {
+                      if (!isReadOnly) {
+                        onSettingsChange({ ...discountSettings, globalDiscount: e.target.checked });
+                      }
+                    }}
+                    disabled={isReadOnly}
                     className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
                   />
                   <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300">
@@ -506,59 +524,200 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                   </Text>
                 </label>
                 {discountSettings.globalDiscount && (
-                  <div className="flex items-center gap-3 pl-7">
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="globalDiscountType"
-                          checked={(discountSettings.globalDiscountType || 'percentage') === 'percentage'}
-                          onChange={() => onSettingsChange({ 
+                  <div className="space-y-5 pl-7">
+                    {/* Discount Type */}
+                    <div>
+                      <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
+                        Discount Type
+                      </Text>
+                      <div className="flex gap-3">
+                        <Button
+                          size="3"
+                          variant={(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? 'solid' : 'soft'}
+                          color="violet"
+                          onClick={() => {
+                            if (!isReadOnly) {
+                              onSettingsChange({ 
                             ...discountSettings, 
                             globalDiscountType: 'percentage',
                             percentage: discountSettings.percentage || 20
-                          })}
-                          className="w-3 h-3 text-violet-600 focus:ring-violet-500"
-                        />
-                        <Text size="2" className="text-gray-600 dark:text-gray-400">Percentage</Text>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="globalDiscountType"
-                          checked={(discountSettings.globalDiscountType || 'percentage') === 'fixed'}
-                          onChange={() => onSettingsChange({ 
+                              });
+                            }
+                          }}
+                          disabled={isReadOnly}
+                          className={`!px-6 !py-3 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          Percentage
+                        </Button>
+                        <Button
+                          size="3"
+                          variant={(discountSettings.globalDiscountType || 'percentage') === 'fixed' ? 'solid' : 'soft'}
+                          color="violet"
+                          onClick={() => {
+                            if (!isReadOnly) {
+                              onSettingsChange({ 
                             ...discountSettings, 
                             globalDiscountType: 'fixed',
                             globalDiscountAmount: discountSettings.globalDiscountAmount || 20
-                          })}
-                          className="w-3 h-3 text-violet-600 focus:ring-violet-500"
-                        />
-                        <Text size="2" className="text-gray-600 dark:text-gray-400">Fixed</Text>
-                      </label>
+                              });
+                            }
+                          }}
+                          disabled={isReadOnly}
+                          className={`!px-6 !py-3 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          Fixed Price
+                        </Button>
+                      </div>
                     </div>
-                    <div className="relative">
+                    {/* Discount Amount */}
+                    <div>
+                      <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
+                        {(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
+                      </Text>
                       <input
                         type="number"
                         min="0"
                         max={(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? 100 : undefined}
-                        step={(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? '1' : '0.01'}
+                        step={(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? 1 : 0.01}
                         value={(discountSettings.globalDiscountType || 'percentage') === 'percentage' 
-                          ? discountSettings.percentage 
-                          : (discountSettings.globalDiscountAmount || 0)}
+                          ? (discountSettings.percentage ?? '') 
+                          : (discountSettings.globalDiscountAmount ?? '')}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
+                          if (!isReadOnly) {
+                            const numValue = parseFloat(e.target.value);
+                            const value = Number.isNaN(numValue) ? 0 : numValue;
                           if ((discountSettings.globalDiscountType || 'percentage') === 'percentage') {
                             onSettingsChange({ ...discountSettings, percentage: value });
                           } else {
                             onSettingsChange({ ...discountSettings, globalDiscountAmount: value });
                           }
+                          }
                         }}
-                        className="w-20 px-4 py-2 pr-8 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500"
+                        disabled={isReadOnly}
+                        readOnly={isReadOnly}
+                        placeholder={(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? 'Enter percentage (e.g., 20)' : 'Enter amount (e.g., 10.00)'}
+                        className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                          isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500 dark:text-gray-400 pointer-events-none">
-                        {(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? '%' : '$'}
-                      </span>
+                    </div>
+
+                    {/* Discount Duration Type */}
+                    <div className="min-w-0">
+                      <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
+                        Discount Duration Type
+                      </Text>
+                      <div className="flex gap-3 flex-wrap">
+                        <Button
+                          size="3"
+                          variant={discountSettings.durationType === 'one-time' ? 'solid' : 'soft'}
+                          color="violet"
+                          onClick={() => !isReadOnly && onSettingsChange({ ...discountSettings, durationType: 'one-time' })}
+                          disabled={isReadOnly}
+                          className={`!px-6 !py-3 flex-shrink-0 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          One-Time
+                        </Button>
+                        <Button
+                          size="3"
+                          variant={discountSettings.durationType === 'forever' ? 'solid' : 'soft'}
+                          color="violet"
+                          onClick={() => !isReadOnly && onSettingsChange({ ...discountSettings, durationType: 'forever' })}
+                          disabled={isReadOnly}
+                          className={`!px-6 !py-3 flex-shrink-0 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          Forever
+                        </Button>
+                        <Button
+                          size="3"
+                          variant={discountSettings.durationType === 'duration_months' ? 'solid' : 'soft'}
+                          color="violet"
+                          onClick={() => !isReadOnly && onSettingsChange({ ...discountSettings, durationType: 'duration_months' })}
+                          disabled={isReadOnly}
+                          className={`!px-6 !py-3 flex-shrink-0 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          Duration
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Duration Months (only shown when durationType is 'duration_months') */}
+                    {discountSettings.durationType === 'duration_months' && (
+                      <div>
+                        <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
+                          Duration (Months)
+                        </Text>
+                        <input
+                          type="number"
+                          min="1"
+                          value={discountSettings.durationMonths ?? ''}
+                          onChange={(e) => {
+                            if (!isReadOnly) {
+                              const value = parseInt(e.target.value, 10);
+                              onSettingsChange({ 
+                                ...discountSettings, 
+                                durationMonths: Number.isNaN(value) || value <= 0 ? undefined : value 
+                              });
+                            }
+                          }}
+                          disabled={isReadOnly}
+                          readOnly={isReadOnly}
+                          placeholder="Enter number of months (e.g., 3)"
+                          className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                            isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    {/* Quantity Per Product */}
+                    <div>
+                      <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
+                        Promo Codes Quantity by Product
+                      </Text>
+                      <div className="space-y-3">
+                        <label className={`flex items-center gap-3 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={discountSettings.quantityPerProduct === -1}
+                            onChange={(e) => {
+                              if (!isReadOnly) {
+                                onSettingsChange({ 
+                                  ...discountSettings, 
+                                  quantityPerProduct: e.target.checked ? -1 : undefined 
+                                });
+                              }
+                            }}
+                            disabled={isReadOnly}
+                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
+                          />
+                          <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300">
+                            Unlimited
+                          </Text>
+                        </label>
+                        {discountSettings.quantityPerProduct !== -1 && (
+                          <input
+                            type="number"
+                            min="0"
+                            value={discountSettings.quantityPerProduct ?? ''}
+                            onChange={(e) => {
+                              if (!isReadOnly) {
+                                const value = parseInt(e.target.value, 10);
+                                onSettingsChange({ 
+                                  ...discountSettings, 
+                                  quantityPerProduct: Number.isNaN(value) || value < 0 ? undefined : value 
+                                });
+                              }
+                            }}
+                            disabled={isReadOnly}
+                            readOnly={isReadOnly}
+                            placeholder="Enter quantity (e.g., 50)"
+                            className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                              isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
+                            }`}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -566,10 +725,10 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
       
               <Separator size="1" color="gray" />
 
-              {/* Discount Duration */}
+              {/* Discount Timeframe */}
               <div>
                 <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
-                  Discount Duration
+                  Discount Timeframe
                 </Text>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -579,8 +738,25 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                     <input
                       type="datetime-local"
                       value={discountSettings.startDate}
-                      onChange={(e) => onSettingsChange({ ...discountSettings, startDate: e.target.value })}
-                      className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500"
+                      max={discountSettings.endDate || ''}
+                      onChange={(e) => {
+                        if (!isReadOnly) {
+                          const newStartDate = e.target.value;
+                          let newEndDate = discountSettings.endDate;
+                          // If start date is after end date, adjust end date to be 1 hour after start
+                          if (newStartDate && newEndDate && newStartDate > newEndDate) {
+                            const startDateObj = new Date(newStartDate);
+                            startDateObj.setHours(startDateObj.getHours() + 1);
+                            newEndDate = startDateObj.toISOString().slice(0, 16);
+                          }
+                          onSettingsChange({ ...discountSettings, startDate: newStartDate, endDate: newEndDate });
+                        }
+                      }}
+                      disabled={isReadOnly}
+                      readOnly={isReadOnly}
+                      className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                        isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
                   <div>
@@ -590,144 +766,58 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                     <input
                       type="datetime-local"
                       value={discountSettings.endDate}
-                      onChange={(e) => onSettingsChange({ ...discountSettings, endDate: e.target.value })}
-                      className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500"
+                      min={discountSettings.startDate || ''}
+                      onChange={(e) => {
+                        if (!isReadOnly) {
+                          const newEndDate = e.target.value;
+                          let newStartDate = discountSettings.startDate;
+                          // If end date is before start date, adjust start date to be 1 hour before end
+                          if (newEndDate && newStartDate && newEndDate < newStartDate) {
+                            const endDateObj = new Date(newEndDate);
+                            endDateObj.setHours(endDateObj.getHours() - 1);
+                            newStartDate = endDateObj.toISOString().slice(0, 16);
+                          }
+                          onSettingsChange({ ...discountSettings, endDate: newEndDate, startDate: newStartDate });
+                        }
+                      }}
+                      disabled={isReadOnly}
+                      readOnly={isReadOnly}
+                      className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                        isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
                     />
                   </div>
                 </div>
               </div>
 
-              <Separator size="1" color="gray" />
-
-              {/* Pre-Discount Messages */}
-              <div>
-                <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
-                  Pre-Discount Notifications
-                </Text>
-                <div className="space-y-2">
-                  {discountSettings.prePromoMessages.map((msg, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Button
-                        size="3"
-                        color="violet"
-                        variant="surface"
-                        onClick={() => onOpenMessageEditor('prePromo', idx)}
-                        className="flex-1 !px-4 !py-2.5 text-left border border-gray-200 dark:border-gray-700 hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
-                              Message {idx + 1} • {msg.offsetHours}h before
-                              {msg.sendAsEmail && <span className="ml-2 text-xs text-violet-600 dark:text-violet-400">+ Email</span>}
-                            </Text>
-                          </div>
-                          <Text size="1" className="text-gray-600 dark:text-gray-400 truncate block mt-0.5">
-                            {msg.message || 'Not set'}
-                          </Text>
-                        </div>
-                      </Button>
-                      <Button
-                        size="2"
-                        variant="soft"
-                        color="red"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removePrePromoMessage(idx);
-                        }}
-                        className="!px-3 !py-2 flex-shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {discountSettings.prePromoMessages.length < 3 && (
-                    <Button
-                      size="3"
-                      color="violet"
-                      variant="surface"
-                      onClick={addPrePromoMessage}
-                      className="w-full !px-4 !py-2.5 border border-dashed border-gray-300 dark:border-gray-600 hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      <Text size="2">Add Message</Text>
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <Separator size="1" color="gray" />
-
-              {/* Active Discount Messages */}
-              <div>
-                <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
-                  Active Discount Notifications
-                </Text>
-                <div className="space-y-2">
-                  {discountSettings.activePromoMessages.map((msg, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Button
-                        size="3"
-                        color="violet"
-                        variant="surface"
-                        onClick={() => onOpenMessageEditor('activePromo', idx)}
-                        className="flex-1 !px-4 !py-2.5 text-left border border-gray-200 dark:border-gray-700 hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <Text size="2" weight="semi-bold" className="text-gray-900 dark:text-white">
-                              Message {idx + 1} • {msg.offsetHours}h after
-                              {msg.sendAsEmail && <span className="ml-2 text-xs text-violet-600 dark:text-violet-400">+ Email</span>}
-                            </Text>
-                          </div>
-                          <Text size="1" className="text-gray-600 dark:text-gray-400 truncate block mt-0.5">
-                            {msg.message || 'Not set'}
-                          </Text>
-                        </div>
-                      </Button>
-                      <Button
-                        size="2"
-                        variant="soft"
-                        color="red"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeActivePromoMessage(idx);
-                        }}
-                        className="!px-3 !py-2 flex-shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {discountSettings.activePromoMessages.length < 3 && (
-                    <Button
-                      size="3"
-                      color="violet"
-                      variant="surface"
-                      onClick={addActivePromoMessage}
-                      className="w-full !px-4 !py-2.5 border border-dashed border-gray-300 dark:border-gray-600 hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      <Text size="2">Add Message</Text>
-                    </Button>
-                  )}
-                </div>
-              </div>
-
               {/* Save/Create and Delete Buttons */}
               <div className="flex items-center gap-2">
+                {!isExpired && (
                 <Button
                   size="3"
                   color="violet"
                   variant="solid"
                   onClick={onSave}
-                  className="flex-1 !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50"
+                  disabled={!isPremium || !canCreateDiscount}
+                  className={`flex-1 !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
+                    (!isPremium || !canCreateDiscount) ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
                 >
                   <div className="flex items-center gap-2">
-                    {hasDiscount && <Edit className="w-4 h-4" />}
-                    {hasDiscount ? 'Save' : 'Create Discount'}
+                    {!isPremium && <Lock className="w-4 h-4" />}
+                    {hasDiscount && isPremium && <Edit className="w-4 h-4" />}
+                    {!isPremium ? (
+                      <>
+                        Locked
+                        <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      </>
+                    ) : (
+                      hasDiscount ? 'Save' : 'Create Discount'
+                    )}
                   </div>
                 </Button>
-                {showPanel && hasDiscount && (
+                )}
+                {showPanel && (hasDiscount || isExpired) && (
                   <Button
                     size="3"
                     color="red"

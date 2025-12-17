@@ -390,6 +390,7 @@ export class WhopApiClient {
               currency: plan.currency || 'usd',
               title: plan.title || `Plan ${plan.id}`,
               plan_type: plan.plan_type,
+              initial_price: plan.initial_price,
               renewal_price: plan.renewal_price,
               billing_period: plan.billing_period,
               purchase_url: plan.purchase_url
@@ -544,8 +545,10 @@ export class WhopApiClient {
                   currency: plan.currency || 'usd',
                   title: plan.title || `Plan ${plan.id}`,
                   plan_type: plan.plan_type,
+                  initial_price: plan.initial_price,
                   renewal_price: plan.renewal_price,
-                  billing_period: plan.billing_period
+                  billing_period: plan.billing_period,
+                  purchase_url: plan.purchase_url
                 };
               });
           

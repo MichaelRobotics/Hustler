@@ -57,6 +57,7 @@ import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useResourceLibraryProducts } from './hooks/useResourceLibraryProducts';
 import { useTemplateManager } from './hooks/useTemplateManager';
 import { useStateRestoration } from './hooks/useStateRestoration';
+import { useSeasonalDiscountActions } from './hooks/useSeasonalDiscountActions';
 import { convertThemeToLegacy, truncateDescription } from './utils';
 import { applyThemeStylesToProducts, convertResourcesToProducts } from './utils/productUtils';
 import { getBackgroundStyle as getBackgroundStyleUtil } from './utils/getThemePlaceholder';
@@ -311,6 +312,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Loading state
     isInitialLoadComplete,
     isStoreContentReady,
+    isLoadingTemplate,
     
     // Store Navigation State Management
     lastActiveTheme,
@@ -320,6 +322,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Theme loading
     loadThemes,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
+
+  // Seasonal discount actions hook
+  const { handleSaveDiscountSettings } = useSeasonalDiscountActions({
+    experienceId: experienceId || undefined,
+    user,
+    updateTemplate,
+    setDiscountSettings,
+    templates,
+  });
   
   // Create ref to store setProductsAndReorder for passing to hook
   const setProductsAndReorderRef = useRef<((products: Product[] | ((prev: Product[]) => Product[])) => void) | undefined>(undefined);
@@ -565,20 +576,30 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     return [...reorderedProducts, ...remainingProducts];
   }, [allResources]);
 
-  // Wrapper function that sets products and immediately reorders them to Market Stall order
+  // Wrapper function that sets products - only reorder when NOT loading from template
   const setProductsAndReorder = useCallback((newProducts: Product[] | ((prev: Product[]) => Product[])) => {
-    // Handle function form
+    // During template load, preserve template order (don't reorder)
+    if (isLoadingTemplate) {
+      // During template load, preserve template order (don't reorder)
+      if (typeof newProducts === 'function') {
+        setProductsFromHook(newProducts);
+      } else {
+        setProductsFromHook(newProducts);
+      }
+      return;
+    }
+    
+    // Normal operation: reorder to Market Stall order
     if (typeof newProducts === 'function') {
       setProductsFromHook((prevProducts) => {
         const updatedProducts = newProducts(prevProducts);
         return reorderProductsArray(updatedProducts);
       });
     } else {
-      // Handle array form - reorder immediately
       const reordered = reorderProductsArray(newProducts);
       setProductsFromHook(reordered);
     }
-  }, [setProductsFromHook, reorderProductsArray]);
+  }, [setProductsFromHook, reorderProductsArray, isLoadingTemplate]);
 
   // Update ref so hook can access it
   setProductsAndReorderRef.current = setProductsAndReorder;
@@ -603,14 +624,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Create a wrapper that intercepts setProducts calls
 
   // CRITICAL: Pass Market Stall resources to filter template products
-  // Use previewTemplate if in preview mode, otherwise use previewLiveTemplate prop
-  // Calculate active preview template reactively (will be updated when preview mode state changes)
+  // Only use preview template hook when in preview mode or when previewLiveTemplate is explicitly provided and we're not in edit view
+  // In edit view, we should use loadTemplate from useSeasonalStoreDatabase instead
+  const shouldUsePreviewTemplate = isInPreviewModeLocal || (previewLiveTemplate && !editorState.isEditorView);
+  
   const activePreviewTemplate = useMemo(() => {
+    if (!shouldUsePreviewTemplate) return null;
     return (isInPreviewModeLocal && previewTemplateLocal) ? previewTemplateLocal : previewLiveTemplate;
-  }, [isInPreviewModeLocal, previewTemplateLocal, previewLiveTemplate]);
+  }, [shouldUsePreviewTemplate, isInPreviewModeLocal, previewTemplateLocal, previewLiveTemplate, editorState.isEditorView]);
   
   const { isTemplateLoaded } = usePreviewLiveTemplate({
-    previewLiveTemplate: activePreviewTemplate,
+    previewLiveTemplate: activePreviewTemplate, // Will be null in edit view, disabling the hook
     onTemplateLoaded,
     setBackground,
     setLogoAsset,
@@ -817,6 +841,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       logoAttachmentId,
       logoAttachmentUrl,
       promoButton,
+      discountSettings,
     },
     isInitialLoadComplete,
     isStoreContentReady,
@@ -824,6 +849,127 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     isInPreviewMode: isInPreviewModeLocal,
     currentlyLoadedTemplateId,
   });
+
+  // Auto-update template in database when Market Stall order changes
+  useEffect(() => {
+    if (hasOrderChanged && isTemplateLoaded && initialReorderDoneRef.current && allResources.length > 0 && products.length > 0) {
+      const currentTemplateId = currentlyLoadedTemplateId || previewLiveTemplate?.id || null;
+      if (currentTemplateId && updateTemplate) {
+        // Find current template to merge with existing templateData
+        const currentTemplate = templates.find((t: any) => t.id === currentTemplateId);
+        if (currentTemplate) {
+          // Auto-update template asynchronously
+          const autoUpdateTemplate = async () => {
+            try {
+              // Filter products to only resource products (same as useTemplateSave)
+              const frontendProducts = products.filter(product => typeof product.id === 'string' && product.id.startsWith('resource-'));
+              
+              console.log('💾 Auto-updating template with Market Stall order:', {
+                templateId: currentTemplateId,
+                productCount: frontendProducts.length,
+                orderChanged: hasOrderChanged
+              });
+              
+              await updateTemplate(currentTemplateId, {
+                templateData: {
+                  ...currentTemplate.templateData,
+                  products: frontendProducts,
+                },
+              });
+              
+              console.log('✅ Template auto-updated with Market Stall order');
+              
+              // Update snapshot after template save completes
+              if (updateSnapshot) {
+                setTimeout(() => {
+                  updateSnapshot();
+                  console.log('📸 Snapshot updated after template auto-update');
+                }, 100);
+              }
+            } catch (error) {
+              console.warn('⚠️ Failed to auto-update template with Market Stall order:', error);
+              // Continue even if auto-update fails - order is still updated in UI
+            }
+          };
+          autoUpdateTemplate();
+        }
+      }
+    }
+  }, [hasOrderChanged, isTemplateLoaded, allResources, products, currentlyLoadedTemplateId, previewLiveTemplate?.id, updateTemplate, templates, updateSnapshot]);
+
+  // Sync product prices when MarketStall resource prices change
+  useEffect(() => {
+    if (!isTemplateLoaded || products.length === 0 || allResources.length === 0) return;
+    
+    // Create a map of resource ID to resource for quick lookup
+    const resourceMap = new Map(allResources.map((r: any) => [r.id, r]));
+    const resourceByWhopIdMap = new Map(
+      allResources
+        .filter((r: any) => r.whopProductId)
+        .map((r: any) => [r.whopProductId, r])
+    );
+    
+    // Check if any product prices need updating
+    let pricesUpdated = false;
+    const updatedProducts = products.map((product) => {
+      let matchedResource: any | null = null;
+      
+      // Match by resource ID
+      if (typeof product.id === 'string' && product.id.startsWith('resource-')) {
+        const resourceId = product.id.replace('resource-', '');
+        matchedResource = resourceMap.get(resourceId);
+      }
+      
+      // Match by whopProductId
+      if (!matchedResource && product.whopProductId) {
+        matchedResource = resourceByWhopIdMap.get(product.whopProductId);
+      }
+      
+      if (matchedResource) {
+        const marketStallPrice = parseFloat(matchedResource.price || '0');
+        if (product.price !== marketStallPrice) {
+          pricesUpdated = true;
+          return { ...product, price: marketStallPrice };
+        }
+      }
+      
+      return product;
+    });
+    
+    if (pricesUpdated) {
+      console.log('💰 Syncing product prices with MarketStall prices');
+      setProductsFromHook(updatedProducts);
+      
+      // Update snapshot after price sync to prevent drift
+      updateSnapshot();
+      
+      // Auto-save template with updated prices (same as product order update)
+      const currentTemplateId = currentlyLoadedTemplateId || previewLiveTemplate?.id || null;
+      if (currentTemplateId && updateTemplate) {
+        // Find current template to merge with existing templateData
+        const currentTemplate = templates.find((t: any) => t.id === currentTemplateId);
+        if (currentTemplate) {
+          // Auto-save template asynchronously
+          const autoSaveTemplate = async () => {
+            try {
+              console.log('💾 Auto-saving template with updated product prices:', currentTemplateId);
+              await updateTemplate(currentTemplateId, {
+                templateData: {
+                  ...currentTemplate.templateData,
+                  products: updatedProducts,
+                },
+              });
+              console.log('✅ Template auto-saved with updated product prices');
+            } catch (error) {
+              console.warn('⚠️ Failed to auto-save template with updated prices:', error);
+              // Continue even if auto-save fails - prices are still updated in UI
+            }
+          };
+          autoSaveTemplate();
+        }
+      }
+    }
+  }, [allResources, products, isTemplateLoaded, setProductsFromHook, currentlyLoadedTemplateId, previewLiveTemplate?.id, updateTemplate, templates, updateSnapshot]);
 
   // Use template save hook
   const { handleSaveTemplateForNavbar } = useTemplateSave({
@@ -914,6 +1060,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       logoAttachmentId,
       logoAttachmentUrl,
       promoButton,
+      discountSettings,
     },
   });
 
@@ -1003,9 +1150,22 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setLogoAttachmentId(snapshotData.logoAttachmentId);
     setLogoAttachmentUrl(snapshotData.logoAttachmentUrl);
     setPromoButton(snapshotData.promoButton);
+    setDiscountSettings(snapshotData.discountSettings || {
+      enabled: false,
+      globalDiscount: false,
+      globalDiscountType: 'percentage',
+      globalDiscountAmount: 20,
+      percentage: 20,
+      startDate: '',
+      endDate: '',
+      discountText: '',
+      promoCode: '',
+      prePromoMessages: [],
+      activePromoMessages: [],
+    });
     
     // Snapshot will be updated automatically by useStoreSnapshot when state stabilizes
-  }, [restoreFromSnapshot, resetSnapshot, setProductsFromHook, setFloatingAssets, setCurrentSeason, setFixedTextStyles, setLogoAsset, setBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl, setLogoAttachmentId, setLogoAttachmentUrl, setPromoButton]);
+  }, [restoreFromSnapshot, resetSnapshot, setProductsFromHook, setFloatingAssets, setCurrentSeason, setFixedTextStyles, setLogoAsset, setBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl, setLogoAttachmentId, setLogoAttachmentUrl, setPromoButton, setDiscountSettings]);
 
   // Determine if we're in preview mode (either from prop or internal state)
   const effectiveIsStorePreview = isStorePreview || isInPreviewMode;
@@ -1357,6 +1517,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         highlightSaveButton={highlightSaveButton}
         hasUnsavedChanges={hasUnsavedChanges}
         isTemplateManagerOpen={templateManagerOpen}
+        discountSettings={discountSettings}
         toggleEditorView={toggleEditorView}
         handleGenerateBgClick={handleGenerateBgClick}
         handleBgImageUpload={handleBgImageUpload}
@@ -1516,6 +1677,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           onOpenProductPage={openProductPageModal}
           storeName={legacyTheme.name || "Store"}
           experienceId={experienceId}
+          discountSettings={discountSettings ? {
+            enabled: discountSettings.enabled,
+            startDate: discountSettings.startDate || '',
+            endDate: discountSettings.endDate || '',
+            promoCode: discountSettings.promoCode,
+          } : undefined}
         />
 
         <PromoButton
@@ -1587,10 +1754,69 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         promoButton={promoButton}
         legacyTheme={legacyTheme}
         backgroundAnalysis={backgroundAnalysis}
+        discountSettings={discountSettings}
         onClose={closeProductEditorAnimated}
         updateProduct={updateProduct}
         setPromoButton={setPromoButton}
         experienceId={experienceId}
+        onProductUpdated={async () => {
+          // Auto-save template after product update (similar to price update auto-save)
+          // Use a longer delay to ensure React state has updated
+          setTimeout(async () => {
+            const currentTemplateId = currentlyLoadedTemplateId || previewLiveTemplate?.id || null;
+            if (currentTemplateId && updateTemplate && isTemplateLoaded) {
+              const currentTemplate = templates.find((t: any) => t.id === currentTemplateId);
+              if (currentTemplate) {
+                try {
+                  // Get the latest products from state (they should be updated by now)
+                  // The products array should already be updated by updateProduct
+                  const latestProducts = products;
+                  console.log('💾 Auto-saving template after product promo update:', currentTemplateId);
+                  
+                  // Log promo fields for debugging
+                  const productsWithPromo = latestProducts.filter(p => p.promoCodeId || p.promoCode || p.promoShowFireIcon);
+                  if (productsWithPromo.length > 0) {
+                    console.log('🎫 Products with promo fields:', productsWithPromo.map(p => ({
+                      id: p.id,
+                      name: p.name?.substring(0, 30),
+                      promoCodeId: p.promoCodeId,
+                      promoCode: p.promoCode,
+                      promoShowFireIcon: p.promoShowFireIcon,
+                      promoQuantityLeft: p.promoQuantityLeft,
+                      promoLimitQuantity: p.promoLimitQuantity,
+                      promoDiscountType: p.promoDiscountType,
+                      promoDiscountAmount: p.promoDiscountAmount,
+                    })));
+                  }
+                  
+                  // Filter to only resource products (same as useTemplateSave)
+                  const frontendProducts = latestProducts.filter(product => typeof product.id === 'string' && product.id.startsWith('resource-'));
+                  
+                  // Verify promoCode is in the products being saved
+                  const productsWithPromoCode = frontendProducts.filter(p => p.promoCode);
+                  if (productsWithPromoCode.length > 0) {
+                    console.log('🎫 Products with promoCode being saved to template:', productsWithPromoCode.map(p => ({
+                      id: p.id,
+                      name: p.name?.substring(0, 30),
+                      promoCode: p.promoCode,
+                      promoCodeId: p.promoCodeId,
+                    })));
+                  }
+                  
+                  await updateTemplate(currentTemplateId, {
+                    templateData: {
+                      ...currentTemplate.templateData,
+                      products: frontendProducts, // Use filtered products array with all fields including promoCode
+                    },
+                  });
+                  console.log('✅ Template auto-saved after product promo update');
+                } catch (error) {
+                  console.warn('⚠️ Failed to auto-save template after product promo update:', error);
+                }
+              }
+            }
+          }, 200); // Increased delay to ensure state is updated
+        }}
       />
 
 
@@ -1783,24 +2009,12 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           return await updateTemplate(templateId, updates);
         }}
         discountSettings={discountSettings}
-        onSaveDiscountSettings={async (templateId, newDiscountSettings) => {
-          if (!experienceId) {
-            throw new Error('Experience ID is required to save discount settings');
-          }
-          const template = templates.find((t: any) => t.id === templateId);
-          if (!template) {
-            throw new Error('Template not found');
-          }
-          await updateTemplate(templateId, {
-            templateData: {
-              ...template.templateData,
-              discountSettings: newDiscountSettings
-            }
-          });
-          // Update local state
-          setDiscountSettings(newDiscountSettings);
-        }}
+        experienceId={experienceId}
+        onSaveDiscountSettings={handleSaveDiscountSettings}
+        updateTemplate={updateTemplate}
+        setDiscountSettings={setDiscountSettings}
         products={products}
+        subscription={user?.experience?.subscription}
       />
 
       {/* All Notifications */}

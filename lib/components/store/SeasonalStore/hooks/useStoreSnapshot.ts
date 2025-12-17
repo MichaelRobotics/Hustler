@@ -14,6 +14,7 @@ interface StoreSnapshotData {
   logoAttachmentId: string | null;
   logoAttachmentUrl: string | null;
   promoButton: any;
+  discountSettings: any;
 }
 
 interface UseStoreSnapshotProps {
@@ -44,16 +45,11 @@ export function useStoreSnapshot({
     // Deep clone to avoid mutating original
     const normalized = JSON.parse(JSON.stringify(data));
     
-    // Sort products by ID for consistent ordering
-    if (normalized.products && Array.isArray(normalized.products)) {
-      normalized.products = [...normalized.products].sort((a, b) => {
-        const idA = String(a?.id || '');
-        const idB = String(b?.id || '');
-        return idA.localeCompare(idB);
-      });
-    }
+    // DO NOT sort products - preserve original order for snapshot comparison
+    // Products are already in the correct order from the template/Market Stall
+    // Sorting by ID would lose the actual display order
     
-    // Sort floating assets by ID for consistent ordering
+    // Sort floating assets by ID for consistent ordering (this is fine as order doesn't matter)
     if (normalized.floatingAssets && Array.isArray(normalized.floatingAssets)) {
       normalized.floatingAssets = [...normalized.floatingAssets].sort((a, b) => {
         const idA = String(a?.id || '');

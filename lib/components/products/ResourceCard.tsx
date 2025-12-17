@@ -136,9 +136,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 		}
 		
 		// Validate price range for paid products
+		// For resources with whopProductId, skip $5 minimum (price comes from Whop plans)
 		if (editedResource.category === "PAID" && editedResource.price) {
 			const price = parseFloat(editedResource.price);
-			if (price < 5 || price > 50000) {
+			const minPrice = editedResource.whopProductId ? 0 : 5;
+			if (price < minPrice || price > 50000) {
 				return;
 			}
 		}
@@ -394,13 +396,17 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 							/>
 							{(() => {
 								const price = parseFloat(editedResource.price || "0");
-								const isValidPrice = price >= 5 && price <= 50000;
+								// For resources with whopProductId, skip $5 minimum (price comes from Whop plans)
+								const minPrice = editedResource.whopProductId ? 0 : 5;
+								const isValidPrice = price >= minPrice && price <= 50000;
 								const hasPrice = editedResource.price && editedResource.price.trim() !== "";
 								
 								if (hasPrice && !isValidPrice) {
 									return (
 										<p className="text-xs text-red-600 dark:text-red-400">
-											Price must be between $5 and $50,000
+											{editedResource.whopProductId 
+												? "Price must be between $0 and $50,000"
+												: "Price must be between $5 and $50,000"}
 										</p>
 									);
 								}

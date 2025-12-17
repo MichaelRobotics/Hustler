@@ -3,13 +3,27 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Button, Heading, Text, Card, Separator } from 'frosted-ui';
-import { Edit, X, Package, Sparkles, Star, Award, ChevronDown, Flame, Bold, Italic, Palette, Type, Eye } from 'lucide-react';
+import { Button, Heading, Text, Card, Progress } from 'frosted-ui';
+import { Edit, X, Package, Sparkles, Star, Award, ChevronDown, Bold, Italic, Palette, Type } from 'lucide-react';
 import { ButtonColorControls } from './ButtonColorControls';
 import { tailwindTextColorToHex } from '../utils/colors';
 import { EMOJI_DATABASE } from '../actions/constants';
+import type { DiscountSettings } from '../types';
 import { ProductPageModal } from './ProductPageModal';
 import type { LegacyTheme } from '../types';
+import { apiPost, apiGet } from '@/lib/utils/api-client';
+import { 
+  FormattingToolbar, 
+  BadgeSelector, 
+  ProductStatsSection, 
+  ProductDiscountStatus, 
+  ButtonStyleSection, 
+  CardStyleSection,
+  ProductDiscountForm,
+  ClaimButtonSettings,
+  ProductEditorModalHeader,
+  EditProductPageButton
+} from './product';
 
 interface Product {
   id: number | string;
@@ -48,6 +62,12 @@ interface Product {
   promoLimitQuantity?: number;
   promoQuantityLeft?: number;
   promoShowFireIcon?: boolean;
+  promoScope?: 'product' | 'plan'; // Whether promo applies to product or plan
+  promoCodeId?: string; // ID of selected promo code from database
+  promoCode?: string; // Promo code string (saved to template for display)
+  promoDurationType?: 'one-time' | 'forever' | 'duration_months'; // Discount duration type
+  promoDurationMonths?: number; // Duration in months (when duration_months selected)
+  checkoutConfigurationId?: string; // Checkout configuration ID (if checkout-only)
   salesCount?: number;
   showSalesCount?: boolean;
   starRating?: number;
@@ -78,11 +98,7 @@ interface ProductEditorModalProps {
   backgroundAnalysis: {
     recommendedTextColor: string;
   };
-  discountSettings?: {
-    enabled: boolean;
-    startDate: string;
-    endDate: string;
-  };
+  discountSettings?: DiscountSettings;
   // Handlers
   onClose: () => void;
   updateProduct: (id: number | string, updates: Partial<Product>) => void;
@@ -94,6 +110,7 @@ interface ProductEditorModalProps {
   isTemplateLoaded?: boolean;
   lastSavedSnapshot?: string | null;
   experienceId?: string; // Experience ID for API calls
+  onProductUpdated?: () => void; // Callback to trigger template auto-save after product update
 }
 
 export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
@@ -114,6 +131,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   isTemplateLoaded = false,
   lastSavedSnapshot = null,
   experienceId,
+  onProductUpdated,
 }) => {
   // Refs for inline editing focus
   
@@ -132,6 +150,10 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     [products, productEditor.productId]
   );
   
+  // Determine product type
+  const isProductType = Boolean(currentProduct?.whopProductId);
+  const isCheckoutType = Boolean(!currentProduct?.whopProductId && currentProduct?.checkoutConfigurationId);
+  
   // Local state for discount fields
   const [localPromoDiscountType, setLocalPromoDiscountType] = useState<'percentage' | 'fixed' | undefined>(currentProduct?.promoDiscountType);
   const [localPromoDiscountAmount, setLocalPromoDiscountAmount] = useState<number | undefined>(currentProduct?.promoDiscountAmount);
@@ -142,7 +164,163 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   const [localShowRatingInfo, setLocalShowRatingInfo] = useState(currentProduct?.showRatingInfo || false);
   const [localStarRating, setLocalStarRating] = useState<number | undefined>(currentProduct?.starRating);
   const [localReviewCount, setLocalReviewCount] = useState<number | undefined>(currentProduct?.reviewCount);
+
+  // Auto-enable fire icon when global discount has quantity per product set
+  useEffect(() => {
+    if (discountSettings?.quantityPerProduct !== undefined && 
+        discountSettings.quantityPerProduct !== -1 && 
+        discountSettings.quantityPerProduct > 0) {
+      // Auto-enable fire icon if not already enabled
+      if (!localPromoShowFireIcon) {
+        setLocalPromoShowFireIcon(true);
+      }
+      // Also set the limit quantity to match global discount quantity if not set
+      if (!localPromoLimitQuantity || localPromoLimitQuantity === 0) {
+        setLocalPromoLimitQuantity(discountSettings.quantityPerProduct);
+      }
+    }
+  }, [discountSettings?.quantityPerProduct, localPromoShowFireIcon, localPromoLimitQuantity]);
   const [discountValidationError, setDiscountValidationError] = useState<string | null>(null);
+  
+  // Local state for new promo fields
+  // For resources with plans, scope always defaults to 'plan'
+  const [localPromoScope, setLocalPromoScope] = useState<'product' | 'plan' | undefined>(
+    currentProduct?.promoScope || undefined
+  );
+  const [localPromoCodeId, setLocalPromoCodeId] = useState<string | undefined>(undefined);
+  const [localPromoCode, setLocalPromoCode] = useState<string | undefined>(currentProduct?.promoCode);
+  const [localPromoDurationType, setLocalPromoDurationType] = useState<'one-time' | 'forever' | 'duration_months' | undefined>(currentProduct?.promoDurationType);
+  const [localPromoDurationMonths, setLocalPromoDurationMonths] = useState<number | undefined>(currentProduct?.promoDurationMonths);
+  const [localPromoUnlimitedQuantity, setLocalPromoUnlimitedQuantity] = useState<boolean>(currentProduct?.promoLimitQuantity === -1);
+  const [availablePromoCodes, setAvailablePromoCodes] = useState<Array<{id: string; code: string}>>([]);
+  const [hasDiscountSelected, setHasDiscountSelected] = useState<boolean>(Boolean(currentProduct?.promoDiscountType || currentProduct?.promoDiscountAmount));
+  const [currentResource, setCurrentResource] = useState<{planId?: string; whopProductId?: string; checkoutConfigurationId?: string} | null>(null);
+  const [isLoadingResource, setIsLoadingResource] = useState(false);
+  
+  // For resources without plans: track if using global discount or custom discount
+  const [promoMode, setPromoMode] = useState<'global' | 'custom'>('custom');
+  
+  // For resources without plans in custom mode: manual promo code input
+  const [localManualPromoCode, setLocalManualPromoCode] = useState<string>('');
+  
+  // Track if promo data is loaded from database (for resources with plan_id)
+  const [promoDataFromDb, setPromoDataFromDb] = useState<{
+    promoId?: string;
+    promoCode?: string;
+    amountOff?: number;
+    promoType?: 'percentage' | 'flat_amount';
+    stock?: number;
+    unlimitedStock?: boolean;
+    promoDurationMonths?: number;
+  } | null>(null);
+  const [isLoadingPromoFromDb, setIsLoadingPromoFromDb] = useState(false);
+
+  const [seasonalDiscountStatus, setSeasonalDiscountStatus] = useState<{
+    status: 'none' | 'upcoming' | 'active' | 'expired';
+    startDate?: string;
+    endDate?: string;
+  } | null>(null);
+  
+  // Track if we've initiated promo loading (to prevent flicker)
+  const [hasInitiatedPromoLoad, setHasInitiatedPromoLoad] = useState(false);
+  
+  // Reset flag when modal closes, resource changes, or seasonal discount status changes to expired/none
+  useEffect(() => {
+    if (!isOpen) {
+      setHasInitiatedPromoLoad(false);
+      return;
+    }
+    
+    // Reset when currentResource changes (not just planId)
+    // This ensures we reset when switching between products
+    setHasInitiatedPromoLoad(false);
+  }, [isOpen, currentResource]);
+  
+  // Reset flag when seasonal discount status changes to expired/none
+  useEffect(() => {
+    if (seasonalDiscountStatus && 
+        (seasonalDiscountStatus.status === 'expired' || seasonalDiscountStatus.status === 'none')) {
+      setHasInitiatedPromoLoad(false);
+    }
+  }, [seasonalDiscountStatus]);
+  
+  // Mark that we've initiated loading when isLoadingPromoFromDb becomes true
+  useEffect(() => {
+    if (isLoadingPromoFromDb) {
+      setHasInitiatedPromoLoad(true);
+    }
+  }, [isLoadingPromoFromDb]);
+  
+  // Determine if Product Discount is fully loaded
+  const isProductDiscountLoading = useMemo(() => {
+    // 1. If modal is not open, not loading
+    if (!isOpen) return false;
+    
+    // 2. If currentResource is loading, still loading
+    if (isLoadingResource) return true;
+    
+    // 3. If seasonal discount status is not loaded yet, still loading
+    if (!seasonalDiscountStatus) return true;
+    
+    // 4. If discount is expired or none, fully loaded (no promo data needed)
+    if (seasonalDiscountStatus.status === 'expired' || seasonalDiscountStatus.status === 'none') {
+      return false;
+    }
+    
+    // 5. If currentResource has planId: need to wait for promo data from DB to finish loading
+    if (currentResource?.planId) {
+      // Still loading if:
+      // - Promo data fetch is in progress, OR
+      // - We need to load promo data but haven't initiated the load yet
+      //   (This prevents flickering when seasonalDiscountStatus is set but the useEffect hasn't run yet)
+      const needsPromoLoad = seasonalDiscountStatus.status === 'active' || seasonalDiscountStatus.status === 'upcoming';
+      const waitingForLoadToStart = needsPromoLoad && !hasInitiatedPromoLoad && !isLoadingPromoFromDb;
+      
+      return isLoadingPromoFromDb || waitingForLoadToStart;
+    }
+    
+    // 6. If currentResource is null (and not loading), fully loaded (no planId, fully loaded)
+    // For resources without plan_id: fully loaded once seasonal discount status is known and resource is resolved
+    return false;
+  }, [isOpen, isLoadingResource, seasonalDiscountStatus, currentResource?.planId, isLoadingPromoFromDb, hasInitiatedPromoLoad]);
+  
+  // Determine if resource has plans (for showing PRODUCT_DISCOUNT section)
+  const hasPlans = useMemo(() => {
+    if (!currentResource) return false;
+    return Boolean(
+      currentResource.whopProductId || 
+      currentResource.planId || 
+      currentResource.checkoutConfigurationId
+    );
+  }, [currentResource]);
+
+  // Ensure scope is always 'plan' for resources with plans (default behavior)
+  useEffect(() => {
+    if (hasPlans && localPromoScope !== 'plan') {
+      setLocalPromoScope('plan');
+    }
+  }, [hasPlans, localPromoScope]);
+  
+  // State for promo creation and loaded data
+  const [isCreatingPromo, setIsCreatingPromo] = useState(false);
+  const [generatedPromoName, setGeneratedPromoName] = useState<string>('');
+  const [selectedPromoData, setSelectedPromoData] = useState<{
+    code: string;
+    amountOff: number;
+    promoType: 'percentage' | 'flat_amount';
+    planIds?: string[];
+    stock?: number;
+    unlimitedStock?: boolean;
+    promoDurationMonths?: number;
+  } | null>(null);
+  const [isPromoDataLoaded, setIsPromoDataLoaded] = useState(false);
+  const [isLoadingPromos, setIsLoadingPromos] = useState(false);
+  
+  // Ref to store generatePromoName function to avoid initialization issues
+  const generatePromoNameRef = useRef<((baseCode: string, discountType: 'percentage' | 'fixed', discountAmount: number) => string) | null>(null);
+  
+  // State for seasonal discount check
+  const [currentTime, setCurrentTime] = useState(new Date());
   
   // State for formatting toolbars (Claim Button Text)
   const [claimButtonTextRef, setClaimButtonTextRef] = useState<HTMLDivElement | null>(null);
@@ -318,13 +496,1150 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       setLocalShowRatingInfo(currentProduct.showRatingInfo || false);
       setLocalStarRating(typeof currentProduct.starRating === 'number' ? currentProduct.starRating : undefined);
       setLocalReviewCount(typeof currentProduct.reviewCount === 'number' ? currentProduct.reviewCount : undefined);
+      // For resources with plans, always use 'plan' scope (default behavior)
+      // Only use product's promoScope if it exists and resource doesn't have plans
+      const shouldUsePlanScope = hasPlans;
+      setLocalPromoScope(shouldUsePlanScope ? 'plan' : (currentProduct.promoScope || undefined));
+      setLocalPromoCodeId(currentProduct.promoCodeId);
+      setLocalPromoDurationType(currentProduct.promoDurationType);
+      setLocalPromoDurationMonths(currentProduct.promoDurationMonths);
+      setLocalPromoUnlimitedQuantity(currentProduct.promoLimitQuantity === -1);
       setDiscountValidationError(null);
+      setHasDiscountSelected(Boolean(currentProduct.promoDiscountType || currentProduct.promoDiscountAmount));
+      // Reset promo data loaded state when product changes
+      setIsPromoDataLoaded(false);
+      setSelectedPromoData(null);
+      setIsCreatingPromo(false);
+      setGeneratedPromoName('');
+      
+      // For resources without plans: initialize manual promo code if it exists and doesn't match global
+      if (!hasPlans && currentProduct.promoCode) {
+        const isGlobalPromo = discountSettings?.globalDiscount && 
+                             discountSettings?.promoCode === currentProduct.promoCode;
+        if (!isGlobalPromo) {
+          setLocalManualPromoCode(currentProduct.promoCode);
+        } else {
+          setLocalManualPromoCode('');
+        }
+      } else {
+        setLocalManualPromoCode('');
+      }
     }
     }
     // Note: Initial snapshots are captured from page load state
     // Product-specific snapshot is taken from initialProductsSnapshotRef when editing starts
     // This allows Clear to reset to the original page load state
   }, [isOpen, currentProduct?.id, productEditor.productId]);
+
+  // Update hasDiscountSelected when discount fields change
+  useEffect(() => {
+    setHasDiscountSelected(Boolean(localPromoDiscountType || localPromoDiscountAmount));
+  }, [localPromoDiscountType, localPromoDiscountAmount]);
+
+  // Update current time every second (for seasonal discount check)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Check if seasonal discount exists (has seasonalDiscountId)
+  // This matches the logic used in Shop Manager (TemplateManagerModal uses hasExistingDiscount)
+  const hasSeasonalDiscount = useMemo(() => {
+    return Boolean(discountSettings?.seasonalDiscountId);
+  }, [discountSettings?.seasonalDiscountId]);
+  
+  // Show +New button when seasonal discount exists
+  // Users can create product-specific discounts regardless of global discount status
+  const showNewPromoButton = useMemo(() => {
+    return hasSeasonalDiscount;
+  }, [hasSeasonalDiscount]);
+
+  // Generate promo name with price/percentage suffix
+  const generatePromoName = useCallback((
+    baseCode: string,
+    discountType: 'percentage' | 'fixed',
+    discountAmount: number
+  ): string => {
+    const suffix = Math.round(discountAmount).toString();
+    const baseName = `${baseCode}${suffix}`;
+    
+    // Check if promo with this name exists
+    const existingPromo = availablePromoCodes.find(p => {
+      const promoCode = p.code.toUpperCase();
+      return promoCode === baseName.toUpperCase() || promoCode.startsWith(baseName.toUpperCase());
+    });
+    
+    if (existingPromo) {
+      // Find the highest letter suffix already used
+      let maxLetter = 'A';
+      availablePromoCodes.forEach(p => {
+        const code = p.code.toUpperCase();
+        if (code.startsWith(baseName.toUpperCase())) {
+          const remaining = code.substring(baseName.length);
+          if (remaining.length === 1 && remaining >= 'A' && remaining <= 'Z') {
+            if (remaining > maxLetter) {
+              maxLetter = remaining;
+            }
+          }
+        }
+      });
+      
+      // Increment to next letter
+      if (maxLetter === 'Z') {
+        // If Z is used, wrap to AA (though unlikely)
+        return `${baseName}AA`;
+      }
+      const nextLetter = String.fromCharCode(maxLetter.charCodeAt(0) + 1);
+      return `${baseName}${nextLetter}`;
+    }
+    
+    return baseName;
+  }, [availablePromoCodes]);
+
+  // Store generatePromoName in ref for use in useEffect
+  useEffect(() => {
+    generatePromoNameRef.current = generatePromoName;
+  }, [generatePromoName]);
+
+  // Update generated promo name when discount type/amount changes in creation mode
+  useEffect(() => {
+    if (isCreatingPromo && discountSettings?.promoCode && localPromoDiscountType && localPromoDiscountAmount && generatePromoNameRef.current) {
+      const updatedName = generatePromoNameRef.current(
+        discountSettings.promoCode,
+        localPromoDiscountType,
+        localPromoDiscountAmount
+      );
+      setGeneratedPromoName(updatedName);
+    }
+  }, [isCreatingPromo, discountSettings?.promoCode, localPromoDiscountType, localPromoDiscountAmount]);
+
+  // Handle promo selection - load promo data
+  const handlePromoSelection = useCallback(async (promoId: string) => {
+    if (!promoId || !experienceId) {
+      setIsPromoDataLoaded(false);
+      setSelectedPromoData(null);
+      return;
+    }
+
+    try {
+      const response = await apiPost(
+        '/api/promos/get-by-id',
+        { promoId },
+        experienceId
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const promo = data.promo;
+
+        if (promo) {
+          // Map promo data to form fields
+          setLocalPromoDiscountType(promo.promoType === 'percentage' ? 'percentage' : 'fixed');
+          setLocalPromoDiscountAmount(parseFloat(promo.amountOff));
+          
+          // Map stock
+          if (promo.unlimitedStock) {
+            setLocalPromoUnlimitedQuantity(true);
+            setLocalPromoLimitQuantity(-1);
+          } else {
+            setLocalPromoUnlimitedQuantity(false);
+            setLocalPromoLimitQuantity(promo.stock || undefined);
+          }
+
+          // Map duration
+          if (promo.promoDurationMonths === 0) {
+            setLocalPromoDurationType('one-time');
+            setLocalPromoDurationMonths(undefined);
+          } else if (promo.promoDurationMonths >= 999) {
+            setLocalPromoDurationType('forever');
+            setLocalPromoDurationMonths(undefined);
+          } else {
+            setLocalPromoDurationType('duration_months');
+            setLocalPromoDurationMonths(promo.promoDurationMonths);
+          }
+
+          // Store promo data
+          // Handle planIds: Drizzle should parse JSONB automatically, but handle edge cases
+          let parsedPlanIds: string[] | undefined = undefined;
+          if (promo.planIds) {
+            if (Array.isArray(promo.planIds)) {
+              parsedPlanIds = promo.planIds;
+            } else if (typeof promo.planIds === 'string') {
+              try {
+                const parsed = JSON.parse(promo.planIds);
+                parsedPlanIds = Array.isArray(parsed) ? parsed : undefined;
+              } catch (e) {
+                // If parsing fails, it might be a single plan ID string, wrap it in an array
+                parsedPlanIds = [promo.planIds];
+              }
+            }
+          }
+          
+          setSelectedPromoData({
+            code: promo.code,
+            amountOff: parseFloat(promo.amountOff),
+            promoType: promo.promoType,
+            planIds: parsedPlanIds,
+            stock: promo.stock || undefined,
+            unlimitedStock: promo.unlimitedStock || false,
+            promoDurationMonths: promo.promoDurationMonths,
+          });
+
+          setIsPromoDataLoaded(true);
+          setHasDiscountSelected(true);
+          
+          // Don't auto-apply promo to template - user must click "Apply Discount" button
+        }
+      }
+    } catch (error) {
+      console.error('Error loading promo data:', error);
+      setIsPromoDataLoaded(false);
+      setSelectedPromoData(null);
+    }
+  }, [experienceId, apiPost, productEditor.productId, updateProduct]);
+
+  // Handle promo deletion
+  const handleDeletePromo = useCallback(async () => {
+    if (!localPromoCodeId || !experienceId) {
+      console.warn('Cannot delete promo: missing required data');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this promo? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await apiPost(
+        '/api/promos/delete',
+        {
+          promoId: localPromoCodeId,
+          experienceId, // Endpoint will resolve companyId from experienceId
+        },
+        experienceId
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete promo');
+      }
+
+      // Clear local state
+      setLocalPromoCodeId(undefined);
+      setSelectedPromoData(null);
+      setIsPromoDataLoaded(false);
+      setHasDiscountSelected(false);
+
+      // Update product to remove promo references
+      if (productEditor.productId !== null) {
+        updateProduct(productEditor.productId, {
+          promoCodeId: undefined,
+          promoCode: undefined,
+        });
+      }
+
+      // Refresh available promos by resetting the scope (which will trigger useEffect to refetch)
+      // The useEffect for fetching promos will automatically refresh
+
+      console.log('✅ Promo deleted successfully');
+    } catch (error) {
+      console.error('Error deleting promo:', error);
+      alert('Failed to delete promo. Please try again.');
+    }
+  }, [localPromoCodeId, experienceId, apiPost, productEditor.productId, updateProduct]);
+
+  // Handle applying existing promo to template (without creating new promo)
+  const handleApplyExistingPromo = useCallback(() => {
+    if (productEditor.productId === null || !localPromoCodeId || !selectedPromoData) {
+      console.warn('Cannot apply existing promo: missing required data');
+      return;
+    }
+
+    const updates: Partial<Product> = {
+      promoCodeId: localPromoCodeId,
+      promoCode: selectedPromoData.code, // Use promo code from selected promo
+      promoScope: localPromoScope,
+      promoDiscountType: localPromoDiscountType,
+      promoDiscountAmount: localPromoDiscountAmount,
+      promoLimitQuantity: localPromoUnlimitedQuantity ? -1 : localPromoLimitQuantity,
+      promoQuantityLeft: localPromoShowFireIcon && !localPromoUnlimitedQuantity && localPromoLimitQuantity 
+        ? localPromoLimitQuantity 
+        : (localPromoUnlimitedQuantity ? undefined : (localPromoLimitQuantity ?? undefined)),
+      promoShowFireIcon: localPromoShowFireIcon,
+      promoDurationType: localPromoDurationType,
+      promoDurationMonths: localPromoDurationMonths,
+    };
+    
+    console.log('💾 Applying existing promotion to product (template update only):', productEditor.productId, updates);
+    updateProduct(productEditor.productId, updates);
+    
+    // Trigger template auto-save callback
+    if (onProductUpdated) {
+      setTimeout(() => {
+        onProductUpdated();
+      }, 100);
+    }
+  }, [
+    productEditor.productId,
+    localPromoCodeId,
+    selectedPromoData,
+    localPromoScope,
+    localPromoDiscountType,
+    localPromoDiscountAmount,
+    localPromoUnlimitedQuantity,
+    localPromoLimitQuantity,
+    localPromoShowFireIcon,
+    localPromoDurationType,
+    localPromoDurationMonths,
+    updateProduct,
+    onProductUpdated,
+  ]);
+
+  // Handle applying global discount to template (for resources without plans)
+  const handleApplyGlobalDiscount = useCallback(() => {
+    if (productEditor.productId === null || !discountSettings?.promoCode || !discountSettings?.globalDiscount) {
+      console.warn('Cannot apply global discount: missing required data');
+      return;
+    }
+
+    // Determine if fire icon should be enabled (if quantity per product is set)
+    const hasLimitedQuantity = discountSettings.quantityPerProduct !== undefined && 
+                              discountSettings.quantityPerProduct !== -1 && 
+                              discountSettings.quantityPerProduct > 0;
+
+    const updates: Partial<Product> = {
+      // Don't set promoCodeId (global promo is not a product-specific promo)
+      promoCode: discountSettings.promoCode, // Use global promo code
+      promoScope: undefined, // Global discount doesn't have scope
+      promoDiscountType: discountSettings.globalDiscountType || 'percentage',
+      promoDiscountAmount: discountSettings.globalDiscountAmount || discountSettings.percentage || 0,
+      // Set limit quantity and fire icon if global discount has quantity per product
+      promoLimitQuantity: hasLimitedQuantity ? discountSettings.quantityPerProduct : undefined,
+      promoQuantityLeft: hasLimitedQuantity ? discountSettings.quantityPerProduct : undefined,
+      promoShowFireIcon: hasLimitedQuantity,
+      promoDurationType: discountSettings.durationType,
+      promoDurationMonths: discountSettings.durationMonths,
+    };
+    
+    console.log('💾 Applying global discount to product (template update only):', productEditor.productId, updates);
+    updateProduct(productEditor.productId, updates);
+    
+    // Trigger template auto-save callback
+    if (onProductUpdated) {
+      setTimeout(() => {
+        onProductUpdated();
+      }, 100);
+    }
+  }, [
+    productEditor.productId,
+    discountSettings,
+    updateProduct,
+    onProductUpdated,
+  ]);
+
+  // Handle promo code change - load promo data when selected
+  useEffect(() => {
+    if (localPromoCodeId) {
+      handlePromoSelection(localPromoCodeId);
+    } else {
+      setIsPromoDataLoaded(false);
+      setSelectedPromoData(null);
+      // Don't clear discount fields when promo is deselected - user might want to keep them
+      // Only clear if they explicitly deselect
+    }
+  }, [localPromoCodeId, handlePromoSelection]);
+  
+  // Set default promo code for Plan scope when product has promoCodeId
+  useEffect(() => {
+    if (localPromoScope === 'plan' && currentProduct?.promoCodeId && !localPromoCodeId) {
+      setLocalPromoCodeId(currentProduct.promoCodeId);
+    }
+  }, [localPromoScope, currentProduct?.promoCodeId]);
+
+  // Handle +New button click
+  const handleNewPromoClick = useCallback(() => {
+    // Check if we have the base promo code from seasonal discount
+    if (!discountSettings?.promoCode) {
+      console.warn('Cannot create promo: seasonal discount promo code is missing');
+      return;
+    }
+
+    // If discount type and amount are not set, we still enter creation mode
+    // The user will need to set them before clicking "Apply Promo"
+    // But we can generate a placeholder name if they are set
+    if (localPromoDiscountType && localPromoDiscountAmount) {
+      const generatedName = generatePromoName(
+        discountSettings.promoCode,
+        localPromoDiscountType,
+        localPromoDiscountAmount
+      );
+      setGeneratedPromoName(generatedName);
+    } else {
+      // Set a placeholder name that will be updated when user sets discount type/amount
+      setGeneratedPromoName(discountSettings.promoCode);
+    }
+
+    setIsCreatingPromo(true);
+    setIsPromoDataLoaded(false);
+    
+    // Ensure discount fields are visible by setting hasDiscountSelected if not already set
+    if (!hasDiscountSelected) {
+      setHasDiscountSelected(true);
+    }
+  }, [discountSettings?.promoCode, localPromoDiscountType, localPromoDiscountAmount, generatePromoName, hasDiscountSelected]);
+
+  // Handle Apply Promo
+  const handleApplyPromo = useCallback(async () => {
+    // Validate required fields before creating promo
+    if (productEditor.productId === null) {
+      console.warn('Cannot apply promo: no product selected');
+      return;
+    }
+
+    // Only require generatedPromoName for resources with plans
+    if (hasPlans && (!experienceId || !generatedPromoName)) {
+      console.warn('Cannot apply promo: missing experienceId or promo name');
+      return;
+    }
+
+    // For resources without plans, require localManualPromoCode
+    if (!hasPlans && (!experienceId || !localManualPromoCode?.trim())) {
+      console.warn('Cannot apply custom discount: missing experienceId or promo code');
+      return;
+    }
+    
+    if (!localPromoDiscountType || !localPromoDiscountAmount || localPromoDiscountAmount <= 0) {
+      setDiscountValidationError('Select a discount type and enter an amount greater than 0.');
+      return;
+    }
+
+    if (localPromoShowFireIcon && !localPromoUnlimitedQuantity && (!localPromoLimitQuantity || localPromoLimitQuantity <= 0)) {
+      setDiscountValidationError('Enter a quantity limit above 0 to show the fire icon.');
+      return;
+    }
+
+    setDiscountValidationError(null);
+    
+    // Update generated name if discount type/amount changed
+    // This ensures generatedPromoName is always up-to-date before creating the promo
+    if (discountSettings?.promoCode && localPromoDiscountType && localPromoDiscountAmount) {
+      const updatedName = generatePromoName(
+        discountSettings.promoCode,
+        localPromoDiscountType,
+        localPromoDiscountAmount
+      );
+      setGeneratedPromoName(updatedName);
+      console.log('🔄 Updated generated promo name:', updatedName);
+    }
+
+    // Validate currentResource is available
+    if (!currentResource) {
+      console.error('Cannot apply promo: currentResource is not available');
+      setDiscountValidationError('Product resource information is not available. Please try refreshing the page.');
+      return;
+    }
+
+    // For resources without plans, just update template with manual promo code
+    if (!hasPlans) {
+      // Check if manual promo code matches global discount - if so, don't apply custom
+      if (discountSettings?.globalDiscount && 
+          discountSettings?.promoCode === localManualPromoCode) {
+        console.warn('Cannot apply custom discount: promo code matches global discount');
+        setDiscountValidationError('This promo code is already used by the global discount. Please use a different code.');
+        return;
+      }
+      
+      const updates: Partial<Product> = {
+        promoCode: localManualPromoCode || undefined,
+        promoScope: undefined,
+        promoDiscountType: localPromoDiscountType,
+        promoDiscountAmount: localPromoDiscountAmount,
+        promoLimitQuantity: localPromoUnlimitedQuantity ? -1 : localPromoLimitQuantity,
+        promoQuantityLeft: localPromoShowFireIcon && !localPromoUnlimitedQuantity && localPromoLimitQuantity 
+          ? localPromoLimitQuantity 
+          : (localPromoUnlimitedQuantity ? undefined : (localPromoLimitQuantity ?? undefined)),
+        promoShowFireIcon: localPromoShowFireIcon,
+        promoDurationType: localPromoDurationType,
+        promoDurationMonths: localPromoDurationMonths,
+      };
+      
+      console.log('💾 Applying manual promo code to product (template update only):', productEditor.productId, updates);
+      updateProduct(productEditor.productId!, updates);
+      
+      if (onProductUpdated) {
+        setTimeout(() => {
+          onProductUpdated();
+        }, 100);
+      }
+      
+      // Exit creation mode
+      setIsCreatingPromo(false);
+      setGeneratedPromoName('');
+      return;
+    }
+
+    // Check if this is design-only mode (no whopProductId and no plans)
+    const isDesignOnly = !currentResource.whopProductId && !currentResource.planId && !currentResource.checkoutConfigurationId;
+
+    if (isDesignOnly) {
+      // Design-only mode: just update template, no API calls
+      const promoCodeToUse = generatedPromoName || discountSettings?.promoCode || 'PROMO';
+      
+      if (productEditor.productId !== null) {
+        const updates: Partial<Product> = {
+          // Don't set promoCodeId (no real promo created)
+          promoCode: promoCodeToUse, // Save promo code string for display
+          promoScope: localPromoScope,
+          promoDiscountType: localPromoDiscountType,
+          promoDiscountAmount: localPromoDiscountAmount,
+          promoLimitQuantity: localPromoUnlimitedQuantity ? -1 : localPromoLimitQuantity,
+          // Set promoQuantityLeft to the limit quantity when fire icon is enabled and we have a limit
+          promoQuantityLeft: localPromoShowFireIcon && !localPromoUnlimitedQuantity && localPromoLimitQuantity 
+            ? localPromoLimitQuantity 
+            : undefined,
+          promoShowFireIcon: localPromoShowFireIcon,
+          promoDurationType: localPromoDurationType,
+          promoDurationMonths: localPromoDurationMonths,
+        };
+        
+        console.log('💾 Applying design-only promotion to product (no API call):', productEditor.productId, updates);
+        updateProduct(productEditor.productId, updates);
+        
+        // Trigger template auto-save callback if provided
+        if (onProductUpdated) {
+          setTimeout(() => {
+            onProductUpdated();
+          }, 100);
+        }
+      }
+      
+      // Exit creation mode
+      setIsCreatingPromo(false);
+      setGeneratedPromoName('');
+      return; // Exit early, skip API call
+    }
+
+    try {
+      // Determine planIds based on scope
+      let planIds: string[] = [];
+      
+      if (localPromoScope === 'plan' && currentResource?.planId) {
+        planIds = [currentResource.planId];
+      } else if (localPromoScope === 'product' && currentResource?.whopProductId) {
+        // Get all plans for the product
+        try {
+          const plansResponse = await apiGet(
+            `/api/plans?whopProductId=${currentResource.whopProductId}`,
+            experienceId
+          );
+          
+          if (plansResponse.ok) {
+            const plansData = await plansResponse.json();
+            const plans = plansData.data || [];
+            planIds = plans.map((plan: any) => plan.planId).filter((id: string) => Boolean(id));
+          } else {
+            const errorData = await plansResponse.json().catch(() => ({}));
+            console.error('Error fetching plans for product:', errorData);
+            setDiscountValidationError('Failed to fetch plans for this product. Please ensure the product has plans configured.');
+            return;
+          }
+        } catch (error) {
+          console.error('Error fetching plans for product:', error);
+          setDiscountValidationError('Failed to fetch plans for this product. Please try again.');
+          return;
+        }
+      }
+
+      if (planIds.length === 0) {
+        const errorMessage = localPromoScope === 'plan' 
+          ? 'No plan selected. Please select a plan for this product first.'
+          : 'No plans found for this product. Please ensure the product has plans configured in Whop.';
+        console.error('No plans found for promo creation:', { localPromoScope, currentResource });
+        setDiscountValidationError(errorMessage);
+        return;
+      }
+
+      // Map duration to months
+      let promoDurationMonths = 0;
+      if (localPromoDurationType === 'forever') {
+        promoDurationMonths = 999;
+      } else if (localPromoDurationType === 'duration_months' && localPromoDurationMonths) {
+        promoDurationMonths = localPromoDurationMonths;
+      }
+
+      // Use the current generatedPromoName (which may have been updated above)
+      // Ensure we have a valid promo code name - this should always be set by the useEffect above
+      const promoCodeToUse = generatedPromoName;
+      if (!promoCodeToUse) {
+        console.error('Cannot apply promo: generatedPromoName is missing', {
+          generatedPromoName,
+          discountSettings: discountSettings?.promoCode,
+          localPromoDiscountType,
+          localPromoDiscountAmount,
+        });
+        setDiscountValidationError('Promo code name is required. Please ensure discount settings are configured.');
+        return;
+      }
+      
+      console.log('🎫 Using promo code for creation and template save:', promoCodeToUse);
+      
+      // Prepare request data
+      const requestData = {
+        experienceId, // Pass experienceId, endpoint will resolve companyId
+        promoCode: promoCodeToUse,
+        amountOff: localPromoDiscountAmount,
+        promoType: localPromoDiscountType === 'percentage' ? 'percentage' : 'flat_amount',
+        planIds,
+        stock: localPromoUnlimitedQuantity ? undefined : localPromoLimitQuantity,
+        unlimitedStock: localPromoUnlimitedQuantity,
+        promoDurationMonths,
+      };
+      
+      console.log('📤 Creating promo with data:', {
+        ...requestData,
+        planIdsCount: planIds.length,
+        planIds: planIds,
+      });
+      
+      // Create promo - endpoint will resolve companyId from experienceId
+      const createResponse = await apiPost(
+        '/api/promos/create',
+        requestData,
+        experienceId
+      );
+
+      if (createResponse.ok) {
+        const createData = await createResponse.json();
+        
+        // Refresh available promos by adding the new one
+        setAvailablePromoCodes(prev => [...prev, { id: createData.promoId, code: generatedPromoName }]);
+        
+        // Select the newly created promo
+        setLocalPromoCodeId(createData.promoId);
+        
+        // Update product with ALL discount fields (same as handleSaveDiscount)
+        if (productEditor.productId !== null) {
+          const updates: Partial<Product> = {
+            promoCodeId: createData.promoId,
+            promoCode: promoCodeToUse, // Save promo code string to template for display
+            promoScope: localPromoScope,
+            promoDiscountType: localPromoDiscountType,
+            promoDiscountAmount: localPromoDiscountAmount,
+            promoLimitQuantity: localPromoUnlimitedQuantity ? -1 : localPromoLimitQuantity,
+            // Set promoQuantityLeft to the limit quantity when fire icon is enabled and we have a limit
+            // This represents the initial "left" count (will decrease as items are sold)
+            promoQuantityLeft: localPromoShowFireIcon && !localPromoUnlimitedQuantity && localPromoLimitQuantity 
+              ? localPromoLimitQuantity 
+              : (localPromoUnlimitedQuantity ? undefined : (localPromoLimitQuantity ?? undefined)),
+            promoShowFireIcon: localPromoShowFireIcon,
+            promoDurationType: localPromoDurationType,
+            promoDurationMonths: localPromoDurationMonths,
+          };
+          
+          console.log('💾 Applying promotion to product:', productEditor.productId, updates);
+          console.log('🎫 Promo code being saved:', {
+            promoCodeId: updates.promoCodeId,
+            promoCode: updates.promoCode,
+            promoScope: updates.promoScope,
+          });
+          console.log('🔥 Fire icon settings:', {
+            promoShowFireIcon: updates.promoShowFireIcon,
+            promoQuantityLeft: updates.promoQuantityLeft,
+            promoLimitQuantity: updates.promoLimitQuantity,
+            localPromoUnlimitedQuantity,
+            willShowFire: updates.promoShowFireIcon && updates.promoQuantityLeft !== undefined && updates.promoQuantityLeft > 0
+          });
+          updateProduct(productEditor.productId, updates);
+          
+          // Trigger template auto-save callback if provided
+          if (onProductUpdated) {
+            // Use setTimeout to ensure product update is processed first
+            setTimeout(() => {
+              onProductUpdated();
+            }, 100);
+          }
+        }
+        
+        // Exit creation mode
+        setIsCreatingPromo(false);
+        setGeneratedPromoName('');
+      } else {
+        // Get error details
+        const status = createResponse.status;
+        const statusText = createResponse.statusText;
+        let errorMessage = 'Failed to create promotion.';
+        
+        try {
+          const errorData = await createResponse.json();
+          console.error('Failed to create promo:', {
+            status,
+            statusText,
+            error: errorData,
+            requestData: {
+              promoCode: promoCodeToUse,
+              amountOff: localPromoDiscountAmount,
+              promoType: localPromoDiscountType,
+              planIds,
+            }
+          });
+          
+          // Extract error message from response
+          if (errorData?.error) {
+            errorMessage = typeof errorData.error === 'string' 
+              ? errorData.error 
+              : errorData.error.message || errorMessage;
+          } else if (errorData?.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // Response might not be JSON, try to get text
+          try {
+            const errorText = await createResponse.text();
+            console.error('Failed to create promo (non-JSON response):', {
+              status,
+              statusText,
+              responseText: errorText,
+            });
+            errorMessage = errorText || `Server returned ${status} ${statusText}`;
+          } catch (textError) {
+            console.error('Failed to create promo (could not read response):', {
+              status,
+              statusText,
+              parseError,
+              textError,
+            });
+            errorMessage = `Server returned ${status} ${statusText}`;
+          }
+        }
+        
+        setDiscountValidationError(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error applying promo:', error);
+    }
+  }, [
+    productEditor.productId,
+    experienceId,
+    generatedPromoName,
+    hasPlans,
+    localManualPromoCode,
+    localPromoDiscountType,
+    localPromoDiscountAmount,
+    localPromoScope,
+    currentResource,
+    localPromoDurationType,
+    localPromoDurationMonths,
+    localPromoUnlimitedQuantity,
+    localPromoLimitQuantity,
+    localPromoShowFireIcon,
+    apiPost,
+    generatePromoName,
+    discountSettings?.promoCode,
+    setDiscountValidationError,
+    updateProduct,
+    onProductUpdated,
+  ]);
+
+  // Fetch resource data for current product
+  useEffect(() => {
+    if (!isOpen || !currentProduct || !experienceId) {
+      setCurrentResource(null);
+      setIsLoadingResource(false);
+      return;
+    }
+
+    const fetchResource = async () => {
+      setIsLoadingResource(true);
+      try {
+        // Try to get resource by whopProductId or product id
+        const productId = currentProduct.whopProductId || currentProduct.id;
+        const response = await apiPost(
+          '/api/resources/get-by-product',
+          {
+            productId: String(productId),
+            experienceId,
+          },
+          experienceId
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('📦 Resource fetched:', data.resource);
+          setCurrentResource(data.resource);
+        } else {
+          console.log('⚠️ Resource fetch failed:', response.status);
+          setCurrentResource(null);
+        }
+      } catch (error) {
+        console.error('Error fetching resource:', error);
+        setCurrentResource(null);
+      } finally {
+        setIsLoadingResource(false);
+      }
+    };
+
+    fetchResource();
+  }, [isOpen, currentProduct?.id, currentProduct?.whopProductId, experienceId, apiPost]);
+
+  // Load seasonal discount from database (not template) for all resources
+  useEffect(() => {
+    if (!isOpen || !experienceId) {
+      setSeasonalDiscountStatus(null);
+      return;
+    }
+
+    const loadSeasonalDiscount = async () => {
+      try {
+        const response = await apiPost(
+          '/api/seasonal-discount/get',
+          { experienceId },
+          experienceId
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const discountData = data.discountData;
+          
+          if (!discountData) {
+            setSeasonalDiscountStatus({ status: 'none' });
+            return;
+          }
+
+          const now = new Date();
+          const startDate = discountData.startDate ? new Date(discountData.startDate) : null;
+          const endDate = discountData.endDate ? new Date(discountData.endDate) : null;
+
+          if (endDate && now > endDate) {
+            setSeasonalDiscountStatus({ 
+              status: 'expired',
+              endDate: discountData.endDate 
+            });
+          } else if (startDate && now < startDate) {
+            setSeasonalDiscountStatus({ 
+              status: 'upcoming',
+              startDate: discountData.startDate,
+              endDate: discountData.endDate 
+            });
+          } else if (startDate && endDate && now >= startDate && now <= endDate) {
+            setSeasonalDiscountStatus({ 
+              status: 'active',
+              startDate: discountData.startDate,
+              endDate: discountData.endDate 
+            });
+          } else {
+            setSeasonalDiscountStatus({ 
+              status: 'active',
+              endDate: discountData.endDate 
+            });
+          }
+        } else {
+          setSeasonalDiscountStatus({ status: 'none' });
+        }
+      } catch (error) {
+        console.error('Error loading seasonal discount from database:', error);
+        setSeasonalDiscountStatus({ status: 'none' });
+      }
+    };
+
+    loadSeasonalDiscount();
+  }, [isOpen, experienceId, apiPost]);
+
+  // Load promo data from database if resource has plan_id
+  useEffect(() => {
+    if (!isOpen || !currentResource?.planId || !experienceId) {
+      setPromoDataFromDb(null);
+      return;
+    }
+
+    // Don't load promo data if discount is expired or none
+    if (seasonalDiscountStatus && 
+        (seasonalDiscountStatus.status === 'expired' || seasonalDiscountStatus.status === 'none')) {
+      setPromoDataFromDb(null);
+      return;
+    }
+
+    const loadPromoFromDatabase = async () => {
+      setIsLoadingPromoFromDb(true);
+      try {
+        const planResponse = await apiPost(
+          '/api/plans/get-by-plan-id',
+          { planId: currentResource.planId },
+          experienceId
+        );
+
+        if (planResponse.ok) {
+          const planData = await planResponse.json();
+          if (planData.promo) {
+            setPromoDataFromDb({
+              promoId: planData.promo.id,
+              promoCode: planData.promo.code,
+              amountOff: parseFloat(planData.promo.amountOff || '0'),
+              promoType: planData.promo.promoType,
+              stock: planData.promo.stock ?? undefined,
+              unlimitedStock: planData.promo.unlimitedStock ?? false,
+              promoDurationMonths: planData.promo.promoDurationMonths ?? undefined,
+            });
+          } else {
+            setPromoDataFromDb(null);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading promo from database:', error);
+        setPromoDataFromDb(null);
+      } finally {
+        setIsLoadingPromoFromDb(false);
+      }
+    };
+
+    loadPromoFromDatabase();
+  }, [isOpen, currentResource?.planId, experienceId, seasonalDiscountStatus, apiPost]);
+
+  // Clear promo data when discount is expired or none
+  useEffect(() => {
+    if (seasonalDiscountStatus && 
+        (seasonalDiscountStatus.status === 'expired' || seasonalDiscountStatus.status === 'none')) {
+      // Clear all promo-related state
+      setLocalPromoDiscountType(undefined);
+      setLocalPromoDiscountAmount(undefined);
+      setLocalPromoLimitQuantity(undefined);
+      setLocalPromoCodeId(undefined);
+      setLocalPromoCode(undefined);
+      setLocalPromoUnlimitedQuantity(false);
+      setLocalPromoDurationType(undefined);
+      setLocalPromoDurationMonths(undefined);
+      setLocalPromoShowFireIcon(false);
+      setPromoDataFromDb(null);
+      setAvailablePromoCodes([]);
+    }
+  }, [seasonalDiscountStatus]);
+
+  // Update local state when database promo data loads (only if active/upcoming)
+  useEffect(() => {
+    // If discount is expired or none, don't set any promo data (already cleared by clear promo data useEffect)
+    if (seasonalDiscountStatus && 
+        (seasonalDiscountStatus.status === 'expired' || seasonalDiscountStatus.status === 'none')) {
+      // Promo data is already cleared by the clear promo data useEffect
+      return;
+    }
+
+    if (promoDataFromDb && currentResource?.planId) {
+      // Resource has plan_id and discount is active/upcoming - use database data
+      setLocalPromoDiscountType(promoDataFromDb.promoType === 'percentage' ? 'percentage' : (promoDataFromDb.promoType === 'flat_amount' ? 'fixed' : undefined));
+      setLocalPromoDiscountAmount(promoDataFromDb.amountOff);
+      setLocalPromoLimitQuantity(promoDataFromDb.unlimitedStock ? -1 : (promoDataFromDb.stock ?? undefined));
+      setLocalPromoCodeId(promoDataFromDb.promoId);
+      setLocalPromoCode(promoDataFromDb.promoCode);
+      setLocalPromoUnlimitedQuantity(promoDataFromDb.unlimitedStock ?? false);
+      if (promoDataFromDb.promoDurationMonths) {
+        setLocalPromoDurationType('duration_months');
+        setLocalPromoDurationMonths(promoDataFromDb.promoDurationMonths);
+      }
+    } else if (!currentResource?.planId && currentProduct) {
+      // Resource has no plan_id and discount is active/upcoming - use template data
+      setLocalPromoDiscountType(currentProduct.promoDiscountType);
+      setLocalPromoDiscountAmount(currentProduct.promoDiscountAmount);
+      setLocalPromoLimitQuantity(currentProduct.promoLimitQuantity);
+      setLocalPromoCodeId(currentProduct.promoCodeId);
+      setLocalPromoCode(currentProduct.promoCode);
+      setLocalPromoUnlimitedQuantity(currentProduct.promoLimitQuantity === -1);
+      setLocalPromoDurationType(currentProduct.promoDurationType);
+      setLocalPromoDurationMonths(currentProduct.promoDurationMonths);
+    }
+  }, [promoDataFromDb, currentResource?.planId, currentProduct, seasonalDiscountStatus]);
+
+  // Initialize promoMode for resources without plans
+  useEffect(() => {
+    if (!hasPlans && currentProduct && discountSettings) {
+      // Set to 'global' if product promo code matches global discount promo code
+      const isUsingGlobalDiscount = discountSettings.globalDiscount && 
+                                    discountSettings.promoCode && 
+                                    currentProduct.promoCode === discountSettings.promoCode;
+      setPromoMode(isUsingGlobalDiscount ? 'global' : 'custom');
+    }
+  }, [hasPlans, currentProduct, discountSettings]);
+
+  // Auto-enable fire icon when Global Discount is selected for resources without plans and has limited quantity
+  useEffect(() => {
+    if (!hasPlans && 
+        promoMode === 'global' && 
+        discountSettings?.quantityPerProduct !== undefined && 
+        discountSettings.quantityPerProduct !== -1 && 
+        discountSettings.quantityPerProduct > 0) {
+      // Auto-enable fire icon if not already enabled
+      if (!localPromoShowFireIcon) {
+        setLocalPromoShowFireIcon(true);
+      }
+      // Set the limit quantity to match global discount quantity
+      if (!localPromoLimitQuantity || localPromoLimitQuantity !== discountSettings.quantityPerProduct) {
+        setLocalPromoLimitQuantity(discountSettings.quantityPerProduct);
+      }
+      // Ensure unlimited quantity is false when fire icon is enabled
+      if (localPromoUnlimitedQuantity) {
+        setLocalPromoUnlimitedQuantity(false);
+      }
+    }
+  }, [hasPlans, promoMode, discountSettings?.quantityPerProduct, localPromoShowFireIcon, localPromoLimitQuantity, localPromoUnlimitedQuantity]);
+
+  // Fetch promos based on selected scope
+  useEffect(() => {
+    if (!isOpen || !localPromoScope || !currentResource || !experienceId) {
+      setAvailablePromoCodes([]);
+      return;
+    }
+
+    const fetchPromos = async () => {
+      try {
+        if (localPromoScope === 'plan') {
+          // For plan scope, we need planId from currentResource
+          if (!currentResource.planId) {
+            console.log('⚠️ Plan scope selected but currentResource.planId is missing:', currentResource);
+            setAvailablePromoCodes([]);
+            return;
+          }
+          
+          console.log('📞 Fetching promos for plan:', currentResource.planId);
+          // Fetch promos for plan
+          const response = await apiPost(
+            '/api/promos/list-by-plan',
+            {
+              planId: currentResource.planId,
+            },
+            experienceId
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            const promos = data.promos || [];
+            console.log(`✅ Found ${promos.length} promos for plan ${currentResource.planId}:`, promos.map((p: {id: string; code: string}) => p.code));
+            setAvailablePromoCodes(promos);
+            
+            // If currentProduct has a promoCodeId, ensure it's in the list or set it as selected
+            if (currentProduct?.promoCodeId && !promos.some((p: {id: string}) => p.id === currentProduct.promoCodeId)) {
+              console.log(`⚠️ Product has promoCodeId ${currentProduct.promoCodeId} but it's not in plan's promoIds, attempting to fetch...`);
+              // Promo might exist but not be in the plan's promoIds yet, try to fetch it
+              try {
+                const promoResponse = await apiPost(
+                  '/api/promos/get-by-id',
+                  { promoId: currentProduct.promoCodeId },
+                  experienceId
+                );
+                if (promoResponse.ok) {
+                  const promoData = await promoResponse.json();
+                  // Add to available promos if it exists
+                  if (promoData.promo) {
+                    console.log(`✅ Found promo ${promoData.promo.code} via get-by-id, adding to list`);
+                    setAvailablePromoCodes(prev => [...prev, { id: promoData.promo.id, code: promoData.promo.code }]);
+                  }
+                } else {
+                  console.warn(`⚠️ Failed to fetch promo ${currentProduct.promoCodeId} via get-by-id`);
+                }
+              } catch (err) {
+                console.error(`❌ Error fetching promo ${currentProduct.promoCodeId}:`, err);
+              }
+            }
+          } else {
+            const errorData = await response.json().catch(() => ({}));
+            console.error(`❌ Failed to fetch promos for plan ${currentResource.planId}:`, errorData);
+            setAvailablePromoCodes([]);
+          }
+        } else if (localPromoScope === 'product') {
+          if (currentResource.whopProductId) {
+            console.log('📞 Fetching plans for product:', currentResource.whopProductId);
+            // Get all plans for the product
+            try {
+              const plansResponse = await apiGet(
+                `/api/plans?whopProductId=${currentResource.whopProductId}`,
+                experienceId
+              );
+              
+              if (plansResponse.ok) {
+                const plansData = await plansResponse.json();
+                const plans = plansData.data || [];
+                
+                // Fetch promos for each plan
+                const allPromos = new Map<string, {id: string; code: string}>();
+                let successCount = 0;
+                let errorCount = 0;
+                
+                console.log(`📞 Fetching promos for ${plans.length} plans of product ${currentResource.whopProductId}`);
+                
+                for (const plan of plans) {
+                  if (plan.planId) {
+                    try {
+                      const promoResponse = await apiPost(
+                        '/api/promos/list-by-plan',
+                        { planId: plan.planId },
+                        experienceId
+                      );
+                      
+                      if (promoResponse.ok) {
+                        const promoData = await promoResponse.json();
+                        if (promoData.promos && promoData.promos.length > 0) {
+                          console.log(`✅ Found ${promoData.promos.length} promos for plan ${plan.planId}`);
+                          promoData.promos.forEach((promo: {id: string; code: string}) => {
+                            if (!allPromos.has(promo.id)) {
+                              allPromos.set(promo.id, promo);
+                            }
+                          });
+                          successCount++;
+                        } else {
+                          console.log(`ℹ️ No promos found for plan ${plan.planId}`);
+                        }
+                      } else {
+                        const errorData = await promoResponse.json().catch(() => ({}));
+                        console.error(`❌ Failed to fetch promos for plan ${plan.planId}:`, errorData);
+                        errorCount++;
+                      }
+                    } catch (err) {
+                      console.error(`❌ Error fetching promos for plan ${plan.planId}:`, err);
+                      errorCount++;
+                    }
+                  }
+                }
+                
+                console.log(`📊 Product promo fetch summary: ${allPromos.size} unique promos found, ${successCount} plans succeeded, ${errorCount} plans failed`);
+                setAvailablePromoCodes(Array.from(allPromos.values()));
+              } else {
+                setAvailablePromoCodes([]);
+              }
+            } catch (error) {
+              console.error('Error fetching plans for product:', error);
+              setAvailablePromoCodes([]);
+            }
+          } else if (currentResource.checkoutConfigurationId && currentResource.planId) {
+            // For checkout-only resources, fetch promos for the plan
+            const response = await apiPost(
+              '/api/promos/list-by-plan',
+              {
+                planId: currentResource.planId,
+              },
+              experienceId
+            );
+
+            if (response.ok) {
+              const data = await response.json();
+              setAvailablePromoCodes(data.promos || []);
+            } else {
+              setAvailablePromoCodes([]);
+            }
+          } else {
+            setAvailablePromoCodes([]);
+          }
+        } else {
+          setAvailablePromoCodes([]);
+        }
+      } catch (error) {
+        console.error('Error fetching promos:', error);
+        setAvailablePromoCodes([]);
+      } finally {
+        setIsLoadingPromos(false);
+      }
+    };
+
+    fetchPromos();
+  }, [isOpen, localPromoScope, currentResource, experienceId, currentProduct?.promoCodeId, apiPost]);
 
   // Handle placeholder for contentEditable divs
   const updatePlaceholder = useCallback((ref: HTMLDivElement | null) => {
@@ -395,7 +1710,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       return;
     }
 
-    if (localPromoShowFireIcon && (!localPromoLimitQuantity || localPromoLimitQuantity <= 0)) {
+    if (localPromoShowFireIcon && !localPromoUnlimitedQuantity && (!localPromoLimitQuantity || localPromoLimitQuantity <= 0)) {
       setDiscountValidationError('Enter a quantity limit above 0 to show the fire icon.');
       return;
     }
@@ -405,9 +1720,19 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     const updates: Partial<Product> = {
       promoDiscountType: localPromoDiscountType,
       promoDiscountAmount: localPromoDiscountAmount,
-      promoLimitQuantity: localPromoLimitQuantity,
-      promoQuantityLeft: localPromoLimitQuantity ?? undefined,
+      promoLimitQuantity: localPromoUnlimitedQuantity ? -1 : localPromoLimitQuantity,
+      // Set promoQuantityLeft to the limit quantity when fire icon is enabled and we have a limit
+      // This represents the initial "left" count (will decrease as items are sold)
+      promoQuantityLeft: localPromoShowFireIcon && !localPromoUnlimitedQuantity && localPromoLimitQuantity 
+        ? localPromoLimitQuantity 
+        : (localPromoUnlimitedQuantity ? undefined : (localPromoLimitQuantity ?? undefined)),
       promoShowFireIcon: localPromoShowFireIcon,
+      promoScope: localPromoScope,
+      promoCodeId: localPromoCodeId,
+      // Note: promoCode is not updated here as it's only set when creating a new promo via "Apply Promotion"
+      // If user selects an existing promo, we should fetch and save its code
+      promoDurationType: localPromoDurationType,
+      promoDurationMonths: localPromoDurationMonths,
     };
 
     console.log('💾 Saving product discount:', productEditor.productId, updates);
@@ -422,6 +1747,10 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   ]);
 
   const handleClearDiscount = useCallback(() => {
+    // Clear manual promo code for resources without plans
+    if (!hasPlans) {
+      setLocalManualPromoCode('');
+    }
     if (productEditor.productId === null) return;
 
     setLocalPromoDiscountType(undefined);
@@ -437,7 +1766,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       promoQuantityLeft: undefined,
       promoShowFireIcon: false,
     });
-  }, [productEditor.productId, updateProduct]);
+  }, [productEditor.productId, updateProduct, hasPlans]);
 
   // Save changes when modal closes (detect transition from open to closed)
   useEffect(() => {
@@ -687,523 +2016,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     return <Edit className="w-5 h-5" />;
   };
 
-  // FormattingToolbar component (simplified version)
-  const FormattingToolbar: React.FC<{
-    show: boolean;
-    elementRef: HTMLDivElement | null;
-    toolbarRef: React.RefObject<HTMLDivElement | null>;
-    showColorPicker: boolean;
-    setShowColorPicker: (show: boolean) => void;
-    showEmojiPicker?: boolean;
-    setShowEmojiPicker?: (show: boolean) => void;
-    showFontSize: boolean;
-    setShowFontSize: (show: boolean) => void;
-    selectedColor: string;
-    setSelectedColor: (color: string) => void;
-    quickColors: string[];
-    fontSizeOptions: number[];
-    emojiDatabase?: Array<{ emoji: string; name: string; keywords: string[] }>;
-    onBold: () => void;
-    onItalic: () => void;
-    onColorChange: (color: string) => void;
-    onEmojiSelect?: (emoji: string) => void;
-    onFontSizeChange: (size: number) => void;
-    hideFontSize?: boolean;
-    hideBoldItalic?: boolean;
-  }> = ({ 
-    show, 
-    elementRef, 
-    toolbarRef, 
-    showColorPicker, 
-    setShowColorPicker,
-    showEmojiPicker = false,
-    setShowEmojiPicker,
-    showFontSize, 
-    setShowFontSize,
-    selectedColor,
-    setSelectedColor,
-    quickColors,
-    fontSizeOptions,
-    emojiDatabase = [],
-    onBold,
-    onItalic,
-    onColorChange,
-    onEmojiSelect,
-    onFontSizeChange,
-    hideFontSize = false,
-    hideBoldItalic = false,
-  }) => {
-    if (!show || !elementRef || typeof window === 'undefined') return null;
-    
-    const savedSelectionRef = useRef<{ start: number; end: number } | null>(null);
-    
-    const saveSelection = () => {
-      if (!elementRef) return;
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        if (elementRef.contains(range.commonAncestorContainer)) {
-          const preCaretRange = document.createRange();
-          preCaretRange.selectNodeContents(elementRef);
-          preCaretRange.setEnd(range.startContainer, range.startOffset);
-          const start = preCaretRange.toString().length;
-          const end = start + range.toString().length;
-          savedSelectionRef.current = { start, end };
-        }
-      } else {
-        const textLength = elementRef.textContent?.length || 0;
-        savedSelectionRef.current = { start: textLength, end: textLength };
-      }
-    };
-    
-    const restoreSelection = () => {
-      if (!elementRef || !savedSelectionRef.current) return;
-      const { start, end } = savedSelectionRef.current;
-      const selection = window.getSelection();
-      try {
-        let currentOffset = 0;
-        const walker = document.createTreeWalker(elementRef, NodeFilter.SHOW_TEXT, null);
-        let targetTextNode: Text | null = null;
-        let startOffset = 0;
-        let endOffset = 0;
-        let node: Text | null;
-        while (node = walker.nextNode() as Text | null) {
-          const nodeLength = node.textContent?.length || 0;
-          if (currentOffset + nodeLength >= start) {
-            targetTextNode = node;
-            startOffset = Math.max(0, start - currentOffset);
-            endOffset = Math.min(end - currentOffset, nodeLength);
-            break;
-          }
-          currentOffset += nodeLength;
-        }
-        if (targetTextNode) {
-          const range = document.createRange();
-          range.setStart(targetTextNode, startOffset);
-          range.setEnd(targetTextNode, endOffset);
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-        } else {
-          const range = document.createRange();
-          if (elementRef.firstChild && elementRef.firstChild.nodeType === Node.TEXT_NODE) {
-            const textNode = elementRef.firstChild as Text;
-            range.setStart(textNode, Math.min(start, textNode.length));
-            range.setEnd(textNode, Math.min(end, textNode.length));
-          } else {
-            range.setStart(elementRef, 0);
-            range.setEnd(elementRef, 0);
-          }
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-        }
-      } catch (err) {
-        const range = document.createRange();
-        if (elementRef.firstChild && elementRef.firstChild.nodeType === Node.TEXT_NODE) {
-          const textNode = elementRef.firstChild as Text;
-          range.setStart(textNode, textNode.length);
-          range.setEnd(textNode, textNode.length);
-        } else {
-          range.setStart(elementRef, 0);
-          range.setEnd(elementRef, 0);
-        }
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
-    };
-    
-    const getToolbarPosition = () => {
-      if (!elementRef) return { top: 0, left: 0 };
-      
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        if (elementRef.contains(range.commonAncestorContainer)) {
-          const rect = range.getBoundingClientRect();
-          return { top: rect.top - 50, left: rect.left + (rect.width / 2) };
-        }
-      }
-      const rect = elementRef.getBoundingClientRect();
-      return { top: rect.top - 50, left: rect.left + (rect.width / 2) };
-    };
-    
-    const [position, setPosition] = useState(() => ({ top: 0, left: 0 }));
-    const positionRef = useRef<{ top: number; left: number } | null>(null);
-    const hasSetInitialPosition = useRef(false);
-    
-    // Update position only when toolbar first appears
-    useEffect(() => {
-      if (show && elementRef && !hasSetInitialPosition.current) {
-        // Use requestAnimationFrame to ensure element is rendered
-        requestAnimationFrame(() => {
-          if (!elementRef) return;
-          const newPosition = getToolbarPosition();
-          // Only set position if it's valid (not 0,0)
-          if (newPosition.top !== 0 || newPosition.left !== 0) {
-            positionRef.current = newPosition;
-            setPosition(newPosition);
-            hasSetInitialPosition.current = true;
-          }
-        });
-      } else if (!show) {
-        // Reset flag when toolbar is hidden
-        hasSetInitialPosition.current = false;
-        positionRef.current = null;
-        setPosition({ top: 0, left: 0 });
-      }
-    }, [show, elementRef]);
-    
-    // Use stored position if available, to prevent drift
-    // Once positionRef is set, always use it - never fall back to position state
-    const stablePosition = positionRef.current || (position.top !== 0 || position.left !== 0 ? position : { top: 0, left: 0 });
-    
-    // Don't render if not showing, no element reference, or invalid position
-    if (!show || !elementRef || (stablePosition.top === 0 && stablePosition.left === 0 && !positionRef.current)) {
-      return null;
-    }
-    
-    return createPortal(
-      <div
-        ref={toolbarRef}
-        className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-        style={{
-          pointerEvents: 'auto',
-          zIndex: 999999,
-          top: `${stablePosition.top}px`,
-          left: `${stablePosition.left}px`,
-          transform: 'translateX(-50%)',
-        }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      >
-        {!hideBoldItalic && (
-          <>
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elementRef) {
-                  elementRef.focus();
-                  saveSelection();
-                }
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elementRef) {
-                  elementRef.focus();
-                  restoreSelection();
-                  onBold();
-                }
-              }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              title="Bold"
-            >
-              <Bold className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elementRef) {
-                  elementRef.focus();
-                  saveSelection();
-                }
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elementRef) {
-                  elementRef.focus();
-                  restoreSelection();
-                  onItalic();
-                }
-              }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              title="Italic"
-            >
-              <Italic className="w-4 h-4" />
-            </button>
-          </>
-        )}
-        <div className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (elementRef) {
-                elementRef.focus();
-                const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  let element: Element | null = null;
-                  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-                    element = range.commonAncestorContainer.parentElement;
-                  } else {
-                    element = range.commonAncestorContainer as Element;
-                  }
-                  while (element && element !== elementRef) {
-                    const style = element.getAttribute('style');
-                    if (style) {
-                      const colorMatch = style.match(/color:\s*([^;]+)/i);
-                      if (colorMatch) {
-                        setSelectedColor(colorMatch[1].trim());
-                        break;
-                      }
-                    }
-                    element = element.parentElement;
-                  }
-                }
-              }
-              setShowColorPicker(!showColorPicker);
-              if (setShowEmojiPicker) setShowEmojiPicker(false);
-              setShowFontSize(false);
-            }}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Text Color"
-          >
-            <Palette className="w-4 h-4" />
-          </button>
-          {showColorPicker && createPortal(
-            <div
-              className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2"
-              style={{
-                pointerEvents: 'auto',
-                zIndex: 1000000,
-                top: `${stablePosition.top}px`,
-                left: `${stablePosition.left}px`,
-                transform: 'translateX(-50%)',
-              }}
-            >
-              <div className="grid grid-cols-6 gap-1 mb-2">
-                {quickColors.map((color, index) => (
-                  <button
-                    key={`${color}-${index}`}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (elementRef) {
-                        elementRef.focus();
-                        // If no selection, select all first
-                        const selection = window.getSelection();
-                        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                          const range = document.createRange();
-                          range.selectNodeContents(elementRef);
-                          selection?.removeAllRanges();
-                          selection?.addRange(range);
-                        }
-                      }
-                      setSelectedColor(color);
-                      onColorChange(color);
-                      setShowColorPicker(false);
-                    }}
-                    className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
-                ))}
-              </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                <input
-                  type="color"
-                  value={selectedColor}
-                  onChange={(e) => {
-                    const color = e.target.value;
-                    if (elementRef) {
-                      elementRef.focus();
-                      // If no selection, select all first
-                      const selection = window.getSelection();
-                      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                        const range = document.createRange();
-                        range.selectNodeContents(elementRef);
-                        selection?.removeAllRanges();
-                        selection?.addRange(range);
-                      }
-                    }
-                    setSelectedColor(color);
-                    onColorChange(color);
-                    setShowColorPicker(false);
-                  }}
-                  className="w-full h-8 cursor-pointer border border-gray-300 dark:border-gray-600 rounded"
-                  title="Custom Color"
-                />
-              </div>
-            </div>,
-            document.body
-          )}
-        </div>
-        {setShowEmojiPicker && emojiDatabase && emojiDatabase.length > 0 && (
-          <div className="relative">
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elementRef) {
-                  elementRef.focus();
-                }
-                if (setShowEmojiPicker) {
-                  setShowEmojiPicker(!showEmojiPicker);
-                }
-                setShowColorPicker(false);
-                setShowFontSize(false);
-              }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-lg"
-              title="Emoji"
-            >
-              😀
-            </button>
-            {showEmojiPicker && createPortal(
-              <div
-                className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 grid grid-cols-8 gap-1 max-h-64 overflow-y-auto"
-                style={{
-                  pointerEvents: 'auto',
-                  zIndex: 1000000,
-                  top: `${stablePosition.top}px`,
-                  left: `${stablePosition.left}px`,
-                  transform: 'translateX(-50%)',
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-              >
-                {emojiDatabase.map((item) => (
-                  <button
-                    key={item.emoji}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (elementRef && onEmojiSelect) {
-                        elementRef.focus();
-                        const selection = window.getSelection();
-                        let range: Range;
-                        if (selection && selection.rangeCount > 0) {
-                          range = selection.getRangeAt(0);
-                        } else {
-                          range = document.createRange();
-                          if (elementRef.childNodes.length > 0) {
-                            range.selectNodeContents(elementRef);
-                            range.collapse(false);
-                          } else {
-                            range.setStart(elementRef, 0);
-                            range.setEnd(elementRef, 0);
-                          }
-                        }
-                        range.deleteContents();
-                        range.insertNode(document.createTextNode(item.emoji));
-                        range.collapse(false);
-                        selection?.removeAllRanges();
-                        selection?.addRange(range);
-                        onEmojiSelect(item.emoji);
-                        setShowEmojiPicker(false);
-                      }
-                    }}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-lg"
-                    title={item.name}
-                  >
-                    {item.emoji}
-                  </button>
-                ))}
-              </div>,
-              document.body
-            )}
-          </div>
-        )}
-        {!hideFontSize && (
-          <div className="relative">
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                saveSelection();
-                setShowFontSize(!showFontSize);
-                setShowColorPicker(false);
-              }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              title="Font Size"
-            >
-              <Type className="w-4 h-4" />
-            </button>
-          {showFontSize && createPortal(
-            <div
-              className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 max-h-64 overflow-y-auto"
-              style={{
-                pointerEvents: 'auto',
-                zIndex: 1000000,
-                top: `${stablePosition.top}px`,
-                left: `${stablePosition.left}px`,
-                transform: 'translateX(-50%)',
-                minWidth: '120px',
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              {fontSizeOptions.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (elementRef) {
-                      elementRef.focus();
-                      restoreSelection();
-                    }
-                    onFontSizeChange(size);
-                    setShowFontSize(false);
-                  }}
-                  className="w-full px-3 py-2 text-left rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white"
-                >
-                  {size}px
-                </button>
-              ))}
-            </div>,
-            document.body
-          )}
-          </div>
-        )}
-      </div>,
-      document.body
-    );
-  };
+  // FormattingToolbar is now imported from ./product
 
   return (
     <>
@@ -1272,51 +2085,20 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           onPointerDown={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-8 py-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-            <div className="flex items-center justify-between mb-4">
-              <Dialog.Title asChild>
-                <Heading
-                  size="5"
-                  weight="bold"
-                  className="flex items-center gap-3 text-gray-900 dark:text-white text-2xl font-bold tracking-tight"
-                >
-                  {getModalIcon()}
-                  {getModalTitle()}
-                </Heading>
-              </Dialog.Title>
-              <div className="flex items-center gap-2">
-              <Dialog.Close asChild>
-                <Button
-                  size="2"
-                  variant="soft"
-                  color="gray"
-                  className="!px-4 !py-2"
-                >
-                  Close
-                </Button>
-              </Dialog.Close>
-              </div>
-            </div>
-            <Separator size="1" color="gray" />
-          </div>
+          <ProductEditorModalHeader
+            modalTitle={getModalTitle()}
+            modalIcon={getModalIcon()}
+            onClose={handleClose}
+          />
           
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-8 py-6 bg-gray-50 dark:bg-gray-950 overflow-x-visible">
             <div className="space-y-6 min-w-0">
               {/* Edit Product Page Button - Only for FILE type products */}
               {currentProduct?.type === "FILE" && (
-                <div className="mb-4">
-                  <Button
-                    size="3"
-                    color="violet"
-                    variant="solid"
-                    onClick={() => setShowProductPageModal(true)}
-                    className="w-full !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
-                  >
-                    <Eye size={16} strokeWidth={2.5} />
-                    <span className="font-bold text-base antialiased subpixel-antialiased">Edit Product Page</span>
-                  </Button>
-                </div>
+                <EditProductPageButton
+                  onClick={() => setShowProductPageModal(true)}
+                />
               )}
               
               {productEditor.productId !== null && (
@@ -1335,401 +2117,40 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         
                         <div className="space-y-5 min-w-0">
                         {/* Badge Selector */}
-                        <div>
-                          <Text
-                            as="label"
-                            size="3"
-                            weight="medium"
-                            className="block mb-3"
-                          >
-                            Badge
-                          </Text>
-                          {(() => {
-                            const currentBadge = currentProduct?.badge;
-                            const isNoneSelected = !currentBadge;
-                            const isNewSelected = currentBadge === 'new';
-                            const is5StarSelected = currentBadge === '5star';
-                            const isBestSellerSelected = currentBadge === 'bestseller';
-                            
-                            return (
-                              <div className="flex flex-wrap gap-3">
-                                <Button
-                                  size="3"
-                                  variant="surface"
-                                  color="gray"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateProduct(productEditor.productId!, { badge: null });
-                                  }}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  className={`!px-6 !py-3 shadow-lg shadow-gray-500/25 hover:!bg-gray-500 hover:!text-white hover:shadow-gray-500/40 hover:scale-105 active:!bg-gray-600 active:!text-white transition-all duration-300 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50 dark:hover:!bg-gray-600 dark:active:!bg-gray-700 ${isNoneSelected ? '!bg-gray-500 !text-white' : ''}`}
-                                >
-                                  None
-                                </Button>
-                                <Button
-                                  size="3"
-                                  variant="surface"
-                                  color="green"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateProduct(productEditor.productId!, { badge: 'new' });
-                                  }}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  className={`!px-6 !py-3 shadow-lg shadow-green-500/25 hover:!bg-green-500 hover:!text-white hover:shadow-green-500/40 hover:scale-105 active:!bg-green-600 active:!text-white transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 dark:hover:!bg-green-600 dark:active:!bg-green-700 ${isNewSelected ? '!bg-green-500 !text-white' : ''}`}
-                                >
-                                  New
-                                </Button>
-                                <Button
-                                  size="3"
-                                  variant="surface"
-                                  color="amber"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateProduct(productEditor.productId!, { badge: '5star' });
-                                  }}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  className={`!px-6 !py-3 shadow-lg shadow-amber-500/25 hover:!bg-amber-500 hover:!text-white hover:shadow-amber-500/40 hover:scale-105 active:!bg-amber-600 active:!text-white transition-all duration-300 dark:shadow-amber-500/30 dark:hover:shadow-amber-500/50 dark:hover:!bg-amber-600 dark:active:!bg-amber-700 ${is5StarSelected ? '!bg-amber-500 !text-white' : ''}`}
-                                >
-                                  5 ⭐
-                                </Button>
-                                <Button
-                                  size="3"
-                                  variant="surface"
-                                  color="orange"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateProduct(productEditor.productId!, { badge: 'bestseller' });
-                                  }}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  className={`!px-6 !py-3 shadow-lg shadow-orange-500/25 hover:!bg-orange-500 hover:!text-white hover:shadow-orange-500/40 hover:scale-105 active:!bg-orange-600 active:!text-white transition-all duration-300 dark:shadow-orange-500/30 dark:hover:shadow-orange-500/50 dark:hover:!bg-orange-600 dark:active:!bg-orange-700 ${isBestSellerSelected ? '!bg-orange-500 !text-white' : ''}`}
-                                >
-                                  BestSeller
-                                </Button>
-                              </div>
-                            );
-                          })()}
-                        </div>
+                        {productEditor.productId !== null && (
+                          <BadgeSelector
+                            currentProduct={currentProduct ?? null}
+                            updateProduct={updateProduct}
+                            productId={productEditor.productId}
+                          />
+                        )}
 
                         {/* Product Stats */}
-                        <div className="pt-6 border-t border-gray-100 dark:border-gray-800 space-y-5">
-                          <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 text-sm font-medium uppercase tracking-wider">
-                            Product Stats
-                          </Heading>
-
-                          {/* Sales Count */}
-                          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4 space-y-4">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <Text size="3" weight="medium" className="text-gray-800 dark:text-gray-100">
-                                  Show Sales Count
-                                </Text>
-                              </div>
-                              <label className="flex items-center gap-2 cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={localShowSalesCount}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked;
-                                    setLocalShowSalesCount(checked);
-                                    if (productEditor.productId !== null) {
-                                      updateProduct(productEditor.productId, { showSalesCount: checked });
-                                    }
-                                  }}
-                                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                />
-                                <Text size="2" className="text-gray-700 dark:text-gray-200">
-                                  {localShowSalesCount ? 'On' : 'Off'}
-                                </Text>
-                              </label>
-                            </div>
-                            {localShowSalesCount && (
-                              <input
-                                type="number"
-                                min="0"
-                                value={localSalesCount ?? ''}
-                                onChange={(e) => {
-                                  const value = parseInt(e.target.value, 10);
-                                  const parsed = Number.isNaN(value) ? undefined : Math.max(0, value);
-                                  setLocalSalesCount(parsed);
-                                  if (productEditor.productId !== null) {
-                                    updateProduct(productEditor.productId, { salesCount: parsed });
-                                  }
-                                }}
-                                placeholder="Enter total sales (e.g., 250)"
-                                className="w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
-                                onClick={(e) => e.stopPropagation()}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              />
-                            )}
-                          </div>
-
-                          {/* Rating + Reviews */}
-                          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4 space-y-4">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <Text size="3" weight="medium" className="text-gray-800 dark:text-gray-100">
-                                  Show Rating & Reviews
-                                </Text>
-                              </div>
-                              <label className="flex items-center gap-2 cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={localShowRatingInfo}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked;
-                                    setLocalShowRatingInfo(checked);
-                                    if (productEditor.productId !== null) {
-                                      updateProduct(productEditor.productId, { showRatingInfo: checked });
-                                    }
-                                  }}
-                                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                />
-                                <Text size="2" className="text-gray-700 dark:text-gray-200">
-                                  {localShowRatingInfo ? 'On' : 'Off'}
-                                </Text>
-                              </label>
-                            </div>
-                            {localShowRatingInfo && (
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <div>
-                                  <Text
-                                    as="label"
-                                    size="2"
-                                    className="block mb-2 text-gray-600 dark:text-gray-300"
-                                  >
-                                    Star Rating (0-5)
-                                  </Text>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="5"
-                                    step="0.1"
-                                    value={localStarRating ?? ''}
-                                    onChange={(e) => {
-                                      const value = parseFloat(e.target.value);
-                                      const parsed = Number.isNaN(value) ? undefined : Math.min(5, Math.max(0, value));
-                                      setLocalStarRating(parsed);
-                                      if (productEditor.productId !== null) {
-                                        updateProduct(productEditor.productId, { starRating: parsed });
-                                      }
-                                    }}
-                                    placeholder="4.8"
-                                    className="w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                                <div>
-                                  <Text
-                                    as="label"
-                                    size="2"
-                                    className="block mb-2 text-gray-600 dark:text-gray-300"
-                                  >
-                                    Review Count
-                                  </Text>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={localReviewCount ?? ''}
-                                    onChange={(e) => {
-                                      const value = parseInt(e.target.value, 10);
-                                      const parsed = Number.isNaN(value) ? undefined : Math.max(0, value);
-                                      setLocalReviewCount(parsed);
-                                      if (productEditor.productId !== null) {
-                                        updateProduct(productEditor.productId, { reviewCount: parsed });
-                                      }
-                                    }}
-                                    placeholder="120"
-                                    className="w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        {productEditor.productId !== null && (
+                          <ProductStatsSection
+                            productId={productEditor.productId}
+                            localShowSalesCount={localShowSalesCount}
+                            setLocalShowSalesCount={setLocalShowSalesCount}
+                            localSalesCount={localSalesCount}
+                            setLocalSalesCount={setLocalSalesCount}
+                            localShowRatingInfo={localShowRatingInfo}
+                            setLocalShowRatingInfo={setLocalShowRatingInfo}
+                            localStarRating={localStarRating}
+                            setLocalStarRating={setLocalStarRating}
+                            localReviewCount={localReviewCount}
+                            setLocalReviewCount={setLocalReviewCount}
+                            updateProduct={updateProduct}
+                          />
+                        )}
                         </div>
                       </div>
                     </Card>
-
-                  {/* Product Discount Section */}
-                  {productEditor.target !== 'button' && discountSettings && discountSettings.startDate && discountSettings.endDate && discountSettings.startDate.trim() !== '' && discountSettings.endDate.trim() !== '' && (
-                    <Card 
-                      className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <div className="fui-reset px-6 py-6">
-                        <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider">
-                          Product Discount
-                        </Heading>
-                        
-                        <div className="space-y-5">
-                          {/* Discount Type */}
-                          <div>
-                            <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
-                              Discount Type
-                            </Text>
-                            <div className="flex gap-3">
-                              <Button
-                                size="3"
-                                variant={localPromoDiscountType === 'percentage' ? 'solid' : 'soft'}
-                                color="violet"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLocalPromoDiscountType('percentage');
-                                  setDiscountValidationError(null);
-                                }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                className="!px-6 !py-3"
-                              >
-                                Percentage
-                              </Button>
-                              <Button
-                                size="3"
-                                variant={localPromoDiscountType === 'fixed' ? 'solid' : 'soft'}
-                                color="violet"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLocalPromoDiscountType('fixed');
-                                  setDiscountValidationError(null);
-                                }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                className="!px-6 !py-3"
-                              >
-                                Fixed Price
-                              </Button>
-                            </div>
-                          </div>
-
-                        {/* Discount Amount */}
-                        <div>
-                          <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
-                            {localPromoDiscountType === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
-                          </Text>
-                          <input
-                            type="number"
-                            min="0"
-                            max={localPromoDiscountType === 'percentage' ? 100 : undefined}
-                            step={localPromoDiscountType === 'percentage' ? 1 : 0.01}
-                            value={localPromoDiscountAmount ?? ''}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              setLocalPromoDiscountAmount(Number.isNaN(value) ? undefined : value);
-                              setDiscountValidationError(null);
-                            }}
-                            placeholder={localPromoDiscountType === 'percentage' ? 'Enter percentage (e.g., 20)' : 'Enter amount (e.g., 10.00)'}
-                            className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
-                              discountValidationError && discountValidationError.includes('amount') ? 'border-red-500 dark:border-red-500' : ''
-                            }`}
-                            onClick={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-
-                        {/* Limit Quantity */}
-                        <div>
-                          <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
-                            Limit Quantity
-                          </Text>
-                          <input
-                            type="number"
-                            min="0"
-                            value={localPromoLimitQuantity ?? ''}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value, 10);
-                              setLocalPromoLimitQuantity(Number.isNaN(value) || value <= 0 ? undefined : value);
-                              setDiscountValidationError(null);
-                            }}
-                            placeholder="Enter limit (e.g., 50)"
-                            className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
-                              discountValidationError && discountValidationError.includes('quantity') ? 'border-red-500 dark:border-red-500' : ''
-                            }`}
-                            onClick={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          />
-                          <Text size="2" className="text-gray-500 dark:text-gray-400 mt-2">
-                            Optional limit for discounted purchases (required if showing fire icon).
-                          </Text>
-                        </div>
-
-                          {/* Show Fire Icon Toggle */}
-                          <div>
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={localPromoShowFireIcon}
-                                onChange={(e) => {
-                                  setLocalPromoShowFireIcon(e.target.checked);
-                                }}
-                                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
-                                onClick={(e) => e.stopPropagation()}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              />
-                              <div className="flex items-center gap-2">
-                                <Flame className="w-4 h-4 text-red-500" />
-                                <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300">
-                                  Show Fire Icon + "X left" text
-                                </Text>
-                              </div>
-                            </label>
-                          </div>
-
-                          {/* Validation Error */}
-                          {discountValidationError && (
-                            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                              <Text size="2" className="text-red-600 dark:text-red-400">
-                                {discountValidationError}
-                              </Text>
-                            </div>
-                          )}
-
-                          {/* Actions */}
-                          <div className="flex justify-end gap-3 pt-2">
-                            <Button
-                              size="3"
-                              color="gray"
-                              variant="soft"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClearDiscount();
-                              }}
-                              onPointerDown={(e) => e.stopPropagation()}
-                              className="!px-6 !py-3"
-                            >
-                              Clear
-                            </Button>
-                            <Button
-                              size="3"
-                              color="violet"
-                              variant="solid"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSaveDiscount();
-                              }}
-                              onPointerDown={(e) => e.stopPropagation()}
-                              className="!px-6 !py-3"
-                            >
-                              Save Discount
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  )}
-
                     </>
                   )}
-            
+
                   {/* Button-only section (distinct modal experience) */}
                   {productEditor.target === 'button' && (
-                    <>
-                      <Card 
+                    <Card 
                       className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
                       onClick={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -1742,96 +2163,20 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         <div className="space-y-5 min-w-0">
                         
                         {/* Button Style for individual products */}
-                        <div>
-                          <Text
-                            as="label"
-                            size="3"
-                            weight="medium"
-                            className="block mb-3"
-                          >
-                            Button Style
-                          </Text>
-                          <div className="flex flex-wrap gap-3 mb-5">
-                          {[legacyTheme.accent,
-                            'bg-violet-600 hover:bg-violet-700 text-white',
-                            'bg-gray-600 hover:bg-gray-700 text-white',
-                            'bg-green-600 hover:bg-green-700 text-white',
-                            'bg-red-600 hover:bg-red-700 text-white',
-                            'bg-amber-500 hover:bg-amber-600 text-gray-900',
-                            'bg-purple-600 hover:bg-purple-700 text-white',
-                            'bg-slate-800 hover:bg-slate-700 text-white',
-                            'bg-orange-600 hover:bg-orange-700 text-white'
-                          ].map((cls, idx) => {
-                            const isSelected = currentProduct?.buttonClass === cls;
-                            const colorMap: Array<'violet' | 'gray' | 'green' | 'red' | 'purple' | 'orange'> = ['violet', 'violet', 'gray', 'green', 'red', 'violet', 'violet', 'violet', 'violet'];
-                            const shadowClassMap: Record<number, string> = {
-                              0: 'shadow-violet-500/25 hover:shadow-violet-500/40 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 hover:!bg-violet-500 active:!bg-violet-600 dark:hover:!bg-violet-600 dark:active:!bg-violet-700',
-                              1: 'shadow-violet-500/25 hover:shadow-violet-500/40 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 hover:!bg-violet-500 active:!bg-violet-600 dark:hover:!bg-violet-600 dark:active:!bg-violet-700',
-                              2: 'shadow-gray-500/25 hover:shadow-gray-500/40 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50 hover:!bg-gray-500 active:!bg-gray-600 dark:hover:!bg-gray-600 dark:active:!bg-gray-700',
-                              3: 'shadow-green-500/25 hover:shadow-green-500/40 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 hover:!bg-green-500 active:!bg-green-600 dark:hover:!bg-green-600 dark:active:!bg-green-700',
-                              4: 'shadow-red-500/25 hover:shadow-red-500/40 dark:shadow-red-500/30 dark:hover:shadow-red-500/50 hover:!bg-red-500 active:!bg-red-600 dark:hover:!bg-red-600 dark:active:!bg-red-700',
-                              5: 'shadow-purple-500/25 hover:shadow-purple-500/40 dark:shadow-purple-500/30 dark:hover:shadow-purple-500/50 hover:!bg-purple-500 active:!bg-purple-600 dark:hover:!bg-purple-600 dark:active:!bg-purple-700',
-                              6: 'shadow-slate-500/25 hover:shadow-slate-500/40 dark:shadow-slate-500/30 dark:hover:shadow-slate-500/50 hover:!bg-slate-500 active:!bg-slate-600 dark:hover:!bg-slate-600 dark:active:!bg-slate-700',
-                              7: 'shadow-orange-500/25 hover:shadow-orange-500/40 dark:shadow-orange-500/30 dark:hover:shadow-orange-500/50 hover:!bg-orange-500 active:!bg-orange-600 dark:hover:!bg-orange-600 dark:active:!bg-orange-700',
-                              8: 'shadow-violet-500/25 hover:shadow-violet-500/40 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 hover:!bg-violet-500 active:!bg-violet-600 dark:hover:!bg-violet-600 dark:active:!bg-violet-700',
-                            };
-                            const selectedClassMap: Record<number, string> = {
-                              0: isSelected ? '!bg-violet-500 !text-white' : '',
-                              1: isSelected ? '!bg-violet-500 !text-white' : '',
-                              2: isSelected ? '!bg-gray-500 !text-white' : '',
-                              3: isSelected ? '!bg-green-500 !text-white' : '',
-                              4: isSelected ? '!bg-red-500 !text-white' : '',
-                              5: isSelected ? '!bg-purple-500 !text-white' : '',
-                              6: isSelected ? '!bg-slate-500 !text-white' : '',
-                              7: isSelected ? '!bg-orange-500 !text-white' : '',
-                              8: isSelected ? '!bg-violet-500 !text-white' : '',
-                            };
-                            const currentColor = colorMap[idx] || 'violet';
-                            const shadowClasses = shadowClassMap[idx] || shadowClassMap[0];
-                            const selectedClasses = selectedClassMap[idx] || '';
-                            return (
-                          <Button
-                            key={`${cls}-${idx}`}
-                            size="3"
-                            variant="surface"
-                            color={currentColor}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateProduct(productEditor.productId!, { buttonClass: cls });
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className={`!px-6 !py-3 shadow-lg ${shadowClasses} hover:!text-white hover:scale-105 active:!text-white transition-all duration-300 ${selectedClasses} ${cls}`}
-                          >
-                            {idx === 0 ? 'Theme Accent' : 'Preset'}
-                          </Button>
-                            );
-                          })}
-                          </div>
-                          <div className="flex items-center justify-end w-full">
-                          <Button
-                            size="3"
-                            color="violet"
-                            variant="surface"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const current = products.find(p => p.id === productEditor.productId!)?.buttonClass || legacyTheme.accent;
-                              products.forEach(p => {
-                                updateProduct(p.id, { buttonClass: current });
-                              });
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className="!px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-                          >
-                            Apply to All Buttons
-                          </Button>
-                          </div>
-                        </div>
+                        {productEditor.productId !== null && (
+                          <ButtonStyleSection
+                            currentProduct={currentProduct ?? null}
+                            products={products}
+                            productId={productEditor.productId}
+                            legacyTheme={legacyTheme}
+                            updateProduct={updateProduct}
+                          />
+                        )}
                         </div>
                       </div>
                     </Card>
-                    </>
                   )}
-            
+
                   {/* Card Style Presets (apply per-card or all) */}
                   {productEditor.target !== 'button' && (
                     <Card 
@@ -1840,233 +2185,90 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       <div className="fui-reset px-6 py-6">
-                        <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider">
-                          Card Style
-                        </Heading>
-                        <div className="grid grid-cols-2 gap-4 mb-5">
-                      {[
-                        // Frosted UI Violet
-                        { card: 'bg-violet-50/95 dark:bg-violet-900/20 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-violet-500/30 border border-violet-200 dark:border-violet-700', title: 'text-violet-900 dark:text-violet-100', desc: 'text-violet-700 dark:text-violet-300', name: 'Violet' },
-                        // Frosted UI Gray
-                        { card: 'bg-gray-50/95 dark:bg-gray-800/90 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-gray-500/30 border border-gray-200 dark:border-gray-700', title: 'text-gray-900 dark:text-gray-100', desc: 'text-gray-700 dark:text-gray-300', name: 'Gray' },
-                        // Frosted UI Green
-                        { card: 'bg-green-50/95 dark:bg-green-900/20 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-green-500/30 border border-green-200 dark:border-green-700', title: 'text-green-900 dark:text-green-100', desc: 'text-green-700 dark:text-green-300', name: 'Green' },
-                        // Frosted UI Red
-                        { card: 'bg-red-50/95 dark:bg-red-900/20 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-red-500/30 border border-red-200 dark:border-red-700', title: 'text-red-900 dark:text-red-100', desc: 'text-red-700 dark:text-red-300', name: 'Red' },
-                        // Frosted UI Blue
-                        { card: 'bg-blue-50/95 dark:bg-blue-900/20 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-blue-500/30 border border-blue-200 dark:border-blue-700', title: 'text-blue-900 dark:text-blue-100', desc: 'text-blue-700 dark:text-blue-300', name: 'Blue' },
-                        // Frosted UI Amber
-                        { card: 'bg-amber-50/95 dark:bg-amber-900/20 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-amber-500/30 border border-amber-200 dark:border-amber-700', title: 'text-amber-900 dark:text-amber-100', desc: 'text-amber-700 dark:text-amber-300', name: 'Amber' },
-                        // Dark theme
-                        { card: 'bg-gray-900/90 dark:bg-gray-950/95 backdrop-blur-md shadow-2xl hover:shadow-3xl shadow-violet-400/50 border border-violet-400/40', title: 'text-white', desc: 'text-gray-300', name: 'Dark' },
-                        // Dark Violet
-                        { card: 'bg-gray-900/90 dark:bg-gray-950/95 backdrop-blur-md shadow-2xl hover:shadow-3xl shadow-violet-400/50 border border-violet-400/40', title: 'text-white', desc: 'text-violet-300', name: 'Dark Violet' },
-                        // Dark Blue
-                        { card: 'bg-gray-900/90 dark:bg-gray-950/95 backdrop-blur-md shadow-2xl hover:shadow-3xl shadow-blue-400/50 border border-blue-400/40', title: 'text-white', desc: 'text-blue-300', name: 'Dark Blue' }
-                      ].map((preset, idx) => (
-                        <button
-                          key={idx}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateProduct(productEditor.productId!, { cardClass: preset.card, titleClass: preset.title, descClass: preset.desc });
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className={`p-4 rounded-xl text-left transition-all hover:scale-105 ${preset.card} ${
-                            currentProduct?.cardClass === preset.card ? 'ring-2 ring-violet-500 dark:ring-violet-400' : ''
-                          }`}
-                        >
-                          <div className={`text-sm font-bold ${preset.title}`}>Product Title</div>
-                          <div className={`text-xs mt-1 ${preset.desc}`}>Short description...</div>
-                        </button>
-                      ))}
-                        </div>
-                        {/* Card Transparency */}
-                        <div className="mt-6">
-                          <Text
-                            as="label"
-                            size="3"
-                            weight="medium"
-                            className="block mb-4"
-                          >
-                            Card Transparency
-                          </Text>
-                          
-                          {/* Slider */}
-                          <div className="flex items-center gap-4">
-                            <Text size="1">0%</Text>
-                            <input
-                              key={`transparency-${productEditor.productId}`}
-                              type="range"
-                              min={0}
-                              max={100}
-                              step={5}
-                              value={transparencyValue}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                const val = parseInt(e.target.value, 10);
-                                const roundedVal = Math.round(val / 5) * 5;
-                                const clampedVal = Math.max(0, Math.min(100, roundedVal));
-                                
-                                setIsUserInteracting(true);
-                                setTransparencyValue(clampedVal);
-                                
-                                const current = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
-                                
-                                const baseMatch = current.match(/bg-[^\s/]+(?:\[[^\]]+\])?/);
-                                if (baseMatch) {
-                                  const baseClass = baseMatch[0];
-                                  const restOfClasses = current.replace(/bg-[^\s/]+(?:\[[^\]]+\])?(?:\/\d{1,3})?/, '').trim();
-                                  const newCardClass = `${baseClass}/${clampedVal}${restOfClasses ? ' ' + restOfClasses : ''}`;
-                                  updateProduct(productEditor.productId!, { cardClass: newCardClass });
-                                } else {
-                                  const newCardClass = `bg-white/${clampedVal} backdrop-blur-sm shadow-xl`;
-                                  updateProduct(productEditor.productId!, { cardClass: newCardClass });
-                                }
-                              }}
-                              onMouseUp={() => {
-                                setTimeout(() => setIsUserInteracting(false), 100);
-                              }}
-                              onTouchEnd={() => {
-                                setTimeout(() => setIsUserInteracting(false), 100);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              onPointerDown={(e) => e.stopPropagation()}
-                              className="flex-1"
-                            />
-                            <Text size="1">100%</Text>
-                            <Text size="2" weight="semi-bold">{transparencyValue}%</Text>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-end w-full mt-6">
-                          <Button
-                            size="3"
-                            color="violet"
-                            variant="surface"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const currentCard = products.find(p => p.id === productEditor.productId!)?.cardClass || legacyTheme.card;
-                              const currentTitle = products.find(p => p.id === productEditor.productId!)?.titleClass || legacyTheme.text;
-                              const currentDesc = products.find(p => p.id === productEditor.productId!)?.descClass || legacyTheme.text;
-                              products.forEach(p => {
-                                updateProduct(p.id, { cardClass: currentCard, titleClass: currentTitle, descClass: currentDesc });
-                              });
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className="!px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-                          >
-                            Apply to All Cards
-                          </Button>
-                        </div>
+                        {productEditor.productId !== null && (
+                          <CardStyleSection
+                            currentProduct={currentProduct ?? null}
+                            products={products}
+                            productId={productEditor.productId}
+                            legacyTheme={legacyTheme}
+                            transparencyValue={transparencyValue}
+                            setTransparencyValue={setTransparencyValue}
+                            setIsUserInteracting={setIsUserInteracting}
+                            updateProduct={updateProduct}
+                          />
+                        )}
                       </div>
                     </Card>
+                  )}
+
+                  {/* Product Discount Section */}
+                  {productEditor.target !== 'button' && (
+                  <ProductDiscountForm
+                    currentProduct={currentProduct ?? null}
+                    productEditor={productEditor}
+                    discountSettings={discountSettings}
+                    experienceId={experienceId}
+                    hasPlans={hasPlans}
+                    isProductType={isProductType}
+                    seasonalDiscountStatus={seasonalDiscountStatus}
+                    isProductDiscountLoading={isProductDiscountLoading}
+                    localPromoScope={localPromoScope}
+                    setLocalPromoScope={setLocalPromoScope}
+                    localPromoCodeId={localPromoCodeId}
+                    setLocalPromoCodeId={setLocalPromoCodeId}
+                    localManualPromoCode={localManualPromoCode}
+                    setLocalManualPromoCode={setLocalManualPromoCode}
+                    promoMode={promoMode}
+                    setPromoMode={setPromoMode}
+                    localPromoDiscountType={localPromoDiscountType}
+                    setLocalPromoDiscountType={setLocalPromoDiscountType}
+                    localPromoDiscountAmount={localPromoDiscountAmount}
+                    setLocalPromoDiscountAmount={setLocalPromoDiscountAmount}
+                    localPromoLimitQuantity={localPromoLimitQuantity}
+                    setLocalPromoLimitQuantity={setLocalPromoLimitQuantity}
+                    localPromoUnlimitedQuantity={localPromoUnlimitedQuantity}
+                    setLocalPromoUnlimitedQuantity={setLocalPromoUnlimitedQuantity}
+                    localPromoShowFireIcon={localPromoShowFireIcon}
+                    setLocalPromoShowFireIcon={setLocalPromoShowFireIcon}
+                    localPromoDurationType={localPromoDurationType}
+                    setLocalPromoDurationType={setLocalPromoDurationType}
+                    localPromoDurationMonths={localPromoDurationMonths}
+                    setLocalPromoDurationMonths={setLocalPromoDurationMonths}
+                    isCreatingPromo={isCreatingPromo}
+                    setIsCreatingPromo={setIsCreatingPromo}
+                    generatedPromoName={generatedPromoName}
+                    setGeneratedPromoName={setGeneratedPromoName}
+                    availablePromoCodes={availablePromoCodes}
+                    isLoadingPromos={isLoadingPromos}
+                    isPromoDataLoaded={isPromoDataLoaded}
+                    setIsPromoDataLoaded={setIsPromoDataLoaded}
+                    setSelectedPromoData={setSelectedPromoData}
+                    hasDiscountSelected={hasDiscountSelected}
+                    discountValidationError={discountValidationError}
+                    setDiscountValidationError={setDiscountValidationError}
+                    showNewPromoButton={showNewPromoButton}
+                    updateProduct={updateProduct}
+                    onProductUpdated={onProductUpdated}
+                    handleNewPromoClick={handleNewPromoClick}
+                    handleApplyPromo={handleApplyPromo}
+                    handleApplyExistingPromo={handleApplyExistingPromo}
+                    handleDeletePromo={handleDeletePromo}
+                    handleClearDiscount={handleClearDiscount}
+                    handleApplyGlobalDiscount={handleApplyGlobalDiscount}
+                  />
                   )}
                 </>
               )}
               
               {/* Button-only section for Claim button (no productId) */}
               {productEditor.productId === null && productEditor.target === 'button' && (
-                <Card 
-                  className="p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0"
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <div className="fui-reset px-6 py-6">
-                    <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-5 text-sm font-medium uppercase tracking-wider">
-                      Claim Button Settings
-                    </Heading>
-                    
-                    <div className="space-y-5 min-w-0">
-                    
-                    {/* Claim Button Class via presets */}
-                    <div>
-                      <Text
-                        as="label"
-                        size="3"
-                        weight="medium"
-                        className="block mb-3"
-                      >
-                        Button Style
-                      </Text>
-                      <div className="flex flex-wrap gap-3 mb-5">
-                      {[legacyTheme.accent,
-                        'bg-violet-600 hover:bg-violet-700 text-white',
-                        'bg-gray-600 hover:bg-gray-700 text-white',
-                        'bg-green-600 hover:bg-green-700 text-white',
-                        'bg-red-600 hover:bg-red-700 text-white',
-                        'bg-amber-500 hover:bg-amber-600 text-gray-900',
-                        'bg-purple-600 hover:bg-purple-700 text-white',
-                        'bg-slate-800 hover:bg-slate-700 text-white',
-                        'bg-orange-600 hover:bg-orange-700 text-white'
-                      ].map((cls, idx) => {
-                        const isSelected = promoButton.buttonClass === cls;
-                        const colorMap: Array<'violet' | 'gray' | 'green' | 'red' | 'purple' | 'orange'> = ['violet', 'violet', 'gray', 'green', 'red', 'violet', 'violet', 'violet', 'violet'];
-                        const shadowClassMap: Record<number, string> = {
-                          0: 'shadow-violet-500/25 hover:shadow-violet-500/40 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 hover:!bg-violet-500 active:!bg-violet-600 dark:hover:!bg-violet-600 dark:active:!bg-violet-700',
-                          1: 'shadow-violet-500/25 hover:shadow-violet-500/40 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 hover:!bg-violet-500 active:!bg-violet-600 dark:hover:!bg-violet-600 dark:active:!bg-violet-700',
-                          2: 'shadow-gray-500/25 hover:shadow-gray-500/40 dark:shadow-gray-500/30 dark:hover:shadow-gray-500/50 hover:!bg-gray-500 active:!bg-gray-600 dark:hover:!bg-gray-600 dark:active:!bg-gray-700',
-                          3: 'shadow-green-500/25 hover:shadow-green-500/40 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 hover:!bg-green-500 active:!bg-green-600 dark:hover:!bg-green-600 dark:active:!bg-green-700',
-                          4: 'shadow-red-500/25 hover:shadow-red-500/40 dark:shadow-red-500/30 dark:hover:shadow-red-500/50 hover:!bg-red-500 active:!bg-red-600 dark:hover:!bg-red-600 dark:active:!bg-red-700',
-                          5: 'shadow-purple-500/25 hover:shadow-purple-500/40 dark:shadow-purple-500/30 dark:hover:shadow-purple-500/50 hover:!bg-purple-500 active:!bg-purple-600 dark:hover:!bg-purple-600 dark:active:!bg-purple-700',
-                          6: 'shadow-slate-500/25 hover:shadow-slate-500/40 dark:shadow-slate-500/30 dark:hover:shadow-slate-500/50 hover:!bg-slate-500 active:!bg-slate-600 dark:hover:!bg-slate-600 dark:active:!bg-slate-700',
-                          7: 'shadow-orange-500/25 hover:shadow-orange-500/40 dark:shadow-orange-500/30 dark:hover:shadow-orange-500/50 hover:!bg-orange-500 active:!bg-orange-600 dark:hover:!bg-orange-600 dark:active:!bg-orange-700',
-                          8: 'shadow-violet-500/25 hover:shadow-violet-500/40 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 hover:!bg-violet-500 active:!bg-violet-600 dark:hover:!bg-violet-600 dark:active:!bg-violet-700',
-                        };
-                        const selectedClassMap: Record<number, string> = {
-                          0: isSelected ? '!bg-violet-500 !text-white' : '',
-                          1: isSelected ? '!bg-violet-500 !text-white' : '',
-                          2: isSelected ? '!bg-gray-500 !text-white' : '',
-                          3: isSelected ? '!bg-green-500 !text-white' : '',
-                          4: isSelected ? '!bg-red-500 !text-white' : '',
-                          5: isSelected ? '!bg-purple-500 !text-white' : '',
-                          6: isSelected ? '!bg-slate-500 !text-white' : '',
-                          7: isSelected ? '!bg-orange-500 !text-white' : '',
-                          8: isSelected ? '!bg-violet-500 !text-white' : '',
-                        };
-                        const currentColor = colorMap[idx] || 'violet';
-                        const shadowClasses = shadowClassMap[idx] || shadowClassMap[0];
-                        const selectedClasses = selectedClassMap[idx] || '';
-                        return (
-                          <Button
-                            key={`${cls}-${idx}`}
-                            size="3"
-                            variant="surface"
-                            color={currentColor}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPromoButton(prev => ({ ...prev, buttonClass: cls }));
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className={`!px-6 !py-3 shadow-lg ${shadowClasses} hover:!text-white hover:scale-105 active:!text-white transition-all duration-300 ${selectedClasses} ${cls}`}
-                          >
-                            {idx === 0 ? 'Theme Accent' : 'Preset'}
-                          </Button>
-                        );
-                      })}
-                      </div>
-                      <div className="flex items-center justify-end w-full">
-                        <Button
-                          size="3"
-                          color="violet"
-                          variant="surface"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const current = promoButton.buttonClass || legacyTheme.accent;
-                            products.forEach(p => {
-                              updateProduct(p.id, { buttonClass: current });
-                            });
-                            setPromoButton(prev => ({ ...prev, buttonClass: current }));
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="!px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
-                        >
-                          Apply to All Buttons
-                        </Button>
-                      </div>
-                    </div>
-                    </div>
-                  </div>
-                </Card>
+                <ClaimButtonSettings
+                  promoButton={promoButton}
+                  setPromoButton={setPromoButton}
+                  legacyTheme={legacyTheme}
+                  products={products}
+                  updateProduct={updateProduct}
+                />
               )}
             </div>
           </div>

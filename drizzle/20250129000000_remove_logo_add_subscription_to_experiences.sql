@@ -18,3 +18,8 @@ ADD COLUMN IF NOT EXISTS subscription subscription_type;
 
 -- Add comment for documentation
 COMMENT ON COLUMN experiences.subscription IS 'Subscription tier for this experience: Basic, Pro, or Vip';
+
+
+
+
+

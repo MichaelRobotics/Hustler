@@ -44,6 +44,15 @@ export const subscriptionTypeEnum = pgEnum("subscription_type", [
 	"Pro",
 	"Vip",
 ]);
+export const seasonalDiscountDurationTypeEnum = pgEnum("seasonal_discount_duration_type", [
+	"one-time",
+	"forever",
+	"duration_months",
+]);
+export const promoTypeEnum = pgEnum("promo_type", [
+	"percentage",
+	"flat_amount",
+]);
 
 
 // ===== CORE WHOP INTEGRATION TABLES =====
@@ -58,6 +67,16 @@ export const experiences = pgTable(
 		description: text("description"),
 		subscription: subscriptionTypeEnum("subscription"),
 		link: text("link"),
+		// Seasonal Discount fields
+		seasonalDiscountId: text("seasonal_discount_id"), // Generated ID when discount is created
+		seasonalDiscountPromo: text("seasonal_discount_promo"), // Promo code
+		seasonalDiscountStart: timestamp("seasonal_discount_start"), // Discount start date/time
+		seasonalDiscountEnd: timestamp("seasonal_discount_end"), // Discount end date/time
+		seasonalDiscountText: text("seasonal_discount_text"), // Discount text/message
+		seasonalDiscountQuantityPerProduct: integer("seasonal_discount_quantity_per_product"), // Quantity per product
+		seasonalDiscountDurationType: seasonalDiscountDurationTypeEnum("seasonal_discount_duration_type"), // Duration type: "one-time", "forever", or "duration_months"
+		seasonalDiscountDurationMonths: integer("seasonal_discount_duration_months"), // Duration in months (only used when duration_type is "duration_months")
+		globalDiscount: boolean("global_discount"), // Whether global discount is enabled (promo applies to all products/plans)
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -69,6 +88,41 @@ export const experiences = pgTable(
 			table.whopCompanyId,
 		),
 		updatedAtIdx: index("experiences_updated_at_idx").on(table.updatedAt),
+	}),
+);
+
+export const promos = pgTable(
+	"promos",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		whopCompanyId: text("whop_company_id").notNull(), // Company ID for querying promos by company
+		whopPromoId: text("whop_promo_id"), // ID returned from Whop API after creation
+		// Required fields from Whop API
+		code: text("code").notNull(), // The specific code used to apply the promo at checkout
+		amountOff: decimal("amount_off", { precision: 10, scale: 2 }).notNull(), // The amount off (% or flat amount)
+		baseCurrency: text("base_currency").notNull(), // Monetary currency (usd, sgd, inr, etc.)
+		companyId: text("company_id").notNull(), // The id of the company (whopCompanyId from experience)
+		newUsersOnly: boolean("new_users_only").notNull(), // Restricts to users who never purchased
+		promoDurationMonths: integer("promo_duration_months").notNull(), // Number of months promo is valid
+		promoType: promoTypeEnum("promo_type").notNull(), // "percentage" or "flat_amount"
+		// Optional fields from Whop API
+		churnedUsersOnly: boolean("churned_users_only"), // Restricts to churned users
+		existingMembershipsOnly: boolean("existing_memberships_only"), // For existing memberships only
+		expiresAt: timestamp("expires_at"), // Date/time when promo expires
+		onePerCustomer: boolean("one_per_customer"), // Restricts to once per customer
+		planIds: jsonb("plan_ids"), // Array of plan IDs the promo applies to
+		productId: text("product_id"), // Product to lock promo to
+		stock: integer("stock"), // Quantity limit on number of uses
+		unlimitedStock: boolean("unlimited_stock"), // Whether promo has unlimited stock
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		whopCompanyIdIdx: index("promos_whop_company_id_idx").on(table.whopCompanyId),
+		codeIdx: index("promos_code_idx").on(table.code),
+		whopPromoIdIdx: index("promos_whop_promo_id_idx").on(table.whopPromoId),
+		companyIdIdx: index("promos_company_id_idx").on(table.companyId),
+		productIdIdx: index("promos_product_id_idx").on(table.productId),
 	}),
 );
 
@@ -184,6 +238,9 @@ export const resources = pgTable(
 		storageUrl: text("storage_url"), // Link that triggers digital asset upload
 		productImages: jsonb("product_images"), // Array of up to 3 product image URLs for FILE type products
 		displayOrder: integer("display_order"), // Order for displaying resources in Market Stall
+		planId: text("plan_id"), // Whop plan ID
+		purchaseUrl: text("purchase_url"), // Purchase URL from plan or checkout configuration
+		checkoutConfigurationId: text("checkout_configuration_id"), // Checkout configuration ID for resources created via checkout
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -198,6 +255,7 @@ export const resources = pgTable(
 		),
 		whopAppIdIdx: index("resources_whop_app_id_idx").on(table.whopAppId),
 		whopMembershipIdIdx: index("resources_whop_membership_id_idx").on(table.whopMembershipId),
+		checkoutConfigurationIdIdx: index("resources_checkout_configuration_id_idx").on(table.checkoutConfigurationId),
 		experienceUserUpdatedIdx: index("resources_experience_user_updated_idx").on(
 			table.experienceId,
 			table.userId,
@@ -211,6 +269,38 @@ export const resources = pgTable(
 			table.experienceId,
 			table.displayOrder,
 		),
+	}),
+);
+
+// ===== PLANS TABLE =====
+export const plans = pgTable(
+	"plans",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		resourceId: uuid("resource_id")
+			.notNull()
+			.references(() => resources.id, { onDelete: "cascade" }),
+		whopProductId: text("whop_product_id"), // For plans tied to products (nullable)
+		checkoutConfigurationId: text("checkout_configuration_id"), // For plans tied to checkout configurations (nullable)
+		planId: text("plan_id").notNull(), // Whop plan ID (unique constraint defined below)
+		whopCompanyId: text("whop_company_id").notNull(), // Company ID for querying plans by company
+		purchaseUrl: text("purchase_url"),
+		initialPrice: decimal("initial_price", { precision: 10, scale: 2 }),
+		renewalPrice: decimal("renewal_price", { precision: 10, scale: 2 }),
+		currency: text("currency"),
+		planType: text("plan_type"),
+		promoIds: jsonb("promo_ids"), // Array of whop_promo_id values that apply to this plan
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		resourceIdIdx: index("plans_resource_id_idx").on(table.resourceId),
+		whopProductIdIdx: index("plans_whop_product_id_idx").on(table.whopProductId),
+		checkoutConfigurationIdIdx: index("plans_checkout_configuration_id_idx").on(table.checkoutConfigurationId),
+		planIdIdx: index("plans_plan_id_idx").on(table.planId),
+		whopCompanyIdIdx: index("plans_whop_company_id_idx").on(table.whopCompanyId),
+		planIdUnique: unique("plans_plan_id_unique").on(table.planId),
+		promoIdsIdx: index("plans_promo_ids_idx").using("gin", table.promoIds),
 	}),
 );
 
@@ -470,6 +560,14 @@ export const resourcesRelations = relations(resources, ({ one, many }) => ({
 		references: [users.id],
 	}),
 	funnelResources: many(funnelResources),
+	plans: many(plans),
+}));
+
+export const plansRelations = relations(plans, ({ one }) => ({
+	resource: one(resources, {
+		fields: [plans.resourceId],
+		references: [resources.id],
+	}),
 }));
 
 export const funnelResourcesRelations = relations(

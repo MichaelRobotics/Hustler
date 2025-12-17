@@ -123,8 +123,8 @@ importers:
         specifier: 0.2.36
         version: 0.2.36(@auth/core@0.40.0)(@types/react-dom@19.1.5(@types/react@19.1.4))(@types/react@19.1.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@whop/sdk':
-        specifier: ^0.0.2
-        version: 0.0.2
+        specifier: ^0.0.19
+        version: 0.0.19
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2802,8 +2802,8 @@ packages:
     peerDependencies:
       react: ^19.0.0
 
-  '@whop/sdk@0.0.2':
-    resolution: {integrity: sha512-Ro6RxDtKN9bzSCpg//2535LumvjnHanpmjVZvVApTuZDeUYmbTyeLcOyXL2a+n8pAZ/GZYDNzTon6pk0iFswAw==}
+  '@whop/sdk@0.0.19':
+    resolution: {integrity: sha512-VZm6pZsNU3Y0MQyPrZgeHnLZQs0kOI3SNtAHy88D3PlkxVW7ZJRkAQGGIRHncVt2uhNOZ3M8XKUTVk5Uk6a52Q==}
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
@@ -3105,8 +3105,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  graphql-request@7.3.5:
-    resolution: {integrity: sha512-yrikPPBQFrHTCEw+Nr89vcKkhSOaKk1a4i1aoK0q2pJp0TkkH+HxJXKeVDqzHSYAEoFoNqKmNuqda1tubgaGZQ==}
+  graphql-request@7.4.0:
+    resolution: {integrity: sha512-xfr+zFb/QYbs4l4ty0dltqiXIp07U6sl+tOKAb0t50/EnQek6CVVBLjETXi+FghElytvgaAWtIOt3EV7zLzIAQ==}
     peerDependencies:
       graphql: 14 - 16
 
@@ -6640,7 +6640,7 @@ snapshots:
     dependencies:
       '@auth/core': 0.40.0
       graphql: 16.11.0
-      graphql-request: 7.3.5(graphql@16.11.0)
+      graphql-request: 7.4.0(graphql@16.11.0)
       graphql-tag: 2.12.6(graphql@16.11.0)
       jose: 6.0.11
       js-md5: 0.8.3
@@ -6650,7 +6650,7 @@ snapshots:
     dependencies:
       '@auth/core': 0.40.0
       graphql: 16.11.0
-      graphql-request: 7.3.5(graphql@16.11.0)
+      graphql-request: 7.4.0(graphql@16.11.0)
       graphql-tag: 2.12.6(graphql@16.11.0)
       jose: 6.0.11
       js-md5: 0.8.3
@@ -6678,7 +6678,7 @@ snapshots:
       - '@types/react-dom'
       - react-dom
 
-  '@whop/sdk@0.0.2':
+  '@whop/sdk@0.0.19':
     dependencies:
       jose: 6.1.0
       standardwebhooks: 1.0.0
@@ -6964,7 +6964,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  graphql-request@7.3.5(graphql@16.11.0):
+  graphql-request@7.4.0(graphql@16.11.0):
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.11.0)
       graphql: 16.11.0

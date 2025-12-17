@@ -290,7 +290,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   
   const countdownLabel = timeRemaining ? 'Ends in:' : timeUntilStart ? 'Starts in:' : '';
   const formatTimeUnit = (value: number) => value.toString().padStart(2, '0');
-  const showPromoTimerCard = Boolean(countdownInfo && discountSettings?.startDate && discountSettings?.endDate);
+  
+  // Show promo card if discount is set but not started yet OR if it's active
+  const showPromoTimerCard = Boolean(
+    discountSettings && 
+    discountSettings.startDate && 
+    discountSettings.endDate && 
+    (isPromoActive || timeUntilStart)
+  );
+  
+  // Hide promo code and copy button if promo hasn't started yet
+  const showPromoCode = isPromoActive && Boolean(promoCode);
 
   const handlePromoCardCopy = React.useCallback(() => {
     console.log('🔵 handlePromoCardCopy called', { promoCode, hasPromoCode: !!promoCode });
@@ -673,24 +683,24 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="flex-1 flex items-center justify-center">
               {showPromoTimerCard && countdownInfo && (
                 <div
-                  className={`promo-card promo-card-hover group relative w-full sm:w-auto sm:max-w-3xl px-4 py-3 sm:px-6 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${promoCode ? 'cursor-pointer' : 'cursor-default'}`}
-                  role={promoCode ? 'button' : undefined}
-                  tabIndex={promoCode ? 0 : undefined}
+                  className={`promo-card promo-card-hover group relative w-full sm:w-auto sm:max-w-3xl px-4 py-3 sm:px-6 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${showPromoCode ? 'cursor-pointer' : 'cursor-default'}`}
+                  role={showPromoCode ? 'button' : undefined}
+                  tabIndex={showPromoCode ? 0 : undefined}
                   onClick={(e) => {
-                    console.log('🔵 Parent div clicked', { promoCode, hasPromoCode: !!promoCode, target: e.target });
-                    if (promoCode) {
+                    console.log('🔵 Parent div clicked', { promoCode, showPromoCode, target: e.target });
+                    if (showPromoCode) {
                       e.preventDefault();
                       e.stopPropagation();
                       handlePromoCardCopy();
                     }
                   }}
-                  onKeyDown={promoCode ? handlePromoCardKeyDown : undefined}
-                  aria-label={promoCode ? `Copy promo code ${promoCode}` : undefined}
+                  onKeyDown={showPromoCode ? handlePromoCardKeyDown : undefined}
+                  aria-label={showPromoCode ? `Copy promo code ${promoCode}` : undefined}
                 >
                   <div className="absolute inset-0 rounded-2xl bg-[var(--subtitleBgColorStatic,#FEEBEB)] dark:bg-rose-900/60 opacity-95 pointer-events-none"></div>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-amber-50/80 dark:from-rose-900/50 dark:via-slate-900/80 dark:to-amber-900/40 pointer-events-none"></div>
-                  <div className={`relative z-10 flex flex-wrap items-center gap-4 text-left ${promoCode ? 'justify-between w-full' : 'justify-start'}`}>
-                    <div className={`flex items-center gap-4 flex-wrap ${promoCode ? 'flex-1 min-w-0' : ''}`}>
+                  <div className={`relative z-10 flex flex-wrap items-center gap-4 text-left ${showPromoCode ? 'justify-between w-full' : 'justify-start'}`}>
+                    <div className={`flex items-center gap-4 flex-wrap ${showPromoCode ? 'flex-1 min-w-0' : ''}`}>
                       {discountSettings?.discountText && (
                         <span 
                           className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap"
@@ -722,7 +732,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                       </div>
                     </div>
 
-                    {promoCode && (
+                    {showPromoCode && (
                       <div className="flex items-center">
                         {promoCopied ? (
                           <Check className="w-5 h-5 text-emerald-500" />

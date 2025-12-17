@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from 'frosted-ui';
 import { CheckCircle, Upload, X } from 'lucide-react';
+import { apiGet } from '../../../utils/api-client';
+import type { Plan } from '../../../types/plan';
 
 interface FormFieldsProps {
   resource: any;
@@ -26,6 +28,7 @@ interface FormFieldsProps {
   onSave?: () => void;
   isFormValid?: boolean;
   saveButtonText?: string;
+  experienceId?: string;
 }
 
 export const FormFields: React.FC<FormFieldsProps> = ({
@@ -52,9 +55,86 @@ export const FormFields: React.FC<FormFieldsProps> = ({
   onSave,
   isFormValid = false,
   saveButtonText = "Save",
+  experienceId,
 }) => {
   // Determine if we're creating (no id) or editing (has id)
   const isEditMode = !isCreating && !!resource.id;
+  const isProductResource = resource.whopProductId?.startsWith('prod_');
+  
+  // State for plans
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+  
+  // Extract experienceId from URL as fallback
+  const [urlExperienceId, setUrlExperienceId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    // Extract from URL path like DynamicWebsocketProvider
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      const experienceMatch = pathname.match(/^\/experiences\/(exp_[a-zA-Z0-9]+)/);
+      if (experienceMatch) {
+        setUrlExperienceId(experienceMatch[1]);
+      }
+    }
+  }, []);
+  
+  const effectiveExperienceId = experienceId || urlExperienceId || '';
+
+  // Fetch plans when whopProductId changes and it's a product
+  useEffect(() => {
+    const fetchPlans = async () => {
+      if (isProductResource && resource.whopProductId) {
+        setIsLoadingPlans(true);
+        try {
+          // Use experienceId prop or URL-extracted value
+          const response = await apiGet(
+            `/api/plans?whopProductId=${resource.whopProductId}`,
+            effectiveExperienceId
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setPlans(data.data || []);
+          }
+        } catch (error) {
+          console.error('Error fetching plans:', error);
+        } finally {
+          setIsLoadingPlans(false);
+        }
+      } else {
+        setPlans([]);
+      }
+    };
+
+    fetchPlans();
+  }, [resource.whopProductId, isProductResource, effectiveExperienceId]);
+
+  // Update price from current plan when editing and plans are loaded
+  useEffect(() => {
+    if (isEditMode && resource.planId && plans.length > 0 && !isLoadingPlans) {
+      const currentPlan = plans.find(p => p.planId === resource.planId);
+      if (currentPlan) {
+        // For renewal plans, use renewalPrice if not 0, otherwise use initialPrice
+        const planPrice = currentPlan.planType === 'renewal' && currentPlan.renewalPrice && parseFloat(currentPlan.renewalPrice) !== 0
+          ? currentPlan.renewalPrice
+          : (currentPlan.initialPrice || null);
+        
+        if (planPrice && resource.price !== planPrice) {
+          // Update price from plan
+          setResource((prev: any) => ({
+            ...prev,
+            price: planPrice,
+            purchaseUrl: currentPlan.purchaseUrl || prev.purchaseUrl || "",
+          }));
+        }
+      } else {
+        // Plan not found in plans array - might need to refetch or clear selection
+        console.warn(`Plan ${resource.planId} not found in plans array for product ${resource.whopProductId}`);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource.planId, plans.length, isEditMode, isLoadingPlans]);
+
   const getFieldClassName = (hasError = false) => {
     const baseClasses = "w-full px-3 py-2 text-sm border-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
     
@@ -128,33 +208,93 @@ export const FormFields: React.FC<FormFieldsProps> = ({
       {/* Price Field - Only for Paid products */}
       {resource.category === "PAID" && (
         <div className="space-y-1">
-          <input
-            type="text"
-            value={resource.price || ""}
-            onChange={(e) => setResource({ ...resource, price: e.target.value })}
-            placeholder="$0.00"
-            disabled={isSaving}
-            className={getFieldClassName()}
-          />
-          {(() => {
-            const price = parseFloat(resource.price || "0");
-            const isValidPrice = price >= 5 && price <= 50000;
-            const hasPrice = resource.price && resource.price.trim() !== "";
-            
-            if (hasPrice && !isValidPrice) {
-              return (
-                <p className="text-xs text-red-600 dark:text-red-400">
-                  Price must be between $5 and $50,000
-                </p>
-              );
-            }
-            
-            return (
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                *Only whop fees will be deducted
-              </p>
-            );
-          })()}
+          {isProductResource ? (
+            // Select component for products (prod_*)
+            <select
+              value={resource.planId || ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                const selectedPlan = plans.find((p) => p.planId === value);
+                if (selectedPlan) {
+                  // Use initialPrice if available, otherwise use renewalPrice (if not 0)
+                  const planPrice = selectedPlan.initialPrice || 
+                    (selectedPlan.renewalPrice && parseFloat(selectedPlan.renewalPrice) !== 0 ? selectedPlan.renewalPrice : "0");
+                  setResource({
+                    ...resource,
+                    planId: selectedPlan.planId,
+                    price: planPrice,
+                    purchaseUrl: selectedPlan.purchaseUrl || "",
+                  });
+                } else if (value === "") {
+                  // Clear selection
+                  setResource({
+                    ...resource,
+                    planId: undefined,
+                    price: "",
+                    purchaseUrl: "",
+                  });
+                }
+              }}
+              disabled={isSaving || isLoadingPlans}
+              className={getFieldClassName()}
+            >
+              <option value="" disabled>
+                {isLoadingPlans ? "Loading plans..." : "Select a plan"}
+              </option>
+              {plans.length === 0 ? (
+                <option value="" disabled>No plans available</option>
+              ) : (
+                plans.map((plan) => {
+                  // For renewal plans, use renewalPrice if not 0, otherwise use initialPrice
+                  const displayPrice = plan.planType === 'renewal' && plan.renewalPrice && parseFloat(plan.renewalPrice) !== 0
+                    ? plan.renewalPrice
+                    : (plan.initialPrice || "0");
+                  // Format price to show 2 decimal places
+                  const formattedPrice = parseFloat(displayPrice).toFixed(2);
+                  return (
+                    <option key={plan.id} value={plan.planId}>
+                      ${formattedPrice}
+                    </option>
+                  );
+                })
+              )}
+            </select>
+          ) : (
+            // Input field for non-product resources
+            <>
+              <input
+                type="text"
+                value={resource.price || ""}
+                onChange={(e) => setResource({ ...resource, price: e.target.value })}
+                placeholder="$0.00"
+                disabled={isSaving}
+                className={getFieldClassName()}
+              />
+              {(() => {
+                const price = parseFloat(resource.price || "0");
+                // For resources with whopProductId, skip $5 minimum (price comes from Whop plans)
+                const minPrice = resource.whopProductId ? 0 : 5;
+                const isValidPrice = price >= minPrice && price <= 50000;
+                const hasPrice = resource.price && resource.price.trim() !== "";
+                
+                if (hasPrice && !isValidPrice) {
+                  return (
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {resource.whopProductId 
+                        ? "Price must be between $0 and $50,000"
+                        : "Price must be between $5 and $50,000"}
+                    </p>
+                  );
+                }
+                
+                return (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    *Only whop fees will be deducted
+                  </p>
+                );
+              })()}
+            </>
+          )}
         </div>
       )}
 

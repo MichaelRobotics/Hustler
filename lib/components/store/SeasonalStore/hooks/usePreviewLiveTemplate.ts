@@ -151,6 +151,11 @@ export const usePreviewLiveTemplate = ({
             promoLimitQuantity: templateProduct.promoLimitQuantity,
             promoQuantityLeft: templateProduct.promoQuantityLeft,
             promoShowFireIcon: templateProduct.promoShowFireIcon,
+            promoCodeId: templateProduct.promoCodeId,
+            promoCode: templateProduct.promoCode, // Promo code string from template
+            promoScope: templateProduct.promoScope,
+            promoDurationType: templateProduct.promoDurationType,
+            promoDurationMonths: templateProduct.promoDurationMonths,
             salesCount: templateProduct.salesCount,
             showSalesCount: templateProduct.showSalesCount,
             starRating: templateProduct.starRating,
@@ -184,6 +189,52 @@ export const usePreviewLiveTemplate = ({
       console.log(`🎨 [PreviewLiveTemplate] Result: ${filteredProducts.length} products matched, ${skippedProducts.length} products skipped`);
       if (skippedProducts.length > 0) {
         console.log(`🎨 [PreviewLiveTemplate] Skipped products: ${skippedProducts.join(', ')}`);
+      }
+      
+      // Reorder filtered products to match Market Stall order
+      if (filteredProducts.length > 0 && marketStallResources.length > 0) {
+        // Get PAID resources sorted by displayOrder
+        const paidMarketStallResources = marketStallResources
+          .filter((r: any) => r.category === 'PAID')
+          .sort((a: any, b: any) => {
+            if (a.displayOrder !== undefined && b.displayOrder !== undefined) {
+              return a.displayOrder - b.displayOrder;
+            }
+            if (a.displayOrder !== undefined) return -1;
+            if (b.displayOrder !== undefined) return 1;
+            return 0;
+          });
+        
+        if (paidMarketStallResources.length > 0) {
+          // Create a map of resource ID to resource
+          const resourceMap = new Map(paidMarketStallResources.map((r: any) => [r.id, r]));
+          
+          // Get Market Stall order (resource IDs in displayOrder)
+          const marketStallOrder = paidMarketStallResources.map((r: any): string => r.id);
+          
+          // Reorder filtered products to match Market Stall order
+          const reorderedProducts = marketStallOrder
+            .map((resourceId: string) => {
+              const resource = resourceMap.get(resourceId) as any;
+              // Find product that matches this resource ID
+              const product = filteredProducts.find(
+                (p: any) =>
+                  (typeof p.id === 'string' && p.id === `resource-${resourceId}`) ||
+                  (p.whopProductId && resource && resource.whopProductId === p.whopProductId)
+              );
+              return product;
+            })
+            .filter((p: any | undefined): p is any => p !== undefined);
+          
+          // Add any products that weren't in the Market Stall order
+          const remainingProducts = filteredProducts.filter(
+            (p: any) => !reorderedProducts.includes(p)
+          );
+          
+          console.log(`🔄 [PreviewLiveTemplate] Reordered ${reorderedProducts.length} products to match Market Stall order`);
+          
+          return [...reorderedProducts, ...remainingProducts];
+        }
       }
       
       return filteredProducts;

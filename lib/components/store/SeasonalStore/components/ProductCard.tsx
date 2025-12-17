@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, ZapIcon } from './Icons';
 import { Button } from 'frosted-ui';
-import { Zap, Flame, Star, Bold, Italic, Palette, ArrowLeft } from 'lucide-react';
-import { normalizeHtmlContent, stripInlineColorTags } from '../utils/html';
+import { Star } from 'lucide-react';
+import { stripInlineColorTags, normalizeHtmlContent } from '../utils/html';
+import { FormattingToolbar, ProductImageSection, BadgeDisplay, ProductNameSection, ProductDescriptionSection, ProductPriceSection, ProductButtonSection } from './product';
 
 interface ProductCardProps {
   product: Product;
@@ -25,6 +26,7 @@ interface ProductCardProps {
     enabled: boolean;
     startDate: string;
     endDate: string;
+    promoCode?: string; // Promo code for seasonal discount
   };
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;
@@ -131,6 +133,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   storeName,
   experienceId,
 }) => {
+  // Get promo code from product object (saved to template)
+  // No need to fetch from API - it's already in the template data
+  const productPromoCode = product.promoCode || null;
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -471,7 +476,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Check if HTML content has formatting (tags or inline styles)
 
   const cardClass = product.cardClass || theme.card;
-  const buttonText = product.buttonText || 'VIEW DETAILS';
+  
+  // Determine button text: if product has a promo code (from Apply Promotion), show ticket icon + promo code
+  // Otherwise use product.buttonText or default to 'VIEW DETAILS'
+  const getButtonText = () => {
+    if (productPromoCode) {
+      // Return HTML with ticket icon SVG + promo code
+      // Using inline SVG for ticket icon (from lucide-react Ticket icon)
+      const ticketIconSvg = `<svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>`;
+      // Escape promo code to prevent XSS
+      const escapedPromoCode = productPromoCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      return `<span class="flex items-center justify-center gap-2">${ticketIconSvg}<span>${escapedPromoCode}</span></span>`;
+    }
+    return product.buttonText || 'VIEW DETAILS';
+  };
+  
+  const buttonText = getButtonText();
   const buttonBaseClass = product.buttonClass || theme.accent;
   
   // Parse transparency from cardClass and extract base background color
@@ -560,305 +580,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   }, [product, cardClass, titleClass, descClass]);
   // Avoid inline color styles per instructions; rely on classes only
 
-  // FormattingToolbar component (simplified version for ProductCard)
-  const FormattingToolbar: React.FC<{
-    show: boolean;
-    elementRef: HTMLDivElement | null;
-    toolbarRef: React.RefObject<HTMLDivElement | null>;
-    showColorPicker: boolean;
-    setShowColorPicker: (show: boolean) => void;
-    selectedColor: string;
-    setSelectedColor: (color: string) => void;
-    quickColors: string[];
-    activeSubToolbar: 'color' | null;
-    setActiveSubToolbar: React.Dispatch<React.SetStateAction<'color' | null>>;
-    onBold: () => void;
-    onItalic: () => void;
-    onColorChange: (color: string) => void;
-    onClose: () => void;
-  }> = ({ 
-    show, 
-    elementRef, 
-    toolbarRef, 
-    showColorPicker, 
-    setShowColorPicker, 
-    selectedColor,
-    setSelectedColor,
-    quickColors,
-    activeSubToolbar,
-    setActiveSubToolbar,
-    onBold,
-    onItalic,
-    onColorChange,
-    onClose,
-  }) => {
-    if (!show || !elementRef || typeof window === 'undefined') return null;
-    
-    const getToolbarPosition = () => {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        if (elementRef.contains(range.commonAncestorContainer)) {
-          const rect = range.getBoundingClientRect();
-          return { top: rect.top - 50, left: rect.left + (rect.width / 2) };
-        }
-      }
-      const rect = elementRef.getBoundingClientRect();
-      return { top: rect.top - 50, left: rect.left + (rect.width / 2) };
-    };
-    
-    const [position, setPosition] = React.useState(getToolbarPosition);
-    const hasSetInitialPosition = React.useRef(false);
-    
-    // Update position only when toolbar first appears
-    React.useEffect(() => {
-      if (show && !hasSetInitialPosition.current) {
-        setPosition(getToolbarPosition());
-        hasSetInitialPosition.current = true;
-      } else if (!show) {
-        // Reset flag when toolbar is hidden
-        hasSetInitialPosition.current = false;
-      }
-    }, [show, elementRef]);
-    
-    // Show sub-toolbar only for color picker
-    if (activeSubToolbar === 'color') {
-    return createPortal(
-        <>
-          {/* Transparent overlay to intercept clicks outside toolbar */}
-          <div
-            className="fixed inset-0 bg-transparent"
-            style={{
-              zIndex: 999998,
-              pointerEvents: 'auto',
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Close toolbar first to prevent onBlur handler from interfering
-              onClose();
-              // Then blur the contentEditable element to exit edit mode
-              if (elementRef) {
-                // Clear selection first
-                const selection = window.getSelection();
-                if (selection) {
-                  selection.removeAllRanges();
-                }
-                // Force blur to exit edit mode
-                elementRef.blur();
-                // Focus on body to ensure contentEditable loses focus completely
-                if (document.body) {
-                  document.body.focus();
-                }
-                // Additional cleanup: ensure focus is removed
-                setTimeout(() => {
-                  if (document.activeElement === elementRef) {
-                    elementRef.blur();
-                    if (document.body) {
-                      document.body.focus();
-                    }
-                  }
-                }, 0);
-              }
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          />
-          <div
-            ref={toolbarRef}
-            className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-            style={{
-              pointerEvents: 'auto',
-              zIndex: 999999,
-              top: `${position.top}px`,
-              left: `${position.left}px`,
-              transform: 'translateX(-50%)',
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-          {/* Back button */}
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setActiveSubToolbar(null);
-              setShowColorPicker(false);
-            }}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          
-          {/* Color picker grid */}
-          <div className="grid grid-cols-6 gap-1">
-            {quickColors.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (elementRef) {
-                    elementRef.focus();
-                    // If no selection, select all first
-                    const selection = window.getSelection();
-                    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                      const range = document.createRange();
-                      range.selectNodeContents(elementRef);
-                      selection?.removeAllRanges();
-                      selection?.addRange(range);
-                    }
-                    setSelectedColor(color);
-                    onColorChange(color);
-                    setActiveSubToolbar(null);
-                    onClose();
-                  }
-                }}
-                className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
-                style={{ backgroundColor: color }}
-                title={color}
-              />
-            ))}
-          </div>
-          </div>
-        </>,
-        document.body
-      );
-    }
-    
-    // Main toolbar
-    return createPortal(
-      <>
-        {/* Transparent overlay to intercept clicks outside toolbar */}
-        <div
-          className="fixed inset-0 bg-transparent"
-          style={{
-            zIndex: 999998,
-            pointerEvents: 'auto',
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Blur the contentEditable element to exit edit mode
-            if (elementRef) {
-              elementRef.blur();
-            }
-            onClose();
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        />
-      <div
-        ref={toolbarRef}
-        className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-2"
-        style={{
-          pointerEvents: 'auto',
-          zIndex: 999999,
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-          transform: 'translateX(-50%)',
-        }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      >
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onBold();
-            onClose();
-          }}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Bold"
-        >
-          <Bold className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onItalic();
-            onClose();
-          }}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Italic"
-        >
-          <Italic className="w-4 h-4" />
-        </button>
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (elementRef) {
-                elementRef.focus();
-                const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  let element: Element | null = null;
-                  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-                    element = range.commonAncestorContainer.parentElement;
-                  } else {
-                    element = range.commonAncestorContainer as Element;
-                  }
-                  while (element && element !== elementRef) {
-                    const style = element.getAttribute('style');
-                    if (style) {
-                      const colorMatch = style.match(/color:\s*([^;]+)/i);
-                      if (colorMatch) {
-                        setSelectedColor(colorMatch[1].trim());
-                        break;
-                      }
-                    }
-                    element = element.parentElement;
-                  }
-                }
-              }
-            setActiveSubToolbar('color');
-            }}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Text Color"
-          >
-            <Palette className="w-4 h-4" />
-          </button>
-              </div>
-      </>,
-      document.body
-    );
-  };
+  // FormattingToolbar is now imported from ./product
 
   return (
     <div className="relative max-w-xs mx-auto" data-prevent-bg-toggle="true">
@@ -886,515 +608,91 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         }}
       >
       {/* Image Section - Top Half */}
-      <div className="relative h-56 w-full">
-        {/* Background Image - fills top half */}
-        <div 
-          className="absolute inset-0 rounded-t-2xl overflow-hidden"
-          style={{
-            backgroundImage: product.imageAttachmentUrl 
-              ? `url(${product.imageAttachmentUrl})` 
-              : product.image
-                ? `url(${product.image})`
-                : `url(https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp)`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            filter: `drop-shadow(0 10px 10px ${
-              theme.name === 'Fall' ? 'rgba(160, 82, 45, 0.5)' : 
-              theme.name === 'Winter' ? 'rgba(31, 74, 155, 0.5)' : 
-              'rgba(232, 160, 2, 0.5)'
-            })`
-          }}
-        />
-        
-        {/* Fire Icon + "X left" text - Top Right Corner */}
-        {(() => {
-          const showFire =
-            product.promoShowFireIcon &&
-            product.promoQuantityLeft !== undefined &&
-            product.promoQuantityLeft > 0;
-
-          if (!showFire) return null;
-
-          return (
-          <div className="absolute top-2 right-2 z-30 flex items-center gap-1 bg-red-500/90 backdrop-blur-sm px-2 py-1 rounded-lg shadow-lg">
-            <Flame className="w-4 h-4 text-white" />
-            <span className="text-white text-xs font-bold">
-              {product.promoQuantityLeft} left
-            </span>
-          </div>
-          );
-        })()}
-
-        {/* Badge as diagonal ribbon extending beyond card borders - 45 degree angle */}
-        {product.badge && (
-          <div 
-            className="absolute top-0 left-0 z-30 pointer-events-none"
-            style={{
-              width: '100%',
-              height: '100%',
-            }}
-          >
-            {/* Ribbon that extends beyond left and right borders */}
-            <div 
-              className={`absolute font-bold text-[10px] shadow-lg ${
-                product.badge === 'new' 
-                  ? 'bg-green-500' 
-                  : product.badge === '5star'
-                  ? 'bg-yellow-600'
-                  : product.badge === 'bestseller'
-                  ? 'bg-orange-500'
-                  : ''
-              }`}
-              style={{
-                width: '150%',
-                height: '28px',
-                left: '-65%',
-                top: '15px',
-                transform: 'rotate(-45deg)',
-                transformOrigin: 'center',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
-              }}
-            />
-            {/* Text container - clipped to stay within card boundaries, centered at midpoint of shard intersections */}
-            <div 
-              className="absolute top-0 left-0 w-full h-full"
-              style={{
-                overflow: 'hidden',
-              }}
-            >
-               {/* Shard center is at 10% of card width (midpoint between entry and exit) */}
-                <div 
-                className={`absolute flex items-center justify-center font-bold text-[10px] ${
-                  product.badge === 'new' 
-                    ? 'text-white' 
-                    : product.badge === '5star'
-                    ? 'text-white'
-                    : product.badge === 'bestseller'
-                    ? 'text-white'
-                    : ''
-                }`}
-                  style={{
-                    top: '15px',
-                    left: '10%',
-                    transform: 'translateX(-50%) rotate(-45deg)',
-                    transformOrigin: 'center center',
-                    height: '28px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                {product.badge === 'new' ? 'New' : product.badge === '5star' ? '5 ⭐' : 'BestSeller'}
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {shouldShowRatingInfo && ratingValue !== null && (
-          <div className="absolute bottom-3 left-3 z-30 flex items-center gap-1 rounded-full bg-black/70 text-white text-[11px] font-semibold px-2.5 py-1 backdrop-blur-sm shadow-lg">
-            <Star className="w-4 h-4 text-amber-300 fill-current" fill="currentColor" />
-            <span>{ratingValue.toFixed(1)}</span>
-            <span className="text-white/80">
-              ({(reviewCountValue ?? 0).toLocaleString()} reviews)
-            </span>
-          </div>
-        )}
-
-        {shouldShowSalesInfo && salesCountValue !== null && (
-          <div className="absolute bottom-3 right-3 z-30 flex items-center gap-1 rounded-full bg-white/90 text-gray-900 text-[11px] font-semibold px-2.5 py-1 backdrop-blur-sm shadow-lg">
-            <span>{salesCountValue.toLocaleString()} sold</span>
-          </div>
-        )}
-      </div>
-      {/* Theme Up Button - Top Right (Only visible in Editor View and on hover) */}
-      {isEditorView && (
-          <Button
-            size="3"
-            color="green"
-            onClick={() => onRefineProduct(product)}
-            disabled={loadingState.isTextLoading || loadingState.isImageLoading}
-            className={`absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 px-6 py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 group ${
-              (loadingState.isTextLoading || loadingState.isImageLoading) 
-                ? 'cursor-not-allowed' 
-                : ''
-            }`}
-            title="Theme Up!"
-          >
-            <Zap
-              size={20}
-              strokeWidth={2.5}
-              className="group-hover:scale-110 transition-transform duration-300"
-            />
-            <span className="ml-1">Theme Up!</span>
-          </Button>
-      )}
-
-      {/* Drop Zone for Assets - covers entire card */}
-      <div 
-        className="absolute inset-0 product-container-drop-zone"
-        onDragOver={(e) => isEditorView && e.preventDefault()}
-        onDrop={(e) => onDropAsset(e, product.id)}
+      <ProductImageSection
+        product={product}
+        theme={theme}
+        isEditorView={isEditorView}
+        loadingState={loadingState}
+        shouldShowRatingInfo={shouldShowRatingInfo}
+        ratingValue={ratingValue}
+        reviewCountValue={reviewCountValue}
+        shouldShowSalesInfo={shouldShowSalesInfo}
+        salesCountValue={salesCountValue}
+        onRefineProduct={onRefineProduct}
+        onDropAsset={onDropAsset}
       />
       
       {/* Text Content Section - Bottom Half */}
       <div className="px-3 py-2 flex flex-col flex-grow text-center relative z-30">
         {/* Editable Product Name */}
-        {isEditorView ? (
-          <div className="relative">
-            <FormattingToolbar
-              show={showNameToolbar}
-              elementRef={nameRef}
-              toolbarRef={nameToolbarRef}
-              showColorPicker={showNameColorPicker}
-              setShowColorPicker={setShowNameColorPicker}
-              selectedColor={selectedNameColor}
-              setSelectedColor={setSelectedNameColor}
-              quickColors={quickColors}
-              activeSubToolbar={activeNameSubToolbar}
-              setActiveSubToolbar={setActiveNameSubToolbar}
-              onClose={() => {
-                setShowNameToolbar(false);
-                setShowNameColorPicker(false);
-                setActiveNameSubToolbar(null);
-              }}
-              onBold={() => {
-                if (nameRef) {
-                  nameRef.focus();
-                  // Select all text in the field
-                  const range = document.createRange();
-                  range.selectNodeContents(nameRef);
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  // Apply bold to all selected text
-                      document.execCommand('bold', false);
-                  selection?.removeAllRanges();
-                  const content = nameRef.innerHTML || nameRef.textContent || '';
-                  onUpdateProduct(product.id, { name: content });
-                }
-              }}
-              onItalic={() => {
-                if (nameRef) {
-                  nameRef.focus();
-                  // Select all text in the field
-                  const range = document.createRange();
-                  range.selectNodeContents(nameRef);
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  // Apply italic to all selected text
-                      document.execCommand('italic', false);
-                  selection?.removeAllRanges();
-                  const content = nameRef.innerHTML || nameRef.textContent || '';
-                  onUpdateProduct(product.id, { name: content });
-                }
-              }}
-              onColorChange={(color) => {
-                if (nameRef) {
-                  nameRef.focus();
-                  // Always select all text in the field
-                    const range = document.createRange();
-                    range.selectNodeContents(nameRef);
-                  const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                    selection?.addRange(range);
-                  // Apply color to all selected text
-                    document.execCommand('foreColor', false, color);
-                    selection?.removeAllRanges();
-                  const content = nameRef.innerHTML || nameRef.textContent || '';
-                  onUpdateProduct(product.id, { name: content });
-                }
-              }}
-            />
-            <div
-              ref={setNameRef}
-              contentEditable
-              className={`text-lg font-bold mb-0.5 ${titleClass} cursor-text hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1 outline-none`}
-              onClick={(e) => {
-                e.stopPropagation();
-                // Hide description toolbar when clicking on name
-                setShowDescToolbar(false);
-                setShowDescColorPicker(false);
-                setActiveDescSubToolbar(null);
-                setShowNameToolbar(true);
-              }}
-              onSelect={() => {
-                // Hide description toolbar when selecting in name
-                setShowDescToolbar(false);
-                setShowDescColorPicker(false);
-                setActiveDescSubToolbar(null);
-                setShowNameToolbar(true);
-              }}
-              onBlur={(e) => {
-                const relatedTarget = e.relatedTarget as Node;
-                const toolbarElement = nameToolbarRef.current;
-                const isClickingToolbar = toolbarElement && (
-                  toolbarElement.contains(relatedTarget) || relatedTarget === toolbarElement
-                );
-                const content = nameRef?.innerHTML || nameRef?.textContent || '';
-                onUpdateProduct(product.id, { name: content });
-                if (!isClickingToolbar) {
-                  setTimeout(() => {
-                    // Check if toolbar was already closed by overlay click
-                    if (!showNameToolbar) return; // Skip if already closed
-                    
-                    const activeElement = document.activeElement;
-                    if (!toolbarElement?.contains(activeElement)) {
-                      setShowNameToolbar(false);
-                      setShowNameColorPicker(false);
-                      setActiveNameSubToolbar(null);
-                    }
-                  }, 200);
-                }
-              }}
-              onInput={() => {
-                const rawContent = nameRef?.innerHTML || nameRef?.textContent || '';
-                const content = normalizeHtmlContent(rawContent);
-                onUpdateProduct(product.id, { name: content });
-              }}
-            />
-          </div>
-        ) : (
-          <h2 
-            className={`text-lg font-bold mb-0.5 ${nameHasHtmlFormatting ? '' : titleClass}`}
-            dangerouslySetInnerHTML={{ __html: product.name || '' }}
-          />
-        )}
+        <ProductNameSection
+          product={product}
+          isEditorView={isEditorView}
+          titleClass={titleClass}
+          nameHasHtmlFormatting={Boolean(nameHasHtmlFormatting)}
+          showNameToolbar={showNameToolbar}
+          nameRef={nameRef}
+          setNameRef={setNameRef}
+          nameToolbarRef={nameToolbarRef}
+          showNameColorPicker={showNameColorPicker}
+          setShowNameColorPicker={setShowNameColorPicker}
+          selectedNameColor={selectedNameColor}
+          setSelectedNameColor={setSelectedNameColor}
+          quickColors={quickColors}
+          activeNameSubToolbar={activeNameSubToolbar}
+          setActiveNameSubToolbar={setActiveNameSubToolbar}
+          setShowNameToolbar={setShowNameToolbar}
+          setShowDescToolbar={setShowDescToolbar}
+          setShowDescColorPicker={setShowDescColorPicker}
+          setActiveDescSubToolbar={setActiveDescSubToolbar}
+          onUpdateProduct={onUpdateProduct}
+        />
         
         {/* Editable Product Description */}
-        {isEditorView ? (
-          <div className="relative">
-            <FormattingToolbar
-              show={showDescToolbar}
-              elementRef={descRef}
-              toolbarRef={descToolbarRef}
-              showColorPicker={showDescColorPicker}
-              setShowColorPicker={setShowDescColorPicker}
-              selectedColor={selectedDescColor}
-              setSelectedColor={setSelectedDescColor}
-              quickColors={quickColors}
-              activeSubToolbar={activeDescSubToolbar}
-              setActiveSubToolbar={setActiveDescSubToolbar}
-              onClose={() => {
-                setShowDescToolbar(false);
-                setShowDescColorPicker(false);
-                setActiveDescSubToolbar(null);
-              }}
-              onBold={() => {
-                if (descRef) {
-                  descRef.focus();
-                  // Select all text in the field
-                  const range = document.createRange();
-                  range.selectNodeContents(descRef);
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  // Apply bold to all selected text
-                      document.execCommand('bold', false);
-                  selection?.removeAllRanges();
-                  const content = descRef.innerHTML || descRef.textContent || '';
-                  onUpdateProduct(product.id, { description: content });
-                }
-              }}
-              onItalic={() => {
-                if (descRef) {
-                  descRef.focus();
-                  // Select all text in the field
-                  const range = document.createRange();
-                  range.selectNodeContents(descRef);
-                    const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                  selection?.addRange(range);
-                  // Apply italic to all selected text
-                      document.execCommand('italic', false);
-                  selection?.removeAllRanges();
-                  const content = descRef.innerHTML || descRef.textContent || '';
-                  onUpdateProduct(product.id, { description: content });
-                }
-              }}
-              onColorChange={(color) => {
-                if (descRef) {
-                  descRef.focus();
-                  // Always select all text in the field
-                    const range = document.createRange();
-                    range.selectNodeContents(descRef);
-                  const selection = window.getSelection();
-                    selection?.removeAllRanges();
-                    selection?.addRange(range);
-                  // Apply color to all selected text
-                    document.execCommand('foreColor', false, color);
-                    selection?.removeAllRanges();
-                  const content = descRef.innerHTML || descRef.textContent || '';
-                  onUpdateProduct(product.id, { description: content });
-                }
-              }}
-            />
-            <div
-              ref={setDescRef}
-              contentEditable
-              className={`text-xs mb-1 ${descClass} flex-grow cursor-text hover:bg-white/10 transition-colors duration-200 rounded-lg px-2 py-1 outline-none`}
-              style={{
-                minHeight: '1.5rem',
-                maxHeight: '3rem',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                wordBreak: 'break-word',
-                lineHeight: '1.5rem',
-                whiteSpace: 'normal',
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                // Hide name toolbar when clicking on description
-                setShowNameToolbar(false);
-                setShowNameColorPicker(false);
-                setActiveNameSubToolbar(null);
-                setShowDescToolbar(true);
-              }}
-              onSelect={() => {
-                // Hide name toolbar when selecting in description
-                setShowNameToolbar(false);
-                setShowNameColorPicker(false);
-                setActiveNameSubToolbar(null);
-                setShowDescToolbar(true);
-              }}
-              onBlur={(e) => {
-                const relatedTarget = e.relatedTarget as Node;
-                const toolbarElement = descToolbarRef.current;
-                const isClickingToolbar = toolbarElement && (
-                  toolbarElement.contains(relatedTarget) || relatedTarget === toolbarElement
-                );
-                let content = descRef?.innerHTML || descRef?.textContent || '';
-                // Truncate to 2 lines if content is too long
-                content = truncateHTMLToTwoLines(content);
-                // Update the element's content to match truncated version
-                if (descRef && descRef.innerHTML !== content) {
-                  descRef.innerHTML = content;
-                }
-                onUpdateProduct(product.id, { description: content });
-                if (!isClickingToolbar) {
-                  setTimeout(() => {
-                    // Check if toolbar was already closed by overlay click
-                    if (!showDescToolbar) return; // Skip if already closed
-                    
-                    const activeElement = document.activeElement;
-                    if (!toolbarElement?.contains(activeElement)) {
-                      setShowDescToolbar(false);
-                      setShowDescColorPicker(false);
-                      setActiveDescSubToolbar(null);
-                    }
-                  }, 200);
-                }
-              }}
-              onInput={() => {
-                const rawContent = descRef?.innerHTML || descRef?.textContent || '';
-                const content = normalizeHtmlContent(rawContent);
-                onUpdateProduct(product.id, { description: content });
-              }}
-            />
-          </div>
-        ) : (
-          <p 
-            className={`text-xs mb-1 ${descHasHtmlFormatting ? '' : descClass}`}
-            dangerouslySetInnerHTML={{ __html: product.description || '' }}
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              wordBreak: 'break-word',
-              maxHeight: '3rem',
-              lineHeight: '1.5rem',
-            }}
-          />
-        )}
+        <ProductDescriptionSection
+          product={product}
+          isEditorView={isEditorView}
+          descClass={descClass}
+          descHasHtmlFormatting={Boolean(descHasHtmlFormatting)}
+          showDescToolbar={showDescToolbar}
+          descRef={descRef}
+          setDescRef={setDescRef}
+          descToolbarRef={descToolbarRef}
+          showDescColorPicker={showDescColorPicker}
+          setShowDescColorPicker={setShowDescColorPicker}
+          selectedDescColor={selectedDescColor}
+          setSelectedDescColor={setSelectedDescColor}
+          quickColors={quickColors}
+          activeDescSubToolbar={activeDescSubToolbar}
+          setActiveDescSubToolbar={setActiveDescSubToolbar}
+          setShowDescToolbar={setShowDescToolbar}
+          setShowNameToolbar={setShowNameToolbar}
+          setShowNameColorPicker={setShowNameColorPicker}
+          setActiveNameSubToolbar={setActiveNameSubToolbar}
+          onUpdateProduct={onUpdateProduct}
+        />
         
         {/* Editable Price */}
-        <div className="text-xl font-extrabold mt-auto">
-          <div className="flex items-center justify-center gap-3">
-            {discountedPrice !== null ? (
-              <>
-                <span className={`text-2xl font-extrabold ${priceTextColor}`}>
-                  ${discountedPrice.toFixed(2)}
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-500 line-through">
-                    ${product.price.toFixed(2)}
-                  </span>
-                  <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded">
-                    {discountDisplay}
-                  </span>
-                </span>
-              </>
-            ) : (
-              <span className={`text-2xl font-extrabold ${priceTextColor}`}>
-                ${product.price.toFixed(2)}
-              </span>
-            )}
-          </div>
-        </div>
+        <ProductPriceSection
+          product={product}
+          discountedPrice={discountedPrice}
+          discountDisplay={discountDisplay ?? null}
+          priceTextColor={priceTextColor}
+        />
 
         {/* Button / Inline Button Text Editor */}
-        {isEditorView && inlineButtonEditing ? (
-          <input
-            type="text"
-            defaultValue={buttonText}
-            onChange={(e) => onInlineButtonSave && onInlineButtonSave(e.target.value)}
-            onBlur={() => onInlineButtonEnd && onInlineButtonEnd()}
-            className="w-full max-w-48 mx-auto py-2 px-3 rounded-full bg-gray-900 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-center font-bold uppercase tracking-wider"
-          />
-        ) : (
-          <button 
-            className={`w-full max-w-48 py-1.5 px-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.03] ${buttonBaseClass} shadow-xl ring-2 ring-offset-2 ring-offset-white mx-auto`}
-            onClick={(e) => { 
-              console.log('🔵 [ProductCard] Button clicked:', {
-                productId: product.id,
-                productName: product.name,
-                isEditorView,
-                hasOnOpenEditor: !!onOpenEditor,
-                hasButtonLink: !!product.buttonLink,
-                buttonLink: product.buttonLink,
-                buttonText: buttonText,
-                productType: product.type,
-                hasStorageUrl: !!product.storageUrl,
-                buttonLinkType: product.buttonLink ? (product.buttonLink.startsWith('http') ? 'external' : 'relative') : 'none',
-              });
-              
-              if (isEditorView && onOpenEditor) { 
-                console.log('🔵 [ProductCard] Editor view - opening editor for button');
-                e.stopPropagation(); 
-                onOpenEditor(product.id, 'button'); 
-              } else if (product.type === "FILE" && onOpenProductPage) {
-                // For FILE type products, open ProductPageModal
-                console.log('🔵 [ProductCard] Opening ProductPageModal for FILE type product');
-                e.stopPropagation();
-                onOpenProductPage(product);
-              } else if (product.buttonLink) {
-                console.log('🔵 [ProductCard] Redirecting to buttonLink:', product.buttonLink);
-                // Redirect to the specified link
-                if (product.buttonLink.startsWith('http')) {
-                  console.log('🔵 [ProductCard] Opening external link in new tab:', product.buttonLink);
-                  window.open(product.buttonLink, '_blank');
-                } else {
-                  console.log('🔵 [ProductCard] Navigating to relative path:', product.buttonLink);
-                  window.location.href = product.buttonLink;
-                }
-              } else {
-                console.warn('🔵 [ProductCard] No buttonLink found - button click does nothing. Product:', {
-                  id: product.id,
-                  name: product.name,
-                  hasButtonLink: !!product.buttonLink,
-                  productType: product.type,
-                  fullProduct: product
-                });
-              }
-            }}
-            dangerouslySetInnerHTML={{ __html: buttonText || 'VIEW DETAILS' }}
-          >
-          </button>
-        )}
+        <ProductButtonSection
+          product={product}
+          isEditorView={isEditorView}
+          inlineButtonEditing={inlineButtonEditing ?? undefined}
+          buttonText={buttonText}
+          buttonBaseClass={buttonBaseClass}
+          productPromoCode={productPromoCode ?? undefined}
+          onOpenEditor={onOpenEditor}
+          onInlineButtonSave={onInlineButtonSave}
+          onInlineButtonEnd={onInlineButtonEnd}
+          onOpenProductPage={onOpenProductPage}
+        />
       </div>
     </div>
     </div>

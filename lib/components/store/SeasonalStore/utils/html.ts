@@ -83,4 +83,50 @@ export const stripInlineColorTags = (value: string): string => {
   return sanitized;
 };
 
+/**
+ * Truncates HTML content to approximately 2 lines (120 characters by default).
+ * Strips HTML tags for length calculation and truncates at word/sentence boundaries.
+ */
+export const truncateHTMLToTwoLines = (html: string, maxLength: number = 120): string => {
+  if (!html) return html;
+  
+  // Strip HTML tags to get plain text length
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  const plainText = tempDiv.textContent || tempDiv.innerText || '';
+  
+  if (plainText.length <= maxLength) {
+    return html;
+  }
+  
+  // If content is too long, truncate at word boundary
+  const truncated = plainText.substring(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastExclamation = truncated.lastIndexOf('!');
+  const lastQuestion = truncated.lastIndexOf('?');
+  
+  // Prefer sentence boundary, then word boundary
+  const sentenceEnd = Math.max(lastPeriod, lastExclamation, lastQuestion);
+  const truncateAt = sentenceEnd > maxLength - 30 && sentenceEnd > 0 
+    ? sentenceEnd + 1 
+    : (lastSpace > maxLength - 20 && lastSpace > 0 ? lastSpace : maxLength);
+  
+  const truncatedText = plainText.substring(0, truncateAt).trim();
+  
+  // If original had HTML, preserve the first opening tag structure
+  if (html.includes('<')) {
+    // Extract first tag if it exists
+    const firstTagMatch = html.match(/^<[^>]+>/);
+    if (firstTagMatch) {
+      const tagName = firstTagMatch[0].match(/<(\w+)/)?.[1];
+      if (tagName) {
+        return `${firstTagMatch[0]}${truncatedText}</${tagName}>`;
+      }
+    }
+  }
+  
+  return truncatedText;
+};
+
 

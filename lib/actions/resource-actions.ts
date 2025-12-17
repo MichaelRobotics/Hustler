@@ -1,9 +1,10 @@
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
-import { funnelResources, funnels, resources } from "../supabase/schema";
+import { funnelResources, funnels, resources, plans } from "../supabase/schema";
 import { GLOBAL_LIMITS } from "../types/resource";
 import { whopSdk } from "../whop-sdk";
+import { createPlanFromCheckoutConfiguration } from "./plan-actions";
 
 export interface CreateResourceInput {
 	name: string;
@@ -19,6 +20,9 @@ export interface CreateResourceInput {
 	storageUrl?: string; // Link that triggers digital asset upload
 	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
 	displayOrder?: number; // Order for displaying resources in Market Stall
+	planId?: string; // Whop plan ID (for products with plans)
+	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
+	checkoutConfigurationId?: string; // Checkout configuration ID (for resources created via checkout)
 }
 
 export interface UpdateResourceInput {
@@ -34,6 +38,9 @@ export interface UpdateResourceInput {
 	storageUrl?: string; // Link that triggers digital asset upload
 	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
 	displayOrder?: number; // Order for displaying resources in Market Stall
+	planId?: string; // Whop plan ID (for products with plans)
+	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
+	checkoutConfigurationId?: string; // Checkout configuration ID (for resources created via checkout)
 }
 
 export interface ResourceWithFunnels {
@@ -48,6 +55,9 @@ export interface ResourceWithFunnels {
 	whopProductId?: string;
 	productApps?: any; // JSON field for product apps data
 	price?: string; // Price from access pass plan or user input
+	planId?: string; // Whop plan ID (for products with plans)
+	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
+	checkoutConfigurationId?: string; // Checkout configuration ID (for resources created via checkout)
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
 	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
@@ -146,6 +156,70 @@ export async function createResource(
 			displayOrderValue = maxOrder + 1;
 		}
 
+		// Handle checkout configuration creation for PAID resources without product connection
+		let checkoutConfigurationId: string | null = null;
+		let planId: string | null = null;
+		let purchaseUrl: string | null = null;
+		let finalPrice: string | null = input.price || null;
+		let checkoutConfig: any = null;
+
+		// Only create checkout configuration for FILE type PAID resources without product connection
+		// LINK type resources don't need plans
+		if (input.category === "PAID" && input.type === "FILE" && !input.whopProductId && !input.planId) {
+			try {
+				// Create checkout configuration using Whop Client SDK (@whop/sdk)
+				// The server SDK doesn't have checkoutConfigurations, so we use the client SDK
+				const Whop = (await import('@whop/sdk')).default;
+				const client = new Whop({
+					apiKey: process.env.WHOP_API_KEY!,
+					appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
+				});
+
+				// Build plan object - for standalone paid resources, we need a one-time payment plan
+				// Price (initial_price) is required and planType is hardcoded to 'one_time'
+				if (!input.price) {
+					throw new Error("Price is required for paid resources");
+				}
+
+				const planData: any = {
+					company_id: user.experience.whopCompanyId,
+					currency: 'usd',
+					planType: 'one_time', // Hardcoded to one-time payment
+					initial_price: parseFloat(input.price), // Required
+					title: input.name, // Use resource name as plan title
+					description: input.description || null, // Use resource description as plan description
+				};
+
+				checkoutConfig = await client.checkoutConfigurations.create({
+					plan: planData as any,
+				});
+
+				// Extract data from checkout configuration
+				checkoutConfigurationId = checkoutConfig.id;
+				planId = checkoutConfig.plan.id;
+				purchaseUrl = checkoutConfig.purchase_url || null;
+				
+				// Use initial_price or renewal_price from the plan response
+				const planPrice = checkoutConfig.plan.initial_price || checkoutConfig.plan.renewal_price;
+				if (planPrice) {
+					finalPrice = planPrice.toString();
+				} else if (input.price) {
+					// Fallback to input price if plan doesn't return price
+					finalPrice = input.price;
+				}
+			} catch (error) {
+				console.error("Error creating checkout configuration:", error);
+				throw new Error("Failed to create checkout configuration for paid resource");
+			}
+		} else if (input.planId) {
+			// If planId is provided (from plan selection), use it
+			planId = input.planId;
+			purchaseUrl = input.purchaseUrl || null;
+		} else if (input.checkoutConfigurationId) {
+			// If checkoutConfigurationId is provided, use it
+			checkoutConfigurationId = input.checkoutConfigurationId;
+		}
+
 		// Create the resource
 		const [newResource] = await db
 			.insert(resources)
@@ -160,13 +234,26 @@ export async function createResource(
 				description: input.description || null,
 				whopProductId: input.whopProductId || null,
 				productApps: input.productApps || null,
-				price: input.price || null,
+				price: finalPrice,
+				planId: planId,
+				purchaseUrl: purchaseUrl,
+				checkoutConfigurationId: checkoutConfigurationId,
 				image: input.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
 				storageUrl: input.storageUrl || null,
 				productImages: input.productImages && input.productImages.length > 0 ? input.productImages : null,
 				displayOrder: displayOrderValue,
 			})
 			.returning();
+
+		// Create plan record if checkout configuration was created
+		if (checkoutConfig && checkoutConfigurationId && planId) {
+			try {
+				await createPlanFromCheckoutConfiguration(checkoutConfig, newResource.id);
+			} catch (error) {
+				console.error("Error creating plan from checkout configuration:", error);
+				// Don't throw - resource is already created
+			}
+		}
 
 		// Return resource with empty funnels array
 		return {
@@ -180,6 +267,9 @@ export async function createResource(
 			description: newResource.description || undefined,
 			whopProductId: newResource.whopProductId || undefined,
 			price: newResource.price || undefined,
+			planId: newResource.planId || undefined,
+			purchaseUrl: newResource.purchaseUrl || undefined,
+			checkoutConfigurationId: newResource.checkoutConfigurationId || undefined,
 			image: newResource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
 			storageUrl: newResource.storageUrl || undefined,
 			productImages: Array.isArray(newResource.productImages) ? newResource.productImages : undefined,
@@ -240,6 +330,9 @@ export async function getResourceById(
 			storageUrl: resource.storageUrl || undefined,
 			productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined,
 			price: resource.price || undefined,
+			planId: resource.planId || undefined,
+			purchaseUrl: resource.purchaseUrl || undefined,
+			checkoutConfigurationId: resource.checkoutConfigurationId || undefined,
 			displayOrder: resource.displayOrder ?? undefined,
 			createdAt: resource.createdAt,
 			updatedAt: resource.updatedAt,
@@ -346,6 +439,9 @@ export async function getResources(
 					storageUrl: resource.storageUrl || undefined,
 					productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined,
 					price: resource.price || undefined,
+					planId: resource.planId || undefined,
+					purchaseUrl: resource.purchaseUrl || undefined,
+					checkoutConfigurationId: resource.checkoutConfigurationId || undefined,
 					displayOrder: resource.displayOrder ?? undefined,
 					createdAt: resource.createdAt,
 					updatedAt: resource.updatedAt,
@@ -451,6 +547,9 @@ export async function updateResource(
 					? (input.productImages && input.productImages.length > 0 ? input.productImages : null)
 					: existingResource.productImages,
 				price: input.price !== undefined ? input.price : existingResource.price,
+				planId: input.planId !== undefined ? input.planId : existingResource.planId,
+				purchaseUrl: input.purchaseUrl !== undefined ? input.purchaseUrl : existingResource.purchaseUrl,
+				checkoutConfigurationId: input.checkoutConfigurationId !== undefined ? input.checkoutConfigurationId : existingResource.checkoutConfigurationId,
 				displayOrder: input.displayOrder !== undefined ? input.displayOrder : existingResource.displayOrder,
 				updatedAt: new Date(),
 			})

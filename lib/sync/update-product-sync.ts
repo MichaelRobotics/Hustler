@@ -8,10 +8,11 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
-import { experiences, resources, users } from "../supabase/schema";
+import { experiences, resources, users, plans } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct, type WhopApp } from "../whop-api-client";
 import { updateOriginTemplateFromProduct, shouldUpdateOriginTemplate, shouldCreateOriginTemplate, createOriginTemplateFromProduct } from "../services/origin-template-service";
 import { whopSdk } from "../whop-sdk";
+import { upsertPlansForProduct, ensurePlansExistForProduct } from "../actions/plan-actions";
 
 export interface ProductChange {
   type: 'created' | 'updated' | 'deleted';
@@ -180,6 +181,46 @@ export class UpdateProductSync {
           result.summary.deleted++;
         }
       });
+
+      // Check for missing plans for products (prod_*)
+      // This ensures resources with products have their plans synced
+      // Check both: products from API and resources in DB
+      console.log(`[UPDATE-SYNC] 🔍 Checking for missing plans in resources with products...`);
+      
+      // Get all resources with products (prod_*) from database
+      const resourcesWithProducts = currentResources.filter(
+        (r: any) => r.whopProductId?.startsWith('prod_') ?? false
+      );
+
+      const missingPlansCheckPromises = resourcesWithProducts.map(async (resource: any) => {
+        const productId = resource.whopProductId;
+        if (!productId) return;
+
+        try {
+          // Try to get product data from API response first
+          const productFromApi = whopProductsMap.get(productId);
+          
+          // Use consolidated helper to check and sync plans
+          const result = await ensurePlansExistForProduct(
+            productId,
+            resource.id,
+            user.experience.id,
+            productFromApi?.plans,
+          );
+          
+          if (result.synced) {
+            console.log(`[UPDATE-SYNC] ⚠️ Synced ${result.planCount} plans for product ${productId} (resource ${resource.id})`);
+          } else {
+            console.log(`[UPDATE-SYNC] ✅ Plans already exist for product ${productId} (${result.planCount} plans found)`);
+          }
+        } catch (error) {
+          console.error(`[UPDATE-SYNC] Error checking/syncing plans for product ${productId}:`, error);
+          // Don't throw - continue with other products
+        }
+      });
+
+      await Promise.all(missingPlansCheckPromises);
+      console.log(`[UPDATE-SYNC] ✅ Completed missing plans check for ${resourcesWithProducts.length} products`);
 
       result.summary.total = result.changes.length;
       result.hasChanges = result.summary.total > 0;

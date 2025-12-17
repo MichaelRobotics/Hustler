@@ -28,6 +28,12 @@ export interface Product {
   promoLimitQuantity?: number; // Limit amount of sold products on discounted price
   promoShowFireIcon?: boolean; // Show red fire icon + "X left" text on right corner
   promoQuantityLeft?: number; // Track remaining quantity (calculated from limit - sold)
+  promoScope?: 'product' | 'plan'; // Whether promo applies to product or plan
+  promoCodeId?: string; // ID of selected promo code from database
+  promoCode?: string; // Promo code string (saved to template for display)
+  promoDurationType?: 'one-time' | 'forever' | 'duration_months'; // Discount duration type
+  promoDurationMonths?: number; // Duration in months (when duration_months selected)
+  checkoutConfigurationId?: string; // Checkout configuration ID (if checkout-only)
   salesCount?: number;
   showSalesCount?: boolean;
   starRating?: number;
@@ -155,6 +161,10 @@ export interface DiscountSettings {
   endDate: string;
   discountText: string;
   promoCode: string;
+  durationType?: 'one-time' | 'forever' | 'duration_months';
+  durationMonths?: number;
+  quantityPerProduct?: number;
+  seasonalDiscountId?: string; // ID linking to experience seasonal discount
   prePromoMessages: DiscountMessage[];
   activePromoMessages: DiscountMessage[];
 }

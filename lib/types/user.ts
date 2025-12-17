@@ -21,6 +21,7 @@ export interface AuthenticatedUser {
 		description?: string;
 		logo?: string;
 		link?: string;
+		subscription?: "Basic" | "Pro" | "Vip" | null;
 	};
 }
 

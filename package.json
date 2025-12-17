@@ -55,7 +55,7 @@
 		"@whop-apps/sdk": "0.0.1-canary.117",
 		"@whop/api": "^0.0.51",
 		"@whop/react": "0.2.36",
-		"@whop/sdk": "^0.0.2",
+		"@whop/sdk": "^0.0.19",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"dotenv": "^17.2.2",

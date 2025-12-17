@@ -8,8 +8,9 @@
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
-import { experiences, resources, users } from "../supabase/schema";
+import { experiences, resources, users, plans } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct } from "../whop-api-client";
+import { upsertPlansForProduct, ensurePlansExistForProduct, getPlansForProduct } from "../actions/plan-actions";
 
 export interface WhopProduct {
 	id: string;
@@ -24,6 +25,11 @@ export interface WhopProduct {
 		price: number;
 		currency: string;
 		title?: string;
+		plan_type?: string;
+		initial_price?: number;
+		renewal_price?: number;
+		billing_period?: number | null;
+		purchase_url?: string;
 	}>;
 	visibility: 'archived' | 'hidden' | 'quick_link' | 'visible';
 	status: "active" | "inactive" | "draft";
@@ -199,18 +205,91 @@ export class WhopProductSync {
 						.set(resourceData)
 						.where(eq(resources.id, existingResource.id));
 
+					// Sync plans for products (prod_*)
+					if (whopProduct.id.startsWith('prod_')) {
+						try {
+							console.log(`[PRODUCT-SYNC] Syncing plans for product ${whopProduct.id} (update), plans count: ${whopProduct.plans?.length || 0}`);
+							await upsertPlansForProduct(
+								whopProduct.id,
+								existingResource.id,
+								user.experience.id,
+								whopProduct.plans,
+							);
+						} catch (error) {
+							console.error(`[PRODUCT-SYNC] Error syncing plans for product ${whopProduct.id}:`, error);
+							// Don't throw - product sync succeeded even if plan sync failed
+						}
+					}
+
 					return { created: false, updated: true };
+				}
+
+				// Resource doesn't need update, but check if plans exist
+				// If product has whopProductId starting with "prod_", verify plans exist in DB
+				if (whopProduct.id.startsWith('prod_')) {
+					try {
+						const result = await ensurePlansExistForProduct(
+							whopProduct.id,
+							existingResource.id,
+							user.experience.id,
+							whopProduct.plans,
+						);
+						if (result.synced) {
+							console.log(`[PRODUCT-SYNC] Synced ${result.planCount} plans for product ${whopProduct.id}`);
+						} else {
+							console.log(`[PRODUCT-SYNC] Plans already exist for product ${whopProduct.id} (${result.planCount} plans found)`);
+						}
+					} catch (error) {
+						console.error(`[PRODUCT-SYNC] Error checking/syncing plans for product ${whopProduct.id}:`, error);
+						// Don't throw - product sync succeeded even if plan sync failed
+					}
 				}
 
 				return { created: false, updated: false };
 			} else {
 				// Create new resource
-				await db.insert(resources).values({
+				const [newResource] = await db.insert(resources).values({
 					...resourceData,
 					experienceId: user.experience.id, // Use database UUID
 					userId: user.id,
 					createdAt: new Date(),
-				});
+				}).returning();
+
+				// Sync plans for products (prod_*)
+				if (whopProduct.id.startsWith('prod_')) {
+					try {
+						console.log(`[PRODUCT-SYNC] Syncing plans for product ${whopProduct.id}, plans count: ${whopProduct.plans?.length || 0}`);
+						await upsertPlansForProduct(
+							whopProduct.id,
+							newResource.id,
+							user.experience.id,
+							whopProduct.plans,
+						);
+						
+						// Set default plan (lowest price) after syncing
+						const productPlans = await getPlansForProduct(whopProduct.id, user.experience.id);
+						if (productPlans.length > 0) {
+							const lowestPricePlan = productPlans.reduce((lowest, plan) => {
+								const lowestPrice = parseFloat(lowest.initialPrice || lowest.renewalPrice || "999999");
+								const currentPrice = parseFloat(plan.initialPrice || plan.renewalPrice || "999999");
+								return currentPrice < lowestPrice ? plan : lowest;
+							});
+							
+							// Update resource with default plan
+							await db.update(resources)
+								.set({
+									planId: lowestPricePlan.planId,
+									purchaseUrl: lowestPricePlan.purchaseUrl || null,
+									price: lowestPricePlan.initialPrice || lowestPricePlan.renewalPrice || null,
+								})
+								.where(eq(resources.id, newResource.id));
+							console.log(`[PRODUCT-SYNC] Set default plan ${lowestPricePlan.planId} for resource ${newResource.id}`);
+						}
+					} catch (error) {
+						console.error(`[PRODUCT-SYNC] Error syncing plans for product ${whopProduct.id}:`, error);
+						// Don't throw - product sync succeeded even if plan sync failed
+					}
+				}
 
 				return { created: true, updated: false };
 			}

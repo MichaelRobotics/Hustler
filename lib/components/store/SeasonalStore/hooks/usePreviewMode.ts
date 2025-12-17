@@ -21,6 +21,7 @@ interface UsePreviewModeProps {
     logoAttachmentId: string | null;
     logoAttachmentUrl: string | null;
     promoButton: any;
+    discountSettings: any;
   };
 }
 

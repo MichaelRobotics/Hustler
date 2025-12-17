@@ -48,13 +48,17 @@ export const useResourceValidation = (): ValidationActions => {
     }
 
     // Price validation for paid products
+    // For resources with whopProductId, skip $5 minimum (price comes from Whop plans)
     if (resource.category === 'PAID') {
       if (!resource.price?.trim()) {
         errors.push('Price is required for paid products');
       } else {
         const price = parseFloat(resource.price);
-        if (price < 5 || price > 50000) {
-          errors.push('Price must be between $5 and $50,000');
+        const minPrice = resource.whopProductId ? 0 : 5;
+        if (price < minPrice || price > 50000) {
+          errors.push(resource.whopProductId 
+            ? 'Price must be between $0 and $50,000'
+            : 'Price must be between $5 and $50,000');
         }
       }
     }

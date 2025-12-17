@@ -9,6 +9,8 @@ import { eq, and } from 'drizzle-orm';
 import { getWhopApiClient } from '@/lib/whop-api-client';
 import { whopSdk } from '@/lib/whop-sdk';
 import type { AuthenticatedUser } from '@/lib/context/user-context';
+import { upsertPlansForProduct, getPlansForProduct } from '@/lib/actions/plan-actions';
+import { updateResource } from '@/lib/actions/resource-actions';
 
 /**
  * Apply specific changes detected by update sync
@@ -39,11 +41,11 @@ async function applySpecificChanges(user: AuthenticatedUser, syncResult: UpdateS
     for (const change of syncResult.changes) {
       try {
         if (change.type === 'created') {
-          // Create new resource
+          // Create new resource (plan sync is handled inside createResourceFromWhop)
           await createResourceFromWhop(user, whopClient, change.whopProductId, allApps, allProducts);
           result.created++;
         } else if (change.type === 'updated') {
-          // Update existing resource
+          // Update existing resource (plan sync is handled inside updateResourceFromWhop)
           await updateResourceFromWhop(user, whopClient, change.whopProductId, allApps, allProducts);
           result.updated++;
         } else if (change.type === 'deleted') {
@@ -244,6 +246,54 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   });
   console.log(`[API] ✅ Created resource with link: ${resource.link}`);
   
+  // Sync plans for products (prod_*)
+  if (whopProductId.startsWith('prod_')) {
+    try {
+      console.log(`[API] Syncing plans for product ${whopProductId}, plans count: ${product.plans?.length || 0}`);
+      await upsertPlansForProduct(
+        whopProductId,
+        resource.id,
+        user.experience.id,
+        product.plans,
+      );
+      
+      // After plans are synced, set default plan (lowest price)
+      const productPlans = await getPlansForProduct(whopProductId, user.experience.id);
+      if (productPlans.length > 0) {
+        // Helper function to get effective price for a plan
+        const getEffectivePrice = (plan: any) => {
+          if (plan.planType === 'renewal' && plan.renewalPrice && parseFloat(plan.renewalPrice) !== 0) {
+            return parseFloat(plan.renewalPrice);
+          }
+          return parseFloat(plan.initialPrice || "999999");
+        };
+        
+        // Find plan with lowest price
+        const lowestPricePlan = productPlans.reduce((lowest: any, plan: any) => {
+          const lowestPrice = getEffectivePrice(lowest);
+          const currentPrice = getEffectivePrice(plan);
+          return currentPrice < lowestPrice ? plan : lowest;
+        });
+        
+        // Determine the price to use for the resource
+        const resourcePrice = lowestPricePlan.planType === 'renewal' && lowestPricePlan.renewalPrice && parseFloat(lowestPricePlan.renewalPrice) !== 0
+          ? lowestPricePlan.renewalPrice
+          : (lowestPricePlan.initialPrice || undefined);
+        
+        // Update resource with default plan
+        await updateResource(user, resource.id, {
+          planId: lowestPricePlan.planId,
+          purchaseUrl: lowestPricePlan.purchaseUrl || undefined,
+          price: resourcePrice,
+        });
+        console.log(`[API] Set default plan ${lowestPricePlan.planId} for resource ${resource.id}`);
+      }
+    } catch (error) {
+      console.error(`[API] Error syncing plans for product ${whopProductId}:`, error);
+      // Don't throw - resource creation succeeded even if plan sync failed
+    }
+  }
+  
   return resource;
 }
 
@@ -401,6 +451,22 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     .where(eq(resources.id, existingResource.id));
   
   console.log(`[API] Resource update result:`, updateResult);
+  
+  // Sync plans for products (prod_*)
+  if (whopProductId.startsWith('prod_')) {
+    try {
+      console.log(`[API] Syncing plans for product ${whopProductId} (update), plans count: ${product.plans?.length || 0}`);
+      await upsertPlansForProduct(
+        whopProductId,
+        existingResource.id,
+        user.experience.id,
+        product.plans,
+      );
+    } catch (error) {
+      console.error(`[API] Error syncing plans for product ${whopProductId}:`, error);
+      // Don't throw - resource update succeeded even if plan sync failed
+    }
+  }
   
   return existingResource;
 }
