@@ -37,6 +37,8 @@ interface ProductShowcaseProps {
     endDate: string;
     promoCode?: string; // Promo code for seasonal discount
   };
+  discountStatus?: 'active' | 'approaching' | 'expired' | 'non-existent'; // Discount status from database
+  seasonalDiscountId?: string; // Seasonal discount ID to match against product's discount
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;
   onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
@@ -65,6 +67,8 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   handleDropOnProduct,
   openProductEditor,
   discountSettings,
+  discountStatus,
+  seasonalDiscountId,
   getThemeQuickColors,
   backgroundUrl,
   onOpenProductPage,
@@ -260,6 +264,8 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   onDropAsset={(e) => handleDropOnProduct(product.id, e)}
                   onOpenEditor={(id, target) => openProductEditor(id, target)}
                   discountSettings={discountSettings}
+                  discountStatus={discountStatus}
+                  seasonalDiscountId={seasonalDiscountId}
                   getThemeQuickColors={getThemeQuickColors}
                   backgroundUrl={backgroundUrl}
                   onOpenProductPage={onOpenProductPage}

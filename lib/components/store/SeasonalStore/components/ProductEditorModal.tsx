@@ -12,6 +12,7 @@ import type { DiscountSettings } from '../types';
 import { ProductPageModal } from './ProductPageModal';
 import type { LegacyTheme } from '../types';
 import { apiPost, apiGet } from '@/lib/utils/api-client';
+import { removeProductPromoData } from '../utils/discountHelpers';
 import { 
   FormattingToolbar, 
   BadgeSelector, 
@@ -111,6 +112,11 @@ interface ProductEditorModalProps {
   lastSavedSnapshot?: string | null;
   experienceId?: string; // Experience ID for API calls
   onProductUpdated?: () => void; // Callback to trigger template auto-save after product update
+  // Template management props
+  templates?: any[]; // All templates
+  setTemplates?: (templates: any[] | ((prev: any[]) => any[])) => void;
+  updateCachedTemplates?: (updater: (prev: Map<string, any>) => Map<string, any>) => void;
+  updateTemplate?: (templateId: string, updates: { templateData?: any }) => Promise<any>;
 }
 
 export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
@@ -132,6 +138,10 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   lastSavedSnapshot = null,
   experienceId,
   onProductUpdated,
+  templates,
+  setTemplates,
+  updateCachedTemplates,
+  updateTemplate,
 }) => {
   // Refs for inline editing focus
   
@@ -224,6 +234,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   // Track if we've initiated promo loading (to prevent flicker)
   const [hasInitiatedPromoLoad, setHasInitiatedPromoLoad] = useState(false);
   
+  // Track if promo deletion is in progress
+  const [isDeletingPromo, setIsDeletingPromo] = useState(false);
+  
   // Reset flag when modal closes, resource changes, or seasonal discount status changes to expired/none
   useEffect(() => {
     if (!isOpen) {
@@ -303,6 +316,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   
   // State for promo creation and loaded data
   const [isCreatingPromo, setIsCreatingPromo] = useState(false);
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false); // Track when API call is in progress
   const [generatedPromoName, setGeneratedPromoName] = useState<string>('');
   const [selectedPromoData, setSelectedPromoData] = useState<{
     code: string;
@@ -711,6 +725,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       return;
     }
 
+    setIsDeletingPromo(true);
     try {
       const response = await apiPost(
         '/api/promos/delete',
@@ -732,23 +747,143 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       setIsPromoDataLoaded(false);
       setHasDiscountSelected(false);
 
-      // Update product to remove promo references
-      if (productEditor.productId !== null) {
+      // Update product to remove ALL promo data - explicitly set all promo fields to undefined
+      if (productEditor.productId !== null && currentProduct) {
         updateProduct(productEditor.productId, {
-          promoCodeId: undefined,
           promoCode: undefined,
+          promoCodeId: undefined,
+          promoDiscountType: undefined,
+          promoDiscountAmount: undefined,
+          promoLimitQuantity: undefined,
+          promoQuantityLeft: undefined,
+          promoShowFireIcon: undefined,
+          promoScope: undefined,
+          promoDurationType: undefined,
+          promoDurationMonths: undefined,
         });
       }
 
-      // Refresh available promos by resetting the scope (which will trigger useEffect to refetch)
-      // The useEffect for fetching promos will automatically refresh
+      // Remove deleted promo from availablePromoCodes list
+      setAvailablePromoCodes(prev => prev.filter(p => p.id !== localPromoCodeId));
+
+      // Remove promo from all templates that have products with this promoCodeId
+      if (templates && setTemplates && updateCachedTemplates && updateTemplate) {
+        try {
+          // Prepare cleaned templates - only remove promo data from products with matching promoCodeId
+          const cleanedTemplates = templates.map(template => {
+            const cleanedTemplateProducts = (template.templateData?.products || []).map((product: Product) => {
+              // Only clean products that have the deleted promoCodeId
+              if (product.promoCodeId === localPromoCodeId) {
+                // Explicitly set all promo fields to undefined to ensure they're removed
+                return {
+                  ...product,
+                  promoCode: undefined,
+                  promoCodeId: undefined,
+                  promoDiscountType: undefined,
+                  promoDiscountAmount: undefined,
+                  promoLimitQuantity: undefined,
+                  promoQuantityLeft: undefined,
+                  promoShowFireIcon: undefined,
+                  promoScope: undefined,
+                  promoDurationType: undefined,
+                  promoDurationMonths: undefined,
+                };
+              }
+              return product; // Keep other products unchanged
+            });
+            
+            // Only update template if it has products with the deleted promo
+            const hasProductsWithPromo = cleanedTemplateProducts.some((p: Product, index: number) => {
+              const originalProduct = (template.templateData?.products || [])[index];
+              return originalProduct?.promoCodeId === localPromoCodeId;
+            });
+            
+            if (hasProductsWithPromo) {
+              return {
+                ...template,
+                templateData: {
+                  ...template.templateData,
+                  products: cleanedTemplateProducts,
+                },
+              };
+            }
+            return template; // No changes needed
+          });
+
+          // Filter to only templates that actually have changes
+          const templatesWithChanges = cleanedTemplates.filter(template => {
+            const originalTemplate = templates.find(t => t.id === template.id);
+            if (originalTemplate) {
+              const originalProducts = originalTemplate.templateData?.products || [];
+              return originalProducts.some((p: Product) => p.promoCodeId === localPromoCodeId);
+            }
+            return false;
+          });
+          
+          if (templatesWithChanges.length > 0) {
+            // Update templates in local state immediately for UI responsiveness
+            setTemplates(prev => prev.map(template => {
+              const updatedTemplate = templatesWithChanges.find(t => t.id === template.id);
+              return updatedTemplate || template;
+            }));
+
+            // Update templates in cache immediately
+            updateCachedTemplates(prev => {
+              const newCache = new Map(prev);
+              templatesWithChanges.forEach(template => {
+                // Get the original template from cache to preserve all properties
+                const originalTemplate = prev.get(template.id);
+                if (originalTemplate) {
+                  // Update only the templateData while preserving other properties
+                  newCache.set(template.id, {
+                    ...originalTemplate,
+                    templateData: template.templateData,
+                  } as any);
+                } else {
+                  // If not in cache, use the template as-is
+                  newCache.set(template.id, template as any);
+                }
+              });
+              return newCache;
+            });
+
+            // Save all affected templates to database
+            // Note: updateTemplate will also update state and cache, but that's fine (idempotent)
+            console.log(`💾 Saving ${templatesWithChanges.length} cleaned templates to database after promo delete`);
+            const savePromises = templatesWithChanges.map(template => 
+              updateTemplate(template.id, {
+                templateData: template.templateData,
+              }).catch(error => {
+                console.warn(`⚠️ Failed to save template ${template.id} to database:`, error);
+                // Continue with other templates even if one fails
+                return null;
+              })
+            );
+
+            await Promise.all(savePromises);
+            console.log('✅ All templates saved to database after promo delete');
+          }
+        } catch (error) {
+          console.error('⚠️ Error removing promo from templates:', error);
+          // Don't block the delete operation if template update fails
+        }
+      }
+
+      // Trigger template auto-save callback
+      if (onProductUpdated) {
+        setTimeout(() => {
+          onProductUpdated();
+        }, 100);
+      }
 
       console.log('✅ Promo deleted successfully');
     } catch (error) {
       console.error('Error deleting promo:', error);
       alert('Failed to delete promo. Please try again.');
+    } finally {
+      setIsDeletingPromo(false);
     }
-  }, [localPromoCodeId, experienceId, apiPost, productEditor.productId, updateProduct]);
+  }, [localPromoCodeId, experienceId, apiPost, productEditor.productId, currentProduct, updateProduct, onProductUpdated, templates, setTemplates, updateCachedTemplates, updateTemplate]);
 
   // Handle applying existing promo to template (without creating new promo)
   const handleApplyExistingPromo = useCallback(() => {
@@ -890,6 +1025,34 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     }
   }, [discountSettings?.promoCode, localPromoDiscountType, localPromoDiscountAmount, generatePromoName, hasDiscountSelected]);
 
+  // Helper function to find an available promo code
+  const findAvailablePromoCode = useCallback((baseCode: string, existingCodes: Set<string>): string => {
+    // If base code doesn't exist, use it
+    if (!existingCodes.has(baseCode)) {
+      return baseCode;
+    }
+
+    // Try appending letters A-Z
+    for (let i = 0; i < 26; i++) {
+      const letter = String.fromCharCode(65 + i); // A-Z
+      const candidateCode = baseCode + letter;
+      if (!existingCodes.has(candidateCode)) {
+        return candidateCode;
+      }
+    }
+
+    // If all letters are taken, try numbers (A1, A2, etc.)
+    for (let i = 1; i <= 99; i++) {
+      const candidateCode = baseCode + 'A' + i;
+      if (!existingCodes.has(candidateCode)) {
+        return candidateCode;
+      }
+    }
+
+    // Fallback: return base code with timestamp (shouldn't reach here)
+    return baseCode + Date.now().toString().slice(-4);
+  }, []);
+
   // Handle Apply Promo
   const handleApplyPromo = useCallback(async () => {
     // Validate required fields before creating promo
@@ -921,6 +1084,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     }
 
     setDiscountValidationError(null);
+    
+    // Set loading state for create operation (API call in progress)
+    setIsApplyingPromo(true);
     
     // Update generated name if discount type/amount changed
     // This ensures generatedPromoName is always up-to-date before creating the promo
@@ -976,6 +1142,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       
       // Exit creation mode
       setIsCreatingPromo(false);
+      setIsApplyingPromo(false);
       setGeneratedPromoName('');
       return;
     }
@@ -1017,6 +1184,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       
       // Exit creation mode
       setIsCreatingPromo(false);
+      setIsApplyingPromo(false);
       setGeneratedPromoName('');
       return; // Exit early, skip API call
     }
@@ -1071,7 +1239,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
 
       // Use the current generatedPromoName (which may have been updated above)
       // Ensure we have a valid promo code name - this should always be set by the useEffect above
-      const promoCodeToUse = generatedPromoName;
+      let promoCodeToUse = generatedPromoName;
       if (!promoCodeToUse) {
         console.error('Cannot apply promo: generatedPromoName is missing', {
           generatedPromoName,
@@ -1081,6 +1249,36 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
         });
         setDiscountValidationError('Promo code name is required. Please ensure discount settings are configured.');
         return;
+      }
+
+      // Check for existing promo codes before creating
+      try {
+        const listResponse = await apiPost(
+          '/api/promos/list-by-company',
+          { experienceId },
+          experienceId
+        );
+
+        if (listResponse.ok) {
+          const listData = await listResponse.json();
+          const existingCodes = new Set<string>((listData.promos || []).map((p: string) => p.toUpperCase()));
+          
+          // Check if promo code exists (case-insensitive)
+          const originalCode = promoCodeToUse;
+          const availableCode = findAvailablePromoCode(promoCodeToUse.toUpperCase(), existingCodes);
+          
+          // If code was modified, update generatedPromoName and show message
+          if (availableCode !== originalCode.toUpperCase()) {
+            promoCodeToUse = availableCode;
+            setGeneratedPromoName(availableCode);
+            // Show user-friendly info message
+            alert(`Promo code '${originalCode}' already exists. Using '${availableCode}' instead.`);
+            setDiscountValidationError(null); // Clear any previous errors
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to check existing promo codes, proceeding with original code:', error);
+        // Continue with original code - server will catch duplicate if it exists
       }
       
       console.log('🎫 Using promo code for creation and template save:', promoCodeToUse);
@@ -1164,6 +1362,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
         
         // Exit creation mode
         setIsCreatingPromo(false);
+        setIsApplyingPromo(false);
         setGeneratedPromoName('');
       } else {
         // Get error details
@@ -1215,9 +1414,11 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
         }
         
         setDiscountValidationError(errorMessage);
+        setIsApplyingPromo(false);
       }
     } catch (error) {
       console.error('Error applying promo:', error);
+      setIsApplyingPromo(false);
     }
   }, [
     productEditor.productId,
@@ -1229,6 +1430,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     localPromoDiscountAmount,
     localPromoScope,
     currentResource,
+    findAvailablePromoCode,
     localPromoDurationType,
     localPromoDurationMonths,
     localPromoUnlimitedQuantity,
@@ -1746,27 +1948,166 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     updateProduct,
   ]);
 
-  const handleClearDiscount = useCallback(() => {
-    // Clear manual promo code for resources without plans
+  const handleClearDiscount = useCallback(async () => {
+    if (productEditor.productId === null || !currentProduct) return;
+    
+    // Check if product has custom discount (not global)
+    const hasCustomDiscount = currentProduct.promoCode && 
+      !(discountSettings?.globalDiscount && discountSettings?.promoCode === currentProduct.promoCode);
+    
+    if (!hasCustomDiscount) {
+      // No custom discount to clear, just clear local state
+      if (!hasPlans) {
+        setLocalManualPromoCode('');
+      }
+      setLocalPromoDiscountType(undefined);
+      setLocalPromoDiscountAmount(undefined);
+      setLocalPromoLimitQuantity(undefined);
+      setLocalPromoShowFireIcon(false);
+      setDiscountValidationError(null);
+      return;
+    }
+    
+    // Get the custom promo code to find in other templates
+    const customPromoCode = currentProduct.promoCode;
+    
+    // Clear local state
     if (!hasPlans) {
       setLocalManualPromoCode('');
     }
-    if (productEditor.productId === null) return;
-
     setLocalPromoDiscountType(undefined);
     setLocalPromoDiscountAmount(undefined);
     setLocalPromoLimitQuantity(undefined);
     setLocalPromoShowFireIcon(false);
     setDiscountValidationError(null);
-
+    
+    // Clear custom discount from current product (preserve global discount fields)
     updateProduct(productEditor.productId, {
+      promoCode: undefined,
+      promoCodeId: undefined,
+      promoScope: undefined,
       promoDiscountType: undefined,
       promoDiscountAmount: undefined,
       promoLimitQuantity: undefined,
       promoQuantityLeft: undefined,
-      promoShowFireIcon: false,
+      promoShowFireIcon: undefined,
+      promoDurationType: undefined,
+      promoDurationMonths: undefined,
     });
-  }, [productEditor.productId, updateProduct, hasPlans]);
+    
+    // Remove custom discount from all templates that have products with this custom promo code
+    if (templates && setTemplates && updateCachedTemplates && updateTemplate) {
+      try {
+        // Prepare cleaned templates - only remove custom discount data from products with matching custom promo code
+        const cleanedTemplates = templates.map(template => {
+          const cleanedTemplateProducts = (template.templateData?.products || []).map((product: Product) => {
+            // Only clean products that have the custom promo code AND it's not a global discount
+            const isProductGlobalDiscount = discountSettings?.globalDiscount && 
+              discountSettings?.promoCode === product.promoCode;
+            
+            if (product.promoCode === customPromoCode && !isProductGlobalDiscount) {
+              // Explicitly set all promo fields to undefined to ensure they're removed
+              return {
+                ...product,
+                promoCode: undefined,
+                promoCodeId: undefined,
+                promoScope: undefined,
+                promoDiscountType: undefined,
+                promoDiscountAmount: undefined,
+                promoLimitQuantity: undefined,
+                promoQuantityLeft: undefined,
+                promoShowFireIcon: undefined,
+                promoDurationType: undefined,
+                promoDurationMonths: undefined,
+              };
+            }
+            return product; // Keep other products unchanged
+          });
+          
+          // Check if template has products with the custom discount
+          const hasProductsWithCustomDiscount = cleanedTemplateProducts.some((p: Product, index: number) => {
+            const originalProduct = (template.templateData?.products || [])[index];
+            const isOriginalGlobalDiscount = discountSettings?.globalDiscount && 
+              discountSettings?.promoCode === originalProduct?.promoCode;
+            return originalProduct?.promoCode === customPromoCode && !isOriginalGlobalDiscount;
+          });
+          
+          if (hasProductsWithCustomDiscount) {
+            return {
+              ...template,
+              templateData: {
+                ...template.templateData,
+                products: cleanedTemplateProducts,
+              },
+            };
+          }
+          return template; // No changes needed
+        });
+        
+        // Filter to only templates that actually have changes
+        const templatesWithChanges = cleanedTemplates.filter(template => {
+          const originalTemplate = templates.find(t => t.id === template.id);
+          if (originalTemplate) {
+            const originalProducts = originalTemplate.templateData?.products || [];
+            return originalProducts.some((p: Product) => {
+              const isGlobalDiscount = discountSettings?.globalDiscount && 
+                discountSettings?.promoCode === p.promoCode;
+              return p.promoCode === customPromoCode && !isGlobalDiscount;
+            });
+          }
+          return false;
+        });
+        
+        if (templatesWithChanges.length > 0) {
+          // Update templates in local state
+          setTemplates(prev => prev.map(template => {
+            const updatedTemplate = templatesWithChanges.find(t => t.id === template.id);
+            return updatedTemplate || template;
+          }));
+          
+          // Update templates in cache
+          updateCachedTemplates(prev => {
+            const newCache = new Map(prev);
+            templatesWithChanges.forEach(template => {
+              const originalTemplate = prev.get(template.id);
+              if (originalTemplate) {
+                newCache.set(template.id, {
+                  ...originalTemplate,
+                  templateData: template.templateData,
+                } as any);
+              } else {
+                newCache.set(template.id, template as any);
+              }
+            });
+            return newCache;
+          });
+          
+          // Save all affected templates to database
+          console.log(`💾 Saving ${templatesWithChanges.length} cleaned templates to database after custom discount clear`);
+          const savePromises = templatesWithChanges.map(template => 
+            updateTemplate(template.id, {
+              templateData: template.templateData,
+            }).catch(error => {
+              console.warn(`⚠️ Failed to save template ${template.id} to database:`, error);
+              return null;
+            })
+          );
+          
+          await Promise.all(savePromises);
+          console.log('✅ All templates saved to database after custom discount clear');
+        }
+      } catch (error) {
+        console.error('⚠️ Error removing custom discount from templates:', error);
+      }
+    }
+    
+    // Trigger template auto-save callback for current template
+    if (onProductUpdated) {
+      setTimeout(() => {
+        onProductUpdated();
+      }, 100);
+    }
+  }, [productEditor.productId, currentProduct, discountSettings, updateProduct, templates, setTemplates, updateCachedTemplates, updateTemplate, onProductUpdated, hasPlans]);
 
   // Save changes when modal closes (detect transition from open to closed)
   useEffect(() => {
@@ -2236,6 +2577,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     setLocalPromoDurationMonths={setLocalPromoDurationMonths}
                     isCreatingPromo={isCreatingPromo}
                     setIsCreatingPromo={setIsCreatingPromo}
+                    isApplyingPromo={isApplyingPromo}
                     generatedPromoName={generatedPromoName}
                     setGeneratedPromoName={setGeneratedPromoName}
                     availablePromoCodes={availablePromoCodes}
@@ -2253,6 +2595,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     handleApplyPromo={handleApplyPromo}
                     handleApplyExistingPromo={handleApplyExistingPromo}
                     handleDeletePromo={handleDeletePromo}
+                    isDeletingPromo={isDeletingPromo}
                     handleClearDiscount={handleClearDiscount}
                     handleApplyGlobalDiscount={handleApplyGlobalDiscount}
                   />

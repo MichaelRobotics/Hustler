@@ -17,6 +17,7 @@ export interface SeasonalDiscountData {
 	seasonalDiscountDurationType?: 'one-time' | 'forever' | 'duration_months';
 	seasonalDiscountDurationMonths?: number;
 	globalDiscount?: boolean;
+	isExpired?: boolean; // Flag to indicate if discount has expired
 }
 
 /**
@@ -1118,14 +1119,10 @@ export async function getExperienceSeasonalDiscount(
 			return null;
 		}
 
-		// Check if expired
+		// Check if expired (but still return the data so it can be displayed and deleted)
 		const isExpired = experience.seasonalDiscountEnd 
 			? new Date() > new Date(experience.seasonalDiscountEnd)
 			: false;
-
-		if (isExpired) {
-			return null;
-		}
 
 		// Map experience fields to SeasonalDiscountData
 		const discountData: SeasonalDiscountData = {
@@ -1138,6 +1135,7 @@ export async function getExperienceSeasonalDiscount(
 			seasonalDiscountDurationType: experience.seasonalDiscountDurationType || undefined,
 			seasonalDiscountDurationMonths: experience.seasonalDiscountDurationMonths || undefined,
 			globalDiscount: experience.globalDiscount || false,
+			isExpired, // Include expired flag in the returned data
 		};
 
 		return discountData;

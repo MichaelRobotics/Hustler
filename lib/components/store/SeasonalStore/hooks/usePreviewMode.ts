@@ -4,36 +4,14 @@ interface UsePreviewModeProps {
   templates: any[];
   editorState: { isEditorView: boolean };
   toggleEditorView: () => void;
-  isTemplateLoaded: boolean;
-  computeStoreSnapshot: () => string;
-  setLastSavedSnapshot: (snapshot: string) => void;
   currentlyLoadedTemplateId?: string | null; // Track currently loaded template to avoid unnecessary snapshots
-  snapshotData: {
-    products: any[];
-    floatingAssets: any[];
-    currentSeason: string;
-    fixedTextStyles: any;
-    logoAsset: any;
-    generatedBackground: string | null;
-    uploadedBackground: string | null;
-    backgroundAttachmentId: string | null;
-    backgroundAttachmentUrl: string | null;
-    logoAttachmentId: string | null;
-    logoAttachmentUrl: string | null;
-    promoButton: any;
-    discountSettings: any;
-  };
 }
 
 export function usePreviewMode({
   templates,
   editorState,
   toggleEditorView,
-  isTemplateLoaded,
-  computeStoreSnapshot,
-  setLastSavedSnapshot,
   currentlyLoadedTemplateId,
-  snapshotData,
 }: UsePreviewModeProps) {
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
   const [isInPreviewMode, setIsInPreviewMode] = useState(false);
@@ -70,29 +48,13 @@ export function usePreviewMode({
         toggleEditorView();
       }
 
-      // Wait for preview template to load, then take a new snapshot
-      // Only do this if we're previewing a different template
-      const checkTemplateLoaded = setInterval(() => {
-        if (isTemplateLoaded) {
-          clearInterval(checkTemplateLoaded);
-          setTimeout(() => {
-            const snapshot = computeStoreSnapshot();
-            setLastSavedSnapshot(snapshot);
-            console.log('📸 Snapshot taken after preview template loaded');
-          }, 100);
-        }
-      }, 50);
-      
-      // Cleanup interval after 5 seconds (safety timeout)
-      setTimeout(() => clearInterval(checkTemplateLoaded), 5000);
+      // Preview mode should NEVER take snapshots - it's read-only
+      // The edit mode's snapshot must be preserved when entering/exiting preview
     },
     [
       templates,
       editorState.isEditorView,
       toggleEditorView,
-      isTemplateLoaded,
-      computeStoreSnapshot,
-      setLastSavedSnapshot,
       currentlyLoadedTemplateId,
     ]
   );

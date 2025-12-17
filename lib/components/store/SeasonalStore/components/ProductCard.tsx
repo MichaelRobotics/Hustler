@@ -28,6 +28,8 @@ interface ProductCardProps {
     endDate: string;
     promoCode?: string; // Promo code for seasonal discount
   };
+  discountStatus?: 'active' | 'approaching' | 'expired' | 'non-existent'; // Discount status from database
+  seasonalDiscountId?: string; // Seasonal discount ID to match against product's discount
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;
   onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
@@ -127,6 +129,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onInlineButtonSave,
   onInlineButtonEnd,
   discountSettings,
+  discountStatus,
+  seasonalDiscountId,
   getThemeQuickColors,
   backgroundUrl,
   onOpenProductPage,
@@ -136,6 +140,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Get promo code from product object (saved to template)
   // No need to fetch from API - it's already in the template data
   const productPromoCode = product.promoCode || null;
+  
+  // Check if promo should be hidden (approaching but not yet active)
+  const shouldHidePromo = React.useMemo(() => {
+    if (!discountStatus || !seasonalDiscountId) return false;
+    
+    // Only hide in preview mode, not in edit mode
+    // In edit mode, always show promos so user can see/edit them
+    if (isEditorView) return false;
+    
+    // Hide if discount is approaching (not yet active) and matches product's discount
+    if (discountStatus === 'approaching') {
+      // Check if product has promo data that matches the approaching discount
+      return Boolean(product.promoCode || product.promoCodeId);
+    }
+    
+    return false;
+  }, [discountStatus, seasonalDiscountId, product.promoCode, product.promoCodeId, isEditorView]);
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -431,6 +452,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   // Calculate discounted price
   const discountedPrice = React.useMemo(() => {
+    // Hide discount when approaching (not yet active)
+    if (shouldHidePromo) return null;
+    
     const discountAmount = Number(product.promoDiscountAmount ?? 0);
     const shouldShowDiscount =
       discountAmount > 0 &&
@@ -445,10 +469,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     } else {
       return Math.max(0, product.price - discountAmount);
     }
-  }, [product.promoDiscountType, product.promoDiscountAmount, product.price]);
+  }, [product.promoDiscountType, product.promoDiscountAmount, product.price, shouldHidePromo]);
 
   // Calculate discount display
   const discountDisplay = React.useMemo(() => {
+    // Hide discount badge when approaching (not yet active)
+    if (shouldHidePromo) return null;
+    
     const discountAmount = Number(product.promoDiscountAmount ?? 0);
     if (discountAmount <= 0) {
       return null;
@@ -459,7 +486,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     } else {
       return `-$${discountAmount.toFixed(2)}`;
     }
-  }, [product.promoDiscountType, product.promoDiscountAmount]);
+  }, [product.promoDiscountType, product.promoDiscountAmount, shouldHidePromo]);
 
   const salesCountValue = typeof product.salesCount === 'number' ? Math.max(0, product.salesCount) : null;
   const ratingValue = typeof product.starRating === 'number' ? Math.min(5, Math.max(0, product.starRating)) : null;
@@ -480,6 +507,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Determine button text: if product has a promo code (from Apply Promotion), show ticket icon + promo code
   // Otherwise use product.buttonText or default to 'VIEW DETAILS'
   const getButtonText = () => {
+    // Hide promo code when approaching (not yet active)
+    if (shouldHidePromo) {
+      return product.buttonText || 'VIEW DETAILS';
+    }
+    
     if (productPromoCode) {
       // Return HTML with ticket icon SVG + promo code
       // Using inline SVG for ticket icon (from lucide-react Ticket icon)

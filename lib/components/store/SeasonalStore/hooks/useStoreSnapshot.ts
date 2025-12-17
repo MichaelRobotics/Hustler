@@ -39,6 +39,7 @@ export function useStoreSnapshot({
   const isResettingRef = useRef(false);
   const lastTemplateIdRef = useRef<string | null>(null);
   const hasTakenSnapshotForTemplateRef = useRef<string | null>(null);
+  const changeDetectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Normalize snapshot data to ensure consistent comparison
   const normalizeSnapshotData = useCallback((data: StoreSnapshotData): StoreSnapshotData => {
@@ -121,6 +122,7 @@ export function useStoreSnapshot({
   // Take snapshot when template is fully loaded (using same stable metric as loading screen)
   // Conditions: isStoreContentReady && isTemplateLoaded && !isInPreviewMode
   // This ensures snapshot is taken only after all loading processes complete
+  // Also handles snapshots after exiting preview mode
   useEffect(() => {
     // Skip if in preview mode or template not loaded
     if (isInPreviewMode || !isTemplateLoaded || !isStoreContentReady) {
@@ -145,7 +147,18 @@ export function useStoreSnapshot({
     return () => clearTimeout(snapshotTimeout);
   }, [isStoreContentReady, isTemplateLoaded, isInPreviewMode, currentlyLoadedTemplateId, computeStoreSnapshot]);
 
+  // Reset snapshot tracking when exiting preview mode to allow new snapshot after template loads
+  useEffect(() => {
+    // When exiting preview mode (was in preview, now not), reset tracking
+    if (!isInPreviewMode && lastTemplateIdRef.current !== null) {
+      // Reset tracking so a new snapshot can be taken for the newly loaded template
+      // This handles both cases: exiting Live preview (different template) and exiting regular preview (same template)
+      hasTakenSnapshotForTemplateRef.current = null;
+    }
+  }, [isInPreviewMode]);
+
   // Detect unsaved changes once a snapshot exists
+  // Debounced to prevent infinite loops during rapid state changes
   useEffect(() => {
     if (!lastSavedSnapshot) {
       return;
@@ -156,8 +169,27 @@ export function useStoreSnapshot({
       return;
     }
 
-    const currentSnapshot = computeStoreSnapshot();
-    setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
+    // Clear any pending change detection
+    if (changeDetectionTimeoutRef.current) {
+      clearTimeout(changeDetectionTimeoutRef.current);
+    }
+
+    // Debounce change detection to prevent rapid-fire comparisons
+    changeDetectionTimeoutRef.current = setTimeout(() => {
+      // Double-check we're not resetting (might have changed during timeout)
+      if (isResettingRef.current) {
+        return;
+      }
+
+      const currentSnapshot = computeStoreSnapshot();
+      setHasUnsavedChanges(currentSnapshot !== lastSavedSnapshot);
+    }, 100);
+
+    return () => {
+      if (changeDetectionTimeoutRef.current) {
+        clearTimeout(changeDetectionTimeoutRef.current);
+      }
+    };
   }, [computeStoreSnapshot, lastSavedSnapshot]);
 
   // Update snapshot manually (e.g., after save)

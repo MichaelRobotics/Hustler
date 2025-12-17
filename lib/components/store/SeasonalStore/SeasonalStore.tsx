@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useState, useMemo, startTransition } from 'react';
 import { useSeasonalStoreDatabase } from './hooks/useSeasonalStoreDatabase';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
 import { useTheme } from '../../common/ThemeProvider';
@@ -48,6 +48,8 @@ import { useAutoAddResources } from './hooks/useAutoAddResources';
 import { useClickOutside } from './hooks/useClickOutside';
 import { useStoreSnapshot } from './hooks/useStoreSnapshot';
 import { useThemeApplication } from './hooks/useThemeApplication';
+import { checkDiscountStatus, DiscountData } from './utils/discountHelpers';
+import { apiPost } from '@/lib/utils/api-client';
 import { useLiveFunnel } from './hooks/useLiveFunnel';
 import { usePreviewMode } from './hooks/usePreviewMode';
 import { useModalAnimation } from './hooks/useModalAnimation';
@@ -286,6 +288,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     deleteTemplate,
     setLiveTemplate,
     updateTemplate,
+    setTemplates,
+    updateCachedTemplates,
     
     // Theme Management
     createTheme,
@@ -323,17 +327,45 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     loadThemes,
   } = useSeasonalStoreDatabase(experienceId || 'default-experience');
 
-  // Seasonal discount actions hook
-  const { handleSaveDiscountSettings } = useSeasonalDiscountActions({
-    experienceId: experienceId || undefined,
-    user,
-    updateTemplate,
-    setDiscountSettings,
-    templates,
-  });
-  
   // Create ref to store setProductsAndReorder for passing to hook
   const setProductsAndReorderRef = useRef<((products: Product[] | ((prev: Product[]) => Product[])) => void) | undefined>(undefined);
+  
+  // Calculate discount status for ProductCard components
+  const [discountStatus, setDiscountStatus] = useState<'active' | 'approaching' | 'expired' | 'non-existent'>('non-existent');
+  const [seasonalDiscountId, setSeasonalDiscountId] = useState<string | undefined>(undefined);
+  
+  // Fetch discount status from database
+  useEffect(() => {
+    const fetchDiscountStatus = async () => {
+      if (!experienceId) return;
+      
+      try {
+        const response = await apiPost(
+          '/api/seasonal-discount/get',
+          { experienceId },
+          experienceId
+        );
+        if (response.ok) {
+          const { discountData } = await response.json();
+          const status = checkDiscountStatus(discountData);
+          setDiscountStatus(status);
+          setSeasonalDiscountId(discountData?.seasonalDiscountId);
+        } else {
+          setDiscountStatus('non-existent');
+          setSeasonalDiscountId(undefined);
+        }
+      } catch (error) {
+        console.warn('⚠️ Error fetching discount status:', error);
+        setDiscountStatus('non-existent');
+        setSeasonalDiscountId(undefined);
+      }
+    };
+    
+    fetchDiscountStatus();
+    // Refresh discount status periodically (every 30 seconds) to catch approaching discounts becoming active
+    const interval = setInterval(fetchDiscountStatus, 30000);
+    return () => clearInterval(interval);
+  }, [experienceId]);
   
   // Load origin template on mount
   useEffect(() => {
@@ -642,6 +674,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     setProducts: setProductsAndReorder, // Use wrapper that auto-reorders to Market Stall order
     setPromoButton,
     setFloatingAssets,
+    setDiscountSettings, // CRITICAL: Pass setDiscountSettings so preview mode can set discount
     allResources, // Market Stall resources for filtering
     experienceId, // For fetching Market Stall if allResources not available
   });
@@ -850,6 +883,20 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     currentlyLoadedTemplateId,
   });
 
+  // Seasonal discount actions hook (moved here to access updateSnapshot)
+  const { handleSaveDiscountSettings } = useSeasonalDiscountActions({
+    experienceId: experienceId || undefined,
+    user,
+    updateTemplate,
+    setDiscountSettings,
+    templates,
+    currentlyLoadedTemplateId,
+    setProducts: setProductsFromHook,
+    setTemplates,
+    updateCachedTemplates,
+    updateSnapshot,
+  });
+
   // Auto-update template in database when Market Stall order changes
   useEffect(() => {
     if (hasOrderChanged && isTemplateLoaded && initialReorderDoneRef.current && allResources.length > 0 && products.length > 0) {
@@ -1043,25 +1090,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     templates,
     editorState,
     toggleEditorView,
-    isTemplateLoaded,
-    computeStoreSnapshot,
-    setLastSavedSnapshot: updateSnapshot,
     currentlyLoadedTemplateId,
-    snapshotData: {
-      products,
-      floatingAssets,
-      currentSeason,
-      fixedTextStyles,
-      logoAsset,
-      generatedBackground,
-      uploadedBackground,
-      backgroundAttachmentId,
-      backgroundAttachmentUrl,
-      logoAttachmentId,
-      logoAttachmentUrl,
-      promoButton,
-      discountSettings,
-    },
   });
 
   // Sync preview mode state from hook
@@ -1115,6 +1144,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const handlePreviewTemplate = handlePreviewTemplateFromHook;
 
   // Reset handler - restores store to last saved snapshot
+  // Uses startTransition to batch updates and prevent cascading recalculations
   const handleResetChanges = useCallback(() => {
     const snapshotData = restoreFromSnapshot();
     if (!snapshotData) {
@@ -1127,41 +1157,44 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     // Immediately reset the snapshot flag to prevent diff detection during state restoration
     resetSnapshot();
     
-    // Restore all state from snapshot
-    setProductsFromHook(snapshotData.products);
-    setFloatingAssets(snapshotData.floatingAssets);
-    setCurrentSeason(snapshotData.currentSeason);
-    setFixedTextStyles(snapshotData.fixedTextStyles);
-    setLogoAsset(snapshotData.logoAsset);
-    
-    // Restore background - use setBackground which handles both generated and uploaded
-    if (snapshotData.generatedBackground) {
-      setBackground('generated', snapshotData.generatedBackground);
-    } else if (snapshotData.uploadedBackground) {
-      setBackground('uploaded', snapshotData.uploadedBackground);
-    } else {
-      // Clear both backgrounds if neither exists
-      setBackground('generated', null);
-      setBackground('uploaded', null);
-    }
-    
-    setBackgroundAttachmentId(snapshotData.backgroundAttachmentId);
-    setBackgroundAttachmentUrl(snapshotData.backgroundAttachmentUrl);
-    setLogoAttachmentId(snapshotData.logoAttachmentId);
-    setLogoAttachmentUrl(snapshotData.logoAttachmentUrl);
-    setPromoButton(snapshotData.promoButton);
-    setDiscountSettings(snapshotData.discountSettings || {
-      enabled: false,
-      globalDiscount: false,
-      globalDiscountType: 'percentage',
-      globalDiscountAmount: 20,
-      percentage: 20,
-      startDate: '',
-      endDate: '',
-      discountText: '',
-      promoCode: '',
-      prePromoMessages: [],
-      activePromoMessages: [],
+    // Batch all state updates in a transition to prevent cascading recalculations
+    startTransition(() => {
+      // Restore all state from snapshot
+      setProductsFromHook(snapshotData.products);
+      setFloatingAssets(snapshotData.floatingAssets);
+      setCurrentSeason(snapshotData.currentSeason);
+      setFixedTextStyles(snapshotData.fixedTextStyles);
+      setLogoAsset(snapshotData.logoAsset);
+      
+      // Restore background - use setBackground which handles both generated and uploaded
+      if (snapshotData.generatedBackground) {
+        setBackground('generated', snapshotData.generatedBackground);
+      } else if (snapshotData.uploadedBackground) {
+        setBackground('uploaded', snapshotData.uploadedBackground);
+      } else {
+        // Clear both backgrounds if neither exists
+        setBackground('generated', null);
+        setBackground('uploaded', null);
+      }
+      
+      setBackgroundAttachmentId(snapshotData.backgroundAttachmentId);
+      setBackgroundAttachmentUrl(snapshotData.backgroundAttachmentUrl);
+      setLogoAttachmentId(snapshotData.logoAttachmentId);
+      setLogoAttachmentUrl(snapshotData.logoAttachmentUrl);
+      setPromoButton(snapshotData.promoButton);
+      setDiscountSettings(snapshotData.discountSettings || {
+        enabled: false,
+        globalDiscount: false,
+        globalDiscountType: 'percentage',
+        globalDiscountAmount: 20,
+        percentage: 20,
+        startDate: '',
+        endDate: '',
+        discountText: '',
+        promoCode: '',
+        prePromoMessages: [],
+        activePromoMessages: [],
+      });
     });
     
     // Snapshot will be updated automatically by useStoreSnapshot when state stabilizes
@@ -1683,6 +1716,8 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
             endDate: discountSettings.endDate || '',
             promoCode: discountSettings.promoCode,
           } : undefined}
+          discountStatus={discountStatus}
+          seasonalDiscountId={seasonalDiscountId}
         />
 
         <PromoButton
@@ -1759,6 +1794,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         updateProduct={updateProduct}
         setPromoButton={setPromoButton}
         experienceId={experienceId}
+        templates={templates}
+        setTemplates={setTemplates}
+        updateCachedTemplates={updateCachedTemplates}
+        updateTemplate={updateTemplate}
         onProductUpdated={async () => {
           // Auto-save template after product update (similar to price update auto-save)
           // Use a longer delay to ensure React state has updated
@@ -2015,6 +2054,19 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         setDiscountSettings={setDiscountSettings}
         products={products}
         subscription={user?.experience?.subscription}
+        currentlyLoadedTemplateId={currentlyLoadedTemplateId}
+        setProducts={setProductsFromHook}
+        setTemplates={(templatesOrUpdater) => {
+          if (typeof templatesOrUpdater === 'function') {
+            setTemplates((prev) => {
+              const updated = templatesOrUpdater(prev as any);
+              return updated as any;
+            });
+          } else {
+            setTemplates(templatesOrUpdater as any);
+          }
+        }}
+        updateCachedTemplates={updateCachedTemplates}
       />
 
       {/* All Notifications */}

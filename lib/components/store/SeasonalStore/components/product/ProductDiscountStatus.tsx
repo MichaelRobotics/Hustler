@@ -32,10 +32,10 @@ export const ProductDiscountStatus: React.FC<ProductDiscountStatusProps> = ({
             )}
             {seasonalDiscountStatus.status === 'upcoming' && (
               <Text size="2" className="text-blue-600 dark:text-blue-400">
-                Discount starts soon
+                Discount approaching
                 {seasonalDiscountStatus.startDate && (
                   <span className="ml-1">
-                    ({new Date(seasonalDiscountStatus.startDate).toLocaleDateString()})
+                    (starts {new Date(seasonalDiscountStatus.startDate).toLocaleDateString()})
                   </span>
                 )}
               </Text>

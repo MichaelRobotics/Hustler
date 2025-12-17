@@ -6,6 +6,8 @@ import { ShopCarousel } from './templates/ShopCarousel';
 import { SeasonalDiscountPanel } from './templates/SeasonalDiscountPanel';
 import { apiPost } from '@/lib/utils/api-client';
 import type { DiscountSettings } from '../types';
+import { convertDiscountDataToSettings, checkDiscountStatus, removeProductPromoData, type DiscountData } from '../utils/discountHelpers';
+import type { Product, StoreTemplate } from '../types';
 
 interface Template {
   id: string;
@@ -36,6 +38,10 @@ interface TemplateManagerModalProps {
   products?: any[];
   subscription?: "Basic" | "Pro" | "Vip" | null;
   experienceId?: string; // Experience ID for delete operations
+  currentlyLoadedTemplateId?: string | null;
+  setProducts?: (products: Product[] | ((prev: Product[]) => Product[])) => void;
+  setTemplates?: (templates: Template[] | ((prev: Template[]) => Template[])) => void;
+  updateCachedTemplates?: (updater: (prev: Map<string, StoreTemplate>) => Map<string, StoreTemplate>) => void;
   
   // Handlers
   onClose: () => void;
@@ -75,6 +81,10 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   maxTemplates = 10,
   subscription,
   experienceId,
+  currentlyLoadedTemplateId,
+  setProducts,
+  setTemplates,
+  updateCachedTemplates,
 }) => {
   const [showSeasonalDiscountPanel, setShowSeasonalDiscountPanel] = useState(false);
 
@@ -100,39 +110,75 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
     activePromoMessages: [],
   });
 
-  // Get initial discount settings for the live template
-  const initialDiscountSettings = liveTemplate?.templateData?.discountSettings || discountSettings || createDefaultDiscountSettings();
+  // State for discount data from database (Shop Manager ONLY uses database data)
+  const [databaseDiscountData, setDatabaseDiscountData] = useState<DiscountData | null>(null);
+  const [isLoadingDiscount, setIsLoadingDiscount] = useState(false);
+  
+  // Loading states for create/delete operations
+  const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch discount from database when modal opens or experienceId changes
+  useEffect(() => {
+    if (!isOpen || !experienceId) {
+      setDatabaseDiscountData(null);
+      return;
+    }
+
+    const fetchDiscountFromDatabase = async () => {
+      setIsLoadingDiscount(true);
+      try {
+        const response = await apiPost(
+          '/api/seasonal-discount/get',
+          { experienceId },
+          experienceId
+        );
+
+        if (response.ok) {
+          const { discountData } = await response.json();
+          setDatabaseDiscountData(discountData || null);
+        } else {
+          setDatabaseDiscountData(null);
+        }
+      } catch (error) {
+        console.error('Error fetching discount from database:', error);
+        setDatabaseDiscountData(null);
+      } finally {
+        setIsLoadingDiscount(false);
+      }
+    };
+
+    fetchDiscountFromDatabase();
+  }, [isOpen, experienceId]);
+
+  // Convert database discount data to DiscountSettings format
+  const databaseDiscountSettings = useMemo(() => {
+    if (!databaseDiscountData) {
+      return createDefaultDiscountSettings();
+    }
+    return convertDiscountDataToSettings(databaseDiscountData);
+  }, [databaseDiscountData]);
 
   // Local state for discount settings (only saved when user clicks Save/Create Discount)
-  const [localDiscountSettings, setLocalDiscountSettings] = useState<DiscountSettings>(initialDiscountSettings);
+  const [localDiscountSettings, setLocalDiscountSettings] = useState<DiscountSettings>(databaseDiscountSettings);
 
-  // Sync local state when template changes, modal opens, or discountSettings prop updates
+  // Sync local state when database discount data changes
   useEffect(() => {
-    // Prioritize discountSettings prop (fresh from parent) over liveTemplate (might be stale)
-    // If discountSettings has seasonalDiscountId, use it; otherwise fall back to liveTemplate
-    const newSettings = discountSettings?.seasonalDiscountId 
-      ? discountSettings 
-      : (liveTemplate?.templateData?.discountSettings || discountSettings || createDefaultDiscountSettings());
-    
-    setLocalDiscountSettings(newSettings);
-    // Update discountWasSaved based on whether seasonalDiscountId exists
-    setDiscountWasSaved(Boolean(newSettings.seasonalDiscountId));
-  }, [liveTemplate?.templateData?.discountSettings, discountSettings, liveTemplate?.id]);
+    setLocalDiscountSettings(databaseDiscountSettings);
+    setDiscountWasSaved(Boolean(databaseDiscountSettings.seasonalDiscountId));
+  }, [databaseDiscountSettings]);
 
   // Get discount settings for display (use local state)
   const templateDiscountSettings = localDiscountSettings;
 
   // Track if discount was saved in this session (to update button text after first save)
   const [discountWasSaved, setDiscountWasSaved] = useState(
-    Boolean(liveTemplate?.templateData?.discountSettings?.seasonalDiscountId)
+    Boolean(databaseDiscountSettings.seasonalDiscountId)
   );
 
-  // Check if discount already exists in the saved template OR was saved in this session
-  // Prioritize discountSettings prop (fresh from parent) over liveTemplate (might be stale)
+  // Check if discount already exists in database
   const hasExistingDiscount = Boolean(
-    discountSettings?.seasonalDiscountId ||
-    localDiscountSettings.seasonalDiscountId || 
-    liveTemplate?.templateData?.discountSettings?.seasonalDiscountId
+    databaseDiscountData?.seasonalDiscountId
   );
 
   // Real-time timer state for discount status tracking
@@ -168,7 +214,23 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   }, [templateDiscountSettings.startDate, templateDiscountSettings.endDate, currentTime]);
 
   // Calculate if discount has expired (real-time)
+  // Check both database flag and end date comparison
   const isExpired = useMemo(() => {
+    // First check if database indicates expired
+    if (databaseDiscountData?.isExpired) {
+      return true;
+    }
+    // Then check end date
+    if (!templateDiscountSettings.endDate) {
+      return false;
+    }
+    const now = currentTime;
+    const end = new Date(templateDiscountSettings.endDate);
+    return now > end;
+  }, [templateDiscountSettings.endDate, currentTime, databaseDiscountData?.isExpired]);
+
+  // Check if end date is before current date (for button visibility logic)
+  const isEndDateExpired = useMemo(() => {
     if (!templateDiscountSettings.endDate) {
       return false;
     }
@@ -243,11 +305,11 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
         }
       `}</style>
       <div
-      className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+        className={`fixed inset-0 z-50 flex items-stretch justify-end transition-opacity duration-500 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
       <div
         role="dialog"
         aria-modal="true"
@@ -328,29 +390,44 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                         // Check if this is a create operation (no seasonalDiscountId)
                         const wasCreate = !localDiscountSettings.seasonalDiscountId;
                         
+                        setIsCreating(true);
                         try {
                           await onSaveDiscountSettings(liveTemplate.id, localDiscountSettings);
                           
-                          // After save, the save handler updates the template with seasonalDiscountId and calls setDiscountSettings
-                          // Sync local state from the updated discountSettings prop (which gets updated by setDiscountSettings in the save handler)
-                          // Use a small delay to ensure parent state has updated
-                          setTimeout(() => {
-                            // Prioritize discountSettings prop (fresh from setDiscountSettings) over liveTemplate
-                            const updatedSettings = discountSettings?.seasonalDiscountId
-                              ? discountSettings
-                              : (liveTemplate?.templateData?.discountSettings || localDiscountSettings);
-                            
-                            setLocalDiscountSettings(updatedSettings);
-                            setDiscountWasSaved(Boolean(updatedSettings.seasonalDiscountId));
-                          }, 100);
+                          // After save, refresh discount from database
+                          // Use a small delay to ensure database has updated
+                          await new Promise(resolve => setTimeout(resolve, 100));
+                          
+                          try {
+                            const response = await apiPost(
+                              '/api/seasonal-discount/get',
+                              { experienceId },
+                              experienceId
+                            );
+                            if (response.ok) {
+                              const { discountData } = await response.json();
+                              setDatabaseDiscountData(discountData || null);
+                              
+                              // Update localDiscountSettings with refreshed data to ensure updated discount text is kept
+                              if (discountData) {
+                                const refreshedSettings = convertDiscountDataToSettings(discountData);
+                                setLocalDiscountSettings(refreshedSettings);
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Error refreshing discount after save:', error);
+                          }
                         } catch (error) {
                           // Handle promo code exists error
                           if (error instanceof Error && error.message === 'PROMO_CODE_EXISTS') {
                             alert('A promo code with this name already exists. Please choose a different code for the promo.');
+                            setIsCreating(false);
                             return; // Abort - don't save discount
                           }
                           // Re-throw other errors
                           throw error;
+                        } finally {
+                          setIsCreating(false);
                         }
                       }
                     }}
@@ -360,6 +437,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                         return;
                       }
 
+                      setIsDeleting(true);
                       try {
                         // Call API endpoint to delete promos (promo code will be fetched from experience by the server)
                         const response = await apiPost(
@@ -372,57 +450,139 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                           throw new Error('Failed to delete seasonal discount promos');
                         }
 
-                        // Clear discount settings from template directly (don't call onSaveDiscountSettings to avoid regenerating discount)
+                        // Remove discountSettings and product promo data from liveTemplate
                         if (updateTemplate && liveTemplate) {
+                          // Remove product promo data from liveTemplate products
+                          const cleanedProducts = (liveTemplate.templateData.products || []).map((product: Product) => 
+                            removeProductPromoData(product)
+                          );
+                          
                           await updateTemplate(liveTemplate.id, {
                             templateData: {
                               ...liveTemplate.templateData,
                               discountSettings: undefined,
+                              products: cleanedProducts,
                             },
                           });
                         }
 
-                        // Reset local state to default and update flags
-                        const emptySettings: DiscountSettings = createDefaultDiscountSettings();
-                        setLocalDiscountSettings(emptySettings);
-                        setDiscountWasSaved(false);
-                        // Update parent component's discountSettings state
-                        if (setDiscountSettings) {
-                          setDiscountSettings(emptySettings);
+                        // Prepare cleaned templates (used for both state updates and database saves)
+                        const cleanedTemplates = templates.map(template => {
+                          const cleanedTemplateProducts = (template.templateData.products || []).map((product: Product) => 
+                            removeProductPromoData(product)
+                          );
+                          return {
+                            ...template,
+                            templateData: {
+                              ...template.templateData,
+                              discountSettings: undefined,
+                              products: cleanedTemplateProducts,
+                            },
+                          };
+                        });
+
+                        // Remove discountSettings and product promo data from ALL templates in local state
+                        if (setTemplates) {
+                          setTemplates(cleanedTemplates);
+                        }
+
+                        // Remove discountSettings and product promo data from ALL templates in cache
+                        if (updateCachedTemplates) {
+                          updateCachedTemplates(prev => {
+                            const newCache = new Map(prev);
+                            cleanedTemplates.forEach(template => {
+                              // Get the original template from cache to preserve all properties
+                              const originalTemplate = prev.get(template.id);
+                              if (originalTemplate) {
+                                // Update only the templateData while preserving other properties
+                                newCache.set(template.id, {
+                                  ...originalTemplate,
+                                  templateData: template.templateData,
+                                } as StoreTemplate);
+                              } else {
+                                // If not in cache, use the template as-is (type assertion needed)
+                                newCache.set(template.id, template as StoreTemplate);
+                              }
+                            });
+                            return newCache;
+                          });
+                        }
+
+                        // If currently loaded template matches liveTemplate, update products state
+                        if (currentlyLoadedTemplateId === liveTemplate?.id && setProducts) {
+                          setProducts(prevProducts => prevProducts.map(product => removeProductPromoData(product)));
+                        }
+
+                        // Save ALL cleaned templates to database (not just liveTemplate)
+                        if (updateTemplate) {
+                          try {
+                            console.log(`💾 Saving ${cleanedTemplates.length} cleaned templates to database after discount delete`);
+                            const savePromises = cleanedTemplates.map(template => 
+                              updateTemplate(template.id, {
+                                templateData: template.templateData,
+                              }).catch(error => {
+                                console.warn(`⚠️ Failed to save template ${template.id} to database:`, error);
+                                // Continue with other templates even if one fails
+                                return null;
+                              })
+                            );
+
+                            await Promise.all(savePromises);
+                            console.log('✅ All templates saved to database after discount delete');
+                          } catch (error) {
+                            console.error('⚠️ Error saving templates to database after delete:', error);
+                            // Continue even if saving fails - local state and cache are already updated
+                          }
+                        }
+
+                        // Refresh discount from database after delete
+                        try {
+                          const refreshResponse = await apiPost(
+                            '/api/seasonal-discount/get',
+                            { experienceId },
+                            experienceId
+                          );
+                          if (refreshResponse.ok) {
+                            const { discountData } = await refreshResponse.json();
+                            setDatabaseDiscountData(discountData || null);
+                          }
+                        } catch (refreshError) {
+                          console.error('Error refreshing discount after delete:', refreshError);
+                          // Still set to null if refresh fails
+                          setDatabaseDiscountData(null);
                         }
                       } catch (error) {
                         console.error('Error deleting seasonal discount:', error);
-                        // Continue with clearing local state even if API call fails
-                        const emptySettings: DiscountSettings = createDefaultDiscountSettings();
-                        setLocalDiscountSettings(emptySettings);
-                        setDiscountWasSaved(false);
-                        // Update parent component's discountSettings state
-                        if (setDiscountSettings) {
-                          setDiscountSettings(emptySettings);
-                        }
-                        // Try to clear template even on error
-                        if (updateTemplate && liveTemplate) {
-                          try {
-                            await updateTemplate(liveTemplate.id, {
-                              templateData: {
-                                ...liveTemplate.templateData,
-                                discountSettings: undefined,
-                              },
-                            });
-                          } catch (updateError) {
-                            console.error('Error clearing template discount settings:', updateError);
+                        // Refresh discount from database even on error
+                        try {
+                          const refreshResponse = await apiPost(
+                            '/api/seasonal-discount/get',
+                            { experienceId },
+                            experienceId
+                          );
+                          if (refreshResponse.ok) {
+                            const { discountData } = await refreshResponse.json();
+                            setDatabaseDiscountData(discountData || null);
                           }
+                        } catch (refreshError) {
+                          console.error('Error refreshing discount after delete error:', refreshError);
+                          setDatabaseDiscountData(null);
                         }
+                      } finally {
+                        setIsDeleting(false);
                       }
                     }}
                     isPromoActive={isPromoActive}
                     timeRemaining={timeRemaining}
                     timeUntilStart={timeUntilStart}
                     isExpired={isExpired}
+                    isEndDateExpired={isEndDateExpired}
                     showPanel={showSeasonalDiscountPanel}
                     onTogglePanel={() => setShowSeasonalDiscountPanel(!showSeasonalDiscountPanel)}
                     subscription={subscription}
                     hasExistingDiscount={hasExistingDiscount}
+                    isCreating={isCreating}
+                    isDeleting={isDeleting}
                   />
                   </div>
           </div>

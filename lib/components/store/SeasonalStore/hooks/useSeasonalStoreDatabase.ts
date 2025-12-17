@@ -44,6 +44,7 @@ import {
   sanitizeProducts as sanitizeProductsUtil,
 } from '@/lib/components/store/SeasonalStore/utils/productUtils';
 import { apiPost } from '@/lib/utils/api-client';
+import { checkDiscountStatus, removeProductPromoData, convertDiscountDataToSettings, type DiscountData } from '../utils/discountHelpers';
 
 const sanitizeProductContent = (html?: string | null): string | undefined => {
   if (!html) return html || undefined;
@@ -227,6 +228,9 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   // Track template ID that was requested to load (for verifying load completed)
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
   
+  // Track last logged templateId to prevent duplicate logs
+  const lastLoggedTemplateIdRef = useRef<string | null>(null);
+  
   // DERIVED STATE: Store content is ready when:
   // 1. Initial load is complete
   // 2. Not currently loading a template
@@ -251,12 +255,13 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       return false;
     }
     
-    // Log readiness state for debugging
-    if (hasTextContent) {
+    // Log readiness state for debugging - only when templateId changes
+    if (hasTextContent && currentlyLoadedTemplateId !== lastLoggedTemplateIdRef.current) {
       console.log('✅ Store content ready:', {
         mainHeader: fixedTextStyles.mainHeader?.content?.substring(0, 30),
         templateId: currentlyLoadedTemplateId,
       });
+      lastLoggedTemplateIdRef.current = currentlyLoadedTemplateId;
     }
     
     return hasTextContent;
@@ -1129,6 +1134,80 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       }
     }
     
+    // Load and validate discount settings based on database state BEFORE setting products
+    // This ensures products are cleaned before being loaded into state
+    // First, fetch current discount from database
+    let databaseDiscountData: DiscountData | null = null;
+    try {
+      const response = await apiPost(
+        '/api/seasonal-discount/get',
+        { experienceId },
+        experienceId
+      );
+      if (response.ok) {
+        const { discountData } = await response.json();
+        databaseDiscountData = discountData || null;
+      }
+    } catch (error) {
+      console.warn('⚠️ Error fetching discount from database:', error);
+    }
+
+    const discountStatus = checkDiscountStatus(databaseDiscountData);
+    const isActiveOrApproaching = discountStatus === 'active' || discountStatus === 'approaching';
+    
+    // Clean templateProducts based on discount status BEFORE setting to state
+    let shouldCleanAllTemplates = false;
+    let newDiscountSettings: DiscountSettings | null = null;
+    
+    // Case 1: Template HAS discountSettings
+    if (template.templateData.discountSettings) {
+      const templateDiscountSettings = template.templateData.discountSettings;
+      const templateSeasonalDiscountId = templateDiscountSettings.seasonalDiscountId;
+      const databaseSeasonalDiscountId = databaseDiscountData?.seasonalDiscountId;
+
+      // If promo is NON-EXISTENT or EXPIRED - clean products BEFORE setting to state
+      if (discountStatus === 'non-existent' || discountStatus === 'expired') {
+        console.log('🧹 Removing discount settings and product promo data - discount is non-existent or expired');
+        templateProducts = templateProducts.map(product => removeProductPromoData(product));
+        shouldCleanAllTemplates = true;
+        newDiscountSettings = createDefaultDiscountSettings();
+      }
+      // If promo is ACTIVE/APPROACHING but different seasonal_discount_id - clean products
+      else if (isActiveOrApproaching && databaseSeasonalDiscountId && templateSeasonalDiscountId !== databaseSeasonalDiscountId) {
+        console.log('🔄 Updating discount settings - different active discount found');
+        templateProducts = templateProducts.map(product => removeProductPromoData(product));
+        shouldCleanAllTemplates = true;
+        newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+      }
+      // If promo is ACTIVE/APPROACHING and matches - keep products as-is
+      else if (isActiveOrApproaching && templateSeasonalDiscountId === databaseSeasonalDiscountId) {
+        console.log('✅ Discount settings match active discount - loading as-is');
+        newDiscountSettings = templateDiscountSettings;
+      }
+      // If template has discount but no seasonalDiscountId and database has active discount
+      else if (!templateSeasonalDiscountId && isActiveOrApproaching && databaseSeasonalDiscountId) {
+        console.log('🔄 Updating template discount - template has discount but no ID, database has active discount');
+        newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+      }
+      // Template has discount but database doesn't have active/approaching discount
+      else {
+        console.log('⚠️ Template has discount but database discount is not active/approaching');
+        newDiscountSettings = templateDiscountSettings;
+      }
+    }
+    // Case 2: Template DOESN'T have discountSettings
+    else {
+      // If discount is ACTIVE/APPROACHING
+      if (isActiveOrApproaching && databaseDiscountData) {
+        console.log('✅ Applying active discount from database to template');
+        newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+      }
+      // If discount is NOT active/approaching
+      else {
+        newDiscountSettings = createDefaultDiscountSettings();
+      }
+    }
+    
     // Process products in a single batch to prevent multiple renders
     if (Array.isArray(templateProducts) && templateProducts.length > 0) {
       if (typeof templateProducts[0] === 'string') {
@@ -1164,6 +1243,105 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setTemplateResourceLibraryProductIds([]);
     }
     
+    // Clean ALL templates if needed (expired/non-existent or different discount ID)
+    // Note: We need to access templates from the closure, but since this is inside loadTemplate,
+    // we'll use a functional update pattern to get the latest templates
+    if (shouldCleanAllTemplates && newDiscountSettings) {
+      try {
+        // Get all templates from state using functional update
+        let allTemplates: StoreTemplate[] = [];
+        setTemplates(prev => {
+          allTemplates = prev;
+          return prev;
+        });
+        
+        // Prepare cleaned templates - remove ProductCard promo data from all products
+        const cleanedTemplates = allTemplates.map(t => {
+          const templateProducts = (t.templateData?.products || []);
+          const cleanedTemplateProducts = templateProducts.map((product: Product) => removeProductPromoData(product));
+          
+          // Check if template has products with promo data
+          const hasProductsWithPromo = templateProducts.some((p: Product) => 
+            p.promoCode || p.promoCodeId || p.promoDiscountType || p.promoDiscountAmount
+          );
+          
+          if (hasProductsWithPromo) {
+            return {
+              ...t,
+              templateData: {
+                ...t.templateData,
+                products: cleanedTemplateProducts,
+                discountSettings: discountStatus === 'non-existent' || discountStatus === 'expired' 
+                  ? undefined 
+                  : (t.templateData.discountSettings?.seasonalDiscountId === databaseDiscountData?.seasonalDiscountId 
+                      ? newDiscountSettings 
+                      : t.templateData.discountSettings),
+              },
+            };
+          }
+          return t; // No changes needed
+        });
+        
+        // Filter to only templates that actually have changes
+        const templatesWithChanges = cleanedTemplates.filter(t => {
+          const originalTemplate = allTemplates.find(orig => orig.id === t.id);
+          if (originalTemplate) {
+            const originalProducts = originalTemplate.templateData?.products || [];
+            return originalProducts.some((p: Product) => 
+              p.promoCode || p.promoCodeId || p.promoDiscountType || p.promoDiscountAmount
+            );
+          }
+          return false;
+        });
+        
+        if (templatesWithChanges.length > 0) {
+          // Update templates in local state
+          setTemplates(prev => prev.map(template => {
+            const updatedTemplate = templatesWithChanges.find(t => t.id === template.id);
+            return updatedTemplate || template;
+          }));
+          
+          // Update templates in cache
+          updateCachedTemplates(prev => {
+            const newCache = new Map(prev);
+            templatesWithChanges.forEach(template => {
+              const originalTemplate = prev.get(template.id);
+              if (originalTemplate) {
+                newCache.set(template.id, {
+                  ...originalTemplate,
+                  templateData: template.templateData,
+                } as StoreTemplate);
+              } else {
+                newCache.set(template.id, template as StoreTemplate);
+              }
+            });
+            return newCache;
+          });
+          
+          // Save all affected templates to database
+          console.log(`💾 Saving ${templatesWithChanges.length} cleaned templates to database after ProductCard promo data cleanup`);
+          const savePromises = templatesWithChanges.map(t => 
+            updateTemplate(experienceId, t.id, {
+              templateData: t.templateData,
+            }).catch(error => {
+              console.warn(`⚠️ Failed to save template ${t.id} to database:`, error);
+              return null;
+            })
+          );
+          
+          await Promise.all(savePromises);
+          console.log('✅ All templates saved to database after ProductCard promo data cleanup');
+        }
+      } catch (error) {
+        console.error('⚠️ Error cleaning all templates:', error);
+      }
+    }
+    
+    // Set discount settings
+    if (newDiscountSettings) {
+      setDiscountSettings(newDiscountSettings);
+    }
+    
     // Load floating assets (handle both old theme-specific and new single state)
     if (template.templateData.floatingAssets && Array.isArray(template.templateData.floatingAssets)) {
       // New format: single floating assets array
@@ -1197,168 +1375,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setPromoButton(template.templateData.promoButton);
     }
     
-    // Load discount settings if available, with validation
-    if (template.templateData.discountSettings) {
-      const discountSettings = template.templateData.discountSettings;
-      
-      // Validate seasonalDiscountId if it exists
-      if (discountSettings.seasonalDiscountId) {
-        try {
-          // Use API route instead of direct import to avoid bundling server code
-          const response = await apiPost(
-            '/api/seasonal-discount/validate',
-            {
-              experienceId,
-              seasonalDiscountId: discountSettings.seasonalDiscountId,
-            },
-            experienceId
-          );
-          
-          if (!response.ok) {
-            throw new Error('Failed to validate seasonal discount');
-          }
-          
-          const validation = await response.json();
-          
-          if (!validation.isValid || validation.isExpired) {
-            // Remove invalid/expired discount from template
-            const updatedTemplateData = {
-              ...template.templateData,
-              discountSettings: undefined,
-            };
-            
-            // Update template in database
-            try {
-              const updatedTemplate = await updateTemplate(experienceId, template.id, {
-                templateData: updatedTemplateData,
-              });
-              
-              // Update templates array to reflect the change
-              setTemplates(prev => prev.map(t => t.id === template.id ? updatedTemplate : t));
-              
-              // Update cache if it exists
-              updateCachedTemplates(prev => {
-                const newCache = new Map(prev);
-                newCache.set(template.id, updatedTemplate);
-                return newCache;
-              });
-            } catch (error) {
-              console.warn('⚠️ Failed to update template after removing invalid discount:', error);
-            }
-            
-            // Update local state with default settings
-            setDiscountSettings(createDefaultDiscountSettings());
-          } else {
-            // Valid discount, load it
-            setDiscountSettings(discountSettings);
-          }
-        } catch (error) {
-          console.warn('⚠️ Error validating seasonal discount, removing from template:', error);
-          // Remove discount on validation error
-          try {
-            const updatedTemplate = await updateTemplate(experienceId, template.id, {
-              templateData: {
-                ...template.templateData,
-                discountSettings: undefined,
-              },
-            });
-            
-            // Update templates array to reflect the change
-            setTemplates(prev => prev.map(t => t.id === template.id ? updatedTemplate : t));
-            
-            // Update cache if it exists
-            updateCachedTemplates(prev => {
-              const newCache = new Map(prev);
-              newCache.set(template.id, updatedTemplate);
-              return newCache;
-            });
-          } catch (updateError) {
-            console.warn('⚠️ Failed to update template:', updateError);
-          }
-          setDiscountSettings(createDefaultDiscountSettings());
-        }
-      } else {
-        // No seasonalDiscountId, just load the settings
-        setDiscountSettings(discountSettings);
-      }
-    } else {
-      // No discountSettings in template - check if they exist in experience
-      try {
-        const response = await apiPost(
-          '/api/seasonal-discount/get',
-          { experienceId },
-          experienceId
-        );
-
-        if (response.ok) {
-          const { discountData } = await response.json();
-          
-          if (discountData && discountData.seasonalDiscountId) {
-            // Convert SeasonalDiscountData to DiscountSettings format
-            const experienceDiscountSettings: DiscountSettings = {
-              enabled: true,
-              globalDiscount: discountData.globalDiscount || false,
-              globalDiscountType: 'percentage',
-              globalDiscountAmount: 0,
-              percentage: 0,
-              startDate: discountData.seasonalDiscountStart 
-                ? new Date(discountData.seasonalDiscountStart).toISOString() 
-                : '',
-              endDate: discountData.seasonalDiscountEnd 
-                ? new Date(discountData.seasonalDiscountEnd).toISOString() 
-                : '',
-              discountText: discountData.seasonalDiscountText || '',
-              promoCode: discountData.seasonalDiscountPromo || '',
-              durationType: discountData.seasonalDiscountDurationType,
-              durationMonths: discountData.seasonalDiscountDurationMonths,
-              quantityPerProduct: discountData.seasonalDiscountQuantityPerProduct,
-              seasonalDiscountId: discountData.seasonalDiscountId,
-              prePromoMessages: [],
-              activePromoMessages: [],
-            };
-
-            // Sync to template in database
-            try {
-              const updatedTemplate = await updateTemplate(experienceId, template.id, {
-                templateData: {
-                  ...template.templateData,
-                  discountSettings: experienceDiscountSettings,
-                },
-              });
-
-              // Update templates array to reflect the change
-              setTemplates(prev => prev.map(t => t.id === template.id ? updatedTemplate : t));
-
-              // Update cache if it exists
-              updateCachedTemplates(prev => {
-                const newCache = new Map(prev);
-                newCache.set(template.id, updatedTemplate);
-                return newCache;
-              });
-
-              console.log('✅ Synced discountSettings from experience to template:', template.id);
-              
-              // Load the synced settings
-              setDiscountSettings(experienceDiscountSettings);
-            } catch (error) {
-              console.warn('⚠️ Failed to sync discountSettings to template:', error);
-              // Still load the settings even if template update fails
-              setDiscountSettings(experienceDiscountSettings);
-            }
-          } else {
-            // No discount in experience, use defaults
-            setDiscountSettings(createDefaultDiscountSettings());
-          }
-        } else {
-          // API call failed, use defaults
-          setDiscountSettings(createDefaultDiscountSettings());
-        }
-      } catch (error) {
-        console.warn('⚠️ Error fetching discountSettings from experience:', error);
-        // On error, use defaults
-        setDiscountSettings(createDefaultDiscountSettings());
-      }
-    }
+    // Note: Discount validation and ProductCard promo data cleaning now happens BEFORE setting products to state
+    // (see lines 1137-1184 above) to ensure products are cleaned before being loaded
     
     // Track which template is currently loaded/being edited
     setCurrentlyLoadedTemplateId(template.id);
@@ -2255,7 +2273,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       setIsLoadingTemplate(false);
       throw error;
     }
-  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, saveLastLoadedTemplateToCache, cachedTemplates, sanitizeProducts]);
+  }, [experienceId, filterTemplateProductsAgainstMarketStall, preloadBackgroundImage, saveLastLoadedTemplateToCache, cachedTemplates, sanitizeProducts, templates, setTemplates, updateCachedTemplates, updateTemplate, checkDiscountStatus, removeProductPromoData, convertDiscountDataToSettings, createDefaultDiscountSettings, apiPost, setDiscountSettings]);
   
   const setLiveTemplateHandler = useCallback(async (templateId: string) => {
     try {
@@ -2726,6 +2744,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     // Template management
     updateTemplate: updateTemplateWrapper,
     deleteTemplate,
+    setTemplates,
+    updateCachedTemplates,
     
     // Limit helpers
     canAddCustomTheme,

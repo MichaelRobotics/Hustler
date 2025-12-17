@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { truncateDescription } from '../utils';
 import { filterProductsAgainstMarketStall } from '../utils/productUtils';
 import type { FloatingAsset, DiscountSettings } from '../types';
+import { checkDiscountStatus, convertDiscountDataToSettings, createDefaultDiscountSettings, type DiscountData } from '../utils/discountHelpers';
+import { apiPost } from '@/lib/utils/api-client';
 
 interface PreviewLiveTemplateHookProps {
   previewLiveTemplate?: any;
@@ -280,6 +282,21 @@ export const usePreviewLiveTemplate = ({
       // Apply template data to the component state
       const templateData = previewLiveTemplate.templateData;
       
+      // CRITICAL: Set initial discountSettings EARLY (synchronously) before any async operations
+      // This ensures TopNavbar always has discountSettings to render, preventing race conditions
+      // We'll validate and update it asynchronously after, but this ensures initial render works
+      if (setDiscountSettings) {
+        if (templateData.discountSettings) {
+          // Set from template immediately - TopNavbar can render with this
+          setDiscountSettings(templateData.discountSettings);
+          console.log('✅ [PreviewLiveTemplate] Set initial discountSettings from template (will validate async)');
+        } else {
+          // Set default immediately - ensures TopNavbar always has discountSettings
+          setDiscountSettings(createDefaultDiscountSettings());
+          console.log('✅ [PreviewLiveTemplate] Set initial default discountSettings (will validate async)');
+        }
+      }
+      
       // Set background if available (now async)
       // Check all possible background sources in priority order:
       // 1. Theme-specific backgrounds (for custom themes)
@@ -365,23 +382,98 @@ export const usePreviewLiveTemplate = ({
         setFloatingAssets([]);
       }
 
-      // Set discount settings if available
-      if (templateData.discountSettings && setDiscountSettings) {
-        setDiscountSettings(templateData.discountSettings);
-      } else if (setDiscountSettings) {
-        setDiscountSettings({
-          enabled: false,
-          globalDiscount: false,
-          globalDiscountType: 'percentage',
-          globalDiscountAmount: 20,
-          percentage: 20,
-          startDate: '',
-          endDate: '',
-          discountText: '',
-          promoCode: '',
-          prePromoMessages: [],
-          activePromoMessages: [],
-        });
+      // Validate and update discount settings asynchronously (after initial set above)
+      // NOTE: Even if template comes from cache with stale discountSettings, we always validate
+      // against the database to ensure we show the correct active/expired discount status.
+      // The cache may be stale, but validation ensures correctness. Cache is updated in edit mode
+      // when discounts are created/deleted/updated.
+      // Initial discountSettings was already set synchronously above, so TopNavbar can render.
+      // This async validation will update it if needed.
+      if (setDiscountSettings && experienceId && !isCancelled) {
+        try {
+          // Fetch current discount from database (always validate, even if template is from cache)
+          let databaseDiscountData: DiscountData | null = null;
+          try {
+            const response = await apiPost(
+              '/api/seasonal-discount/get',
+              { experienceId },
+              experienceId
+            );
+            if (response.ok) {
+              const { discountData } = await response.json();
+              databaseDiscountData = discountData || null;
+            }
+          } catch (error) {
+            console.warn('⚠️ [PreviewLiveTemplate] Error fetching discount from database:', error);
+          }
+
+          // Check if cancelled before proceeding
+          if (isCancelled) return;
+
+          const discountStatus = checkDiscountStatus(databaseDiscountData);
+          const isActiveOrApproaching = discountStatus === 'active' || discountStatus === 'approaching';
+
+          // Case 1: Template HAS discountSettings
+          if (templateData.discountSettings) {
+            const templateDiscountSettings = templateData.discountSettings;
+            const templateSeasonalDiscountId = templateDiscountSettings.seasonalDiscountId;
+            const databaseSeasonalDiscountId = databaseDiscountData?.seasonalDiscountId;
+
+            // If promo is NON-EXISTENT or EXPIRED
+            if (discountStatus === 'non-existent' || discountStatus === 'expired') {
+              console.log('🧹 [PreviewLiveTemplate] Removing discount settings - discount is non-existent or expired');
+              // Don't update template in preview mode, just set default settings
+              if (!isCancelled && setDiscountSettings) {
+                setDiscountSettings(createDefaultDiscountSettings());
+              }
+            }
+            // If promo is ACTIVE/APPROACHING but different seasonal_discount_id
+            else if (isActiveOrApproaching && databaseSeasonalDiscountId && templateSeasonalDiscountId !== databaseSeasonalDiscountId) {
+              console.log('🔄 [PreviewLiveTemplate] Updating discount settings - different active discount found');
+              // Use database discount instead of template discount
+              if (!isCancelled && setDiscountSettings) {
+                const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+                setDiscountSettings(newDiscountSettings);
+              }
+            }
+            // If promo is ACTIVE/APPROACHING and seasonal_discount_id MATCHES
+            else if (isActiveOrApproaching && templateSeasonalDiscountId === databaseSeasonalDiscountId) {
+              console.log('✅ [PreviewLiveTemplate] Discount settings match active discount - keeping template settings');
+              // Template settings are already set above, no need to update
+            }
+            // If template has discount but no seasonalDiscountId and database has active discount
+            else if (!templateSeasonalDiscountId && isActiveOrApproaching && databaseSeasonalDiscountId) {
+              console.log('🔄 [PreviewLiveTemplate] Updating template discount - template has discount but no ID, database has active discount');
+              // Use database discount
+              if (!isCancelled && setDiscountSettings) {
+                const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+                setDiscountSettings(newDiscountSettings);
+              }
+            }
+            // Template has discount but database doesn't have active/approaching discount
+            else {
+              console.log('⚠️ [PreviewLiveTemplate] Template has discount but database discount is not active/approaching');
+              // Template settings are already set above, no need to update
+            }
+          }
+          // Case 2: Template DOESN'T have discountSettings
+          else {
+            // If discount is ACTIVE/APPROACHING
+            if (isActiveOrApproaching && databaseDiscountData) {
+              console.log('✅ [PreviewLiveTemplate] Applying active discount from database to preview');
+              // Apply discountSettings from database
+              if (!isCancelled && setDiscountSettings) {
+                const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+                setDiscountSettings(newDiscountSettings);
+              }
+            }
+            // If discount is NOT active/approaching - default already set above, no need to update
+          }
+        } catch (error) {
+          console.warn('⚠️ [PreviewLiveTemplate] Error validating discount, keeping initial settings:', error);
+          // Initial discountSettings was already set above, so we can keep it
+          // No need to fallback here since initial set already happened
+        }
       }
     };
     

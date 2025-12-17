@@ -3,7 +3,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Heading, Text, Card, Separator } from 'frosted-ui';
-import { Clock, Edit, Bold, Italic, Palette, Lock, Star } from 'lucide-react';
+import { Clock, Edit, Bold, Italic, Palette, Lock, Star, Loader2 } from 'lucide-react';
 import type { DiscountSettings } from '../../types';
 import { EMOJI_DATABASE } from '../../actions/constants';
 
@@ -16,10 +16,13 @@ interface SeasonalDiscountPanelProps {
   timeRemaining: { hours: number; minutes: number } | null;
   timeUntilStart: { hours: number; minutes: number; seconds: number } | null;
   isExpired?: boolean; // Whether discount has expired (real-time)
+  isEndDateExpired?: boolean; // Whether end date is before current date (for button visibility)
   showPanel: boolean;
   onTogglePanel: () => void;
   subscription?: "Basic" | "Pro" | "Vip" | null;
   hasExistingDiscount?: boolean; // Whether discount already exists in saved template
+  isCreating?: boolean; // Whether create/save operation is in progress
+  isDeleting?: boolean; // Whether delete operation is in progress
 }
 
 export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
@@ -31,10 +34,13 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
   timeRemaining,
   timeUntilStart,
   isExpired = false,
+  isEndDateExpired = false,
   showPanel,
   onTogglePanel,
   subscription,
   hasExistingDiscount = false,
+  isCreating = false,
+  isDeleting = false,
 }) => {
   // Discount text editor state
   const [discountTextEditableRef, setDiscountTextEditableRef] = React.useState<HTMLDivElement | null>(null);
@@ -126,8 +132,19 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
     const discountTextContent = discountTextEditableRef?.textContent || discountSettings.discountText || '';
     const hasDiscountText = discountTextContent.trim() !== '';
     const hasPromoCode = discountSettings.promoCode && discountSettings.promoCode.trim() !== '';
-    return hasStartDate && hasEndDate && hasDiscountText && hasPromoCode;
-  }, [hasDiscount, discountSettings.startDate, discountSettings.endDate, discountSettings.discountText, discountSettings.promoCode, discountTextEditableRef]);
+    
+    // Base validation: all required fields must be present
+    const baseValidation = hasStartDate && hasEndDate && hasDiscountText && hasPromoCode;
+    
+    // If global discount is enabled, also require quantityPerProduct and durationType
+    if (discountSettings.globalDiscount) {
+      const hasQuantityPerProduct = discountSettings.quantityPerProduct !== undefined && discountSettings.quantityPerProduct !== null;
+      const hasDurationType = discountSettings.durationType !== undefined && discountSettings.durationType !== null;
+      return baseValidation && hasQuantityPerProduct && hasDurationType;
+    }
+    
+    return baseValidation;
+  }, [hasDiscount, discountSettings.startDate, discountSettings.endDate, discountSettings.discountText, discountSettings.promoCode, discountSettings.globalDiscount, discountSettings.quantityPerProduct, discountSettings.durationType, discountTextEditableRef]);
 
   return (
     <div>
@@ -168,6 +185,13 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                 <Text size="2">
                   Starts in {timeUntilStart.hours}h {timeUntilStart.minutes}m {timeUntilStart.seconds}s
                 </Text>
+              </div>
+            </Button>
+          ) : isExpired ? (
+            <Button size="2" variant="soft" color="red" className="!px-3 !py-1.5 !h-auto">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <Text size="2" weight="medium">Discount Expired</Text>
               </div>
             </Button>
           ) : (
@@ -792,40 +816,61 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
 
               {/* Save/Create and Delete Buttons */}
               <div className="flex items-center gap-2">
-                {!isExpired && (
+                {/* Create Discount button - visible even when expired (but locked when end date is expired) */}
                 <Button
                   size="3"
                   color="violet"
                   variant="solid"
                   onClick={onSave}
-                  disabled={!isPremium || !canCreateDiscount}
+                  disabled={!isPremium || !canCreateDiscount || isCreating || isDeleting || isEndDateExpired}
                   className={`flex-1 !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 ${
-                    (!isPremium || !canCreateDiscount) ? 'opacity-60 cursor-not-allowed' : ''
+                    (!isPremium || !canCreateDiscount || isCreating || isDeleting || isEndDateExpired) ? 'opacity-60 cursor-not-allowed' : ''
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    {!isPremium && <Lock className="w-4 h-4" />}
-                    {hasDiscount && isPremium && <Edit className="w-4 h-4" />}
-                    {!isPremium ? (
+                    {isCreating ? (
                       <>
-                        Locked
-                        <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {hasDiscount ? 'Saving...' : 'Creating...'}
                       </>
                     ) : (
-                      hasDiscount ? 'Save' : 'Create Discount'
+                      <>
+                        {!isPremium && <Lock className="w-4 h-4" />}
+                        {hasDiscount && isPremium && <Edit className="w-4 h-4" />}
+                        {!isPremium ? (
+                          <>
+                            Locked
+                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                          </>
+                        ) : (
+                          hasDiscount ? 'Save' : 'Create Discount'
+                        )}
+                      </>
                     )}
                   </div>
                 </Button>
-                )}
-                {showPanel && (hasDiscount || isExpired) && (
+                {/* Delete button - visible when discount exists in database (even if expired), hidden when creating */}
+                {showPanel && hasDiscount && (
                   <Button
                     size="3"
                     color="red"
                     variant="solid"
                     onClick={onDelete}
-                    className="flex-1 !px-6 !py-3 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-300 dark:shadow-red-500/30 dark:hover:shadow-red-500/50"
+                    disabled={isCreating || isDeleting}
+                    className={`flex-1 !px-6 !py-3 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-300 dark:shadow-red-500/30 dark:hover:shadow-red-500/50 ${
+                      (isCreating || isDeleting) ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   >
-                    Delete
+                    <div className="flex items-center gap-2">
+                      {isDeleting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Delete'
+                      )}
+                    </div>
                   </Button>
                 )}
               </div>

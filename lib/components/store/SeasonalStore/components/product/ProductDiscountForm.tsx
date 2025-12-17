@@ -2,7 +2,7 @@
 
 import React, { useMemo, useEffect } from 'react';
 import { Card, Heading, Text, Button } from 'frosted-ui';
-import { Flame, Star } from 'lucide-react';
+import { Flame, Star, Loader2 } from 'lucide-react';
 import type { Product } from './types';
 import type { DiscountSettings } from '../../types';
 import { ProductDiscountStatus } from './ProductDiscountStatus';
@@ -40,6 +40,7 @@ interface ProductDiscountFormProps {
   setLocalPromoDurationMonths: (months: number | undefined) => void;
   isCreatingPromo: boolean;
   setIsCreatingPromo: (creating: boolean) => void;
+  isApplyingPromo?: boolean; // Track when API call is in progress
   generatedPromoName: string;
   setGeneratedPromoName: (name: string) => void;
   availablePromoCodes: Array<{id: string; code: string}>;
@@ -65,6 +66,7 @@ interface ProductDiscountFormProps {
   handleApplyPromo: () => void;
   handleApplyExistingPromo: () => void;
   handleDeletePromo: () => void;
+  isDeletingPromo?: boolean;
   handleClearDiscount: () => void;
   handleApplyGlobalDiscount: () => void;
 }
@@ -101,6 +103,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
   setLocalPromoDurationMonths,
   isCreatingPromo,
   setIsCreatingPromo,
+  isApplyingPromo = false,
   generatedPromoName,
   setGeneratedPromoName,
   availablePromoCodes,
@@ -118,6 +121,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
   handleApplyPromo,
   handleApplyExistingPromo,
   handleDeletePromo,
+  isDeletingPromo = false,
   handleClearDiscount,
   handleApplyGlobalDiscount,
 }) => {
@@ -682,9 +686,25 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="!px-6 !py-3"
-                    disabled={!localPromoDiscountType || !localPromoDiscountAmount || localPromoDiscountAmount <= 0}
+                    disabled={
+                      !localPromoDiscountType || 
+                      !localPromoDiscountAmount || 
+                      localPromoDiscountAmount <= 0 || 
+                      isApplyingPromo ||
+                      // Require Limit Quantity: either unlimited is checked OR limit quantity is set
+                      (!localPromoUnlimitedQuantity && (!localPromoLimitQuantity || localPromoLimitQuantity <= 0)) ||
+                      // Require Discount Duration (only when hasPlans is true, since that's when the field is shown)
+                      (hasPlans && !localPromoDurationType)
+                    }
                   >
-                    Create Discount
+                    {isApplyingPromo ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Discount'
+                    )}
                   </Button>
                 </>
               )}
@@ -715,9 +735,19 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       handleDeletePromo();
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="!px-6 !py-3"
+                    disabled={isDeletingPromo}
+                    className={`!px-6 !py-3 ${isDeletingPromo ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
-                    Delete
+                    <div className="flex items-center gap-2">
+                      {isDeletingPromo ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Delete'
+                      )}
+                    </div>
                   </Button>
                 </>
               )}
