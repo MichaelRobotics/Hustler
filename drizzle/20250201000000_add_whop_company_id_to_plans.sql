@@ -24,3 +24,5 @@ COMMENT ON COLUMN "plans"."whop_company_id" IS 'Whop company ID for querying pla
 
 
 
+
+

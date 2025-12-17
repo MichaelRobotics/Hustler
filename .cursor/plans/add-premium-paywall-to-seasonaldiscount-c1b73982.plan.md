@@ -1,4 +1,72 @@
-<!-- c1b73982-eb0d-4c83-8409-ae4cf9e78e53 20878cb7-8bed-4397-8b2b-b1df87bf745f -->
+---
+name: Update Global Discount Promo Creation and Product Editor Discount UI
+overview: ""
+todos:
+  - id: e5bfce0c-14ca-4e26-9605-99aea5b1fdd1
+    content: Add whopCompanyId field to plans table schema with index
+    status: pending
+  - id: ea584d69-a299-409a-8a5a-98d86246a75a
+    content: Create migration to add whop_company_id to plans table and backfill from experiences
+    status: pending
+  - id: 0ca097e7-e0a1-4660-8c23-ad710f68b5b2
+    content: Update upsertPlansForProduct to include whopCompanyId when creating/updating plans
+    status: pending
+  - id: cce82cad-ec99-4d5a-91e0-4882421c1634
+    content: Update createPlanFromCheckoutConfiguration to include whopCompanyId (fetch from resource experience)
+    status: pending
+  - id: d2bdb792-a098-4ec6-9714-b8fbd0cb0559
+    content: Change promos table to use whopCompanyId instead of experienceId
+    status: pending
+  - id: 3dca5660-b92c-43eb-a2dd-09a3ccd30e34
+    content: Create migration to change promos table from experience_id to whop_company_id
+    status: pending
+  - id: a69b94a7-bd6d-47e3-80a0-d3a3428bc230
+    content: Update createPromoCodeForSeasonalDiscount to query plans from plans table by whopCompanyId
+    status: pending
+  - id: 6142b856-2c89-4af3-96ef-6f1a25645848
+    content: Update syncPromosFromWhopAPI to save whopCompanyId instead of experienceId
+    status: pending
+  - id: 987c2220-d470-4c1d-a5fe-7d6681f9516b
+    content: Update deleteSeasonalDiscountPromos to query by whopCompanyId instead of experienceId
+    status: pending
+  - id: 592ba82b-dcf4-4e32-a57a-f47cb658caa6
+    content: Modify createPromoCodeForSeasonalDiscount to create separate promos per product (with product_id) and one promo for checkout-only plans
+    status: pending
+  - id: 0bf2732f-68e6-4ccd-b9b4-35c117cf8853
+    content: Create /api/promos/list endpoint to query promos by companyId, planId, or productId
+    status: pending
+  - id: c8dc6f06-0405-4e58-9aeb-ead57cd70d5b
+    content: Create /api/resources/get-by-product endpoint to get resource data for a product
+    status: pending
+  - id: 60a133cc-1f3c-47bc-9961-95d5f86c09a5
+    content: Update ProductEditorModal to conditionally show discount fields only when discount is selected
+    status: pending
+  - id: c80b9057-1387-4e12-95a4-a1443ef28bab
+    content: Add logic to fetch resource data for current product in ProductEditorModal
+    status: pending
+  - id: c73766d3-b11a-42d3-9ccd-92457214baca
+    content: Add useEffect to fetch and filter promos based on selected scope (Plan vs Product) in ProductEditorModal
+    status: pending
+  - id: 67388d91-b9ce-4db3-9bb7-fdf538c6f2d4
+    content: Modify createPromoCodeForSeasonalDiscount to create separate promos per product (with product_id) and one promo for checkout-only plans
+    status: pending
+  - id: 0460a5cc-807a-4a65-a5c2-002d079d76fa
+    content: Create /api/promos/list endpoint to query promos by companyId, planId, or productId
+    status: pending
+  - id: 23895cfa-8c43-4ea3-a59f-75050b383e96
+    content: Create /api/resources/get-by-product endpoint to get resource data for a product
+    status: pending
+  - id: 3d31b6b7-adee-41fb-b6e4-7dc36e52617b
+    content: Update ProductEditorModal to conditionally show discount fields only when discount is selected
+    status: pending
+  - id: 5e7d3465-57d8-45b9-ab5c-db48c569a099
+    content: Add logic to fetch resource data for current product in ProductEditorModal
+    status: pending
+  - id: ec0d3df1-77ac-4116-8e5b-468ec9112fa7
+    content: Add useEffect to fetch and filter promos based on selected scope (Plan vs Product) in ProductEditorModal
+    status: pending
+---
+
 # Update Global Discount Promo Creation and Product Editor Discount UI
 
 ## Overview
@@ -145,27 +213,3 @@ async function removePromoIdFromPlans(whopPromoId: string) {
   - Returns array of `{id, code}`
 - In `ProductEditorModal`, add `useEffect` that:
   - Fetch
-
-### To-dos
-
-- [ ] Add whopCompanyId field to plans table schema with index
-- [ ] Create migration to add whop_company_id to plans table and backfill from experiences
-- [ ] Update upsertPlansForProduct to include whopCompanyId when creating/updating plans
-- [ ] Update createPlanFromCheckoutConfiguration to include whopCompanyId (fetch from resource experience)
-- [ ] Change promos table to use whopCompanyId instead of experienceId
-- [ ] Create migration to change promos table from experience_id to whop_company_id
-- [ ] Update createPromoCodeForSeasonalDiscount to query plans from plans table by whopCompanyId
-- [ ] Update syncPromosFromWhopAPI to save whopCompanyId instead of experienceId
-- [ ] Update deleteSeasonalDiscountPromos to query by whopCompanyId instead of experienceId
-- [ ] Modify createPromoCodeForSeasonalDiscount to create separate promos per product (with product_id) and one promo for checkout-only plans
-- [ ] Create /api/promos/list endpoint to query promos by companyId, planId, or productId
-- [ ] Create /api/resources/get-by-product endpoint to get resource data for a product
-- [ ] Update ProductEditorModal to conditionally show discount fields only when discount is selected
-- [ ] Add logic to fetch resource data for current product in ProductEditorModal
-- [ ] Add useEffect to fetch and filter promos based on selected scope (Plan vs Product) in ProductEditorModal
-- [ ] Modify createPromoCodeForSeasonalDiscount to create separate promos per product (with product_id) and one promo for checkout-only plans
-- [ ] Create /api/promos/list endpoint to query promos by companyId, planId, or productId
-- [ ] Create /api/resources/get-by-product endpoint to get resource data for a product
-- [ ] Update ProductEditorModal to conditionally show discount fields only when discount is selected
-- [ ] Add logic to fetch resource data for current product in ProductEditorModal
-- [ ] Add useEffect to fetch and filter promos based on selected scope (Plan vs Product) in ProductEditorModal

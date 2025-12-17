@@ -1,4 +1,21 @@
-<!-- afa15515-f0c2-40cb-90da-a4825afbbc5d 1013fe54-9169-4ec2-8ad9-efc2ddbb5a9f -->
+---
+name: Fix default_theme_data Structure and Remove Theme Creation
+overview: ""
+todos:
+  - id: 1953d4ac-f6ba-447d-a2e4-ea0155e26387
+    content: Create generateThemeStylesFromBannerImage function in origin-template-service.ts that analyzes banner image directly with Gemini Flash to generate theme styles
+    status: completed
+  - id: a19a20f8-20aa-4c80-b8c9-a912d1089109
+    content: Update createCompanyTheme to use banner image analysis directly instead of themePrompt, and use companyTitle parameter with Black Friday fallback
+    status: completed
+  - id: d0ec5336-90fc-474a-b12c-dfdf4dd017c9
+    content: Update createOriginTemplateFromProduct to extract company.title and pass it to createCompanyTheme along with banner URL
+    status: completed
+  - id: 5ea7a591-4c6a-427b-9d58-3542187cbb8f
+    content: Update useThemeApplication to preserve banner background when switching to/from company theme, while allowing other styles to change
+    status: completed
+---
+
 # Fix default_theme_data Structure and Remove Theme Creation
 
 ## Overview
@@ -88,10 +105,3 @@ Update the origin template service to store complete theme data in `default_them
 ### 4. Update "Create new Shop" Button Logic
 
 **File to m
-
-### To-dos
-
-- [x] Create generateThemeStylesFromBannerImage function in origin-template-service.ts that analyzes banner image directly with Gemini Flash to generate theme styles
-- [x] Update createCompanyTheme to use banner image analysis directly instead of themePrompt, and use companyTitle parameter with Black Friday fallback
-- [x] Update createOriginTemplateFromProduct to extract company.title and pass it to createCompanyTheme along with banner URL
-- [x] Update useThemeApplication to preserve banner background when switching to/from company theme, while allowing other styles to change

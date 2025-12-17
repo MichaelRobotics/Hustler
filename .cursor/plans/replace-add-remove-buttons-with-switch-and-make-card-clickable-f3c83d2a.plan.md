@@ -1,4 +1,30 @@
-<!-- f3c83d2a-50aa-4f4f-adb5-96190add373c 19cac951-b3df-4fc4-8f2f-1bd2f7f6b548 -->
+---
+name: Fix First Template Load Market Stall Order
+overview: ""
+todos:
+  - id: 938d9a94-dccc-4b15-98a5-8533cfdf4349
+    content: Remove order conflict notification UI and related handlers from SeasonalStore.tsx
+    status: pending
+  - id: cb46286f-9146-4065-804a-da5c8770a358
+    content: Modify filterProductsAgainstMarketStall to preserve template product order instead of Market Stall order
+    status: pending
+  - id: 69cff6b0-e6f8-44e8-a7cb-26324b436ed3
+    content: Add effect in SeasonalStore.tsx to automatically sync product order when Market Stall order changes
+    status: pending
+  - id: dea9bb40-f275-48f5-bc70-0ad2d55276f9
+    content: Ensure template products maintain their saved order when loaded in useSeasonalStoreDatabase and usePreviewLiveTemplate
+    status: pending
+  - id: 038b1032-5c8e-43ba-ae3f-3063f2c7c289
+    content: Add useEffect in SeasonalStore.tsx to reorder products to Market Stall order when template is first loaded
+    status: pending
+  - id: cd08173c-e6d3-4b9e-b65a-362efb3eaa23
+    content: Use ref to track if initial reorder has been done to avoid multiple reorders
+    status: pending
+  - id: 5651a035-ec31-454a-870d-401ca2d9a490
+    content: Ensure initial reorder updates the snapshot to prevent false change detection
+    status: pending
+---
+
 # Fix First Template Load Market Stall Order
 
 ## Problem
@@ -49,13 +75,3 @@ The effect should trigger when:
 - Reorder hasn't been done yet
 
 This will catch the first template load case regardless of `isTemplateLoaded` status.
-
-### To-dos
-
-- [ ] Remove order conflict notification UI and related handlers from SeasonalStore.tsx
-- [ ] Modify filterProductsAgainstMarketStall to preserve template product order instead of Market Stall order
-- [ ] Add effect in SeasonalStore.tsx to automatically sync product order when Market Stall order changes
-- [ ] Ensure template products maintain their saved order when loaded in useSeasonalStoreDatabase and usePreviewLiveTemplate
-- [ ] Add useEffect in SeasonalStore.tsx to reorder products to Market Stall order when template is first loaded
-- [ ] Use ref to track if initial reorder has been done to avoid multiple reorders
-- [ ] Ensure initial reorder updates the snapshot to prevent false change detection

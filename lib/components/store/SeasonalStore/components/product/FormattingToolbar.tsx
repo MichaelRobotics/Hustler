@@ -607,3 +607,5 @@ const FormattingToolbarComponent: React.FC<ExtendedFormattingToolbarProps> = ({
 
 export const FormattingToolbar = React.memo(FormattingToolbarComponent) as React.FC<ExtendedFormattingToolbarProps>;
 
+
+

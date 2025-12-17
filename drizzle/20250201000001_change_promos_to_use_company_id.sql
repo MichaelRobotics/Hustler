@@ -34,3 +34,5 @@ COMMENT ON COLUMN "promos"."whop_company_id" IS 'Whop company ID for querying pr
 
 
 
+
+

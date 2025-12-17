@@ -78,3 +78,5 @@ export interface ProductDisplaySectionProps {
   onUpdateProduct: (id: number | string, updates: Partial<Product>) => void;
 }
 
+
+

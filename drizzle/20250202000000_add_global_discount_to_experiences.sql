@@ -7,3 +7,5 @@ ALTER TABLE "experiences"
 -- Add comment explaining the field
 COMMENT ON COLUMN "experiences"."global_discount" IS 'Whether global discount is enabled (promo applies to all products/plans)';
 
+
+

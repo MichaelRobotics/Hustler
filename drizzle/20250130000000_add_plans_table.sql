@@ -55,3 +55,5 @@ COMMENT ON COLUMN "resources"."checkout_configuration_id" IS 'Checkout configura
 
 
 
+
+

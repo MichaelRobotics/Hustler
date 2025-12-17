@@ -195,3 +195,5 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
 
 export const ProductDescriptionSection = React.memo(ProductDescriptionSectionComponent) as React.FC<ProductDescriptionSectionProps>;
 
+
+

@@ -123,3 +123,5 @@ export const ProductImageSection: React.FC<ProductImageSectionProps> = ({
   );
 };
 
+
+

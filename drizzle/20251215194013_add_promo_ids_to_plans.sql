@@ -6,3 +6,5 @@ CREATE INDEX plans_promo_ids_idx ON plans USING GIN (promo_ids);
 
 
 
+
+
