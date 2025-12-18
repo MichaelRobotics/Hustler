@@ -1467,7 +1467,6 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Step 3a: Fetch discount data from database and apply to all templates
       let databaseDiscountData: DiscountData | null = null;
       try {
-        const { apiPost } = await import('@/lib/utils/api');
         const response = await apiPost(
           '/api/seasonal-discount/get',
           { experienceId },
