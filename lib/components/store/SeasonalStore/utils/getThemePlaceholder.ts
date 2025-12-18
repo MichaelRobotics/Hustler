@@ -40,7 +40,7 @@ export function getBackgroundStyle(
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       backgroundAttachment: 'scroll',
-      minHeight: '100dvh',
+      minHeight: '100vh',
       width: '100%',
       transition: 'background-image 0.5s ease-in-out, opacity 0.3s ease-in-out',
       opacity: 1
