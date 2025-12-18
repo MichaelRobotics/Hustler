@@ -707,7 +707,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="flex-1 flex items-center justify-center">
               {showPromoTimerCard && countdownInfo && (
                 <div
-                  className={`promo-card promo-card-hover group relative w-auto max-w-full sm:max-w-3xl mx-auto px-3 py-2 sm:px-6 sm:py-3 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${shouldCopyOnClick ? 'cursor-pointer' : 'cursor-default'}`}
+                  className={`promo-card promo-card-hover group relative w-auto max-w-full sm:max-w-3xl mx-auto px-2 py-1.5 sm:px-6 sm:py-3 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${shouldCopyOnClick ? 'cursor-pointer' : 'cursor-default'}`}
                   role={shouldCopyOnClick ? 'button' : undefined}
                   tabIndex={shouldCopyOnClick ? 0 : undefined}
                   onClick={(e) => {
@@ -725,36 +725,38 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 >
                   <div className="absolute inset-0 rounded-2xl bg-[var(--subtitleBgColorStatic,#FEEBEB)] dark:bg-rose-900/60 opacity-95 pointer-events-none"></div>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-amber-50/80 dark:from-rose-900/50 dark:via-slate-900/80 dark:to-amber-900/40 pointer-events-none"></div>
-                  <div className="relative z-10 flex items-center gap-1.5 sm:gap-4 flex-wrap justify-center sm:justify-start">
+                  <div className="relative z-10 flex flex-col sm:flex-row items-center gap-1 sm:gap-4 justify-center sm:justify-start">
                     {discountSettings?.discountText && (
                       <span 
                         className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap"
                         dangerouslySetInnerHTML={{ __html: discountSettings.discountText }}
                       />
                     )}
-                    {/* Clock animation - hidden on mobile, positioned after discount text */}
-                    <div className="hidden sm:flex promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
-                      <img
-                        src="https://ae01.alicdn.com/kf/S1fa2ebed8eb04c4597523704c386ff5ag/48x48.gif"
-                        alt="Promo clock animation"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                        loading="lazy"
-                      />
-                      <span className="absolute inset-0 rounded-full border border-white/60 dark:border-white/20 pointer-events-none"></span>
-                    </div>
-                    {/* Countdown label and timer - on same level as discount text */}
-                    <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap text-xs sm:text-base font-semibold text-gray-900 dark:text-white">
-                      {countdownLabel && (
-                        <span className="text-xs sm:text-base uppercase tracking-wider text-rose-600 dark:text-rose-200 whitespace-nowrap">
-                          {countdownLabel}
-                        </span>
-                      )}
-                      <div className="flex items-center text-lg sm:text-2xl font-bold tracking-widest gap-1 sm:gap-2">
-                        <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.hours)}</span>
-                        <span className="font-medium">:</span>
-                        <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.minutes)}</span>
-                        <span className="font-medium">:</span>
-                        <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.seconds)}</span>
+                    <div className="flex items-center gap-1 sm:gap-4 flex-nowrap">
+                      {/* Clock animation - hidden on mobile, positioned after discount text */}
+                      <div className="hidden sm:flex promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
+                        <img
+                          src="https://ae01.alicdn.com/kf/S1fa2ebed8eb04c4597523704c386ff5ag/48x48.gif"
+                          alt="Promo clock animation"
+                          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                          loading="lazy"
+                        />
+                        <span className="absolute inset-0 rounded-full border border-white/60 dark:border-white/20 pointer-events-none"></span>
+                      </div>
+                      {/* Countdown label and timer - on same level as discount text on desktop, below on mobile */}
+                      <div className="flex items-center gap-1 sm:gap-3 flex-nowrap text-xs sm:text-base font-semibold text-gray-900 dark:text-white">
+                        {countdownLabel && (
+                          <span className="text-xs sm:text-base uppercase tracking-wider text-rose-600 dark:text-rose-200 whitespace-nowrap">
+                            {countdownLabel}
+                          </span>
+                        )}
+                        <div className="flex items-center text-lg sm:text-2xl font-bold tracking-widest gap-1 sm:gap-2">
+                          <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.hours)}</span>
+                          <span className="font-medium">:</span>
+                          <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.minutes)}</span>
+                          <span className="font-medium">:</span>
+                          <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.seconds)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
