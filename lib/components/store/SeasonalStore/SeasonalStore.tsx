@@ -1514,7 +1514,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       {isStoreContentReady && isConditionalReturnsReady && (
         <div 
           ref={appRef} 
-          className={`min-h-screen font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''} ${editorState.isEditorView ? 'cursor-pointer' : ''}`}
+          className={`font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''} ${editorState.isEditorView ? 'cursor-pointer' : ''}`}
           style={getBackgroundStyle}
           onClick={(e) => {
             // Only open AdminSheet if clicking directly on background (not on child elements)
