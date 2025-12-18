@@ -92,18 +92,23 @@ export function removeProductPromoData(product: Product): Product {
  * Convert database discount data to DiscountSettings format
  */
 export function convertDiscountDataToSettings(discountData: DiscountData): DiscountSettings {
+  // Helper to format date for date input (YYYY-MM-DD)
+  const formatDateForInput = (date: string | Date | undefined): string => {
+    if (!date) return '';
+    const dateObj = new Date(date);
+    if (isNaN(dateObj.getTime())) return '';
+    // Format as YYYY-MM-DD for date input
+    return dateObj.toISOString().slice(0, 10);
+  };
+
   return {
     enabled: true,
     globalDiscount: discountData.globalDiscount || false,
     globalDiscountType: 'percentage',
     globalDiscountAmount: 0,
     percentage: 0,
-    startDate: discountData.seasonalDiscountStart 
-      ? new Date(discountData.seasonalDiscountStart).toISOString() 
-      : '',
-    endDate: discountData.seasonalDiscountEnd 
-      ? new Date(discountData.seasonalDiscountEnd).toISOString() 
-      : '',
+    startDate: formatDateForInput(discountData.seasonalDiscountStart),
+    endDate: formatDateForInput(discountData.seasonalDiscountEnd),
     discountText: discountData.seasonalDiscountText || '',
     promoCode: discountData.seasonalDiscountPromo || '',
     durationType: discountData.seasonalDiscountDurationType,

@@ -554,7 +554,7 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                       <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
                         Discount Type
                       </Text>
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 flex-wrap">
                         <Button
                           size="3"
                           variant={(discountSettings.globalDiscountType || 'percentage') === 'percentage' ? 'solid' : 'soft'}
@@ -569,7 +569,7 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                             }
                           }}
                           disabled={isReadOnly}
-                          className={`!px-6 !py-3 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`!px-6 !py-3 flex-shrink-0 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           Percentage
                         </Button>
@@ -587,7 +587,7 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                             }
                           }}
                           disabled={isReadOnly}
-                          className={`!px-6 !py-3 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`!px-6 !py-3 flex-shrink-0 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           Fixed Price
                         </Button>
@@ -700,25 +700,6 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                         Promo Codes Quantity by Product
                       </Text>
                       <div className="space-y-3">
-                        <label className={`flex items-center gap-3 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                          <input
-                            type="checkbox"
-                            checked={discountSettings.quantityPerProduct === -1}
-                            onChange={(e) => {
-                              if (!isReadOnly) {
-                                onSettingsChange({ 
-                                  ...discountSettings, 
-                                  quantityPerProduct: e.target.checked ? -1 : undefined 
-                                });
-                              }
-                            }}
-                            disabled={isReadOnly}
-                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
-                          />
-                          <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300">
-                            Unlimited
-                          </Text>
-                        </label>
                         {discountSettings.quantityPerProduct !== -1 && (
                           <input
                             type="number"
@@ -742,6 +723,27 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                           />
                         )}
                       </div>
+                      <div className="mt-4">
+                        <label className={`flex items-center gap-3 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={discountSettings.quantityPerProduct === -1}
+                            onChange={(e) => {
+                              if (!isReadOnly) {
+                                onSettingsChange({ 
+                                  ...discountSettings, 
+                                  quantityPerProduct: e.target.checked ? -1 : undefined 
+                                });
+                              }
+                            }}
+                            disabled={isReadOnly}
+                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500"
+                          />
+                          <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300">
+                            Unlimited
+                          </Text>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -754,33 +756,34 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                 <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
                   Discount Timeframe
                 </Text>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 mt-4">
                   <div>
                     <Text size="2" weight="medium" className="text-gray-600 dark:text-gray-400 mb-2 block">
                       Start
                     </Text>
                     <input
-                      type="datetime-local"
+                      type="date"
                       value={discountSettings.startDate}
                       max={discountSettings.endDate || ''}
                       onChange={(e) => {
                         if (!isReadOnly) {
                           const newStartDate = e.target.value;
                           let newEndDate = discountSettings.endDate;
-                          // If start date is after end date, adjust end date to be 1 hour after start
+                          // If start date is after end date, adjust end date to be 1 day after start
                           if (newStartDate && newEndDate && newStartDate > newEndDate) {
                             const startDateObj = new Date(newStartDate);
-                            startDateObj.setHours(startDateObj.getHours() + 1);
-                            newEndDate = startDateObj.toISOString().slice(0, 16);
+                            startDateObj.setDate(startDateObj.getDate() + 1);
+                            newEndDate = startDateObj.toISOString().slice(0, 10);
                           }
                           onSettingsChange({ ...discountSettings, startDate: newStartDate, endDate: newEndDate });
                         }
                       }}
                       disabled={isReadOnly}
                       readOnly={isReadOnly}
-                      className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                      className={`w-full min-w-[140px] px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
                         isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
                       }`}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div>
@@ -788,27 +791,28 @@ export const SeasonalDiscountPanel: React.FC<SeasonalDiscountPanelProps> = ({
                       End
                     </Text>
                     <input
-                      type="datetime-local"
+                      type="date"
                       value={discountSettings.endDate}
                       min={discountSettings.startDate || ''}
                       onChange={(e) => {
                         if (!isReadOnly) {
                           const newEndDate = e.target.value;
                           let newStartDate = discountSettings.startDate;
-                          // If end date is before start date, adjust start date to be 1 hour before end
+                          // If end date is before start date, adjust start date to be 1 day before end
                           if (newEndDate && newStartDate && newEndDate < newStartDate) {
                             const endDateObj = new Date(newEndDate);
-                            endDateObj.setHours(endDateObj.getHours() - 1);
-                            newStartDate = endDateObj.toISOString().slice(0, 16);
+                            endDateObj.setDate(endDateObj.getDate() - 1);
+                            newStartDate = endDateObj.toISOString().slice(0, 10);
                           }
                           onSettingsChange({ ...discountSettings, endDate: newEndDate, startDate: newStartDate });
                         }
                       }}
                       disabled={isReadOnly}
                       readOnly={isReadOnly}
-                      className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
+                      className={`w-full min-w-[140px] px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${
                         isReadOnly ? 'opacity-60 cursor-not-allowed' : ''
                       }`}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                 </div>
