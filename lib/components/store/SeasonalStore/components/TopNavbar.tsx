@@ -288,7 +288,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     });
   }, [discountSettings, promoCode]);
   
-  const countdownLabel = timeRemaining ? 'Ends in:' : timeUntilStart ? 'Starts in:' : '';
+  const countdownLabel = timeRemaining ? 'Ends:' : timeUntilStart ? 'Starts:' : '';
   const formatTimeUnit = (value: number) => value.toString().padStart(2, '0');
   
   // Show promo card if discount is set but not started yet OR if it's active
