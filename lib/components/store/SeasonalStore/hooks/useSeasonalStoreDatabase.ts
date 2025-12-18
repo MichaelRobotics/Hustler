@@ -760,12 +760,68 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   const loadTemplates = useCallback(async () => {
     try {
       const templatesList = await getTemplates(experienceId);
-      setTemplates(templatesList);
+      
+      // Fetch discount data from database and apply to all templates
+      let databaseDiscountData: DiscountData | null = null;
+      try {
+        const response = await apiPost(
+          '/api/seasonal-discount/get',
+          { experienceId },
+          experienceId
+        );
+        if (response.ok) {
+          const { discountData } = await response.json();
+          databaseDiscountData = discountData || null;
+        }
+      } catch (error) {
+        console.warn('⚠️ [loadTemplates] Error fetching discount from database:', error);
+      }
+      
+      // Apply discount settings to all templates if discount data exists
+      let finalTemplates = templatesList;
+      if (databaseDiscountData) {
+        const discountStatus = checkDiscountStatus(databaseDiscountData);
+        const isActiveOrApproaching = discountStatus === 'active' || discountStatus === 'approaching';
+        
+        if (isActiveOrApproaching) {
+          const updatedDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+          
+          // Update all templates with discount settings from database
+          finalTemplates = templatesList.map(template => {
+            // Only update if template doesn't have discountSettings or if it has a different discount ID
+            if (!template.templateData.discountSettings || 
+                template.templateData.discountSettings.seasonalDiscountId !== databaseDiscountData?.seasonalDiscountId) {
+              return {
+                ...template,
+                templateData: {
+                  ...template.templateData,
+                  discountSettings: updatedDiscountSettings,
+                },
+              };
+            }
+            // Template already has correct discount settings
+            return template;
+          });
+        }
+      }
+      
+      setTemplates(finalTemplates);
+      
+      // Update cache with updated templates
+      if (finalTemplates !== templatesList) {
+        updateCachedTemplates(prev => {
+          const newCache = new Map(prev);
+          finalTemplates.forEach(template => {
+            newCache.set(template.id, template as StoreTemplate);
+          });
+          return newCache;
+        });
+      }
       
       // Also cache templates when they're loaded (if not already cached)
-      if (templatesList.length > 0 && !templateBackgroundsPreloaded) {
+      if (finalTemplates.length > 0 && !templateBackgroundsPreloaded) {
         // Cache and preload in background (non-blocking)
-        cacheAllTemplatesAndPreloadBackgrounds(templatesList).catch(err => {
+        cacheAllTemplatesAndPreloadBackgrounds(finalTemplates).catch(err => {
           console.error('Error caching templates in loadTemplates:', err);
         });
       }
@@ -778,7 +834,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         setApiError(`Failed to load templates: ${(error as Error).message}`);
       }
     }
-  }, [experienceId, templateBackgroundsPreloaded, cacheAllTemplatesAndPreloadBackgrounds]);
+  }, [experienceId, templateBackgroundsPreloaded, cacheAllTemplatesAndPreloadBackgrounds, apiPost, checkDiscountStatus, convertDiscountDataToSettings, updateCachedTemplates]);
   
   // CRITICAL: Filter template products to ONLY include ones that exist in Market Stall
   // Applies template product design (buttons, colors, images, etc.) to matching Market Stall products
@@ -1179,10 +1235,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
         shouldCleanAllTemplates = true;
         newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
       }
-      // If promo is ACTIVE/APPROACHING and matches - keep products as-is
+      // If promo is ACTIVE/APPROACHING and matches - use database discount to ensure globalDiscount is correct
       else if (isActiveOrApproaching && templateSeasonalDiscountId === databaseSeasonalDiscountId) {
-        console.log('✅ Discount settings match active discount - loading as-is');
-        newDiscountSettings = templateDiscountSettings;
+        console.log('✅ Discount settings match active discount - using database discount to ensure globalDiscount is correct');
+        newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
       }
       // If template has discount but no seasonalDiscountId and database has active discount
       else if (!templateSeasonalDiscountId && isActiveOrApproaching && databaseSeasonalDiscountId) {
@@ -1192,7 +1248,12 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Template has discount but database doesn't have active/approaching discount
       else {
         console.log('⚠️ Template has discount but database discount is not active/approaching');
-        newDiscountSettings = templateDiscountSettings;
+        // Still use database discount data if available to ensure globalDiscount is correct
+        if (databaseDiscountData) {
+          newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+        } else {
+          newDiscountSettings = templateDiscountSettings;
+        }
       }
     }
     // Case 2: Template DOESN'T have discountSettings
@@ -1402,7 +1463,67 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       
       // Step 3: Load all templates ("shops") and pick the most recently updated
       const allTemplates = await getTemplates(experienceId);
-      setTemplates(allTemplates);
+      
+      // Step 3a: Fetch discount data from database and apply to all templates
+      let databaseDiscountData: DiscountData | null = null;
+      try {
+        const { apiPost } = await import('@/lib/utils/api');
+        const response = await apiPost(
+          '/api/seasonal-discount/get',
+          { experienceId },
+          experienceId
+        );
+        if (response.ok) {
+          const { discountData } = await response.json();
+          databaseDiscountData = discountData || null;
+        }
+      } catch (error) {
+        console.warn('⚠️ [loadApplicationData] Error fetching discount from database:', error);
+      }
+      
+      // Apply discount settings to all templates if discount data exists
+      if (databaseDiscountData) {
+        const discountStatus = checkDiscountStatus(databaseDiscountData);
+        const isActiveOrApproaching = discountStatus === 'active' || discountStatus === 'approaching';
+        
+        if (isActiveOrApproaching) {
+          const updatedDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+          
+          // Update all templates with discount settings from database
+          const updatedTemplates = allTemplates.map(template => {
+            // Only update if template doesn't have discountSettings or if it has a different discount ID
+            if (!template.templateData.discountSettings || 
+                template.templateData.discountSettings.seasonalDiscountId !== databaseDiscountData?.seasonalDiscountId) {
+              return {
+                ...template,
+                templateData: {
+                  ...template.templateData,
+                  discountSettings: updatedDiscountSettings,
+                },
+              };
+            }
+            // Template already has correct discount settings
+            return template;
+          });
+          
+          setTemplates(updatedTemplates);
+          
+          // Update cache with updated templates
+          updateCachedTemplates(prev => {
+            const newCache = new Map(prev);
+            updatedTemplates.forEach(template => {
+              newCache.set(template.id, template as StoreTemplate);
+            });
+            return newCache;
+          });
+        } else {
+          // Discount is not active/approaching, set templates as-is
+          setTemplates(allTemplates);
+        }
+      } else {
+        // No discount data, set templates as-is
+        setTemplates(allTemplates);
+      }
 
       const shopTemplates = allTemplates.filter(template => !template.isLive);
       

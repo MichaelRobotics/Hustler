@@ -438,8 +438,12 @@ export const usePreviewLiveTemplate = ({
             }
             // If promo is ACTIVE/APPROACHING and seasonal_discount_id MATCHES
             else if (isActiveOrApproaching && templateSeasonalDiscountId === databaseSeasonalDiscountId) {
-              console.log('✅ [PreviewLiveTemplate] Discount settings match active discount - keeping template settings');
-              // Template settings are already set above, no need to update
+              console.log('✅ [PreviewLiveTemplate] Discount settings match active discount - using database discount to ensure globalDiscount is correct');
+              // Always use database discount to ensure globalDiscount is correct
+              if (!isCancelled && setDiscountSettings) {
+                const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+                setDiscountSettings(newDiscountSettings);
+              }
             }
             // If template has discount but no seasonalDiscountId and database has active discount
             else if (!templateSeasonalDiscountId && isActiveOrApproaching && databaseSeasonalDiscountId) {
@@ -453,7 +457,12 @@ export const usePreviewLiveTemplate = ({
             // Template has discount but database doesn't have active/approaching discount
             else {
               console.log('⚠️ [PreviewLiveTemplate] Template has discount but database discount is not active/approaching');
-              // Template settings are already set above, no need to update
+              // Still use database discount data if available to ensure globalDiscount is correct
+              if (databaseDiscountData && !isCancelled && setDiscountSettings) {
+                const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+                setDiscountSettings(newDiscountSettings);
+              }
+              // Otherwise template settings are already set above
             }
           }
           // Case 2: Template DOESN'T have discountSettings

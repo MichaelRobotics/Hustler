@@ -306,7 +306,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   const shouldCopyOnClick = discountSettings?.enabled && isPromoActive && Boolean(promoCode);
 
   const handlePromoCardCopy = React.useCallback(() => {
-    console.log('🔵 handlePromoCardCopy called', { promoCode, hasPromoCode: !!promoCode });
+    console.log('🔵 handlePromoCardCopy called', { promoCode, shouldCopyOnClick });
     if (!promoCode) {
       console.log('⚠️ No promo code, returning early');
       return;
@@ -315,7 +315,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       navigator.clipboard.writeText(promoCode).then(() => {
         console.log('✅ Promo code copied to clipboard:', promoCode);
         setPromoCopied(true);
-        setIsNotificationAnimating(true);
+        // Let the useEffect handle the animation state
         setShowPromoNotification(true);
         setTimeout(() => setPromoCopied(false), 1500);
       }).catch((err) => {
@@ -325,7 +325,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     } else {
       console.log('⚠️ Clipboard API not available');
     }
-  }, [promoCode]);
+  }, [promoCode, shouldCopyOnClick]);
 
   const handlePromoCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!promoCode) return;
@@ -418,12 +418,20 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           animation: hourSweep 8s linear infinite;
         }
         .timer-chip {
-          min-width: 38px;
+          min-width: 28px;
           text-align: center;
-          border-radius: 12px;
+          border-radius: 8px;
           background: rgba(255,255,255,0.8);
-          padding: 4px 10px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          padding: 2px 6px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        @media (min-width: 640px) {
+          .timer-chip {
+            min-width: 38px;
+            border-radius: 12px;
+            padding: 4px 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          }
         }
         .dark .timer-chip {
           background: rgba(15,23,42,0.8);
@@ -461,11 +469,24 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         .promo-notification-slide-out { animation: slideOutBounce 0.4s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards; }
         .promo-notification-container { opacity: 0; transform: translate(-50%, -100%); }
       `}</style>            <div className="sticky top-4 z-30 flex-shrink-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6" data-prevent-bg-toggle="true">
-        <div className={`min-h-[80px] py-3 px-4 sm:px-6 lg:px-8 shadow-lg rounded-lg relative overflow-hidden flex flex-col justify-center ${
-          editorState.isEditorView 
-            ? 'bg-white dark:bg-gray-900' 
-            : 'bg-transparent'
-        }`}>
+        <div 
+          className={`min-h-[80px] py-3 px-4 sm:px-6 lg:px-8 shadow-lg rounded-lg relative overflow-hidden flex flex-col justify-center ${
+            editorState.isEditorView 
+              ? 'bg-white dark:bg-gray-900' 
+              : 'bg-transparent'
+          } ${shouldCopyOnClick ? 'cursor-pointer' : ''}`}
+          onClick={(e) => {
+            // Only copy if clicking on the container itself or non-interactive elements
+            // Don't copy if clicking on buttons, inputs, or other interactive elements
+            const target = e.target as HTMLElement;
+            const isInteractive = target.closest('button, a, input, select, textarea, [role="button"], [onclick], .promo-card');
+            
+            if (shouldCopyOnClick && !isInteractive) {
+              // Don't prevent default or stop propagation - let the event flow naturally
+              handlePromoCardCopy();
+            }
+          }}
+        >
           {/* Accent border line at bottom - matches ProductCard button color - Only in Editor View */}
           {editorState.isEditorView && (
             <>
@@ -686,14 +707,16 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="flex-1 flex items-center justify-center">
               {showPromoTimerCard && countdownInfo && (
                 <div
-                  className={`promo-card promo-card-hover group relative w-full sm:w-auto sm:max-w-3xl px-4 py-3 sm:px-6 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${shouldCopyOnClick ? 'cursor-pointer' : 'cursor-default'}`}
+                  className={`promo-card promo-card-hover group relative w-auto max-w-full sm:max-w-3xl mx-auto px-3 py-2 sm:px-6 sm:py-3 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${shouldCopyOnClick ? 'cursor-pointer' : 'cursor-default'}`}
                   role={shouldCopyOnClick ? 'button' : undefined}
                   tabIndex={shouldCopyOnClick ? 0 : undefined}
                   onClick={(e) => {
-                    console.log('🔵 Parent div clicked', { promoCode, shouldCopyOnClick, target: e.target });
+                    // Stop propagation to prevent parent TopNavbar click handler from firing
+                    e.stopPropagation();
+                    console.log('🔵 Promo card clicked', { promoCode, shouldCopyOnClick, target: e.target });
                     if (shouldCopyOnClick) {
                       e.preventDefault();
-                      e.stopPropagation();
+                      // Ensure notification is triggered
                       handlePromoCardCopy();
                     }
                   }}
@@ -702,38 +725,36 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 >
                   <div className="absolute inset-0 rounded-2xl bg-[var(--subtitleBgColorStatic,#FEEBEB)] dark:bg-rose-900/60 opacity-95 pointer-events-none"></div>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-amber-50/80 dark:from-rose-900/50 dark:via-slate-900/80 dark:to-amber-900/40 pointer-events-none"></div>
-                  <div className="relative z-10 flex flex-wrap items-center gap-2 sm:gap-4 text-left justify-start">
-                    <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-                      {discountSettings?.discountText && (
-                        <span 
-                          className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap"
-                          dangerouslySetInnerHTML={{ __html: discountSettings.discountText }}
-                        />
+                  <div className="relative z-10 flex items-center gap-1.5 sm:gap-4 flex-wrap justify-center sm:justify-start">
+                    {discountSettings?.discountText && (
+                      <span 
+                        className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap"
+                        dangerouslySetInnerHTML={{ __html: discountSettings.discountText }}
+                      />
+                    )}
+                    {/* Clock animation - hidden on mobile, positioned after discount text */}
+                    <div className="hidden sm:flex promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
+                      <img
+                        src="https://ae01.alicdn.com/kf/S1fa2ebed8eb04c4597523704c386ff5ag/48x48.gif"
+                        alt="Promo clock animation"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        loading="lazy"
+                      />
+                      <span className="absolute inset-0 rounded-full border border-white/60 dark:border-white/20 pointer-events-none"></span>
+                    </div>
+                    {/* Countdown label and timer - on same level as discount text */}
+                    <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap text-xs sm:text-base font-semibold text-gray-900 dark:text-white">
+                      {countdownLabel && (
+                        <span className="text-xs sm:text-base uppercase tracking-wider text-rose-600 dark:text-rose-200 whitespace-nowrap">
+                          {countdownLabel}
+                        </span>
                       )}
-                      {/* Clock animation - hidden on mobile */}
-                      <div className="hidden sm:flex promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
-                        <img
-                          src="https://ae01.alicdn.com/kf/S1fa2ebed8eb04c4597523704c386ff5ag/48x48.gif"
-                          alt="Promo clock animation"
-                          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                          loading="lazy"
-                        />
-                        <span className="absolute inset-0 rounded-full border border-white/60 dark:border-white/20 pointer-events-none"></span>
-                      </div>
-                      {/* Countdown label and timer - on same level as promo text on mobile */}
-                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-sm sm:text-base font-semibold text-gray-900 dark:text-white">
-                        {countdownLabel && (
-                          <span className="text-sm sm:text-base uppercase tracking-wider text-rose-600 dark:text-rose-200 whitespace-nowrap">
-                            {countdownLabel}
-                          </span>
-                        )}
-                        <div className="flex items-center text-lg sm:text-2xl font-bold tracking-widest gap-2">
-                          <span className="timer-chip">{formatTimeUnit(countdownInfo.hours)}</span>
-                          <span className="font-medium">:</span>
-                          <span className="timer-chip">{formatTimeUnit(countdownInfo.minutes)}</span>
-                          <span className="font-medium">:</span>
-                          <span className="timer-chip">{formatTimeUnit(countdownInfo.seconds)}</span>
-                        </div>
+                      <div className="flex items-center text-lg sm:text-2xl font-bold tracking-widest gap-1 sm:gap-2">
+                        <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.hours)}</span>
+                        <span className="font-medium">:</span>
+                        <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.minutes)}</span>
+                        <span className="font-medium">:</span>
+                        <span className="timer-chip text-sm sm:text-lg">{formatTimeUnit(countdownInfo.seconds)}</span>
                       </div>
                     </div>
                   </div>

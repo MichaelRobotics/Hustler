@@ -102,8 +102,8 @@ export function convertDiscountDataToSettings(discountData: DiscountData): Disco
   };
 
   return {
-    enabled: true,
-    globalDiscount: discountData.globalDiscount || false,
+    enabled: Boolean(discountData.seasonalDiscountId && discountData.seasonalDiscountPromo),
+    globalDiscount: discountData.globalDiscount ?? false,
     globalDiscountType: 'percentage',
     globalDiscountAmount: 0,
     percentage: 0,
