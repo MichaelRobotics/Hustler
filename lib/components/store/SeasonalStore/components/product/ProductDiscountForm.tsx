@@ -206,14 +206,14 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
               <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
                 Promo Code Name
               </Text>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
               {isCreatingPromo ? (
                 <>
                   <input
                     type="text"
                     value={generatedPromoName}
                     readOnly
-                    className="flex-1 px-4 py-3 bg-gray-100 border border-gray-300 rounded-xl text-gray-700 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 cursor-not-allowed"
+                    className="flex-1 min-w-0 px-4 py-3 bg-gray-100 border border-gray-300 rounded-xl text-gray-700 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 cursor-not-allowed"
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                   />
@@ -227,7 +227,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       setGeneratedPromoName('');
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="!px-6 !py-3"
+                    className="!px-6 !py-3 flex-shrink-0"
                   >
                     Cancel
                   </Button>
@@ -240,7 +240,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       setLocalPromoCodeId(e.target.value || undefined);
                     }}
                     disabled={isLoadingPromos}
-                    className={`flex-1 px-4 py-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${isLoadingPromos ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex-1 min-w-0 px-4 py-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 ${isLoadingPromos ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
@@ -261,7 +261,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                         handleNewPromoClick();
                       }}
                       onPointerDown={(e) => e.stopPropagation()}
-                      className="!px-6 !py-3"
+                      className="!px-6 !py-3 flex-shrink-0"
                     >
                       + New
                     </Button>
@@ -278,7 +278,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
               <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
                 Discount Source
               </Text>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 <Button
                   size="3"
                   variant={promoMode === 'global' ? 'solid' : 'soft'}
@@ -293,7 +293,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                     setIsCreatingPromo(false);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="!px-6 !py-3"
+                  className="!px-6 !py-3 flex-shrink-0"
                   disabled={!discountSettings?.globalDiscount || !discountSettings?.promoCode}
                 >
                   Global Discount
@@ -307,7 +307,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                     setPromoMode('custom');
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="!px-6 !py-3"
+                  className="!px-6 !py-3 flex-shrink-0"
                 >
                   Custom Discount
                 </Button>
@@ -373,7 +373,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
             <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
               Discount Type
             </Text>
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <Button
                 size="3"
                 variant={localPromoDiscountType === 'percentage' ? 'solid' : 'soft'}
@@ -387,7 +387,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                   }
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="!px-6 !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="!px-6 !py-3 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Percentage
               </Button>
@@ -404,7 +404,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                   }
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="!px-6 !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="!px-6 !py-3 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Fixed Price
               </Button>
@@ -446,6 +446,37 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
             Limit Quantity
           </Text>
           <div className="space-y-3">
+            <input
+              type="number"
+              min="0"
+              value={localPromoUnlimitedQuantity ? '' : (localPromoLimitQuantity ?? '')}
+              onChange={(e) => {
+                if (!areButtonsDisabled) {
+                  const value = parseInt(e.target.value, 10);
+                  const newLimit = Number.isNaN(value) || value <= 0 ? undefined : value;
+                  setLocalPromoLimitQuantity(newLimit);
+                  
+                  // If fire icon is enabled, validate that we have a valid quantity
+                  if (localPromoShowFireIcon && (!newLimit || newLimit <= 0)) {
+                    setDiscountValidationError('Enter a quantity limit above 0 to show the fire icon.');
+                  } else {
+                    setDiscountValidationError(null);
+                  }
+                }
+              }}
+              disabled={localPromoUnlimitedQuantity || areButtonsDisabled}
+              placeholder="Enter limit (e.g., 50)"
+              className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 ${
+                discountValidationError && discountValidationError.includes('quantity') ? 'border-red-500 dark:border-red-500' : ''
+              }`}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+            <Text size="2" className="text-gray-500 dark:text-gray-400 mt-2">
+              Optional limit for discounted purchases (required if showing fire icon).
+            </Text>
+          </div>
+          <div className="mt-4">
             <label className={`flex items-center gap-3 ${areButtonsDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
               <input
                 type="checkbox"
@@ -479,35 +510,6 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                 Unlimited
               </Text>
             </label>
-            <input
-              type="number"
-              min="0"
-              value={localPromoUnlimitedQuantity ? '' : (localPromoLimitQuantity ?? '')}
-              onChange={(e) => {
-                if (!areButtonsDisabled) {
-                  const value = parseInt(e.target.value, 10);
-                  const newLimit = Number.isNaN(value) || value <= 0 ? undefined : value;
-                  setLocalPromoLimitQuantity(newLimit);
-                  
-                  // If fire icon is enabled, validate that we have a valid quantity
-                  if (localPromoShowFireIcon && (!newLimit || newLimit <= 0)) {
-                    setDiscountValidationError('Enter a quantity limit above 0 to show the fire icon.');
-                  } else {
-                    setDiscountValidationError(null);
-                  }
-                }
-              }}
-              disabled={localPromoUnlimitedQuantity || areButtonsDisabled}
-              placeholder="Enter limit (e.g., 50)"
-              className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all duration-200 shadow-sm hover:shadow-md hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:placeholder:text-gray-300 dark:focus:border-violet-400 dark:focus:ring-violet-500/50 dark:hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 ${
-                discountValidationError && discountValidationError.includes('quantity') ? 'border-red-500 dark:border-red-500' : ''
-              }`}
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-            />
-            <Text size="2" className="text-gray-500 dark:text-gray-400 mt-2">
-              Optional limit for discounted purchases (required if showing fire icon).
-            </Text>
           </div>
           </div>
 
@@ -518,7 +520,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                 <Text size="3" weight="medium" className="text-gray-700 dark:text-gray-300 mb-3">
                   Discount Duration
                 </Text>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <Button
                     size="3"
                     variant={localPromoDurationType === 'one-time' ? 'solid' : 'soft'}
@@ -531,7 +533,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       }
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="!px-6 !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="!px-6 !py-3 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     One-Time
                   </Button>
@@ -547,7 +549,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       }
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="!px-6 !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="!px-6 !py-3 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Forever
                   </Button>
@@ -563,7 +565,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       }
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="!px-6 !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="!px-6 !py-3 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Duration
                   </Button>
@@ -723,7 +725,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       onPointerDown={(e) => e.stopPropagation()}
                       className="!px-6 !py-3"
                     >
-                      Apply Discount
+                      Apply
                     </Button>
                   )}
                   <Button
@@ -771,7 +773,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                           className="!px-6 !py-3"
                           disabled={!discountSettings?.globalDiscount || !discountSettings?.promoCode}
                         >
-                          Apply Discount
+                          Apply
                         </Button>
                       )}
                     </>
@@ -850,7 +852,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                             className="!px-6 !py-3"
                             disabled={!localPromoDiscountType || !localPromoDiscountAmount || localPromoDiscountAmount <= 0 || !localManualPromoCode?.trim()}
                           >
-                            Apply Discount
+                            Apply
                           </Button>
                         </>
                       )}

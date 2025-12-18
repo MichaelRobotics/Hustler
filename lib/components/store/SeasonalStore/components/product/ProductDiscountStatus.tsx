@@ -22,7 +22,7 @@ export const ProductDiscountStatus: React.FC<ProductDiscountStatusProps> = ({
 
   return (
     <div className="mb-5">
-      <div style={{ width: 300 }}>
+      <div className="w-full max-w-[300px]">
         <div className="flex items-center gap-3">
           <div className="flex-1 p-3 rounded-lg bg-gray-100 dark:bg-gray-800">
             {seasonalDiscountStatus.status === 'none' && (
