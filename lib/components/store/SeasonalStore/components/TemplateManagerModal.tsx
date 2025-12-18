@@ -354,6 +354,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               templates={templates}
               liveTemplateId={liveTemplate?.id}
               highlightedTemplateId={highlightedTemplateId}
+              currentlyLoadedTemplateId={currentlyLoadedTemplateId}
               originTemplate={originTemplate}
               onDeleteTemplate={deleteTemplate}
               onSetLive={(id) => {
