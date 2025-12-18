@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, Settings, Package, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Settings, Package, Check } from 'lucide-react';
 import { Button, Heading, Text } from 'frosted-ui';
 
 interface TopNavbarProps {
@@ -301,6 +301,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   
   // Hide promo code and copy button if promo hasn't started yet
   const showPromoCode = isPromoActive && Boolean(promoCode);
+  
+  // Check if clicking should copy promo code (only when discount is active, not approaching, and enabled)
+  const shouldCopyOnClick = discountSettings?.enabled && isPromoActive && Boolean(promoCode);
 
   const handlePromoCardCopy = React.useCallback(() => {
     console.log('🔵 handlePromoCardCopy called', { promoCode, hasPromoCode: !!promoCode });
@@ -683,31 +686,32 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="flex-1 flex items-center justify-center">
               {showPromoTimerCard && countdownInfo && (
                 <div
-                  className={`promo-card promo-card-hover group relative w-full sm:w-auto sm:max-w-3xl px-4 py-3 sm:px-6 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${showPromoCode ? 'cursor-pointer' : 'cursor-default'}`}
-                  role={showPromoCode ? 'button' : undefined}
-                  tabIndex={showPromoCode ? 0 : undefined}
+                  className={`promo-card promo-card-hover group relative w-full sm:w-auto sm:max-w-3xl px-4 py-3 sm:px-6 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${shouldCopyOnClick ? 'cursor-pointer' : 'cursor-default'}`}
+                  role={shouldCopyOnClick ? 'button' : undefined}
+                  tabIndex={shouldCopyOnClick ? 0 : undefined}
                   onClick={(e) => {
-                    console.log('🔵 Parent div clicked', { promoCode, showPromoCode, target: e.target });
-                    if (showPromoCode) {
+                    console.log('🔵 Parent div clicked', { promoCode, shouldCopyOnClick, target: e.target });
+                    if (shouldCopyOnClick) {
                       e.preventDefault();
                       e.stopPropagation();
                       handlePromoCardCopy();
                     }
                   }}
-                  onKeyDown={showPromoCode ? handlePromoCardKeyDown : undefined}
-                  aria-label={showPromoCode ? `Copy promo code ${promoCode}` : undefined}
+                  onKeyDown={shouldCopyOnClick ? handlePromoCardKeyDown : undefined}
+                  aria-label={shouldCopyOnClick ? `Copy promo code ${promoCode}` : undefined}
                 >
                   <div className="absolute inset-0 rounded-2xl bg-[var(--subtitleBgColorStatic,#FEEBEB)] dark:bg-rose-900/60 opacity-95 pointer-events-none"></div>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-amber-50/80 dark:from-rose-900/50 dark:via-slate-900/80 dark:to-amber-900/40 pointer-events-none"></div>
-                  <div className={`relative z-10 flex flex-wrap items-center gap-4 text-left ${showPromoCode ? 'justify-between w-full' : 'justify-start'}`}>
-                    <div className={`flex items-center gap-4 flex-wrap ${showPromoCode ? 'flex-1 min-w-0' : ''}`}>
+                  <div className="relative z-10 flex flex-wrap items-center gap-2 sm:gap-4 text-left justify-start">
+                    <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                       {discountSettings?.discountText && (
                         <span 
                           className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap"
                           dangerouslySetInnerHTML={{ __html: discountSettings.discountText }}
                         />
                       )}
-                      <div className="promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
+                      {/* Clock animation - hidden on mobile */}
+                      <div className="hidden sm:flex promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
                         <img
                           src="https://ae01.alicdn.com/kf/S1fa2ebed8eb04c4597523704c386ff5ag/48x48.gif"
                           alt="Promo clock animation"
@@ -716,7 +720,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                         />
                         <span className="absolute inset-0 rounded-full border border-white/60 dark:border-white/20 pointer-events-none"></span>
                       </div>
-                      <div className="flex items-center gap-3 flex-wrap text-sm sm:text-base font-semibold text-gray-900 dark:text-white">
+                      {/* Countdown label and timer - on same level as promo text on mobile */}
+                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-sm sm:text-base font-semibold text-gray-900 dark:text-white">
                         {countdownLabel && (
                           <span className="text-sm sm:text-base uppercase tracking-wider text-rose-600 dark:text-rose-200 whitespace-nowrap">
                             {countdownLabel}
@@ -731,16 +736,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                         </div>
                       </div>
                     </div>
-
-                    {showPromoCode && (
-                      <div className="flex items-center">
-                        {promoCopied ? (
-                          <Check className="w-5 h-5 text-emerald-500" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-gray-500" />
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
