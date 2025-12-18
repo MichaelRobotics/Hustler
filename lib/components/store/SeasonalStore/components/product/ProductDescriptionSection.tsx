@@ -3,7 +3,7 @@
 import React from 'react';
 import type { Product } from './types';
 import { FormattingToolbar } from './FormattingToolbar';
-import { normalizeHtmlContent, truncateHTMLToTwoLines } from '../../utils/html';
+import { normalizeHtmlContent, truncateHTMLToTwoLines, normalizeExecCommandHtml } from '../../utils/html';
 
 interface ProductDescriptionSectionProps {
   product: Product;
@@ -64,6 +64,7 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
           quickColors={quickColors}
           activeSubToolbar={activeDescSubToolbar}
           setActiveSubToolbar={setActiveDescSubToolbar}
+          hideBoldItalic={true}
           onClose={() => {
             setShowDescToolbar(false);
             setShowDescColorPicker(false);
@@ -79,7 +80,13 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
               selection?.addRange(range);
               document.execCommand('bold', false);
               selection?.removeAllRanges();
-              const content = descRef.innerHTML || descRef.textContent || '';
+              let content = descRef.innerHTML || descRef.textContent || '';
+              // Normalize HTML tags (convert <b> to <strong>, inline styles to <strong>)
+              content = normalizeExecCommandHtml(content);
+              // Update the DOM with normalized content
+              if (descRef.innerHTML !== content) {
+                descRef.innerHTML = content;
+              }
               onUpdateProduct(product.id, { description: content });
             }
           }}
@@ -93,7 +100,13 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
               selection?.addRange(range);
               document.execCommand('italic', false);
               selection?.removeAllRanges();
-              const content = descRef.innerHTML || descRef.textContent || '';
+              let content = descRef.innerHTML || descRef.textContent || '';
+              // Normalize HTML tags (convert <i> to <em>, inline styles to <em>)
+              content = normalizeExecCommandHtml(content);
+              // Update the DOM with normalized content
+              if (descRef.innerHTML !== content) {
+                descRef.innerHTML = content;
+              }
               onUpdateProduct(product.id, { description: content });
             }
           }}
@@ -107,7 +120,13 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
               selection?.addRange(range);
               document.execCommand('foreColor', false, color);
               selection?.removeAllRanges();
-              const content = descRef.innerHTML || descRef.textContent || '';
+              let content = descRef.innerHTML || descRef.textContent || '';
+              // Normalize HTML tags (preserve color, convert <b> to <strong>, <i> to <em>)
+              content = normalizeExecCommandHtml(content);
+              // Update the DOM with normalized content
+              if (descRef.innerHTML !== content) {
+                descRef.innerHTML = content;
+              }
               onUpdateProduct(product.id, { description: content });
             }
           }}
@@ -148,6 +167,8 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
               toolbarElement.contains(relatedTarget) || relatedTarget === toolbarElement
             );
             let content = descRef?.innerHTML || descRef?.textContent || '';
+            // Normalize HTML before truncating
+            content = normalizeExecCommandHtml(content);
             content = truncateHTMLToTwoLines(content);
             if (descRef && descRef.innerHTML !== content) {
               descRef.innerHTML = content;
@@ -167,7 +188,13 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
           }}
           onInput={() => {
             const rawContent = descRef?.innerHTML || descRef?.textContent || '';
-            const content = normalizeHtmlContent(rawContent);
+            let content = normalizeHtmlContent(rawContent);
+            // Normalize execCommand HTML tags
+            content = normalizeExecCommandHtml(content);
+            // Update the DOM with normalized content if it changed
+            if (descRef && descRef.innerHTML !== content) {
+              descRef.innerHTML = content;
+            }
             onUpdateProduct(product.id, { description: content });
           }}
         />
@@ -175,10 +202,16 @@ const ProductDescriptionSectionComponent: React.FC<ProductDescriptionSectionProp
     );
   }
 
+  // Normalize HTML for preview mode (convert <font>, <b>, <i> tags)
+  const normalizedDescription = React.useMemo(() => {
+    if (!product.description) return '';
+    return normalizeExecCommandHtml(product.description);
+  }, [product.description]);
+
   return (
     <p 
       className={`text-xs mb-1 ${descHasHtmlFormatting ? '' : descClass}`}
-      dangerouslySetInnerHTML={{ __html: product.description || '' }}
+      dangerouslySetInnerHTML={{ __html: normalizedDescription }}
       style={{
         display: '-webkit-box',
         WebkitLineClamp: 2,

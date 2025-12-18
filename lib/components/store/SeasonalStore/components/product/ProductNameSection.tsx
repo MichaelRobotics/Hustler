@@ -3,7 +3,7 @@
 import React, { useRef } from 'react';
 import type { Product } from './types';
 import { FormattingToolbar } from './FormattingToolbar';
-import { normalizeHtmlContent } from '../../utils/html';
+import { normalizeHtmlContent, normalizeExecCommandHtml } from '../../utils/html';
 
 interface ProductNameSectionProps {
   product: Product;
@@ -64,6 +64,7 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
           quickColors={quickColors}
           activeSubToolbar={activeNameSubToolbar}
           setActiveSubToolbar={setActiveNameSubToolbar}
+          hideBoldItalic={true}
           onClose={() => {
             setShowNameToolbar(false);
             setShowNameColorPicker(false);
@@ -79,7 +80,13 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
               selection?.addRange(range);
               document.execCommand('bold', false);
               selection?.removeAllRanges();
-              const content = nameRef.innerHTML || nameRef.textContent || '';
+              let content = nameRef.innerHTML || nameRef.textContent || '';
+              // Normalize HTML tags (convert <b> to <strong>, inline styles to <strong>)
+              content = normalizeExecCommandHtml(content);
+              // Update the DOM with normalized content
+              if (nameRef.innerHTML !== content) {
+                nameRef.innerHTML = content;
+              }
               onUpdateProduct(product.id, { name: content });
             }
           }}
@@ -93,7 +100,13 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
               selection?.addRange(range);
               document.execCommand('italic', false);
               selection?.removeAllRanges();
-              const content = nameRef.innerHTML || nameRef.textContent || '';
+              let content = nameRef.innerHTML || nameRef.textContent || '';
+              // Normalize HTML tags (convert <i> to <em>, inline styles to <em>)
+              content = normalizeExecCommandHtml(content);
+              // Update the DOM with normalized content
+              if (nameRef.innerHTML !== content) {
+                nameRef.innerHTML = content;
+              }
               onUpdateProduct(product.id, { name: content });
             }
           }}
@@ -107,7 +120,13 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
               selection?.addRange(range);
               document.execCommand('foreColor', false, color);
               selection?.removeAllRanges();
-              const content = nameRef.innerHTML || nameRef.textContent || '';
+              let content = nameRef.innerHTML || nameRef.textContent || '';
+              // Normalize HTML tags (preserve color, convert <b> to <strong>, <i> to <em>)
+              content = normalizeExecCommandHtml(content);
+              // Update the DOM with normalized content
+              if (nameRef.innerHTML !== content) {
+                nameRef.innerHTML = content;
+              }
               onUpdateProduct(product.id, { name: content });
             }
           }}
@@ -135,7 +154,13 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
             const isClickingToolbar = toolbarElement && (
               toolbarElement.contains(relatedTarget) || relatedTarget === toolbarElement
             );
-            const content = nameRef?.innerHTML || nameRef?.textContent || '';
+            let content = nameRef?.innerHTML || nameRef?.textContent || '';
+            // Normalize HTML before saving
+            content = normalizeExecCommandHtml(content);
+            // Update the DOM with normalized content if it changed
+            if (nameRef && nameRef.innerHTML !== content) {
+              nameRef.innerHTML = content;
+            }
             onUpdateProduct(product.id, { name: content });
             if (!isClickingToolbar) {
               setTimeout(() => {
@@ -151,7 +176,13 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
           }}
           onInput={() => {
             const rawContent = nameRef?.innerHTML || nameRef?.textContent || '';
-            const content = normalizeHtmlContent(rawContent);
+            let content = normalizeHtmlContent(rawContent);
+            // Normalize execCommand HTML tags
+            content = normalizeExecCommandHtml(content);
+            // Update the DOM with normalized content if it changed
+            if (nameRef && nameRef.innerHTML !== content) {
+              nameRef.innerHTML = content;
+            }
             onUpdateProduct(product.id, { name: content });
           }}
         />
@@ -159,10 +190,16 @@ export const ProductNameSection: React.FC<ProductNameSectionProps> = ({
     );
   }
 
+  // Normalize HTML for preview mode (convert <font>, <b>, <i> tags)
+  const normalizedName = React.useMemo(() => {
+    if (!product.name) return '';
+    return normalizeExecCommandHtml(product.name);
+  }, [product.name]);
+
   return (
     <h2 
       className={`text-lg font-bold mb-0.5 ${nameHasHtmlFormatting ? '' : titleClass}`}
-      dangerouslySetInnerHTML={{ __html: product.name || '' }}
+      dangerouslySetInnerHTML={{ __html: normalizedName }}
     />
   );
 };

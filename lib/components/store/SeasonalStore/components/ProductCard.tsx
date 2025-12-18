@@ -30,6 +30,7 @@ interface ProductCardProps {
   };
   discountStatus?: 'active' | 'approaching' | 'expired' | 'non-existent'; // Discount status from database
   seasonalDiscountId?: string; // Seasonal discount ID to match against product's discount
+  currentDiscountPromoCode?: string; // Current discount promo code from experience record
   getThemeQuickColors?: (theme: any) => string[];
   backgroundUrl?: string | null;
   onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
@@ -131,6 +132,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   discountSettings,
   discountStatus,
   seasonalDiscountId,
+  currentDiscountPromoCode,
   getThemeQuickColors,
   backgroundUrl,
   onOpenProductPage,
@@ -141,6 +143,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // No need to fetch from API - it's already in the template data
   const productPromoCode = product.promoCode || null;
   
+  // Check if product has any promo data
+  const hasPromoData = React.useMemo(() => {
+    return Boolean(
+      product.promoCode || 
+      product.promoCodeId || 
+      product.promoDiscountType || 
+      product.promoDiscountAmount !== undefined ||
+      product.promoLimitQuantity !== undefined ||
+      product.promoQuantityLeft !== undefined ||
+      product.promoShowFireIcon ||
+      product.promoScope ||
+      product.promoDurationType ||
+      product.promoDurationMonths !== undefined
+    );
+  }, [
+    product.promoCode,
+    product.promoCodeId,
+    product.promoDiscountType,
+    product.promoDiscountAmount,
+    product.promoLimitQuantity,
+    product.promoQuantityLeft,
+    product.promoShowFireIcon,
+    product.promoScope,
+    product.promoDurationType,
+    product.promoDurationMonths,
+  ]);
+
   // Check if promo should be hidden (approaching but not yet active)
   const shouldHidePromo = React.useMemo(() => {
     if (!discountStatus || !seasonalDiscountId) return false;
@@ -149,14 +178,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     // In edit mode, always show promos so user can see/edit them
     if (isEditorView) return false;
     
-    // Hide if discount is approaching (not yet active) and matches product's discount
+    // Hide ALL promo data when discount is approaching (not yet active)
     if (discountStatus === 'approaching') {
-      // Check if product has promo data that matches the approaching discount
-      return Boolean(product.promoCode || product.promoCodeId);
+      // Hide if product has any promo data
+      return hasPromoData;
     }
     
     return false;
-  }, [discountStatus, seasonalDiscountId, product.promoCode, product.promoCodeId, isEditorView]);
+  }, [discountStatus, seasonalDiscountId, hasPromoData, isEditorView]);
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -650,6 +679,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         reviewCountValue={reviewCountValue}
         shouldShowSalesInfo={shouldShowSalesInfo}
         salesCountValue={salesCountValue}
+        shouldHidePromo={shouldHidePromo}
         onRefineProduct={onRefineProduct}
         onDropAsset={onDropAsset}
       />

@@ -333,6 +333,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   // Calculate discount status for ProductCard components
   const [discountStatus, setDiscountStatus] = useState<'active' | 'approaching' | 'expired' | 'non-existent'>('non-existent');
   const [seasonalDiscountId, setSeasonalDiscountId] = useState<string | undefined>(undefined);
+  const [currentDiscountPromoCode, setCurrentDiscountPromoCode] = useState<string | undefined>(undefined);
   
   // Fetch discount status from database
   useEffect(() => {
@@ -350,14 +351,17 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           const status = checkDiscountStatus(discountData);
           setDiscountStatus(status);
           setSeasonalDiscountId(discountData?.seasonalDiscountId);
+          setCurrentDiscountPromoCode(discountData?.seasonalDiscountPromo);
         } else {
           setDiscountStatus('non-existent');
           setSeasonalDiscountId(undefined);
+          setCurrentDiscountPromoCode(undefined);
         }
       } catch (error) {
         console.warn('⚠️ Error fetching discount status:', error);
         setDiscountStatus('non-existent');
         setSeasonalDiscountId(undefined);
+        setCurrentDiscountPromoCode(undefined);
       }
     };
     
@@ -1718,6 +1722,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           } : undefined}
           discountStatus={discountStatus}
           seasonalDiscountId={seasonalDiscountId}
+          currentDiscountPromoCode={currentDiscountPromoCode}
         />
 
         <PromoButton

@@ -799,7 +799,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                 // Explicitly set all promo fields to undefined to ensure they're removed
                 return {
                   ...product,
-                  promoCode: undefined,
+          promoCode: undefined,
                   promoCodeId: undefined,
                   promoDiscountType: undefined,
                   promoDiscountAmount: undefined,
@@ -810,7 +810,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                   promoDurationType: undefined,
                   promoDurationMonths: undefined,
                 };
-              }
+      }
               return product; // Keep other products unchanged
             });
             
@@ -1015,40 +1015,6 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     }
   }, [localPromoScope, currentProduct?.promoCodeId]);
 
-  // Handle +New button click
-  const handleNewPromoClick = useCallback(() => {
-    // Get promo code from discountSettings or database discount data
-    const promoCode = discountSettings?.promoCode || databaseDiscountData?.seasonalDiscountPromo;
-    
-    if (!promoCode) {
-      console.warn('Cannot create promo: seasonal discount promo code is missing');
-      return;
-    }
-
-    // If discount type and amount are not set, we still enter creation mode
-    // The user will need to set them before clicking "Apply Promo"
-    // But we can generate a placeholder name if they are set
-    if (localPromoDiscountType && localPromoDiscountAmount) {
-      const generatedName = generatePromoName(
-        promoCode,
-        localPromoDiscountType,
-        localPromoDiscountAmount
-      );
-      setGeneratedPromoName(generatedName);
-    } else {
-      // Set a placeholder name that will be updated when user sets discount type/amount
-      setGeneratedPromoName(promoCode);
-    }
-
-    setIsCreatingPromo(true);
-    setIsPromoDataLoaded(false);
-    
-    // Ensure discount fields are visible by setting hasDiscountSelected if not already set
-    if (!hasDiscountSelected) {
-      setHasDiscountSelected(true);
-    }
-  }, [discountSettings?.promoCode, databaseDiscountData?.seasonalDiscountPromo, localPromoDiscountType, localPromoDiscountAmount, generatePromoName, hasDiscountSelected]);
-
   // Helper function to find an available promo code
   const findAvailablePromoCode = useCallback((baseCode: string, existingCodes: Set<string>): string => {
     // If base code doesn't exist, use it
@@ -1076,6 +1042,73 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     // Fallback: return base code with timestamp (shouldn't reach here)
     return baseCode + Date.now().toString().slice(-4);
   }, []);
+
+  // Handle +New button click
+  const handleNewPromoClick = useCallback(async () => {
+    // Get promo code from discountSettings or database discount data
+    const promoCode = discountSettings?.promoCode || databaseDiscountData?.seasonalDiscountPromo;
+    
+    if (!promoCode) {
+      console.warn('Cannot create promo: seasonal discount promo code is missing');
+      return;
+    }
+
+    if (!experienceId) {
+      console.warn('Cannot create promo: experienceId is missing');
+      return;
+    }
+
+    let promoCodeToUse = promoCode;
+
+    // If discount type and amount are set, generate the initial promo name
+    if (localPromoDiscountType && localPromoDiscountAmount) {
+      const baseName = generatePromoName(
+        promoCode,
+        localPromoDiscountType,
+        localPromoDiscountAmount
+      );
+      promoCodeToUse = baseName;
+    }
+
+    // Check for existing promo codes before setting the name
+    try {
+      const listResponse = await apiPost(
+        '/api/promos/list-by-company',
+        { experienceId },
+        experienceId
+      );
+
+      if (listResponse.ok) {
+        const listData = await listResponse.json();
+        const existingCodes = new Set<string>((listData.promos || []).map((p: string) => p.toUpperCase()));
+        
+        // Check if promo code exists (case-insensitive) and find available code
+        const originalCode = promoCodeToUse;
+        const availableCode = findAvailablePromoCode(promoCodeToUse.toUpperCase(), existingCodes);
+        
+        // If code was modified, update and show message
+        if (availableCode !== originalCode.toUpperCase()) {
+          promoCodeToUse = availableCode;
+          // Show user-friendly info message
+          alert(`Promo code '${originalCode}' already exists. Using '${availableCode}' instead.`);
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to check existing promo codes, proceeding with original code:', error);
+      // Continue with original code - server will catch duplicate if it exists
+    }
+
+    // Set the final generated name
+    setGeneratedPromoName(promoCodeToUse);
+
+    setIsCreatingPromo(true);
+    setIsPromoDataLoaded(false);
+    
+    // Ensure discount fields are visible by setting hasDiscountSelected if not already set
+    if (!hasDiscountSelected) {
+      setHasDiscountSelected(true);
+    }
+  }, [discountSettings?.promoCode, databaseDiscountData?.seasonalDiscountPromo, localPromoDiscountType, localPromoDiscountAmount, generatePromoName, hasDiscountSelected, experienceId, findAvailablePromoCode]);
 
   // Handle Apply Promo
   const handleApplyPromo = useCallback(async () => {
@@ -1553,11 +1586,11 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
             status = 'expired';
           }
 
-          setSeasonalDiscountStatus({
+            setSeasonalDiscountStatus({ 
             status,
             startDate: discountData.seasonalDiscountStart ? (typeof discountData.seasonalDiscountStart === 'string' ? discountData.seasonalDiscountStart : discountData.seasonalDiscountStart.toISOString()) : undefined,
             endDate: discountData.seasonalDiscountEnd ? (typeof discountData.seasonalDiscountEnd === 'string' ? discountData.seasonalDiscountEnd : discountData.seasonalDiscountEnd.toISOString()) : undefined
-          });
+            });
         } else {
           setDatabaseDiscountData(null);
           setSeasonalDiscountStatus({ status: 'none' });
@@ -1981,9 +2014,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     
     if (!hasCustomDiscount) {
       // No custom discount to clear, just clear local state
-      if (!hasPlans) {
-        setLocalManualPromoCode('');
-      }
+    if (!hasPlans) {
+      setLocalManualPromoCode('');
+    }
       setLocalPromoDiscountType(undefined);
       setLocalPromoDiscountAmount(undefined);
       setLocalPromoLimitQuantity(undefined);
@@ -2004,7 +2037,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     setLocalPromoLimitQuantity(undefined);
     setLocalPromoShowFireIcon(false);
     setDiscountValidationError(null);
-    
+
     // Clear custom discount from current product (preserve global discount fields)
     updateProduct(productEditor.productId, {
       promoCode: undefined,

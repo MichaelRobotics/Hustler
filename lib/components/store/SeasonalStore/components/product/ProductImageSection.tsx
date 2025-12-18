@@ -17,6 +17,7 @@ interface ProductImageSectionProps {
   reviewCountValue: number | null;
   shouldShowSalesInfo: boolean;
   salesCountValue: number | null;
+  shouldHidePromo?: boolean;
   onRefineProduct: (product: Product) => void;
   onDropAsset: (e: React.DragEvent, productId: number | string) => void;
 }
@@ -31,10 +32,12 @@ export const ProductImageSection: React.FC<ProductImageSectionProps> = ({
   reviewCountValue,
   shouldShowSalesInfo,
   salesCountValue,
+  shouldHidePromo,
   onRefineProduct,
   onDropAsset,
 }) => {
   const showFire =
+    !shouldHidePromo &&
     product.promoShowFireIcon &&
     product.promoQuantityLeft !== undefined &&
     product.promoQuantityLeft > 0;
