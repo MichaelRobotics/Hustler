@@ -426,20 +426,7 @@ export class UpdateProductSync {
       };
     }
 
-    // Check price changes - normalize prices to avoid "100" vs "100.00" false positives
-    const currentPrice = currentResource.price || '';
-    const newPrice = whopProduct.price > 0 ? whopProduct.price.toString() : '';
-    
-    // Normalize prices by parsing as numbers and comparing
-    const currentPriceNum = parseFloat(currentPrice) || 0;
-    const newPriceNum = parseFloat(newPrice) || 0;
-    
-    if (currentPriceNum !== newPriceNum) {
-      changes.price = {
-        old: currentPrice,
-        new: newPrice,
-      };
-    }
+    // Price changes are not checked - prices are managed separately and should not trigger sync updates
 
     // Check image changes - fetch from Whop SDK galleryImages ONLY (no product.logo/bannerImage/imageUrl)
     const currentImage = currentResource.image || '';
