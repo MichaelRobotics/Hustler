@@ -29,3 +29,4 @@ ADD COLUMN IF NOT EXISTS "welcome_color" text;
 
 
 
+

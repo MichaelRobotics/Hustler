@@ -1701,6 +1701,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           isProductsReady={isProductsReady}
           navigateToPrevious={navigateToPrevious}
           navigateToNext={navigateToNext}
+          setCurrentProductIndex={setCurrentProductIndex}
           handleTouchStart={handleTouchStart}
           handleTouchMove={handleTouchMove}
           handleTouchEnd={handleTouchEnd}

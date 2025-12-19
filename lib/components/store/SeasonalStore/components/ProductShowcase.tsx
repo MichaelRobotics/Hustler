@@ -21,6 +21,7 @@ interface ProductShowcaseProps {
   // Handlers
   navigateToPrevious: (skipSlideAnimation?: boolean) => void;
   navigateToNext: (skipSlideAnimation?: boolean) => void;
+  setCurrentProductIndex: (index: number) => void;
   handleTouchStart: (e: React.TouchEvent) => void;
   handleTouchMove: (e: React.TouchEvent) => void;
   handleTouchEnd: (e: React.TouchEvent) => void;
@@ -57,6 +58,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   isProductsReady,
   navigateToPrevious,
   navigateToNext,
+  setCurrentProductIndex,
   handleTouchStart,
   handleTouchMove,
   handleTouchEnd,
@@ -80,7 +82,21 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   const [showNavigation, setShowNavigation] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const autoSwitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detect mobile/desktop viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }
+  }, []);
 
   // Show navigation arrows after products finish loading
   useEffect(() => {
@@ -302,16 +318,13 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
       {/* Navigation Dots - Only show on mobile when there are multiple products */}
       {combinedProducts.length > 1 && showNavigation && (
         <div className="flex justify-center mt-4 space-x-2 md:hidden">
-          {Array.from({ length: Math.max(1, combinedProducts.length - 1) }, (_, index) => (
+          {Array.from({ length: combinedProducts.length }, (_, index) => (
             <button
               key={index}
               onClick={() => {
                 if (index !== currentProductIndex) {
-                  if (index > currentProductIndex) {
-                    navigateToNext();
-                  } else {
-                    navigateToPrevious();
-                  }
+                  // Directly set the index for immediate navigation
+                  setCurrentProductIndex(index);
                 }
               }}
               className={`w-2 h-2 rounded-full transition-all duration-200 ${

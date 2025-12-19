@@ -17,6 +17,20 @@ export const useProductNavigation = ({
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile/desktop viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }
+  }, []);
 
   // Auto-switch is now handled in ProductShowcase component with fade animation
   // This function is kept for compatibility but does nothing
@@ -54,20 +68,23 @@ export const useProductNavigation = ({
     if (!isSliding) {
       setIsSliding(true);
       
+      // Desktop shows 2 products, so max index is length - 2
+      // Mobile shows 1 product, so max index is length - 1
+      const maxIndex = isMobile ? products.length - 1 : products.length - 2;
+      
       if (skipSlideAnimation) {
         // Skip slide animation - just change the index immediately with wrap-around
         setCurrentProductIndex(prevIndex => {
-          const maxIndex = products.length - 2;
           return prevIndex >= maxIndex ? 0 : prevIndex + 1;
         });
         setSwipeDirection(null);
         setIsSliding(false);
       } else {
         // Use slide animation (only if not at the end)
-        if (currentProductIndex < products.length - 2) {
+        if (currentProductIndex < maxIndex) {
           setSwipeDirection('left');
           setTimeout(() => {
-            setCurrentProductIndex(prev => Math.min(products.length - 2, prev + 1));
+            setCurrentProductIndex(prev => Math.min(maxIndex, prev + 1));
             setSwipeDirection('right'); // Slide in from right
             setTimeout(() => {
               setSwipeDirection(null);
@@ -80,7 +97,7 @@ export const useProductNavigation = ({
       }
       // Auto-switch is now handled in ProductShowcase component
     }
-  }, [currentProductIndex, products.length, isSliding, setIsSliding]);
+  }, [currentProductIndex, products.length, isSliding, setIsSliding, isMobile]);
 
   // Touch swipe handlers for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -101,7 +118,10 @@ export const useProductNavigation = ({
 
     console.log('Touch swipe detected:', { distance, isLeftSwipe, isRightSwipe, currentProductIndex, productsLength: products.length });
 
-    if (isLeftSwipe && currentProductIndex < products.length - 2) {
+    // Mobile shows 1 product, so max index is length - 1
+    // Desktop shows 2 products, so max index is length - 2 (but touch is mobile-only)
+    const maxIndex = products.length - 1;
+    if (isLeftSwipe && currentProductIndex < maxIndex) {
       console.log('Navigating to next product');
       navigateToNext();
     }
@@ -117,12 +137,21 @@ export const useProductNavigation = ({
 
   // Auto-switch is now handled in ProductShowcase component with fade animation
 
-  // Reset index when products change
+  // Reset index when products change or viewport changes (clamp to appropriate max)
   useEffect(() => {
-    if (currentProductIndex >= products.length - 1) {
+    if (products.length === 0) {
       setCurrentProductIndex(0);
+      return;
     }
-  }, [products.length, currentProductIndex]);
+    
+    // Desktop shows 2 products, so max index is length - 2
+    // Mobile shows 1 product, so max index is length - 1
+    const maxIndex = isMobile ? products.length - 1 : Math.max(0, products.length - 2);
+    
+    if (currentProductIndex > maxIndex) {
+      setCurrentProductIndex(maxIndex);
+    }
+  }, [products.length, currentProductIndex, isMobile]);
 
   return {
     currentProductIndex,
