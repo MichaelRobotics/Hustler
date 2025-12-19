@@ -284,6 +284,40 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       return () => clearTimeout(timeoutId);
     }
   }, [showSeasonalDiscountPanel]);
+
+  // Prevent body scroll and viewport movement on mobile when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Lock body scroll to prevent background movement
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalHeight = document.body.style.height;
+      const originalTop = document.body.style.top;
+      const originalWidth = document.body.style.width;
+      
+      // Get current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body to prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      
+      return () => {
+        // Restore body styles
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.width = originalWidth;
+        document.body.style.height = originalHeight;
+        document.body.style.top = originalTop;
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
   
   if (!isOpen) return null;
 
