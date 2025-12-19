@@ -94,7 +94,7 @@ export const truncateHTMLToTwoLines = (html: string, maxLength: number = 120): s
   // Use DOM manipulation for accurate HTML parsing and preservation
   if (typeof document === 'undefined') {
     // SSR fallback: simple regex-based truncation (less accurate but works)
-    // Strip HTML tags to get plain text length
+  // Strip HTML tags to get plain text length
     const plainText = html.replace(/<[^>]+>/g, '');
     if (plainText.length <= maxLength) {
       return html;
@@ -430,7 +430,7 @@ export const normalizeExecCommandHtml = (html: string): string => {
           const preservedStyles: string[] = [];
           if (hasColor) {
             preservedStyles.push(`color: ${styleObj['color']}`);
-          }
+      }
           otherStyles.forEach(key => {
             preservedStyles.push(`${key}: ${styleObj[key]}`);
           });

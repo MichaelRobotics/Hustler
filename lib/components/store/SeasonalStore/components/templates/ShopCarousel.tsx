@@ -141,32 +141,32 @@ export const ShopCarousel: React.FC<ShopCarouselProps> = ({
       
       {/* Template Card */}
       <div className="mb-4">
-        {currentTemplate && (
-          <Card className="p-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
-            <div className="fui-reset">
+          {currentTemplate && (
+            <Card className="p-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-visible min-w-0">
+              <div className="fui-reset">
               {/* Shop Name with Edit and Delete */}
-              <div className="flex items-center gap-2 mb-4 min-w-0">
-                {editingShopId === currentTemplate.id ? (
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <input
-                      ref={shopNameInputRef}
-                      type="text"
-                      value={editingShopName}
-                      onChange={(e) => setEditingShopName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSaveShopName(currentTemplate.id);
-                        } else if (e.key === 'Escape') {
-                          setEditingShopId(null);
-                          setEditingShopName('');
-                        }
-                      }}
-                      onBlur={() => handleSaveShopName(currentTemplate.id)}
-                      className="flex-1 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-0"
-                    />
-                  </div>
-                ) : (
-                  <>
+                <div className="flex items-center gap-2 mb-4 min-w-0">
+                  {editingShopId === currentTemplate.id ? (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <input
+                        ref={shopNameInputRef}
+                        type="text"
+                        value={editingShopName}
+                        onChange={(e) => setEditingShopName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveShopName(currentTemplate.id);
+                          } else if (e.key === 'Escape') {
+                            setEditingShopId(null);
+                            setEditingShopName('');
+                          }
+                        }}
+                        onBlur={() => handleSaveShopName(currentTemplate.id)}
+                        className="flex-1 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-0"
+                      />
+                    </div>
+                  ) : (
+                    <>
                     {onRenameTemplate ? (
                       <Heading 
                         size="4" 
@@ -185,90 +185,90 @@ export const ShopCarousel: React.FC<ShopCarouselProps> = ({
                         {currentTemplate.name}
                       </Heading>
                     )}
-                    <Button
-                      size="1"
-                      variant="ghost"
+                        <Button
+                          size="1"
+                          variant="ghost"
                       color="red"
-                      onClick={() => {
+                          onClick={() => {
                         if (confirm('Are you sure you want to delete this shop?')) {
                           onDeleteTemplate(currentTemplate.id);
                           if (currentShopIndex >= sortedTemplates.length - 1) {
                             setCurrentShopIndex(Math.max(0, sortedTemplates.length - 2));
                           }
                         }
-                      }}
-                      className="!px-1.5 !py-1.5 flex-shrink-0"
+                          }}
+                          className="!px-1.5 !py-1.5 flex-shrink-0"
                       title="Delete shop"
-                    >
+                        >
                       <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </>
-                )}
-              </div>
+                        </Button>
+                    </>
+                  )}
+                </div>
 
-              {/* Shop Info */}
-              <div className="flex items-center gap-2 mb-4">
-                <Text size="2" className="text-gray-500 dark:text-gray-400">
-                  {currentTemplate.templateData?.products?.length || 0} products
-                </Text>
-              </div>
+                {/* Shop Info */}
+                <div className="flex items-center gap-2 mb-4">
+                  <Text size="2" className="text-gray-500 dark:text-gray-400">
+                    {currentTemplate.templateData?.products?.length || 0} products
+                  </Text>
+                </div>
 
               {/* Action Buttons - Preview and Go Live Side by Side */}
-              <div className="flex items-center gap-2">
-                {onPreview && (
+                  <div className="flex items-center gap-2">
+                    {onPreview && (
+                      <Button
+                        size="3"
+                        color="violet"
+                        variant="surface"
+                        onClick={() => {
+                          onPreview(currentTemplate.id, { restorePrevious: true });
+                          onClose();
+                        }}
+                        className="flex-1 !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+                      >
+                        <Eye size={16} strokeWidth={2.5} />
+                        <span>Preview</span>
+                      </Button>
+                    )}
                   <Button
                     size="3"
-                    color="violet"
-                    variant="surface"
+                    color="green"
+                    variant="solid"
                     onClick={() => {
-                      onPreview(currentTemplate.id, { restorePrevious: true });
+                      onSetLive(currentTemplate.id);
+                      if (onMakePublic) {
+                        onMakePublic(currentTemplate.id);
+                      }
                       onClose();
                     }}
-                    className="flex-1 !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
-                  >
-                    <Eye size={16} strokeWidth={2.5} />
-                    <span>Preview</span>
-                  </Button>
-                )}
-                <Button
-                  size="3"
-                  color="green"
-                  variant="solid"
-                  onClick={() => {
-                    onSetLive(currentTemplate.id);
-                    if (onMakePublic) {
-                      onMakePublic(currentTemplate.id);
-                    }
-                    onClose();
-                  }}
                   className={`flex-1 !px-6 !py-3 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105 transition-all duration-300 dark:shadow-green-500/30 dark:hover:shadow-green-500/50 flex items-center justify-center ${
-                    currentTemplate.id === highlightedTemplateId ? 'make-public-pulse' : ''
-                  }`}
-                >
-                  <span>Go Live</span>
-                </Button>
+                      currentTemplate.id === highlightedTemplateId ? 'make-public-pulse' : ''
+                    }`}
+                  >
+                    <span>Go Live</span>
+                  </Button>
+                </div>
               </div>
-            </div>
-          </Card>
-        )}
-      </div>
-
+            </Card>
+          )}
+        </div>
+        
       {/* Create new Shop button - only show if origin template exists */}
       {originTemplate && onCreateNewShop && (
         <div>
-          <Button
+        <Button
             size="3"
             color="violet"
             variant="solid"
-            onClick={() => {
+          onClick={() => {
               onCreateNewShop();
-            }}
+          }}
             className="w-full !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
-          >
+        >
             <Plus size={16} strokeWidth={2.5} />
             <span>Create new Shop</span>
-          </Button>
-        </div>
+        </Button>
+      </div>
       )}
     </div>
   );

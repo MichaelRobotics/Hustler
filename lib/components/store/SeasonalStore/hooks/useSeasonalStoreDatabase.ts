@@ -1442,7 +1442,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     // Track which template is currently loaded/being edited
     setCurrentlyLoadedTemplateId(template.id);
   }, [preloadBackgroundImage, filterTemplateProductsAgainstMarketStall, convertTemplateThemeToLegacy, setCurrentSeason, setFixedTextStyles, setLogoAsset, setGeneratedBackground, setUploadedBackground, setBackgroundAttachmentId, setBackgroundAttachmentUrl, setLogoAttachmentId, setLogoAttachmentUrl, setProducts, setTemplateResourceLibraryProductIds, setFloatingAssets, setCurrentTemplateTheme, setPromoButton, sanitizeProducts, createDefaultDiscountSettings]);
-  
+            
   // Application load logic: newest template -> default theme fallback + auto-add Market Stall products
   const loadApplicationData = useCallback(async () => {
     try {
@@ -1457,10 +1457,10 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       // Step 1: Load live template metadata for UI (but do not auto-load it into editor)
       const live = await getLiveTemplate(experienceId);
       setLiveTemplate(live);
-
+            
       // Step 2: Load origin template (needed for auto-creation)
       await loadOriginTemplate();
-      
+            
       // Step 3: Load all templates ("shops") and pick the most recently updated
       const allTemplates = await getTemplates(experienceId);
       
@@ -1503,23 +1503,23 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             }
             // Template already has correct discount settings
             return template;
-          });
-          
+              });
+
           setTemplates(updatedTemplates);
-          
+
           // Update cache with updated templates
-          updateCachedTemplates(prev => {
-            const newCache = new Map(prev);
+              updateCachedTemplates(prev => {
+                const newCache = new Map(prev);
             updatedTemplates.forEach(template => {
               newCache.set(template.id, template as StoreTemplate);
             });
-            return newCache;
-          });
-        } else {
+                return newCache;
+              });
+          } else {
           // Discount is not active/approaching, set templates as-is
           setTemplates(allTemplates);
-        }
-      } else {
+          }
+        } else {
         // No discount data, set templates as-is
         setTemplates(allTemplates);
       }

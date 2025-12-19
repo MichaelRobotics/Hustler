@@ -429,8 +429,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           .timer-chip {
             min-width: 38px;
             border-radius: 12px;
-            padding: 4px 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          padding: 4px 10px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
           }
         }
         .dark .timer-chip {
@@ -471,9 +471,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       `}</style>            <div className="sticky top-4 z-30 flex-shrink-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6" data-prevent-bg-toggle="true">
         <div 
           className={`min-h-[80px] py-3 px-4 sm:px-6 lg:px-8 shadow-lg rounded-lg relative overflow-hidden flex flex-col justify-center ${
-            editorState.isEditorView 
-              ? 'bg-white dark:bg-gray-900' 
-              : 'bg-transparent'
+          editorState.isEditorView 
+            ? 'bg-white dark:bg-gray-900' 
+            : 'bg-transparent'
           } ${shouldCopyOnClick ? 'cursor-pointer' : ''}`}
           onClick={(e) => {
             // Only copy if clicking on the container itself or non-interactive elements
@@ -726,12 +726,12 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <div className="absolute inset-0 rounded-2xl bg-[var(--subtitleBgColorStatic,#FEEBEB)] dark:bg-rose-900/60 opacity-95 pointer-events-none"></div>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-amber-50/80 dark:from-rose-900/50 dark:via-slate-900/80 dark:to-amber-900/40 pointer-events-none"></div>
                   <div className="relative z-10 flex flex-col sm:flex-row items-center gap-1 sm:gap-4 justify-center sm:justify-start">
-                    {discountSettings?.discountText && (
-                      <span 
+                      {discountSettings?.discountText && (
+                        <span 
                         className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap"
-                        dangerouslySetInnerHTML={{ __html: discountSettings.discountText }}
-                      />
-                    )}
+                          dangerouslySetInnerHTML={{ __html: discountSettings.discountText }}
+                        />
+                      )}
                     <div className="flex items-center gap-1 sm:gap-4 flex-nowrap">
                       {/* Clock animation - hidden on mobile, positioned after discount text */}
                       <div className="hidden sm:flex promo-clock-hover relative w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-900/60 shadow-inner items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">

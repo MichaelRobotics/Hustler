@@ -12,82 +12,23 @@ export interface ContainerDimensions {
 
 /**
  * Measure the current iframe container dimensions
+ * Always uses viewport dimensions to prevent background resizing when content changes
  */
 export const measureIframeContainer = (): ContainerDimensions | null => {
   if (typeof window === 'undefined') return null;
 
   try {
-    // Try multiple selectors for main container with comprehensive search
-    const containerSelectors = [
-      'active-app-container',
-      'iframe[src*="localhost"]',
-      'iframe[src*="experiences"]',
-      'iframe[src*="3000"]',
-      'iframe[src*="whop"]',
-      'iframe',
-      'body > div:first-child', // Main app container
-      'body > div', // Any main div
-      'body' // Fallback to body
-    ];
-    
-    let container: HTMLElement | null = null;
-    
-    console.log('🎨 [Dimension Debug] Searching for main container...');
-    
-    for (const selector of containerSelectors) {
-      if (selector.startsWith('iframe')) {
-        container = document.querySelector(selector) as HTMLElement;
-      } else if (selector.startsWith('body')) {
-        container = document.querySelector(selector) as HTMLElement;
-      } else {
-        container = document.querySelector(selector) as HTMLElement;
-      }
-      
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        console.log(`🎨 [Dimension Debug] Found container with selector "${selector}":`, {
-          element: container,
-          rect: rect,
-          width: rect.width,
-          height: rect.height,
-          tagName: container.tagName
-        });
-        
-        if (rect.width > 0 && rect.height > 0) {
-          break;
-        }
-      }
-    }
-    
-    if (container && container.getBoundingClientRect().width > 0) {
-      const rect = container.getBoundingClientRect();
-      const dimensions = {
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-        aspectRatio: rect.width / rect.height,
-        devicePixelRatio: window.devicePixelRatio || 1
-      };
-      
-      console.log('🎨 [Dimension Debug] Main container found:', {
-        element: container,
-        rect: rect,
-        dimensions: dimensions,
-        windowSize: { width: window.innerWidth, height: window.innerHeight }
-      });
-      
-      return dimensions;
-    }
-
-    // Fallback to window dimensions if container not found
-    const fallbackDimensions = {
+    // Always use viewport dimensions to prevent background resizing when ProductCard dimensions change
+    // This ensures the background image size is based on the viewport, not the scrollable content
+    const viewportDimensions = {
       width: window.innerWidth,
       height: window.innerHeight,
       aspectRatio: window.innerWidth / window.innerHeight,
       devicePixelRatio: window.devicePixelRatio || 1
     };
     
-    console.log('🎨 [Dimension Debug] Container not found, using window dimensions:', fallbackDimensions);
-    return fallbackDimensions;
+    console.log('🎨 [Dimension Debug] Using viewport dimensions (fixed to prevent content-based resizing):', viewportDimensions);
+    return viewportDimensions;
   } catch (error) {
     console.error('Error measuring container:', error);
     return null;

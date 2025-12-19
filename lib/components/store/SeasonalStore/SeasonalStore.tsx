@@ -1512,11 +1512,19 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
       
       {/* Store content - only render when ready AND ConditionalReturns is ready */}
       {isStoreContentReady && isConditionalReturnsReady && (
-        <div 
-          ref={appRef} 
-          className={`font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''} ${editorState.isEditorView ? 'cursor-pointer' : ''}`}
-          style={getBackgroundStyle}
-          onClick={(e) => {
+        <>
+          {/* Fixed background layer - doesn't resize with content */}
+          <div 
+            style={getBackgroundStyle}
+            className="fixed inset-0"
+            aria-hidden="true"
+          />
+          {/* Scrollable content layer */}
+          <div 
+            ref={appRef} 
+            className={`font-inter antialiased relative overflow-y-auto overflow-x-hidden transition-all duration-700 ${!uploadedBackground && !generatedBackground && !legacyTheme.backgroundImage ? legacyTheme.background : ''} ${editorState.isEditorView ? 'cursor-pointer' : ''}`}
+            style={{ position: 'relative', zIndex: 0 }}
+            onClick={(e) => {
             // Only open AdminSheet if clicking directly on background (not on child elements)
             if (editorState.isEditorView) {
               const target = e.target as HTMLElement;
@@ -2171,6 +2179,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           </div>
         </div>
       </div>
+        </>
       )}
       
       {/* Green Popup - No Merchant is Live */}
