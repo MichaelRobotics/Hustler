@@ -205,6 +205,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Capture initial viewport height to prevent background movement when keyboard opens
+  const [initialViewportHeight, setInitialViewportHeight] = useState<number | null>(null);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined' && initialViewportHeight === null) {
+      // Capture initial viewport height on mount
+      setInitialViewportHeight(window.innerHeight);
+    }
+  }, [initialViewportHeight]);
   
   // Show notification when no funnel is live (only after funnel check is complete)
   useEffect(() => {
@@ -1333,8 +1343,16 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
 
   // Determine background style with smooth transitions
   const getBackgroundStyle = useMemo(() => {
-    return getBackgroundStyleUtil(backgroundAttachmentUrl, currentSeason, legacyTheme);
-  }, [backgroundAttachmentUrl, currentSeason, legacyTheme]);
+    const baseStyle = getBackgroundStyleUtil(backgroundAttachmentUrl, currentSeason, legacyTheme);
+    // Use initial viewport height if available to prevent movement when keyboard opens
+    if (initialViewportHeight !== null) {
+      return {
+        ...baseStyle,
+        height: `${initialViewportHeight}px`,
+      };
+    }
+    return baseStyle;
+  }, [backgroundAttachmentUrl, currentSeason, legacyTheme, initialViewportHeight]);
 
   // Product editor slide-over state
   const [productEditor, setProductEditor] = useState<{ isOpen: boolean; productId: number | string | null; target: 'name' | 'description' | 'card' | 'button' | null }>({ isOpen: false, productId: null, target: null });
