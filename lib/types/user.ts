@@ -13,6 +13,7 @@ export interface AuthenticatedUser {
 	credits: number;
 	messages: number;
 	subscription?: "Basic" | "Pro" | "Vip" | null;
+	membership?: string | null; // Whop membership ID for subscription management
 	accessLevel: "admin" | "customer" | "no_access";
 	productsSynced: boolean;
 	experience: {

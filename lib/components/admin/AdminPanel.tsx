@@ -988,6 +988,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 								maxFunnels={GLOBAL_LIMITS.FUNNELS}
 								subscription={user?.subscription ?? "Basic"}
 								experienceId={user?.experienceId}
+								user={user}
 							/>
 
 							<div className="mt-8">

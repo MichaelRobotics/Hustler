@@ -174,9 +174,16 @@ export async function consumeCredit(user?: AuthenticatedUser, experienceId?: str
 export async function addCredits(
 	userId: string,
 	experienceId: string,
-	amount: number,
+	amount: number | string,
 ): Promise<void> {
 	try {
+		// Ensure amount is an integer (credits column is integer type)
+		const creditAmount = Math.floor(Number(amount));
+		
+		if (isNaN(creditAmount) || creditAmount < 0) {
+			throw new Error(`Invalid credit amount: ${amount}`);
+		}
+
 		// Get user context to get the database experience ID
 		const userContext = await getUserContext(
 			userId,
@@ -191,11 +198,11 @@ export async function addCredits(
 		}
 
 		const currentCredits = await getDbUserCredits(userId, userContext.user.experience.id);
-		const success = await updateUserCredits(userId, userContext.user.experience.id, amount, "add");
+		const success = await updateUserCredits(userId, userContext.user.experience.id, creditAmount, "add");
 
 		if (success) {
 			console.log(
-				`Added ${amount} credits to user ${userId} in experience ${experienceId}. New balance: ${currentCredits + amount}`,
+				`Added ${creditAmount} credits to user ${userId} in experience ${experienceId}. New balance: ${currentCredits + creditAmount}`,
 			);
 		} else {
 			throw new Error("Failed to add credits to database");
@@ -277,9 +284,16 @@ export async function getAllCreditPacks() {
 export async function addMessages(
 	userId: string,
 	experienceId: string,
-	amount: number,
+	amount: number | string,
 ): Promise<void> {
 	try {
+		// Ensure amount is an integer (messages column is integer type)
+		const messageAmount = Math.floor(Number(amount));
+		
+		if (isNaN(messageAmount) || messageAmount < 0) {
+			throw new Error(`Invalid message amount: ${amount}`);
+		}
+
 		// Get user context to get the database experience ID
 		const userContext = await getUserContext(
 			userId,
@@ -307,7 +321,7 @@ export async function addMessages(
 		}
 
 		const currentMessages = user.messages || 0;
-		const newMessages = currentMessages + amount;
+		const newMessages = currentMessages + messageAmount;
 
 		// Update messages in database
 		await db
@@ -322,11 +336,39 @@ export async function addMessages(
 		invalidateUserCache(`${userId}:${experienceId}`);
 
 		console.log(
-			`Added ${amount} messages to user ${userId} in experience ${experienceId}. New balance: ${newMessages}`,
+			`Added ${messageAmount} messages to user ${userId} in experience ${experienceId}. New balance: ${newMessages}`,
 		);
 	} catch (error) {
 		console.error("Error adding messages:", error);
 		throw error;
+	}
+}
+
+/**
+ * Cancel a Whop membership
+ */
+export async function cancelMembership(membershipId: string): Promise<boolean> {
+	try {
+		if (!membershipId) {
+			console.error("Membership ID is required for cancellation");
+			return false;
+		}
+
+		console.log(`Cancelling membership: ${membershipId}`);
+		
+		// Use @whop/sdk directly for membership cancellation
+		const Whop = (await import('@whop/sdk')).default;
+		const client = new Whop({
+			apiKey: process.env.WHOP_API_KEY!,
+		});
+		
+		await client.memberships.cancel(membershipId);
+		console.log(`Successfully cancelled membership: ${membershipId}`);
+		return true;
+	} catch (error: any) {
+		console.error(`Error cancelling membership ${membershipId}:`, error);
+		// Don't throw - gracefully handle errors so webhook processing can continue
+		return false;
 	}
 }
 
@@ -337,6 +379,7 @@ export async function updateUserSubscription(
 	userId: string,
 	experienceId: string,
 	subscriptionType: "Basic" | "Pro" | "Vip",
+	membershipId?: string | null,
 ): Promise<void> {
 	try {
 		// Get user context to get the database experience ID
@@ -365,20 +408,46 @@ export async function updateUserSubscription(
 			return;
 		}
 
-		// Update subscription in database
+		// Check if subscription type changed
+		const subscriptionChanged = user.subscription !== subscriptionType;
+		const oldMembershipId = user.membership;
+
+		// If subscription type changed and user has an existing membership, cancel it
+		if (subscriptionChanged && oldMembershipId) {
+			console.log(`Subscription type changed from ${user.subscription} to ${subscriptionType}, cancelling old membership: ${oldMembershipId}`);
+			await cancelMembership(oldMembershipId);
+		}
+
+		// Prepare update data
+		const updateData: {
+			subscription: "Basic" | "Pro" | "Vip";
+			membership?: string | null;
+			updatedAt: Date;
+		} = {
+			subscription: subscriptionType,
+			updatedAt: new Date(),
+		};
+
+		// Update membership_id if provided (for both new subscriptions and renewals)
+		if (membershipId) {
+			updateData.membership = membershipId;
+			console.log(`Updating membership_id to ${membershipId} for user ${userId}`);
+		} else if (subscriptionChanged && !oldMembershipId) {
+			// If subscription changed but no new membership_id provided, clear old membership
+			updateData.membership = null;
+		}
+
+		// Update subscription and membership in database
 		await db
 			.update(users)
-			.set({
-				subscription: subscriptionType,
-				updatedAt: new Date(),
-			})
+			.set(updateData)
 			.where(eq(users.id, user.id));
 
 		// Invalidate cache for this user-experience combination
 		invalidateUserCache(`${userId}:${experienceId}`);
 
 		console.log(
-			`Updated subscription to ${subscriptionType} for user ${userId} in experience ${experienceId}`,
+			`Updated subscription to ${subscriptionType} for user ${userId} in experience ${experienceId}${membershipId ? ` with membership ${membershipId}` : ''}`,
 		);
 	} catch (error) {
 		console.error("Error updating subscription:", error);

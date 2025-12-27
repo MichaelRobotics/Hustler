@@ -141,6 +141,7 @@ export const users = pgTable(
 		credits: integer("credits").default(0).notNull(),
 		messages: integer("messages").default(0).notNull(),
 		subscription: subscriptionTypeEnum("subscription"),
+		membership: text("membership"), // Whop membership ID for subscription management
 		accessLevel: text("access_level").notNull().default("customer"), // WHOP access level: admin/customer/no_access
 		productsSynced: boolean("products_synced").default(false).notNull(), // Track if products have been synced for this user
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -158,6 +159,7 @@ export const users = pgTable(
 			table.experienceId,
 			table.accessLevel,
 		),
+		membershipIdx: index("users_membership_idx").on(table.membership),
 		// Unique constraint: one user record per whop_user_id per experience
 		whopUserExperienceUnique: unique("users_whop_user_experience_unique").on(
 			table.whopUserId,

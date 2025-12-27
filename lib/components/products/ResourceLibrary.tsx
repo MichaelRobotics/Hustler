@@ -392,6 +392,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						showCreateAssets={showCreateAssets}
 						subscription={user?.subscription ?? "Basic"}
 						experienceId={user?.experienceId}
+						user={user}
 					/>
 
 					{/* Delete Resource Modal */}

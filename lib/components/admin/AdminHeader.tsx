@@ -6,6 +6,7 @@ import React, { useState } from "react";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { SubscriptionBadge } from "../common/SubscriptionBadge";
 import { CreditPackModal } from "../payments/CreditPackModal";
+import type { AuthenticatedUser } from "../../types/user";
 
 interface AdminHeaderProps {
 	onAddFunnel: () => void;
@@ -13,9 +14,10 @@ interface AdminHeaderProps {
 	maxFunnels: number;
 	subscription?: "Basic" | "Pro" | "Vip" | null;
 	experienceId?: string;
+	user?: AuthenticatedUser | null;
 }
 
-export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId }: AdminHeaderProps) {
+export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId, user }: AdminHeaderProps) {
 	const isAtLimit = funnelCount >= maxFunnels;
 	const [showCreditModal, setShowCreditModal] = useState(false);
 	return (
@@ -80,6 +82,7 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subs
 				subscription={subscription ?? "Basic"}
 				initialTab="subscriptions"
 				experienceId={experienceId}
+				user={user}
 			/>
 		</div>
 	);

@@ -328,6 +328,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
             allResourcesCount={allResources.length}
             subscription={user?.subscription ?? "Basic"}
             experienceId={user?.experienceId}
+            user={user}
           />
 
           {/* Delete Resource Modal */}

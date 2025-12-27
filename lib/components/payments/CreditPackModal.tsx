@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { getAllCreditPacks } from "../../actions/credit-actions";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 import type { CreditPackId } from "../../types/credit";
+import type { AuthenticatedUser } from "../../types/user";
 
 interface CreditPackModalProps {
 	isOpen: boolean;
@@ -16,14 +17,17 @@ interface CreditPackModalProps {
 	experienceId?: string;
 	subscription?: "Basic" | "Pro" | "Vip" | null;
 	initialTab?: TabType;
+	user?: AuthenticatedUser | null;
 }
 
 type TabType = "subscriptions" | "credits" | "dms";
 
-// Mock current balance data
-const currentBalance = {
-	dms: 25,
-	credits: 150,
+// Helper to get current balance from user
+const getCurrentBalance = (user: AuthenticatedUser | null | undefined) => {
+	return {
+		messages: user?.messages ?? 0,
+		credits: user?.credits ?? 0,
+	};
 };
 
 // Subscription plans
@@ -79,7 +83,9 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	experienceId,
 	subscription,
 	initialTab = "credits",
+	user,
 }) => {
+	const currentBalance = getCurrentBalance(user);
 	const { isInIframe, iframeSdk } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -491,7 +497,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 					{/* Right: Balance and Close */}
 					<div className="flex items-center gap-3">
 						<span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-sm font-medium text-blue-700 dark:text-blue-400">
-							DMs: {currentBalance.dms}
+							Messages: {currentBalance.messages}
 						</span>
 						<span className="px-3 py-1 bg-violet-100 dark:bg-violet-900/30 rounded-full text-sm font-medium text-violet-700 dark:text-violet-400">
 							Credits: {currentBalance.credits}
@@ -538,7 +544,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 									: "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
 							}`}
 						>
-							DMs
+							Messages
 						</button>
 					</div>
 				</div>
@@ -601,24 +607,32 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 										</ul>
 									</div>
 
-									<Button
-										onClick={() => handleSubscriptionPurchase(plan.id)}
-										disabled={isLoading === plan.id}
-										className={`w-full mt-auto ${
-											plan.badge === "Most Popular"
-												? "bg-violet-500 hover:bg-violet-600"
-												: "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
-										}`}
-									>
-										{isLoading === plan.id ? (
-											<div className="flex items-center justify-center">
-												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-												Processing...
-											</div>
-										) : (
-											`Subscribe`
-										)}
-									</Button>
+									{subscription?.toLowerCase() === plan.id.toLowerCase() ? (
+										<div className="w-full mt-auto px-4 py-2 bg-green-100 dark:bg-green-900/30 border-2 border-green-500 rounded-lg text-center">
+											<span className="text-green-700 dark:text-green-400 font-semibold text-sm">
+												Current
+											</span>
+										</div>
+									) : (
+										<Button
+											onClick={() => handleSubscriptionPurchase(plan.id)}
+											disabled={isLoading === plan.id}
+											className={`w-full mt-auto ${
+												plan.badge === "Most Popular"
+													? "bg-violet-500 hover:bg-violet-600"
+													: "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+											}`}
+										>
+											{isLoading === plan.id ? (
+												<div className="flex items-center justify-center">
+													<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+													Processing...
+												</div>
+											) : (
+												`Subscribe`
+											)}
+										</Button>
+									)}
 								</div>
 							))}
 						</div>
@@ -739,7 +753,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 											${plan.price}
 										</div>
 										<div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3 whitespace-nowrap">
-											{plan.sends} DMs
+											{plan.sends} Messages
 										</div>
 									</div>
 
@@ -758,7 +772,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 												Processing...
 											</div>
 										) : (
-											`Buy ${plan.sends} DMs`
+											`Buy ${plan.sends} Messages`
 										)}
 									</Button>
 								</div>

@@ -393,6 +393,8 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 				onClose={() => setShowCreditModal(false)}
 				onPurchaseSuccess={handlePurchaseSuccess}
 				experienceId={user?.experienceId}
+				subscription={user?.subscription ?? null}
+				user={user}
 			/>
 		</div>
 	);

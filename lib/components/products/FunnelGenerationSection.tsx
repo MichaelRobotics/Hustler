@@ -255,6 +255,8 @@ export const FunnelGenerationSection: React.FC<
 				onClose={() => setShowCreditModal(false)}
 				onPurchaseSuccess={handlePurchaseSuccess}
 				experienceId={user?.experienceId}
+				subscription={user?.subscription ?? null}
+				user={user}
 			/>
 		</div>
 	);

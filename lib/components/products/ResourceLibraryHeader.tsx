@@ -7,6 +7,7 @@ import { ThemeToggle } from "../common/ThemeToggle";
 import { SubscriptionBadge } from "../common/SubscriptionBadge";
 import { CreditPackModal } from "../payments/CreditPackModal";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
+import type { AuthenticatedUser } from "../../types/user";
 
 interface ResourceLibraryHeaderProps {
 	context: "global" | "funnel" | "store";
@@ -23,6 +24,7 @@ interface ResourceLibraryHeaderProps {
 	showCreateAssets?: boolean;
 	subscription?: "Basic" | "Pro" | "Vip" | null;
 	experienceId?: string;
+	user?: AuthenticatedUser | null;
 }
 
 export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
@@ -39,6 +41,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 	showCreateAssets = false,
 	subscription,
 	experienceId,
+	user,
 }) => {
 	const isAtGlobalLimit = allResourcesCount >= GLOBAL_LIMITS.PRODUCTS;
 	const [showCreditModal, setShowCreditModal] = useState(false);
@@ -182,6 +185,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 				subscription={subscription ?? "Basic"}
 				initialTab="subscriptions"
 				experienceId={experienceId}
+				user={user}
 			/>
 		</div>
 	);

@@ -95,13 +95,27 @@ export class UpdateProductSync {
 
       console.log(`[UPDATE-SYNC] 📊 Found ${whopProducts.length} products and ${whopApps.length} apps from Whop API`);
 
+      // Additional safety filter for archived products before comparison
+      // This ensures archived products are excluded even if they slip through fetchWhopProducts
+      const nonArchivedProducts = whopProducts.filter((product: ApiWhopProduct) => {
+        if (product.visibility === 'archived') {
+          console.log(`[UPDATE-SYNC] ⚠️ Additional filter: Excluding archived product "${product.title}" (${product.id})`);
+          return false;
+        }
+        return true;
+      });
+
+      if (whopProducts.length !== nonArchivedProducts.length) {
+        console.log(`[UPDATE-SYNC] ⚠️ Additional filter removed ${whopProducts.length - nonArchivedProducts.length} archived products from update check`);
+      }
+
       // Create maps for easy lookup
       const currentResourcesMap = new Map(
         currentResources.map((r: any) => [r.whopProductId, r])
       );
 
       const whopProductsMap = new Map(
-        whopProducts.map(p => [p.id, p])
+        nonArchivedProducts.map(p => [p.id, p])
       );
 
       const whopAppsMap = new Map(

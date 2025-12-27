@@ -42,13 +42,15 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
 
   // Check if this is a credit pack purchase via chargeUser (metadata-based method) - legacy
   if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
-    console.log(`Credit pack purchase detected via chargeUser: ${metadata.credits} credits for user ${user_id}`);
+    // Parse credits as integer (metadata values may be strings or numbers)
+    const creditsAmount = Math.floor(Number(metadata.credits));
+    console.log(`Credit pack purchase detected via chargeUser: ${creditsAmount} credits for user ${user_id}`);
     
     await handleCreditPackPurchaseWithCompany(
       user_id,
       company_id,
       metadata.packId as CreditPackId,
-      metadata.credits as number,
+      creditsAmount,
       id,
     );
     return;
@@ -170,7 +172,7 @@ async function lookupPlan(
  * Handle new checkout system payments (Subscriptions, Credits, Messages)
  */
 async function handleNewCheckoutPayment(data: PaymentWebhookData) {
-	const { id, user_id, company_id, subtotal, amount_after_fees, metadata, checkout_id, plan_id } = data;
+	const { id, user_id, company_id, subtotal, amount_after_fees, metadata, checkout_id, plan_id, membership_id } = data;
 
 	if (!user_id) {
 		console.error("Missing user_id for new checkout payment");
@@ -254,8 +256,14 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 
 		if (metadata) {
 			paymentType = metadata.type as string;
-			credits = metadata.credits as number | undefined;
-			messages = metadata.messages as number | undefined;
+			// Parse credits as integer (metadata values may be strings or numbers)
+			credits = metadata.credits !== undefined && metadata.credits !== null 
+				? Math.floor(Number(metadata.credits)) 
+				: undefined;
+			// Parse messages as integer
+			messages = metadata.messages !== undefined && metadata.messages !== null
+				? Math.floor(Number(metadata.messages))
+				: undefined;
 			planIdValue = (metadata.planId as string | null) || planIdValue;
 			amount = metadata.amount as number | null;
 		}
@@ -269,8 +277,10 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 				paymentType = plan.type;
 				planIdValue = plan.planId;
 				amount = plan.amount ? parseFloat(plan.amount) : null;
-				credits = plan.credits ? parseFloat(plan.credits) : undefined;
-				messages = plan.messages ? parseFloat(plan.messages) : undefined;
+				// Parse credits as integer (database stores as decimal, but users.credits is integer)
+				credits = plan.credits ? Math.floor(parseFloat(plan.credits)) : undefined;
+				// Parse messages as integer
+				messages = plan.messages ? Math.floor(parseFloat(plan.messages)) : undefined;
 			}
 		}
 
@@ -302,9 +312,12 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 			await addMessages(user_id, whopExperienceId, messages);
 			console.log(`Successfully added ${messages} messages to user ${user_id}`);
 		} else if (subscriptionType) {
-			// Update subscription tier
-			await updateUserSubscription(user_id, whopExperienceId, subscriptionType);
-			console.log(`Successfully updated subscription to ${subscriptionType} for user ${user_id}`);
+			// Update subscription tier with membership_id
+			// The updateUserSubscription function handles:
+			// - Cancelling old membership if subscription type changed
+			// - Updating membership_id for renewals (same subscription type)
+			await updateUserSubscription(user_id, whopExperienceId, subscriptionType, membership_id || null);
+			console.log(`Successfully updated subscription to ${subscriptionType} for user ${user_id}${membership_id ? ` with membership ${membership_id}` : ''}`);
 			
 			// Add credits and messages that come with the subscription
 			if (credits) {

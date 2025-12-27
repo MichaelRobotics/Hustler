@@ -458,6 +458,7 @@ async function createUserContext(
 			credits: user.credits,
 			messages: user.messages,
 			subscription: user.subscription || undefined,
+			membership: user.membership || undefined,
 			accessLevel: finalAccessLevel,
 			productsSynced: user.productsSynced,
 			experience: {
