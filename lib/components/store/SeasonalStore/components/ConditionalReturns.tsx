@@ -27,6 +27,12 @@ interface ConditionalReturnsProps {
   handleRemoveFromTemplate: (resource: any) => void;
   isResourceInTemplate: (resourceId: string) => boolean;
   getFilteredPaidResources: () => any[];
+  onPurchaseSuccess?: (purchaseData: {
+    type: 'subscription' | 'credits' | 'messages';
+    subscription?: 'Basic' | 'Pro' | 'Vip';
+    credits?: number;
+    messages?: number;
+  }) => void; // Callback for purchase success
 
   // Loading overlay props
   previewLiveTemplate?: any;
@@ -58,6 +64,7 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
   handleRemoveFromTemplate,
   isResourceInTemplate,
   getFilteredPaidResources,
+  onPurchaseSuccess,
 
   // Loading overlay props
   previewLiveTemplate,
@@ -163,6 +170,7 @@ export const ConditionalReturns: React.FC<ConditionalReturnsProps> = ({
         onRemoveFromTheme={handleRemoveFromTemplate}
         isResourceInTheme={isResourceInTemplate}
         autoOpenCreateModal={false}
+        onPurchaseSuccess={onPurchaseSuccess}
       />
     );
   }

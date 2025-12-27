@@ -17,7 +17,6 @@ interface FunnelGenerationSectionProps {
 	onGlobalGeneration: (funnelId: string) => Promise<void>;
 	totalFunnels?: number;
 	onDeploy?: (funnelId: string) => Promise<void>;
-	onUserUpdate?: () => Promise<void>;
 }
 
 export const FunnelGenerationSection: React.FC<
@@ -30,7 +29,6 @@ export const FunnelGenerationSection: React.FC<
 	isAnyFunnelGenerating,
 	onGlobalGeneration,
 	totalFunnels = 0,
-	onUserUpdate,
 	onDeploy,
 }) => {
 	const { canGenerate, consumeCredit, refresh: refreshCredits } = useCredits(user);
@@ -163,12 +161,13 @@ export const FunnelGenerationSection: React.FC<
 		}
 	};
 
-	const handlePurchaseSuccess = async () => {
+	const handlePurchaseSuccess = (purchaseData?: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => {
 		setShowCreditModal(false);
-		// Refresh user context after payment to update credits, messages, subscription, and membership
-		if (onUserUpdate) {
-			await onUserUpdate();
-		}
 	};
 
 	// Removed product validation - generation is no longer disabled based on product types

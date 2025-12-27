@@ -42,7 +42,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	context,
 	onModalStateChange,
 	user,
-	onUserUpdate,
+	onPurchaseSuccess,
 	// Generation props for funnel context
 	isGeneratingFunnel,
 	onGlobalGenerationFunnel,
@@ -394,6 +394,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						subscription={user?.subscription ?? "Basic"}
 						experienceId={user?.experienceId}
 						user={user}
+						onPurchaseSuccess={onPurchaseSuccess}
 					/>
 
 					{/* Delete Resource Modal */}
@@ -436,7 +437,6 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										onGlobalGeneration={onGlobalGenerationFunnel || (async () => {})}
 										totalFunnels={allFunnels.length}
 										onDeploy={onDeploy}
-										onUserUpdate={onUserUpdate}
 									/>
 								</div>
               ) : (

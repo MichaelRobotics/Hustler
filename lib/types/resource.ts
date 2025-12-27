@@ -71,7 +71,13 @@ export interface ResourceLibraryProps {
 	context: "global" | "funnel";
 	onModalStateChange?: (isModalOpen: boolean) => void;
 	user?: AuthenticatedUser | null;
-	onUserUpdate?: () => Promise<void>;
+	onUserUpdate?: (updates: { subscription?: "Basic" | "Pro" | "Vip" | null; credits?: number; messages?: number; membership?: string | null }) => void;
+	onPurchaseSuccess?: (purchaseData: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => void;
 	// Generation props for funnel context
 	isGeneratingFunnel?: (funnelId: string) => boolean;
 	onGlobalGenerationFunnel?: (funnelId: string) => Promise<void>;

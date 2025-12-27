@@ -25,6 +25,12 @@ interface ResourceLibraryHeaderProps {
 	subscription?: "Basic" | "Pro" | "Vip" | null;
 	experienceId?: string;
 	user?: AuthenticatedUser | null;
+	onPurchaseSuccess?: (purchaseData: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => void;
 }
 
 export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
@@ -42,9 +48,20 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 	subscription,
 	experienceId,
 	user,
+	onPurchaseSuccess,
 }) => {
 	const isAtGlobalLimit = allResourcesCount >= GLOBAL_LIMITS.PRODUCTS;
 	const [showCreditModal, setShowCreditModal] = useState(false);
+	
+	// Log re-renders when subscription or user state changes (after payment)
+	React.useEffect(() => {
+		console.log("🔄 [ResourceLibraryHeader] Re-rendered with updated props:", {
+			subscription,
+			credits: user?.credits,
+			messages: user?.messages,
+		});
+	}, [subscription, user?.credits, user?.messages]);
+	
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 			{/* Top Section: Back Button + Title */}
@@ -186,6 +203,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 				initialTab="subscriptions"
 				experienceId={experienceId}
 				user={user}
+				onPurchaseSuccess={onPurchaseSuccess}
 			/>
 		</div>
 	);

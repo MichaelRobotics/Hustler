@@ -59,10 +59,114 @@ type View =
 
 interface AdminPanelProps {
 	user: AuthenticatedUser | null;
-	onUserUpdate?: () => Promise<void>;
 }
 
-const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
+const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
+	// Local user state - syncs with prop and updates optimistically after purchases
+	const [user, setUser] = React.useState<AuthenticatedUser | null>(userProp);
+	
+	// Track when we've made an optimistic update to prevent cache from overwriting it
+	const optimisticUpdateRef = React.useRef<{
+		timestamp: number;
+		type?: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	} | null>(null);
+
+	// Sync local state when prop changes, but protect optimistic updates from stale cache
+	React.useEffect(() => {
+		if (!userProp) {
+			setUser(null);
+			return;
+		}
+
+		// If we have a recent optimistic update, completely block syncing to prevent stale webhook data from overwriting
+		if (optimisticUpdateRef.current) {
+			const timeSinceUpdate = Date.now() - optimisticUpdateRef.current.timestamp;
+			const RECENT_UPDATE_THRESHOLD = 300000; // 5 minutes - completely block webhook sync during this period
+
+			if (timeSinceUpdate < RECENT_UPDATE_THRESHOLD) {
+				// Recent optimistic update - completely block syncing to prevent stale webhook data
+				console.log("🚫 [AdminPanel] BLOCKING webhook sync - optimistic update is recent:", {
+					timeSinceUpdate: `${Math.round(timeSinceUpdate / 1000)}s`,
+					threshold: `${RECENT_UPDATE_THRESHOLD / 1000}s`,
+					optimistic: optimisticUpdateRef.current,
+					current: { 
+						subscription: user?.subscription, 
+						credits: user?.credits, 
+						messages: user?.messages 
+					},
+					prop: { 
+						subscription: userProp.subscription, 
+						credits: userProp.credits, 
+						messages: userProp.messages 
+					},
+					action: "BLOCKED - not syncing with prop to preserve optimistic update"
+				});
+				return; // Don't sync at all during this period - preserve optimistic update
+			} else {
+				// Optimistic update is old enough, safe to sync
+				console.log("⏰ [AdminPanel] Optimistic update is old enough, syncing with prop");
+				optimisticUpdateRef.current = null;
+				setUser(userProp);
+			}
+		} else {
+			// No optimistic update, safe to sync
+			console.log("✅ [AdminPanel] No optimistic update, syncing with prop normally");
+			setUser(userProp);
+		}
+	}, [userProp, user]);
+
+	// Handle purchase success - update local user state optimistically
+	const handlePurchaseSuccess = React.useCallback((purchaseData: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => {
+		console.log("🔄 [AdminPanel] handlePurchaseSuccess CALLED with:", purchaseData);
+		console.log("🔄 [AdminPanel] Current user state before update:", user);
+		setUser(prev => {
+			if (!prev) {
+				console.warn("⚠️ [AdminPanel] Cannot update user state - user is null");
+				return prev;
+			}
+			const updatedUser = {
+				...prev,
+				subscription: purchaseData.subscription ?? prev.subscription,
+				credits: (prev.credits ?? 0) + (purchaseData.credits ?? 0),
+				messages: (prev.messages ?? 0) + (purchaseData.messages ?? 0),
+			};
+			
+			console.log("✅ [AdminPanel] User state updated optimistically:", {
+				before: {
+					subscription: prev.subscription,
+					credits: prev.credits,
+					messages: prev.messages,
+				},
+				after: {
+					subscription: updatedUser.subscription,
+					credits: updatedUser.credits,
+					messages: updatedUser.messages,
+				},
+			});
+			
+			// Track this optimistic update
+			optimisticUpdateRef.current = {
+				timestamp: Date.now(),
+				type: purchaseData.type,
+				subscription: purchaseData.subscription,
+				credits: purchaseData.credits,
+				messages: purchaseData.messages,
+			};
+			
+			console.log("🔄 [AdminPanel] AdminPanel will re-render, child components will receive updated props");
+			
+			return updatedUser;
+		});
+	}, []);
+
 	// State for tracking typing in LiveChat
 	const [isUserTyping, setIsUserTyping] = React.useState(false);
 	// State for tracking if we're in a chat conversation
@@ -596,7 +700,6 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 							setAllResources={setAllResources}
 							onBack={undefined}
 							user={user}
-							onUserUpdate={onUserUpdate}
 							onAddToFunnel={undefined}
 							onRemoveFromFunnel={undefined}
 							onEdit={undefined}
@@ -607,6 +710,7 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 							onOpenOfflineConfirmation={undefined}
 							context={libraryContext}
 							onModalStateChange={handleLibraryModalStateChange}
+							onPurchaseSuccess={handlePurchaseSuccess}
 						/>
 					</div>
 				</div>
@@ -621,7 +725,6 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 						setAllResources={setAllResources}
 						onBack={() => setCurrentView("dashboard")}
 						user={user}
-						onUserUpdate={onUserUpdate}
 						onAddToFunnel={handleAddToFunnelInLibrary}
 						onRemoveFromFunnel={(resource) => {
 							if (selectedFunnelForLibrary) {
@@ -671,6 +774,7 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 						onDeploy={deployment.handleDeploy}
 						context={libraryContext}
 						onModalStateChange={handleLibraryModalStateChange}
+						onPurchaseSuccess={handlePurchaseSuccess}
 						// Generation props for funnel context
 						isGeneratingFunnel={isFunnelGenerating}
 						onGlobalGenerationFunnel={handleGlobalGeneration}
@@ -899,7 +1003,6 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 				<div className={`h-screen w-full ${currentView === "store" ? '' : 'hidden'}`}>
 					<SeasonalStore
 						user={user}
-						onUserUpdate={onUserUpdate}
 						allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
 						setAllResources={setAllResources}
 						isActive={currentView === "store"}
@@ -907,6 +1010,7 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 							console.log("🏪 [STORE] Back to AdminPanel");
 							setCurrentView("dashboard");
 						}}
+						onPurchaseSuccess={handlePurchaseSuccess}
 						// Update sync props - managed at AdminPanel level
 						updateSyncProps={{
 							isChecking: isCheckingUpdates,
@@ -986,6 +1090,10 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 				<div className="flex-1 overflow-auto w-full lg:w-auto">
 					<div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
 						<div className="max-w-7xl mx-auto">
+							{(() => {
+								console.log("🔄 [AdminPanel] Rendering AdminHeader - handlePurchaseSuccess:", typeof handlePurchaseSuccess === 'function' ? "function" : typeof handlePurchaseSuccess);
+								return null;
+							})()}
 							<AdminHeader 
 								onAddFunnel={handleCreateNewFunnelInline}
 								funnelCount={funnels.length}
@@ -993,6 +1101,7 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 								subscription={user?.subscription ?? "Basic"}
 								experienceId={user?.experienceId}
 								user={user}
+								onPurchaseSuccess={handlePurchaseSuccess}
 							/>
 
 							<div className="mt-8">
@@ -1042,7 +1151,7 @@ const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 			</div>
 		</div>
 	);
-});
+};
 
 AdminPanel.displayName = "AdminPanel";
 

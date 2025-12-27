@@ -21,7 +21,6 @@ interface UnifiedNavigationProps {
 	className?: string;
 	showOnPage?: "aibuilder" | "preview" | "all" | "analytics";
 	user?: AuthenticatedUser | null; // New: User context for credits
-	onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
 	isFunnelBuilder?: boolean; // New: Distinguish between Funnel Builder and Library contexts
 	isSingleMerchant?: boolean; // New: Detect if there's only 1 merchant card
 }
@@ -39,7 +38,6 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	className = "",
 	showOnPage = "all",
 	user = null,
-	onUserUpdate,
 	isFunnelBuilder = false,
 	isSingleMerchant = false,
 }) => {
@@ -224,12 +222,13 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 		}
 	};
 
-	const handlePurchaseSuccess = async () => {
+	const handlePurchaseSuccess = (purchaseData?: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => {
 		setShowCreditModal(false);
-		// Refresh user context after payment to update credits, messages, subscription, and membership
-		if (onUserUpdate) {
-			await onUserUpdate();
-		}
 	};
 
 	// Only show on specified pages (hide on analytics)

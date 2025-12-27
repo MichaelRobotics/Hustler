@@ -13,7 +13,12 @@ import type { AuthenticatedUser } from "../../types/user";
 interface CreditPackModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	onPurchaseSuccess?: () => void;
+	onPurchaseSuccess?: (purchaseData: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => void;
 	experienceId?: string;
 	subscription?: "Basic" | "Pro" | "Vip" | null;
 	initialTab?: TabType;
@@ -85,12 +90,24 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	initialTab = "credits",
 	user,
 }) => {
+	// Recompute balance whenever user prop changes to ensure optimistic updates are reflected
 	const currentBalance = getCurrentBalance(user);
 	const { isInIframe, iframeSdk } = useSafeIframeSdk();
 	const [isLoading, setIsLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 	const [creditPacks, setCreditPacks] = useState<any[]>([]);
+
+	// Log re-renders when user state changes (after payment)
+	useEffect(() => {
+		if (user) {
+			console.log("🔄 [CreditPackModal] Re-rendered with updated user state:", {
+				subscription: user.subscription,
+				credits: user.credits,
+				messages: user.messages,
+			});
+		}
+	}, [user?.subscription, user?.credits, user?.messages]);
 
 	useEffect(() => {
 		getAllCreditPacks().then(setCreditPacks);
@@ -104,6 +121,14 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			setActiveTab(initialTab);
 			// Disable body scroll when modal is open
 			document.body.style.overflow = "hidden";
+			
+			// Log props when modal opens
+			console.log("🔄 [CreditPackModal] Modal opened with props:", {
+				onPurchaseSuccess: onPurchaseSuccess ? "defined" : "undefined",
+				subscription,
+				experienceId,
+				user: user ? { subscription: user.subscription, credits: user.credits, messages: user.messages } : null,
+			});
 		} else {
 			// Re-enable body scroll when modal is closed
 			document.body.style.overflow = "";
@@ -113,7 +138,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 		return () => {
 			document.body.style.overflow = "";
 		};
-	}, [isOpen, initialTab]);
+	}, [isOpen, initialTab, onPurchaseSuccess, subscription, experienceId, user]);
 
 	// Helper function to lookup plan data
 	const lookupPlan = async (type: string, amount?: number, planId?: string): Promise<{ planId: string; type: string; amount: string | null; credits: string | null; messages: string | null } | null> => {
@@ -229,9 +254,21 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			console.log("Payment result:", result);
 
 			if (result.status === "ok") {
-				console.log("Payment successful");
-				onPurchaseSuccess?.();
-				onClose();
+				console.log("✅ [CreditPackModal] Payment successful - Credits pack");
+				const creditsAmount = plan.credits ? Number(plan.credits) : 0;
+				console.log("🔄 [CreditPackModal] Calling onPurchaseSuccess with credits:", creditsAmount);
+				
+				// Call onPurchaseSuccess first to update state
+				onPurchaseSuccess?.({
+					type: 'credits',
+					credits: creditsAmount,
+				});
+				
+				// Use setTimeout to allow state update to propagate before closing
+				setTimeout(() => {
+					console.log("🔄 [CreditPackModal] Closing modal after state update");
+					onClose();
+				}, 100);
 			} else {
 				const errorMessage = result.error || "Payment failed";
 				let userFriendlyMessage = errorMessage;
@@ -330,9 +367,37 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			console.log("Payment result:", result);
 
 			if (result.status === "ok") {
-				console.log("Payment successful");
-				onPurchaseSuccess?.();
-				onClose();
+				console.log("✅ [CreditPackModal] Payment successful - Subscription:", type);
+				const creditsAmount = planData.credits ? Number(planData.credits) : undefined;
+				const messagesAmount = planData.messages ? Number(planData.messages) : undefined;
+				console.log("🔄 [CreditPackModal] Calling onPurchaseSuccess with subscription:", type, "credits:", creditsAmount, "messages:", messagesAmount);
+				console.log("🔄 [CreditPackModal] onPurchaseSuccess is:", onPurchaseSuccess ? "defined" : "undefined");
+				console.log("🔄 [CreditPackModal] onPurchaseSuccess type:", typeof onPurchaseSuccess);
+				console.log("🔄 [CreditPackModal] Current props:", { subscription, experienceId, user: user?.subscription });
+				
+				// Call onPurchaseSuccess first to update state
+				if (onPurchaseSuccess) {
+					try {
+						onPurchaseSuccess({
+							type: 'subscription',
+							subscription: type as 'Basic' | 'Pro' | 'Vip',
+							credits: creditsAmount,
+							messages: messagesAmount,
+						});
+						console.log("✅ [CreditPackModal] onPurchaseSuccess called successfully");
+					} catch (error) {
+						console.error("❌ [CreditPackModal] Error calling onPurchaseSuccess:", error);
+					}
+				} else {
+					console.warn("⚠️ [CreditPackModal] onPurchaseSuccess is not defined! Modal will close without updating state.");
+					console.warn("⚠️ [CreditPackModal] This means the prop was not passed from parent component.");
+				}
+				
+				// Use setTimeout to allow state update to propagate before closing
+				setTimeout(() => {
+					console.log("🔄 [CreditPackModal] Closing modal after state update");
+					onClose();
+				}, 100);
 			} else {
 				const errorMessage = result.error || "Payment failed";
 				let userFriendlyMessage = errorMessage;
@@ -418,9 +483,21 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			console.log("Payment result:", result);
 
 			if (result.status === "ok") {
-				console.log("Payment successful");
-				onPurchaseSuccess?.();
-				onClose();
+				console.log("✅ [CreditPackModal] Payment successful - Messages pack");
+				const messagesAmount = planData.messages ? Number(planData.messages) : 0;
+				console.log("🔄 [CreditPackModal] Calling onPurchaseSuccess with messages:", messagesAmount);
+				
+				// Call onPurchaseSuccess first to update state
+				onPurchaseSuccess?.({
+					type: 'messages',
+					messages: messagesAmount,
+				});
+				
+				// Use setTimeout to allow state update to propagate before closing
+				setTimeout(() => {
+					console.log("🔄 [CreditPackModal] Closing modal after state update");
+					onClose();
+				}, 100);
 			} else {
 				const errorMessage = result.error || "Payment failed";
 				let userFriendlyMessage = errorMessage;

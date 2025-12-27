@@ -66,37 +66,51 @@ export default function ExperiencePage({
 	const refreshUserContext = useCallback(async () => {
 		console.log("🔄 Refreshing user context after payment...");
 		
-		// Wait a bit for webhook to process (webhooks are async)
-		await new Promise(resolve => setTimeout(resolve, 2000));
+		// Wait longer for webhook to process (webhooks are async and can take time)
+		await new Promise(resolve => setTimeout(resolve, 3000));
 		
 		// Try to refresh with retries (webhook might take a moment)
-		let retries = 3;
+		let retries = 5;
+		let lastData = null;
 		
 		while (retries > 0) {
 			try {
 				const data = await fetchUserContext(true);
 				if (data) {
+					lastData = data;
+					console.log(`🔄 Refresh attempt ${6 - retries}/5: Got user data, subscription=${data.user?.subscription}, credits=${data.user?.credits}, messages=${data.user?.messages}`);
+					
 					// Wait a bit more to ensure webhook has processed
-					await new Promise(resolve => setTimeout(resolve, 1000));
+					await new Promise(resolve => setTimeout(resolve, 1500));
 					retries--;
 				} else {
+					console.warn(`⚠️ Refresh attempt ${6 - retries}/5: No data returned`);
 					retries--;
 				}
 			} catch (error) {
-				console.error("Error refreshing user context:", error);
+				console.error(`❌ Refresh attempt ${6 - retries}/5 error:`, error);
 				retries--;
 			}
 		}
 		
 		// Final refresh attempt
-		await fetchUserContext(true);
+		const finalData = await fetchUserContext(true);
+		if (finalData) {
+			console.log("✅ Final refresh successful:", {
+				subscription: finalData.user?.subscription,
+				credits: finalData.user?.credits,
+				messages: finalData.user?.messages
+			});
+		} else {
+			console.warn("⚠️ Final refresh returned no data");
+		}
 		
-		console.log("✅ User context refreshed");
+		console.log("✅ User context refresh complete");
 	}, [fetchUserContext]);
 
-	// Single useEffect - get params and fetch context immediately
+	// Single useEffect - get params and fetch context immediately with force refresh
 	useEffect(() => {
-		fetchUserContext();
+		fetchUserContext(true); // Force refresh on page load to get latest data
 	}, [fetchUserContext]);
 
 
@@ -146,7 +160,7 @@ export default function ExperiencePage({
 
 	// Handle user-selected view from ViewSelectionPanel
 	if (selectedView === "admin") {
-		return <AdminPanel user={authContext?.user || null} onUserUpdate={refreshUserContext} />;
+		return <AdminPanel user={authContext?.user || null} />;
 	}
 
 	if (selectedView === "customer") {
@@ -164,7 +178,7 @@ export default function ExperiencePage({
 	// Handle backend auto-selected views
 	if (authContext.autoSelectedView === "admin") {
 		// Backend determined: show AdminPanel
-		return <AdminPanel user={authContext?.user || null} onUserUpdate={refreshUserContext} />;
+		return <AdminPanel user={authContext?.user || null} />;
 	}
 
 	if (authContext.autoSelectedView === "customer") {

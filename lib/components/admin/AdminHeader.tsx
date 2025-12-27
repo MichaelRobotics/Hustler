@@ -15,11 +15,48 @@ interface AdminHeaderProps {
 	subscription?: "Basic" | "Pro" | "Vip" | null;
 	experienceId?: string;
 	user?: AuthenticatedUser | null;
+	onPurchaseSuccess?: (purchaseData: {
+		type: 'subscription' | 'credits' | 'messages';
+		subscription?: 'Basic' | 'Pro' | 'Vip';
+		credits?: number;
+		messages?: number;
+	}) => void;
 }
 
-export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId, user }: AdminHeaderProps) {
+export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId, user, onPurchaseSuccess }: AdminHeaderProps) {
 	const isAtLimit = funnelCount >= maxFunnels;
 	const [showCreditModal, setShowCreditModal] = useState(false);
+	
+	// Log when onPurchaseSuccess prop changes
+	React.useEffect(() => {
+		console.log("🔄 [AdminHeader] onPurchaseSuccess prop:", onPurchaseSuccess ? "defined" : "undefined", typeof onPurchaseSuccess);
+		if (!onPurchaseSuccess) {
+			console.warn("⚠️ [AdminHeader] onPurchaseSuccess is undefined! This will prevent state updates after payment.");
+			console.warn("⚠️ [AdminHeader] This means AdminPanel did not pass handlePurchaseSuccess to AdminHeader.");
+		} else {
+			console.log("✅ [AdminHeader] onPurchaseSuccess is defined, will pass to CreditPackModal");
+		}
+	}, [onPurchaseSuccess]);
+	
+	// Log when modal opens
+	React.useEffect(() => {
+		if (showCreditModal) {
+			console.log("🔄 [AdminHeader] CreditPackModal opened, onPurchaseSuccess:", onPurchaseSuccess ? "defined" : "undefined");
+		}
+	}, [showCreditModal, onPurchaseSuccess]);
+	
+	// Log re-renders when subscription or user state changes (after payment)
+	React.useEffect(() => {
+		console.log("🔄 [AdminHeader] Re-rendered with updated props:", {
+			subscription,
+			userSubscription: user?.subscription,
+			credits: user?.credits,
+			messages: user?.messages,
+			onPurchaseSuccess: onPurchaseSuccess ? "defined" : "undefined",
+		});
+		console.log("🔄 [AdminHeader] SubscriptionBadge will show:", subscription ?? "Basic");
+	}, [subscription, user?.subscription, user?.credits, user?.messages, onPurchaseSuccess]);
+	
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 			<div className="flex items-center justify-between mb-6">
@@ -83,6 +120,7 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subs
 				initialTab="subscriptions"
 				experienceId={experienceId}
 				user={user}
+				onPurchaseSuccess={onPurchaseSuccess}
 			/>
 		</div>
 	);

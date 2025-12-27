@@ -30,6 +30,12 @@ interface StoreResourceLibraryProps {
   onRemoveFromTheme: (resource: Resource) => void;
   isResourceInTheme: (resourceId: string) => boolean;
   autoOpenCreateModal?: boolean;
+  onPurchaseSuccess?: (purchaseData: {
+    type: 'subscription' | 'credits' | 'messages';
+    subscription?: 'Basic' | 'Pro' | 'Vip';
+    credits?: number;
+    messages?: number;
+  }) => void;
 }
 
 export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
@@ -43,6 +49,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
   onRemoveFromTheme,
   isResourceInTheme,
   autoOpenCreateModal = false,
+  onPurchaseSuccess,
 }) => {
   // Use the same resource management hook as global ResourceLibrary
   const {
@@ -329,6 +336,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
             subscription={user?.subscription ?? "Basic"}
             experienceId={user?.experienceId}
             user={user}
+            onPurchaseSuccess={onPurchaseSuccess}
           />
 
           {/* Delete Resource Modal */}

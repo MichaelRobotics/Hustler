@@ -89,7 +89,6 @@ interface UpdateSyncProps {
 interface SeasonalStoreProps {
   onBack?: () => void;
   user?: AuthenticatedUser | null; // Changed from experienceId to full user object
-  onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
   allResources?: any[];
   setAllResources?: (resources: any[]) => void;
   previewLiveTemplate?: any;
@@ -98,9 +97,15 @@ interface SeasonalStoreProps {
   isStorePreview?: boolean; // Indicates if this SeasonalStore is being used in StorePreview context
   isActive?: boolean; // Indicates if this SeasonalStore is currently the active view
   updateSyncProps?: UpdateSyncProps; // Optional update sync props from AdminPanel
+  onPurchaseSuccess?: (purchaseData: {
+    type: 'subscription' | 'credits' | 'messages';
+    subscription?: 'Basic' | 'Pro' | 'Vip';
+    credits?: number;
+    messages?: number;
+  }) => void; // Callback for purchase success to update user state optimistically
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, onUserUpdate, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps, onPurchaseSuccess }) => {
   // Extract experienceId from user object
   const experienceId = user?.experienceId;
   
@@ -1498,6 +1503,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, onUs
     handleRemoveFromTemplate,
     isResourceInTemplate,
     getFilteredPaidResources,
+    onPurchaseSuccess, // Pass purchase success callback
 
     // Loading overlay props
     previewLiveTemplate,
@@ -1842,7 +1848,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, onUs
           theme={legacyTheme}
           storeName={legacyTheme.name || "Store"}
           experienceId={experienceId}
-          onUserUpdate={onUserUpdate}
         />
       )}
       
@@ -1858,7 +1863,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, onUs
         updateProduct={updateProduct}
         setPromoButton={setPromoButton}
         experienceId={experienceId}
-        onUserUpdate={onUserUpdate}
         templates={templates}
         setTemplates={setTemplates}
         updateCachedTemplates={updateCachedTemplates}

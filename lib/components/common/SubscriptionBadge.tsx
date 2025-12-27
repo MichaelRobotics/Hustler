@@ -14,6 +14,11 @@ export const SubscriptionBadge: React.FC<SubscriptionBadgeProps> = ({
 }) => {
 	// Default to "Basic" if subscription is null or undefined
 	const subscriptionType = subscription ?? "Basic";
+	
+	// Log when subscription changes
+	React.useEffect(() => {
+		console.log("🔄 [SubscriptionBadge] Re-rendered with subscription:", subscriptionType);
+	}, [subscriptionType]);
 
 	// Determine icon, text, and colors based on subscription type
 	const getSubscriptionConfig = () => {
