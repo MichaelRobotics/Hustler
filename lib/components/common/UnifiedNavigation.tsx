@@ -21,6 +21,7 @@ interface UnifiedNavigationProps {
 	className?: string;
 	showOnPage?: "aibuilder" | "preview" | "all" | "analytics";
 	user?: AuthenticatedUser | null; // New: User context for credits
+	onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
 	isFunnelBuilder?: boolean; // New: Distinguish between Funnel Builder and Library contexts
 	isSingleMerchant?: boolean; // New: Detect if there's only 1 merchant card
 }

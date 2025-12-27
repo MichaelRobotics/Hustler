@@ -42,6 +42,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	context,
 	onModalStateChange,
 	user,
+	onUserUpdate,
 	// Generation props for funnel context
 	isGeneratingFunnel,
 	onGlobalGenerationFunnel,
