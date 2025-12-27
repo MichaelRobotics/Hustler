@@ -6,9 +6,13 @@ import {
 	getUserCredits as getDbUserCredits,
 	updateUserCredits,
 	getUserContext,
+	invalidateUserCache,
 } from "../context/user-context";
 import { CREDIT_PACKS, type CreditPackId } from "../types/credit";
 import type { AuthenticatedUser } from "../types/user";
+import { db } from "../supabase/db-server";
+import { users } from "../supabase/schema";
+import { eq, and } from "drizzle-orm";
 
 /**
  * Get user's credit balance from database (experience-aware)
@@ -265,4 +269,119 @@ export async function getCreditPack(packId: CreditPackId) {
  */
 export async function getAllCreditPacks() {
 	return Object.values(CREDIT_PACKS);
+}
+
+/**
+ * Add messages to user's balance (called from webhook after purchase)
+ */
+export async function addMessages(
+	userId: string,
+	experienceId: string,
+	amount: number,
+): Promise<void> {
+	try {
+		// Get user context to get the database experience ID
+		const userContext = await getUserContext(
+			userId,
+			"", // whopCompanyId is optional
+			experienceId, // This is the Whop Experience ID
+			false, // forceRefresh
+		);
+
+		if (!userContext) {
+			console.error("User context not found for adding messages");
+			return;
+		}
+
+		// Get current messages
+		const user = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, userId),
+				eq(users.experienceId, userContext.user.experience.id)
+			),
+		});
+
+		if (!user) {
+			console.error("User not found for adding messages");
+			return;
+		}
+
+		const currentMessages = user.messages || 0;
+		const newMessages = currentMessages + amount;
+
+		// Update messages in database
+		await db
+			.update(users)
+			.set({
+				messages: newMessages,
+				updatedAt: new Date(),
+			})
+			.where(eq(users.id, user.id));
+
+		// Invalidate cache for this user-experience combination
+		invalidateUserCache(`${userId}:${experienceId}`);
+
+		console.log(
+			`Added ${amount} messages to user ${userId} in experience ${experienceId}. New balance: ${newMessages}`,
+		);
+	} catch (error) {
+		console.error("Error adding messages:", error);
+		throw error;
+	}
+}
+
+/**
+ * Update user subscription tier (called from webhook after purchase)
+ */
+export async function updateUserSubscription(
+	userId: string,
+	experienceId: string,
+	subscriptionType: "Basic" | "Pro" | "Vip",
+): Promise<void> {
+	try {
+		// Get user context to get the database experience ID
+		const userContext = await getUserContext(
+			userId,
+			"", // whopCompanyId is optional
+			experienceId, // This is the Whop Experience ID
+			false, // forceRefresh
+		);
+
+		if (!userContext) {
+			console.error("User context not found for updating subscription");
+			return;
+		}
+
+		// Get user from database
+		const user = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, userId),
+				eq(users.experienceId, userContext.user.experience.id)
+			),
+		});
+
+		if (!user) {
+			console.error("User not found for updating subscription");
+			return;
+		}
+
+		// Update subscription in database
+		await db
+			.update(users)
+			.set({
+				subscription: subscriptionType,
+				updatedAt: new Date(),
+			})
+			.where(eq(users.id, user.id));
+
+		// Invalidate cache for this user-experience combination
+		invalidateUserCache(`${userId}:${experienceId}`);
+
+		console.log(
+			`Updated subscription to ${subscriptionType} for user ${userId} in experience ${experienceId}`,
+		);
+	} catch (error) {
+		console.error("Error updating subscription:", error);
+		throw error;
+	}
 }

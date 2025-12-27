@@ -23,6 +23,7 @@ export async function GET(
       email: "owner@example.com",
       name: "Test Owner",
       credits: 1000,
+      messages: 0,
       accessLevel: "admin" as const,
       productsSynced: false,
       experience: {

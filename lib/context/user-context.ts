@@ -457,6 +457,8 @@ async function createUserContext(
 			name: user.name,
 			avatar: user.avatar || undefined,
 			credits: user.credits,
+			messages: user.messages,
+			subscription: user.subscription || undefined,
 			accessLevel: finalAccessLevel,
 			productsSynced: user.productsSynced,
 			experience: {
@@ -466,7 +468,6 @@ async function createUserContext(
 				name: experience.name,
 				description: experience.description || undefined,
 				link: experience.link || undefined, // Include link field from database
-				subscription: experience.subscription || undefined,
 			},
 		};
 		console.log(`✅ AuthenticatedUser created: id=${authenticatedUser.id}, whopUserId=${authenticatedUser.whopUserId}, experience.id=${authenticatedUser.experience.id}`);

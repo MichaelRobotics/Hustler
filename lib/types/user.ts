@@ -11,6 +11,8 @@ export interface AuthenticatedUser {
 	name: string;
 	avatar?: string;
 	credits: number;
+	messages: number;
+	subscription?: "Basic" | "Pro" | "Vip" | null;
 	accessLevel: "admin" | "customer" | "no_access";
 	productsSynced: boolean;
 	experience: {
@@ -21,7 +23,6 @@ export interface AuthenticatedUser {
 		description?: string;
 		logo?: string;
 		link?: string;
-		subscription?: "Basic" | "Pro" | "Vip" | null;
 	};
 }
 

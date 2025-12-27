@@ -2085,7 +2085,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         updateTemplate={updateTemplate}
         setDiscountSettings={setDiscountSettings}
         products={products}
-        subscription={user?.experience?.subscription}
+        subscription={user?.subscription}
         currentlyLoadedTemplateId={currentlyLoadedTemplateId}
         setProducts={setProductsFromHook}
         setTemplates={(templatesOrUpdater) => {

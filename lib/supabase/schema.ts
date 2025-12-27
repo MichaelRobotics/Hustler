@@ -65,7 +65,6 @@ export const experiences = pgTable(
 		whopCompanyId: text("whop_company_id").notNull(), 
 		name: text("name").notNull(),
 		description: text("description"),
-		subscription: subscriptionTypeEnum("subscription"),
 		link: text("link"),
 		// Seasonal Discount fields
 		seasonalDiscountId: text("seasonal_discount_id"), // Generated ID when discount is created
@@ -140,6 +139,8 @@ export const users = pgTable(
 		name: text("name").notNull(),
 		avatar: text("avatar"),
 		credits: integer("credits").default(0).notNull(),
+		messages: integer("messages").default(0).notNull(),
+		subscription: subscriptionTypeEnum("subscription"),
 		accessLevel: text("access_level").notNull().default("customer"), // WHOP access level: admin/customer/no_access
 		productsSynced: boolean("products_synced").default(false).notNull(), // Track if products have been synced for this user
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -772,6 +773,64 @@ export const templatesRelations = relations(templates, ({ one }) => ({
 		references: [themes.id],
 	}),
 }));
+
+// ===== ORDERS TABLE =====
+export const orders = pgTable(
+	"orders",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		whopCompanyId: text("whop_company_id").notNull(),
+		userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+		planId: text("plan_id"), // Subscription plan ID
+		prodId: text("prod_id"), // Product ID (for credit packs, DM packs, etc.)
+		prodName: text("prod_name").notNull(), // Product name
+		paymentId: text("payment_id").notNull(), // Whop payment ID
+		accessLevel: text("access_level").notNull(), // Snapshot at purchase time
+		avatar: text("avatar"), // User avatar snapshot
+		userName: text("user_name").notNull(), // User name snapshot
+		email: text("email").notNull(), // User email snapshot
+		amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Payment amount
+		messages: integer("messages"), // Messages included (nullable)
+		credits: integer("credits"), // Credits included (nullable)
+		subscription: subscriptionTypeEnum("subscription"), // Subscription tier (nullable)
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		userIdIdx: index("orders_user_id_idx").on(table.userId),
+		whopCompanyIdIdx: index("orders_whop_company_id_idx").on(table.whopCompanyId),
+		paymentIdIdx: unique("orders_payment_id_unique").on(table.paymentId),
+		createdAtIdx: index("orders_created_at_idx").on(table.createdAt),
+		companyCreatedIdx: index("orders_company_created_idx").on(
+			table.whopCompanyId,
+			table.createdAt,
+		),
+	}),
+);
+
+// ===== SUBSCRIPTIONS TABLE =====
+export const subscriptions = pgTable(
+	"subscriptions",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		checkoutId: text("checkout_id").notNull(),
+		internalCheckoutId: text("internal_checkout_id").notNull(),
+		planId: text("plan_id").notNull(), // "basic", "pro", "vip", "starter", "popular", "pro"
+		type: text("type").notNull(), // "Basic", "Pro", "Vip", "Credits", "Messages"
+		amount: decimal("amount", { precision: 10, scale: 2 }), // Nullable for subscriptions
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		checkoutIdIdx: unique("subscriptions_checkout_id_unique").on(table.checkoutId),
+		internalCheckoutIdIdx: unique("subscriptions_internal_checkout_id_unique").on(
+			table.internalCheckoutId,
+		),
+		typeIdx: index("subscriptions_type_idx").on(table.type),
+		planIdIdx: index("subscriptions_plan_id_idx").on(table.planId),
+		typeAmountIdx: index("subscriptions_type_amount_idx").on(table.type, table.amount),
+	}),
+);
 
 export const originTemplatesRelations = relations(originTemplates, ({ one }) => ({
 	experience: one(experiences, {

@@ -2,17 +2,22 @@
 
 import { Button, Heading } from "frosted-ui";
 import { Plus } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { SubscriptionBadge } from "../common/SubscriptionBadge";
+import { CreditPackModal } from "../payments/CreditPackModal";
 
 interface AdminHeaderProps {
 	onAddFunnel: () => void;
 	funnelCount: number;
 	maxFunnels: number;
+	subscription?: "Basic" | "Pro" | "Vip" | null;
+	experienceId?: string;
 }
 
-export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels }: AdminHeaderProps) {
+export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId }: AdminHeaderProps) {
 	const isAtLimit = funnelCount >= maxFunnels;
+	const [showCreditModal, setShowCreditModal] = useState(false);
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 			<div className="flex items-center justify-between mb-6">
@@ -25,6 +30,10 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels }: Ad
 						My Merchants
 					</Heading>
 				</div>
+				<SubscriptionBadge 
+					subscription={subscription ?? "Basic"} 
+					onClick={() => setShowCreditModal(true)}
+				/>
 			</div>
 
 			<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
@@ -63,6 +72,15 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels }: Ad
 					)}
 				</div>
 			</div>
+
+			{/* Credit Pack Modal */}
+			<CreditPackModal
+				isOpen={showCreditModal}
+				onClose={() => setShowCreditModal(false)}
+				subscription={subscription ?? "Basic"}
+				initialTab="subscriptions"
+				experienceId={experienceId}
+			/>
 		</div>
 	);
 }

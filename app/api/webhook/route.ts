@@ -1,12 +1,12 @@
 import { makeWebhookValidator, type PaymentWebhookData, type MembershipWebhookData } from "@whop/api";
 import { after } from "next/server";
-import { addCredits } from "@/lib/actions/credit-actions";
+import { addCredits, addMessages, updateUserSubscription } from "@/lib/actions/credit-actions";
 import type { CreditPackId } from "@/lib/types/credit";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
 import { getExperienceContextFromWebhook, validateExperienceContext } from "@/lib/analytics/experience-context";
 import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tracking";
 import { db } from "@/lib/supabase/db-server";
-import { experiences, users } from "@/lib/supabase/schema";
+import { experiences, users, orders, subscriptions } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 
@@ -38,23 +38,32 @@ export async function POST(request: Request) {
 }
 
 async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
-  const { id, user_id, subtotal, amount_after_fees, metadata } = data;
+  const { id, user_id, subtotal, amount_after_fees, metadata, company_id } = data;
 
-  // Check if this is a credit pack purchase via chargeUser (metadata-based method)
+  // Check if this is a credit pack purchase via chargeUser (metadata-based method) - legacy
   if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
     console.log(`Credit pack purchase detected via chargeUser: ${metadata.credits} credits for user ${user_id}`);
     
     await handleCreditPackPurchaseWithCompany(
       user_id,
-      data.company_id,
+      company_id,
       metadata.packId as CreditPackId,
       metadata.credits as number,
       id,
     );
-  } else {
-    // Handle other payment types with scenario detection and analytics
-    await handlePaymentWithAnalytics(data);
+    return;
   }
+
+  // Handle new checkout system payments (Subscriptions, Credits, Messages)
+  if (metadata?.type && (metadata.type === "Basic" || metadata.type === "Pro" || metadata.type === "Vip" || metadata.type === "Credits" || metadata.type === "Messages")) {
+    console.log(`New checkout system payment detected: ${metadata.type} for user ${user_id}`);
+    
+    await handleNewCheckoutPayment(data);
+    return;
+  }
+
+  // Handle other payment types with scenario detection and analytics
+  await handlePaymentWithAnalytics(data);
 }
 
 // DISABLED: handleMembershipWentValidWebhook function removed
@@ -122,6 +131,193 @@ async function handleCreditPackPurchaseWithCompany(
 
 	} catch (error) {
 		console.error("Error processing credit pack purchase with company:", error);
+	}
+}
+
+/**
+ * Lookup checkout configuration from subscriptions table (fallback if metadata not available)
+ */
+async function lookupCheckoutConfiguration(
+	checkoutId?: string | null,
+	planId?: string | null,
+): Promise<{ type: string; planId: string; amount: number | null; credits?: number; messages?: number } | null> {
+	try {
+		if (!checkoutId && !planId) {
+			return null;
+		}
+
+		const subscription = await db.query.subscriptions.findFirst({
+			where: checkoutId
+				? eq(subscriptions.checkoutId, checkoutId)
+				: eq(subscriptions.planId, planId!),
+		});
+
+		if (!subscription) {
+			return null;
+		}
+
+		return {
+			type: subscription.type,
+			planId: subscription.planId,
+			amount: subscription.amount ? parseFloat(subscription.amount) : null,
+		};
+	} catch (error) {
+		console.error("Error looking up checkout configuration:", error);
+		return null;
+	}
+}
+
+/**
+ * Handle new checkout system payments (Subscriptions, Credits, Messages)
+ */
+async function handleNewCheckoutPayment(data: PaymentWebhookData) {
+	const { id, user_id, company_id, subtotal, amount_after_fees, metadata, checkout_id, plan_id } = data;
+
+	if (!user_id || !company_id) {
+		console.error("Missing user_id or company_id for new checkout payment");
+		return;
+	}
+
+	try {
+		// 1. Find experience by company_id
+		const experience = await db
+			.select()
+			.from(experiences)
+			.where(eq(experiences.whopCompanyId, company_id))
+			.limit(1);
+
+		if (experience.length === 0) {
+			console.error(`No experience found for company_id: ${company_id}`);
+			return;
+		}
+
+		const experienceRecord = experience[0];
+		const experienceId = experienceRecord.id;
+		const whopExperienceId = experienceRecord.whopExperienceId;
+
+		// 2. Find user by user_id and experience_id
+		const user = await db
+			.select()
+			.from(users)
+			.where(
+				and(
+					eq(users.whopUserId, user_id),
+					eq(users.experienceId, experienceId)
+				)
+			)
+			.limit(1);
+
+		if (user.length === 0) {
+			console.error(`No user found with whop_user_id ${user_id} in experience ${experienceId}`);
+			return;
+		}
+
+		const userRecord = user[0];
+		const userId = userRecord.id;
+
+		// 3. Extract payment type and amounts from metadata (primary approach)
+		let paymentType: string | null = null;
+		let credits: number | undefined;
+		let messages: number | undefined;
+		let subscriptionType: "Basic" | "Pro" | "Vip" | null = null;
+		let planIdValue: string | null = plan_id || null;
+		let amount: number | null = null;
+
+		if (metadata) {
+			paymentType = metadata.type as string;
+			credits = metadata.credits as number | undefined;
+			messages = metadata.messages as number | undefined;
+			planIdValue = (metadata.planId as string | null) || planIdValue;
+			amount = metadata.amount as number | null;
+		}
+
+		// Fallback: lookup checkout configuration if metadata not available
+		if (!paymentType && (checkout_id || plan_id)) {
+			const checkoutConfig = await lookupCheckoutConfiguration(checkout_id, plan_id);
+			if (checkoutConfig) {
+				paymentType = checkoutConfig.type;
+				planIdValue = checkoutConfig.planId;
+				amount = checkoutConfig.amount;
+				credits = checkoutConfig.credits;
+				messages = checkoutConfig.messages;
+			}
+		}
+
+		if (!paymentType) {
+			console.error("Could not determine payment type from metadata or checkout lookup");
+			return;
+		}
+
+		// Determine subscription type from paymentType or planId
+		if (paymentType === "Basic" || paymentType === "Pro" || paymentType === "Vip") {
+			subscriptionType = paymentType as "Basic" | "Pro" | "Vip";
+		} else if (planIdValue) {
+			// Check if planId indicates subscription type (basic, pro, vip)
+			const planIdLower = planIdValue.toLowerCase();
+			if (planIdLower === "basic" || planIdLower.includes("basic")) {
+				subscriptionType = "Basic";
+			} else if (planIdLower === "pro" || planIdLower.includes("pro")) {
+				subscriptionType = "Pro";
+			} else if (planIdLower === "vip" || planIdLower.includes("vip")) {
+				subscriptionType = "Vip";
+			}
+		}
+
+		// 4. Update user based on payment type
+		if (paymentType === "Credits" && credits) {
+			await addCredits(user_id, whopExperienceId, credits);
+			console.log(`Successfully added ${credits} credits to user ${user_id}`);
+		} else if (paymentType === "Messages" && messages) {
+			await addMessages(user_id, whopExperienceId, messages);
+			console.log(`Successfully added ${messages} messages to user ${user_id}`);
+		} else if (subscriptionType) {
+			// Update subscription tier
+			await updateUserSubscription(user_id, whopExperienceId, subscriptionType);
+			console.log(`Successfully updated subscription to ${subscriptionType} for user ${user_id}`);
+			
+			// Add credits and messages that come with the subscription
+			if (credits) {
+				await addCredits(user_id, whopExperienceId, credits);
+				console.log(`Successfully added ${credits} credits from subscription to user ${user_id}`);
+			}
+			if (messages) {
+				await addMessages(user_id, whopExperienceId, messages);
+				console.log(`Successfully added ${messages} messages from subscription to user ${user_id}`);
+			}
+		}
+
+		// 5. Create order record
+		const paymentAmount = subtotal || amount_after_fees || amount || 0;
+		const prodName = paymentType === "Credits" 
+			? `${credits || 0} Credits`
+			: paymentType === "Messages"
+			? `${messages || 0} Messages`
+			: `${subscriptionType || paymentType} Subscription`;
+
+		await db.insert(orders).values({
+			whopCompanyId: company_id,
+			userId: userId,
+			planId: planIdValue || null,
+			prodId: planIdValue || null,
+			prodName: prodName,
+			paymentId: id,
+			accessLevel: userRecord.accessLevel,
+			avatar: userRecord.avatar || null,
+			userName: userRecord.userName || "Unknown",
+			email: userRecord.email || "unknown@example.com",
+			amount: paymentAmount.toString(),
+			messages: messages || null,
+			credits: credits || null,
+			subscription: subscriptionType || null,
+		});
+
+		console.log(`Successfully created order record for payment ${id}`);
+
+		// 6. Handle analytics (for funnel tracking)
+		await handlePaymentWithAnalytics(data);
+
+	} catch (error) {
+		console.error("Error processing new checkout payment:", error);
 	}
 }
 

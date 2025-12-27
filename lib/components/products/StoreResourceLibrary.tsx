@@ -326,6 +326,8 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
             onAddProduct={handleCreateNewProductInline}
             filteredResourcesCount={paidResources.length}
             allResourcesCount={allResources.length}
+            subscription={user?.subscription ?? "Basic"}
+            experienceId={user?.experienceId}
           />
 
           {/* Delete Resource Modal */}

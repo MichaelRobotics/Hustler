@@ -390,6 +390,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						isDeploying={isDeploying}
 						hasAnyLiveFunnel={hasAnyLiveFunnel}
 						showCreateAssets={showCreateAssets}
+						subscription={user?.subscription ?? "Basic"}
+						experienceId={user?.experienceId}
 					/>
 
 					{/* Delete Resource Modal */}

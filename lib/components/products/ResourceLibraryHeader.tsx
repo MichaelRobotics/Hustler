@@ -1,9 +1,11 @@
 import { Button, Heading, Text } from "frosted-ui";
 import { ArrowLeft, Plus, Play } from "lucide-react";
-import type React from "react";
+import React, { useState } from "react";
 import { GLOBAL_LIMITS } from "../../types/resource";
 import type { Funnel, ResourceLibraryProps } from "../../types/resource";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { SubscriptionBadge } from "../common/SubscriptionBadge";
+import { CreditPackModal } from "../payments/CreditPackModal";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 
 interface ResourceLibraryHeaderProps {
@@ -19,6 +21,8 @@ interface ResourceLibraryHeaderProps {
 	isDeploying?: boolean;
 	hasAnyLiveFunnel?: boolean;
 	showCreateAssets?: boolean;
+	subscription?: "Basic" | "Pro" | "Vip" | null;
+	experienceId?: string;
 }
 
 export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
@@ -33,34 +37,43 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 	isDeploying = false,
 	hasAnyLiveFunnel = false,
 	showCreateAssets = false,
+	subscription,
+	experienceId,
 }) => {
 	const isAtGlobalLimit = allResourcesCount >= GLOBAL_LIMITS.PRODUCTS;
+	const [showCreditModal, setShowCreditModal] = useState(false);
 	return (
 		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 			{/* Top Section: Back Button + Title */}
-			<div className="flex items-center gap-4 mb-6">
-				{(context === "funnel" || context === "store") && onBack && (
-					<Button
-						size="2"
-						variant="ghost"
-						color="gray"
-						onClick={onBack}
-						className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
-						aria-label="Back to assigned products"
-					>
-						<ArrowLeft size={20} strokeWidth={2.5} />
-					</Button>
-				)}
+			<div className="flex items-center justify-between gap-4 mb-6">
+				<div className="flex items-center gap-4">
+					{(context === "funnel" || context === "store") && onBack && (
+						<Button
+							size="2"
+							variant="ghost"
+							color="gray"
+							onClick={onBack}
+							className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
+							aria-label="Back to assigned products"
+						>
+							<ArrowLeft size={20} strokeWidth={2.5} />
+						</Button>
+					)}
 
-				<div>
-					<Heading
-						size="6"
-						weight="bold"
-						className="text-black dark:text-white"
-					>
-						{context === "funnel" ? "Merchant Market Stall" : context === "store" ? "Market Stall" : "Warehouse"}
-					</Heading>
+					<div>
+						<Heading
+							size="6"
+							weight="bold"
+							className="text-black dark:text-white"
+						>
+							{context === "funnel" ? "Merchant Market Stall" : context === "store" ? "Market Stall" : "Warehouse"}
+						</Heading>
+					</div>
 				</div>
+				<SubscriptionBadge 
+					subscription={subscription ?? "Basic"} 
+					onClick={() => setShowCreditModal(true)}
+				/>
 			</div>
 
 			{/* Subtle Separator Line */}
@@ -161,6 +174,15 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 					)}
 				</div>
 			</div>
+
+			{/* Credit Pack Modal */}
+			<CreditPackModal
+				isOpen={showCreditModal}
+				onClose={() => setShowCreditModal(false)}
+				subscription={subscription ?? "Basic"}
+				initialTab="subscriptions"
+				experienceId={experienceId}
+			/>
 		</div>
 	);
 };
