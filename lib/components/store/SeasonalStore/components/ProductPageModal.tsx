@@ -17,6 +17,7 @@ interface ProductPageModalProps {
   storeName?: string;
   experienceId?: string;
   isEditMode?: boolean; // If true, clicking thumbnails swaps images. If false (preview), just changes displayed image
+  onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
 }
 
 export const ProductPageModal: React.FC<ProductPageModalProps> = ({
@@ -27,6 +28,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
   storeName = "Store",
   experienceId,
   isEditMode = false, // Default to preview mode
+  onUserUpdate,
 }) => {
   const { isInIframe, safeInAppPurchase } = useSafeIframeSdk();
   const fileUpload = useFileUpload();
@@ -344,6 +346,10 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
 
       if (result.status === "ok") {
         console.log("Payment successful");
+        // Refresh user context after payment to update credits, messages, subscription, and membership
+        if (onUserUpdate) {
+          await onUserUpdate();
+        }
         // Provide download link
         if (product.storageUrl) {
           window.open(product.storageUrl, '_blank');

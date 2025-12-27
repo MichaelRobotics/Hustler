@@ -71,6 +71,7 @@ export interface ResourceLibraryProps {
 	context: "global" | "funnel";
 	onModalStateChange?: (isModalOpen: boolean) => void;
 	user?: AuthenticatedUser | null;
+	onUserUpdate?: () => Promise<void>;
 	// Generation props for funnel context
 	isGeneratingFunnel?: (funnelId: string) => boolean;
 	onGlobalGenerationFunnel?: (funnelId: string) => Promise<void>;

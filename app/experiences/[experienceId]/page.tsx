@@ -3,7 +3,7 @@
 import AdminPanel from "@/lib/components/admin/AdminPanel";
 import { CustomerView } from "@/lib/components/userChat";
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import ViewSelectionPanel from "@/lib/components/experiences/ViewSelectionPanel";
 import type { AuthenticatedUser } from "@/lib/types/user";
 import { apiGet } from "@/lib/utils/api-client";
@@ -31,33 +31,73 @@ export default function ExperiencePage({
 	const [experienceId, setExperienceId] = useState<string>("");
 	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
 
+	// Function to fetch user context
+	const fetchUserContext = useCallback(async (forceRefresh = false) => {
+		// Get experienceId from params if not already set
+		let expId = experienceId;
+		if (!expId) {
+			const resolvedParams = await params;
+			expId = resolvedParams.experienceId;
+			setExperienceId(expId);
+		}
+		
+		const url = `/api/user/context?experienceId=${expId}${forceRefresh ? '&forceRefresh=true' : ''}`;
+		const response = await apiGet(url, expId);
+		
+		if (!response.ok) {
+			// Let Whop handle all errors natively
+			return null;
+		}
+
+		const data = await response.json();
+		setAuthContext(data);
+		
+		// Backend determines everything - no frontend state management
+		console.log("🎯 Backend decision:", {
+			autoSelectedView: data.autoSelectedView,
+			shouldShowViewSelection: data.shouldShowViewSelection,
+			userType: data.userType
+		});
+		
+		return data;
+	}, [experienceId, params]);
+
+	// Function to refresh user context after payment (with retry logic for webhook processing)
+	const refreshUserContext = useCallback(async () => {
+		console.log("🔄 Refreshing user context after payment...");
+		
+		// Wait a bit for webhook to process (webhooks are async)
+		await new Promise(resolve => setTimeout(resolve, 2000));
+		
+		// Try to refresh with retries (webhook might take a moment)
+		let retries = 3;
+		
+		while (retries > 0) {
+			try {
+				const data = await fetchUserContext(true);
+				if (data) {
+					// Wait a bit more to ensure webhook has processed
+					await new Promise(resolve => setTimeout(resolve, 1000));
+					retries--;
+				} else {
+					retries--;
+				}
+			} catch (error) {
+				console.error("Error refreshing user context:", error);
+				retries--;
+			}
+		}
+		
+		// Final refresh attempt
+		await fetchUserContext(true);
+		
+		console.log("✅ User context refreshed");
+	}, [fetchUserContext]);
+
 	// Single useEffect - get params and fetch context immediately
 	useEffect(() => {
-		const fetchUserContext = async () => {
-			// Get experienceId from params
-			const { experienceId: expId } = await params;
-			setExperienceId(expId);
-			
-			const response = await apiGet(`/api/user/context?experienceId=${expId}`, expId);
-			
-			if (!response.ok) {
-				// Let Whop handle all errors natively
-				return;
-			}
-
-			const data = await response.json();
-			setAuthContext(data);
-			
-			// Backend determines everything - no frontend state management
-			console.log("🎯 Backend decision:", {
-				autoSelectedView: data.autoSelectedView,
-				shouldShowViewSelection: data.shouldShowViewSelection,
-				userType: data.userType
-			});
-		};
-
 		fetchUserContext();
-	}, [params]);
+	}, [fetchUserContext]);
 
 
 	// Let Whop handle all authentication and access errors natively
@@ -106,7 +146,7 @@ export default function ExperiencePage({
 
 	// Handle user-selected view from ViewSelectionPanel
 	if (selectedView === "admin") {
-		return <AdminPanel user={authContext?.user || null} />;
+		return <AdminPanel user={authContext?.user || null} onUserUpdate={refreshUserContext} />;
 	}
 
 	if (selectedView === "customer") {
@@ -124,7 +164,7 @@ export default function ExperiencePage({
 	// Handle backend auto-selected views
 	if (authContext.autoSelectedView === "admin") {
 		// Backend determined: show AdminPanel
-		return <AdminPanel user={authContext?.user || null} />;
+		return <AdminPanel user={authContext?.user || null} onUserUpdate={refreshUserContext} />;
 	}
 
 	if (authContext.autoSelectedView === "customer") {

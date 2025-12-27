@@ -59,9 +59,10 @@ type View =
 
 interface AdminPanelProps {
 	user: AuthenticatedUser | null;
+	onUserUpdate?: () => Promise<void>;
 }
 
-const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
+const AdminPanel = React.memo(({ user, onUserUpdate }: AdminPanelProps) => {
 	// State for tracking typing in LiveChat
 	const [isUserTyping, setIsUserTyping] = React.useState(false);
 	// State for tracking if we're in a chat conversation
@@ -595,6 +596,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 							setAllResources={setAllResources}
 							onBack={undefined}
 							user={user}
+							onUserUpdate={onUserUpdate}
 							onAddToFunnel={undefined}
 							onRemoveFromFunnel={undefined}
 							onEdit={undefined}
@@ -619,6 +621,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 						setAllResources={setAllResources}
 						onBack={() => setCurrentView("dashboard")}
 						user={user}
+						onUserUpdate={onUserUpdate}
 						onAddToFunnel={handleAddToFunnelInLibrary}
 						onRemoveFromFunnel={(resource) => {
 							if (selectedFunnelForLibrary) {
@@ -896,6 +899,7 @@ const AdminPanel = React.memo(({ user }: AdminPanelProps) => {
 				<div className={`h-screen w-full ${currentView === "store" ? '' : 'hidden'}`}>
 					<SeasonalStore
 						user={user}
+						onUserUpdate={onUserUpdate}
 						allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
 						setAllResources={setAllResources}
 						isActive={currentView === "store"}

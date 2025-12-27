@@ -435,6 +435,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										onGlobalGeneration={onGlobalGenerationFunnel || (async () => {})}
 										totalFunnels={allFunnels.length}
 										onDeploy={onDeploy}
+										onUserUpdate={onUserUpdate}
 									/>
 								</div>
               ) : (

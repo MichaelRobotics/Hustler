@@ -89,6 +89,7 @@ interface UpdateSyncProps {
 interface SeasonalStoreProps {
   onBack?: () => void;
   user?: AuthenticatedUser | null; // Changed from experienceId to full user object
+  onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
   allResources?: any[];
   setAllResources?: (resources: any[]) => void;
   previewLiveTemplate?: any;
@@ -99,7 +100,7 @@ interface SeasonalStoreProps {
   updateSyncProps?: UpdateSyncProps; // Optional update sync props from AdminPanel
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, onUserUpdate, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps }) => {
   // Extract experienceId from user object
   const experienceId = user?.experienceId;
   
@@ -1841,6 +1842,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           theme={legacyTheme}
           storeName={legacyTheme.name || "Store"}
           experienceId={experienceId}
+          onUserUpdate={onUserUpdate}
         />
       )}
       
@@ -1856,6 +1858,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         updateProduct={updateProduct}
         setPromoButton={setPromoButton}
         experienceId={experienceId}
+        onUserUpdate={onUserUpdate}
         templates={templates}
         setTemplates={setTemplates}
         updateCachedTemplates={updateCachedTemplates}

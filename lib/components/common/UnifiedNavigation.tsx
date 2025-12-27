@@ -38,6 +38,7 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 	className = "",
 	showOnPage = "all",
 	user = null,
+	onUserUpdate,
 	isFunnelBuilder = false,
 	isSingleMerchant = false,
 }) => {
@@ -222,8 +223,12 @@ const UnifiedNavigation: React.FC<UnifiedNavigationProps> = ({
 		}
 	};
 
-	const handlePurchaseSuccess = () => {
+	const handlePurchaseSuccess = async () => {
 		setShowCreditModal(false);
+		// Refresh user context after payment to update credits, messages, subscription, and membership
+		if (onUserUpdate) {
+			await onUserUpdate();
+		}
 	};
 
 	// Only show on specified pages (hide on analytics)

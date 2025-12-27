@@ -112,6 +112,7 @@ interface ProductEditorModalProps {
   lastSavedSnapshot?: string | null;
   experienceId?: string; // Experience ID for API calls
   onProductUpdated?: () => void; // Callback to trigger template auto-save after product update
+  onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
   // Template management props
   templates?: any[]; // All templates
   setTemplates?: (templates: any[] | ((prev: any[]) => any[])) => void;
@@ -138,6 +139,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   lastSavedSnapshot = null,
   experienceId,
   onProductUpdated,
+  onUserUpdate,
   templates,
   setTemplates,
   updateCachedTemplates,
@@ -2694,6 +2696,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           storeName="Store"
           experienceId={experienceId}
           isEditMode={true}
+          onUserUpdate={onUserUpdate}
         />
       )}
     </Dialog.Root>

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
 		// Get experienceId from query params
 		const { searchParams } = new URL(request.url);
 		const experienceId = searchParams.get("experienceId");
+		const forceRefresh = searchParams.get("forceRefresh") === "true";
 		
 		if (!experienceId) {
 			return NextResponse.json(
@@ -47,12 +48,12 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		// Get user context
+		// Get user context (with forceRefresh option to bypass cache)
 		const userContext = await getUserContext(
 			userId,
 			whopCompanyId,
 			experienceId,
-			false,
+			forceRefresh,
 			experienceAccess.accessLevel,
 		);
 
