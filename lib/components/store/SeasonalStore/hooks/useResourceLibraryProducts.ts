@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { convertResourcesToProducts } from '../utils/productUtils';
 import { getButtonAnimColor } from '../utils/buttonAnimColor';
 import type { LegacyTheme } from '../types';
@@ -22,6 +22,7 @@ export function useResourceLibraryProducts({
 }: UseResourceLibraryProductsProps) {
   const [resourceLibraryProducts, setResourceLibraryProducts] = useState<any[]>([]);
   const [hasLoadedResourceLibrary, setHasLoadedResourceLibrary] = useState(false);
+  const lastProcessedProductsRef = useRef<string>('');
 
   // Load ResourceLibrary products on mount and when theme changes
   useEffect(() => {
@@ -47,36 +48,89 @@ export function useResourceLibraryProducts({
       typeof product.id === 'string' && product.id.startsWith('resource-')
     );
     
-    if (resourceLibraryProducts.length > 0) {
-      const productsWithLinks = resourceLibraryProducts.map(product => {
-        if (!product.buttonLink && typeof product.id === 'string' && product.id.startsWith('resource-')) {
-          const resourceId = product.id.replace('resource-', '');
-          const matchingResource = allResources.find(r => r.id === resourceId);
-          
-          if (matchingResource?.link) {
-            return {
-              ...product,
-              buttonLink: matchingResource.link
-            };
-          }
+    if (resourceLibraryProducts.length === 0) {
+      return;
+    }
+    
+    // Create a signature of current products to detect if we've already processed this state
+    const currentSignature = JSON.stringify(
+      resourceLibraryProducts.map(p => ({ id: p.id, buttonLink: p.buttonLink }))
+    );
+    
+    // Skip if we've already processed this exact state
+    if (lastProcessedProductsRef.current === currentSignature) {
+      return;
+    }
+    
+    // Check if any products need buttonLink restoration
+    const needsRestoration = resourceLibraryProducts.some(product => 
+      !product.buttonLink && typeof product.id === 'string' && product.id.startsWith('resource-')
+    );
+    
+    if (!needsRestoration) {
+      lastProcessedProductsRef.current = currentSignature;
+      return;
+    }
+    
+    const productsWithLinks = resourceLibraryProducts.map(product => {
+      if (!product.buttonLink && typeof product.id === 'string' && product.id.startsWith('resource-')) {
+        const resourceId = product.id.replace('resource-', '');
+        const matchingResource = allResources.find(r => r.id === resourceId);
+        
+        if (matchingResource?.link) {
+          return {
+            ...product,
+            buttonLink: matchingResource.link
+          };
         }
-        return product;
-      });
-      
-      const hasUpdates = productsWithLinks.some((p: any, idx: number) => 
-        p.buttonLink && !resourceLibraryProducts[idx]?.buttonLink
-      );
-      
-      if (hasUpdates) {
-        setProducts((prev: any[]) => prev.map((product: any) => {
-          const restoredProduct = productsWithLinks.find((p: any) => p.id === product.id);
-          if (restoredProduct && restoredProduct.buttonLink && !product.buttonLink) {
-            return restoredProduct;
+      }
+      return product;
+    });
+    
+    // Only update if there are actual changes
+    const hasUpdates = productsWithLinks.some((p: any, idx: number) => 
+      p.buttonLink && !resourceLibraryProducts[idx]?.buttonLink
+    );
+    
+    if (hasUpdates) {
+      setProducts((prev: any[]) => {
+        // Create a map for quick lookup
+        const linkMap = new Map(productsWithLinks.map((p: any) => [p.id, p.buttonLink]));
+        
+        // Only update products that actually need updates
+        let hasChanges = false;
+        const updated = prev.map((product: any) => {
+          const newLink = linkMap.get(product.id);
+          if (newLink && !product.buttonLink) {
+            hasChanges = true;
+            return { ...product, buttonLink: newLink };
           }
           return product;
-        }));
-      }
-      
+        });
+        
+        // Only return new array if there are actual changes
+        if (hasChanges) {
+          // Update the ref signature after successful update
+          const updatedSignature = JSON.stringify(
+            updated.filter(p => typeof p.id === 'string' && p.id.startsWith('resource-'))
+              .map(p => ({ id: p.id, buttonLink: p.buttonLink }))
+          );
+          lastProcessedProductsRef.current = updatedSignature;
+          return updated;
+        }
+        return prev;
+      });
+    } else {
+      // Mark as processed even if no updates needed
+      lastProcessedProductsRef.current = currentSignature;
+    }
+    
+    // Update resourceLibraryProducts state only if there are changes
+    const resourceLibraryHasUpdates = productsWithLinks.some((p: any, idx: number) => 
+      p.buttonLink && !resourceLibraryProducts[idx]?.buttonLink
+    );
+    
+    if (resourceLibraryHasUpdates) {
       setResourceLibraryProducts(productsWithLinks);
     }
   }, [products, allResources, setProducts]);

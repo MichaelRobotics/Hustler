@@ -16,7 +16,10 @@ export {
 export const convertThemeToLegacy = (dbTheme: any): LegacyTheme => {
   // Handle undefined/null theme - use Black Friday as fallback (default season)
   if (!dbTheme) {
-    console.warn('convertThemeToLegacy: dbTheme is undefined/null, returning Black Friday theme as fallback');
+    // Only log in development to avoid console noise
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('convertThemeToLegacy: dbTheme is undefined/null, returning Black Friday theme as fallback');
+    }
     return {
       name: 'Black Friday',
       themePrompt: 'A bold, high-energy sale theme with dark backgrounds and vibrant accents.',
