@@ -345,32 +345,31 @@ async function createUserContext(
 
 				console.log(`🔍 Fetched user after creation: id=${user?.id}, whopUserId=${user?.whopUserId}, experienceId=${user?.experienceId}`);
 
-				// Trigger product sync for new admin users via API route
+				// Trigger product sync for new admin users (non-blocking)
+				// This runs in the background and doesn't block user context creation
 				if (initialAccessLevel === "admin") {
 					console.log(`🚀 New admin user created, triggering async product sync for experience ${experience.id}`);
 					console.log(`📊 User ID: ${newUser.id}, Experience ID: ${experience.id}, Company ID: ${experience.whopCompanyId}`);
 					
-					try {
-						// Call sync function directly and await it to ensure completion
-						console.log(`[USER-CONTEXT] 🔄 Triggering product sync for user ${newUser.id}...`);
-						
-						// Import the sync function directly since we're in server-side context
-						const { triggerProductSyncForNewAdmin } = await import('../sync/trigger-product-sync');
-						
-						// Call the function directly and await it to ensure completion
-						await triggerProductSyncForNewAdmin(
+					// Fire and forget - don't await to avoid blocking user context creation
+					// The sync can take a long time (especially getInstalledApps with 45s timeout)
+					// so we run it in the background
+					import('../sync/trigger-product-sync').then(({ triggerProductSyncForNewAdmin }) => {
+						triggerProductSyncForNewAdmin(
 							newUser.id,
 							experience.id,
 							experience.whopCompanyId
-						);
-						
-						console.log(`[USER-CONTEXT] ✅ Product sync completed successfully for user ${newUser.id}`);
-					} catch (error) {
-						console.error("❌ Product sync failed:", error);
-						console.error("❌ Error details:", error instanceof Error ? error.stack : error);
-						console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
-						console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
-					}
+						).then(() => {
+							console.log(`[USER-CONTEXT] ✅ Product sync completed successfully for user ${newUser.id}`);
+						}).catch((error) => {
+							console.error("❌ Product sync failed:", error);
+							console.error("❌ Error details:", error instanceof Error ? error.stack : error);
+							console.error("❌ Error name:", error instanceof Error ? error.name : 'Unknown');
+							console.error("❌ Error message:", error instanceof Error ? error.message : 'Unknown error');
+						});
+					}).catch((importError) => {
+						console.error("❌ Failed to import product sync function:", importError);
+					});
 				}
 			}
 		} else {

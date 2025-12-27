@@ -105,10 +105,11 @@ export class WhopApiClient {
       console.log("🔍 Getting installed apps using SDK methods...");
       
       // MULTIPLE RETRY STRATEGY: Try different approaches
+      // Reduced timeouts to prevent blocking user context loading
       const strategies = [
         { name: "Ultra-fast", timeout: 2000, first: 10 },
         { name: "Fast", timeout: 5000, first: 20 },
-        { name: "Standard", timeout: 10000, first: 50 }
+        { name: "Standard", timeout: 8000, first: 50 } // Reduced from 10000 to 8000
       ];
       
       for (const strategy of strategies) {
@@ -210,10 +211,14 @@ export class WhopApiClient {
         }
       }
       
-      // If all strategies failed, throw error
-      throw new Error("All API strategies failed");
+      // If all strategies failed, return empty array instead of throwing
+      // This prevents blocking user context loading
+      console.warn("⚠️ All API strategies failed for getInstalledApps, returning empty array");
+      console.log("⚠️ No FREE apps will be created");
+      return [];
       
     } catch (error) {
+      // Catch any unexpected errors and return empty array to prevent blocking
       console.error("❌ Error fetching installed apps:", error);
       console.log("⚠️ No FREE apps will be created");
       return [];
