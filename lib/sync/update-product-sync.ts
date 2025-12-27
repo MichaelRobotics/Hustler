@@ -321,7 +321,8 @@ export class UpdateProductSync {
     try {
       const apiProducts = await whopClient.getCompanyProducts();
       
-      return apiProducts.map((product: ApiWhopProduct) => ({
+      // Map products and filter out archived ones
+      const mappedProducts = apiProducts.map((product: ApiWhopProduct) => ({
         id: product.id,
         title: product.title || "Unnamed Product",
         description: product.description,
@@ -342,6 +343,21 @@ export class UpdateProductSync {
         route: product.route,
         isFree: product.isFree,
       }));
+      
+      // Explicitly filter out archived products as a safety measure
+      const filteredProducts = mappedProducts.filter((product: ApiWhopProduct) => {
+        const isArchived = product.visibility === 'archived';
+        if (isArchived) {
+          console.log(`[UPDATE-SYNC] ⚠️ Filtering out archived product: "${product.title}" (${product.id})`);
+        }
+        return !isArchived;
+      });
+      
+      if (mappedProducts.length !== filteredProducts.length) {
+        console.log(`[UPDATE-SYNC] ⚠️ Filtered out ${mappedProducts.length - filteredProducts.length} archived products`);
+      }
+      
+      return filteredProducts;
     } catch (error) {
       console.error("Error fetching Whop products:", error);
       return [];

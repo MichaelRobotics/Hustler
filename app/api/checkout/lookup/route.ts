@@ -4,12 +4,14 @@ import { subscriptions } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 
 /**
- * GET /api/checkout/lookup - Lookup checkout by type and amount or type and planId
+ * GET /api/checkout/lookup - Lookup plan by type and amount or type and planId
+ * 
+ * Returns plan data (not checkout data) - frontend will use this to create checkout dynamically
  * 
  * Query params:
  * - type: "Basic" | "Pro" | "Vip" | "Credits" | "Messages"
  * - amount: number (for Credits/Messages)
- * - planId: string (for subscriptions)
+ * - planId: string (for subscriptions - the internal planId like "basic", "pro", "vip")
  */
 export async function GET(request: NextRequest) {
 	try {
@@ -59,48 +61,35 @@ export async function GET(request: NextRequest) {
 				eq(subscriptions.amount, amountValue.toString())
 			);
 		} else {
-			// For subscriptions (Basic/Pro/Vip), lookup by type + planId
-			if (!planId) {
-				return NextResponse.json(
-					{ error: "PlanId parameter is required for subscriptions" },
-					{ status: 400 }
-				);
-			}
-
-			whereCondition = and(
-				eq(subscriptions.type, type),
-				eq(subscriptions.planId, planId)
-			);
+			// For subscriptions (Basic/Pro/Vip), lookup by type only
+			// There's only one plan of each subscription type, so type is sufficient
+			whereCondition = eq(subscriptions.type, type);
 		}
 
 		// Query the subscriptions table
-		const checkout = await db.query.subscriptions.findFirst({
+		const plan = await db.query.subscriptions.findFirst({
 			where: whereCondition,
 		});
 
-		if (!checkout) {
+		if (!plan) {
 			return NextResponse.json(
-				{ error: "Checkout not found for the specified criteria" },
+				{ error: "Plan not found for the specified criteria" },
 				{ status: 404 }
 			);
 		}
 
-		// Note: We use checkoutId as planId since the Whop SDK method for getting
-		// checkout configurations is not available in the client SDK.
-		// The checkoutId can be used directly with iframeSdk.inAppPurchase
-		const whopPlanId: string | null = null;
-
+		// Return plan data (not checkout data)
 		return NextResponse.json({
-			checkoutId: checkout.checkoutId,
-			internalCheckoutId: checkout.internalCheckoutId,
-			planId: whopPlanId || checkout.checkoutId, // Fallback to checkoutId if plan ID not available
-			type: checkout.type,
-			amount: checkout.amount,
+			planId: plan.planId, // Whop plan ID
+			type: plan.type,
+			amount: plan.amount,
+			credits: plan.credits,
+			messages: plan.messages,
 		});
 	} catch (error) {
-		console.error("Error looking up checkout:", error);
+		console.error("Error looking up plan:", error);
 		return NextResponse.json(
-			{ error: "Failed to lookup checkout" },
+			{ error: "Failed to lookup plan" },
 			{ status: 500 }
 		);
 	}

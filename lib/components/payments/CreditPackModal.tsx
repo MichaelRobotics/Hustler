@@ -109,8 +109,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 		};
 	}, [isOpen, initialTab]);
 
-	// Helper function to lookup checkout
-	const lookupCheckout = async (type: string, amount?: number, planId?: string): Promise<{ checkoutId: string; planId: string } | null> => {
+	// Helper function to lookup plan data
+	const lookupPlan = async (type: string, amount?: number, planId?: string): Promise<{ planId: string; type: string; amount: string | null; credits: string | null; messages: string | null } | null> => {
 		try {
 			const params = new URLSearchParams({ type });
 			if (amount !== undefined) {
@@ -124,7 +124,41 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			
 			if (!response.ok) {
 				const errorData = await response.json();
-				throw new Error(errorData.error || "Failed to lookup checkout");
+				throw new Error(errorData.error || "Failed to lookup plan");
+			}
+
+			const data = await response.json();
+			return {
+				planId: data.planId,
+				type: data.type,
+				amount: data.amount,
+				credits: data.credits,
+				messages: data.messages,
+			};
+		} catch (error: any) {
+			console.error("Error looking up plan:", error);
+			setError(error.message || "Failed to lookup plan");
+			return null;
+		}
+	};
+
+	// Helper function to create checkout dynamically with experience metadata
+	const createCheckout = async (planId: string, experienceId: string): Promise<{ checkoutId: string; planId: string } | null> => {
+		try {
+			const response = await fetch('/api/checkout/create', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					planId,
+					experienceId,
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || "Failed to create checkout");
 			}
 
 			const data = await response.json();
@@ -133,8 +167,8 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				planId: data.planId,
 			};
 		} catch (error: any) {
-			console.error("Error looking up checkout:", error);
-			setError(error.message || "Failed to lookup checkout");
+			console.error("Error creating checkout:", error);
+			setError(error.message || "Failed to create checkout");
 			return null;
 		}
 	};
@@ -157,16 +191,30 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Looking up checkout for Credits pack:", packId, "Amount:", pack.price);
+			console.log("Looking up plan for Credits pack:", packId, "Amount:", pack.price);
 
-			const checkout = await lookupCheckout("Credits", pack.price);
-			
-			if (!checkout) {
-				setError("Checkout not found for this credit pack.");
+			// 1. Lookup plan data
+			const plan = await lookupPlan("Credits", pack.price);
+
+			if (!plan) {
+				setError("Plan not found for this credit pack.");
 				return;
 			}
 
-			// Use inAppPurchase with the checkoutId and planId
+			// 2. Create checkout dynamically with experience metadata
+			if (!experienceId) {
+				setError("Experience ID is required to create checkout.");
+				return;
+			}
+
+			const checkout = await createCheckout(plan.planId, experienceId);
+
+			if (!checkout) {
+				setError("Failed to create checkout for this credit pack.");
+				return;
+			}
+
+			// 3. Use inAppPurchase with the checkoutId and planId
 			const result = await iframeSdk.inAppPurchase({
 				planId: checkout.planId,
 				id: checkout.checkoutId,
@@ -181,7 +229,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 			} else {
 				const errorMessage = result.error || "Payment failed";
 				let userFriendlyMessage = errorMessage;
-
+				
 				if (errorMessage.toLowerCase().includes("cancel")) {
 					userFriendlyMessage = "Payment was cancelled. No charges were made.";
 				} else if (errorMessage.toLowerCase().includes("insufficient")) {
@@ -202,7 +250,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				) {
 					userFriendlyMessage = "Payment authorization failed. Please try again or contact support.";
 				}
-
+				
 				setError(userFriendlyMessage);
 			}
 		} catch (error: any) {
@@ -244,16 +292,30 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Looking up checkout for subscription:", type, "PlanId:", planId);
+			console.log("Looking up plan for subscription:", type, "PlanId:", planId);
 
-			const checkout = await lookupCheckout(type, undefined, planId);
-			
-			if (!checkout) {
-				setError("Checkout not found for this subscription plan.");
+			// 1. Lookup plan data
+			const planData = await lookupPlan(type, undefined, planId);
+
+			if (!planData) {
+				setError("Plan not found for this subscription.");
 				return;
 			}
 
-			// Use inAppPurchase with the checkoutId and planId
+			// 2. Create checkout dynamically with experience metadata
+			if (!experienceId) {
+				setError("Experience ID is required to create checkout.");
+				return;
+			}
+
+			const checkout = await createCheckout(planData.planId, experienceId);
+
+			if (!checkout) {
+				setError("Failed to create checkout for this subscription.");
+				return;
+			}
+
+			// 3. Use inAppPurchase with the checkoutId and planId
 			const result = await iframeSdk.inAppPurchase({
 				planId: checkout.planId,
 				id: checkout.checkoutId,
@@ -318,16 +380,30 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				return;
 			}
 
-			console.log("Looking up checkout for Messages pack:", planId, "Amount:", plan.price);
+			console.log("Looking up plan for Messages pack:", planId, "Amount:", plan.price);
 
-			const checkout = await lookupCheckout("Messages", plan.price);
-			
-			if (!checkout) {
-				setError("Checkout not found for this DM pack.");
+			// 1. Lookup plan data
+			const planData = await lookupPlan("Messages", plan.price);
+
+			if (!planData) {
+				setError("Plan not found for this DM pack.");
 				return;
 			}
 
-			// Use inAppPurchase with the checkoutId and planId
+			// 2. Create checkout dynamically with experience metadata
+			if (!experienceId) {
+				setError("Experience ID is required to create checkout.");
+				return;
+			}
+
+			const checkout = await createCheckout(planData.planId, experienceId);
+
+			if (!checkout) {
+				setError("Failed to create checkout for this DM pack.");
+				return;
+			}
+
+			// 3. Use inAppPurchase with the checkoutId and planId
 			const result = await iframeSdk.inAppPurchase({
 				planId: checkout.planId,
 				id: checkout.checkoutId,
@@ -420,14 +496,14 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 						<span className="px-3 py-1 bg-violet-100 dark:bg-violet-900/30 rounded-full text-sm font-medium text-violet-700 dark:text-violet-400">
 							Credits: {currentBalance.credits}
 						</span>
-						<Button
-							variant="ghost"
-							size="2"
-							onClick={onClose}
+					<Button
+						variant="ghost"
+						size="2"
+						onClick={onClose}
 							className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-						>
-							<X className="w-4 h-4" />
-						</Button>
+					>
+						<X className="w-4 h-4" />
+					</Button>
 					</div>
 				</div>
 
@@ -550,77 +626,77 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 					{/* Credits Tab */}
 					{activeTab === "credits" && (
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-								{creditPacks.map((pack) => (
-									<div
-										key={pack.id}
+					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+						{creditPacks.map((pack) => (
+							<div
+								key={pack.id}
 										className={`relative border-2 rounded-xl p-5 sm:p-6 transition-all duration-200 cursor-pointer group ${
-											pack.badge === "Most Popular"
-												? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
-												: "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
-										}`}
-										onClick={() => {
+									pack.badge === "Most Popular"
+										? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
+										: "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
+								}`}
+								onClick={() => {
 											setError(null);
-											handlePurchase(pack.id as CreditPackId);
-										}}
-									>
-										{pack.badge && (
+									handlePurchase(pack.id as CreditPackId);
+								}}
+							>
+								{pack.badge && (
 											<div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
 												<span className="bg-violet-500 text-white text-xs font-medium px-3 py-1 rounded-full whitespace-nowrap">
-													{pack.badge}
-												</span>
-											</div>
-										)}
-
-										<div className="flex items-center justify-center mb-3 sm:mb-4">
-											<div
-												className={`p-2 sm:p-3 rounded-xl ${
-													pack.badge === "Most Popular"
-														? "bg-violet-100 dark:bg-violet-800"
-														: "bg-gray-100 dark:bg-gray-800"
-												}`}
-											>
-												{getPackIcon(pack.id)}
-											</div>
-										</div>
-
-										<div className="text-center mb-4 sm:mb-6">
-											<h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2 whitespace-nowrap">
-												{pack.name}
-											</h3>
-											<div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2 whitespace-nowrap">
-												${pack.price}
-											</div>
-											<div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3 whitespace-nowrap">
-												{pack.credits} Credits
-											</div>
-											<p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{pack.description}</p>
-										</div>
-
-										<Button
-											onClick={(e) => {
-												e.stopPropagation();
-												handlePurchase(pack.id as CreditPackId);
-											}}
-											disabled={isLoading === pack.id}
-											className={`w-full ${
-												pack.badge === "Most Popular"
-													? "bg-violet-500 hover:bg-violet-600"
-													: "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
-											}`}
-										>
-											{isLoading === pack.id ? (
-												<div className="flex items-center justify-center">
-													<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-													Processing...
-												</div>
-											) : (
-												`Buy ${pack.credits} Credits`
-											)}
-										</Button>
+											{pack.badge}
+										</span>
 									</div>
-								))}
+								)}
+
+								<div className="flex items-center justify-center mb-3 sm:mb-4">
+									<div
+										className={`p-2 sm:p-3 rounded-xl ${
+											pack.badge === "Most Popular"
+												? "bg-violet-100 dark:bg-violet-800"
+												: "bg-gray-100 dark:bg-gray-800"
+										}`}
+									>
+										{getPackIcon(pack.id)}
+									</div>
+								</div>
+
+								<div className="text-center mb-4 sm:mb-6">
+											<h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2 whitespace-nowrap">
+										{pack.name}
+									</h3>
+											<div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2 whitespace-nowrap">
+										${pack.price}
+									</div>
+											<div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3 whitespace-nowrap">
+										{pack.credits} Credits
+									</div>
+											<p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{pack.description}</p>
+								</div>
+
+								<Button
+									onClick={(e) => {
+										e.stopPropagation();
+										handlePurchase(pack.id as CreditPackId);
+									}}
+									disabled={isLoading === pack.id}
+									className={`w-full ${
+										pack.badge === "Most Popular"
+											? "bg-violet-500 hover:bg-violet-600"
+											: "bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+									}`}
+								>
+									{isLoading === pack.id ? (
+										<div className="flex items-center justify-center">
+											<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+											Processing...
+										</div>
+									) : (
+										`Buy ${pack.credits} Credits`
+									)}
+								</Button>
 							</div>
+						))}
+					</div>
 					)}
 
 					{/* DMs Tab */}

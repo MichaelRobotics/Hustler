@@ -62,8 +62,8 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
     return;
   }
 
-  // Handle other payment types with scenario detection and analytics
-  await handlePaymentWithAnalytics(data);
+    // Handle other payment types with scenario detection and analytics
+    await handlePaymentWithAnalytics(data);
 }
 
 // DISABLED: handleMembershipWentValidWebhook function removed
@@ -135,21 +135,18 @@ async function handleCreditPackPurchaseWithCompany(
 }
 
 /**
- * Lookup checkout configuration from subscriptions table (fallback if metadata not available)
+ * Lookup plan from subscriptions table (fallback if metadata not available)
  */
-async function lookupCheckoutConfiguration(
-	checkoutId?: string | null,
+async function lookupPlan(
 	planId?: string | null,
 ): Promise<{ type: string; planId: string; amount: number | null; credits?: number; messages?: number } | null> {
 	try {
-		if (!checkoutId && !planId) {
+		if (!planId) {
 			return null;
 		}
 
 		const subscription = await db.query.subscriptions.findFirst({
-			where: checkoutId
-				? eq(subscriptions.checkoutId, checkoutId)
-				: eq(subscriptions.planId, planId!),
+			where: eq(subscriptions.planId, planId),
 		});
 
 		if (!subscription) {
@@ -160,9 +157,11 @@ async function lookupCheckoutConfiguration(
 			type: subscription.type,
 			planId: subscription.planId,
 			amount: subscription.amount ? parseFloat(subscription.amount) : null,
+			credits: subscription.credits ? parseFloat(subscription.credits) : undefined,
+			messages: subscription.messages ? parseFloat(subscription.messages) : undefined,
 		};
 	} catch (error) {
-		console.error("Error looking up checkout configuration:", error);
+		console.error("Error looking up plan:", error);
 		return null;
 	}
 }
@@ -173,27 +172,57 @@ async function lookupCheckoutConfiguration(
 async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 	const { id, user_id, company_id, subtotal, amount_after_fees, metadata, checkout_id, plan_id } = data;
 
-	if (!user_id || !company_id) {
-		console.error("Missing user_id or company_id for new checkout payment");
+	if (!user_id) {
+		console.error("Missing user_id for new checkout payment");
 		return;
 	}
 
 	try {
-		// 1. Find experience by company_id
+		// 1. Extract experienceId from metadata (primary approach)
+		let whopExperienceId: string | null = null;
+		
+		if (metadata?.experienceId) {
+			whopExperienceId = metadata.experienceId as string;
+			console.log(`Found experienceId in metadata: ${whopExperienceId}`);
+		} else {
+			// Fallback: use company_id to find experience (backward compatibility)
+			if (!company_id) {
+				console.error("Missing experienceId in metadata and company_id for new checkout payment");
+				return;
+			}
+			console.log(`No experienceId in metadata, falling back to company_id: ${company_id}`);
+			const experienceFallback = await db
+				.select()
+				.from(experiences)
+				.where(eq(experiences.whopCompanyId, company_id))
+				.limit(1);
+
+			if (experienceFallback.length === 0) {
+				console.error(`No experience found for company_id: ${company_id}`);
+				return;
+			}
+			whopExperienceId = experienceFallback[0].whopExperienceId;
+		}
+
+		if (!whopExperienceId) {
+			console.error("Could not determine whopExperienceId from metadata or company_id");
+			return;
+		}
+
+		// 2. Find experience by whopExperienceId
 		const experience = await db
 			.select()
 			.from(experiences)
-			.where(eq(experiences.whopCompanyId, company_id))
+			.where(eq(experiences.whopExperienceId, whopExperienceId))
 			.limit(1);
 
 		if (experience.length === 0) {
-			console.error(`No experience found for company_id: ${company_id}`);
+			console.error(`No experience found for whopExperienceId: ${whopExperienceId}`);
 			return;
 		}
 
 		const experienceRecord = experience[0];
 		const experienceId = experienceRecord.id;
-		const whopExperienceId = experienceRecord.whopExperienceId;
 
 		// 2. Find user by user_id and experience_id
 		const user = await db
@@ -231,15 +260,17 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 			amount = metadata.amount as number | null;
 		}
 
-		// Fallback: lookup checkout configuration if metadata not available
-		if (!paymentType && (checkout_id || plan_id)) {
-			const checkoutConfig = await lookupCheckoutConfiguration(checkout_id, plan_id);
-			if (checkoutConfig) {
-				paymentType = checkoutConfig.type;
-				planIdValue = checkoutConfig.planId;
-				amount = checkoutConfig.amount;
-				credits = checkoutConfig.credits;
-				messages = checkoutConfig.messages;
+		// Fallback: lookup plan from subscriptions table if metadata not available
+		if (!paymentType && plan_id) {
+			const plan = await db.query.subscriptions.findFirst({
+				where: eq(subscriptions.planId, plan_id),
+			});
+			if (plan) {
+				paymentType = plan.type;
+				planIdValue = plan.planId;
+				amount = plan.amount ? parseFloat(plan.amount) : null;
+				credits = plan.credits ? parseFloat(plan.credits) : undefined;
+				messages = plan.messages ? parseFloat(plan.messages) : undefined;
 			}
 		}
 
@@ -295,7 +326,7 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 			: `${subscriptionType || paymentType} Subscription`;
 
 		await db.insert(orders).values({
-			whopCompanyId: company_id,
+			whopCompanyId: experienceRecord.whopCompanyId,
 			userId: userId,
 			planId: planIdValue || null,
 			prodId: planIdValue || null,

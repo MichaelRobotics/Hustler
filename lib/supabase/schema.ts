@@ -813,19 +813,15 @@ export const subscriptions = pgTable(
 	"subscriptions",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		checkoutId: text("checkout_id").notNull(),
-		internalCheckoutId: text("internal_checkout_id").notNull(),
-		planId: text("plan_id").notNull(), // "basic", "pro", "vip", "starter", "popular", "pro"
+		planId: text("plan_id").notNull(), // Whop plan ID (e.g., "plan_xxx")
 		type: text("type").notNull(), // "Basic", "Pro", "Vip", "Credits", "Messages"
 		amount: decimal("amount", { precision: 10, scale: 2 }), // Nullable for subscriptions
+		credits: decimal("credits", { precision: 10, scale: 2 }), // Credits included in plan
+		messages: decimal("messages", { precision: 10, scale: 2 }), // Messages included in plan
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => ({
-		checkoutIdIdx: unique("subscriptions_checkout_id_unique").on(table.checkoutId),
-		internalCheckoutIdIdx: unique("subscriptions_internal_checkout_id_unique").on(
-			table.internalCheckoutId,
-		),
 		typeIdx: index("subscriptions_type_idx").on(table.type),
 		planIdIdx: index("subscriptions_plan_id_idx").on(table.planId),
 		typeAmountIdx: index("subscriptions_type_amount_idx").on(table.type, table.amount),

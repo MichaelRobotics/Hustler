@@ -911,6 +911,14 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     updateSnapshot,
   });
 
+  // Track last processed order to prevent infinite loops
+  const lastProcessedOrderRef = useRef<string>('');
+
+  // Reset processed order when template changes
+  useEffect(() => {
+    lastProcessedOrderRef.current = '';
+  }, [currentlyLoadedTemplateId, previewLiveTemplate?.id]);
+
   // Auto-update template in database when Market Stall order changes
   useEffect(() => {
     if (hasOrderChanged && isTemplateLoaded && initialReorderDoneRef.current && allResources.length > 0 && products.length > 0) {
@@ -919,12 +927,40 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         // Find current template to merge with existing templateData
         const currentTemplate = templates.find((t: any) => t.id === currentTemplateId);
         if (currentTemplate) {
+          // Filter products to only resource products that exist in Market Stall (exclude archived)
+          // Extract resource IDs from allResources for quick lookup
+          const activeResourceIds = new Set(allResources.map(r => r.id));
+          const frontendProducts = products.filter(product => {
+            // Must be a resource product
+            if (typeof product.id !== 'string' || !product.id.startsWith('resource-')) {
+              return false;
+            }
+            // Extract resource ID from product ID (format: "resource-{uuid}")
+            const resourceId = product.id.replace('resource-', '');
+            // Only include if resource still exists in Market Stall (not archived)
+            return activeResourceIds.has(resourceId);
+          });
+          
+          // Create a hash of the current order to detect if we've already processed this change
+          const currentOrderHash = JSON.stringify(frontendProducts.map(p => p.id));
+          
+          // Skip if we've already processed this exact order
+          if (lastProcessedOrderRef.current === currentOrderHash) {
+            return;
+          }
+          
+          // Mark this order as processed immediately to prevent re-triggering
+          lastProcessedOrderRef.current = currentOrderHash;
+          
+          // Update snapshot immediately to prevent hasOrderChanged from staying true
+          if (updateSnapshot) {
+            updateSnapshot();
+            console.log('📸 Snapshot updated before template auto-update');
+          }
+          
           // Auto-update template asynchronously
           const autoUpdateTemplate = async () => {
             try {
-              // Filter products to only resource products (same as useTemplateSave)
-              const frontendProducts = products.filter(product => typeof product.id === 'string' && product.id.startsWith('resource-'));
-              
               console.log('💾 Auto-updating template with Market Stall order:', {
                 templateId: currentTemplateId,
                 productCount: frontendProducts.length,
@@ -939,16 +975,10 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
               });
               
               console.log('✅ Template auto-updated with Market Stall order');
-              
-              // Update snapshot after template save completes
-              if (updateSnapshot) {
-                setTimeout(() => {
-                  updateSnapshot();
-                  console.log('📸 Snapshot updated after template auto-update');
-                }, 100);
-              }
             } catch (error) {
               console.warn('⚠️ Failed to auto-update template with Market Stall order:', error);
+              // Reset the ref on error so we can retry
+              lastProcessedOrderRef.current = '';
               // Continue even if auto-update fails - order is still updated in UI
             }
           };

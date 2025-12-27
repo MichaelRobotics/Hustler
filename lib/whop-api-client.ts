@@ -292,9 +292,13 @@ export class WhopApiClient {
       console.log(`🔍 Filtered products: ${validProducts.length}/${products.length} (excluded products without visible/hidden plans)`);
 
       // Filter products by visibility - include visible, hidden, and quick_link (exclude only archived)
-      const visibleProducts = validProducts.filter(product => 
-        product.visibility === 'visible' || product.visibility === 'hidden' || product.visibility === 'quick_link'
-      );
+      const visibleProducts = validProducts.filter(product => {
+        const isArchived = product.visibility === 'archived';
+        if (isArchived) {
+          console.log(`🔍 [getCompanyProducts] ⚠️ Filtering out archived product: "${product.title}" (${product.id})`);
+        }
+        return product.visibility === 'visible' || product.visibility === 'hidden' || product.visibility === 'quick_link';
+      });
       console.log(`🔍 Filtered products: ${visibleProducts.length}/${validProducts.length} (excluded only archived)`);
       
       // DEBUG: Log product names
@@ -310,7 +314,13 @@ export class WhopApiClient {
       console.log(`🔍 Final products: ${finalProducts.length}/${visibleProducts.length} (no filtering applied)`);
 
       // Find plans without matching products and create products from them
-      const visibleHiddenPlansForOrphans = plans.filter(p => p.visibility === 'visible' || p.visibility === 'hidden');
+      // Only use plans with visible/hidden visibility AND products with non-archived visibility
+      const visibleHiddenPlansForOrphans = plans.filter(p => {
+        const planVisibility = p.visibility === 'visible' || p.visibility === 'hidden';
+        const productVisibility = p.product?.visibility;
+        const isNotArchived = productVisibility !== 'archived';
+        return planVisibility && isNotArchived;
+      });
       const productIds = new Set(finalProducts.map(p => p.id));
       
       const orphanPlans = visibleHiddenPlansForOrphans.filter(plan => {
@@ -377,11 +387,17 @@ export class WhopApiClient {
           const purchaseUrl = planWithPurchaseUrl?.purchase_url || undefined;
           
           // Create product object from plan data
+          // Ensure visibility is not archived (use 'visible' as default if product visibility is archived)
+          const productVisibility = firstPlan.product?.visibility;
+          const safeVisibility = (productVisibility && productVisibility !== 'archived') 
+            ? productVisibility 
+            : 'visible';
+          
           const createdProduct = {
             id: productId,
             title: productName,
             description: firstPlan.description || '',
-            visibility: firstPlan.product?.visibility || 'visible',
+            visibility: safeVisibility,
             status: 'active',
             price: finalPrice,
             currency: currency,
@@ -410,14 +426,23 @@ export class WhopApiClient {
       });
       
       // Add created products to final products list
-      const allProducts = [...finalProducts, ...createdProducts];
-      console.log(`🔍 Total products after adding from plans: ${allProducts.length} (${finalProducts.length} existing + ${createdProducts.length} created from plans)`);
+      // Final safety check: filter out any archived products that might have slipped through
+      const allProducts = [...finalProducts, ...createdProducts].filter(product => 
+        product.visibility !== 'archived'
+      );
+      console.log(`🔍 Total products after adding from plans: ${allProducts.length} (${finalProducts.length} existing + ${createdProducts.length} created from plans, archived filtered out)`);
 
       console.log("🔍 Step 3: Correlating plans with products and getting detailed product data...");
       const correlatedProducts: WhopProduct[] = [];
 
       for (const product of allProducts) {
         try {
+          // Skip archived products (shouldn't happen due to earlier filtering, but safety check)
+          if (product.visibility === 'archived') {
+            console.log(`🔍 [getCompanyProducts] ⚠️ Skipping archived product during processing: "${product.title}" (${product.id})`);
+            continue;
+          }
+          
           // Get detailed product data (skip if product was created from plan)
           let detailedProduct: any;
           const isCreatedFromPlan = createdProducts.some(cp => cp.id === product.id);
@@ -429,6 +454,12 @@ export class WhopApiClient {
           } else {
             // Get detailed product data from API
             detailedProduct = await client.products.retrieve(product.id);
+            
+            // Check if retrieved product is archived
+            if (detailedProduct.visibility === 'archived') {
+              console.log(`🔍 [getCompanyProducts] ⚠️ Skipping archived product from API: "${detailedProduct.title}" (${detailedProduct.id})`);
+              continue;
+            }
           }
           
           // Find plans for this product - filter by visibility (only visible and hidden)
@@ -570,7 +601,9 @@ export class WhopApiClient {
             model: modelType,
             includedApps: [],
             plans: plansToUse,
-            visibility: (detailedProduct.visibility || 'visible') as 'visible' | 'hidden' | 'archived' | 'quick_link',
+            visibility: (detailedProduct.visibility && detailedProduct.visibility !== 'archived' 
+              ? detailedProduct.visibility 
+              : 'visible') as 'visible' | 'hidden' | 'archived' | 'quick_link',
             discoveryPageUrl,
             checkoutUrl,
             route: detailedProduct.route,
@@ -589,16 +622,21 @@ export class WhopApiClient {
         }
       }
 
-      console.log(`✅ Successfully processed ${correlatedProducts.length} products using direct SDK API`);
+      // Final safety check: filter out any archived products
+      const finalCorrelatedProducts = correlatedProducts.filter(product => 
+        product.visibility !== 'archived'
+      );
+      
+      console.log(`✅ Successfully processed ${finalCorrelatedProducts.length} products using direct SDK API (${correlatedProducts.length - finalCorrelatedProducts.length} archived products filtered out)`);
       
       // INVESTIGATION: Log final product structure
-      if (correlatedProducts.length > 0) {
+      if (finalCorrelatedProducts.length > 0) {
         console.log(`🔍 INVESTIGATION: Final product object structure:`);
-        console.log(JSON.stringify(correlatedProducts[0], null, 2));
-        console.log(`🔍 INVESTIGATION: Product object keys:`, Object.keys(correlatedProducts[0]));
+        console.log(JSON.stringify(finalCorrelatedProducts[0], null, 2));
+        console.log(`🔍 INVESTIGATION: Product object keys:`, Object.keys(finalCorrelatedProducts[0]));
       }
 
-      return correlatedProducts;
+      return finalCorrelatedProducts;
       
     } catch (error) {
       console.error("❌ Failed to get discovery page products using direct SDK API:", error);

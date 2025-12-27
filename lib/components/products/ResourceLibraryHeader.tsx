@@ -47,28 +47,28 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 			{/* Top Section: Back Button + Title */}
 			<div className="flex items-center justify-between gap-4 mb-6">
 				<div className="flex items-center gap-4">
-					{(context === "funnel" || context === "store") && onBack && (
-						<Button
-							size="2"
-							variant="ghost"
-							color="gray"
-							onClick={onBack}
-							className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
-							aria-label="Back to assigned products"
-						>
-							<ArrowLeft size={20} strokeWidth={2.5} />
-						</Button>
-					)}
+				{(context === "funnel" || context === "store") && onBack && (
+					<Button
+						size="2"
+						variant="ghost"
+						color="gray"
+						onClick={onBack}
+						className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
+						aria-label="Back to assigned products"
+					>
+						<ArrowLeft size={20} strokeWidth={2.5} />
+					</Button>
+				)}
 
-					<div>
-						<Heading
-							size="6"
-							weight="bold"
-							className="text-black dark:text-white"
-						>
-							{context === "funnel" ? "Merchant Market Stall" : context === "store" ? "Market Stall" : "Warehouse"}
-						</Heading>
-					</div>
+				<div>
+					<Heading
+						size="6"
+						weight="bold"
+						className="text-black dark:text-white"
+					>
+						{context === "funnel" ? "Merchant Market Stall" : context === "store" ? "Market Stall" : "Warehouse"}
+					</Heading>
+				</div>
 				</div>
 				<SubscriptionBadge 
 					subscription={subscription ?? "Basic"} 
