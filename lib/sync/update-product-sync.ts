@@ -88,12 +88,9 @@ export class UpdateProductSync {
       const whopClient = getWhopApiClient(user.experience.whopCompanyId, user.whopUserId);
 
       // Fetch current products from Whop API
-      const [whopProducts, whopApps] = await Promise.all([
-        this.fetchWhopProducts(whopClient),
-        this.fetchWhopApps(whopClient, user.experience.whopCompanyId)
-      ]);
+      const whopProducts = await this.fetchWhopProducts(whopClient);
 
-      console.log(`[UPDATE-SYNC] 📊 Found ${whopProducts.length} products and ${whopApps.length} apps from Whop API`);
+      console.log(`[UPDATE-SYNC] 📊 Found ${whopProducts.length} products from Whop API`);
 
       // Additional safety filter for archived products before comparison
       // This ensures archived products are excluded even if they slip through fetchWhopProducts
@@ -118,11 +115,7 @@ export class UpdateProductSync {
         nonArchivedProducts.map(p => [p.id, p])
       );
 
-      const whopAppsMap = new Map(
-        whopApps.map(a => [a.id, a])
-      );
-
-      // Check for created products/apps
+      // Check for created products
       whopProductsMap.forEach((product, productId) => {
         if (!currentResourcesMap.has(productId)) {
           result.changes.push({
@@ -135,19 +128,7 @@ export class UpdateProductSync {
         }
       });
 
-      whopAppsMap.forEach((app, appId) => {
-        if (!currentResourcesMap.has(appId)) {
-          result.changes.push({
-            type: 'created',
-            category: 'FREE_VALUE',
-            name: app.name,
-            whopProductId: appId,
-          });
-          result.summary.created++;
-        }
-      });
-
-      // Check for updated products/apps
+      // Check for updated products
       const updatePromises = Array.from(whopProductsMap.entries()).map(async ([productId, product]) => {
         const currentResource = currentResourcesMap.get(productId);
         if (currentResource) {
@@ -166,26 +147,9 @@ export class UpdateProductSync {
       });
       await Promise.all(updatePromises);
 
-      whopAppsMap.forEach((app, appId) => {
-        const currentResource = currentResourcesMap.get(appId);
-        if (currentResource) {
-          const changes = this.detectAppChanges(currentResource, app);
-          if (changes && Object.keys(changes).length > 0) {
-            result.changes.push({
-              type: 'updated',
-              category: 'FREE_VALUE',
-              name: app.name,
-              whopProductId: appId,
-              changes,
-            });
-            result.summary.updated++;
-          }
-        }
-      });
-
-      // Check for deleted products/apps
+      // Check for deleted products
       currentResourcesMap.forEach((resource, productId) => {
-        if (!whopProductsMap.has(productId as string) && !whopAppsMap.has(productId as string)) {
+        if (!whopProductsMap.has(productId as string)) {
           result.changes.push({
             type: 'deleted',
             category: (resource as any).category as 'PAID' | 'FREE_VALUE',
@@ -378,49 +342,7 @@ export class UpdateProductSync {
     }
   }
 
-  /**
-   * Fetch apps from Whop API
-   */
-  private async fetchWhopApps(whopClient: any, companyId: string): Promise<WhopApp[]> {
-    try {
-      const installedApps = await whopClient.getInstalledApps();
-      console.log(`[UPDATE-SYNC] 🔍 Fetched ${installedApps.length} installed apps from Whop API`);
-      
-      // Get current experience to exclude it from apps
-      const currentExperience = await db.query.experiences.findFirst({
-        where: eq(experiences.whopCompanyId, companyId),
-        columns: { whopExperienceId: true }
-      });
-
-      console.log(`[UPDATE-SYNC] 🔍 Current experience ID: ${currentExperience?.whopExperienceId}`);
-
-      const filteredApps = installedApps.filter((app: WhopApp) => {
-        const shouldInclude = app.experienceId !== currentExperience?.whopExperienceId;
-        console.log(`[UPDATE-SYNC] 🔍 App "${app.name}" (${app.experienceId}) - ${shouldInclude ? 'INCLUDED' : 'EXCLUDED'}`);
-        return shouldInclude;
-      });
-
-      console.log(`[UPDATE-SYNC] 🔍 After filtering: ${filteredApps.length} apps (excluded current experience)`);
-      
-      // Debug: Check app structure for link generation
-      if (filteredApps.length > 0) {
-        const sampleApp = filteredApps[0];
-        console.log(`[UPDATE-SYNC] 🔍 Sample app structure for link generation:`, {
-          id: sampleApp.id,
-          name: sampleApp.name,
-          experienceId: sampleApp.experienceId,
-          companyRoute: sampleApp.companyRoute,
-          appSlug: sampleApp.appSlug,
-          hasRequiredFields: !!(sampleApp.companyRoute || sampleApp.experienceId)
-        });
-      }
-      
-      return filteredApps;
-    } catch (error) {
-      console.error("Error fetching Whop apps:", error);
-      return [];
-    }
-  }
+  // REMOVED: fetchWhopApps method - app sync is no longer supported
 
   /**
    * Detect changes between current resource and Whop product

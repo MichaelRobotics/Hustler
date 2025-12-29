@@ -387,11 +387,14 @@ export class WhopApiClient {
           const purchaseUrl = planWithPurchaseUrl?.purchase_url || undefined;
           
           // Create product object from plan data
-          // Ensure visibility is not archived (use 'visible' as default if product visibility is archived)
+          // Skip if product visibility is archived
           const productVisibility = firstPlan.product?.visibility;
-          const safeVisibility = (productVisibility && productVisibility !== 'archived') 
-            ? productVisibility 
-            : 'visible';
+          if (productVisibility === 'archived') {
+            console.log(`🔍 [getCompanyProducts] ⚠️ Skipping archived product from orphan plan: "${productName}" (${productId})`);
+            return; // Skip creating this product
+          }
+          
+          const safeVisibility = productVisibility || 'visible';
           
           const createdProduct = {
             id: productId,

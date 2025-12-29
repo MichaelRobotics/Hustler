@@ -177,7 +177,7 @@ export const FormFields: React.FC<FormFieldsProps> = ({
         <select
             value={resource.type || "LINK"}
             onChange={(e) => {
-              const newType = e.target.value as "LINK" | "FILE";
+              const newType = e.target.value as "LINK" | "FILE" | "WHOP";
             setResource({
               ...resource,
                 type: newType,
@@ -185,11 +185,12 @@ export const FormFields: React.FC<FormFieldsProps> = ({
                 ...(newType === "LINK" ? { storageUrl: "" } : { link: "" }),
               });
             }}
-          disabled={isSaving}
+          disabled={isSaving || resource.type === "WHOP"}
           className={getFieldClassName()}
         >
             <option value="LINK">Link</option>
             <option value="FILE">File</option>
+            {/* WHOP type is not available in create modal - only for synced products */}
         </select>
       </div>
       )}
@@ -298,8 +299,8 @@ export const FormFields: React.FC<FormFieldsProps> = ({
         </div>
       )}
 
-      {/* URL Field - Show for LINK type or Whop products */}
-      {(resource.type === "LINK" || resource.whopProductId) && (
+      {/* URL Field - Show for LINK type only (not for WHOP type) */}
+      {resource.type === "LINK" && (
         <input
           type="url"
           value={resource.link || ""}

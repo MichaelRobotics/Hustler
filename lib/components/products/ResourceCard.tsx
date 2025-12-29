@@ -18,6 +18,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { canAssignResource } from "../../helpers/product-limits";
 import type { Funnel, Resource } from "../../types/resource";
+import { WHOP_ICON_URL } from "../../constants/whop-icon";
 
 interface ResourceCardProps {
 	resource: Resource;
@@ -97,6 +98,14 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 			case "FILE":
 				return (
 					<FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" strokeWidth={2.5} />
+				);
+			case "WHOP":
+				return (
+					<img 
+						src={WHOP_ICON_URL} 
+						alt="Whop" 
+						className="w-5 h-5 object-contain"
+					/>
 				);
 			default:
 				return null;
@@ -275,7 +284,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 							disabled={
 								isSaving ||
 								!editedResource.name?.trim() ||
-								!editedResource.link?.trim() ||
+								// Only require link for LINK type (not for WHOP or FILE)
+								(editedResource.type === "LINK" && !editedResource.link?.trim()) ||
 								allResources.some((r) => {
 									if (r.id === resource.id) return false;
 									const normalizedInputName = editedResource.name?.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -303,7 +313,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						<select
 							value={editedResource.type || "LINK"}
 							onChange={(e) => {
-								const newType = e.target.value as "LINK" | "FILE";
+								const newType = e.target.value as "LINK" | "FILE" | "WHOP";
 								setEditedResource({
 									...editedResource,
 									type: newType,
@@ -311,11 +321,12 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 									...(newType === "LINK" ? { storageUrl: "" } : { link: "" }),
 								});
 							}}
-							disabled={isSaving}
+							disabled={isSaving || editedResource.type === "WHOP"}
 							className="flex-1 px-3 py-2 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<option value="LINK">Link</option>
 							<option value="FILE">File</option>
+							{editedResource.type !== "WHOP" && <option value="WHOP">Whop</option>}
 						</select>
 						<select
 							value={editedResource.category || "FREE_VALUE"}
@@ -367,8 +378,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						</div>
 					)}
 
-					{/* URL Field - Show for LINK type or Whop products */}
-					{(editedResource.type === "LINK" || editedResource.whopProductId) && (
+					{/* URL Field - Show for LINK type only (not for WHOP type) */}
+					{editedResource.type === "LINK" && (
 						<input
 							type="url"
 							value={editedResource.link || ""}
@@ -571,8 +582,8 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 								</div>
 							)}
 
-							{/* Delete Button - Show for both global and funnel contexts when not being edited */}
-							{!isBeingEdited && (
+							{/* Delete Button - Show for both global and funnel contexts when not being edited and not WHOP type */}
+							{!isBeingEdited && resource.type !== "WHOP" && (
 								<Button
 									size="1"
 									variant="ghost"
@@ -606,7 +617,10 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 					color="gray"
 					className="text-muted-foreground line-clamp-2"
 				>
-					{resource.description || resource.link}
+					{resource.type === "WHOP" 
+						? (resource.description || "no description")
+						: (resource.description || resource.link)
+					}
 				</Text>
 				{resource.promoCode && (
 					<div className="flex items-center gap-2">

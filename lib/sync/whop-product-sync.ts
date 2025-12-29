@@ -183,7 +183,7 @@ export class WhopProductSync {
 
 			const resourceData = {
 				name: whopProduct.title,
-				type: "LINK" as const,
+				type: "WHOP" as const,
 				category: this.determineCategory(whopProduct),
 				link: this.generateProductLink(whopProduct.id),
 				description: whopProduct.description || null,
@@ -545,7 +545,7 @@ export class WhopProductSync {
 					experienceId: user.experienceId,
 					userId: user.id,
 					name: product.name,
-					type: "LINK",
+					type: "WHOP",
 					category: product.category,
 					link: product.link,
 					code: product.code || null,

@@ -18,6 +18,7 @@ import {
 export const resourceTypeEnum = pgEnum("resource_type", [
 	"LINK",
 	"FILE",
+	"WHOP",
 ]);
 export const resourceCategoryEnum = pgEnum("resource_category", [
 	"PAID",

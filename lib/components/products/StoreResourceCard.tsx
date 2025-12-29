@@ -18,6 +18,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Resource } from "@/lib/types/resource";
+import { WHOP_ICON_URL } from "@/lib/constants/whop-icon";
 
 interface StoreResourceCardProps {
   resource: Resource;
@@ -93,6 +94,14 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
       case "FILE":
         return (
           <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" strokeWidth={2.5} />
+        );
+      case "WHOP":
+        return (
+          <img 
+            src={WHOP_ICON_URL} 
+            alt="Whop" 
+            className="w-5 h-5 object-contain"
+          />
         );
       default:
         return null;
@@ -243,7 +252,8 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
                 </div>
               )}
 
-              {/* Delete Button */}
+              {/* Delete Button - Hide for WHOP type */}
+              {resource.type !== "WHOP" && (
               <Button
                 size="1"
                 variant="ghost"
@@ -257,6 +267,7 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
               >
                 <Trash2 size={14} strokeWidth={2.5} />
               </Button>
+              )}
             </>
           )}
         </div>
@@ -276,7 +287,10 @@ export const StoreResourceCard: React.FC<StoreResourceCardProps> = ({
           color="gray"
           className="text-muted-foreground line-clamp-2"
         >
-          {resource.description || resource.link}
+          {resource.type === "WHOP" 
+            ? (resource.description || "no description")
+            : (resource.description || resource.link)
+          }
         </Text>
         {resource.promoCode && (
           <div className="flex items-center gap-2">

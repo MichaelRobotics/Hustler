@@ -3,7 +3,7 @@ import type { AuthenticatedUser } from "./user";
 export interface Resource {
 	id: string;
 	name: string;
-	type: "LINK" | "FILE";
+	type: "LINK" | "FILE" | "WHOP";
 	link?: string;
 	category: "PAID" | "FREE_VALUE";
 	description?: string;
@@ -23,7 +23,7 @@ export interface Resource {
 export interface ResourceFormData {
 	id?: string;
 	name: string;
-	type: "LINK" | "FILE";
+	type: "LINK" | "FILE" | "WHOP";
 	link?: string;
 	category: "PAID" | "FREE_VALUE";
 	description?: string;

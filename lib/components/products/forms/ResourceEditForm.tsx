@@ -127,6 +127,10 @@ export const ResourceEditForm: React.FC<ResourceEditFormProps> = ({
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 bg-blue-400 rounded-full animate-pulse" />
           {(() => {
+            // Don't show type badge for WHOP type
+            if (editingResource.type === "WHOP") {
+              return null;
+            }
             const inferredType = editingResource.storageUrl && !editingResource.link ? "FILE" : "LINK";
             return (
           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">

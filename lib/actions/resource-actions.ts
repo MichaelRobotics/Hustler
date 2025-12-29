@@ -8,7 +8,7 @@ import { createPlanFromCheckoutConfiguration } from "./plan-actions";
 
 export interface CreateResourceInput {
 	name: string;
-	type: "LINK" | "FILE";
+	type: "LINK" | "FILE" | "WHOP";
 	category: "PAID" | "FREE_VALUE";
 	link?: string;
 	code?: string;
@@ -27,7 +27,7 @@ export interface CreateResourceInput {
 
 export interface UpdateResourceInput {
 	name?: string;
-	type?: "LINK" | "FILE";
+	type?: "LINK" | "FILE" | "WHOP";
 	category?: "PAID" | "FREE_VALUE";
 	link?: string;
 	code?: string;
@@ -46,7 +46,7 @@ export interface UpdateResourceInput {
 export interface ResourceWithFunnels {
 	id: string;
 	name: string;
-	type: "LINK" | "FILE";
+	type: "LINK" | "FILE" | "WHOP";
 	category: "PAID" | "FREE_VALUE";
 	link?: string;
 	code?: string;
@@ -590,6 +590,11 @@ export async function deleteResource(
 			existingResource.userId !== user.id
 		) {
 			throw new Error("Access denied: You can only delete your own resources");
+		}
+
+		// Prevent deletion of WHOP type resources (synced products)
+		if (existingResource.type === "WHOP") {
+			throw new Error("Cannot delete resource: WHOP type resources (synced products) cannot be deleted");
 		}
 
 		// Check if resource is used in any deployed funnels

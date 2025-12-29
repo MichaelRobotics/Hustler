@@ -934,7 +934,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
             // Include type, storageUrl, and productImages from Market Stall resource
             // Prefer template product type if it exists, otherwise use resource type
             // If resource has storageUrl but no type, infer FILE type
-            type: templateProduct.type || matchedResource.type || (matchedResource.storageUrl ? 'FILE' : 'LINK'),
+            // Convert WHOP type to LINK (Seasonal Store only supports LINK and FILE)
+            type: templateProduct.type || (matchedResource.type === 'WHOP' ? 'LINK' : matchedResource.type) || (matchedResource.storageUrl ? 'FILE' : 'LINK'),
             storageUrl: templateProduct.storageUrl || matchedResource.storageUrl,
             productImages: templateProduct.productImages || (Array.isArray(matchedResource.productImages) ? matchedResource.productImages : undefined),
           };
