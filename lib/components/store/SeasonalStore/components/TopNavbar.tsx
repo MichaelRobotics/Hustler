@@ -69,6 +69,7 @@ interface TopNavbarProps {
   getHoverRingClass: (ringClass: string) => string;
   getGlowBgClass: (ringClass: string) => string;
   getGlowBgStrongClass: (ringClass: string) => string;
+  rightSideContent?: React.ReactNode; // Optional custom content for right side in preview mode
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -102,6 +103,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   getHoverRingClass,
   getGlowBgClass,
   getGlowBgStrongClass,
+  rightSideContent,
 }) => {
   // Get accent color - same logic as ProductCard: product.buttonClass || theme.accent
   // ProductCard uses: buttonBaseClass = product.buttonClass || theme.accent
@@ -669,42 +671,45 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         
         {/* Preview Mode: Back button and Discount Text */}
         {isStorePreview && !editorState.isEditorView && !isChatOpen && (
-          <div className="flex items-center justify-between w-full">
-            {onBack && (
-              <Button
-                size="3"
-                color="violet"
-                onClick={onBack || (() => window.history.back())}
-                className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 relative overflow-hidden"
-                aria-label="Back"
-                title="Back"
-              >
-                <ArrowLeft size={20} strokeWidth={2.5} />
-                {/* Accent border line at bottom - matches TopNavbar border style, within button */}
-                {isThemeAccentSelected && gradientBorderInfo ? (
-                  <>
-                    {/* Main gradient line */}
-                    <div 
-                      className="absolute bottom-0 left-0 right-0 h-1.5 shadow-lg" 
-                      style={{ 
-                        background: gradientBorderInfo.gradient,
-                        boxShadow: `0 0 10px ${gradientBorderInfo.shadowColor}40`
-                      }}
-                    ></div>
-                    {/* Subtle glow effect */}
-                    <div 
-                      className="absolute bottom-0 left-0 right-0 h-0.5 opacity-60 blur-sm" 
-                      style={{ background: gradientBorderInfo.glow }}
-                    ></div>
-                  </>
-                ) : (
-                <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${accentBorderColor.replace('border-', 'bg-')}`}></div>
-                )}
-              </Button>
-            )}
+          <div className="flex items-center justify-between w-full relative">
+            {/* Left side: Back button (or empty if no onBack) */}
+            <div className="flex items-center">
+              {onBack && (
+                <Button
+                  size="3"
+                  color="violet"
+                  onClick={onBack || (() => window.history.back())}
+                  className="px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 relative overflow-hidden"
+                  aria-label="Back"
+                  title="Back"
+                >
+                  <ArrowLeft size={20} strokeWidth={2.5} />
+                  {/* Accent border line at bottom - matches TopNavbar border style, within button */}
+                  {isThemeAccentSelected && gradientBorderInfo ? (
+                    <>
+                      {/* Main gradient line */}
+                      <div 
+                        className="absolute bottom-0 left-0 right-0 h-1.5 shadow-lg" 
+                        style={{ 
+                          background: gradientBorderInfo.gradient,
+                          boxShadow: `0 0 10px ${gradientBorderInfo.shadowColor}40`
+                        }}
+                      ></div>
+                      {/* Subtle glow effect */}
+                      <div 
+                        className="absolute bottom-0 left-0 right-0 h-0.5 opacity-60 blur-sm" 
+                        style={{ background: gradientBorderInfo.glow }}
+                      ></div>
+                    </>
+                  ) : (
+                  <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${accentBorderColor.replace('border-', 'bg-')}`}></div>
+                  )}
+                </Button>
+              )}
+            </div>
             
-            {/* Discount Text, Promo Code and Timers in Middle */}
-            <div className="flex-1 flex items-center justify-center">
+            {/* Center: Discount Text, Promo Code and Timers - Flex on mobile, absolute on desktop */}
+            <div className="flex-1 flex items-center justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:flex-none">
               {showPromoTimerCard && countdownInfo && (
                 <div
                   className={`promo-card promo-card-hover group relative w-auto max-w-full sm:max-w-3xl mx-auto px-2 py-1.5 sm:px-6 sm:py-3 rounded-2xl border border-rose-200/60 dark:border-rose-500/30 shadow-xl overflow-hidden ${shouldCopyOnClick ? 'cursor-pointer' : 'cursor-default'}`}
@@ -763,6 +768,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 </div>
               )}
             </div>
+            
+            {/* Right side: Custom content (Membership button) */}
+            {rightSideContent && (
+              <div className="flex items-center ml-auto">
+                {rightSideContent}
+              </div>
+            )}
           </div>
         )}
       </div>

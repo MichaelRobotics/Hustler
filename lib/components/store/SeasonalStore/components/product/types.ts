@@ -43,6 +43,7 @@ export interface Product {
   promoDurationType?: 'one-time' | 'forever' | 'duration_months';
   promoDurationMonths?: number;
   checkoutConfigurationId?: string;
+  planId?: string; // Whop plan ID associated with this resource
   salesCount?: number;
   showSalesCount?: boolean;
   starRating?: number;

@@ -139,6 +139,8 @@ export const usePreviewLiveTemplate = ({
             price: templateProduct.price !== undefined && templateProduct.price !== null ? templateProduct.price : parseFloat(matchedResource.price || '0'), // Prefer template price, fallback to Market Stall
             buttonLink: templateProduct.buttonLink || matchedResource.link || '', // Prefer template link, fallback to Market Stall
             whopProductId: matchedResource.whopProductId, // Keep Market Stall whopProductId for syncing
+            checkoutConfigurationId: templateProduct.checkoutConfigurationId || matchedResource.checkoutConfigurationId || matchedResource.checkout_configuration_id,
+            planId: templateProduct.planId || matchedResource.planId || matchedResource.plan_id,
             
             // Apply template product design/styling
             cardClass: templateProduct.cardClass, // Template design

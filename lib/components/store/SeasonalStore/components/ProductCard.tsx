@@ -6,6 +6,7 @@ import { Button } from 'frosted-ui';
 import { Star } from 'lucide-react';
 import { stripInlineColorTags, normalizeHtmlContent } from '../utils/html';
 import { FormattingToolbar, ProductImageSection, BadgeDisplay, ProductNameSection, ProductDescriptionSection, ProductPriceSection, ProductButtonSection } from './product';
+import { apiPost } from '../../../../utils/api-client';
 
 interface ProductCardProps {
   product: Product;
@@ -36,6 +37,7 @@ interface ProductCardProps {
   onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
   storeName?: string; // Store name for modal
   experienceId?: string; // Experience ID for payment
+  onPurchaseSuccess?: (planId: string) => void; // Handler for successful purchase (receives planId after payment verification)
 }
 
 // Helper to convert Tailwind text color class to hex
@@ -138,7 +140,58 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onOpenProductPage,
   storeName,
   experienceId,
+  onPurchaseSuccess,
 }) => {
+  // Handler for purchase success - retrieves payment, verifies status, extracts planId
+  const handlePurchaseSuccess = useCallback(async (paymentId: string) => {
+    if (!experienceId || !onPurchaseSuccess) {
+      console.warn('🔵 [ProductCard] Missing experienceId or onPurchaseSuccess handler');
+      return;
+    }
+
+    try {
+      console.log('🔵 [ProductCard] Retrieving payment details for:', paymentId);
+      
+      // Call payment retrieval API
+      const response = await apiPost(
+        '/api/payments/retrieve',
+        { paymentId },
+        experienceId
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to retrieve payment');
+      }
+
+      const payment = await response.json();
+      console.log('🔵 [ProductCard] Payment retrieved:', payment);
+
+      // Verify payment status is "paid"
+      if (payment.status !== 'paid') {
+        console.warn('🔵 [ProductCard] Payment status is not "paid":', payment.status);
+        alert(`Payment status is ${payment.status}. Please contact support if you were charged.`);
+        return;
+      }
+
+      // Extract planId from payment.plan.id
+      if (!payment.plan || !payment.plan.id) {
+        console.error('🔵 [ProductCard] Payment does not have plan.id:', payment);
+        alert('Payment completed but plan information is missing. Please contact support.');
+        return;
+      }
+
+      const planId = payment.plan.id;
+      console.log('🔵 [ProductCard] Payment verified, planId:', planId);
+
+      // Call parent's onPurchaseSuccess with planId
+      onPurchaseSuccess(planId);
+    } catch (error: any) {
+      console.error('🔵 [ProductCard] Error handling purchase success:', error);
+      alert(`Failed to verify payment: ${error.message || 'Unknown error'}`);
+    }
+  }, [experienceId, onPurchaseSuccess]);
+
   // Get promo code from product object (saved to template)
   // No need to fetch from API - it's already in the template data
   const productPromoCode = product.promoCode || null;
@@ -754,6 +807,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           onInlineButtonSave={onInlineButtonSave}
           onInlineButtonEnd={onInlineButtonEnd}
           onOpenProductPage={onOpenProductPage}
+          checkoutConfigurationId={product.checkoutConfigurationId}
+          planId={product.planId}
+          experienceId={experienceId}
+          onPurchaseSuccess={handlePurchaseSuccess}
         />
       </div>
     </div>

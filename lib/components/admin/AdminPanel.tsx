@@ -64,6 +64,7 @@ interface AdminPanelProps {
 const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 	// Local user state - syncs with prop and updates optimistically after purchases
 	const [user, setUser] = React.useState<AuthenticatedUser | null>(userProp);
+	const [showCustomerDashboard, setShowCustomerDashboard] = React.useState(false);
 	
 	// Track when we've made an optimistic update to prevent cache from overwriting it
 	const optimisticUpdateRef = React.useRef<{
@@ -1011,6 +1012,8 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 							setCurrentView("dashboard");
 						}}
 						onPurchaseSuccess={handlePurchaseSuccess}
+						showCustomerDashboard={showCustomerDashboard}
+						onShowCustomerDashboard={setShowCustomerDashboard}
 						// Update sync props - managed at AdminPanel level
 						updateSyncProps={{
 							isChecking: isCheckingUpdates,

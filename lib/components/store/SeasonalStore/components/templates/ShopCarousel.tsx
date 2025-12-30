@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button, Heading, Text, Card } from 'frosted-ui';
-import { ChevronLeft, ChevronRight, Eye, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Trash2, Plus, Star, User } from 'lucide-react';
 
 interface Template {
   id: string;
@@ -30,6 +30,8 @@ interface ShopCarouselProps {
   onMakePublic?: (templateId: string) => void;
   onCreateNewShop?: () => void;
   onClose: () => void;
+  experienceId?: string; // For Customer Dashboard navigation
+  onNavigateToCustomerDashboard?: () => void; // Callback to navigate to Customer Dashboard
 }
 
 export const ShopCarousel: React.FC<ShopCarouselProps> = ({
@@ -45,6 +47,8 @@ export const ShopCarousel: React.FC<ShopCarouselProps> = ({
   onMakePublic,
   onCreateNewShop,
   onClose,
+  experienceId,
+  onNavigateToCustomerDashboard,
 }) => {
   const [currentShopIndex, setCurrentShopIndex] = useState(0);
   const [editingShopId, setEditingShopId] = useState<string | null>(null);
@@ -255,7 +259,7 @@ export const ShopCarousel: React.FC<ShopCarouselProps> = ({
         
       {/* Create new Shop button - only show if origin template exists */}
       {originTemplate && onCreateNewShop && (
-        <div>
+        <div className="mb-4">
         <Button
             size="3"
             color="violet"
@@ -267,6 +271,29 @@ export const ShopCarousel: React.FC<ShopCarouselProps> = ({
         >
             <Plus size={16} strokeWidth={2.5} />
             <span>Create new Shop</span>
+        </Button>
+      </div>
+      )}
+
+      {/* Customer Dashboard Section */}
+      {onNavigateToCustomerDashboard && (
+        <div className="mt-4">
+          <Heading size="3" weight="medium" className="text-gray-700 dark:text-gray-300 !mb-3 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+            Customer Dashboard
+            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+          </Heading>
+          <Button
+            size="3"
+            color="violet"
+            variant="solid"
+            onClick={() => {
+              onNavigateToCustomerDashboard();
+              onClose();
+            }}
+            className="w-full !px-4 !py-2.5 shadow-md shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+          >
+            <User size={16} strokeWidth={2.5} />
+            <span>Enter Dashboard</span>
         </Button>
       </div>
       )}

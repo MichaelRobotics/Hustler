@@ -69,6 +69,7 @@ interface Product {
   promoDurationType?: 'one-time' | 'forever' | 'duration_months'; // Discount duration type
   promoDurationMonths?: number; // Duration in months (when duration_months selected)
   checkoutConfigurationId?: string; // Checkout configuration ID (if checkout-only)
+  planId?: string; // Whop plan ID associated with this resource
   salesCount?: number;
   showSalesCount?: boolean;
   starRating?: number;
@@ -153,6 +154,19 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   
   // State for ProductPageModal
   const [showProductPageModal, setShowProductPageModal] = useState(false);
+  // Track if purchase modal is open to prevent interference
+  const isPurchaseModalOpenRef = useRef(false);
+  
+  // Handler for product purchase success in edit mode
+  const handlePurchaseSuccess = useCallback((planId: string) => {
+    console.log('✅ [ProductEditorModal] Product purchase successful in edit mode, planId:', planId);
+    // Close the product page modal after successful purchase
+    setShowProductPageModal(false);
+    // Optionally refresh user context if onUserUpdate is available
+    if (onUserUpdate) {
+      onUserUpdate();
+    }
+  }, [onUserUpdate]);
   
   // Memoize current product to avoid repeated finds
   const currentProduct = useMemo(() => 
@@ -2434,7 +2448,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       if (!open) {
         handleClose();
       }
-    }}>
+    }} modal={!isPurchaseModalOpenRef.current}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-transparent z-50" />
         <Dialog.Description className="sr-only">
@@ -2444,9 +2458,29 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           className={`fixed inset-y-0 right-0 w-full md:w-[500px] bg-white dark:bg-gray-900 text-foreground shadow-2xl z-[60] flex flex-col transform transition-transform duration-500 ${
             isOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
-          onEscapeKeyDown={handleClose}
+          onEscapeKeyDown={isPurchaseModalOpenRef.current ? undefined : handleClose}
           onPointerDownOutside={(e) => {
             const target = e.target as HTMLElement;
+            
+            // Don't interfere if purchase modal is open
+            if (isPurchaseModalOpenRef.current) {
+              // Let all events pass through when purchase modal is open
+              return;
+            }
+            
+            // Don't interfere with Whop SDK inAppPurchase modal
+            if (
+              target.closest('[data-whop-modal]') ||
+              target.closest('[data-whop-checkout]') ||
+              target.closest('.whop-modal') ||
+              target.closest('.whop-checkout') ||
+              target.closest('[id*="whop"]') ||
+              target.closest('[class*="whop"]')
+            ) {
+              // Let Whop SDK handle it - don't prevent or close
+              return;
+            }
+            
             // Don't close if clicking on inputs, buttons, or inside the modal content
             if (target.tagName === 'INPUT' || 
                 target.tagName === 'TEXTAREA' || 
@@ -2465,6 +2499,26 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           }}
           onInteractOutside={(e) => {
             const target = e.target as HTMLElement;
+            
+            // Don't interfere if purchase modal is open
+            if (isPurchaseModalOpenRef.current) {
+              // Let all events pass through when purchase modal is open
+              return;
+            }
+            
+            // Don't interfere with Whop SDK inAppPurchase modal
+            if (
+              target.closest('[data-whop-modal]') ||
+              target.closest('[data-whop-checkout]') ||
+              target.closest('.whop-modal') ||
+              target.closest('.whop-checkout') ||
+              target.closest('[id*="whop"]') ||
+              target.closest('[class*="whop"]')
+            ) {
+              // Let Whop SDK handle it - don't prevent or close
+              return;
+            }
+            
             // Don't close if clicking on inputs, buttons, or inside the modal content
             if (target.tagName === 'INPUT' || 
                 target.tagName === 'TEXTAREA' || 
@@ -2697,6 +2751,13 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           experienceId={experienceId}
           isEditMode={true}
           onUserUpdate={onUserUpdate}
+          checkoutConfigurationId={currentProduct.checkoutConfigurationId || currentResource?.checkoutConfigurationId}
+          planId={currentProduct.planId || currentResource?.planId}
+          onPurchaseSuccess={handlePurchaseSuccess}
+          onPurchaseModalStateChange={(isOpen) => {
+            // Update ref to track purchase modal state without causing re-renders
+            isPurchaseModalOpenRef.current = isOpen;
+          }}
         />
       )}
     </Dialog.Root>

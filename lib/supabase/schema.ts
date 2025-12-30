@@ -831,6 +831,43 @@ export const subscriptions = pgTable(
 	}),
 );
 
+// ===== CUSTOMERS RESOURCES TABLE =====
+export const customersResources = pgTable(
+	"customers_resources",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		companyId: text("company_id").notNull(), // whopCompanyId from experience
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		userId: uuid("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		userName: text("user_name").notNull(),
+		membershipPlanId: text("membership_plan_id").notNull(), // Whop plan ID
+		membershipProductId: text("membership_product_id"), // Whop product ID (nullable)
+		downloadLink: text("download_link"),
+		productName: text("product_name").notNull(),
+		description: text("description"),
+		image: text("image"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		experienceIdIdx: index("customers_resources_experience_id_idx").on(
+			table.experienceId,
+		),
+		userIdIdx: index("customers_resources_user_id_idx").on(table.userId),
+		companyIdIdx: index("customers_resources_company_id_idx").on(table.companyId),
+		membershipPlanIdIdx: index("customers_resources_membership_plan_id_idx").on(
+			table.membershipPlanId,
+		),
+		membershipProductIdIdx: index("customers_resources_membership_product_id_idx").on(
+			table.membershipProductId,
+		),
+	}),
+);
+
 export const originTemplatesRelations = relations(originTemplates, ({ one }) => ({
 	experience: one(experiences, {
 		fields: [originTemplates.experienceId],

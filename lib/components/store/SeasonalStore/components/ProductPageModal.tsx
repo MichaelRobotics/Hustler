@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button, Text } from 'frosted-ui';
 import { X, ArrowLeft, DollarSign, Gift, Download, Upload } from 'lucide-react';
@@ -18,6 +18,10 @@ interface ProductPageModalProps {
   experienceId?: string;
   isEditMode?: boolean; // If true, clicking thumbnails swaps images. If false (preview), just changes displayed image
   onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
+  checkoutConfigurationId?: string; // Checkout configuration ID for inAppPurchase
+  planId?: string; // Plan ID for inAppPurchase
+  onPurchaseSuccess?: (planId: string) => void; // Callback for successful purchase (receives planId after payment verification)
+  onPurchaseModalStateChange?: (isOpen: boolean) => void; // Callback to notify parent when purchase modal opens/closes
 }
 
 export const ProductPageModal: React.FC<ProductPageModalProps> = ({
@@ -29,11 +33,18 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
   experienceId,
   isEditMode = false, // Default to preview mode
   onUserUpdate,
+  checkoutConfigurationId,
+  planId,
+  onPurchaseSuccess,
+  onPurchaseModalStateChange,
 }) => {
-  const { isInIframe, safeInAppPurchase } = useSafeIframeSdk();
+  const { isInIframe, iframeSdk } = useSafeIframeSdk();
   const fileUpload = useFileUpload();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Use ref to track purchase modal state without causing re-renders
+  const isPurchaseModalOpenRef = useRef(false);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [productImages, setProductImages] = useState<string[]>(product.productImages || []);
   const [mainImageUrl, setMainImageUrl] = useState<string>(product.image || '');
@@ -69,7 +80,13 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
     : (thumbnailImages[selectedImageIndex] || mainImageUrl || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp');
 
   // Clear error and sync state when modal opens
+  // Skip this effect when purchase modal is open to prevent re-renders from interfering
   useEffect(() => {
+    // Don't run if purchase modal is open (check ref to avoid re-render trigger)
+    if (isPurchaseModalOpenRef.current) {
+      return;
+    }
+    
     if (isOpen) {
       setError(null);
       setIsLoading(false);
@@ -282,98 +299,258 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
         setError(
           "Please access this app through Whop to purchase products. The payment system is only available within the Whop platform."
         );
+        setIsLoading(false);
         return;
       }
 
-      if (!product.price || product.price <= 0) {
-        setError("Invalid product price");
-        return;
-      }
-
-      // TODO: Replace with actual payment implementation
-      // For now, use mock payment system
-      console.log("🔄 [ProductPageModal] Using mock payment system");
-      
-      try {
-        // Mock payment - simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Buy Now flow: Only for FILE type products
+      if (product.type === "FILE") {
+        // If planId is missing, try to lookup from resource
+        let finalPlanId = planId;
+        let finalCheckoutId = checkoutConfigurationId;
         
-        // Mock successful payment
-        const mockPaymentResult = {
-          status: "ok" as const,
-          inAppPurchase: {
-            id: `mock-purchase-${Date.now()}`,
-            planId: `mock-plan-${product.id}`,
+        // If planId is missing but we have a resource ID, lookup the resource
+        if (!finalPlanId && resourceId && experienceId) {
+          try {
+            console.log('🔄 [ProductPageModal] planId missing, looking up resource by ID:', resourceId);
+            const resourceResponse = await fetch(`/api/resources/${resourceId}?experienceId=${encodeURIComponent(experienceId)}`);
+            
+            if (resourceResponse.ok) {
+              const resourceData = await resourceResponse.json();
+              if (resourceData.success && resourceData.data?.resource) {
+                const resource = resourceData.data.resource;
+                finalPlanId = resource.planId || resource.plan_id;
+                finalCheckoutId = finalCheckoutId || resource.checkoutConfigurationId || resource.checkout_configuration_id;
+                console.log('✅ [ProductPageModal] Resource found, planId:', finalPlanId, 'checkoutConfig:', finalCheckoutId);
+              }
+            }
+          } catch (error) {
+            console.error('❌ [ProductPageModal] Error looking up resource:', error);
           }
-        };
+        }
         
-        console.log("✅ [ProductPageModal] Mock payment successful:", mockPaymentResult);
+        // If still no planId, try lookup by experienceId and product name/whopProductId
+        if (!finalPlanId && experienceId) {
+          try {
+            // Try to find resource by whopProductId if available
+            if (product.whopProductId) {
+              console.log('🔄 [ProductPageModal] Looking up resource by whopProductId:', product.whopProductId);
+              const lookupResponse = await fetch(`/api/resources/get-by-product?experienceId=${encodeURIComponent(experienceId)}&productId=${encodeURIComponent(product.whopProductId)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              });
+              
+              if (lookupResponse.ok) {
+                const lookupData = await lookupResponse.json();
+                if (lookupData.resource) {
+                  finalPlanId = lookupData.resource.planId || lookupData.resource.plan_id;
+                  finalCheckoutId = finalCheckoutId || lookupData.resource.checkoutConfigurationId || lookupData.resource.checkout_configuration_id;
+                  console.log('✅ [ProductPageModal] Resource found by whopProductId, planId:', finalPlanId);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('❌ [ProductPageModal] Error looking up resource by whopProductId:', error);
+          }
+        }
         
-        // Provide download link
-        if (product.storageUrl) {
-          window.open(product.storageUrl, '_blank');
+        // Require planId for FILE products
+        if (!finalPlanId) {
+          setError("This product is not configured for purchase. Please contact support.");
+          setIsLoading(false);
+          return;
         }
-        onClose();
-      } catch (mockError: any) {
-        console.error("❌ [ProductPageModal] Mock payment failed:", mockError);
-        setError("Payment processing failed. Please try again later.");
+
+        if (!iframeSdk) {
+          setError("Payment system is not available. Please access this app through Whop.");
+          setIsLoading(false);
+          return;
+        }
+
+        if (!onPurchaseSuccess) {
+          setError("Purchase handler is not available. Please refresh the page.");
+          setIsLoading(false);
+          return;
+        }
+
+        if (!experienceId) {
+          setError("Experience ID is required to process purchase.");
+          setIsLoading(false);
+          return;
+        }
+
+        try {
+          // Use the planId and checkoutId we resolved above (or from props)
+          // finalPlanId and finalCheckoutId are already declared above
+          
+          // If we already resolved these above, use those values
+          if (finalPlanId && finalCheckoutId) {
+            // Already resolved, continue
+          } else if (finalPlanId && !finalCheckoutId && experienceId) {
+            // If we have planId but no checkoutId, lookup resource to get it from database
+            if (!finalPlanId) {
+              throw new Error('Plan ID is required but not found. Please contact support.');
+            }
+            
+            console.log('🔄 [ProductPageModal] No checkout config, looking up resource:', {
+              experienceId,
+              planId: finalPlanId,
+            });
+
+            // Lookup resource by experience_id and plan_id to get checkoutConfigurationId
+            const lookupResponse = await fetch(`/api/resources/lookup?experienceId=${encodeURIComponent(experienceId)}&planId=${encodeURIComponent(finalPlanId)}`);
+            
+            if (!lookupResponse.ok) {
+              const errorData = await lookupResponse.json();
+              throw new Error(errorData.error || 'Failed to lookup resource');
+            }
+
+            const lookupData = await lookupResponse.json();
+            const resource = lookupData.resource;
+
+            console.log('✅ [ProductPageModal] Resource found:', resource);
+
+            // Use checkoutConfigurationId from resource
+            if (resource.checkoutConfigurationId) {
+              finalCheckoutId = resource.checkoutConfigurationId;
+              console.log('✅ [ProductPageModal] Using checkout config from resource:', finalCheckoutId);
+            } else {
+              throw new Error('Resource does not have a checkout configuration. Please configure the product first.');
+            }
+          }
+
+          if (!finalCheckoutId || !finalPlanId) {
+            throw new Error('Checkout configuration and plan ID are required but not found. Please contact support.');
+          }
+
+          console.log('🔄 [ProductPageModal] Starting Buy Now flow with checkout:', {
+            checkoutConfigurationId: finalCheckoutId,
+            planId: finalPlanId,
+          });
+
+          // Mark that purchase modal is opening (use ref immediately to prevent effects from running)
+          isPurchaseModalOpenRef.current = true;
+          // Notify parent component immediately via ref (no re-render)
+          // Delay state update to allow Whop SDK modal to open and establish focus first
+          // This prevents React re-renders from interfering with the modal's focus management
+          setTimeout(() => {
+            setIsPurchaseModalOpen(true);
+            onPurchaseModalStateChange?.(true);
+          }, 100); // Small delay to let Whop SDK modal open and establish focus
+          
+          // Call inAppPurchase with checkout configuration
+          // This opens the modal - we want it to establish focus before React re-renders
+          const result = await iframeSdk.inAppPurchase({
+            id: finalCheckoutId,
+            planId: finalPlanId,
+          });
+
+          console.log('🔄 [ProductPageModal] Payment result:', result);
+          
+          // Mark that purchase modal has closed (regardless of result)
+          // Use setTimeout with 0 delay to ensure this happens after any pending DOM updates
+          // This prevents re-renders from interfering with the modal's internal state
+          setTimeout(() => {
+            isPurchaseModalOpenRef.current = false;
+            setIsPurchaseModalOpen(false);
+            // Notify parent component that purchase modal is closed
+            onPurchaseModalStateChange?.(false);
+          }, 0);
+
+          if (result.status === "ok") {
+            // Extract payment ID from result - check multiple possible fields
+            const paymentId = (result as any).paymentId || 
+                             (result as any).id || 
+                             (result as any).payment?.id ||
+                             (result as any).inAppPurchase?.id ||
+                             (result as any).payment_id;
+            
+            if (paymentId && experienceId) {
+              console.log('✅ [ProductPageModal] Payment successful, paymentId:', paymentId);
+              
+              // Verify payment and extract planId
+              try {
+                const response = await apiPost(
+                  '/api/payments/retrieve',
+                  { paymentId },
+                  experienceId
+                );
+
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to retrieve payment');
+                }
+
+                const payment = await response.json();
+                console.log('✅ [ProductPageModal] Payment retrieved:', payment);
+
+                // Verify payment status is "paid"
+                if (payment.status !== 'paid') {
+                  console.warn('⚠️ [ProductPageModal] Payment status is not "paid":', payment.status);
+                  setError(`Payment status is ${payment.status}. Please contact support if you were charged.`);
+                  return;
+                }
+
+                // Extract planId from payment.plan.id
+                if (!payment.plan || !payment.plan.id) {
+                  console.error('❌ [ProductPageModal] Payment does not have plan.id:', payment);
+                  setError('Payment completed but plan information is missing. Please contact support.');
+                  return;
+                }
+
+                const extractedPlanId = payment.plan.id;
+                console.log('✅ [ProductPageModal] Payment verified, planId:', extractedPlanId);
+                
+                // Call onPurchaseSuccess with planId
+                onPurchaseSuccess(extractedPlanId);
+                onClose();
+              } catch (verifyError: any) {
+                console.error('❌ [ProductPageModal] Error verifying payment:', verifyError);
+                setError(`Failed to verify payment: ${verifyError.message || 'Unknown error'}`);
+              }
+            } else {
+              console.error('❌ [ProductPageModal] Payment successful but no paymentId found in result:', result);
+              setError('Payment completed but could not retrieve payment details. Please contact support or check your dashboard.');
+            }
+          } else {
+            const errorMessage = result.error || "Payment failed";
+            console.error('❌ [ProductPageModal] Payment failed:', errorMessage);
+            
+            // Show user-friendly error message
+            if (errorMessage.toLowerCase().includes("cancel")) {
+              // User cancelled - don't show error
+              console.log('🔄 [ProductPageModal] Payment was cancelled by user');
+            } else {
+              let userFriendlyMessage = errorMessage;
+              if (errorMessage.toLowerCase().includes("insufficient")) {
+                userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
+              } else if (errorMessage.toLowerCase().includes("declined")) {
+                userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
+              } else if (errorMessage.toLowerCase().includes("expired")) {
+                userFriendlyMessage = "Payment session expired. Please try again.";
+              } else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+                userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+              }
+              setError(userFriendlyMessage);
+            }
+          }
+        } catch (error: any) {
+          console.error('❌ [ProductPageModal] Error during purchase:', error);
+          setError(`Purchase failed: ${error.message || 'Unknown error'}`);
+          // Ensure purchase modal state is reset on error
+          isPurchaseModalOpenRef.current = false;
+          setIsPurchaseModalOpen(false);
+          // Notify parent component that purchase modal is closed
+          onPurchaseModalStateChange?.(false);
+        } finally {
+          setIsLoading(false);
+        }
+        return;
       }
-      
-      /* 
-      // Actual payment implementation (commented out for now)
-      const response = await apiPost(
-        "/api/resources/purchase-file",
-        {
-          resourceId: product.id,
-          price: product.price,
-          name: product.name,
-        },
-        experienceId
-      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create charge");
-      }
-
-      const inAppPurchase = await response.json();
-      console.log("Charge created, opening payment modal:", inAppPurchase);
-
-      // Open payment modal with iframe SDK
-      const result = await safeInAppPurchase(inAppPurchase);
-
-      console.log("Payment result:", result);
-
-      if (result.status === "ok") {
-        console.log("Payment successful");
-        // Refresh user context after payment to update credits, messages, subscription, and membership
-        if (onUserUpdate) {
-          await onUserUpdate();
-        }
-        // Provide download link
-        if (product.storageUrl) {
-          window.open(product.storageUrl, '_blank');
-        }
-        onClose();
-      } else {
-        const errorMessage = result.error || "Payment failed";
-        let userFriendlyMessage = errorMessage;
-
-        if (errorMessage.toLowerCase().includes("cancel")) {
-          userFriendlyMessage = "Payment was cancelled. No charges were made.";
-        } else if (errorMessage.toLowerCase().includes("insufficient")) {
-          userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
-        } else if (errorMessage.toLowerCase().includes("declined")) {
-          userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
-        } else if (errorMessage.toLowerCase().includes("expired")) {
-          userFriendlyMessage = "Payment session expired. Please try again.";
-        } else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
-          userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
-        }
-
-        setError(userFriendlyMessage);
-      }
-      */
+      // For non-FILE products or other types, show error
+      setError("This product type is not supported for purchase through this modal.");
+      setIsLoading(false);
     } catch (error: any) {
       console.error("Purchase failed:", error);
       setError(error.message || "Purchase failed. Please try again.");
@@ -394,15 +571,58 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
                            cardClass.includes('zinc-900') || cardClass.includes('neutral-900');
   const backButtonTextClass = isDarkBackground ? 'text-gray-200 hover:text-white' : 'text-gray-700 hover:text-gray-900';
 
+  // Memoize dialog content className to prevent re-renders when isPurchaseModalOpen changes
+  // This helps prevent interference with Whop SDK modal's internal state
+  // Add smooth transition classes for fade-out effect when purchase modal opens
+  const dialogContentClassName = React.useMemo(() => {
+    const baseClasses = `fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-5xl ${cardClass} text-foreground shadow-2xl rounded-2xl overflow-hidden transition-all duration-300 ease-in-out`;
+    const zIndexClass = isPurchaseModalOpen ? 'z-[90] opacity-0 scale-95' : 'z-[100] opacity-100 scale-100';
+    return `${baseClasses} ${zIndexClass}`;
+  }, [cardClass, isPurchaseModalOpen]);
+  
+  // Use inline style for pointer-events to avoid className changes that might cause re-renders
+  const dialogContentStyle = React.useMemo(() => {
+    return isPurchaseModalOpen ? { pointerEvents: 'none' as const } : {};
+  }, [isPurchaseModalOpen]);
+  
+  // Also fade out the overlay smoothly when purchase modal opens
+  const overlayClassName = React.useMemo(() => {
+    const baseClasses = 'fixed inset-0 backdrop-blur-md z-[100] transition-all duration-300 ease-in-out';
+    return isPurchaseModalOpen 
+      ? `${baseClasses} bg-black/40 opacity-0` 
+      : `${baseClasses} bg-black/80 opacity-100`;
+  }, [isPurchaseModalOpen]);
+
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()} modal={!isPurchaseModalOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 z-[100]" />
+        <Dialog.Overlay className={overlayClassName} />
         <Dialog.Content
-          className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-5xl ${cardClass} text-foreground shadow-2xl rounded-2xl overflow-hidden z-[100]`}
-          onEscapeKeyDown={onClose}
+          className={dialogContentClassName}
+          style={dialogContentStyle}
+          onEscapeKeyDown={isPurchaseModalOpen ? undefined : onClose}
           onPointerDownOutside={(e) => {
+            // Don't interfere at all when purchase modal is open
+            if (isPurchaseModalOpen) {
+              return; // Let all events pass through to Whop SDK modal
+            }
+            
             const target = e.target as HTMLElement;
+            
+            // Check if click is on Whop SDK inAppPurchase modal (it might have specific classes/attributes)
+            // Allow clicks on Whop SDK modal elements to pass through
+            if (
+              target.closest('[data-whop-modal]') ||
+              target.closest('[data-whop-checkout]') ||
+              target.closest('.whop-modal') ||
+              target.closest('.whop-checkout') ||
+              target.closest('[id*="whop"]') ||
+              target.closest('[class*="whop"]')
+            ) {
+              // Don't prevent default or close - let Whop SDK handle it
+              return;
+            }
+            
             // Comprehensive check for interactive elements and modal content
             // Prevent closing if clicking on any element inside the dialog content
             const dialogContent = target.closest('[data-radix-dialog-content]');
@@ -429,8 +649,57 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
             }
             onClose();
           }}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            // Don't interfere if purchase modal is open
+            if (isPurchaseModalOpen) {
+              return; // Let all events pass through
+            }
+            
+            // Don't stop propagation if clicking on Whop SDK modal elements
+            const target = e.target as HTMLElement;
+            if (
+              target.closest('[data-whop-modal]') ||
+              target.closest('[data-whop-checkout]') ||
+              target.closest('.whop-modal') ||
+              target.closest('.whop-checkout')
+            ) {
+              return; // Let event propagate to Whop SDK
+            }
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => {
+            // Don't interfere if purchase modal is open
+            if (isPurchaseModalOpen) {
+              return; // Let all events pass through
+            }
+            
+            // Don't stop propagation if clicking on Whop SDK modal elements
+            const target = e.target as HTMLElement;
+            if (
+              target.closest('[data-whop-modal]') ||
+              target.closest('[data-whop-checkout]') ||
+              target.closest('.whop-modal') ||
+              target.closest('.whop-checkout')
+            ) {
+              return; // Let event propagate to Whop SDK
+            }
+            e.stopPropagation();
+          }}
+          onFocusCapture={(e) => {
+            // Prevent focus capture when purchase modal is open
+            // This stops Radix Dialog from stealing focus from Whop SDK modal
+            if (isPurchaseModalOpen) {
+              e.stopPropagation();
+              e.preventDefault();
+            }
+          }}
+          onBlurCapture={(e) => {
+            // Prevent blur capture when purchase modal is open
+            // This stops Radix Dialog from managing focus when user interacts with Whop SDK modal
+            if (isPurchaseModalOpen) {
+              e.stopPropagation();
+            }
+          }}
         >
           <Dialog.Title className="sr-only">{product.name} - Product Details</Dialog.Title>
           {/* Header with Back and Close */}
@@ -535,7 +804,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
                                 handleThumbnailUpload(file, slotIndex - 1); // Adjust index for productImages array
                               }
                             }}
-                            disabled={fileUpload.isUploadingImage || isFirstSlot}
+                            disabled={fileUpload.isUploadingImage || isFirstSlot || isPurchaseModalOpen}
                             className="hidden"
                           />
                           {fileUpload.isUploadingImage ? (

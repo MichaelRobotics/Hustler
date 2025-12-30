@@ -1,14 +1,24 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { User, Sun, Moon } from 'lucide-react';
 import UserChat from './UserChat';
 import type { FunnelFlow } from '../../types/funnel';
 import type { ConversationWithMessages } from '../../types/user';
 import { getThemePlaceholderUrl } from '../store/SeasonalStore/utils/getThemePlaceholder';
 import { filterProductsAgainstMarketStall } from '../store/SeasonalStore/utils/productUtils';
 import { ProductCard } from '../store/SeasonalStore/components/ProductCard';
-import { convertThemeToLegacy } from '../store/SeasonalStore/utils';
-import type { LegacyTheme } from '../store/SeasonalStore/types';
+import { ProductPageModal } from '../store/SeasonalStore/components/ProductPageModal';
+import { convertThemeToLegacy, getHoverRingClass, getGlowBgClass, getGlowBgStrongClass } from '../store/SeasonalStore/utils';
+import type { LegacyTheme, Product } from '../store/SeasonalStore/types';
+import { useTheme } from '../common/ThemeProvider';
+import { TopNavbar } from '../store/SeasonalStore/components/TopNavbar';
+import { createDefaultDiscountSettings, checkDiscountStatus, convertDiscountDataToSettings } from '../store/SeasonalStore/utils/discountHelpers';
+import type { DiscountSettings } from '../store/SeasonalStore/types';
+import type { DiscountData } from '../store/SeasonalStore/utils/discountHelpers';
+import { apiPost } from '../../utils/api-client';
+import { Button } from 'frosted-ui';
 
 interface TemplateRendererProps {
   liveTemplate: any;
@@ -30,6 +40,8 @@ interface TemplateRendererProps {
     isExperienceQualificationStage: boolean;
   };
   userType?: "admin" | "customer";
+  onShowCustomerDashboard?: () => void;
+  onPurchaseSuccess?: (planId: string) => void; // Callback for successful purchase (receives planId)
 }
 
 /**
@@ -52,10 +64,21 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   conversationId,
   conversation,
   stageInfo,
-  userType = "customer"
+  userType = "customer",
+  onShowCustomerDashboard,
+  onPurchaseSuccess
 }) => {
+  const router = useRouter();
+  const { appearance, toggleTheme } = useTheme();
+  
   // Chat state management
   const [isChatOpen, setIsChatOpen] = useState(false);
+  
+  // ProductPageModal state
+  const [productPageModal, setProductPageModal] = useState<{ isOpen: boolean; product: Product | null }>({ isOpen: false, product: null });
+  
+  // Validated discount settings state (validated against database)
+  const [validatedDiscountSettings, setValidatedDiscountSettings] = useState<DiscountSettings | null>(null);
   
   // Mobile detection
   const [isMobileDetected, setIsMobileDetected] = useState(false);
@@ -90,6 +113,121 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   const handleChatClose = () => {
     setIsChatOpen(false);
   };
+  
+  // Handle ProductPageModal open/close
+  const openProductPageModal = useCallback((product: Product) => {
+    setProductPageModal({ isOpen: true, product });
+  }, []);
+  
+  const closeProductPageModal = useCallback(() => {
+    setProductPageModal({ isOpen: false, product: null });
+  }, []);
+  
+  // Handle product purchase success
+  const handleProductPurchaseSuccess = useCallback((planId: string) => {
+    console.log('✅ [TemplateRenderer] Product purchase successful, planId:', planId);
+    closeProductPageModal();
+    if (onPurchaseSuccess) {
+      onPurchaseSuccess(planId);
+    }
+  }, [onPurchaseSuccess, closeProductPageModal]);
+  
+  // Validate discount settings against database (same logic as usePreviewLiveTemplate)
+  useEffect(() => {
+    if (!liveTemplate || !liveTemplate.templateData || !experienceId) {
+      setValidatedDiscountSettings(null);
+      return;
+    }
+
+    const validateDiscountSettings = async () => {
+      try {
+        const templateData = liveTemplate.templateData || {};
+        const templateDiscountSettings = templateData.discountSettings;
+
+        // Fetch current discount from database
+        let databaseDiscountData: DiscountData | null = null;
+        try {
+          const response = await apiPost(
+            '/api/seasonal-discount/get',
+            { experienceId },
+            experienceId
+          );
+          if (response.ok) {
+            const { discountData } = await response.json();
+            databaseDiscountData = discountData || null;
+          }
+        } catch (error) {
+          console.warn('⚠️ [TemplateRenderer] Error fetching discount from database:', error);
+        }
+
+        const discountStatus = checkDiscountStatus(databaseDiscountData);
+        const isActiveOrApproaching = discountStatus === 'active' || discountStatus === 'approaching';
+
+        // Case 1: Template HAS discountSettings
+        if (templateDiscountSettings) {
+          const templateSeasonalDiscountId = templateDiscountSettings.seasonalDiscountId;
+          const databaseSeasonalDiscountId = databaseDiscountData?.seasonalDiscountId;
+
+          // If promo is NON-EXISTENT or EXPIRED
+          if (discountStatus === 'non-existent' || discountStatus === 'expired') {
+            console.log('🧹 [TemplateRenderer] Removing discount settings - discount is non-existent or expired');
+            setValidatedDiscountSettings(createDefaultDiscountSettings());
+          }
+          // If promo is ACTIVE/APPROACHING but different seasonal_discount_id
+          else if (isActiveOrApproaching && databaseSeasonalDiscountId && templateSeasonalDiscountId !== databaseSeasonalDiscountId) {
+            console.log('🔄 [TemplateRenderer] Updating discount settings - different active discount found');
+            const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+            setValidatedDiscountSettings(newDiscountSettings);
+          }
+          // If promo is ACTIVE/APPROACHING and seasonal_discount_id MATCHES
+          else if (isActiveOrApproaching && templateSeasonalDiscountId === databaseSeasonalDiscountId) {
+            console.log('✅ [TemplateRenderer] Discount settings match active discount - using database discount');
+            const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+            setValidatedDiscountSettings(newDiscountSettings);
+          }
+          // If template has discount but no seasonalDiscountId and database has active discount
+          else if (!templateSeasonalDiscountId && isActiveOrApproaching && databaseSeasonalDiscountId) {
+            console.log('🔄 [TemplateRenderer] Updating template discount - template has discount but no ID, database has active discount');
+            const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+            setValidatedDiscountSettings(newDiscountSettings);
+          }
+          // Template has discount but database doesn't have active/approaching discount
+          else {
+            console.log('⚠️ [TemplateRenderer] Template has discount but database discount is not active/approaching');
+            // Still use database discount data if available to ensure globalDiscount is correct
+            if (databaseDiscountData) {
+              const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+              setValidatedDiscountSettings(newDiscountSettings);
+            } else {
+              // Use template settings
+              setValidatedDiscountSettings(templateDiscountSettings);
+            }
+          }
+        }
+        // Case 2: Template DOESN'T have discountSettings
+        else {
+          // If discount is ACTIVE/APPROACHING
+          if (isActiveOrApproaching && databaseDiscountData) {
+            console.log('✅ [TemplateRenderer] Applying active discount from database');
+            const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+            setValidatedDiscountSettings(newDiscountSettings);
+          }
+          // If discount is NOT active/approaching - use default
+          else {
+            setValidatedDiscountSettings(createDefaultDiscountSettings());
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ [TemplateRenderer] Error validating discount, keeping template settings:', error);
+        // Fallback to template settings if validation fails
+        const templateData = liveTemplate.templateData || {};
+        setValidatedDiscountSettings(templateData.discountSettings || createDefaultDiscountSettings());
+      }
+    };
+
+    validateDiscountSettings();
+  }, [liveTemplate, experienceId]);
+  
   if (!liveTemplate || !liveTemplate.templateData) {
     return null;
   }
@@ -449,33 +587,78 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
           }}
         />
       
-      {/* TopNavbar - matches SeasonalStore */}
-      <div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg min-h-[4rem]">
-        <div className="px-3 py-2 h-full flex items-center">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-4">
-              {/* Empty space for balance */}
-            </div>
+      {/* TopNavbar - Using SeasonalStore TopNavbar */}
+      {(() => {
+        // Extract template data for TopNavbar
+        const promoButton = templateData.promoButton || {
+          text: "CLAIM YOUR GIFT!",
+          buttonClass: "bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600",
+          ringClass: "ring-yellow-400",
+          ringHoverClass: "ring-yellow-500",
+          icon: "gift"
+        };
 
-            {/* Center: Hide Chat Button - Only show when chat is open */}
-            {isChatOpen && (
-              <div className="flex-1 flex justify-center">
-                <button
-                  onClick={handleChatClose}
-                  className="group relative z-10 flex items-center justify-center py-3 px-6 text-lg rounded-full font-bold uppercase tracking-widest transition-all duration-500 transform hover:scale-[1.03] ring-4 ring-offset-4 ring-offset-white ring-white/30 hover:ring-slate-400 bg-rose-600 hover:bg-rose-700 text-white shadow-2xl"
+        // Use validated discountSettings if available, otherwise use template discountSettings or default
+        const discountSettings = validatedDiscountSettings || templateData.discountSettings || createDefaultDiscountSettings();
+
+        const allThemes = {}; // Empty for now, can be populated if needed
+        
+        // Get legacyTheme from templateData.currentTheme or themeSnapshot
+        const legacyTheme = templateData.currentTheme || liveTemplate.themeSnapshot || {
+          accent: "bg-indigo-500",
+          card: "bg-white/95 backdrop-blur-sm shadow-xl",
+          text: "text-gray-800"
+        };
+
+        return (
+          <TopNavbar
+            editorState={{ isEditorView: false }}
+            showGenerateBgInNavbar={false}
+            isChatOpen={isChatOpen}
+            isGeneratingBackground={false}
+            loadingState={{ isImageLoading: false }}
+            promoButton={promoButton}
+            currentSeason={currentSeason}
+            allThemes={allThemes}
+            legacyTheme={legacyTheme}
+            previewLiveTemplate={liveTemplate}
+            hideEditorButtons={true}
+            isStorePreview={true}
+            discountSettings={discountSettings}
+            toggleEditorView={() => {}}
+            handleGenerateBgClick={() => {}}
+            handleBgImageUpload={() => {}}
+            handleSaveTemplate={() => {}}
+            toggleAdminSheet={() => {}}
+            openTemplateManager={() => {}}
+            handleAddProduct={() => {}}
+            setIsChatOpen={setIsChatOpen}
+            setCurrentSeason={() => {}}
+            getHoverRingClass={getHoverRingClass}
+            getGlowBgClass={getGlowBgClass}
+            getGlowBgStrongClass={getGlowBgStrongClass}
+            rightSideContent={
+              (userType === "customer" || userType === "admin") ? (
+                <Button
+                  size="3"
+                  color="violet"
+                  variant="surface"
+                  onClick={() => {
+                    if (onShowCustomerDashboard) {
+                      onShowCustomerDashboard();
+                    }
+                  }}
+                  className="px-3 sm:px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+                  title="View Memberships & Files"
                 >
-                  <span className="mr-3 text-xl animate-pulse">💬</span>
-                  Hide Chat
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-4">
-              {/* Empty space for balance */}
-            </div>
-          </div>
-        </div>
-      </div>
+                  <User size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300" />
+                  <span className="ml-1 hidden sm:inline">Membership</span>
+                </Button>
+              ) : undefined
+            }
+          />
+        );
+      })()}
       
       {/* Template Content Container */}
       <div className="relative z-30 flex flex-col items-center pt-1 pb-8 px-3 sm:px-6 max-w-7xl mx-auto transition-all duration-500 overflow-y-auto overflow-x-hidden h-full w-full">
@@ -639,7 +822,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                       onRemoveSticker={() => {}}
                       onDropAsset={() => {}}
                       onOpenEditor={() => {}}
-                      onOpenProductPage={product.type === 'FILE' ? () => handleChatOpen() : undefined}
+                      onOpenProductPage={product.type === 'FILE' ? () => openProductPageModal(product) : undefined}
                       storeName=""
                       experienceId={experienceId}
                     />
@@ -781,6 +964,21 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
         </div>
       </div>
       </div>
+      
+      {/* ProductPageModal */}
+      {productPageModal.product && (
+        <ProductPageModal
+          isOpen={productPageModal.isOpen}
+          onClose={closeProductPageModal}
+          product={productPageModal.product}
+          theme={convertThemeToLegacy(themeSnapshot) as LegacyTheme}
+          storeName=""
+          experienceId={experienceId}
+          checkoutConfigurationId={productPageModal.product.checkoutConfigurationId}
+          planId={productPageModal.product.planId}
+          onPurchaseSuccess={handleProductPurchaseSuccess}
+        />
+      )}
     </>
   );
 };

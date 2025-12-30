@@ -46,6 +46,7 @@ interface ProductShowcaseProps {
   onOpenProductPage?: (product: Product) => void; // Handler to open ProductPageModal for FILE type products
   storeName?: string; // Store name for modal
   experienceId?: string; // Experience ID for payment
+  onPurchaseSuccess?: (planId: string) => void; // Handler for successful product purchase
 }
 
 export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
@@ -78,6 +79,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
   onOpenProductPage,
   storeName,
   experienceId,
+  onPurchaseSuccess,
 }) => {
   const [showNavigation, setShowNavigation] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -290,6 +292,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({
                   onOpenProductPage={onOpenProductPage}
                   storeName={storeName}
                   experienceId={experienceId}
+                  onPurchaseSuccess={onPurchaseSuccess}
                 />
               </div>
             ))}

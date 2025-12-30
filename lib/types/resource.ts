@@ -111,3 +111,21 @@ export interface ProductLimits {
 	paid: number;
 	freeValue: number;
 }
+
+export interface CustomerResource {
+	id: string;
+	company_id: string;
+	experience_id: string;
+	user_id: string;
+	user_name: string;
+	membership_plan_id: string;
+	membership_product_id?: string;
+	download_link?: string;
+	product_name: string;
+	description?: string;
+	image?: string;
+	created_at: Date;
+	updated_at: Date;
+	resourceType?: "WHOP" | "LINK" | "FILE"; // Type from original resource, added by API
+	storage_url?: string; // Storage URL from resources table for FILE type downloads
+}

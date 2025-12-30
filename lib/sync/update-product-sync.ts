@@ -64,23 +64,27 @@ export class UpdateProductSync {
 
     try {
       // Get current database resources using database UUID, not Whop experience ID
-      const currentResources = await db.query.resources.findMany({
-        where: and(
-          eq(resources.experienceId, user.experience.id), // Use database UUID
-          isNotNull(resources.whopProductId)
-        ),
-        columns: {
-          id: true,
-          name: true,
-          description: true,
-          category: true,
-          link: true,
-          image: true,
-          price: true,
-          whopProductId: true,
-          updatedAt: true,
-        },
-      });
+      // Use direct SQL query with limit to avoid timeout on large datasets
+      const currentResources = await db
+        .select({
+          id: resources.id,
+          name: resources.name,
+          description: resources.description,
+          category: resources.category,
+          link: resources.link,
+          image: resources.image,
+          price: resources.price,
+          whopProductId: resources.whopProductId,
+          updatedAt: resources.updatedAt,
+        })
+        .from(resources)
+        .where(
+          and(
+            eq(resources.experienceId, user.experience.id), // Use database UUID
+            isNotNull(resources.whopProductId)
+          )
+        )
+        .limit(1000); // Reasonable limit to prevent timeout
 
       console.log(`[UPDATE-SYNC] 📊 Found ${currentResources.length} current resources in database`);
 
@@ -214,12 +218,17 @@ export class UpdateProductSync {
       // Check if origin template exists and needs update, or should be created
       try {
         // Get products with whopProductId to check company data
-        const productsWithIds = await db.query.resources.findMany({
-          where: and(
-            eq(resources.experienceId, user.experience.id),
-            isNotNull(resources.whopProductId)
-          ),
-        });
+        // Use direct SQL query with limit to avoid timeout
+        const productsWithIds = await db
+          .select()
+          .from(resources)
+          .where(
+            and(
+              eq(resources.experienceId, user.experience.id),
+              isNotNull(resources.whopProductId)
+            )
+          )
+          .limit(100); // Limit for origin template check (only need one valid product)
 
         // Find a valid product by trying to fetch it from Whop SDK
         let validProduct = null;

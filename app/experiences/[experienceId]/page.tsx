@@ -24,8 +24,10 @@ interface AuthContext {
 
 export default function ExperiencePage({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ experienceId: string }>;
+	searchParams?: Promise<{ view?: string; dashboard?: string }>;
 }) {
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
 	const [experienceId, setExperienceId] = useState<string>("");
@@ -107,6 +109,17 @@ export default function ExperiencePage({
 		
 		console.log("✅ User context refresh complete");
 	}, [fetchUserContext]);
+
+	// Read search params for view
+	useEffect(() => {
+		if (searchParams) {
+			searchParams.then((params) => {
+				if (params.view === "customer") {
+					setSelectedView("customer");
+				}
+			});
+		}
+	}, [searchParams]);
 
 	// Single useEffect - get params and fetch context immediately with force refresh
 	useEffect(() => {

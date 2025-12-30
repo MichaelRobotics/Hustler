@@ -260,12 +260,15 @@ export class WhopApiClient {
         product_name: p.product?.title || 'Unknown Product'
       })));
 
-      console.log("🔍 Step 2: Fetching all products...");
+      console.log("🔍 Step 2: Fetching all products (regular type only)...");
       const products: any[] = [];
-      for await (const productListItem of client.products.list({ company_id: this.companyId })) {
+      for await (const productListItem of client.products.list({ 
+        company_id: this.companyId,
+        product_types: ["regular"]
+      })) {
         products.push(productListItem);
       }
-      console.log(`✅ Found ${products.length} products`);
+      console.log(`✅ Found ${products.length} regular products`);
       
       // DEBUG: Log all products with visibility
       console.log(`🔍 DEBUG - All products fetched:`, products.map(p => ({
@@ -275,16 +278,21 @@ export class WhopApiClient {
         status: p.status || 'active'
       })));
       
+      // Create a Set of regular product IDs for efficient lookup
+      const regularProductIds = new Set(products.map(p => p.id));
+      
       // Filter out products that don't have proper product associations
-      // Only check for plans with visibility 'visible' or 'hidden'
+      // Only check for plans with visibility 'visible' or 'hidden' AND whose product is in our regular products list
       const validProducts = products.filter(product => {
         // Only include products that have at least one visible/hidden plan associated with them
+        // AND the plan's product must be a regular product (in our filtered list)
         const hasAssociatedPlans = plans.some(plan => 
           plan.product?.id === product.id &&
+          regularProductIds.has(plan.product.id) && // Ensure plan's product is a regular product
           (plan.visibility === 'visible' || plan.visibility === 'hidden')
         );
         if (!hasAssociatedPlans) {
-          console.log(`⚠️ Filtering out product "${product.title}" (${product.id}) - no visible/hidden associated plans`);
+          console.log(`⚠️ Filtering out product "${product.title}" (${product.id}) - no visible/hidden associated plans with regular product type`);
         }
         return hasAssociatedPlans;
       });
@@ -315,11 +323,13 @@ export class WhopApiClient {
 
       // Find plans without matching products and create products from them
       // Only use plans with visible/hidden visibility AND products with non-archived visibility
+      // AND only consider plans whose product is a regular product type
       const visibleHiddenPlansForOrphans = plans.filter(p => {
         const planVisibility = p.visibility === 'visible' || p.visibility === 'hidden';
         const productVisibility = p.product?.visibility;
         const isNotArchived = productVisibility !== 'archived';
-        return planVisibility && isNotArchived;
+        const isRegularProduct = p.product?.id && regularProductIds.has(p.product.id);
+        return planVisibility && isNotArchived && isRegularProduct;
       });
       const productIds = new Set(finalProducts.map(p => p.id));
       
@@ -347,6 +357,14 @@ export class WhopApiClient {
       orphanPlansByProduct.forEach((plansForProduct, productId) => {
         const firstPlan = plansForProduct[0];
         const productName = firstPlan.product?.title || 'Unknown Product';
+        
+        // Verify the product is actually a regular product type by checking if it's in our regular products list
+        // If it's not in regularProductIds, it means it wasn't returned from the API with product_types: ["regular"]
+        // In that case, we should NOT create a product from its plans
+        if (!regularProductIds.has(productId)) {
+          console.log(`⚠️ Skipping product creation from plan: "${productName}" (${productId}) - product is not a regular type`);
+          return;
+        }
         
         // Only create if product name is NOT "Unknown Product" (case insensitive)
         if (productName && productName.toLowerCase() !== 'unknown product') {
@@ -458,6 +476,13 @@ export class WhopApiClient {
             // Get detailed product data from API
             detailedProduct = await client.products.retrieve(product.id);
             
+            // Verify the product is a regular type (should be in our regular products list)
+            // If it's not, skip it as it shouldn't have been processed
+            if (!regularProductIds.has(product.id)) {
+              console.log(`🔍 [getCompanyProducts] ⚠️ Skipping non-regular product from API: "${detailedProduct.title}" (${detailedProduct.id})`);
+              continue;
+            }
+            
             // Check if retrieved product is archived
             if (detailedProduct.visibility === 'archived') {
               console.log(`🔍 [getCompanyProducts] ⚠️ Skipping archived product from API: "${detailedProduct.title}" (${detailedProduct.id})`);
@@ -466,8 +491,10 @@ export class WhopApiClient {
           }
           
           // Find plans for this product - filter by visibility (only visible and hidden)
+          // AND ensure the plan's product is a regular product type
           const productPlans = plans.filter(plan => 
             plan.product?.id === product.id &&
+            regularProductIds.has(plan.product.id) && // Ensure plan's product is a regular product
             (plan.visibility === 'visible' || plan.visibility === 'hidden')
           );
 

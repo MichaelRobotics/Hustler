@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useCallback, useEffect, useState, useMemo, startTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSeasonalStoreDatabase } from './hooks/useSeasonalStoreDatabase';
 import { useElementHeight } from '@/lib/hooks/useElementHeight';
 import { useTheme } from '../../common/ThemeProvider';
@@ -21,6 +22,7 @@ import { LogoSection } from './components/LogoSection';
 import { StoreResourceLibrary } from '../../products/StoreResourceLibrary';
 import { StoreHeader } from './components/StoreHeader';
 import { ConditionalReturns } from './components/ConditionalReturns';
+import { CustomerDashboard } from '../../customers/CustomerDashboard';
 import { 
   PresentIcon, 
   XIcon, 
@@ -103,9 +105,12 @@ interface SeasonalStoreProps {
     credits?: number;
     messages?: number;
   }) => void; // Callback for purchase success to update user state optimistically
+  showCustomerDashboard?: boolean; // State from AdminPanel to show CustomerDashboard
+  onShowCustomerDashboard?: (show: boolean) => void; // Callback to update CustomerDashboard state in AdminPanel
 }
 
-export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps, onPurchaseSuccess }) => {
+export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allResources = [], setAllResources = () => {}, previewLiveTemplate, hideEditorButtons = false, onTemplateLoaded, isStorePreview = false, isActive = false, updateSyncProps, onPurchaseSuccess, showCustomerDashboard = false, onShowCustomerDashboard }) => {
+  const router = useRouter();
   // Extract experienceId from user object
   const experienceId = user?.experienceId;
   
@@ -130,6 +135,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   
   // Store ResourceLibrary state
   const [showStoreResourceLibrary, setShowStoreResourceLibrary] = useState(false);
+  
+  // State for purchased planId (for scrolling to purchased product in dashboard)
+  const [purchasedPlanId, setPurchasedPlanId] = useState<string | null>(null);
   
   // Use live funnel hook
   const {
@@ -1397,10 +1405,20 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const openProductPageModal = useCallback((product: Product) => {
     setProductPageModal({ isOpen: true, product });
   }, []);
-  
+
   const closeProductPageModal = useCallback(() => {
     setProductPageModal({ isOpen: false, product: null });
   }, []);
+
+  // Handler for product purchase success (FILE type products with checkout configuration)
+  const handleProductPurchaseSuccess = useCallback((planId: string) => {
+    console.log('🛒 [SeasonalStore] Product purchase successful, planId:', planId);
+    setPurchasedPlanId(planId);
+    // Show customer dashboard
+    if (onShowCustomerDashboard) {
+      onShowCustomerDashboard(true);
+    }
+  }, [onShowCustomerDashboard]);
   
   const openProductEditor = (productId: number | string | null, target: 'name' | 'description' | 'card' | 'button') => {
     setProductEditor({ isOpen: true, productId, target });
@@ -1529,6 +1547,27 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     ...productEditor,
     target: productEditor.target || 'name'
   };
+
+  // Show CustomerDashboard if requested (state managed by AdminPanel)
+  if (showCustomerDashboard && user) {
+    return (
+      <CustomerDashboard
+        user={user}
+        scrollToPlanId={purchasedPlanId}
+        onBack={() => {
+          if (onShowCustomerDashboard) {
+            onShowCustomerDashboard(false);
+          }
+          // Clear purchasedPlanId when closing dashboard
+          setPurchasedPlanId(null);
+        }}
+        onUserSelect={(userId) => {
+          // Handle user selection for admin
+        }}
+        selectedUserId={null}
+      />
+    );
+  }
 
   return (
     <>
@@ -1778,6 +1817,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           onOpenProductPage={openProductPageModal}
           storeName={legacyTheme.name || "Store"}
           experienceId={experienceId}
+          onPurchaseSuccess={handleProductPurchaseSuccess}
           discountSettings={discountSettings ? {
             enabled: discountSettings.enabled,
             startDate: discountSettings.startDate || '',
@@ -1848,6 +1888,9 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           theme={legacyTheme}
           storeName={legacyTheme.name || "Store"}
           experienceId={experienceId}
+          checkoutConfigurationId={productPageModal.product.checkoutConfigurationId}
+          planId={productPageModal.product.planId}
+          onPurchaseSuccess={handleProductPurchaseSuccess}
         />
       )}
       
@@ -1942,6 +1985,15 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         setLiveTemplate={setLiveTemplate}
         onPreview={handlePreviewTemplate}
         maxTemplates={MAX_CUSTOM_TEMPLATES}
+        experienceId={experienceId}
+        onNavigateToCustomerDashboard={() => {
+          // Close modal first
+          closeTemplateManagerAnimated();
+          // Show CustomerDashboard (state managed by AdminPanel)
+          if (onShowCustomerDashboard) {
+            onShowCustomerDashboard(true);
+          }
+        }}
         onCreateNewShop={async () => {
           if (!originTemplate) return;
           
@@ -2117,7 +2169,6 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           return await updateTemplate(templateId, updates);
         }}
         discountSettings={discountSettings}
-        experienceId={experienceId}
         onSaveDiscountSettings={handleSaveDiscountSettings}
         updateTemplate={updateTemplate}
         setDiscountSettings={setDiscountSettings}

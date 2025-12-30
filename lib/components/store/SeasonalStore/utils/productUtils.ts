@@ -144,6 +144,8 @@ export const filterProductsAgainstMarketStall = async (
         price: parseFloat(matchedResource.price || '0'), // Always use MarketStall price
         buttonLink: templateProduct.buttonLink || matchedResource.link || '',
         whopProductId: matchedResource.whopProductId,
+        checkoutConfigurationId: templateProduct.checkoutConfigurationId || matchedResource.checkoutConfigurationId || matchedResource.checkout_configuration_id,
+        planId: templateProduct.planId || matchedResource.planId || matchedResource.plan_id,
 
         // Preserve template product styling
         cardClass: templateProduct.cardClass,
@@ -261,6 +263,8 @@ export const convertResourcesToProducts = (
     buttonText: 'VIEW DETAILS',
     buttonLink: resource.link || '',
     whopProductId: resource.whopProductId,
+    checkoutConfigurationId: resource.checkoutConfigurationId || resource.checkout_configuration_id,
+    planId: resource.planId || resource.plan_id,
     type: resource.type, // Include type (LINK or FILE)
     storageUrl: resource.storageUrl, // Include storageUrl for FILE type
     productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined, // Include productImages array

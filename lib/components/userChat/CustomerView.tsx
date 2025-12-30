@@ -2,18 +2,25 @@
 
 import type React from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import UserChat from "./UserChat";
 import { AdminNavbar } from "./AdminNavbar";
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
 import { apiGet, apiPost } from "../../utils/api-client";
-import { Text } from "frosted-ui";
+import { Text, Button } from "frosted-ui";
 import { MessageSquare, Play, RotateCcw, Settings, User, MessageCircle, Sun, Moon } from "lucide-react";
 import FunnelProgressBar from "./FunnelProgressBar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
 import { useTheme } from "../common/ThemeProvider";
 import { TemplateRenderer } from "./TemplateRenderer";
+import { CustomerDashboard } from "../customers/CustomerDashboard";
+import { TopNavbar } from "../store/SeasonalStore/components/TopNavbar";
+import { getHoverRingClass, getGlowBgClass, getGlowBgStrongClass } from "../store/SeasonalStore/utils";
+import { createDefaultDiscountSettings, checkDiscountStatus, convertDiscountDataToSettings } from "../store/SeasonalStore/utils/discountHelpers";
+import type { DiscountSettings } from "../store/SeasonalStore/types";
+import type { DiscountData } from "../store/SeasonalStore/utils/discountHelpers";
 
 /**
  * --- Customer View Component ---
@@ -59,6 +66,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [templateLoading, setTemplateLoading] = useState(true);
 	const [templateReady, setTemplateReady] = useState(false);
 	
+	// Validated discount settings state (validated against database)
+	const [validatedDiscountSettings, setValidatedDiscountSettings] = useState<DiscountSettings | null>(null);
+	
 	// View mode state - single source of truth
 	type ViewMode = 'iframe-only' | 'chat-only' | 'split-view';
 	const [viewMode, setViewMode] = useState<ViewMode>('iframe-only'); // Start with iframe only
@@ -76,7 +86,51 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [userContext, setUserContext] = useState<{
 		user_id?: string;
 		company_id?: string;
+		user?: {
+			id: string;
+			name: string;
+			avatar?: string | null;
+			accessLevel?: string;
+		};
 	} | null>(null);
+
+	// Customer Dashboard view state - managed internally
+	// Check URL params for dashboard query
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const dashboardParam = searchParams?.get('dashboard');
+	const viewParam = searchParams?.get('view');
+	const [showCustomerDashboard, setShowCustomerDashboard] = useState(dashboardParam === 'true');
+	const [purchasedPlanId, setPurchasedPlanId] = useState<string | null>(null);
+	
+	// Track if we came from SeasonalStore (view=customer in URL)
+	const cameFromSeasonalStore = viewParam === 'customer';
+	
+	// Update state when URL param changes
+	useEffect(() => {
+		if (dashboardParam === 'true') {
+			setShowCustomerDashboard(true);
+		}
+	}, [dashboardParam]);
+	
+	// Handler for back button from CustomerDashboard
+	const handleDashboardBack = () => {
+		if (cameFromSeasonalStore) {
+			// Navigate back to SeasonalStore (go to admin view which shows SeasonalStore)
+			router.push(`/experiences/${experienceId}?view=admin`);
+		} else {
+			// Just close the dashboard (we're already in CustomerView)
+			setShowCustomerDashboard(false);
+		}
+		setPurchasedPlanId(null); // Clear purchased plan when leaving dashboard
+	};
+	
+	// Handle product purchase success
+	const handleProductPurchaseSuccess = useCallback((planId: string) => {
+		console.log('✅ [CustomerView] Product purchase successful, planId:', planId);
+		setPurchasedPlanId(planId);
+		setShowCustomerDashboard(true); // Show customer dashboard
+	}, []);
 
 	// Drag state for admin navbar
 	const [isDragging, setIsDragging] = useState(false);
@@ -319,11 +373,17 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				const data = await response.json();
 				console.log(`[CustomerView] User context response:`, data);
 				
-				// Set user context for admin users
-				if (data.user && userType === "admin") {
+				// Set user context for all users (needed for CustomerDashboard)
+				if (data.user) {
 					setUserContext({
 						user_id: data.user.whopUserId,
-						company_id: data.user.experience.whopCompanyId
+						company_id: data.user.experience.whopCompanyId,
+						user: {
+							id: data.user.id,
+							name: data.user.name,
+							avatar: data.user.avatar,
+							accessLevel: data.user.accessLevel,
+						},
 					});
 				}
 			} else {
@@ -589,6 +649,102 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		checkLiveTemplate(); // Check for live template
 	}, [loadFunnelAndConversation, fetchUserContext, fetchExperienceLink, checkLiveTemplate]);
 
+	// Validate discount settings against database (same logic as usePreviewLiveTemplate)
+	useEffect(() => {
+		if (!liveTemplate || !experienceId) {
+			setValidatedDiscountSettings(null);
+			return;
+		}
+
+		const validateDiscountSettings = async () => {
+			try {
+				const templateData = liveTemplate.templateData || {};
+				const templateDiscountSettings = templateData.discountSettings;
+
+				// Fetch current discount from database
+				let databaseDiscountData: DiscountData | null = null;
+				try {
+					const response = await apiPost(
+						'/api/seasonal-discount/get',
+						{ experienceId },
+						experienceId
+					);
+					if (response.ok) {
+						const { discountData } = await response.json();
+						databaseDiscountData = discountData || null;
+					}
+				} catch (error) {
+					console.warn('⚠️ [CustomerView] Error fetching discount from database:', error);
+				}
+
+				const discountStatus = checkDiscountStatus(databaseDiscountData);
+				const isActiveOrApproaching = discountStatus === 'active' || discountStatus === 'approaching';
+
+				// Case 1: Template HAS discountSettings
+				if (templateDiscountSettings) {
+					const templateSeasonalDiscountId = templateDiscountSettings.seasonalDiscountId;
+					const databaseSeasonalDiscountId = databaseDiscountData?.seasonalDiscountId;
+
+					// If promo is NON-EXISTENT or EXPIRED
+					if (discountStatus === 'non-existent' || discountStatus === 'expired') {
+						console.log('🧹 [CustomerView] Removing discount settings - discount is non-existent or expired');
+						setValidatedDiscountSettings(createDefaultDiscountSettings());
+					}
+					// If promo is ACTIVE/APPROACHING but different seasonal_discount_id
+					else if (isActiveOrApproaching && databaseSeasonalDiscountId && templateSeasonalDiscountId !== databaseSeasonalDiscountId) {
+						console.log('🔄 [CustomerView] Updating discount settings - different active discount found');
+						const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+						setValidatedDiscountSettings(newDiscountSettings);
+					}
+					// If promo is ACTIVE/APPROACHING and seasonal_discount_id MATCHES
+					else if (isActiveOrApproaching && templateSeasonalDiscountId === databaseSeasonalDiscountId) {
+						console.log('✅ [CustomerView] Discount settings match active discount - using database discount');
+						const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+						setValidatedDiscountSettings(newDiscountSettings);
+					}
+					// If template has discount but no seasonalDiscountId and database has active discount
+					else if (!templateSeasonalDiscountId && isActiveOrApproaching && databaseSeasonalDiscountId) {
+						console.log('🔄 [CustomerView] Updating template discount - template has discount but no ID, database has active discount');
+						const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData!);
+						setValidatedDiscountSettings(newDiscountSettings);
+					}
+					// Template has discount but database doesn't have active/approaching discount
+					else {
+						console.log('⚠️ [CustomerView] Template has discount but database discount is not active/approaching');
+						// Still use database discount data if available to ensure globalDiscount is correct
+						if (databaseDiscountData) {
+							const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+							setValidatedDiscountSettings(newDiscountSettings);
+						} else {
+							// Use template settings
+							setValidatedDiscountSettings(templateDiscountSettings);
+						}
+					}
+				}
+				// Case 2: Template DOESN'T have discountSettings
+				else {
+					// If discount is ACTIVE/APPROACHING
+					if (isActiveOrApproaching && databaseDiscountData) {
+						console.log('✅ [CustomerView] Applying active discount from database');
+						const newDiscountSettings = convertDiscountDataToSettings(databaseDiscountData);
+						setValidatedDiscountSettings(newDiscountSettings);
+					}
+					// If discount is NOT active/approaching - use default
+					else {
+						setValidatedDiscountSettings(createDefaultDiscountSettings());
+					}
+				}
+			} catch (error) {
+				console.warn('⚠️ [CustomerView] Error validating discount, keeping template settings:', error);
+				// Fallback to template settings if validation fails
+				const templateData = liveTemplate.templateData || {};
+				setValidatedDiscountSettings(templateData.discountSettings || createDefaultDiscountSettings());
+			}
+		};
+
+		validateDiscountSettings();
+	}, [liveTemplate, experienceId]);
+
 	// Monitor iframeUrl changes
 	useEffect(() => {
 		console.log(`[CustomerView] Iframe URL changed to: ${iframeUrl}`);
@@ -697,8 +853,110 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		shouldShowAdminPanel: userType === "admin"
 	});
 
+	// Extract template data for TopNavbar
+	const extractTemplateData = () => {
+		if (!liveTemplate) {
+			return {
+				promoButton: {
+					text: "CLAIM YOUR GIFT!",
+					buttonClass: "bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600",
+					ringClass: "ring-yellow-400",
+					ringHoverClass: "ring-yellow-500",
+					icon: "gift"
+				},
+				discountSettings: createDefaultDiscountSettings(),
+				currentSeason: "default",
+				allThemes: {},
+				legacyTheme: {
+					accent: "bg-indigo-500",
+					card: "bg-white/95 backdrop-blur-sm shadow-xl",
+					text: "text-gray-800"
+				}
+			};
+		}
+
+		const templateData = liveTemplate.templateData || {};
+		const promoButton = templateData.promoButton || {
+			text: "CLAIM YOUR GIFT!",
+			buttonClass: "bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600",
+			ringClass: "ring-yellow-400",
+			ringHoverClass: "ring-yellow-500",
+			icon: "gift"
+		};
+
+		// Use validated discountSettings if available, otherwise use template discountSettings or default
+		const discountSettings = validatedDiscountSettings || templateData.discountSettings || createDefaultDiscountSettings();
+
+		const currentSeason = liveTemplate.currentSeason || "default";
+		const allThemes = {}; // Empty for now, can be populated if needed
+		
+		// Get legacyTheme from templateData.currentTheme or themeSnapshot
+		const legacyTheme = templateData.currentTheme || liveTemplate.themeSnapshot || {
+			accent: "bg-indigo-500",
+			card: "bg-white/95 backdrop-blur-sm shadow-xl",
+			text: "text-gray-800"
+		};
+
+		return {
+			promoButton,
+			discountSettings,
+			currentSeason,
+			allThemes,
+			legacyTheme
+		};
+	};
+
+	const templateData = extractTemplateData();
+
+	// Chat state for TopNavbar - derived from viewMode
+	const isChatOpen = viewMode === 'split-view' || viewMode === 'chat-only';
+	const setIsChatOpen = (open: boolean) => {
+		if (open) {
+			if (isMobile) {
+				setViewMode('chat-only');
+			} else {
+				setViewMode('split-view');
+			}
+		} else {
+			setViewMode('iframe-only');
+		}
+	};
+
 	// Show TemplateRenderer if live template is found
 	if (hasLiveTemplate && liveTemplate) {
+		// If dashboard is shown, render CustomerDashboard instead
+		if (showCustomerDashboard && userContext?.user) {
+			return (
+				<CustomerDashboard
+					user={{
+						id: userContext.user.id,
+						name: userContext.user.name || userName || "User",
+						avatar: userContext.user.avatar || undefined,
+						accessLevel: (userContext.user.accessLevel as "admin" | "customer") || "customer",
+						whopUserId: whopUserId || "",
+						experienceId: experienceId || "",
+						email: "",
+						credits: 0,
+						messages: 0,
+						productsSynced: false,
+						experience: {
+							id: experienceId || "",
+							whopExperienceId: experienceId || "",
+							whopCompanyId: userContext.company_id || "",
+							name: userContext.user.name || userName || "",
+							link: iframeUrl,
+						}
+					}}
+					onBack={handleDashboardBack}
+					onUserSelect={(userId) => {
+						// Handle user selection for admin
+					}}
+					selectedUserId={null}
+					scrollToPlanId={purchasedPlanId}
+				/>
+			);
+		}
+		
 		return (
 			<TemplateRenderer
 				liveTemplate={liveTemplate}
@@ -719,11 +977,49 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				conversation={conversation || undefined}
 				stageInfo={stageInfo || undefined}
 				userType={userType}
+				onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
+				onPurchaseSuccess={handleProductPurchaseSuccess}
 			/>
 		);
 	}
 
 	// Render UserChat with real data
+	// If dashboard is shown, render CustomerDashboard instead
+	if (showCustomerDashboard && userContext?.user) {
+		return (
+			<CustomerDashboard
+				user={{
+					id: userContext.user.id,
+					name: userContext.user.name || userName || "User",
+					avatar: userContext.user.avatar || undefined,
+					accessLevel: (userContext.user.accessLevel as "admin" | "customer") || "customer",
+					whopUserId: whopUserId || "",
+					experienceId: experienceId || "",
+					email: "",
+					credits: 0,
+					messages: 0,
+					productsSynced: false,
+					experience: {
+						id: experienceId || "",
+						whopExperienceId: experienceId || "",
+						whopCompanyId: userContext.company_id || "",
+						name: userContext.user.name || userName || "",
+						link: iframeUrl,
+					}
+				}}
+				onBack={() => {
+					setShowCustomerDashboard(false);
+					setPurchasedPlanId(null); // Clear purchased plan when closing dashboard
+				}}
+				onUserSelect={(userId) => {
+					// Handle user selection for admin
+				}}
+				selectedUserId={null}
+				scrollToPlanId={purchasedPlanId}
+			/>
+		);
+	}
+	
 			return (
 				<div className="h-screen w-full relative flex flex-col">
 			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads */}
@@ -800,7 +1096,51 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			</div>
 		)}
 
-		{/* Top Navbar with Integrated Progress Bar */}
+		{/* Top Navbar - Using SeasonalStore TopNavbar */}
+		{liveTemplate ? (
+			<TopNavbar
+				editorState={{ isEditorView: false }}
+				showGenerateBgInNavbar={false}
+				isChatOpen={isChatOpen}
+				isGeneratingBackground={false}
+				loadingState={{ isImageLoading: false }}
+				promoButton={templateData.promoButton}
+				currentSeason={templateData.currentSeason}
+				allThemes={templateData.allThemes}
+				legacyTheme={templateData.legacyTheme}
+				previewLiveTemplate={liveTemplate}
+				hideEditorButtons={true}
+				isStorePreview={true}
+				discountSettings={templateData.discountSettings}
+				toggleEditorView={() => {}}
+				handleGenerateBgClick={() => {}}
+				handleBgImageUpload={() => {}}
+				handleSaveTemplate={() => {}}
+				toggleAdminSheet={() => {}}
+				openTemplateManager={() => {}}
+				handleAddProduct={() => {}}
+				setIsChatOpen={setIsChatOpen}
+				setCurrentSeason={() => {}}
+				getHoverRingClass={getHoverRingClass}
+				getGlowBgClass={getGlowBgClass}
+				getGlowBgStrongClass={getGlowBgStrongClass}
+				rightSideContent={
+					(userType === "customer" || userType === "admin") ? (
+						<Button
+							size="3"
+							color="violet"
+							variant="surface"
+							onClick={() => setShowCustomerDashboard(true)}
+							className="px-3 sm:px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+							title="View Memberships & Files"
+						>
+							<User size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform duration-300" />
+							<span className="ml-1 hidden sm:inline">Membership</span>
+						</Button>
+					) : undefined
+				}
+			/>
+		) : (
 		<div className="sticky top-0 z-30 flex-shrink-0 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-b border-border/30 dark:border-border/20 shadow-lg">
 			<div className="px-4 py-3">
 				<div className="flex items-center justify-between">
@@ -812,7 +1152,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 								alt="User Avatar"
 								className="w-20 h-20 object-cover"
 								onError={(e) => {
-									// Fallback to default icon if image fails to load
 									const target = e.target as HTMLImageElement;
 									target.style.display = 'none';
 									const parent = target.parentElement;
@@ -822,7 +1161,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 								}}
 							/>
 						</div>
-
 					</div>
 
 		{/* Center: CLAIM YOUR GIFT Button */}
@@ -833,21 +1171,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					className="relative inline-flex items-center justify-center px-6 py-3 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group animate-pulse"
 					style={{ WebkitTapHighlightColor: "transparent" }}
 				>
-					{/* Animated background overlay */}
 					<span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-600 via-amber-600 to-yellow-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-					
-					{/* Shimmer effect */}
 					<span className="absolute inset-0 -top-1 -left-1 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 group-hover:animate-pulse"></span>
-					
-					{/* Content */}
 					<span className="relative flex items-center space-x-2 z-10">
-						{/* Show HIDE CHAT when UserChat is visible (half view or mobile full view) */}
 						{(viewMode === 'split-view' || (viewMode === 'chat-only' && isMobile)) ? (
 							<>
-								{/* Chat Icon with 3 dots for Hide Chat - same as chat button */}
 								<div className="w-5 h-5 text-white relative z-10">
 									<MessageCircle className="w-5 h-5 text-white" />
-									{/* 3 Dots inside the circle */}
 									<div className="absolute inset-0 flex items-center justify-center">
 										<div className="flex space-x-0.5">
 											<div className="w-0.5 h-0.5 bg-white rounded-full"></div>
@@ -863,31 +1193,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						 stageInfo?.currentStage === "PAIN_POINT_QUALIFICATION" ||
 						 stageInfo?.currentStage === "OFFER" ? (
 							<>
-								{/* Diamond Icon for VIP Access */}
-								<svg
-									width={20}
-									height={20}
-									viewBox="0 0 24 24"
-									fill="currentColor"
-									className="text-white"
-								>
+												<svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor" className="text-white">
 									<path d="M6 2L2 8l10 14 10-14-4-6H6zm2.5 2h7l2.5 4-7.5 10.5L4.5 8l2.5-4z"/>
 								</svg>
 								<span>UNLOCK VIP ACCESS</span>
 							</>
 						) : (
 							<>
-								{/* Gift Icon for default */}
-								<svg
-									width={20}
-									height={20}
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
+												<svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 									<path d="M20 12v10H4V12"/>
 									<path d="M2 7h20v5H2z"/>
 									<path d="M12 22V7"/>
@@ -897,42 +1210,45 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							</>
 						)}
 					</span>
-					
-					{/* Glow effect */}
 					<span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
 				</button>
 							</div>
 		)}
 
-			{/* Right Side: Theme Toggle Button - Icon Only */}
+						{/* Right Side: Membership Button and Theme Toggle */}
+						<div className="flex items-center gap-2">
+							{(userType === "customer" || userType === "admin") && (
+								<Button
+									size="3"
+									color="violet"
+									variant="surface"
+									onClick={() => setShowCustomerDashboard(true)}
+									className="px-3 sm:px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 group"
+									title="View Memberships & Files"
+								>
+									<span className="ml-1 hidden sm:inline">Membership</span>
+								</Button>
+							)}
+							
 			<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 							<button
 					onClick={toggleTheme}
 					className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
 					style={{ WebkitTapHighlightColor: "transparent" }}
-					title={
-						appearance === "dark"
-							? "Switch to light mode"
-							: "Switch to dark mode"
-					}
+									title={appearance === "dark" ? "Switch to light mode" : "Switch to dark mode"}
 				>
 					{appearance === "dark" ? (
-						<Sun
-							size={20}
-							className="text-foreground/70 dark:text-foreground/70"
-						/>
+										<Sun size={20} className="text-foreground/70 dark:text-foreground/70" />
 					) : (
-						<Moon
-							size={20}
-							className="text-foreground/70 dark:text-foreground/70"
-						/>
+										<Moon size={20} className="text-foreground/70 dark:text-foreground/70" />
 					)}
 							</button>
 						</div>
 					</div>
 				</div>
-
 		</div>
+			</div>
+		)}
 
 		{/* Main Content Area with Toggle Functionality */}
 		<div className="flex-1 w-full relative flex flex-col overflow-hidden">

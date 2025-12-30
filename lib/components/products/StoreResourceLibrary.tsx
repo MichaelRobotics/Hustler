@@ -8,6 +8,7 @@ import { LibraryEmptyState } from './LibraryEmptyState';
 import { LibraryResourceDeleteModal } from './modals/LibraryResourceDeleteModal';
 import { ResourceCreateForm } from './forms/ResourceCreateForm';
 import { ResourceEditForm } from './forms/ResourceEditForm';
+import { OrdersTable } from './OrdersTable';
 import { Resource } from '@/lib/types/resource';
 import { AuthenticatedUser } from '@/lib/types/user';
 import { apiPut, apiPost, apiDelete } from '@/lib/utils/api-client';
@@ -69,6 +70,7 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
   const [newlyEditedResourceId, setNewlyEditedResourceId] = useState<string | null>(null);
   const [showCreateSuccessPopup, setShowCreateSuccessPopup] = useState(false);
   const [showEditSuccessPopup, setShowEditSuccessPopup] = useState(false);
+  const [showOrders, setShowOrders] = useState(false);
   const [showDeleteSuccessPopup, setShowDeleteSuccessPopup] = useState(false);
   const [newlyCreatedResource, setNewlyCreatedResource] = useState<Resource | null>(null);
   const [newlyEditedResource, setNewlyEditedResource] = useState<Resource | null>(null);
@@ -337,6 +339,8 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
             experienceId={user?.experienceId}
             user={user}
             onPurchaseSuccess={onPurchaseSuccess}
+            showOrders={showOrders}
+            onToggleOrders={() => setShowOrders(!showOrders)}
           />
 
           {/* Delete Resource Modal */}
@@ -346,23 +350,28 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
             onCancel={cancelDelete}
           />
 
-          {/* Error State */}
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
-              <div className="flex items-center">
-                <div className="text-destructive font-medium">
-                  Error loading resources
+          {/* Orders View */}
+          {showOrders ? (
+            <OrdersTable experienceId={user?.experienceId} />
+          ) : (
+            <>
+              {/* Error State */}
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+                  <div className="flex items-center">
+                    <div className="text-destructive font-medium">
+                      Error loading resources
+                    </div>
+                    <button
+                      onClick={() => setError(null)}
+                      className="ml-auto text-sm text-destructive hover:underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">{error}</p>
                 </div>
-                <button
-                  onClick={() => setError(null)}
-                  className="ml-auto text-sm text-destructive hover:underline"
-                >
-                  Dismiss
-                </button>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">{error}</p>
-            </div>
-          )}
+              )}
 
           {/* Create Product Form */}
           {isCreatingNewProduct && (
@@ -418,6 +427,8 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
           {/* Empty State */}
           {!error && paidResources.length === 0 && (
             <LibraryEmptyState selectedCategory="PAID" />
+          )}
+            </>
           )}
         </div>
       </div>

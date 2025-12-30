@@ -55,6 +55,7 @@ interface TemplateManagerModalProps {
   updateTemplate?: (templateId: string, updates: { templateData?: any }) => Promise<any>;
   setDiscountSettings?: (settings: DiscountSettings) => void;
   onCreateNewShop?: () => void;
+  onNavigateToCustomerDashboard?: () => void; // Callback to navigate to Customer Dashboard
 }
 
 export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
@@ -76,6 +77,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   updateTemplate,
   setDiscountSettings,
   onCreateNewShop,
+  onNavigateToCustomerDashboard,
   discountSettings,
   products = [],
   maxTemplates = 10,
@@ -406,6 +408,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               onMakePublic={onMakePublic}
               onCreateNewShop={onCreateNewShop}
               onClose={onClose}
+              onNavigateToCustomerDashboard={onNavigateToCustomerDashboard}
             />
 
             {/* Discount Management Panels - Only show if live template exists */}
