@@ -309,33 +309,17 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
         let finalPlanId = planId;
         let finalCheckoutId = checkoutConfigurationId;
         
-        // If planId is missing but we have a resource ID, lookup the resource
-        if (!finalPlanId && resourceId && experienceId) {
+        // If planId or checkoutConfigurationId is missing, lookup resource (same as Edit/Preview mode)
+        // This matches the pattern used in ProductEditorModal
+        if ((!finalPlanId || !finalCheckoutId) && experienceId) {
           try {
-            console.log('🔄 [ProductPageModal] planId missing, looking up resource by ID:', resourceId);
-            const resourceResponse = await fetch(`/api/resources/${resourceId}?experienceId=${encodeURIComponent(experienceId)}`);
+            // Use the same lookup pattern as ProductEditorModal: fetch by product ID or whopProductId
+            const productId = product.whopProductId || product.id;
             
-            if (resourceResponse.ok) {
-              const resourceData = await resourceResponse.json();
-              if (resourceData.success && resourceData.data?.resource) {
-                const resource = resourceData.data.resource;
-                finalPlanId = resource.planId || resource.plan_id;
-                finalCheckoutId = finalCheckoutId || resource.checkoutConfigurationId || resource.checkout_configuration_id;
-                console.log('✅ [ProductPageModal] Resource found, planId:', finalPlanId, 'checkoutConfig:', finalCheckoutId);
-              }
-            }
-          } catch (error) {
-            console.error('❌ [ProductPageModal] Error looking up resource:', error);
-          }
-        }
-        
-        // If still no planId, try lookup by experienceId and product name/whopProductId
-        if (!finalPlanId && experienceId) {
-          try {
-            // Try to find resource by whopProductId if available
-            if (product.whopProductId) {
-              console.log('🔄 [ProductPageModal] Looking up resource by whopProductId:', product.whopProductId);
-              const lookupResponse = await fetch(`/api/resources/get-by-product?experienceId=${encodeURIComponent(experienceId)}&productId=${encodeURIComponent(product.whopProductId)}`, {
+            if (productId) {
+              console.log('🔄 [ProductPageModal] Looking up resource by product ID (same as Edit/Preview):', productId);
+              
+              const lookupResponse = await fetch(`/api/resources/get-by-product?experienceId=${encodeURIComponent(experienceId)}&productId=${encodeURIComponent(String(productId))}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
               });
@@ -343,14 +327,15 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
               if (lookupResponse.ok) {
                 const lookupData = await lookupResponse.json();
                 if (lookupData.resource) {
-                  finalPlanId = lookupData.resource.planId || lookupData.resource.plan_id;
+                  // Use resource values as fallback (same pattern as ProductEditorModal)
+                  finalPlanId = finalPlanId || lookupData.resource.planId || lookupData.resource.plan_id;
                   finalCheckoutId = finalCheckoutId || lookupData.resource.checkoutConfigurationId || lookupData.resource.checkout_configuration_id;
-                  console.log('✅ [ProductPageModal] Resource found by whopProductId, planId:', finalPlanId);
+                  console.log('✅ [ProductPageModal] Resource found (same as Edit/Preview), planId:', finalPlanId, 'checkoutConfig:', finalCheckoutId);
                 }
               }
             }
           } catch (error) {
-            console.error('❌ [ProductPageModal] Error looking up resource by whopProductId:', error);
+            console.error('❌ [ProductPageModal] Error looking up resource:', error);
           }
         }
         

@@ -107,30 +107,32 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 
 			{/* Bottom Section: Action Buttons - Always Horizontal Layout */}
 			<div className="flex items-center gap-2 sm:gap-3">
-				{/* Left Side: Orders Button */}
-				<div className="flex-shrink-0">
-					{onToggleOrders && (
-						<Button
-							size="3"
-							color="violet"
-							variant={showOrders ? "solid" : "surface"}
-							onClick={onToggleOrders}
-							className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50`}
-						>
-							<ShoppingBag
-								size={20}
-								strokeWidth={2.5}
-								className={`transition-transform duration-300 ${
-									showOrders ? "" : "group-hover:rotate-12"
-								}`}
-							/>
-							<span className="ml-2 font-semibold text-sm sm:text-base">Orders</span>
-						</Button>
-					)}
-				</div>
+				{/* Left Side: Orders Button - Only show for "store" context (Market Stall), not for "global" (Warehouse) or "funnel" (Merchant Market Stall) */}
+				{context === "store" && (
+					<div className="flex-shrink-0">
+						{onToggleOrders && (
+							<Button
+								size="3"
+								color="violet"
+								variant={showOrders ? "solid" : "surface"}
+								onClick={onToggleOrders}
+								className={`px-6 py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50`}
+							>
+								<ShoppingBag
+									size={20}
+									strokeWidth={2.5}
+									className={`transition-transform duration-300 ${
+										showOrders ? "" : "group-hover:rotate-12"
+									}`}
+								/>
+								<span className="ml-2 font-semibold text-sm sm:text-base">Orders</span>
+							</Button>
+						)}
+					</div>
+				)}
 
 				{/* Center: Theme Toggle - Hidden on mobile, visible on desktop */}
-				<div className="hidden sm:flex flex-1 justify-center">
+				<div className={`hidden sm:flex ${context === "store" ? "flex-1 justify-center" : "flex-1 justify-start"}`}>
 					<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 						<ThemeToggle />
 					</div>

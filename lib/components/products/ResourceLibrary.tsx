@@ -16,7 +16,6 @@ import { InsufficientProductsValidation } from "./InsufficientProductsValidation
 import { ResourceCreateForm } from "./forms/ResourceCreateForm";
 import { ResourceEditForm } from "./forms/ResourceEditForm";
 import { ResourceGrid } from "./ResourceGrid";
-import { OrdersTable } from "./OrdersTable";
 
 // Helper function to check if there's at least 1 free resource
 const hasAtLeastOneFreeResource = (funnel: any) => {
@@ -103,9 +102,6 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 
 	// Highlighting state for insufficient products validation
   const [highlightedCards, setHighlightedCards] = useState<string[]>([]);
-	
-	// Orders view state
-	const [showOrders, setShowOrders] = useState(false);
 	
 	// State for "Create Digital Assets" scenario
   const [showCreateAssets, setShowCreateAssets] = useState(false);
@@ -399,8 +395,6 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 						experienceId={user?.experienceId}
 						user={user}
 						onPurchaseSuccess={onPurchaseSuccess}
-						showOrders={showOrders}
-						onToggleOrders={() => setShowOrders(!showOrders)}
 					/>
 
 					{/* Delete Resource Modal */}
@@ -410,13 +404,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             onCancel={cancelDelete}
           />
 
-					{/* Orders View */}
-					{showOrders ? (
-						<OrdersTable experienceId={user?.experienceId} />
-					) : (
-						<>
-							{/* Error State */}
-							{error && (
+				{/* Error State */}
+				{error && (
 								<div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
 									<div className="flex items-center">
 										<div className="text-destructive font-medium">
@@ -519,12 +508,10 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             </div>
           )}
 
-					{/* Empty State */}
-					{!error && filteredResources.length === 0 && (
-						<LibraryEmptyState selectedCategory={selectedCategory} />
-					)}
-						</>
-					)}
+				{/* Empty State */}
+				{!error && filteredResources.length === 0 && (
+					<LibraryEmptyState selectedCategory={selectedCategory} />
+				)}
 				</div>
 			</div>
 
