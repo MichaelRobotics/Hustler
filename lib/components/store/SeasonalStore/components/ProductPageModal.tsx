@@ -309,29 +309,54 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
         let finalPlanId = planId;
         let finalCheckoutId = checkoutConfigurationId;
         
-        // If planId or checkoutConfigurationId is missing, lookup resource (same as Edit/Preview mode)
-        // This matches the pattern used in ProductEditorModal
+        // If planId or checkoutConfigurationId is missing, lookup resource from database
+        // For customer view, we need to retrieve the resource directly by its ID
         if ((!finalPlanId || !finalCheckoutId) && experienceId) {
           try {
-            // Use the same lookup pattern as ProductEditorModal: fetch by product ID or whopProductId
-            const productId = product.whopProductId || product.id;
+            // For customer view, use resourceId (UUID) directly if available
+            // This is the actual database resource ID, not the product ID
+            let lookupProductId: string | null = null;
             
-            if (productId) {
-              console.log('🔄 [ProductPageModal] Looking up resource by product ID (same as Edit/Preview):', productId);
-              
-              const lookupResponse = await fetch(`/api/resources/get-by-product?experienceId=${encodeURIComponent(experienceId)}&productId=${encodeURIComponent(String(productId))}`, {
+            // Priority 1: Use whopProductId if available (for Whop-synced products)
+            if (product.whopProductId) {
+              lookupProductId = product.whopProductId;
+              console.log('🔄 [ProductPageModal] Looking up resource by whopProductId:', lookupProductId);
+            }
+            // Priority 2: Use extracted resourceId (UUID) if product.id has "resource-" prefix
+            else if (resourceId) {
+              lookupProductId = resourceId;
+              console.log('🔄 [ProductPageModal] Looking up resource by resourceId (UUID):', lookupProductId);
+            }
+            // Priority 3: Use product.id as fallback
+            else if (product.id) {
+              lookupProductId = String(product.id);
+              console.log('🔄 [ProductPageModal] Looking up resource by product.id:', lookupProductId);
+            }
+            
+            if (lookupProductId) {
+              // Send POST request with JSON body (not query parameters)
+              const lookupResponse = await fetch(`/api/resources/get-by-product`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  productId: lookupProductId,
+                  experienceId: experienceId,
+                }),
               });
               
               if (lookupResponse.ok) {
                 const lookupData = await lookupResponse.json();
                 if (lookupData.resource) {
-                  // Use resource values as fallback (same pattern as ProductEditorModal)
+                  // Use resource values as fallback
                   finalPlanId = finalPlanId || lookupData.resource.planId || lookupData.resource.plan_id;
                   finalCheckoutId = finalCheckoutId || lookupData.resource.checkoutConfigurationId || lookupData.resource.checkout_configuration_id;
-                  console.log('✅ [ProductPageModal] Resource found (same as Edit/Preview), planId:', finalPlanId, 'checkoutConfig:', finalCheckoutId);
+                  console.log('✅ [ProductPageModal] Resource found from database, planId:', finalPlanId, 'checkoutConfig:', finalCheckoutId);
+                } else {
+                  console.warn('⚠️ [ProductPageModal] Resource lookup returned no resource data');
                 }
+              } else {
+                const errorText = await lookupResponse.text();
+                console.error('❌ [ProductPageModal] Resource lookup failed:', lookupResponse.status, errorText);
               }
             }
           } catch (error) {
