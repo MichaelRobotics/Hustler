@@ -568,9 +568,9 @@ const validateResourcesForGeneration = (resources: Resource[]): void => {
 		}
 
 		// Validate type is valid
-		if (!["LINK", "FILE"].includes(resource.type)) {
+		if (!["LINK", "FILE", "WHOP"].includes(resource.type)) {
 			throw new ValidationError(
-				`Invalid resource type for "${resource.name}": ${resource.type}. Must be "LINK" or "FILE"`
+				`Invalid resource type for "${resource.name}": ${resource.type}. Must be "LINK", "FILE", or "WHOP"`
 			);
 		}
 	});

@@ -124,10 +124,10 @@ async function createResourceHandler(
 			);
 		}
 
-		if (!["LINK", "FILE"].includes(input.type)) {
+		if (!["LINK", "FILE", "WHOP"].includes(input.type)) {
 			return createErrorResponse(
 				"INVALID_INPUT",
-				"Type must be either LINK or FILE",
+				"Type must be either LINK, FILE, or WHOP",
 			);
 		}
 
