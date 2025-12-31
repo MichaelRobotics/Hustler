@@ -109,7 +109,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 			<div className="flex items-center gap-2 sm:gap-3">
 				{/* Left Side: Orders Button - Only show for "store" context (Market Stall), not for "global" (Warehouse) or "funnel" (Merchant Market Stall) */}
 				{context === "store" && (
-					<div className="flex-shrink-0">
+				<div className="flex-shrink-0">
 						{onToggleOrders && (
 							<Button
 								size="3"

@@ -404,23 +404,23 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             onCancel={cancelDelete}
           />
 
-				{/* Error State */}
-				{error && (
-								<div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
-									<div className="flex items-center">
-										<div className="text-destructive font-medium">
-											Error loading resources
-										</div>
-										<button
-											onClick={fetchResources}
-											className="ml-auto text-sm text-destructive hover:underline"
-										>
-											Retry
-										</button>
-									</div>
-									<p className="text-sm text-muted-foreground mt-1">{error}</p>
+					{/* Error State */}
+					{error && (
+						<div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+							<div className="flex items-center">
+								<div className="text-destructive font-medium">
+									Error loading resources
 								</div>
-							)}
+								<button
+									onClick={fetchResources}
+									className="ml-auto text-sm text-destructive hover:underline"
+								>
+									Retry
+								</button>
+							</div>
+							<p className="text-sm text-muted-foreground mt-1">{error}</p>
+						</div>
+					)}
 
 					{/* Generation Sections - Only show in funnel context */}
 					{context === "funnel" && funnel && (
@@ -508,10 +508,10 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
             </div>
           )}
 
-				{/* Empty State */}
-				{!error && filteredResources.length === 0 && (
-					<LibraryEmptyState selectedCategory={selectedCategory} />
-				)}
+					{/* Empty State */}
+					{!error && filteredResources.length === 0 && (
+						<LibraryEmptyState selectedCategory={selectedCategory} />
+					)}
 				</div>
 			</div>
 

@@ -480,16 +480,16 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
               
               // Verify payment and extract planId
               try {
-                const response = await apiPost(
+      const response = await apiPost(
                   '/api/payments/retrieve',
                   { paymentId },
-                  experienceId
-                );
+        experienceId
+      );
 
-                if (!response.ok) {
-                  const errorData = await response.json();
+      if (!response.ok) {
+        const errorData = await response.json();
                   throw new Error(errorData.error || 'Failed to retrieve payment');
-                }
+      }
 
                 const payment = await response.json();
                 console.log('✅ [ProductPageModal] Payment retrieved:', payment);
@@ -522,27 +522,27 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
               console.error('❌ [ProductPageModal] Payment successful but no paymentId found in result:', result);
               setError('Payment completed but could not retrieve payment details. Please contact support or check your dashboard.');
             }
-          } else {
-            const errorMessage = result.error || "Payment failed";
+      } else {
+        const errorMessage = result.error || "Payment failed";
             console.error('❌ [ProductPageModal] Payment failed:', errorMessage);
-            
+
             // Show user-friendly error message
-            if (errorMessage.toLowerCase().includes("cancel")) {
+        if (errorMessage.toLowerCase().includes("cancel")) {
               // User cancelled - don't show error
               console.log('🔄 [ProductPageModal] Payment was cancelled by user');
             } else {
               let userFriendlyMessage = errorMessage;
               if (errorMessage.toLowerCase().includes("insufficient")) {
-                userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
-              } else if (errorMessage.toLowerCase().includes("declined")) {
-                userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
-              } else if (errorMessage.toLowerCase().includes("expired")) {
-                userFriendlyMessage = "Payment session expired. Please try again.";
-              } else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
-                userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
-              }
-              setError(userFriendlyMessage);
-            }
+          userFriendlyMessage = "Payment failed due to insufficient funds. Please try a different payment method.";
+        } else if (errorMessage.toLowerCase().includes("declined")) {
+          userFriendlyMessage = "Payment was declined. Please check your payment details and try again.";
+        } else if (errorMessage.toLowerCase().includes("expired")) {
+          userFriendlyMessage = "Payment session expired. Please try again.";
+        } else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("timeout")) {
+          userFriendlyMessage = "Network error occurred. Please check your connection and try again.";
+        }
+        setError(userFriendlyMessage);
+      }
           }
         } catch (error: any) {
           console.error('❌ [ProductPageModal] Error during purchase:', error);

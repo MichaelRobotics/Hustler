@@ -355,78 +355,78 @@ export const StoreResourceLibrary: React.FC<StoreResourceLibraryProps> = ({
             <OrdersTable experienceId={user?.experienceId} />
           ) : (
             <>
-              {/* Error State */}
-              {error && (
-                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
-                  <div className="flex items-center">
-                    <div className="text-destructive font-medium">
-                      Error loading resources
-                    </div>
-                    <button
-                      onClick={() => setError(null)}
-                      className="ml-auto text-sm text-destructive hover:underline"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">{error}</p>
+          {/* Error State */}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <div className="text-destructive font-medium">
+                  Error loading resources
                 </div>
-              )}
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-auto text-sm text-destructive hover:underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+            </div>
+          )}
 
-              {/* Create Product Form */}
-              {isCreatingNewProduct && (
-                <div data-create-form className="mt-8">
-                  <ResourceCreateForm
-                    onSave={handleSaveNewProduct}
-                    onCancel={handleCancelNewProduct}
-                    allResources={allResources}
-                    error={error}
-                    setError={setError}
-                    defaultCategory="PAID"
-                    experienceId={user?.experienceId}
-                  />
-                </div>
-              )}
+          {/* Create Product Form */}
+          {isCreatingNewProduct && (
+            <div data-create-form className="mt-8">
+              <ResourceCreateForm
+                onSave={handleSaveNewProduct}
+                onCancel={handleCancelNewProduct}
+                allResources={allResources}
+                error={error}
+                setError={setError}
+                defaultCategory="PAID"
+                experienceId={user?.experienceId}
+              />
+            </div>
+          )}
 
-              {/* Edit Product Form */}
-              {isEditingProduct && editingResource && (
-                <div className="mt-8">
-                  <ResourceEditForm
-                    resource={editingResource}
-                    onSave={handleSaveEditedProduct}
-                    onCancel={handleCancelEditProduct}
-                    allResources={allResources}
-                    error={error}
-                    setError={setError}
-                    experienceId={user?.experienceId}
-                  />
-                </div>
-              )}
+          {/* Edit Product Form */}
+          {isEditingProduct && editingResource && (
+            <div className="mt-8">
+              <ResourceEditForm
+                resource={editingResource}
+                onSave={handleSaveEditedProduct}
+                onCancel={handleCancelEditProduct}
+                allResources={allResources}
+                error={error}
+                setError={setError}
+                experienceId={user?.experienceId}
+              />
+            </div>
+          )}
 
-              {/* Resources Grid */}
-              {!error && (
-                <div className="mt-8">
-                  <StoreResourceGrid
-                    resources={paidResources}
-                    allResources={allResources}
-                    onEdit={handleStartEditProduct}
-                    onDelete={handleDeleteResource}
-                    onUpdate={handleSaveEditedProduct}
-                    removingResourceId={removingResourceId || undefined}
-                    highlightedCards={highlightedCards}
-                    themeContext={themeContext}
-                    onAddToTheme={onAddToTheme}
-                    onRemoveFromTheme={onRemoveFromTheme}
-                    isResourceInTheme={isResourceInTheme}
-                    editingResourceId={editingResource?.id || null}
-                    onReorder={handleReorder}
-                  />
-                </div>
-              )}
+          {/* Resources Grid */}
+          {!error && (
+            <div className="mt-8">
+              <StoreResourceGrid
+              resources={paidResources}
+              allResources={allResources}
+              onEdit={handleStartEditProduct}
+              onDelete={handleDeleteResource}
+              onUpdate={handleSaveEditedProduct}
+              removingResourceId={removingResourceId || undefined}
+              highlightedCards={highlightedCards}
+              themeContext={themeContext}
+              onAddToTheme={onAddToTheme}
+              onRemoveFromTheme={onRemoveFromTheme}
+              isResourceInTheme={isResourceInTheme}
+              editingResourceId={editingResource?.id || null}
+              onReorder={handleReorder}
+            />
+            </div>
+          )}
 
-              {/* Empty State */}
-              {!error && paidResources.length === 0 && (
-                <LibraryEmptyState selectedCategory="PAID" />
+          {/* Empty State */}
+          {!error && paidResources.length === 0 && (
+            <LibraryEmptyState selectedCategory="PAID" />
               )}
             </>
           )}

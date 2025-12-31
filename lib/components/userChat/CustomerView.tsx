@@ -958,28 +958,69 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 		
 		return (
-			<TemplateRenderer
-				liveTemplate={liveTemplate}
-				onProductClick={() => {
-					console.log('[CustomerView] Product clicked in template');
-				}}
-				onPromoClick={() => {
-					console.log('[CustomerView] Promo button clicked in template');
-				}}
-				isMobile={isMobile}
-				isFunnelActive={isFunnelActive || false}
-				funnelFlow={funnelFlow}
-				experienceId={experienceId}
-				userName={userName}
-				whopUserId={whopUserId}
-				onMessageSent={handleMessageSentInternal}
-				conversationId={conversationId || undefined}
-				conversation={conversation || undefined}
-				stageInfo={stageInfo || undefined}
-				userType={userType}
-				onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
-				onPurchaseSuccess={handleProductPurchaseSuccess}
-			/>
+			<div className="h-screen w-full relative flex flex-col">
+				{/* Admin Navbar - Movable overlay positioned at top navbar */}
+				{(userType === "admin" || userContext?.user?.accessLevel === "admin") && (
+					<div 
+						ref={navbarRef}
+						className="absolute z-[100] cursor-move"
+						style={{
+							left: navbarPosition.x === 0 ? '50%' : `${navbarPosition.x}px`,
+							top: navbarPosition.y === 0 ? '50%' : `${navbarPosition.y}px`,
+							transform: navbarPosition.x === 0 && navbarPosition.y === 0 
+								? 'translate(-50%, -50%)' 
+								: isDragging ? 'scale(1.02)' : 'scale(1)',
+							transition: isDragging ? 'none' : 'transform 0.2s ease-out'
+						}}
+						onMouseDown={handleDragStart}
+					>
+						<div className="bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-lg shadow-2xl">
+							{/* Drag handle */}
+							<div className="w-full h-4 bg-gradient-to-r from-blue-400 to-purple-500 rounded-t-lg cursor-move flex items-center justify-center">
+								<div className="w-8 h-1 bg-white/50 rounded-full"></div>
+							</div>
+							
+							<AdminNavbar
+								conversationId={conversationId}
+								stageInfo={stageInfo}
+								adminLoading={adminLoading}
+								adminError={adminError}
+								adminSuccess={adminSuccess}
+								onCheckStatus={checkConversationStatus}
+								onTriggerDM={triggerDMForAdmin}
+								onResetConversations={resetConversations}
+								experienceId={experienceId}
+								funnelFlow={funnelFlow}
+								user_id={userContext?.user_id}
+								company_id={userContext?.company_id}
+							/>
+						</div>
+					</div>
+				)}
+				
+				<TemplateRenderer
+					liveTemplate={liveTemplate}
+					onProductClick={() => {
+						console.log('[CustomerView] Product clicked in template');
+					}}
+					onPromoClick={() => {
+						console.log('[CustomerView] Promo button clicked in template');
+					}}
+					isMobile={isMobile}
+					isFunnelActive={isFunnelActive || false}
+					funnelFlow={funnelFlow}
+					experienceId={experienceId}
+					userName={userName}
+					whopUserId={whopUserId}
+					onMessageSent={handleMessageSentInternal}
+					conversationId={conversationId || undefined}
+					conversation={conversation || undefined}
+					stageInfo={stageInfo || undefined}
+					userType={userType}
+					onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
+					onPurchaseSuccess={handleProductPurchaseSuccess}
+				/>
+			</div>
 		);
 	}
 
@@ -1058,10 +1099,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			)}
 
 			{/* Admin Navbar - Movable overlay positioned at top navbar */}
-			{userType === "admin" && (
+			{(userType === "admin" || userContext?.user?.accessLevel === "admin") && (
 			<div 
 				ref={navbarRef}
-				className="absolute z-50 cursor-move"
+				className="absolute z-[100] cursor-move"
 				style={{
 					left: navbarPosition.x === 0 ? '50%' : `${navbarPosition.x}px`,
 					top: navbarPosition.y === 0 ? '50%' : `${navbarPosition.y}px`,
@@ -1078,20 +1119,20 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						<div className="w-8 h-1 bg-white/50 rounded-full"></div>
 					</div>
 					
-						<AdminNavbar
-							conversationId={conversationId}
-							stageInfo={stageInfo}
-							adminLoading={adminLoading}
-							adminError={adminError}
-							adminSuccess={adminSuccess}
-							onCheckStatus={checkConversationStatus}
-							onTriggerDM={triggerDMForAdmin}
-							onResetConversations={resetConversations}
+					<AdminNavbar
+						conversationId={conversationId}
+						stageInfo={stageInfo}
+						adminLoading={adminLoading}
+						adminError={adminError}
+						adminSuccess={adminSuccess}
+						onCheckStatus={checkConversationStatus}
+						onTriggerDM={triggerDMForAdmin}
+						onResetConversations={resetConversations}
 						experienceId={experienceId}
 						funnelFlow={funnelFlow}
 						user_id={userContext?.user_id}
 						company_id={userContext?.company_id}
-						/>
+					/>
 					</div>
 			</div>
 		)}

@@ -1405,7 +1405,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
   const openProductPageModal = useCallback((product: Product) => {
     setProductPageModal({ isOpen: true, product });
   }, []);
-
+  
   const closeProductPageModal = useCallback(() => {
     setProductPageModal({ isOpen: false, product: null });
   }, []);

@@ -148,13 +148,13 @@ export const ProductButtonSection: React.FC<ProductButtonSectionProps> = ({
         }
 
         console.warn('🔵 [ProductCard] No action available - button click does nothing. Product:', {
-          id: product.id,
-          name: product.name,
-          hasButtonLink: !!product.buttonLink,
-          productType: product.type,
+            id: product.id,
+            name: product.name,
+            hasButtonLink: !!product.buttonLink,
+            productType: product.type,
           hasCheckoutConfigurationId: !!checkoutConfigurationId,
-          fullProduct: product
-        });
+            fullProduct: product
+          });
       }}
       dangerouslySetInnerHTML={{ __html: buttonText }}
     >
