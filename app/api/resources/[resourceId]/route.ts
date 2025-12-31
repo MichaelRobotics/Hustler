@@ -34,13 +34,22 @@ async function updateResourceHandler(
 			);
 		}
 
-		const input = await request.json();
-
-		// Validation
-		if (input.type && !["LINK", "FILE"].includes(input.type)) {
+		let input;
+		try {
+			input = await request.json();
+		} catch (error) {
+			console.error("Error parsing request body:", error);
 			return createErrorResponse(
 				"INVALID_INPUT",
-				"Type must be either LINK or FILE",
+				"Invalid JSON in request body",
+			);
+		}
+
+		// Validation
+		if (input.type && !["LINK", "FILE", "WHOP"].includes(input.type)) {
+			return createErrorResponse(
+				"INVALID_INPUT",
+				"Type must be either LINK, FILE, or WHOP",
 			);
 		}
 
@@ -84,6 +93,13 @@ async function updateResourceHandler(
 		delete resourceData.promoCode; // Remove promoCode as it's not expected by the backend
 
 		// Update resource using server action
+		console.log("Updating resource:", {
+			resourceId,
+			experienceId,
+			userId: userContext.user.id,
+			inputKeys: Object.keys(resourceData),
+		});
+		
 		const updatedResource = await updateResource(
 			userContext.user,
 			resourceId,
@@ -96,6 +112,7 @@ async function updateResourceHandler(
 		);
 	} catch (error) {
 		console.error("Error updating resource:", error);
+		console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
 		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
 	}
 }
