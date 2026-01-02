@@ -183,11 +183,12 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 	}, []);
 
 	const triggerSync = useCallback(async () => {
-		if (!isAdmin) return;
 		setIsSyncing(true);
 		try {
 			const experienceId = experienceIdRef.current;
-			// Only sync memberships for the currently viewed user
+			// Sync memberships for the currently viewed user
+			// For customers: currentViewUserId is user.id (their own ID)
+			// For admins: currentViewUserId is selectedCustomerUser (could be themselves or another user)
 			const syncUrl = currentViewUserId
 				? `/api/customers-resources/sync?experienceId=${experienceId}&userId=${currentViewUserId}`
 				: `/api/customers-resources/sync?experienceId=${experienceId}`;
@@ -215,16 +216,16 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 		} finally {
 			setIsSyncing(false);
 		}
-	}, [isAdmin, currentViewUserId, fetchCustomerResources]);
+	}, [currentViewUserId, fetchCustomerResources]);
 
-	// Trigger sync on mount for admins (only once)
-	const hasSyncedRef = React.useRef(false);
+	// Trigger sync on mount for both admins and customers (only once per user)
+	const hasSyncedRef = React.useRef<Set<string>>(new Set());
 	useEffect(() => {
-		if (isAdmin && !hasSyncedRef.current) {
-			hasSyncedRef.current = true;
+		if (currentViewUserId && !hasSyncedRef.current.has(currentViewUserId)) {
+			hasSyncedRef.current.add(currentViewUserId);
 			triggerSync();
 		}
-	}, [isAdmin, triggerSync]);
+	}, [currentViewUserId, triggerSync]);
 
 	useEffect(() => {
 		if (currentViewUserId) {
@@ -241,8 +242,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 			onUserSelect(userId);
 		}
 		
-		// Trigger sync for the newly selected user
-		if (isAdmin) {
+		// Trigger sync for the newly selected user (admin only - customers can't select other users)
+		if (isAdmin && !hasSyncedRef.current.has(userId)) {
+			hasSyncedRef.current.add(userId);
 			setIsSyncing(true);
 			try {
 				const experienceId = experienceIdRef.current;
