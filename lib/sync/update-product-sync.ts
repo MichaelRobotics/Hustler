@@ -12,7 +12,12 @@ import { experiences, resources, users, plans } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct, type WhopApp } from "../whop-api-client";
 import { updateOriginTemplateFromProduct, shouldUpdateOriginTemplate, shouldCreateOriginTemplate, createOriginTemplateFromProduct } from "../services/origin-template-service";
 import { whopSdk } from "../whop-sdk";
+import { syncReviewsForProduct } from "../services/reviews-sync-service";
+import { syncPromosFromWhopAPI } from "../actions/seasonal-discount-actions";
+import { updateTemplatesWithProductData } from "../services/template-sync-service";
+import { syncAllPlanMemberCounts } from "../services/plan-member-sync-service";
 import { upsertPlansForProduct, ensurePlansExistForProduct } from "../actions/plan-actions";
+import { hasAnyPaidPlan } from "./product-category-helper";
 
 export interface ProductChange {
   type: 'created' | 'updated' | 'deleted';
@@ -124,7 +129,7 @@ export class UpdateProductSync {
         if (!currentResourcesMap.has(productId)) {
           result.changes.push({
             type: 'created',
-            category: product.isFree ? 'FREE_VALUE' : 'PAID',
+            category: (hasAnyPaidPlan(product) || (!product.isFree && product.price > 0)) ? 'PAID' : 'FREE_VALUE',
             name: product.title,
             whopProductId: productId,
           });
@@ -140,7 +145,7 @@ export class UpdateProductSync {
           if (changes && Object.keys(changes).length > 0) {
             result.changes.push({
               type: 'updated',
-              category: product.isFree ? 'FREE_VALUE' : 'PAID',
+              category: (hasAnyPaidPlan(product) || (!product.isFree && product.price > 0)) ? 'PAID' : 'FREE_VALUE',
               name: product.title,
               whopProductId: productId,
               changes,
@@ -164,17 +169,17 @@ export class UpdateProductSync {
         }
       });
 
-      // Check for missing plans for products (prod_*)
-      // This ensures resources with products have their plans synced
+      // Check for new/updated plans for products (prod_*)
+      // This ensures resources with products have their plans synced, including NEW plans
       // Check both: products from API and resources in DB
-      console.log(`[UPDATE-SYNC] 🔍 Checking for missing plans in resources with products...`);
+      console.log(`[UPDATE-SYNC] 🔍 Checking for new/updated plans in resources with products...`);
       
       // Get all resources with products (prod_*) from database
       const resourcesWithProducts = currentResources.filter(
         (r: any) => r.whopProductId?.startsWith('prod_') ?? false
       );
 
-      const missingPlansCheckPromises = resourcesWithProducts.map(async (resource: any) => {
+      const plansSyncPromises = resourcesWithProducts.map(async (resource: any) => {
         const productId = resource.whopProductId;
         if (!productId) return;
 
@@ -182,27 +187,33 @@ export class UpdateProductSync {
           // Try to get product data from API response first
           const productFromApi = whopProductsMap.get(productId);
           
-          // Use consolidated helper to check and sync plans
-          const result = await ensurePlansExistForProduct(
+          // Always use upsertPlansForProduct to detect and sync NEW plans
+          // This will upsert all plans from API, adding new ones and updating existing ones
+          await upsertPlansForProduct(
             productId,
             resource.id,
             user.experience.id,
             productFromApi?.plans,
           );
           
-          if (result.synced) {
-            console.log(`[UPDATE-SYNC] ⚠️ Synced ${result.planCount} plans for product ${productId} (resource ${resource.id})`);
-          } else {
-            console.log(`[UPDATE-SYNC] ✅ Plans already exist for product ${productId} (${result.planCount} plans found)`);
-          }
+          // Get count after sync to report
+          const syncedPlans = await db.query.plans.findMany({
+            where: and(
+              eq(plans.whopProductId, productId),
+              eq(plans.resourceId, resource.id),
+            ),
+            columns: { id: true },
+          });
+          
+          console.log(`[UPDATE-SYNC] ✅ Synced plans for product ${productId} (${syncedPlans.length} plans total)`);
         } catch (error) {
-          console.error(`[UPDATE-SYNC] Error checking/syncing plans for product ${productId}:`, error);
+          console.error(`[UPDATE-SYNC] Error syncing plans for product ${productId}:`, error);
           // Don't throw - continue with other products
         }
       });
 
-      await Promise.all(missingPlansCheckPromises);
-      console.log(`[UPDATE-SYNC] ✅ Completed missing plans check for ${resourcesWithProducts.length} products`);
+      await Promise.all(plansSyncPromises);
+      console.log(`[UPDATE-SYNC] ✅ Completed plans sync for ${resourcesWithProducts.length} products`);
 
       result.summary.total = result.changes.length;
       result.hasChanges = result.summary.total > 0;
@@ -291,6 +302,64 @@ export class UpdateProductSync {
       } catch (originTemplateError) {
         // Don't fail the update check if origin template creation/update fails
         console.error(`[UPDATE-SYNC] ⚠️ Error with origin template (non-critical):`, originTemplateError);
+      }
+
+      // Sync reviews, promo stock, and update templates
+      try {
+        console.log(`[UPDATE-SYNC] 🔄 Syncing reviews, promo stock, and updating templates...`);
+        
+        // Get all resources with whopProductId for this experience
+        const resourcesWithProducts = await db.query.resources.findMany({
+          where: and(
+            eq(resources.experienceId, user.experience.id),
+            isNotNull(resources.whopProductId)
+          ),
+          columns: {
+            id: true,
+            whopProductId: true,
+          },
+        });
+
+        // Sync reviews for each product (only for resources with whopProductId)
+        for (const resource of resourcesWithProducts) {
+          if (resource.whopProductId) {
+            try {
+              await syncReviewsForProduct(user.experience.id, resource.whopProductId, resource.id);
+            } catch (error) {
+              console.error(`[UPDATE-SYNC] ⚠️ Error syncing reviews for product ${resource.whopProductId}:`, error);
+            }
+          }
+          // Skip review sync for plan-only resources (reviews only in DB)
+        }
+
+        // Sync plan member counts (for plan-only resources)
+        try {
+          const planMemberSyncResult = await syncAllPlanMemberCounts(user.experience.id);
+          console.log(`[UPDATE-SYNC] ✅ Synced member counts for ${planMemberSyncResult.synced} plans`);
+          if (planMemberSyncResult.errors > 0) {
+            console.warn(`[UPDATE-SYNC] ⚠️ ${planMemberSyncResult.errors} errors during plan member count sync`);
+          }
+        } catch (error) {
+          console.error(`[UPDATE-SYNC] ⚠️ Error syncing plan member counts:`, error);
+        }
+
+        // Sync promo stock
+        try {
+          await syncPromosFromWhopAPI(user.experience.id, user.experience.whopCompanyId);
+        } catch (error) {
+          console.error(`[UPDATE-SYNC] ⚠️ Error syncing promo stock:`, error);
+        }
+
+        // Update templates with aggregated data
+        try {
+          const templateResult = await updateTemplatesWithProductData(user.experience.id);
+          console.log(`[UPDATE-SYNC] ✅ Updated ${templateResult.updated} templates`);
+        } catch (error) {
+          console.error(`[UPDATE-SYNC] ⚠️ Error updating templates:`, error);
+        }
+      } catch (syncError) {
+        // Don't fail the update check if reviews/promo/template sync fails
+        console.error(`[UPDATE-SYNC] ⚠️ Error during reviews/promo/template sync (non-critical):`, syncError);
       }
 
       return result;

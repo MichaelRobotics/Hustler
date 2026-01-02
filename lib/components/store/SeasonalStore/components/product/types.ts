@@ -25,7 +25,7 @@ export interface Product {
   imageAttachmentUrl?: string | null;
   whopProductId?: string;
   // Product type and file support
-  type?: "LINK" | "FILE";
+  type?: "LINK" | "FILE" | "WHOP";
   storageUrl?: string;
   productImages?: string[];
   // Badge support

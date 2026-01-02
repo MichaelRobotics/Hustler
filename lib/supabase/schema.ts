@@ -54,6 +54,11 @@ export const promoTypeEnum = pgEnum("promo_type", [
 	"percentage",
 	"flat_amount",
 ]);
+export const reviewStatusEnum = pgEnum("review_status", [
+	"pending",
+	"published",
+	"removed",
+]);
 
 
 // ===== CORE WHOP INTEGRATION TABLES =====
@@ -245,6 +250,7 @@ export const resources = pgTable(
 		planId: text("plan_id"), // Whop plan ID
 		purchaseUrl: text("purchase_url"), // Purchase URL from plan or checkout configuration
 		checkoutConfigurationId: text("checkout_configuration_id"), // Checkout configuration ID for resources created via checkout
+		sold: integer("sold"), // Number of sales/members from product.member_count
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -273,6 +279,43 @@ export const resources = pgTable(
 			table.experienceId,
 			table.displayOrder,
 		),
+		soldIdx: index("resources_sold_idx").on(table.sold),
+	}),
+);
+
+// ===== REVIEWS TABLE =====
+export const reviews = pgTable(
+	"reviews",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		resourceId: uuid("resource_id")
+			.references(() => resources.id, { onDelete: "cascade" }), // Nullable - may not have resource yet
+		whopProductId: text("whop_product_id"), // The Whop product ID (nullable - for plan-only resources)
+		planId: text("plan_id"), // Plan ID (nullable - for plan-only resources)
+		whopReviewId: text("whop_review_id").notNull(), // Unique review ID from Whop API (or generated for DB reviews)
+		title: text("title"), // Review title
+		description: text("description"), // Review description
+		stars: integer("stars").notNull(), // Rating 1-5
+		status: reviewStatusEnum("status").notNull(), // Review status: pending, published, removed
+		paidForProduct: boolean("paid_for_product"), // Whether user paid for product
+		userId: text("user_id").notNull(), // Whop user ID
+		userName: text("user_name"), // User name
+		userUsername: text("user_username"), // User username
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+		publishedAt: timestamp("published_at"), // When review was published
+		joinedAt: timestamp("joined_at"), // When user joined the product
+	},
+	(table) => ({
+		whopReviewIdIdx: index("reviews_whop_review_id_idx").on(table.whopReviewId),
+		whopProductIdIdx: index("reviews_whop_product_id_idx").on(table.whopProductId),
+		planIdIdx: index("reviews_plan_id_idx").on(table.planId),
+		experienceIdIdx: index("reviews_experience_id_idx").on(table.experienceId),
+		resourceIdIdx: index("reviews_resource_id_idx").on(table.resourceId),
+		whopReviewIdUnique: unique("reviews_whop_review_id_unique").on(table.whopReviewId),
 	}),
 );
 

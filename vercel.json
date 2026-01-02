@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/affiliate-dm",
       "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-reviews-sold-promos",
+      "schedule": "0 * * * *"
     }
   ]
 }

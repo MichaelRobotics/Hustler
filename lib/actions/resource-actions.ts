@@ -23,6 +23,7 @@ export interface CreateResourceInput {
 	planId?: string; // Whop plan ID (for products with plans)
 	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
 	checkoutConfigurationId?: string; // Checkout configuration ID (for resources created via checkout)
+	sold?: number | null; // Number of sales/members from product.member_count
 }
 
 export interface UpdateResourceInput {
@@ -242,6 +243,7 @@ export async function createResource(
 				storageUrl: input.storageUrl || null,
 				productImages: input.productImages && input.productImages.length > 0 ? input.productImages : null,
 				displayOrder: displayOrderValue,
+				sold: input.sold || null,
 			})
 			.returning();
 

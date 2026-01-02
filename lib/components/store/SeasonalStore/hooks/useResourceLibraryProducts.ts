@@ -23,6 +23,9 @@ export function useResourceLibraryProducts({
   const [resourceLibraryProducts, setResourceLibraryProducts] = useState<any[]>([]);
   const [hasLoadedResourceLibrary, setHasLoadedResourceLibrary] = useState(false);
   const lastProcessedProductsRef = useRef<string>('');
+  
+  // Convert Set to sorted array for stable dependency comparison
+  const deletedResourceLibraryProductsArray = Array.from(deletedResourceLibraryProducts).sort().join(',');
 
   // Load ResourceLibrary products on mount and when theme changes
   useEffect(() => {
@@ -38,9 +41,19 @@ export function useResourceLibraryProducts({
       buttonAnimColor: getButtonAnimColor(legacyTheme.accent),
     }));
     
-    setResourceLibraryProducts(productsWithAnimColor);
+    // Only update if the products actually changed
+    setResourceLibraryProducts((prev) => {
+      const prevSignature = JSON.stringify(prev.map(p => p.id).sort());
+      const newSignature = JSON.stringify(productsWithAnimColor.map(p => p.id).sort());
+      
+      if (prevSignature !== newSignature) {
+        return productsWithAnimColor;
+      }
+      return prev;
+    });
+    
     setHasLoadedResourceLibrary(true);
-  }, [experienceId, allResources, deletedResourceLibraryProducts, legacyTheme]);
+  }, [experienceId, allResources, deletedResourceLibraryProductsArray, legacyTheme, deletedResourceLibraryProducts]);
 
   // Restore buttonLinks from allResources if missing
   useEffect(() => {
@@ -88,8 +101,8 @@ export function useResourceLibraryProducts({
     });
     
     // Only update if there are actual changes
-    const hasUpdates = productsWithLinks.some((p: any, idx: number) => 
-      p.buttonLink && !resourceLibraryProducts[idx]?.buttonLink
+    const hasUpdates = productsWithLinks.some((p: any) => 
+      p.buttonLink && !resourceLibraryProducts.find((rp: any) => rp.id === p.id)?.buttonLink
     );
     
     if (hasUpdates) {
@@ -126,13 +139,17 @@ export function useResourceLibraryProducts({
     }
     
     // Update resourceLibraryProducts state only if there are changes
-    const resourceLibraryHasUpdates = productsWithLinks.some((p: any, idx: number) => 
-      p.buttonLink && !resourceLibraryProducts[idx]?.buttonLink
-    );
-    
-    if (resourceLibraryHasUpdates) {
-      setResourceLibraryProducts(productsWithLinks);
-    }
+    // Use functional update to avoid dependency on resourceLibraryProducts state
+    setResourceLibraryProducts((prev: any[]) => {
+      const resourceLibraryHasUpdates = productsWithLinks.some((p: any) => 
+        p.buttonLink && !prev.find((rp: any) => rp.id === p.id)?.buttonLink
+      );
+      
+      if (resourceLibraryHasUpdates) {
+        return productsWithLinks;
+      }
+      return prev;
+    });
   }, [products, allResources, setProducts]);
 
   const handleDeleteResourceLibraryProduct = useCallback((productId: string) => {

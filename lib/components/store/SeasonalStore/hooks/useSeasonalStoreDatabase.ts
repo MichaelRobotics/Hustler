@@ -234,7 +234,7 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
   // DERIVED STATE: Store content is ready when:
   // 1. Initial load is complete
   // 2. Not currently loading a template
-  // 3. Text content is actually present in state (not empty initial values)
+  // 3. Text content is actually present in state (not empty initial values) OR no template exists (newly installed app)
   // 4. If a template was pending, it must match currentlyLoadedTemplateId
   const isStoreContentReady = useMemo(() => {
     // Must have completed initial load
@@ -244,11 +244,16 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
     if (isLoadingTemplate) return false;
     
     // Must have actual text content (not just empty initial values)
+    // OR no template exists (for newly installed apps without templates)
     const hasTextContent = !!(
       fixedTextStyles.mainHeader?.content ||
       fixedTextStyles.headerMessage?.content ||
       fixedTextStyles.subHeader?.content
     );
+    
+    // For newly installed apps without templates, allow ready state even without text content
+    // This prevents the overlay from staying permanently
+    const hasNoTemplate = !currentlyLoadedTemplateId && !pendingTemplateId;
     
     // If we're waiting for a specific template, verify it's loaded
     if (pendingTemplateId && pendingTemplateId !== currentlyLoadedTemplateId) {
@@ -264,7 +269,8 @@ export const useSeasonalStoreDatabase = (experienceId: string) => {
       lastLoggedTemplateIdRef.current = currentlyLoadedTemplateId;
     }
     
-    return hasTextContent;
+    // Allow ready state if we have text content OR if there's no template (newly installed app)
+    return hasTextContent || hasNoTemplate;
   }, [isInitialLoadComplete, isLoadingTemplate, fixedTextStyles, pendingTemplateId, currentlyLoadedTemplateId]);
   
   // Store ResourceLibrary product IDs from loaded templates

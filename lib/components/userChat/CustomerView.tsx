@@ -764,7 +764,21 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 
 	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
+	// Also handle case when urlLoaded is true but iframeUrl is empty (no live template)
 	useEffect(() => {
+		// If urlLoaded is true but iframeUrl is empty, there's no template to load
+		// Remove overlay immediately in this case
+		if (urlLoaded && !iframeUrl && !iframeLoaded) {
+			console.log('🎭 No live template found, removing overlay immediately');
+			setOverlayTransitioning(true);
+			setTimeout(() => {
+				setIframeLoaded(true);
+				setOverlayTransitioning(false);
+			}, 500);
+			return;
+		}
+
+		// Fallback timer for when iframe should load but hasn't
 		const fallbackTimer = setTimeout(() => {
 			if (!iframeLoaded) {
 				setOverlayTransitioning(true);
@@ -779,7 +793,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}, 8000);
 
 		return () => clearTimeout(fallbackTimer);
-	}, [iframeLoaded]);
+	}, [iframeLoaded, urlLoaded, iframeUrl]);
 
 	const handleMessageSentInternal = (message: string, convId?: string) => {
 		console.log("Customer message:", {
@@ -998,28 +1012,28 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					</div>
 				)}
 				
-				<TemplateRenderer
-					liveTemplate={liveTemplate}
-					onProductClick={() => {
-						console.log('[CustomerView] Product clicked in template');
-					}}
-					onPromoClick={() => {
-						console.log('[CustomerView] Promo button clicked in template');
-					}}
-					isMobile={isMobile}
-					isFunnelActive={isFunnelActive || false}
-					funnelFlow={funnelFlow}
-					experienceId={experienceId}
-					userName={userName}
-					whopUserId={whopUserId}
-					onMessageSent={handleMessageSentInternal}
-					conversationId={conversationId || undefined}
-					conversation={conversation || undefined}
-					stageInfo={stageInfo || undefined}
-					userType={userType}
-					onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
+			<TemplateRenderer
+				liveTemplate={liveTemplate}
+				onProductClick={() => {
+					console.log('[CustomerView] Product clicked in template');
+				}}
+				onPromoClick={() => {
+					console.log('[CustomerView] Promo button clicked in template');
+				}}
+				isMobile={isMobile}
+				isFunnelActive={isFunnelActive || false}
+				funnelFlow={funnelFlow}
+				experienceId={experienceId}
+				userName={userName}
+				whopUserId={whopUserId}
+				onMessageSent={handleMessageSentInternal}
+				conversationId={conversationId || undefined}
+				conversation={conversation || undefined}
+				stageInfo={stageInfo || undefined}
+				userType={userType}
+				onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
 					onPurchaseSuccess={handleProductPurchaseSuccess}
-				/>
+			/>
 			</div>
 		);
 	}
@@ -1119,20 +1133,20 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						<div className="w-8 h-1 bg-white/50 rounded-full"></div>
 					</div>
 					
-					<AdminNavbar
-						conversationId={conversationId}
-						stageInfo={stageInfo}
-						adminLoading={adminLoading}
-						adminError={adminError}
-						adminSuccess={adminSuccess}
-						onCheckStatus={checkConversationStatus}
-						onTriggerDM={triggerDMForAdmin}
-						onResetConversations={resetConversations}
+						<AdminNavbar
+							conversationId={conversationId}
+							stageInfo={stageInfo}
+							adminLoading={adminLoading}
+							adminError={adminError}
+							adminSuccess={adminSuccess}
+							onCheckStatus={checkConversationStatus}
+							onTriggerDM={triggerDMForAdmin}
+							onResetConversations={resetConversations}
 						experienceId={experienceId}
 						funnelFlow={funnelFlow}
 						user_id={userContext?.user_id}
 						company_id={userContext?.company_id}
-					/>
+						/>
 					</div>
 			</div>
 		)}

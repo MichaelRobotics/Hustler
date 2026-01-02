@@ -113,7 +113,7 @@ export interface ProductLimits {
 }
 
 export interface CustomerResource {
-	id: string;
+	customer_resource_id: string; // ID from customers_resources table (NOT the resources table ID)
 	company_id: string;
 	experience_id: string;
 	user_id: string;

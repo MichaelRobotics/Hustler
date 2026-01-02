@@ -1888,6 +1888,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
           theme={legacyTheme}
           storeName={legacyTheme.name || "Store"}
           experienceId={experienceId}
+          disableImageEditing={effectiveIsStorePreview}
           checkoutConfigurationId={productPageModal.product.checkoutConfigurationId}
           planId={productPageModal.product.planId}
           onPurchaseSuccess={handleProductPurchaseSuccess}

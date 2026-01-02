@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { templates, experiences } from "@/lib/supabase/schema";
+import { templates, experiences, themes } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import {
   type AuthContext,
@@ -35,16 +35,43 @@ async function getLiveTemplateHandler(
       );
     }
 
-    // Get live template
-    const liveTemplate = await db.query.templates.findFirst({
-      where: and(
-        eq(templates.experienceId, experience.id),
-        eq(templates.isLive, true)
-      ),
-      with: {
-        theme: true,
-      },
-    });
+    // Get live template - try with theme relation first, fallback to without if it fails
+    let liveTemplate;
+    try {
+      liveTemplate = await db.query.templates.findFirst({
+        where: and(
+          eq(templates.experienceId, experience.id),
+          eq(templates.isLive, true)
+        ),
+        with: {
+          theme: true,
+        },
+      });
+    } catch (queryError) {
+      // If the relational query fails (e.g., connection issue), try without relation
+      console.warn('Error fetching template with theme relation, trying without:', queryError);
+      try {
+        liveTemplate = await db.query.templates.findFirst({
+          where: and(
+            eq(templates.experienceId, experience.id),
+            eq(templates.isLive, true)
+          ),
+        });
+        
+        // If we got a template without theme, try to fetch theme separately if needed
+        if (liveTemplate && liveTemplate.themeId) {
+          const theme = await db.query.themes.findFirst({
+            where: eq(themes.id, liveTemplate.themeId),
+          });
+          if (theme) {
+            liveTemplate = { ...liveTemplate, theme };
+          }
+        }
+      } catch (fallbackError) {
+        console.error('Error fetching template without relation:', fallbackError);
+        throw fallbackError;
+      }
+    }
 
     if (!liveTemplate) {
       return NextResponse.json({

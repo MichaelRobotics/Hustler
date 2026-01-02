@@ -6,3 +6,7 @@ CREATE INDEX IF NOT EXISTS "customers_resources_membership_product_id_idx" ON "c
 
 
 
+
+
+
+

@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
 			resourceType: string | null;
 			storageUrl: string | null;
 		}) => ({
-			id: row.customerResource.id,
+			customer_resource_id: row.customerResource.id, // ID from customers_resources table
 			company_id: row.customerResource.companyId,
 			experience_id: row.customerResource.experienceId,
 			user_id: row.customerResource.userId,

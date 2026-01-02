@@ -11,6 +11,7 @@ import { db } from "../supabase/db-server";
 import { experiences, resources, users, plans } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct } from "../whop-api-client";
 import { upsertPlansForProduct, ensurePlansExistForProduct, getPlansForProduct } from "../actions/plan-actions";
+import { hasAnyPaidPlan } from "./product-category-helper";
 
 export interface WhopProduct {
 	id: string;
@@ -36,6 +37,7 @@ export interface WhopProduct {
 	category?: string;
 	tags?: string[];
 	imageUrl?: string;
+	activeUsersCount?: number; // member_count from Whop API
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -188,6 +190,7 @@ export class WhopProductSync {
 				link: this.generateProductLink(whopProduct.id),
 				description: whopProduct.description || null,
 				whopProductId: whopProduct.id,
+				sold: whopProduct.activeUsersCount || null, // Map member_count to sold
 				updatedAt: new Date(),
 			};
 
@@ -326,6 +329,7 @@ export class WhopProductSync {
 				category: product.category,
 				tags: product.tags || [],
 				imageUrl: product.imageUrl,
+				activeUsersCount: product.activeUsersCount, // Include member_count for sold field
 				createdAt: product.createdAt ? new Date(product.createdAt) : new Date(),
 				updatedAt: product.updatedAt ? new Date(product.updatedAt) : new Date(),
 			}));
@@ -348,6 +352,11 @@ export class WhopProductSync {
 	 * Determine resource category based on product data
 	 */
 	private determineCategory(product: WhopProduct): "PAID" | "FREE_VALUE" {
+		// Check if product has any paid plan first
+		if (hasAnyPaidPlan(product)) {
+			return "PAID";
+		}
+		// Fall back to product-level price check
 		if (product.price && product.price > 0) {
 			return "PAID";
 		}

@@ -974,6 +974,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
           theme={convertThemeToLegacy(themeSnapshot) as LegacyTheme}
           storeName=""
           experienceId={experienceId}
+          disableImageEditing={true}
           checkoutConfigurationId={productPageModal.product.checkoutConfigurationId}
           planId={productPageModal.product.planId}
           onPurchaseSuccess={handleProductPurchaseSuccess}

@@ -11,6 +11,11 @@ import { whopSdk } from '@/lib/whop-sdk';
 import type { AuthenticatedUser } from '@/lib/context/user-context';
 import { upsertPlansForProduct, getPlansForProduct } from '@/lib/actions/plan-actions';
 import { updateResource } from '@/lib/actions/resource-actions';
+import { syncReviewsForProduct } from '@/lib/services/reviews-sync-service';
+import { syncPromosFromWhopAPI } from '@/lib/actions/seasonal-discount-actions';
+import { updateTemplatesWithProductData } from '@/lib/services/template-sync-service';
+import { isNotNull } from 'drizzle-orm';
+import { hasAnyPaidPlan } from '@/lib/sync/product-category-helper';
 
 /**
  * Apply specific changes detected by update sync
@@ -90,8 +95,9 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
       throw new Error(`Product ${whopProductId} not found in Whop API`);
   }
   
-  // Determine category based on product price/free status
-  const productCategory = product.isFree || product.price === 0 ? "FREE_VALUE" : "PAID";
+  // Check if product has any paid plan (renewal or one-time) with price > 0
+  const hasPaidPlan = hasAnyPaidPlan(product);
+  const productCategory = (hasPaidPlan || (!product.isFree && product.price > 0)) ? "PAID" : "FREE_VALUE";
   
   // Generate product link
   let trackingUrl: string;
@@ -193,7 +199,8 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     whopProductId: product.id,
     productApps: productCategory === "FREE_VALUE" ? [] : undefined,
     image: productImage,
-    price: formattedPrice
+    price: formattedPrice,
+    sold: product.activeUsersCount || null, // Map member_count to sold
   };
   const resource = await createResource(user, resourceInput);
   console.log(`[API] ✅ Created resource with link: ${resource.link}`);
@@ -279,8 +286,9 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     throw new Error(`Resource with whopProductId ${whopProductId} not found in database`);
   }
 
-  // Determine category based on product price/free status
-  const productCategory = product.isFree || product.price === 0 ? "FREE_VALUE" : "PAID";
+  // Check if product has any paid plan (renewal or one-time) with price > 0
+  const hasPaidPlan = hasAnyPaidPlan(product);
+  const productCategory = (hasPaidPlan || (!product.isFree && product.price > 0)) ? "PAID" : "FREE_VALUE";
   
   // Generate product link
   let trackingUrl: string;
@@ -345,6 +353,7 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
       description: product.description,
       image: productImage,
       price: formattedPrice,
+      sold: product.activeUsersCount || null, // Map member_count to sold
       updatedAt: new Date(),
     })
     .where(eq(resources.id, existingResource.id));
@@ -442,6 +451,52 @@ export const POST = withWhopAuth(async (request: NextRequest, context: AuthConte
       deleted: result.deleted,
       errorCount: result.errorCount,
     });
+
+    // Sync reviews, promo stock, and update templates after applying changes
+    try {
+      console.log('[API] 🔄 Syncing reviews, promo stock, and updating templates...');
+      
+      // Get all resources with whopProductId for this experience
+      const resourcesWithProducts = await db.query.resources.findMany({
+        where: and(
+          eq(resources.experienceId, userContext.user.experience.id),
+          isNotNull(resources.whopProductId)
+        ),
+        columns: {
+          id: true,
+          whopProductId: true,
+        },
+      });
+
+      // Sync reviews for each product
+      for (const resource of resourcesWithProducts) {
+        if (resource.whopProductId) {
+          try {
+            await syncReviewsForProduct(userContext.user.experience.id, resource.whopProductId, resource.id);
+          } catch (error) {
+            console.error(`[API] ⚠️ Error syncing reviews for product ${resource.whopProductId}:`, error);
+          }
+        }
+      }
+
+      // Sync promo stock
+      try {
+        await syncPromosFromWhopAPI(userContext.user.experience.id, userContext.user.experience.whopCompanyId);
+      } catch (error) {
+        console.error(`[API] ⚠️ Error syncing promo stock:`, error);
+      }
+
+      // Update templates with aggregated data
+      try {
+        const templateResult = await updateTemplatesWithProductData(userContext.user.experience.id);
+        console.log(`[API] ✅ Updated ${templateResult.updated} templates`);
+      } catch (error) {
+        console.error(`[API] ⚠️ Error updating templates:`, error);
+      }
+    } catch (syncError) {
+      // Don't fail the request if reviews/promo/template sync fails
+      console.error(`[API] ⚠️ Error during reviews/promo/template sync (non-critical):`, syncError);
+    }
     
     return NextResponse.json({
       success: true,

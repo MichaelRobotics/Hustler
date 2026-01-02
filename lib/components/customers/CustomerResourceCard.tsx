@@ -9,11 +9,17 @@ import { WHOP_ICON_URL } from "@/lib/constants/whop-icon";
 interface CustomerResourceCardProps {
 	resource: CustomerResource;
 	resourceType: "WHOP" | "LINK" | "FILE"; // Type determined from original resource
+	onOpenProductReview?: (companySlug: string) => void;
+	onOpenPlanReview?: (resourceId: string | undefined, planId: string) => void;
+	experienceId?: string;
 }
 
 export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 	resource,
 	resourceType,
+	onOpenProductReview,
+	onOpenPlanReview,
+	experienceId,
 }) => {
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const settingsRef = useRef<HTMLDivElement>(null);
@@ -41,10 +47,10 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 	const handleAction = (action: "cancel" | "delete") => {
 		if (action === "cancel") {
 			// TODO: Implement cancel membership logic
-			console.log("Cancel membership:", resource.id);
+			console.log("Cancel membership:", resource.customer_resource_id);
 		} else if (action === "delete") {
 			// TODO: Implement delete file logic
-			console.log("Delete file:", resource.id);
+			console.log("Delete file:", resource.customer_resource_id);
 		}
 		setIsSettingsOpen(false);
 	};
@@ -70,17 +76,66 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 		return `download-${timestamp}.bin`;
 	};
 
-	const handleDownload = () => {
-		if (!resource.storage_url) return;
-		
-		const filename = generateFilename();
-		const downloadUrl = `/api/download?url=${encodeURIComponent(resource.storage_url)}&filename=${encodeURIComponent(filename)}`;
-		window.open(downloadUrl, "_blank", "noopener,noreferrer");
+	const handleDownload = async () => {
+		// For FILE type with storage_url: download file first
+		if (resourceType === "FILE" && resource.storage_url) {
+			const filename = generateFilename();
+			const downloadUrl = `/api/download?url=${encodeURIComponent(resource.storage_url)}&filename=${encodeURIComponent(filename)}`;
+			
+			// Create a temporary anchor element to trigger download
+			const link = document.createElement('a');
+			link.href = downloadUrl;
+			link.download = filename;
+			link.target = '_blank';
+			link.style.display = 'none';
+			document.body.appendChild(link);
+			link.click();
+			
+			// Clean up the temporary element
+			setTimeout(() => {
+				document.body.removeChild(link);
+			}, 100);
+			
+			// Wait longer to ensure download has started before opening modal
+			// Use a longer delay to give the browser time to initiate the download
+			setTimeout(() => {
+				if (!resource.membership_product_id && resource.membership_plan_id && onOpenPlanReview) {
+					// Note: We don't pass customer_resource_id here since the API uses plan's resourceId
+					// The resourceId parameter is optional and will be ignored in favor of plan's resourceId
+					onOpenPlanReview(undefined, resource.membership_plan_id);
+				}
+			}, 500); // Increased from 100ms to 500ms to ensure download starts
+			return;
+		}
+
+		// For plan-only resources (no membership_product_id): open plan review modal
+		if (!resource.membership_product_id && resource.membership_plan_id && onOpenPlanReview) {
+			// Note: We don't pass customer_resource_id here since the API uses plan's resourceId
+			// The resourceId parameter is optional and will be ignored in favor of plan's resourceId
+			onOpenPlanReview(undefined, resource.membership_plan_id);
+		}
 	};
 
-	const handleUpgrade = () => {
-		// Placeholder - no action for now
-		console.log("Upgrade clicked (placeholder)");
+	const handleUpgrade = async () => {
+		// For resources with whopProductId: open product review modal via proxy
+		if (resource.membership_product_id && onOpenProductReview) {
+			// Fetch company slug from API
+			try {
+				const response = await fetch(`/api/company/route?experienceId=${encodeURIComponent(experienceId || '')}`);
+				if (response.ok) {
+					const data = await response.json();
+					if (data.route) {
+						onOpenProductReview(data.route);
+					} else {
+						console.error('Company route not found');
+					}
+				} else {
+					console.error('Failed to fetch company route');
+				}
+			} catch (error) {
+				console.error('Error fetching company route:', error);
+			}
+		}
 	};
 
 	const getTypeIcon = (type: string) => {
@@ -166,9 +221,28 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 					<Download className="w-4 h-4" strokeWidth={2.5} />
 					Download
 				</button>
-			) : resourceType === "WHOP" ? (
+			) : resourceType === "FILE" && !resource.storage_url && resource.membership_plan_id && !resource.membership_product_id ? (
+				// Plan-only FILE resource: show Download button that opens review modal
+				<button
+					onClick={handleDownload}
+					className="absolute top-3 right-3 z-10 inline-flex items-center gap-2 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg transition-colors duration-200 text-sm font-medium shadow-lg"
+				>
+					<Download className="w-4 h-4" strokeWidth={2.5} />
+					Download
+				</button>
+			) : resourceType === "WHOP" && resource.membership_product_id ? (
+				// WHOP resource with productId: show Upgrade button that opens product review modal
 				<button
 					onClick={handleUpgrade}
+					className="absolute top-3 right-3 z-10 inline-flex items-center gap-2 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg transition-colors duration-200 text-sm font-medium shadow-lg"
+				>
+					<Download className="w-4 h-4" strokeWidth={2.5} />
+					Upgrade
+				</button>
+			) : resourceType === "WHOP" && !resource.membership_product_id && resource.membership_plan_id ? (
+				// Plan-only WHOP resource: show Upgrade button that opens plan review modal
+				<button
+					onClick={handleDownload}
 					className="absolute top-3 right-3 z-10 inline-flex items-center gap-2 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg transition-colors duration-200 text-sm font-medium shadow-lg"
 				>
 					<Download className="w-4 h-4" strokeWidth={2.5} />

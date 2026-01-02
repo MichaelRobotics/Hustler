@@ -5,6 +5,8 @@ import { Heading, Text, Button, Card, Separator } from "frosted-ui";
 import { User, Link2, FileText, ArrowLeft, Loader2 } from "lucide-react";
 import { CustomerResourceCard } from "./CustomerResourceCard";
 import { UserSelectionDropdown } from "./UserSelectionDropdown";
+import { ProductReviewModal } from "./ProductReviewModal";
+import { PlanReviewModal } from "./PlanReviewModal";
 import { apiGet, apiPost } from "@/lib/utils/api-client";
 import type { AuthenticatedUser } from "@/lib/types/user";
 import type { CustomerResource } from "@/lib/types/resource";
@@ -33,6 +35,20 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 	const [error, setError] = useState<string | null>(null);
 	const [users, setUsers] = useState<Array<{ id: string; name: string; avatar?: string; whopUserId: string }>>([]);
 	const [selectedCustomerUser, setSelectedCustomerUser] = useState<string | null>(selectedUserIdProp ?? user.id);
+	
+	// Review modal state
+	const [productReviewModal, setProductReviewModal] = useState<{ isOpen: boolean; companySlug: string | null }>({
+		isOpen: false,
+		companySlug: null,
+	});
+	const [planReviewModal, setPlanReviewModal] = useState<{ isOpen: boolean; resourceId?: string | null; planId: string | null; resourceName?: string; companyLogo?: string }>({
+		isOpen: false,
+		resourceId: null,
+		planId: null,
+		resourceName: undefined,
+		companyLogo: undefined,
+	});
+	const [companyLogo, setCompanyLogo] = useState<string | null>(null);
 
 	const isAdmin = user.accessLevel === 'admin';
 	const currentViewUserId = isAdmin ? selectedCustomerUser : user.id;
@@ -148,6 +164,23 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 			hasScrolledRef.current = null;
 		}
 	}, [scrollToPlanId]); // Only depend on isAdmin
+
+	// Fetch company logo
+	useEffect(() => {
+		const fetchCompanyLogo = async () => {
+			try {
+				const experienceId = experienceIdRef.current;
+				const response = await apiGet('/api/company/route', experienceId);
+				if (response.ok) {
+					const data = await response.json();
+					setCompanyLogo(data.logo || null);
+				}
+			} catch (err) {
+				console.error('Error fetching company logo:', err);
+			}
+		};
+		fetchCompanyLogo();
+	}, []);
 
 	const triggerSync = useCallback(async () => {
 		if (!isAdmin) return;
@@ -359,7 +392,14 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 								</div>
 								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 									{memberships.map(resource => (
-										<CustomerResourceCard key={resource.id} resource={resource} resourceType={resource.resourceType || 'WHOP'} />
+										<CustomerResourceCard
+											key={resource.customer_resource_id}
+											resource={resource}
+											resourceType={resource.resourceType || 'WHOP'}
+											onOpenProductReview={(companySlug) => setProductReviewModal({ isOpen: true, companySlug })}
+											onOpenPlanReview={(resourceId, planId) => setPlanReviewModal({ isOpen: true, resourceId, planId, resourceName: resource.product_name, companyLogo: companyLogo || undefined })}
+											experienceId={user.experience.whopExperienceId}
+										/>
 									))}
 								</div>
 							</div>
@@ -378,7 +418,14 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 								</div>
 								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 									{files.map(resource => (
-										<CustomerResourceCard key={resource.id} resource={resource} resourceType={resource.resourceType || 'FILE'} />
+										<CustomerResourceCard
+											key={resource.customer_resource_id}
+											resource={resource}
+											resourceType={resource.resourceType || 'FILE'}
+											onOpenProductReview={(companySlug) => setProductReviewModal({ isOpen: true, companySlug })}
+											onOpenPlanReview={(resourceId, planId) => setPlanReviewModal({ isOpen: true, resourceId, planId, resourceName: resource.product_name, companyLogo: companyLogo || undefined })}
+											experienceId={user.experience.whopExperienceId}
+										/>
 									))}
 								</div>
 							</div>
@@ -388,6 +435,24 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 					</div>
 				</div>
 			</div>
+
+			{/* Review Modals */}
+			<ProductReviewModal
+				isOpen={productReviewModal.isOpen}
+				onClose={() => setProductReviewModal({ isOpen: false, companySlug: null })}
+				companySlug={productReviewModal.companySlug}
+				experienceId={user.experience.whopExperienceId}
+			/>
+			<PlanReviewModal
+				isOpen={planReviewModal.isOpen}
+				onClose={() => setPlanReviewModal({ isOpen: false, resourceId: null, planId: null })}
+				resourceId={planReviewModal.resourceId || undefined}
+				planId={planReviewModal.planId || ''}
+				resourceName={planReviewModal.resourceName}
+				experienceId={user.experience.whopExperienceId}
+				companyName={user.experience.name}
+				companyLogo={planReviewModal.companyLogo}
+			/>
 		</div>
 	);
 };

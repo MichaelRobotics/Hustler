@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button, Text } from 'frosted-ui';
 import { X, ArrowLeft, DollarSign, Gift, Download, Upload } from 'lucide-react';
 import { Product, LegacyTheme } from '../types';
 import { useSafeIframeSdk } from '../../../../hooks/useSafeIframeSdk';
-import { apiPost, apiPut } from '../../../../utils/api-client';
+import { apiGet, apiPost, apiPut } from '../../../../utils/api-client';
 import { useFileUpload } from '../../../../hooks/useFileUpload';
+import { PlanReviewModal } from '../../../customers/PlanReviewModal';
+import { Star } from 'lucide-react';
 
 interface ProductPageModalProps {
   isOpen: boolean;
@@ -17,6 +19,7 @@ interface ProductPageModalProps {
   storeName?: string;
   experienceId?: string;
   isEditMode?: boolean; // If true, clicking thumbnails swaps images. If false (preview), just changes displayed image
+  disableImageEditing?: boolean; // If true, hides upload and remove buttons (for CustomerView and Preview)
   onUserUpdate?: () => Promise<void>; // Callback to refresh user context after payment
   checkoutConfigurationId?: string; // Checkout configuration ID for inAppPurchase
   planId?: string; // Plan ID for inAppPurchase
@@ -32,6 +35,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
   storeName = "Store",
   experienceId,
   isEditMode = false, // Default to preview mode
+  disableImageEditing = false,
   onUserUpdate,
   checkoutConfigurationId,
   planId,
@@ -48,6 +52,28 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [productImages, setProductImages] = useState<string[]>(product.productImages || []);
   const [mainImageUrl, setMainImageUrl] = useState<string>(product.image || '');
+
+  // Reviews state
+  const [reviewsPreview, setReviewsPreview] = useState<Array<{
+    id: string;
+    title: string | null;
+    description: string | null;
+    stars: number;
+    userName: string | null;
+    createdAt: Date;
+  }>>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [planReviewModal, setPlanReviewModal] = useState<{
+    isOpen: boolean;
+    planId: string | null;
+    resourceId: string | null;
+    resourceName: string | null;
+  }>({
+    isOpen: false,
+    planId: null,
+    resourceId: null,
+    resourceName: null,
+  });
 
   // Extract resource ID from product.id
   // Handle both "resource-{id}" format and numeric IDs
@@ -79,6 +105,40 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
     ? (mainImageUrl || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp')
     : (thumbnailImages[selectedImageIndex] || mainImageUrl || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp');
 
+  // Fetch reviews preview
+  const fetchReviewsPreview = useCallback(async () => {
+    if (!planId || !experienceId) {
+      return;
+    }
+
+    setIsLoadingReviews(true);
+    try {
+      const url = new URL('/api/reviews', window.location.origin);
+      url.searchParams.set('planId', planId);
+      url.searchParams.set('experienceId', experienceId);
+      
+      const response = await apiGet(url.toString(), experienceId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Get first 3 reviews for preview
+        const preview = (data.reviews || []).slice(0, 3).map((review: any) => ({
+          id: review.id,
+          title: review.title,
+          description: review.description,
+          stars: review.stars,
+          userName: review.userName,
+          createdAt: new Date(review.createdAt),
+        }));
+        setReviewsPreview(preview);
+      }
+    } catch (err) {
+      console.error('Error fetching reviews preview:', err);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  }, [planId, experienceId]);
+
   // Clear error and sync state when modal opens
   // Skip this effect when purchase modal is open to prevent re-renders from interfering
   useEffect(() => {
@@ -95,6 +155,16 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
       setMainImageUrl(product.image || '');
     }
   }, [isOpen, product.productImages, product.image]);
+
+  // Fetch reviews when modal opens (if planId is available)
+  useEffect(() => {
+    if (isOpen && planId && experienceId) {
+      fetchReviewsPreview();
+    } else {
+      // Clear reviews when modal closes
+      setReviewsPreview([]);
+    }
+  }, [isOpen, planId, experienceId, fetchReviewsPreview]);
 
   // Handle image upload to thumbnail slots
   // slotIndex: 0-1 (for productImages array, since slot 0 is main image)
@@ -570,7 +640,8 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
   };
 
   // Apply ProductCard styles - use ONLY product styles, no theme fallback
-  const cardClass = product.cardClass || 'bg-amber-50/90 backdrop-blur-sm shadow-xl';
+  // Removed backdrop-blur to avoid rendering issues
+  const cardClass = product.cardClass || 'bg-amber-50/90 shadow-xl';
   const titleClass = product.titleClass || 'text-amber-900';
   const descClass = product.descClass || 'text-amber-900';
   const buttonClass = product.buttonClass || 'bg-emerald-600 hover:bg-emerald-700 text-white';
@@ -582,28 +653,40 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
   const backButtonTextClass = isDarkBackground ? 'text-gray-200 hover:text-white' : 'text-gray-700 hover:text-gray-900';
 
   // Memoize dialog content className to prevent re-renders when isPurchaseModalOpen changes
-  // This helps prevent interference with Whop SDK modal's internal state
-  // Add smooth transition classes for fade-out effect when purchase modal opens
+  // Simplified styling without scaling or blur to avoid rendering issues
   const dialogContentClassName = React.useMemo(() => {
-    const baseClasses = `fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] sm:w-full max-w-5xl ${cardClass} text-foreground shadow-2xl rounded-2xl overflow-hidden transition-all duration-300 ease-in-out`;
-    const zIndexClass = isPurchaseModalOpen ? 'z-[90] opacity-0 scale-95' : 'z-[100] opacity-100 scale-100';
+    const baseClasses = `fixed w-[calc(100%-2rem)] sm:w-full max-w-5xl ${cardClass} text-foreground shadow-2xl rounded-2xl overflow-hidden antialiased`;
+    const zIndexClass = isPurchaseModalOpen ? 'z-[90] opacity-0' : 'z-[100] opacity-100';
     return `${baseClasses} ${zIndexClass}`;
   }, [cardClass, isPurchaseModalOpen]);
   
   // Use inline style for pointer-events to avoid className changes that might cause re-renders
+  // Simple positioning with minimal transforms for crisp rendering
   const dialogContentStyle = React.useMemo(() => {
-    return isPurchaseModalOpen ? { pointerEvents: 'none' as const } : {};
+    const baseStyle: React.CSSProperties = {
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      WebkitFontSmoothing: 'antialiased',
+      MozOsxFontSmoothing: 'grayscale',
+      textRendering: 'optimizeLegibility',
+    };
+    if (isPurchaseModalOpen) {
+      return { ...baseStyle, pointerEvents: 'none' as const };
+    }
+    return baseStyle;
   }, [isPurchaseModalOpen]);
   
-  // Also fade out the overlay smoothly when purchase modal opens
+  // Simplified overlay without blur to avoid rendering issues
   const overlayClassName = React.useMemo(() => {
-    const baseClasses = 'fixed inset-0 backdrop-blur-md z-[100] transition-all duration-300 ease-in-out';
+    const baseClasses = 'fixed inset-0 z-[100]';
     return isPurchaseModalOpen 
       ? `${baseClasses} bg-black/40 opacity-0` 
       : `${baseClasses} bg-black/80 opacity-100`;
   }, [isPurchaseModalOpen]);
 
   return (
+    <>
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()} modal={!isPurchaseModalOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className={overlayClassName} />
@@ -776,7 +859,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
                             className="w-full h-full bg-cover bg-center"
                             style={{ backgroundImage: `url(${thumbnailUrl})` }}
                           />
-                          {!isFirstSlot && (
+                          {!isFirstSlot && !disableImageEditing && (
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -800,31 +883,33 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
                           )}
                         </button>
                       ) : (
-                        <label
-                          className={`w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors relative overflow-hidden ${
-                            fileUpload.isUploadingImage || isFirstSlot ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
-                        >
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file && !isFirstSlot) {
-                                handleThumbnailUpload(file, slotIndex - 1); // Adjust index for productImages array
-                              }
-                            }}
-                            disabled={fileUpload.isUploadingImage || isFirstSlot || isPurchaseModalOpen}
-                            className="hidden"
-                          />
-                          {fileUpload.isUploadingImage ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 dark:bg-gray-800/50">
-                              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                            </div>
-                          ) : (
-                            <Upload className="w-5 h-5 text-gray-400" />
-                          )}
-                        </label>
+                        !disableImageEditing && (
+                          <label
+                            className={`w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors relative overflow-hidden ${
+                              fileUpload.isUploadingImage || isFirstSlot ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file && !isFirstSlot) {
+                                  handleThumbnailUpload(file, slotIndex - 1); // Adjust index for productImages array
+                                }
+                              }}
+                              disabled={fileUpload.isUploadingImage || isFirstSlot || isPurchaseModalOpen}
+                              className="hidden"
+                            />
+                            {fileUpload.isUploadingImage ? (
+                              <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 dark:bg-gray-800/50">
+                                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                              </div>
+                            ) : (
+                              <Upload className="w-5 h-5 text-gray-400" />
+                            )}
+                          </label>
+                        )
                       )}
                     </div>
                   );
@@ -856,6 +941,105 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
                 }}
               />
 
+              {/* Reviews Preview - Only show if planId exists */}
+              {planId && (
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                  {isLoadingReviews ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : reviewsPreview.length > 0 ? (
+                    <>
+                      {/* Average rating and count */}
+                      <div className="flex items-center gap-2 mb-3">
+                        {(() => {
+                          const avgRating = reviewsPreview.reduce((sum, r) => sum + r.stars, 0) / reviewsPreview.length;
+                          const totalReviews = reviewsPreview.length;
+                          return (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                <span className={`text-sm font-semibold ${descClass}`}>
+                                  {avgRating.toFixed(1)}
+                                </span>
+                              </div>
+                              <span className={`text-sm ${descClass} opacity-70`}>
+                                ({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Review previews (2-3 reviews) */}
+                      <div className="space-y-3 mb-3">
+                        {reviewsPreview.map((review) => (
+                          <div key={review.id} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-0 last:pb-0">
+                            <div className="flex items-start gap-2 mb-1">
+                              <div className="flex items-center gap-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star
+                                    key={star}
+                                    className={`w-3 h-3 ${
+                                      star <= review.stars
+                                        ? 'fill-yellow-400 text-yellow-400'
+                                        : 'fill-gray-300 text-gray-300 dark:fill-gray-600 dark:text-gray-600'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span className={`text-xs ${descClass} opacity-70`}>
+                                {review.userName || 'Anonymous'}
+                              </span>
+                            </div>
+                            {review.title && (
+                              <p className={`text-sm font-medium ${descClass} mb-1`}>
+                                {review.title}
+                              </p>
+                            )}
+                            {review.description && (
+                              <p className={`text-xs ${descClass} opacity-80 line-clamp-2`}>
+                                {review.description}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* View all reviews button */}
+                      <button
+                        onClick={() => setPlanReviewModal({
+                          isOpen: true,
+                          planId: planId,
+                          resourceId: resourceId || null,
+                          resourceName: product.name,
+                        })}
+                        className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 ${descClass}`}
+                      >
+                        View all reviews
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <Text size="2" className={`${descClass} opacity-70`}>
+                        No reviews yet
+                      </Text>
+                      <button
+                        onClick={() => setPlanReviewModal({
+                          isOpen: true,
+                          planId: planId,
+                          resourceId: resourceId || null,
+                          resourceName: product.name,
+                        })}
+                        className={`mt-2 py-2 px-4 rounded-lg text-sm font-medium transition-colors border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 ${descClass}`}
+                      >
+                        Be the first to review
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Error Message */}
               {error && (
                 <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
@@ -867,7 +1051,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
               <button
                 onClick={handlePurchase}
                 disabled={isLoading}
-                className={`w-full py-1.5 px-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.03] ${buttonClass} shadow-xl ring-2 ring-offset-2 ring-offset-white ${
+                className={`w-full py-1.5 px-3 rounded-full font-bold uppercase tracking-wider ${buttonClass} shadow-xl ring-2 ring-offset-2 ring-offset-white ${
                   isLoading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -891,7 +1075,28 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+
     </Dialog.Root>
+
+    {/* Plan Review Modal - Outside ProductPageModal Dialog.Root to prevent conflicts */}
+    {planReviewModal.planId && (
+      <PlanReviewModal
+        isOpen={planReviewModal.isOpen}
+        onClose={() => setPlanReviewModal({
+          isOpen: false,
+          planId: null,
+          resourceId: null,
+          resourceName: null,
+        })}
+        resourceId={planReviewModal.resourceId || undefined}
+        planId={planReviewModal.planId}
+        resourceName={planReviewModal.resourceName || undefined}
+        experienceId={experienceId}
+        companyName={storeName}
+        readOnly={true}
+      />
+    )}
+    </>
   );
 };
 

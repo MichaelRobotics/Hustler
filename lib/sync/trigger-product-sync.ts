@@ -8,6 +8,11 @@ import { whopSdk } from "@/lib/whop-sdk";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 import { updateProductSync } from "./index";
 import { createOriginTemplateFromProduct, shouldCreateOriginTemplate } from "@/lib/services/origin-template-service";
+import { syncReviewsForProduct } from "@/lib/services/reviews-sync-service";
+import { syncAllPlanMemberCounts } from "@/lib/services/plan-member-sync-service";
+import { syncPromosFromWhopAPI } from "@/lib/actions/seasonal-discount-actions";
+import { updateTemplatesWithProductData } from "@/lib/services/template-sync-service";
+import { hasAnyPaidPlan } from "./product-category-helper";
 
 // App type classification based on name patterns
 function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
@@ -277,16 +282,33 @@ export async function triggerProductSyncForNewAdmin(
 				discoveryProducts = [];
 				syncState.errors.push("Circuit breaker open - discovery products fetch skipped");
 			} else {
-				// Add timeout to entire discovery products fetch
-				const discoveryTimeout = 60000; // 60 seconds total
-				discoveryProducts = await Promise.race([
-					whopClient.getCompanyProducts(),
-					new Promise<never>((_, reject) => 
-						setTimeout(() => reject(new Error(`Discovery products fetch timeout after ${discoveryTimeout}ms`)), discoveryTimeout)
-					)
-				]);
-				circuitBreaker.onSuccess();
-			console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
+				// Increased timeout for newly installed apps (they may have many products)
+				// Use 120 seconds (2 minutes) to allow for slower API responses
+				const discoveryTimeout = 120000; // 120 seconds total
+				
+				// Create a timeout promise that can be cleared
+				let timeoutId: NodeJS.Timeout | null = null;
+				const timeoutPromise = new Promise<never>((_, reject) => {
+					timeoutId = setTimeout(() => {
+						reject(new Error(`Discovery products fetch timeout after ${discoveryTimeout}ms`));
+					}, discoveryTimeout);
+				});
+				
+				try {
+					discoveryProducts = await Promise.race([
+						whopClient.getCompanyProducts().finally(() => {
+							// Clear timeout if the promise resolves/rejects before timeout
+							if (timeoutId) clearTimeout(timeoutId);
+						}),
+						timeoutPromise
+					]);
+					circuitBreaker.onSuccess();
+					console.log(`✅ Found ${discoveryProducts.length} discovery page products`);
+				} catch (raceError) {
+					// Clear timeout if it was the race error
+					if (timeoutId) clearTimeout(timeoutId);
+					throw raceError;
+				}
 			}
 		} catch (error) {
 			circuitBreaker.onFailure();
@@ -327,8 +349,9 @@ export async function triggerProductSyncForNewAdmin(
 				
 				// Process batch in parallel with individual error handling and retry logic
 				const batchPromises = batch.map(async (product) => {
-					// Determine category based on product price/free status
-					const productCategory = product.isFree || product.price === 0 ? "FREE_VALUE" : "PAID";
+					// Check if product has any paid plan (renewal or one-time) with price > 0
+					const hasPaidPlan = hasAnyPaidPlan(product);
+					const productCategory = (hasPaidPlan || (!product.isFree && product.price > 0)) ? "PAID" : "FREE_VALUE";
 					
 					try {
 						const cheapestPlan = whopClient.getCheapestPlan(product);
@@ -596,6 +619,73 @@ export async function triggerProductSyncForNewAdmin(
 			// Don't fail the sync if origin template creation fails
 			console.error(`[PRODUCT-SYNC] ⚠️ Error creating origin template (non-critical):`, originTemplateError);
 			syncState.errors.push(`Origin template creation failed: ${originTemplateError instanceof Error ? originTemplateError.message : 'Unknown error'}`);
+		}
+
+		// Step 7: Sync reviews, promo stock, and update templates
+		try {
+			console.log(`[PRODUCT-SYNC] 🔄 Syncing reviews, promo stock, and updating templates...`);
+			
+			// Get all resources with whopProductId for this experience
+			const resourcesWithProducts = await db.query.resources.findMany({
+				where: and(
+					eq(resources.experienceId, experienceId),
+					isNotNull(resources.whopProductId)
+				),
+				columns: {
+					id: true,
+					whopProductId: true,
+				},
+			});
+
+			// Sync reviews for each product (only for resources with whopProductId)
+			for (const resource of resourcesWithProducts) {
+				if (resource.whopProductId) {
+					try {
+						await syncReviewsForProduct(experienceId, resource.whopProductId, resource.id);
+					} catch (error) {
+						console.error(`[PRODUCT-SYNC] ⚠️ Error syncing reviews for product ${resource.whopProductId}:`, error);
+						syncState.errors.push(`Review sync failed for ${resource.whopProductId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+					}
+				}
+				// Skip review sync for plan-only resources (reviews only in DB)
+			}
+
+			// Sync plan member counts (for plan-only resources)
+			try {
+				const planMemberSyncResult = await syncAllPlanMemberCounts(experienceId);
+				console.log(`[PRODUCT-SYNC] ✅ Synced member counts for ${planMemberSyncResult.synced} plans`);
+				if (planMemberSyncResult.errors > 0) {
+					console.warn(`[PRODUCT-SYNC] ⚠️ ${planMemberSyncResult.errors} errors during plan member count sync`);
+					syncState.errors.push(`Plan member count sync had ${planMemberSyncResult.errors} errors`);
+				}
+			} catch (error) {
+				console.error(`[PRODUCT-SYNC] ⚠️ Error syncing plan member counts:`, error);
+				syncState.errors.push(`Plan member count sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+
+			// Sync promo stock
+			try {
+				await syncPromosFromWhopAPI(experienceId, companyId);
+			} catch (error) {
+				console.error(`[PRODUCT-SYNC] ⚠️ Error syncing promo stock:`, error);
+				syncState.errors.push(`Promo stock sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+
+			// Update templates with aggregated data
+			try {
+				const templateResult = await updateTemplatesWithProductData(experienceId);
+				console.log(`[PRODUCT-SYNC] ✅ Updated ${templateResult.updated} templates`);
+				if (templateResult.errors.length > 0) {
+					syncState.errors.push(...templateResult.errors);
+				}
+			} catch (error) {
+				console.error(`[PRODUCT-SYNC] ⚠️ Error updating templates:`, error);
+				syncState.errors.push(`Template update failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+		} catch (syncError) {
+			// Don't fail the sync if reviews/promo/template sync fails
+			console.error(`[PRODUCT-SYNC] ⚠️ Error during reviews/promo/template sync (non-critical):`, syncError);
+			syncState.errors.push(`Reviews/promo/template sync failed: ${syncError instanceof Error ? syncError.message : 'Unknown error'}`);
 		}
 
 	} catch (error) {

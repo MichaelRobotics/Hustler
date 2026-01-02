@@ -17,7 +17,7 @@ export interface Product {
   imageAttachmentUrl?: string | null;
   whopProductId?: string; // ID of the actual Whop product/app (for synced products)
   // Product type and file support
-  type?: "LINK" | "FILE"; // Product type: LINK for external links, FILE for downloadable files
+  type?: "LINK" | "FILE" | "WHOP"; // Product type: LINK for external links, FILE for downloadable files, WHOP for Whop products
   storageUrl?: string; // File download URL for FILE type products
   productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
   // Badge support

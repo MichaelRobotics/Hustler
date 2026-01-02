@@ -24,3 +24,7 @@ CREATE INDEX IF NOT EXISTS "customers_resources_membership_plan_id_idx" ON "cust
 
 
 
+
+
+
+
