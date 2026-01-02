@@ -44,122 +44,64 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
           const currentPort = window.location.port ? ':' + window.location.port : '';
           const currentOrigin = window.location.protocol + '//' + currentHost + currentPort;
           
-          // Helper function to convert localhost/proxy domain URLs to whop.com
-          function convertToWhop(urlString) {
-            if (!urlString || typeof urlString !== 'string') return urlString;
-            
-            try {
-              // Try to parse as absolute URL
-              let urlObj;
-              if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
-                urlObj = new URL(urlString);
-              } else {
-                // Relative URL, resolve against current origin
-                urlObj = new URL(urlString, currentOrigin);
-              }
-              
-              // Check if it's localhost, 127.0.0.1, or the proxy domain (apps.whop.com)
-              const isLocalhost = urlObj.hostname === 'localhost' || 
-                                 urlObj.hostname.startsWith('127.0.0.1') ||
-                                 urlObj.hostname === currentHost;
-              
-              const isProxyDomain = urlObj.hostname.includes('.apps.whop.com') ||
-                                   urlObj.hostname.includes('ut0jno2kq2s3xmlimb2g.apps.whop.com');
-              
-              // Convert to whop.com if it's localhost or proxy domain
-              if (isLocalhost || isProxyDomain) {
-                const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
-                console.log('✅ Converted URL to whop.com:', urlString, '->', whopUrl);
-                return whopUrl;
-              }
-            } catch (e) {
-              // If parsing fails, try simple string replacement
-              if (urlString.includes('localhost') || urlString.includes('.apps.whop.com')) {
-                const whopUrl = urlString.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
-                console.log('✅ Fallback: Converted URL to whop.com:', urlString, '->', whopUrl);
-                return whopUrl;
-              }
-            }
-            return urlString;
-          }
-          
           window.fetch = function(url, options) {
-            console.log('🔍 Fetch intercepted (early):', url);
-            
-            // Extract URL string from Request object if needed
-            let urlString = typeof url === 'string' ? url : (url instanceof Request ? url.url : String(url));
-            const originalUrlString = urlString;
-            
-            // FIRST: Convert any localhost/proxy domain URLs to whop.com BEFORE anything else
-            urlString = convertToWhop(urlString);
+            console.log('🔍 Fetch intercepted:', url);
             
             // Block problematic API calls that cause white flashes
-            const blockedPatterns = [
-              '/api/auth/token',
-              '/core/api/flags/experiment/',
-              '/api/v3/track/',
-              '/messages?',
-              '/_static/worker/',
-              '/_static/fonts/',
-              '/site.webmanifest',
-              '/schemaFilter.',
-              '/api/graphql/GenerateWebsocketJwt',
-              'FFF-AcidGrotesk-Bold.woff2',
-              '/_vercel/speed-insights/',
-              '/_next/static/chunks/ajs-destination'
-            ];
-            
-            const isBlocked = blockedPatterns.some(pattern => urlString.includes(pattern));
-            if (isBlocked) {
-              console.log('🚫 Blocked problematic API call:', urlString);
-              return Promise.resolve(new Response(JSON.stringify({ 
-                success: true, 
-                data: null,
-                message: 'Blocked for iframe compatibility'
-              }), {
-                status: 200,
-                statusText: 'OK',
-                headers: { 'Content-Type': 'application/json' }
-              }));
-            }
-            
-            // Update the url parameter if it was converted
-            if (urlString !== originalUrlString) {
-              console.log('✅ URL converted from', originalUrlString, 'to', urlString);
-              if (typeof url === 'string') {
-                url = urlString;
-              } else if (url instanceof Request) {
-                // Create new Request with updated URL, preserving all original Request properties
-                const requestInit = {
-                  method: url.method,
-                  headers: url.headers,
-                  body: url.bodyUsed ? null : url.body,
-                  mode: url.mode,
-                  credentials: url.credentials,
-                  cache: url.cache,
-                  redirect: url.redirect,
-                  referrer: url.referrer,
-                  integrity: url.integrity,
-                  keepalive: url.keepalive,
-                  signal: url.signal,
-                  ...options
-                };
-                url = new Request(urlString, requestInit);
+            if (typeof url === 'string') {
+              const blockedPatterns = [
+                '/api/auth/token',
+                '/core/api/flags/experiment/',
+                '/api/v3/track/',
+                '/messages?',
+                '/_static/worker/',
+                '/_static/fonts/',
+                '/site.webmanifest',
+                '/schemaFilter.',
+                '/api/graphql/GenerateWebsocketJwt',
+                'FFF-AcidGrotesk-Bold.woff2',
+                '/_vercel/speed-insights/',
+                '/_next/static/chunks/ajs-destination'
+              ];
+              
+              const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
+              if (isBlocked) {
+                console.log('🚫 Blocked problematic API call:', url);
+                // Return immediate mock response to prevent white flash
+                return Promise.resolve(new Response(JSON.stringify({ 
+                  success: true, 
+                  data: null,
+                  message: 'Blocked for iframe compatibility'
+                }), {
+                  status: 200,
+                  statusText: 'OK',
+                  headers: { 'Content-Type': 'application/json' }
+                }));
               }
-            }
-            
-            // Convert relative URLs to absolute for allowed requests
-            if (typeof url === 'string' && url.startsWith('/')) {
-              url = 'https://whop.com' + url;
-              urlString = url;
-              console.log('✅ Fetch converted to absolute URL:', url);
+              
+              // Convert proxy domain URLs to whop.com (for production)
+              if (url.includes('.apps.whop.com')) {
+                url = url.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
+                console.log('✅ Converted proxy domain URL to whop.com:', url);
+              }
+              
+              // Convert relative URLs to absolute for allowed requests
+              if (url.startsWith('/')) {
+                url = 'https://whop.com' + url;
+                console.log('✅ Fetch converted to absolute URL:', url);
+              } else if (url.includes('whop.com')) {
+                console.log('✅ Fetch already absolute URL:', url);
+              } else {
+                console.log('✅ Fetch external URL:', url);
+              }
             }
             
             // Handle the request and catch 404s gracefully
             return originalFetch.call(this, url, options)
               .then(response => {
                 if (!response.ok && response.status === 404) {
-                  console.log('⚠️ API endpoint not found (404):', urlString);
+                  console.log('⚠️ API endpoint not found (404):', url);
+                  // Return a mock response for 404s to prevent errors
                   return new Response(JSON.stringify({ error: 'Endpoint not available' }), {
                     status: 200,
                     statusText: 'OK',
@@ -169,7 +111,8 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
                 return response;
               })
               .catch(error => {
-                console.log('❌ Fetch error for:', urlString, error);
+                console.log('❌ Fetch error for:', url, error);
+                // Return a mock response for network errors
                 return new Response(JSON.stringify({ error: 'Network error' }), {
                   status: 200,
                   statusText: 'OK',
@@ -292,72 +235,49 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
           const originalXHROpen = XMLHttpRequest.prototype.open;
           const originalXHRSend = XMLHttpRequest.prototype.send;
           
-          XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-            console.log('🔍 XHR intercepted:', method, url);
-            
-            // Block problematic API calls that cause white flashes
-            if (typeof url === 'string') {
-              const blockedPatterns = [
-                '/api/auth/token',
-                '/core/api/flags/experiment/',
-                '/api/v3/track/',
-                '/messages?',
-                '/_static/worker/',
-                '/_static/fonts/',
-                '/site.webmanifest',
-                '/schemaFilter.',
-                '/api/graphql/GenerateWebsocketJwt',
-                'FFF-AcidGrotesk-Bold.woff2',
-                '/_vercel/speed-insights/',
-                '/_next/static/chunks/ajs-destination'
-              ];
+            XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+              console.log('🔍 XHR intercepted:', method, url);
               
-              const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
-              if (isBlocked) {
-                console.log('🚫 Blocked problematic XHR call:', url);
-                // Store the blocked state for later handling
-                this._isBlocked = true;
-                return originalXHROpen.call(this, method, url, async, user, password);
-              }
-              
-              // Handle review-related URLs that point to localhost/current host/proxy domain
-              const currentHost = window.location.hostname;
-              const currentPort = window.location.port ? ':' + window.location.port : '';
-              const currentOrigin = window.location.protocol + '//' + currentHost + currentPort;
-              
-              try {
-                const urlObj = new URL(url, currentOrigin);
-                const isLocalhost = urlObj.hostname === currentHost || 
-                                   urlObj.hostname === 'localhost' || 
-                                   urlObj.hostname.startsWith('127.0.0.1');
-                const isProxyDomain = urlObj.hostname.includes('.apps.whop.com');
+              // Block problematic API calls that cause white flashes
+              if (typeof url === 'string') {
+                const blockedPatterns = [
+                  '/api/auth/token',
+                  '/core/api/flags/experiment/',
+                  '/api/v3/track/',
+                  '/messages?',
+                  '/_static/worker/',
+                  '/_static/fonts/',
+                  '/site.webmanifest',
+                  '/schemaFilter.',
+                  '/api/graphql/GenerateWebsocketJwt',
+                  'FFF-AcidGrotesk-Bold.woff2',
+                  '/_vercel/speed-insights/',
+                  '/_next/static/chunks/ajs-destination'
+                ];
                 
-                if ((isLocalhost || isProxyDomain) && urlObj.pathname.includes('/reviews/')) {
-                  // Convert to whop.com URL
-                  const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
-                  url = whopUrl;
-                  console.log('✅ Converted review XHR URL to whop.com:', url);
-                } else if (isLocalhost || isProxyDomain) {
-                  // For other URLs (not reviews), also convert to whop.com if they're not API calls
-                  if (!urlObj.pathname.startsWith('/api/') && !urlObj.pathname.startsWith('/_next/') && !urlObj.pathname.startsWith('/_static/')) {
-                    const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
-                    url = whopUrl;
-                    console.log('✅ Converted XHR URL to whop.com:', url);
-                  }
+                const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
+                if (isBlocked) {
+                  console.log('🚫 Blocked problematic XHR call:', url);
+                  // Store the blocked state for later handling
+                  this._isBlocked = true;
+                  return originalXHROpen.call(this, method, url, async, user, password);
                 }
-              } catch (e) {
-                // URL parsing failed, continue with original logic
+                
+                // Convert proxy domain URLs to whop.com (for production)
+                if (url.includes('.apps.whop.com')) {
+                  url = url.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
+                  console.log('✅ Converted proxy domain XHR URL to whop.com:', url);
+                }
+                
+                // Convert relative URLs to absolute for allowed requests
+                if (url.startsWith('/')) {
+                  url = 'https://whop.com' + url;
+                  console.log('✅ XHR converted to absolute URL:', url);
+                }
               }
               
-              // Convert relative URLs to absolute for allowed requests
-              if (url.startsWith('/')) {
-                url = 'https://whop.com' + url;
-                console.log('✅ XHR converted to absolute URL:', url);
-              }
-            }
-            
-            return originalXHROpen.call(this, method, url, async, user, password);
-          };
+              return originalXHROpen.call(this, method, url, async, user, password);
+            };
           
           // Override XHR send to handle blocked requests and 404s gracefully
           XMLHttpRequest.prototype.send = function(data) {
