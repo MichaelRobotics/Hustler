@@ -29,11 +29,10 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
     .replace(/<meta[^>]*http-equiv="X-Frame-Options"[^>]*>/gi, '')
     // Remove Content-Security-Policy frame-ancestors
     .replace(/<meta[^>]*http-equiv="Content-Security-Policy"[^>]*frame-ancestors[^>]*>/gi, '')
-    // Add base tag to ensure proper resource loading
-    .replace(/<head>/i, '<head><base href="https://whop.com/">')
-    // Override document.baseURI to force absolute URLs
-    // CRITICAL: Inject fetch interception FIRST, before any other scripts
+    // CRITICAL: Inject base tag and fetch interception FIRST, before any other scripts
+    // Combine into single replace to avoid conflicts
     .replace(/<head>/i, `<head>
+      <base href="https://whop.com/">
       <script>
         // IMMEDIATE fetch interception - MUST run before ANY other scripts
         (function() {
@@ -45,41 +44,40 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
           const currentPort = window.location.port ? ':' + window.location.port : '';
           const currentOrigin = window.location.protocol + '//' + currentHost + currentPort;
           
-          // Helper function to convert localhost URLs to whop.com
-          function convertLocalhostToWhop(urlString) {
+          // Helper function to convert localhost/proxy domain URLs to whop.com
+          function convertToWhop(urlString) {
             if (!urlString || typeof urlString !== 'string') return urlString;
             
-            // Check if URL contains localhost (with or without port)
-            if (urlString.includes('localhost') || urlString.includes('127.0.0.1')) {
-              try {
-                // Try to parse as absolute URL
-                let urlObj;
-                if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
-                  urlObj = new URL(urlString);
-                } else {
-                  // Relative URL, resolve against current origin
-                  urlObj = new URL(urlString, currentOrigin);
-                }
-                
-                // Check if it's actually localhost
-                const isLocalhost = urlObj.hostname === 'localhost' || 
-                                   urlObj.hostname.startsWith('127.0.0.1') ||
-                                   urlObj.hostname === currentHost ||
-                                   urlObj.host.includes('localhost');
-                
-                if (isLocalhost) {
-                  // Convert to whop.com
-                  const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
-                  console.log('✅ Converted localhost URL to whop.com:', urlString, '->', whopUrl);
-                  return whopUrl;
-                }
-              } catch (e) {
-                // If parsing fails, try simple string replacement
-                if (urlString.includes('localhost')) {
-                  const whopUrl = urlString.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
-                  console.log('✅ Fallback: Converted localhost URL to whop.com:', urlString, '->', whopUrl);
-                  return whopUrl;
-                }
+            try {
+              // Try to parse as absolute URL
+              let urlObj;
+              if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
+                urlObj = new URL(urlString);
+              } else {
+                // Relative URL, resolve against current origin
+                urlObj = new URL(urlString, currentOrigin);
+              }
+              
+              // Check if it's localhost, 127.0.0.1, or the proxy domain (apps.whop.com)
+              const isLocalhost = urlObj.hostname === 'localhost' || 
+                                 urlObj.hostname.startsWith('127.0.0.1') ||
+                                 urlObj.hostname === currentHost;
+              
+              const isProxyDomain = urlObj.hostname.includes('.apps.whop.com') ||
+                                   urlObj.hostname.includes('ut0jno2kq2s3xmlimb2g.apps.whop.com');
+              
+              // Convert to whop.com if it's localhost or proxy domain
+              if (isLocalhost || isProxyDomain) {
+                const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
+                console.log('✅ Converted URL to whop.com:', urlString, '->', whopUrl);
+                return whopUrl;
+              }
+            } catch (e) {
+              // If parsing fails, try simple string replacement
+              if (urlString.includes('localhost') || urlString.includes('.apps.whop.com')) {
+                const whopUrl = urlString.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
+                console.log('✅ Fallback: Converted URL to whop.com:', urlString, '->', whopUrl);
+                return whopUrl;
               }
             }
             return urlString;
@@ -92,8 +90,8 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
             let urlString = typeof url === 'string' ? url : (url instanceof Request ? url.url : String(url));
             const originalUrlString = urlString;
             
-            // FIRST: Convert any localhost URLs to whop.com BEFORE anything else
-            urlString = convertLocalhostToWhop(urlString);
+            // FIRST: Convert any localhost/proxy domain URLs to whop.com BEFORE anything else
+            urlString = convertToWhop(urlString);
             
             // Block problematic API calls that cause white flashes
             const blockedPatterns = [
@@ -322,24 +320,29 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
                 return originalXHROpen.call(this, method, url, async, user, password);
               }
               
-              // Handle review-related URLs that point to localhost/current host
+              // Handle review-related URLs that point to localhost/current host/proxy domain
               const currentHost = window.location.hostname;
               const currentPort = window.location.port ? ':' + window.location.port : '';
               const currentOrigin = window.location.protocol + '//' + currentHost + currentPort;
               
               try {
                 const urlObj = new URL(url, currentOrigin);
-                if ((urlObj.hostname === currentHost || urlObj.hostname === 'localhost' || urlObj.hostname.startsWith('127.0.0.1')) && urlObj.pathname.includes('/reviews/')) {
+                const isLocalhost = urlObj.hostname === currentHost || 
+                                   urlObj.hostname === 'localhost' || 
+                                   urlObj.hostname.startsWith('127.0.0.1');
+                const isProxyDomain = urlObj.hostname.includes('.apps.whop.com');
+                
+                if ((isLocalhost || isProxyDomain) && urlObj.pathname.includes('/reviews/')) {
                   // Convert to whop.com URL
                   const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
                   url = whopUrl;
-                  console.log('✅ Converted localhost review XHR URL to whop.com:', url);
-                } else if (urlObj.hostname === currentHost || urlObj.hostname === 'localhost' || urlObj.hostname.startsWith('127.0.0.1')) {
-                  // For other localhost URLs (not reviews), also convert to whop.com if they're not API calls
+                  console.log('✅ Converted review XHR URL to whop.com:', url);
+                } else if (isLocalhost || isProxyDomain) {
+                  // For other URLs (not reviews), also convert to whop.com if they're not API calls
                   if (!urlObj.pathname.startsWith('/api/') && !urlObj.pathname.startsWith('/_next/') && !urlObj.pathname.startsWith('/_static/')) {
                     const whopUrl = 'https://whop.com' + urlObj.pathname + (urlObj.search || '') + (urlObj.hash || '');
                     url = whopUrl;
-                    console.log('✅ Converted localhost XHR URL to whop.com:', url);
+                    console.log('✅ Converted XHR URL to whop.com:', url);
                   }
                 }
               } catch (e) {
