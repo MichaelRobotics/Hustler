@@ -35,6 +35,7 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
       <base href="https://whop.com/">
       <script>
         // IMMEDIATE fetch interception - MUST run before ANY other scripts
+        // Run immediately, even before DOM is ready
         (function() {
           if (window.fetchIntercepted) return; // Prevent double interception
           window.fetchIntercepted = true;
@@ -44,55 +45,87 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
           const currentPort = window.location.port ? ':' + window.location.port : '';
           const currentOrigin = window.location.protocol + '//' + currentHost + currentPort;
           
+          console.log('🚀 Installing fetch interception immediately. Current origin:', currentOrigin);
+          
           window.fetch = function(url, options) {
-            console.log('🔍 Fetch intercepted:', url);
+            // Extract URL string from Request object if needed - do this FIRST
+            let urlString = typeof url === 'string' ? url : (url instanceof Request ? url.url : String(url));
+            const originalUrlString = urlString;
+            
+            console.log('🔍 Fetch intercepted:', urlString, '| Original:', originalUrlString);
             
             // Block problematic API calls that cause white flashes
-            if (typeof url === 'string') {
-              const blockedPatterns = [
-                '/api/auth/token',
-                '/core/api/flags/experiment/',
-                '/api/v3/track/',
-                '/messages?',
-                '/_static/worker/',
-                '/_static/fonts/',
-                '/site.webmanifest',
-                '/schemaFilter.',
-                '/api/graphql/GenerateWebsocketJwt',
-                'FFF-AcidGrotesk-Bold.woff2',
-                '/_vercel/speed-insights/',
-                '/_next/static/chunks/ajs-destination'
-              ];
-              
-              const isBlocked = blockedPatterns.some(pattern => url.includes(pattern));
-              if (isBlocked) {
-                console.log('🚫 Blocked problematic API call:', url);
-                // Return immediate mock response to prevent white flash
-                return Promise.resolve(new Response(JSON.stringify({ 
-                  success: true, 
-                  data: null,
-                  message: 'Blocked for iframe compatibility'
-                }), {
-                  status: 200,
-                  statusText: 'OK',
-                  headers: { 'Content-Type': 'application/json' }
-                }));
-              }
-              
-              // Convert proxy domain URLs to whop.com (for production)
-              if (url.includes('.apps.whop.com')) {
-                url = url.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
-                console.log('✅ Converted proxy domain URL to whop.com:', url);
-              }
-              
-              // Convert relative URLs to absolute for allowed requests
-              if (url.startsWith('/')) {
-                url = 'https://whop.com' + url;
-                console.log('✅ Fetch converted to absolute URL:', url);
-              } else if (url.includes('whop.com')) {
-                console.log('✅ Fetch already absolute URL:', url);
-              } else {
-                console.log('✅ Fetch external URL:', url);
+            const blockedPatterns = [
+              '/api/auth/token',
+              '/core/api/flags/experiment/',
+              '/api/v3/track/',
+              '/messages?',
+              '/_static/worker/',
+              '/_static/fonts/',
+              '/site.webmanifest',
+              '/schemaFilter.',
+              '/api/graphql/GenerateWebsocketJwt',
+              'FFF-AcidGrotesk-Bold.woff2',
+              '/_vercel/speed-insights/',
+              '/_next/static/chunks/ajs-destination'
+            ];
+            
+            const isBlocked = blockedPatterns.some(pattern => urlString.includes(pattern));
+            if (isBlocked) {
+              console.log('🚫 Blocked problematic API call:', urlString);
+              // Return immediate mock response to prevent white flash
+              return Promise.resolve(new Response(JSON.stringify({ 
+                success: true, 
+                data: null,
+                message: 'Blocked for iframe compatibility'
+              }), {
+                status: 200,
+                statusText: 'OK',
+                headers: { 'Content-Type': 'application/json' }
+              }));
+            }
+            
+            // Convert proxy domain URLs to whop.com (for production) - MUST happen before relative URL check
+            // Check for any proxy domain pattern or current host if it's a proxy domain
+            if (urlString.includes('.apps.whop.com') || 
+                (urlString.startsWith('http') && urlString.includes(currentHost) && currentHost.includes('.apps.whop.com')) ||
+                (urlString.includes(currentHost) && currentHost.includes('.apps.whop.com'))) {
+              // Replace the entire origin (protocol + host + port) with whop.com
+              urlString = urlString.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
+              console.log('✅ Converted proxy domain URL to whop.com:', originalUrlString, '->', urlString);
+            }
+            
+            // Convert relative URLs to absolute for allowed requests
+            if (urlString.startsWith('/')) {
+              urlString = 'https://whop.com' + urlString;
+              console.log('✅ Fetch converted to absolute URL:', urlString);
+            } else if (urlString.includes('whop.com')) {
+              console.log('✅ Fetch already absolute URL:', urlString);
+            } else {
+              console.log('✅ Fetch external URL:', urlString);
+            }
+            
+            // Update the url parameter if it was converted
+            if (urlString !== originalUrlString) {
+              if (typeof url === 'string') {
+                url = urlString;
+              } else if (url instanceof Request) {
+                // Create new Request with updated URL, preserving all original Request properties
+                const requestInit = {
+                  method: url.method,
+                  headers: url.headers,
+                  body: url.bodyUsed ? null : url.body,
+                  mode: url.mode,
+                  credentials: url.credentials,
+                  cache: url.cache,
+                  redirect: url.redirect,
+                  referrer: url.referrer,
+                  integrity: url.integrity,
+                  keepalive: url.keepalive,
+                  signal: url.signal,
+                  ...options
+                };
+                url = new Request(urlString, requestInit);
               }
             }
             
@@ -100,7 +133,7 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
             return originalFetch.call(this, url, options)
               .then(response => {
                 if (!response.ok && response.status === 404) {
-                  console.log('⚠️ API endpoint not found (404):', url);
+                  console.log('⚠️ API endpoint not found (404):', urlString);
                   // Return a mock response for 404s to prevent errors
                   return new Response(JSON.stringify({ error: 'Endpoint not available' }), {
                     status: 200,
@@ -111,7 +144,7 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
                 return response;
               })
               .catch(error => {
-                console.log('❌ Fetch error for:', url, error);
+                console.log('❌ Fetch error for:', urlString, error);
                 // Return a mock response for network errors
                 return new Response(JSON.stringify({ error: 'Network error' }), {
                   status: 200,
@@ -263,7 +296,7 @@ function modifyHtmlForIframe(html: string, companySlug: string | null): string {
                   return originalXHROpen.call(this, method, url, async, user, password);
                 }
                 
-                // Convert proxy domain URLs to whop.com (for production)
+                // Convert proxy domain URLs to whop.com (for production) - MUST happen before relative URL check
                 if (url.includes('.apps.whop.com')) {
                   url = url.replace(/https?:\/\/[^\/]+/, 'https://whop.com');
                   console.log('✅ Converted proxy domain XHR URL to whop.com:', url);
