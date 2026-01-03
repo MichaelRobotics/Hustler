@@ -3,7 +3,6 @@ import "frosted-ui/styles.css";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/components/common/ThemeProvider";
 import { WhopIframeSdkProvider } from "@whop/react";
-import { SafeWebsocketProvider } from "@/lib/components/providers/SafeWebsocketProvider";
 import type { Metadata, Viewport } from "next";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -42,11 +41,9 @@ export default function RootLayout({
 			</head>
 			<body>
 				<WhopIframeSdkProvider>
-					<SafeWebsocketProvider>
-						<ThemeProvider>
-							{children}
-						</ThemeProvider>
-					</SafeWebsocketProvider>
+					<ThemeProvider>
+						{children}
+					</ThemeProvider>
 				</WhopIframeSdkProvider>
 			</body>
 		</html>

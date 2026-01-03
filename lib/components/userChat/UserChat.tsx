@@ -10,7 +10,6 @@ import React, {
 	useMemo,
 } from "react";
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
-import { useServerMessages } from "../../hooks/useServerMessages";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 // Server-side functions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "../../types/funnel";
@@ -172,63 +171,62 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversation?.messages]);
 
-	// WebSocket integration for REAL-TIME updates only (receive-only)
-	console.log("🔌 [UserChat] WebSocket configuration:", {
-		conversationId: conversationId || "",
-		experienceId: experienceId || "",
-		userType: userType,
-		hasConversation: !!conversation,
-		conversationIdFromConversation: conversation?.id
-	});
+	// Polling for new messages (replaces WebSocket)
+	// Poll every 3 seconds for new admin/bot messages
+	const lastMessageCountRef = useRef(conversationMessages.length);
 	
-	// Use server messages hook for receiving WebSocket messages (server-side broadcasting)
-	useServerMessages({
-		conversationId: conversationId || "",
-		experienceId: experienceId || "",
-		onMessage: (serverMessage) => {
-			console.log("📨 [UserChat] Server WebSocket message received:", {
-				type: serverMessage.type,
-				conversationId: serverMessage.conversationId,
-				senderType: serverMessage.senderType,
-				content: serverMessage.content?.substring(0, 50) + "...",
-			});
-			
-			// Only process messages from other senders (admin/bot)
-			// Customer's own messages are added locally when sent
-			if (serverMessage.senderType === "customer") {
-				console.log("⚠️ [UserChat] Skipping own message from server");
-				return;
+	useEffect(() => {
+		if (!conversationId || !experienceId) return;
+		
+		const pollForNewMessages = async () => {
+			try {
+				const response = await apiPost('/api/userchat/load-conversation', {
+					conversationId,
+					experienceId,
+				}, experienceId);
+				
+				if (response.ok) {
+					const result = await response.json();
+					const conversationData = result.data || result;
+					if (conversationData.success && conversationData.conversation?.messages) {
+						const serverMessages = conversationData.conversation.messages;
+						
+						// Only update if we have new messages
+						if (serverMessages.length > lastMessageCountRef.current) {
+							console.log(`📨 [UserChat] Polling found ${serverMessages.length - lastMessageCountRef.current} new messages`);
+							
+							const formattedMessages = serverMessages.map((msg: any) => ({
+								id: msg.id,
+								type: msg.type,
+								content: msg.content,
+								metadata: msg.metadata,
+								createdAt: new Date(msg.createdAt || msg.timestamp),
+							}));
+							
+							setConversationMessages(formattedMessages);
+							lastMessageCountRef.current = serverMessages.length;
+							scrollToBottom();
+							
+							// Check for stage changes
+							if (conversationData.conversation.currentStage) {
+								const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
+									detail: { newStage: conversationData.conversation.currentStage }
+								});
+								window.dispatchEvent(stageUpdateEvent);
+							}
+						}
+					}
+				}
+			} catch (error) {
+				console.error("[UserChat] Polling error:", error);
 			}
-			
-			// Check if message already exists locally
-			const messageExists = conversationMessages.some(msg => 
-				msg.content === serverMessage.content && 
-				msg.type === (serverMessage.senderType === "bot" ? "bot" : "user") &&
-				Math.abs(new Date(msg.createdAt).getTime() - new Date(serverMessage.timestamp).getTime()) < 5000
-			);
-			
-			if (!messageExists && serverMessage.content) {
-				console.log("✅ [UserChat] New server message detected, adding...");
-				setConversationMessages(prev => [...prev, {
-					id: serverMessage.messageId || `ws-${Date.now()}`,
-					type: serverMessage.senderType === "bot" ? "bot" as const : serverMessage.senderType === "admin" ? "bot" as const : "user" as const,
-					content: serverMessage.content || "",
-					metadata: serverMessage.metadata,
-					createdAt: new Date(serverMessage.timestamp),
-				}]);
-				scrollToBottom();
-			}
-		},
-		onStageTransition: (currentStage, previousStage) => {
-			console.log("🔄 [UserChat] Stage transition detected:", { currentStage, previousStage });
-			
-			// Dispatch custom event for progress bar update
-			const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
-				detail: { newStage: currentStage }
-			});
-			window.dispatchEvent(stageUpdateEvent);
-		},
-	});
+		};
+		
+		// Poll every 3 seconds
+		const pollInterval = setInterval(pollForNewMessages, 3000);
+		
+		return () => clearInterval(pollInterval);
+	}, [conversationId, experienceId, scrollToBottom]);
 
 	// Refresh conversation data when WebSocket receives new messages (optimized)
 	const refreshConversation = useCallback(async () => {
@@ -319,7 +317,7 @@ const UserChat: React.FC<UserChatProps> = ({
 					const result = await response.json();
 					console.log("Message processed through funnel:", result);
 					
-					// Note: Server broadcasts messages via WebSocket, so bot response will arrive via useServerMessages
+					// Note: Bot response will be picked up by polling
 					// But we also add it locally for immediate feedback
 					const funnelResponse = result.data?.funnelResponse || result.funnelResponse;
 					if (funnelResponse?.botMessage) {

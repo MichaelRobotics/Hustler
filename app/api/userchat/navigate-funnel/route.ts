@@ -9,7 +9,6 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 import { whopSdk } from "@/lib/whop-sdk";
-import { sendBotMessage, sendStageTransition } from "@/lib/services/websocket-service";
 
 /**
  * Look up resource by name and experience ID
@@ -503,7 +502,7 @@ async function processFunnelNavigation(
       botMessage = formattedMessage;
 
       // Record bot message
-      const [savedBotMessage] = await db.insert(messages).values({
+      await db.insert(messages).values({
         conversationId: conversationId,
         type: "bot",
         content: formattedMessage,
@@ -513,24 +512,7 @@ async function processFunnelNavigation(
         },
       }).returning();
 
-      // Broadcast bot message via WebSocket
-      try {
-        console.log(`[navigate-funnel] Broadcasting bot message via WebSocket`);
-        await sendBotMessage({
-          experienceId: conversation.experience?.whopExperienceId || conversation.experienceId,
-          conversationId: conversationId,
-          messageId: savedBotMessage.id,
-          content: formattedMessage,
-          targetUserId: conversation.whopUserId,
-          metadata: {
-            blockId: nextBlockId ?? undefined,
-          },
-        });
-        console.log(`[navigate-funnel] ✅ Bot message broadcast successful`);
-      } catch (wsError) {
-        console.warn(`[navigate-funnel] WebSocket broadcast failed:`, wsError);
-        // Don't fail the navigation if WebSocket fails
-      }
+      console.log(`[navigate-funnel] ✅ Bot message saved`);
 
       // Increment sends counter for the funnel
       try {
@@ -547,7 +529,7 @@ async function processFunnelNavigation(
       }
     }
 
-    // Prepare stage transition data and broadcast via WebSocket
+    // Prepare stage transition data (returned for polling clients)
     let stageTransition = null;
     if (previousStage !== currentStage && botMessage) {
       stageTransition = {
@@ -558,28 +540,14 @@ async function processFunnelNavigation(
         isDMFunnelActive: true
       };
       
-      console.log(`[NAVIGATE-FUNNEL] Stage transition detected: ${previousStage} -> ${currentStage}`);
-
-      // Broadcast stage transition via WebSocket
-      try {
-        await sendStageTransition({
-          experienceId: conversation.experience?.whopExperienceId || conversation.experienceId,
-          conversationId: conversationId,
-          targetUserId: conversation.whopUserId,
-          currentStage,
-          previousStage,
-        });
-        console.log(`[NAVIGATE-FUNNEL] ✅ Stage transition broadcast successful`);
-      } catch (wsError) {
-        console.warn(`[NAVIGATE-FUNNEL] Stage transition WebSocket broadcast failed:`, wsError);
-      }
+      console.log(`[NAVIGATE-FUNNEL] Stage transition: ${previousStage} -> ${currentStage}`);
     }
 
     return {
       conversation: updatedConversation[0],
       nextBlockId,
       botMessage,
-      stageTransition, // Include stage transition data for frontend WebSocket broadcasting
+      stageTransition,
     };
 
   } catch (error) {

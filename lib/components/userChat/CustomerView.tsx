@@ -12,7 +12,6 @@ import { Text, Button } from "frosted-ui";
 import { MessageSquare, Play, RotateCcw, Settings, User, MessageCircle, Sun, Moon } from "lucide-react";
 import FunnelProgressBar from "./FunnelProgressBar";
 import { ThemeToggle } from "../common/ThemeToggle";
-import { useServerMessages, type ServerMessage } from "../../hooks/useServerMessages";
 import { useTheme } from "../common/ThemeProvider";
 import { TemplateRenderer } from "./TemplateRenderer";
 import { CustomerDashboard } from "../customers/CustomerDashboard";
@@ -141,37 +140,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// Theme state
 	const { appearance, toggleTheme } = useTheme();
 
-	// WebSocket integration for receiving server-side messages (receive-only)
-	useServerMessages({
-		conversationId: conversationId || "",
-		experienceId: experienceId || "",
-		onMessage: (serverMessage: ServerMessage) => {
-			console.log("📨 [CustomerView] Server WebSocket message received:", {
-				type: serverMessage.type,
-				conversationId: serverMessage.conversationId,
-				senderType: serverMessage.senderType,
-				content: serverMessage.content?.substring(0, 50) + "...",
-			});
-			
-			// Messages are already handled by UserChat component
-			// This is mainly for stage transition updates at the CustomerView level
-		},
-		onStageTransition: (currentStage: string, previousStage: string) => {
-			console.log("🔄 [CustomerView] Stage transition detected:", { currentStage, previousStage });
-			
-			// Update stageInfo state to trigger progress bar update
-			setStageInfo(prev => prev ? {
-				...prev,
-				currentStage
-			} : null);
-			
-			// Dispatch custom event for progress bar update
-			const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
-				detail: { newStage: currentStage }
-			});
-			window.dispatchEvent(stageUpdateEvent);
-		},
-	});
+	// Stage updates are handled by UserChat polling, which dispatches 'funnel-stage-update' events
+	// Listen for those events to update the progress bar
+	useEffect(() => {
+		const handleStageUpdate = (event: CustomEvent) => {
+			const { newStage } = event.detail;
+			console.log("🔄 [CustomerView] Stage update event received:", newStage);
+			setStageInfo(prev => prev ? { ...prev, currentStage: newStage } : null);
+		};
+		
+		window.addEventListener('funnel-stage-update', handleStageUpdate as EventListener);
+		return () => window.removeEventListener('funnel-stage-update', handleStageUpdate as EventListener);
+	}, []);
 
 	// Unified view mode handler with predictable transitions
 	const handleViewToggle = useCallback(() => {

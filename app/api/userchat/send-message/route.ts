@@ -9,12 +9,11 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import { validateConversationId, validateMessageContent } from "@/lib/middleware/request-validator";
-import { sendChatMessage } from "@/lib/services/websocket-service";
 
 /**
  * Send customer message API
  * 
- * Saves message to database and broadcasts via WebSocket for real-time delivery.
+ * Saves message to database. Updates are fetched via polling.
  * Used by UserChat when customer sends a message.
  */
 async function sendMessageHandler(
@@ -141,19 +140,7 @@ async function sendMessageHandler(
       .set({ updatedAt: new Date() })
       .where(eq(conversations.id, sanitizedConversationId));
 
-    // Broadcast message via WebSocket for real-time delivery
-    console.log(`[send-message] Broadcasting message via WebSocket to experience ${whopExperienceId}`);
-    
-    await sendChatMessage({
-      experienceId: whopExperienceId,
-      conversationId: sanitizedConversationId,
-      messageId: savedMessage.id,
-      content: sanitizedContent,
-      senderId: whopUserId,
-      senderType: "customer",
-    });
-
-    console.log(`[send-message] ✅ Message sent and broadcast successfully`);
+    console.log(`[send-message] ✅ Message saved successfully`);
 
     return createSuccessResponse({
       messageId: savedMessage.id,

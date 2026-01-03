@@ -40,7 +40,6 @@ import { ThemeToggle } from "../common/ThemeToggle";
 import ConversationList from "./ConversationList";
 import LiveChatHeader from "./LiveChatHeader";
 import LiveChatView from "./LiveChatView";
-import { useExperienceMessages, type ServerMessage } from "../../hooks/useServerMessages";
 import type { AuthenticatedUser } from "../../types/user";
 import { apiGet, apiPost } from "../../utils/api-client";
 // Database actions moved to API routes to avoid client-side imports
@@ -118,59 +117,65 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		}
 	}, [user]);
 
-	// Track WebSocket connection state for UI
-	const [isConnected, setIsConnected] = useState(true);
+	// Polling state for new messages
+	const lastConversationUpdateRef = useRef<Map<string, number>>(new Map());
 
-	// WebSocket integration for receiving server-side messages (receive-only)
-	useExperienceMessages({
-		experienceId: experienceId,
-		onMessage: (serverMessage: ServerMessage) => {
-			console.log("📨 [LiveChat] Server WebSocket message received:", {
-				type: serverMessage.type,
-				conversationId: serverMessage.conversationId,
-				senderType: serverMessage.senderType,
-				content: serverMessage.content?.substring(0, 50) + "...",
-			});
-			
-			// Skip messages we sent (admin messages) - they're already added optimistically
-			if (serverMessage.senderType === "admin") {
-				console.log("⚠️ [LiveChat] Skipping own admin message from server");
-				return;
-			}
-			
-			// Update conversation with new message from customer or bot
-			if (serverMessage.content) {
-				setConversations(prev => 
-					prev.map(conv => 
-						conv.id === serverMessage.conversationId
-							? {
-								...conv,
-								messages: [...conv.messages, {
-									id: serverMessage.messageId || `ws-${Date.now()}`,
-									conversationId: conv.id,
-									type: serverMessage.senderType === "bot" ? "bot" : "user",
-									text: serverMessage.content!,
-									timestamp: serverMessage.timestamp,
-									isRead: true,
-									metadata: serverMessage.metadata,
-								}],
-								lastMessage: serverMessage.content!,
-								lastMessageAt: serverMessage.timestamp,
-								messageCount: (conv.messageCount || 0) + 1,
-								updatedAt: serverMessage.timestamp,
+	// Poll for new messages every 3 seconds
+	useEffect(() => {
+		if (!user || !experienceId) return;
+		
+		const pollForUpdates = async () => {
+			try {
+				// Refresh conversations list to get new messages
+				const params = new URLSearchParams({
+					experienceId: experienceId,
+					status: "all",
+					page: "1",
+					limit: "50",
+				});
+				
+				const response = await apiGet(`/api/livechat/conversations?${params.toString()}`, experienceId);
+				
+				if (response.ok) {
+					const result = await response.json();
+					if (result.success && result.data?.conversations) {
+						const serverConversations = result.data.conversations;
+						
+						// Check for new messages in each conversation
+						serverConversations.forEach((serverConv: any) => {
+							const lastUpdate = lastConversationUpdateRef.current.get(serverConv.id) || 0;
+							const serverUpdate = new Date(serverConv.updatedAt).getTime();
+							
+							if (serverUpdate > lastUpdate) {
+								console.log(`📨 [LiveChat] Polling found updates for conversation ${serverConv.id}`);
+								lastConversationUpdateRef.current.set(serverConv.id, serverUpdate);
 							}
-							: conv
-					)
-				);
+						});
+						
+						// Update conversations state with new data
+						setConversations(prev => {
+							// Merge server data with existing data, preserving any optimistic updates
+							return serverConversations.map((serverConv: any) => {
+								const existingConv = prev.find(c => c.id === serverConv.id);
+								return {
+									...serverConv,
+									// Keep optimistic messages that haven't been confirmed yet
+									messages: serverConv.messages || existingConv?.messages || [],
+								};
+							});
+						});
+					}
+				}
+			} catch (error) {
+				console.error("[LiveChat] Polling error:", error);
 			}
-		},
-		onTyping: (conversationId, senderId, isTyping) => {
-			console.log(`[LiveChat] Typing indicator: ${senderId} is ${isTyping ? 'typing' : 'stopped'} in ${conversationId}`);
-			if (conversationId === selectedConversationId) {
-				setIsUserTyping(isTyping);
-			}
-		},
-	});
+		};
+		
+		// Poll every 3 seconds
+		const pollInterval = setInterval(pollForUpdates, 3000);
+		
+		return () => clearInterval(pollInterval);
+	}, [user, experienceId]);
 
 	const selectedConversation = useMemo(() => {
 		return conversations?.find((c) => c.id === selectedConversationId) || null;
