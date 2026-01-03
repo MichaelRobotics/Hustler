@@ -9,6 +9,7 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 import { whopSdk } from "@/lib/whop-sdk";
+import { sendBotMessage, sendStageTransition } from "@/lib/services/websocket-service";
 
 /**
  * Look up resource by name and experience ID
@@ -446,46 +447,9 @@ async function processFunnelNavigation(
           if (resource) {
             console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
             
-            // Check if link already has affiliate parameters
-            const hasAffiliate = resource.link.includes('app=') || resource.link.includes('ref=');
-            
-            if (!hasAffiliate) {
-              console.log(`[OFFER] Adding affiliate parameters to resource link`);
-              
-              // Get affiliate app ID from environment variable
-              const affiliateAppId = process.env.NEXT_PUBLIC_WHOP_APP_ID || conversation.experienceId; // Use environment variable or experience ID as fallback
-              console.log(`[OFFER] Using affiliate app ID: ${affiliateAppId} (from ${process.env.NEXT_PUBLIC_WHOP_APP_ID ? 'NEXT_PUBLIC_WHOP_APP_ID' : 'experience ID fallback'})`);
-              
-              // Add affiliate parameter to the link
-              const url = new URL(resource.link);
-              url.searchParams.set('app', affiliateAppId);
-              const affiliateLink = url.toString();
-              
-              console.log(`[OFFER] Generated affiliate link: ${affiliateLink}`);
-              
-              // Store the affiliate link in the conversation
-              try {
-                await db.update(conversations)
-                  .set({ 
-                    myAffiliateLink: affiliateLink,
-                    updatedAt: new Date()
-                  })
-                  .where(eq(conversations.id, conversationId));
-                console.log(`[OFFER] Stored affiliate link in conversation: ${affiliateLink}`);
-              } catch (error) {
-                console.error(`[OFFER] Failed to store affiliate link in conversation:`, error);
-                // Continue execution even if storing fails
-              }
-              
-              // Replace [LINK] placeholder with animated button HTML
-              const buttonHtml = `<div class="animated-gold-button" data-href="${affiliateLink}">Get Started!</div>`;
-              formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
-            } else {
-              console.log(`[OFFER] Resource link already has affiliate parameters, using as-is`);
-              // Replace [LINK] placeholder with animated button HTML
-              const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
-              formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
-            }
+            // Replace [LINK] placeholder with animated button HTML using the resource link directly
+            const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
+            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
           } else {
             console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
             // Replace [LINK] placeholder with fallback text
@@ -539,7 +503,7 @@ async function processFunnelNavigation(
       botMessage = formattedMessage;
 
       // Record bot message
-      await db.insert(messages).values({
+      const [savedBotMessage] = await db.insert(messages).values({
         conversationId: conversationId,
         type: "bot",
         content: formattedMessage,
@@ -547,7 +511,26 @@ async function processFunnelNavigation(
           blockId: nextBlockId,
           timestamp: new Date().toISOString(),
         },
-      });
+      }).returning();
+
+      // Broadcast bot message via WebSocket
+      try {
+        console.log(`[navigate-funnel] Broadcasting bot message via WebSocket`);
+        await sendBotMessage({
+          experienceId: conversation.experience?.whopExperienceId || conversation.experienceId,
+          conversationId: conversationId,
+          messageId: savedBotMessage.id,
+          content: formattedMessage,
+          targetUserId: conversation.whopUserId,
+          metadata: {
+            blockId: nextBlockId ?? undefined,
+          },
+        });
+        console.log(`[navigate-funnel] ✅ Bot message broadcast successful`);
+      } catch (wsError) {
+        console.warn(`[navigate-funnel] WebSocket broadcast failed:`, wsError);
+        // Don't fail the navigation if WebSocket fails
+      }
 
       // Increment sends counter for the funnel
       try {
@@ -564,7 +547,7 @@ async function processFunnelNavigation(
       }
     }
 
-    // Prepare stage transition data for frontend WebSocket broadcasting
+    // Prepare stage transition data and broadcast via WebSocket
     let stageTransition = null;
     if (previousStage !== currentStage && botMessage) {
       stageTransition = {
@@ -576,6 +559,20 @@ async function processFunnelNavigation(
       };
       
       console.log(`[NAVIGATE-FUNNEL] Stage transition detected: ${previousStage} -> ${currentStage}`);
+
+      // Broadcast stage transition via WebSocket
+      try {
+        await sendStageTransition({
+          experienceId: conversation.experience?.whopExperienceId || conversation.experienceId,
+          conversationId: conversationId,
+          targetUserId: conversation.whopUserId,
+          currentStage,
+          previousStage,
+        });
+        console.log(`[NAVIGATE-FUNNEL] ✅ Stage transition broadcast successful`);
+      } catch (wsError) {
+        console.warn(`[NAVIGATE-FUNNEL] Stage transition WebSocket broadcast failed:`, wsError);
+      }
     }
 
     return {

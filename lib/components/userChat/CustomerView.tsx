@@ -12,7 +12,7 @@ import { Text, Button } from "frosted-ui";
 import { MessageSquare, Play, RotateCcw, Settings, User, MessageCircle, Sun, Moon } from "lucide-react";
 import FunnelProgressBar from "./FunnelProgressBar";
 import { ThemeToggle } from "../common/ThemeToggle";
-import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
+import { useServerMessages, type ServerMessage } from "../../hooks/useServerMessages";
 import { useTheme } from "../common/ThemeProvider";
 import { TemplateRenderer } from "./TemplateRenderer";
 import { CustomerDashboard } from "../customers/CustomerDashboard";
@@ -138,42 +138,38 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 	const navbarRef = useRef<HTMLDivElement>(null);
 
-	// Theme and WebSocket state
+	// Theme state
 	const { appearance, toggleTheme } = useTheme();
-	const { isConnected } = useWhopWebSocket({
+
+	// WebSocket integration for receiving server-side messages (receive-only)
+	useServerMessages({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
-		onMessage: (newMessage) => {
-			console.log("📨 [CustomerView] WebSocket message received:", {
-				id: newMessage.id,
-				type: newMessage.type,
-				content: newMessage.content.substring(0, 50) + "...",
-				conversationId: newMessage.metadata?.conversationId,
-				userId: newMessage.metadata?.userId,
-				experienceId: newMessage.metadata?.experienceId,
-				timestamp: newMessage.createdAt,
+		onMessage: (serverMessage: ServerMessage) => {
+			console.log("📨 [CustomerView] Server WebSocket message received:", {
+				type: serverMessage.type,
+				conversationId: serverMessage.conversationId,
+				senderType: serverMessage.senderType,
+				content: serverMessage.content?.substring(0, 50) + "...",
 			});
 			
-			// Check for stage transition in message metadata
-			if (newMessage.metadata?.stageTransition) {
-				const newStage = newMessage.metadata.stageTransition.currentStage;
-				console.log("🔄 [CustomerView] Stage transition detected:", newStage);
-				
-				// Update stageInfo state to trigger progress bar update
-				setStageInfo(prev => prev ? {
-					...prev,
-					currentStage: newStage
-				} : null);
-				
-				// Dispatch custom event for progress bar update
-				const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
-					detail: { newStage }
-				});
-				window.dispatchEvent(stageUpdateEvent);
-			}
+			// Messages are already handled by UserChat component
+			// This is mainly for stage transition updates at the CustomerView level
 		},
-		onError: (error) => {
-			console.error("WebSocket error:", error);
+		onStageTransition: (currentStage: string, previousStage: string) => {
+			console.log("🔄 [CustomerView] Stage transition detected:", { currentStage, previousStage });
+			
+			// Update stageInfo state to trigger progress bar update
+			setStageInfo(prev => prev ? {
+				...prev,
+				currentStage
+			} : null);
+			
+			// Dispatch custom event for progress bar update
+			const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
+				detail: { newStage: currentStage }
+			});
+			window.dispatchEvent(stageUpdateEvent);
 		},
 	});
 

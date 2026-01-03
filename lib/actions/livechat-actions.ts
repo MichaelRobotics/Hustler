@@ -7,8 +7,10 @@ import {
 	funnels,
 	messages,
 	users,
+	experiences,
 } from "../supabase/schema";
 import type { LiveChatConversation, LiveChatFilters } from "../types/liveChat";
+import { sendChatMessage, sendToUser } from "../services/websocket-service";
 
 export interface LiveChatPagination {
 	page: number;
@@ -548,12 +550,45 @@ export async function sendOwnerMessage(
 			})
 			.where(eq(conversations.id, conversationId));
 
-		// Send real-time message notification
-		try {
-		// Real-time messaging moved to React hooks
-		} catch (wsError) {
-			console.warn("Failed to send real-time message notification:", wsError);
-			// Don't fail the message creation if WebSocket fails
+		// Get experience for WebSocket targeting
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, user.experience.id),
+		});
+
+		// Send real-time message via WebSocket
+		if (experience?.whopExperienceId) {
+			try {
+				console.log(`[LiveChat] Broadcasting owner message via WebSocket to experience ${experience.whopExperienceId}`);
+				
+				// Send to the specific customer
+				if (conversation.whopUserId) {
+					await sendToUser(conversation.whopUserId, {
+						type: "chat_message",
+						conversationId: conversationId,
+						messageId: newMessage.id,
+						content: message,
+						senderId: ownerId,
+						senderType: "admin",
+						timestamp: new Date().toISOString(),
+					});
+				}
+
+				// Also broadcast to experience for other admins
+				await sendChatMessage({
+					experienceId: experience.whopExperienceId,
+					conversationId: conversationId,
+					messageId: newMessage.id,
+					content: message,
+					senderId: ownerId,
+					senderType: "admin",
+					targetUserId: conversation.whopUserId || undefined,
+				});
+
+				console.log(`[LiveChat] ✅ Owner message broadcast successfully`);
+			} catch (wsError) {
+				console.warn("[LiveChat] Failed to send real-time message notification:", wsError);
+				// Don't fail the message creation if WebSocket fails
+			}
 		}
 
 		return {
@@ -748,6 +783,7 @@ export async function sendOwnerResponse(
 				conversationId: conversationId,
 				type: "bot", // Owner responses are 'bot' type
 				content: message,
+				metadata: metadata,
 			})
 			.returning();
 
@@ -759,11 +795,45 @@ export async function sendOwnerResponse(
 			})
 			.where(eq(conversations.id, conversationId));
 
-		// Send real-time message notification
-		try {
-			// Real-time messaging moved to React hooks
-		} catch (wsError) {
-			console.warn("Failed to send real-time message notification:", wsError);
+		// Get experience for WebSocket targeting
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, user.experience.id),
+		});
+
+		// Send real-time message via WebSocket
+		if (experience?.whopExperienceId) {
+			try {
+				console.log(`[LiveChat] Broadcasting owner response via WebSocket to experience ${experience.whopExperienceId}`);
+				
+				// Send to the specific customer
+				if (conversation.whopUserId) {
+					await sendToUser(conversation.whopUserId, {
+						type: "chat_message",
+						conversationId: conversationId,
+						messageId: newMessage.id,
+						content: message,
+						senderId: user.id,
+						senderType: "admin",
+						timestamp: new Date().toISOString(),
+						metadata: { responseType: type },
+					});
+				}
+
+				// Also broadcast to experience for other admins
+				await sendChatMessage({
+					experienceId: experience.whopExperienceId,
+					conversationId: conversationId,
+					messageId: newMessage.id,
+					content: message,
+					senderId: user.id,
+					senderType: "admin",
+					targetUserId: conversation.whopUserId || undefined,
+				});
+
+				console.log(`[LiveChat] ✅ Owner response broadcast successfully`);
+			} catch (wsError) {
+				console.warn("[LiveChat] Failed to send real-time message notification:", wsError);
+			}
 		}
 
 		return {

@@ -40,7 +40,7 @@ import { ThemeToggle } from "../common/ThemeToggle";
 import ConversationList from "./ConversationList";
 import LiveChatHeader from "./LiveChatHeader";
 import LiveChatView from "./LiveChatView";
-import { useLiveChatIntegration } from "../../hooks/useLiveChatIntegration";
+import { useExperienceMessages, type ServerMessage } from "../../hooks/useServerMessages";
 import type { AuthenticatedUser } from "../../types/user";
 import { apiGet, apiPost } from "../../utils/api-client";
 // Database actions moved to API routes to avoid client-side imports
@@ -118,114 +118,57 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		}
 	}, [user]);
 
-	// WebSocket integration - lazy loaded when user is available (same pattern as ResourceLibrary)
-	const {
-		isConnected,
-		connectionStatus,
-		sendMessage: sendWebSocketMessage,
-		sendTyping,
-		error: wsError,
-		reconnect,
-		reset: resetWebSocket, // ✅ FIXED: Add reset function
-	} = useLiveChatIntegration({
-		user: user!, // User is guaranteed to be available here
+	// Track WebSocket connection state for UI
+	const [isConnected, setIsConnected] = useState(true);
+
+	// WebSocket integration for receiving server-side messages (receive-only)
+	useExperienceMessages({
 		experienceId: experienceId,
-		conversationId: selectedConversationId || undefined,
-		onMessage: (message) => {
-			console.log("📨 [LiveChat UI] BEFORE RECEIVING MESSAGE:", {
-				instanceId: `livechat-ui-${experienceId}-${Date.now()}`,
-				experienceId,
-				userId: user?.id,
-				userName: user?.name,
-				messageType: message.type,
-				conversationId: message.conversationId,
-				messageId: message.message?.id,
-				content: message.message?.content?.substring(0, 50) + "...",
-				messageMessageType: message.message?.type,
-				messageUserId: message.message?.metadata?.userId,
-				messageExperienceId: message.message?.metadata?.experienceId,
-				channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-				timestamp: new Date().toISOString()
+		onMessage: (serverMessage: ServerMessage) => {
+			console.log("📨 [LiveChat] Server WebSocket message received:", {
+				type: serverMessage.type,
+				conversationId: serverMessage.conversationId,
+				senderType: serverMessage.senderType,
+				content: serverMessage.content?.substring(0, 50) + "...",
 			});
 			
-			if (message.type === "message" && message.message) {
-				console.log("✅ [LiveChat UI] AFTER RECEIVING MESSAGE:", {
-					instanceId: `livechat-ui-${experienceId}-${Date.now()}`,
-					experienceId,
-					userId: user?.id,
-					userName: user?.name,
-					processedConversationId: message.conversationId,
-					processedMessageId: message.message.id,
-					processedContent: message.message.content.substring(0, 50) + "...",
-					processedMessageType: message.message.type,
-					processedUserId: message.message.metadata?.userId,
-					processedExperienceId: message.message.metadata?.experienceId,
-					channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-					timestamp: new Date().toISOString()
-				});
-				
-				console.log("✅ [LiveChat] Processing message for conversation:", message.conversationId);
-				// Update conversation with new message
+			// Skip messages we sent (admin messages) - they're already added optimistically
+			if (serverMessage.senderType === "admin") {
+				console.log("⚠️ [LiveChat] Skipping own admin message from server");
+				return;
+			}
+			
+			// Update conversation with new message from customer or bot
+			if (serverMessage.content) {
 				setConversations(prev => 
 					prev.map(conv => 
-						conv.id === message.conversationId
+						conv.id === serverMessage.conversationId
 							? {
 								...conv,
 								messages: [...conv.messages, {
-									id: message.message!.id,
+									id: serverMessage.messageId || `ws-${Date.now()}`,
 									conversationId: conv.id,
-									type: message.message!.type,
-									text: message.message!.content,
-									timestamp: message.message!.timestamp,
+									type: serverMessage.senderType === "bot" ? "bot" : "user",
+									text: serverMessage.content!,
+									timestamp: serverMessage.timestamp,
 									isRead: true,
-									metadata: message.message!.metadata,
+									metadata: serverMessage.metadata,
 								}],
-								lastMessage: message.message!.content,
-								lastMessageAt: message.message!.timestamp,
-								messageCount: conv.messageCount + 1,
-								updatedAt: message.message!.timestamp,
+								lastMessage: serverMessage.content!,
+								lastMessageAt: serverMessage.timestamp,
+								messageCount: (conv.messageCount || 0) + 1,
+								updatedAt: serverMessage.timestamp,
 							}
 							: conv
 					)
 				);
-			} else {
-				console.log("⚠️ [LiveChat] Message not processed - missing type or message data");
 			}
 		},
-		onConversationUpdate: (updatedConversation) => {
-			// Update conversation in list
-			setConversations(prev => {
-				const existingIndex = prev.findIndex(conv => conv.id === updatedConversation.id);
-				
-				if (existingIndex >= 0) {
-					// Update existing conversation
-					return prev.map(conv => 
-						conv.id === updatedConversation.id ? updatedConversation : conv
-					);
-				} else {
-					// New conversation - add to the beginning of the list
-					console.log("LiveChat: Adding new conversation to list:", updatedConversation.id);
-					return [updatedConversation, ...prev];
-				}
-			});
-		},
-		onStageTransition: (stageInfo) => {
-			// Handle stage transitions (TRANSITION -> EXPERIENCE_QUALIFICATION)
-			console.log("LiveChat: Stage transition detected:", stageInfo);
-			// Update only the specific conversation instead of reloading all
-			if (stageInfo.conversationId) {
-				console.log(`[LIVECHAT] Updating conversation ${stageInfo.conversationId} with stage transition`);
-				setConversations(prev => 
-					prev.map(conv => 
-						conv.id === stageInfo.conversationId 
-							? { ...conv, ...stageInfo.conversation }
-							: conv
-					)
-				);
+		onTyping: (conversationId, senderId, isTyping) => {
+			console.log(`[LiveChat] Typing indicator: ${senderId} is ${isTyping ? 'typing' : 'stopped'} in ${conversationId}`);
+			if (conversationId === selectedConversationId) {
+				setIsUserTyping(isTyping);
 			}
-		},
-		onConnectionChange: (status) => {
-			console.log("LiveChat Integration status:", status);
 		},
 	});
 
@@ -306,21 +249,11 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			);
 			
 			console.log("LiveChat: Loaded conversation details with messages:", conversation.messages?.length || 0);
-			
-			// ✅ FIXED: Reset WebSocket connection to sync with active clients
-			try {
-				console.log("🔄 [LiveChat] Resetting WebSocket to sync with active clients after conversation load");
-				await resetWebSocket();
-				console.log("✅ [LiveChat] WebSocket reset completed - should sync with active clients");
-			} catch (resetError) {
-				console.error("❌ [LiveChat] Failed to reset WebSocket:", resetError);
-				// Don't throw - this is not critical for conversation loading
-			}
 		} catch (err) {
 			console.error("Error loading conversation details:", err);
 			setError("Failed to load conversation details");
 		}
-	}, [user, experienceId, resetWebSocket]);
+	}, [user, experienceId]);
 
 	// Optimized backend auto-closing behavior with throttling
 	useEffect(() => {
@@ -369,10 +302,10 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		async (message: string) => {
 			if (!selectedConversationId || !user) return;
 
-			// IMMEDIATE UI UPDATE: Add message to conversation immediately
+			// IMMEDIATE UI UPDATE: Add message to conversation immediately (optimistic)
 			const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 			const tempMessage: LiveChatMessage = {
-				id: messageId, // ✅ FIXED: Use same ID format as WebSocket messages
+				id: messageId,
 				conversationId: selectedConversationId,
 				type: "bot" as const,
 				text: message,
@@ -380,8 +313,8 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				isRead: true,
 				metadata: {
 					funnelStage: "LIVECHAT",
-					isOptimistic: true, // ✅ FIXED: Mark as optimistic to prevent WebSocket duplicates
-					userId: user.id, // ✅ FIXED: Include user ID for duplicate prevention
+					isOptimistic: true,
+					userId: user.id,
 				},
 			};
 
@@ -401,20 +334,13 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			);
 
 			try {
-				console.log("LiveChat: Starting to send message:", {
+				console.log("LiveChat: Sending message via API (server broadcasts via WebSocket):", {
 					message,
 					selectedConversationId,
 					experienceId: user.experienceId,
-					user: user
 				});
 
-				// Send message via WebSocket (non-blocking)
-				// ✅ FIXED: Pass messageId to prevent duplicates
-				await sendWebSocketMessage(message, "bot", messageId);
-				console.log("LiveChat: WebSocket message sent (or skipped if not connected)");
-
-				// ✅ RESTORED: Database save for user-inputted messages in LiveChat
-				// This saves admin messages to database for persistence
+				// Send message via API - server handles DB save + WebSocket broadcast
 				const response = await apiPost(`/api/livechat/conversations/${selectedConversationId}`, {
 					action: 'send_message',
 					message,
@@ -445,7 +371,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 									messages: conv.messages.map(msg => 
 										msg.id === messageId
 											? {
-												id: messageId,
+												id: result.data.message.id || messageId,
 												conversationId: result.data.message.conversationId,
 												type: result.data.message.type as "user" | "bot" | "system",
 												text: result.data.message.content,
@@ -465,6 +391,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 								: conv
 						)
 					);
+					console.log("✅ [LiveChat] Message sent successfully, server will broadcast via WebSocket");
 				} else {
 					console.error("LiveChat: API returned error:", {
 						success: result.success,
@@ -475,12 +402,6 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				}
 			} catch (err) {
 				console.error("LiveChat: Exception during message send:", err);
-				console.error("LiveChat: Error details:", {
-					name: err instanceof Error ? err.name : 'Unknown',
-					message: err instanceof Error ? err.message : String(err),
-					stack: err instanceof Error ? err.stack : undefined
-				});
-				console.error("LiveChat: This error is being set in the error state");
 				
 				// Remove temporary message on exception
 				setConversations(prev => 
@@ -498,7 +419,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				setError("Failed to send message");
 			}
 		},
-		[selectedConversationId, user, sendWebSocketMessage],
+		[selectedConversationId, user],
 	);
 
 	// Memoized handlers for better performance
@@ -569,20 +490,6 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		<div
 			className={`relative h-full w-full ${selectedConversation ? "lg:p-4 lg:pb-8" : "p-4 sm:p-6 lg:p-8"} pb-20 lg:pb-8`}
 		>
-			{/* Connection Status Indicator */}
-			{!isConnected && (
-				<div className="fixed top-4 right-4 z-50 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-2 rounded-md flex items-center gap-2">
-					<AlertCircle className="w-4 h-4" />
-					<span className="text-sm">Reconnecting...</span>
-					<button
-						onClick={reconnect}
-						className="text-xs underline hover:no-underline"
-					>
-						Retry
-					</button>
-				</div>
-			)}
-
 			{/* Error Display */}
 			{error && (
 				<div className="fixed top-4 left-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-md flex items-center justify-between">

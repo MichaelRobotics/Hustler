@@ -10,7 +10,7 @@ import React, {
 	useMemo,
 } from "react";
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
-import { useWhopWebSocket } from "../../hooks/useWhopWebSocket";
+import { useServerMessages } from "../../hooks/useServerMessages";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 // Server-side functions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "../../types/funnel";
@@ -120,6 +120,19 @@ const UserChat: React.FC<UserChatProps> = ({
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
+	// Optimized scroll to bottom - mobile performance optimized
+	// NOTE: Defined early so it can be used by other callbacks
+	const scrollToBottom = useCallback(() => {
+		if (chatEndRef.current) {
+			// Use instant scroll for better mobile performance
+			chatEndRef.current.scrollIntoView({
+				behavior: "instant",
+				block: "end",
+				inline: "nearest",
+			});
+		}
+	}, []);
+
 	// Removed OFFER link resolution logic - links are now handled by backend
 
 	// Initialize conversation messages from backend data IMMEDIATELY
@@ -159,7 +172,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 	}, [conversation?.messages]);
 
-	// WebSocket integration for REAL-TIME updates only (background initialization)
+	// WebSocket integration for REAL-TIME updates only (receive-only)
 	console.log("🔌 [UserChat] WebSocket configuration:", {
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
@@ -168,59 +181,52 @@ const UserChat: React.FC<UserChatProps> = ({
 		conversationIdFromConversation: conversation?.id
 	});
 	
-	const { isConnected, sendMessage } = useWhopWebSocket({
+	// Use server messages hook for receiving WebSocket messages (server-side broadcasting)
+	useServerMessages({
 		conversationId: conversationId || "",
 		experienceId: experienceId || "",
-		onMessage: (newMessage) => {
-			console.log("📨 [UserChat] WebSocket message received in component:", {
-				id: newMessage.id,
-				type: newMessage.type,
-				content: newMessage.content.substring(0, 50) + "...",
-				conversationId: newMessage.metadata?.conversationId,
-				userId: newMessage.metadata?.userId,
-				experienceId: newMessage.metadata?.experienceId,
-				timestamp: newMessage.createdAt,
-				userType: userType // ✅ DEBUG: Add userType to see if admin/customer affects WebSocket
+		onMessage: (serverMessage) => {
+			console.log("📨 [UserChat] Server WebSocket message received:", {
+				type: serverMessage.type,
+				conversationId: serverMessage.conversationId,
+				senderType: serverMessage.senderType,
+				content: serverMessage.content?.substring(0, 50) + "...",
 			});
+			
+			// Only process messages from other senders (admin/bot)
+			// Customer's own messages are added locally when sent
+			if (serverMessage.senderType === "customer") {
+				console.log("⚠️ [UserChat] Skipping own message from server");
+				return;
+			}
 			
 			// Check if message already exists locally
 			const messageExists = conversationMessages.some(msg => 
-				msg.content === newMessage.content && 
-				msg.type === newMessage.type &&
-				Math.abs(new Date(msg.createdAt).getTime() - new Date(newMessage.createdAt).getTime()) < 5000 // 5 second tolerance
+				msg.content === serverMessage.content && 
+				msg.type === (serverMessage.senderType === "bot" ? "bot" : "user") &&
+				Math.abs(new Date(msg.createdAt).getTime() - new Date(serverMessage.timestamp).getTime()) < 5000
 			);
 			
-			if (!messageExists) {
-				console.log("✅ [UserChat] New message detected, adding directly...");
-				// Add new message directly instead of reloading all messages
+			if (!messageExists && serverMessage.content) {
+				console.log("✅ [UserChat] New server message detected, adding...");
 				setConversationMessages(prev => [...prev, {
-					id: newMessage.id,
-					type: newMessage.type,
-					content: newMessage.content,
-					metadata: newMessage.metadata,
-					createdAt: newMessage.createdAt,
+					id: serverMessage.messageId || `ws-${Date.now()}`,
+					type: serverMessage.senderType === "bot" ? "bot" as const : serverMessage.senderType === "admin" ? "bot" as const : "user" as const,
+					content: serverMessage.content || "",
+					metadata: serverMessage.metadata,
+					createdAt: new Date(serverMessage.timestamp),
 				}]);
-			} else {
-				console.log("⚠️ [UserChat] Message already exists locally, skipping");
+				scrollToBottom();
 			}
-			
-			// Check for stage transition in message metadata
-			if (newMessage.metadata?.stageTransition) {
-				const newStage = newMessage.metadata.stageTransition.currentStage;
-				console.log("🔄 [UserChat] Stage transition detected:", newStage);
-				
-				// Dispatch custom event for progress bar update
-				const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
-					detail: { newStage }
-				});
-				window.dispatchEvent(stageUpdateEvent);
-			}
-			
-			scrollToBottom();
 		},
-		// ✅ REMOVED: onTyping callback - no typing indicators needed
-		onError: (error) => {
-			console.error("WebSocket error:", error);
+		onStageTransition: (currentStage, previousStage) => {
+			console.log("🔄 [UserChat] Stage transition detected:", { currentStage, previousStage });
+			
+			// Dispatch custom event for progress bar update
+			const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
+				detail: { newStage: currentStage }
+			});
+			window.dispatchEvent(stageUpdateEvent);
 		},
 	});
 
@@ -290,8 +296,18 @@ const UserChat: React.FC<UserChatProps> = ({
 		setMessage("");
 
 		// Handle conversation-based chat
-		if (conversationId && experienceId && isConnected) {
-			// Process message through funnel system (API handles database save)
+		if (conversationId && experienceId) {
+			// Add user message to UI immediately (optimistic update)
+			const userMessage = {
+				id: `user-${Date.now()}`,
+				type: "user" as const,
+				content: messageContent,
+				createdAt: new Date(),
+			};
+			setConversationMessages(prev => [...prev, userMessage]);
+			console.log("UserChat: Added user message to UI:", userMessage);
+
+			// Process message through funnel system (API handles DB save + WebSocket broadcast)
 			try {
 				const response = await apiPost('/api/userchat/process-message', {
 					conversationId,
@@ -303,52 +319,8 @@ const UserChat: React.FC<UserChatProps> = ({
 					const result = await response.json();
 					console.log("Message processed through funnel:", result);
 					
-					// Add user message to UI (API already saved to database)
-					const userMessage = {
-						id: `user-${Date.now()}`,
-						type: "user" as const,
-						content: messageContent,
-						createdAt: new Date(),
-					};
-					setConversationMessages(prev => [...prev, userMessage]);
-					console.log("UserChat: Added user message to UI:", userMessage);
-					
-					// ✅ FIXED: Broadcast user message via WebSocket for real-time sync
-					console.log("🔊 [UserChat UI] BEFORE SENDING MESSAGE:", {
-						instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-						conversationId,
-						experienceId,
-						userType,
-						messageContent: messageContent.substring(0, 50) + "...",
-						isConnected,
-						channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-						timestamp: new Date().toISOString()
-					});
-					
-					try {
-						const result = await sendMessage(messageContent, "user", {
-							conversationId,
-							userId: "customer",
-							experienceId,
-							timestamp: new Date().toISOString(),
-						});
-						console.log("✅ [UserChat UI] AFTER SENDING MESSAGE:", {
-							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-							conversationId,
-							experienceId,
-							userType,
-							messageContent: messageContent.substring(0, 50) + "...",
-							broadcastResult: result,
-							isConnected,
-							channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-							timestamp: new Date().toISOString()
-						});
-					} catch (wsError) {
-						console.error("❌ [UserChat] Failed to broadcast user message:", wsError);
-					}
-					
-					// If there's a bot response, add it to UI
-					// Note: result.data.funnelResponse because createSuccessResponse wraps data
+					// Note: Server broadcasts messages via WebSocket, so bot response will arrive via useServerMessages
+					// But we also add it locally for immediate feedback
 					const funnelResponse = result.data?.funnelResponse || result.funnelResponse;
 					if (funnelResponse?.botMessage) {
 						const botMessage = {
@@ -359,50 +331,14 @@ const UserChat: React.FC<UserChatProps> = ({
 						};
 						setConversationMessages(prev => [...prev, botMessage]);
 						console.log("UserChat: Added bot message to UI:", botMessage);
-						
-						// ✅ FIXED: Broadcast bot message via WebSocket for real-time sync
-						console.log("🔊 [UserChat UI] BEFORE SENDING BOT MESSAGE:", {
-							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-							conversationId,
-							experienceId,
-							userType,
-							botMessage: funnelResponse.botMessage.substring(0, 50) + "...",
-							isConnected,
-							channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-							timestamp: new Date().toISOString()
-						});
-						
-						try {
-							await sendMessage(funnelResponse.botMessage, "bot", {
-								conversationId,
-								userId: "system",
-								experienceId,
-								timestamp: new Date().toISOString(),
-								blockId: funnelResponse.nextBlockId,
-							});
-							console.log("✅ [UserChat UI] AFTER SENDING BOT MESSAGE:", {
-								instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-								conversationId,
-								experienceId,
-								userType,
-								botMessage: funnelResponse.botMessage.substring(0, 50) + "...",
-								isConnected,
-								channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-								timestamp: new Date().toISOString()
-							});
-						} catch (wsError) {
-							console.error("❌ [UserChat] Failed to broadcast bot message:", wsError);
-						}
 					}
 
 					// Update local current block ID if next block is provided
 					if (funnelResponse?.nextBlockId) {
 						setLocalCurrentBlockId(funnelResponse.nextBlockId);
 						console.log("UserChat: Updated local current block ID to:", funnelResponse.nextBlockId);
-						console.log("UserChat: New options will be:", funnelFlow.blocks[funnelResponse.nextBlockId]?.options?.map(opt => opt.text));
 					}
 
-					// Scroll to bottom after adding messages
 					scrollToBottom();
 				} else {
 					const errorText = await response.text();
@@ -424,7 +360,6 @@ const UserChat: React.FC<UserChatProps> = ({
 				}
 			} catch (apiError) {
 				console.error("Error calling message processing API:", apiError);
-				// Show error message to user
 				const errorMessage = {
 					id: `error-${Date.now()}`,
 					type: "bot" as const,
@@ -442,12 +377,37 @@ const UserChat: React.FC<UserChatProps> = ({
 		onMessageSent?.(messageContent, conversationId);
 	};
 
+	// Handle funnel completion - defined early so it can be used by handleConversationOptionSelection
+	const handleFunnelCompletion = useCallback(async () => {
+		try {
+			if (!conversationId) return;
+
+			// Complete funnel via API route
+			const response = await apiPost('/api/userchat/complete-funnel', {
+				conversationId,
+			}, experienceId);
+
+			const result = await response.json();
+			if (result.success) {
+				const completionMessage = {
+					id: `completion-${Date.now()}`,
+					type: "system" as const,
+					content: "🎉 Congratulations! You've completed the funnel. Thank you for your time!",
+					createdAt: new Date(),
+				};
+				setConversationMessages(prev => [...prev, completionMessage]);
+			}
+		} catch (error) {
+			console.error("Error handling funnel completion:", error);
+		}
+	}, [conversationId, experienceId]);
+
 	// Handle conversation option selection
 	const handleConversationOptionSelection = useCallback(async (option: { text: string; nextBlockId: string | null }) => {
 		try {
 			if (!conversationId) return;
 
-			// IMMEDIATE UI UPDATE: Add user message to local state first
+			// IMMEDIATE UI UPDATE: Add user message to local state first (optimistic)
 			const userMessage = {
 				id: `temp-user-${Date.now()}`,
 				type: "user" as const,
@@ -457,113 +417,36 @@ const UserChat: React.FC<UserChatProps> = ({
 			setConversationMessages(prev => [...prev, userMessage]);
 			scrollToBottom();
 
-			// ✅ FIXED: Broadcast user message via WebSocket for real-time sync
-			console.log("🔊 [UserChat UI] BEFORE SENDING OPTION MESSAGE:", {
-				instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-				conversationId,
-				experienceId,
-				userType,
-				optionText: option.text.substring(0, 50) + "...",
-				isConnected,
-				channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-				timestamp: new Date().toISOString()
-			});
-			
-			try {
-				const result = await sendMessage(option.text, "user", {
-					conversationId,
-					userId: "customer",
-					experienceId,
-					timestamp: new Date().toISOString(),
-				});
-				console.log("✅ [UserChat UI] AFTER SENDING OPTION MESSAGE:", {
-					instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-					conversationId,
-					experienceId,
-					userType,
-					optionText: option.text.substring(0, 50) + "...",
-					broadcastResult: result,
-					isConnected,
-					channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-					timestamp: new Date().toISOString()
-				});
-			} catch (wsError) {
-				console.error("❌ [UserChat] Failed to broadcast option message:", wsError);
-			}
-
-			// Navigate funnel via API route
+			// Navigate funnel via API route (server handles DB save + WebSocket broadcast)
 			const response = await apiPost('/api/userchat/navigate-funnel', {
 				conversationId,
 				navigationData: {
 					text: option.text,
 					value: option.text,
-					blockId: currentBlockId || "", // Use current block ID, not next block ID
+					blockId: currentBlockId || "",
 				},
 			}, experienceId);
 
 			const result = await response.json();
 
 			if (result.success && result.conversation) {
-				// IMMEDIATE UI UPDATE: Add bot response if available
+				// Add bot response locally for immediate feedback
+				// Note: Server also broadcasts via WebSocket for other clients
 				if (result.botMessage) {
 					const botMessage = {
 						id: `temp-bot-${Date.now()}`,
 						type: "bot" as const,
-						content: result.botMessage, // Use processed message from backend
+						content: result.botMessage,
 						createdAt: new Date(),
 					};
 					setConversationMessages(prev => [...prev, botMessage]);
 					scrollToBottom();
-
-					// ✅ FIXED: Broadcast bot message via WebSocket for real-time sync
-					console.log("🔊 [UserChat UI] BEFORE SENDING OPTION BOT MESSAGE:", {
-						instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-						conversationId,
-						experienceId,
-						userType,
-						botMessage: result.botMessage.substring(0, 50) + "...",
-						isConnected,
-						channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-						timestamp: new Date().toISOString()
-					});
-					
-					try {
-						// Prepare metadata with stage transition if available
-						const metadata: any = {
-							conversationId,
-							userId: "system",
-							experienceId,
-							timestamp: new Date().toISOString(),
-							blockId: result.conversation.currentBlockId,
-						};
-
-						// Add stage transition metadata if stage transition occurred
-						if (result.stageTransition) {
-							metadata.stageTransition = result.stageTransition;
-							console.log("🔄 [UserChat] Stage transition detected in API response:", result.stageTransition);
-						}
-
-						await sendMessage(result.botMessage, "bot", metadata);
-						console.log("✅ [UserChat UI] AFTER SENDING OPTION BOT MESSAGE:", {
-							instanceId: `userchat-ui-${conversationId}-${Date.now()}`,
-							conversationId,
-							experienceId,
-							userType,
-							botMessage: result.botMessage.substring(0, 50) + "...",
-							isConnected,
-							channels: [`experience:${experienceId}`, `livechat:${experienceId}`],
-							timestamp: new Date().toISOString()
-						});
-					} catch (wsError) {
-						console.error("❌ [UserChat] Failed to broadcast option bot message:", wsError);
-					}
 				}
 				
-				// IMMEDIATE UI UPDATE: Update local current block ID to show new options immediately
+				// Update local current block ID to show new options immediately
 				if (result.conversation.currentBlockId) {
 					setLocalCurrentBlockId(result.conversation.currentBlockId);
 					console.log("UserChat: Updated local current block ID to:", result.conversation.currentBlockId);
-					console.log("UserChat: New options will be:", funnelFlow.blocks[result.conversation.currentBlockId]?.options?.map(opt => opt.text));
 				}
 				
 				// Check for funnel completion
@@ -574,11 +457,11 @@ const UserChat: React.FC<UserChatProps> = ({
 		} catch (error) {
 			console.error("Error handling conversation option selection:", error);
 		}
-	}, [conversationId, currentBlockId, funnelFlow, sendMessage]);
+	}, [conversationId, currentBlockId, funnelFlow, experienceId, handleFunnelCompletion, scrollToBottom]);
 
 	// Handle invalid response
 	const handleInvalidResponse = useCallback(async (userInput: string) => {
-		// IMMEDIATE UI UPDATE: Add error message to local state first
+		// IMMEDIATE UI UPDATE: Add error message to local state
 		const errorMessage = {
 			id: `temp-error-${Date.now()}`,
 			type: "bot" as const,
@@ -587,36 +470,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		};
 		setConversationMessages(prev => [...prev, errorMessage]);
 		scrollToBottom();
-
-		// Send via WebSocket for real-time sync (optional)
-		await sendMessage("Please choose from the provided options above.", "bot");
-	}, [sendMessage]);
-
-	// Handle funnel completion
-	const handleFunnelCompletion = useCallback(async () => {
-		try {
-			if (!conversationId) return;
-
-			// Complete funnel via API route
-		const response = await apiPost('/api/userchat/complete-funnel', {
-			conversationId,
-		}, experienceId);
-
-		const result = await response.json();
-			if (result.success) {
-				const completionMessage = {
-					id: `completion-${Date.now()}`,
-					type: "system" as const,
-					content: "🎉 Congratulations! You've completed the funnel. Thank you for your time!",
-					createdAt: new Date(),
-				};
-				setConversationMessages(prev => [...prev, completionMessage]);
-				await sendMessage(completionMessage.content, "system");
-			}
-		} catch (error) {
-			console.error("Error handling funnel completion:", error);
-		}
-	}, [conversationId, sendMessage]);
+	}, [scrollToBottom]);
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === "Enter" && !e.shiftKey) {
@@ -636,38 +490,24 @@ const UserChat: React.FC<UserChatProps> = ({
 			// ✅ REMOVED: Typing indicator for user messages
 			// No typing indicator shown when user types messages
 		},
-		[conversationId, experienceId, isConnected],
+		[conversationId, experienceId],
 	);
-
-	// Optimized scroll to bottom - mobile performance optimized
-	const scrollToBottom = useCallback(() => {
-		if (chatEndRef.current) {
-			// Use instant scroll for better mobile performance
-			chatEndRef.current.scrollIntoView({
-				behavior: "instant",
-				block: "end",
-				inline: "nearest",
-			});
-		}
-	}, []);
 
 	const handleOptionClickLocal = useCallback(
 		(option: any, index: number) => {
-			// ✅ REMOVED: Typing timeout clearing - no typing indicators needed
-
 			// Send user message immediately
 			onMessageSent?.(`${index + 1}. ${option.text}`, conversationId);
 
 			// Handle option selection based on conversation type
-			if (conversationId && experienceId && isConnected) {
-				// Use backend conversation handling
+			if (conversationId && experienceId) {
+				// Use backend conversation handling (server broadcasts via WebSocket)
 				handleConversationOptionSelection(option);
 			} else {
 				// Fallback to preview mode
 				previewHandleOptionClick(option, index);
 			}
 		},
-		[conversationId, experienceId, isConnected, handleConversationOptionSelection, previewHandleOptionClick, onMessageSent, scrollToBottom],
+		[conversationId, experienceId, handleConversationOptionSelection, previewHandleOptionClick, onMessageSent],
 	);
 
 	// Optimized keyboard handling - reduced timeout for better performance
