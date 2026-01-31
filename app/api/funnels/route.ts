@@ -113,6 +113,7 @@ async function createFunnelHandler(request: NextRequest, context: AuthContext) {
 			name: input.name,
 			description: input.description,
 			resources: input.resources || [],
+			merchantType: input.merchantType || "qualification", // Default to qualification for backward compatibility
 		});
 
 		return NextResponse.json(

@@ -3,6 +3,7 @@ import type { Config } from "tailwindcss";
 export default {
 	content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./lib/**/*.{js,ts,jsx,tsx,mdx}"],
 	darkMode: "class",
+	// Cross-stage dynamic classes: included via @source '../lib/safelist-cross-stage.txt' in globals.css (Tailwind v4)
 	theme: {
 		extend: {
 			colors: {

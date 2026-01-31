@@ -128,14 +128,14 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			try {
 				// Refresh conversations list to get new messages
 				const params = new URLSearchParams({
-					experienceId: experienceId,
+		experienceId: experienceId,
 					status: "all",
 					page: "1",
 					limit: "50",
 				});
 				
 				const response = await apiGet(`/api/livechat/conversations?${params.toString()}`, experienceId);
-				
+			
 				if (response.ok) {
 					const result = await response.json();
 					if (result.success && result.data?.conversations) {
@@ -153,7 +153,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 						});
 						
 						// Update conversations state with new data
-						setConversations(prev => {
+			setConversations(prev => {
 							// Merge server data with existing data, preserving any optimistic updates
 							return serverConversations.map((serverConv: any) => {
 								const existingConv = prev.find(c => c.id === serverConv.id);
@@ -163,7 +163,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 									messages: serverConv.messages || existingConv?.messages || [],
 								};
 							});
-						});
+			});
 					}
 				}
 			} catch (error) {

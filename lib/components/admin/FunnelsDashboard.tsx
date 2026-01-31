@@ -27,6 +27,7 @@ interface Funnel {
 	resources?: any[];
 	sends?: number;
 	flow?: any;
+	merchantType?: "qualification" | "upsell"; // Merchant type
 	// New: Per-funnel generation state
 	generationStatus?: "idle" | "generating" | "completed" | "failed";
 	generationError?: string;
@@ -95,6 +96,8 @@ const FunnelsDashboard = React.memo(
 		>(null);
 		const [editingName, setEditingName] = useState("");
 		const [isSaving, setIsSaving] = useState(false);
+		// State for selected merchant type during creation
+		const [selectedMerchantType, setSelectedMerchantType] = useState<"qualification" | "upsell" | null>(null);
 
 		// Initialize editing name when editing starts
 		useEffect(() => {
@@ -134,7 +137,7 @@ const FunnelsDashboard = React.memo(
 
 		// Memoized handler for creating a new funnel
 		const handleCreateNewFunnel = useCallback(
-			async (funnelName: string) => {
+			async (funnelName: string, merchantType: "qualification" | "upsell" = "qualification") => {
 				// Check if name is available
 				if (!isFunnelNameAvailable(funnelName)) {
 					console.error("Funnel name already exists");
@@ -151,6 +154,7 @@ const FunnelsDashboard = React.memo(
 				try {
 					const response = await apiPost("/api/funnels", {
 						name: funnelName.trim(),
+						merchantType: merchantType,
 					}, user.experienceId);
 
 					if (!response.ok) {
@@ -182,7 +186,7 @@ const FunnelsDashboard = React.memo(
 				} finally {
 					setIsSaving(false);
 				}
-			},
+				},
 			[
 				funnels,
 				setFunnels,
@@ -195,6 +199,7 @@ const FunnelsDashboard = React.memo(
 				onGoToLibrary,
 			],
 		);
+
 
 		// Memoized computed values for better performance
 		const hasValidFunnels = useMemo(() => funnels.length > 0, [funnels.length]);
@@ -217,6 +222,13 @@ const FunnelsDashboard = React.memo(
 					}),
 			[funnels, editingFunnelId],
 		);
+
+		// Reset selected type when creation is cancelled
+		useEffect(() => {
+			if (!isCreatingNewFunnel) {
+				setSelectedMerchantType(null);
+			}
+		}, [isCreatingNewFunnel]);
 
 		return (
 			<div className="space-y-6">
@@ -241,55 +253,47 @@ const FunnelsDashboard = React.memo(
 											<span className="sm:hidden">●</span>
 										</span>
 									</div>
+									{/* Merchant Type Badge - shown after selection, on the right */}
+									{selectedMerchantType && (
+										<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-violet-100 to-purple-100 dark:from-violet-900/60 dark:to-purple-900/60 text-violet-800 dark:text-violet-200 border-2 border-violet-300 dark:border-violet-600 shadow-sm">
+											{selectedMerchantType === "qualification" ? "Qualification" : "UpSell"}
+										</span>
+									)}
 								</div>
 							</div>
 
-							{/* Card Body - Inline Edit */}
+							{/* Card Body - Type Selection or Name Input */}
 							<div className="p-4 flex-1">
-								<div className="space-y-4">
-									<div>
-										<input
-											type="text"
-											value={newFunnelName}
-											onChange={(e) => setNewFunnelName(e.target.value)}
-											placeholder="Enter funnel name..."
-											disabled={isSaving}
-											className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-												newFunnelName && !isFunnelNameAvailable(newFunnelName)
-													? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
-													: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
-											}`}
-											autoFocus
-										/>
-										{newFunnelName && !isFunnelNameAvailable(newFunnelName) && (
-											<div className="mt-2 text-sm text-red-600 dark:text-red-400">
-												This name is already taken. Please choose a different one.
-											</div>
-										)}
-									</div>
-									<div className="flex gap-2">
-										<Button
-											size="2"
-											color="green"
-											onClick={async (e) => {
-												e.stopPropagation();
-												try {
-													await handleCreateNewFunnel(newFunnelName);
-												} catch (error) {
-													console.error("Failed to create funnel:", error);
-												}
-											}}
-											disabled={
-												isSaving || 
-												!newFunnelName.trim() || 
-												!isFunnelNameAvailable(newFunnelName)
-											}
-											className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 dark:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-											aria-label="Save funnel name"
-										>
-											<Check className="h-4 w-4" strokeWidth={2.5} />
-											<span>{isSaving ? "Saving..." : "Save"}</span>
-										</Button>
+								{!selectedMerchantType ? (
+									/* Type Selection */
+									<div className="space-y-4">
+										<div className="grid grid-cols-2 gap-3">
+											{/* Qualification Card */}
+											<button
+												type="button"
+												onClick={() => setSelectedMerchantType("qualification")}
+												className="relative p-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 hover:border-violet-500 dark:hover:border-violet-400 hover:shadow-lg transition-all duration-200 text-left group cursor-pointer"
+											>
+												<div className="flex flex-col items-center text-center">
+													<div className="text-sm font-semibold text-gray-900 dark:text-white">
+														Qualification
+													</div>
+												</div>
+											</button>
+
+											{/* UpSell Card */}
+											<button
+												type="button"
+												onClick={() => setSelectedMerchantType("upsell")}
+												className="relative p-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 hover:border-violet-500 dark:hover:border-violet-400 hover:shadow-lg transition-all duration-200 text-left group cursor-pointer"
+											>
+												<div className="flex flex-col items-center text-center">
+													<div className="text-sm font-semibold text-gray-900 dark:text-white">
+														UpSell
+													</div>
+												</div>
+											</button>
+										</div>
 										<Button
 											size="2"
 											color="red"
@@ -298,18 +302,86 @@ const FunnelsDashboard = React.memo(
 												e.stopPropagation();
 												setEditingFunnelId(null);
 												setNewFunnelName("");
+												setSelectedMerchantType(null);
 												handleSetIsRenaming(false);
 												handleSetIsCreatingNewFunnel(false);
 											}}
 											disabled={isSaving}
-											className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+											className="w-full flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
 											aria-label="Cancel editing"
 										>
 											<X className="h-4 w-4" strokeWidth={2.5} />
 											<span>Cancel</span>
 										</Button>
 									</div>
-								</div>
+								) : (
+									/* Name Input - shown after type selection */
+									<div className="space-y-4">
+										<div>
+											<input
+												type="text"
+												value={newFunnelName}
+												onChange={(e) => setNewFunnelName(e.target.value)}
+												placeholder="Enter funnel name..."
+												disabled={isSaving}
+												className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+													newFunnelName && !isFunnelNameAvailable(newFunnelName)
+														? "border-red-500 focus:border-red-500 focus:ring-red-500/50"
+														: "border-violet-300 dark:border-violet-600 focus:ring-violet-500/50 focus:border-violet-500 dark:focus:border-violet-400"
+												}`}
+												autoFocus
+											/>
+											{newFunnelName && !isFunnelNameAvailable(newFunnelName) && (
+												<div className="mt-2 text-sm text-red-600 dark:text-red-400">
+													This name is already taken. Please choose a different one.
+												</div>
+											)}
+										</div>
+										<div className="flex gap-2">
+											<Button
+												size="2"
+												color="green"
+												onClick={async (e) => {
+													e.stopPropagation();
+													try {
+														await handleCreateNewFunnel(newFunnelName, selectedMerchantType);
+													} catch (error) {
+														console.error("Failed to create funnel:", error);
+													}
+												}}
+												disabled={
+													isSaving || 
+													!newFunnelName.trim() || 
+													!isFunnelNameAvailable(newFunnelName)
+												}
+												className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 dark:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+												aria-label="Save funnel name"
+											>
+												<Check className="h-4 w-4" strokeWidth={2.5} />
+												<span>{isSaving ? "Saving..." : "Save"}</span>
+											</Button>
+											<Button
+												size="2"
+												color="red"
+												variant="soft"
+												onClick={(e) => {
+													e.stopPropagation();
+													setEditingFunnelId(null);
+													setNewFunnelName("");
+													setSelectedMerchantType(null);
+													handleSetIsRenaming(false);
+													handleSetIsCreatingNewFunnel(false);
+												}}
+												disabled={isSaving}
+												className="flex-1 flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 dark:shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+												aria-label="Cancel editing"
+											>
+												<X className="h-4 w-4" strokeWidth={2.5} />
+												<span>Cancel</span>
+											</Button>
+										</div>
+									</div>
+								)}
 							</div>
 						</div>
 					)}
@@ -339,7 +411,7 @@ const FunnelsDashboard = React.memo(
 							<div className="p-4 border-b-2 border-border dark:border-violet-500/30 bg-gradient-to-r from-gray-50 via-gray-100 to-violet-100 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-800/60">
 								<div className="flex items-start justify-between gap-3">
 									{/* Status Badge - Live (Red), Draft (Gray), Saving (Blue), or Deleting (Red) */}
-									<div className="flex items-center gap-2">
+									<div className="flex items-center gap-2 flex-wrap">
 										{isDeletingThisFunnel ? (
 											<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/60 dark:to-red-800/60 text-red-800 dark:text-red-200 border-2 border-red-300 dark:border-red-600 shadow-sm">
 												<Circle
@@ -383,6 +455,12 @@ const FunnelsDashboard = React.memo(
 													Draft
 												</span>
 												<span className="sm:hidden">●</span>
+											</span>
+										)}
+										{/* Merchant Type Badge - on the right side of Draft/Live */}
+										{funnel.merchantType && (
+											<span className="inline-flex items-center px-3 py-2 rounded-full text-xs font-medium bg-gradient-to-r from-violet-100 to-purple-100 dark:from-violet-900/60 dark:to-purple-900/60 text-violet-800 dark:text-violet-200 border-2 border-violet-300 dark:border-violet-600 shadow-sm">
+												{funnel.merchantType === "qualification" ? "Qualification" : "UpSell"}
 											</span>
 										)}
 									</div>

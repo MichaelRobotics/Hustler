@@ -1,4 +1,4 @@
-import { Heading, Text } from "frosted-ui";
+import { Heading, Text, Button } from "frosted-ui";
 import { AlertTriangle, DollarSign, Gift, CheckCircle } from "lucide-react";
 import type React from "react";
 import { useState, useEffect } from "react";
@@ -10,9 +10,10 @@ interface InsufficientProductsValidationProps {
 	allResources?: any[];
 	onHighlightCards?: (highlightedCards: string[]) => void;
 	onCreateAssetsStateChange?: (showCreateAssets: boolean) => void;
+	onCreateMerchantManually?: (merchantType: "qualification" | "upsell") => void;
 }
 
-export const InsufficientProductsValidation: React.FC<InsufficientProductsValidationProps> = ({ funnel, allResources, onHighlightCards, onCreateAssetsStateChange }) => {
+export const InsufficientProductsValidation: React.FC<InsufficientProductsValidationProps> = ({ funnel, allResources, onHighlightCards, onCreateAssetsStateChange, onCreateMerchantManually }) => {
 	const [showProgress, setShowProgress] = useState(false);
 	const [digitalAssetsCount, setDigitalAssetsCount] = useState(0);
 	const [giftAssetsCount, setGiftAssetsCount] = useState(0);
@@ -279,12 +280,36 @@ export const InsufficientProductsValidation: React.FC<InsufficientProductsValida
 		}
 	};
 
+	// Get merchant type from funnel or default to "qualification"
+	const merchantType = (funnel as any)?.merchantType || "qualification";
+
+	// Handle create merchant manually button click
+	const handleCreateMerchantManually = () => {
+		if (onCreateMerchantManually) {
+			onCreateMerchantManually(merchantType as "qualification" | "upsell");
+		}
+	};
+
 	return (
 		<div className="mt-8 mb-8">
 			<div className="text-center py-12 px-8 bg-gradient-to-br from-orange-50/30 via-orange-100/20 to-gray-200/15 dark:from-orange-900/40 dark:via-gray-800/30 dark:to-gray-700/20 rounded-2xl border border-orange-200/30 dark:border-gray-600/30 shadow-xl backdrop-blur-sm relative overflow-hidden">
 				{/* Subtle animated background elements */}
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(251,146,60,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_80%,rgba(251,146,60,0.12)_0%,transparent_50%)]" />
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(156,163,175,0.08)_0%,transparent_50%)] dark:bg-[radial-gradient(circle_at_80%_20%,rgba(156,163,175,0.12)_0%,transparent_50%)]" />
+
+				{/* Create Merchant Manually Button - Top Right Corner */}
+				{onCreateMerchantManually && (
+					<div className="absolute top-4 right-4 z-20">
+						<Button
+							size="2"
+							color="violet"
+							onClick={handleCreateMerchantManually}
+							className="shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300"
+						>
+							Create Merchant Manually
+						</Button>
+					</div>
+				)}
 
 				<div className="relative z-10">
 					{!showProgress ? (

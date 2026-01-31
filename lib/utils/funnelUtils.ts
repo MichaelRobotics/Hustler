@@ -50,6 +50,61 @@ export const createDefaultFunnel = (
 });
 
 /**
+ * Creates a minimal flow structure for "Create Merchant Manually" (no AI generation).
+ * Qualification: trigger + WELCOME stage. Upsell: trigger + OFFER stage (first product card).
+ * @param funnelId - The funnel ID (used for block/stage IDs).
+ * @param merchantType - "qualification" | "upsell". Upsell gets OFFER stage with one product block.
+ * @returns Minimal FunnelFlow.
+ */
+export const createMinimalFlow = (
+	funnelId: string,
+	merchantType: "qualification" | "upsell"
+): FunnelFlow => {
+	if (merchantType === "upsell") {
+		const offerBlockId = `offer-block-${funnelId}`;
+		const offerStageId = `offer-stage-${funnelId}`;
+		return {
+			stages: [{
+				id: offerStageId,
+				name: "OFFER",
+				blockIds: [offerBlockId],
+				explanation: "First product offer",
+				cardType: "product"
+			}],
+			blocks: {
+				[offerBlockId]: {
+					id: offerBlockId,
+					message: "",
+					options: [
+						{ text: "Upsell", nextBlockId: null },
+						{ text: "Downsell", nextBlockId: null }
+					]
+				}
+			},
+			startBlockId: offerBlockId
+		};
+	}
+	const welcomeBlockId = `welcome-block-${funnelId}`;
+	const welcomeStageId = `welcome-stage-${funnelId}`;
+	return {
+		stages: [{
+			id: welcomeStageId,
+			name: "WELCOME",
+			blockIds: [welcomeBlockId],
+			explanation: "Welcome message sent to users"
+		}],
+		blocks: {
+			[welcomeBlockId]: {
+				id: welcomeBlockId,
+				message: "",
+				options: []
+			}
+		},
+		startBlockId: welcomeBlockId
+	};
+};
+
+/**
  * Creates a funnel flow object specifically for displaying errors.
  * This is used when the AI generation fails, providing a clear error message
  * to the user within the funnel visualizer.
@@ -74,3 +129,45 @@ export const createErrorFunnelFlow = (): FunnelFlow => ({
 		},
 	},
 });
+
+/**
+ * Returns options array for an upsell block from upsellBlockId/downsellBlockId (for layout/lines).
+ * Use when reading or persisting upsell blocks so existing layout code works.
+ */
+export function getUpsellBlockOptions(block: FunnelBlock): FunnelBlockOption[] {
+	const upsellId = block.upsellBlockId ?? null;
+	const downsellId = block.downsellBlockId ?? null;
+	return [
+		{ text: "Upsell", nextBlockId: upsellId },
+		{ text: "Downsell", nextBlockId: downsellId }
+	];
+}
+
+/**
+ * Gets the last bot message from a stage by finding the last block in that stage with a message
+ * @param stageId - The ID of the stage to get the message from
+ * @param funnelFlow - The funnel flow containing stages and blocks
+ * @returns The last bot message text from the stage, or null if not found
+ */
+export function getLastBotMessageFromStage(
+	stageId: string,
+	funnelFlow: FunnelFlow
+): string | null {
+	const stage = funnelFlow.stages.find((s) => s.id === stageId);
+	if (!stage) return null;
+
+	// Get all blocks in this stage
+	const stageBlocks = stage.blockIds
+		.map((id) => funnelFlow.blocks[id])
+		.filter(Boolean);
+
+	// Find the last block that has a message
+	for (let i = stageBlocks.length - 1; i >= 0; i--) {
+		const block = stageBlocks[i];
+		if (block?.message) {
+			return block.message;
+		}
+	}
+
+	return null;
+}

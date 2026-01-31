@@ -1,17 +1,22 @@
 "use client";
 
-import { Card } from "frosted-ui";
 import React from "react";
+import { Bell } from "lucide-react";
+import { Heading, Text, Button } from "frosted-ui";
 
 import UnifiedNavigation from "../common/UnifiedNavigation";
 import { FunnelBuilderHeader } from "./FunnelBuilderHeader";
 // Core Components
 import FunnelVisualizer from "./FunnelVisualizer";
+import { type TriggerType } from "./TriggerBlock";
+import type { TriggerConfig } from "@/lib/types/funnel";
+import TriggerPanel from "./TriggerPanel";
+import ConfigPanel from "./ConfigPanel";
+import NotificationCanvasView from "./NotificationCanvasView";
 
 import { ApiErrorModal } from "./modals/ApiErrorModal";
 // Modal Components
 import { DeploymentModal } from "./modals/DeploymentModal";
-import { OfferSelectionModal } from "./modals/OfferSelectionModal";
 import { OfflineConfirmationModal } from "./modals/OfflineConfirmationModal";
 import { ValidationModal } from "./modals/ValidationModal";
 
@@ -20,14 +25,31 @@ import { useFunnelDeployment } from "../../hooks/useFunnelDeployment";
 import { useFunnelValidation } from "../../hooks/useFunnelValidation";
 import { useModalManagement } from "../../hooks/useModalManagement";
 
+// Types
+import type { FunnelNotification, FunnelNotificationInput, FunnelProductFaq, FunnelProductFaqInput } from "@/lib/types/funnel";
+import { getLastBotMessageFromStage, createMinimalFlow, getUpsellBlockOptions } from "../../utils/funnelUtils";
+import { pickRandomUnusedCrossStageStyle } from "../../utils/crossStageStyles";
+
 // Type definitions
 interface Funnel {
 	id: string;
 	name: string;
 	flow?: any;
+	membershipTriggerType?: TriggerType; // Membership category trigger
+	appTriggerType?: TriggerType; // App category trigger
+	membershipTriggerConfig?: TriggerConfig; // Config for membership trigger
+	appTriggerConfig?: TriggerConfig; // Config for app trigger
+	delayMinutes?: number; // App trigger delay (backward compatibility)
+	membershipDelayMinutes?: number; // Membership trigger delay
+	// Handout configuration
+	handoutKeyword?: string;
+	handoutAdminNotification?: string;
+	handoutUserMessage?: string;
 	isDeployed?: boolean;
 	wasEverDeployed?: boolean; // Track if funnel was ever live
+	isDraft?: boolean; // Draft mode - prevents deployment when new cards don't have complete connections
 	resources?: Resource[];
+	merchantType?: "qualification" | "upsell"; // Merchant type: qualification or upsell
 }
 
 interface Resource {
@@ -37,6 +59,7 @@ interface Resource {
 	link: string;
 	promoCode?: string; // Keep original field name for consistency with AdminPanel
 	category?: string;
+	description?: string;
 }
 
 interface AIFunnelBuilderPageProps {
@@ -75,6 +98,78 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 }) => {
 	// State Management
 	const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
+	const [showTriggerPanel, setShowTriggerPanel] = React.useState(false);
+	const [triggerPanelCategory, setTriggerPanelCategory] = React.useState<"Membership" | "App" | null>(null);
+	const [showConfigureView, setShowConfigureView] = React.useState(false); // Configure mode for notification canvas
+	const [showConfigPanel, setShowConfigPanel] = React.useState(true); // Show config panel in Configure view
+	
+	// Get merchant type from funnel (default to "qualification" for backward compatibility)
+	const merchantType = currentFunnel.merchantType || "qualification";
+	const hasFlow = !!currentFunnel.flow;
+	
+	// Get flow to use (actual flow or minimal flow). For upsell, normalize block options from upsellBlockId/downsellBlockId.
+	const flowToUse = React.useMemo(() => {
+		const raw = hasFlow ? currentFunnel.flow : createMinimalFlow(currentFunnel.id, merchantType);
+		if (!raw || merchantType !== "upsell") return raw;
+		const blocks = { ...raw.blocks };
+		Object.keys(blocks).forEach((id) => {
+			const b = blocks[id] as any;
+			if (b && (b.upsellBlockId !== undefined || b.downsellBlockId !== undefined)) {
+				blocks[id] = { ...b, options: getUpsellBlockOptions(b) };
+			}
+		});
+		return { ...raw, blocks };
+	}, [hasFlow, currentFunnel.flow, currentFunnel.id, merchantType, createMinimalFlow]);
+	
+	// Notification state
+	const [notifications, setNotifications] = React.useState<FunnelNotification[]>([]);
+	
+	// Selection state for notifications and resets
+	const [selectedNotificationId, setSelectedNotificationId] = React.useState<string | null>(null);
+	const [selectedNotificationSequence, setSelectedNotificationSequence] = React.useState<number | null>(null);
+	const [selectedNotificationStageId, setSelectedNotificationStageId] = React.useState<string | null>(null);
+	const [selectedResetId, setSelectedResetId] = React.useState<string | null>(null);
+	const [selectedResetStageId, setSelectedResetStageId] = React.useState<string | null>(null);
+	
+	// Product FAQs state
+	const [productFaqs, setProductFaqs] = React.useState<FunnelProductFaq[]>([]);
+	
+	// Resources and funnels state for trigger selection
+	const [resources, setResources] = React.useState<Array<{ id: string; name: string }>>([]);
+	const [funnels, setFunnels] = React.useState<Array<{ id: string; name: string }>>([]);
+	const [loadingResources, setLoadingResources] = React.useState(false);
+	const [loadingFunnels, setLoadingFunnels] = React.useState(false);
+
+	// State for pending option selection (selection mode)
+	const [pendingOptionSelection, setPendingOptionSelection] = React.useState<{
+		isActive: boolean;
+		sourceBlockId: string;
+		optionText: string;
+		newBlockId: string;
+		nextStageBlockIds: string[];
+		/** When set, selection sets source block's upsellBlockId or downsellBlockId instead of adding option */
+		upsellKind?: "upsell" | "downsell";
+		/** When true (last-stage upsell/downsell), only the new placeholder may be selected; above-stage cards blocked */
+		onlyPlaceholderSelectable?: boolean;
+	} | null>(null);
+
+	// State for pending delete
+	const [pendingDelete, setPendingDelete] = React.useState<{
+		blockId: string;
+		affectedOptions: Array<{ blockId: string; optionIndex: number }>; // Options leading TO deleted card
+		outgoingConnections: Array<{ targetBlockId: string }>; // Options FROM deleted card
+		orphanedNextStageCards: string[]; // Cards in next stage with no incoming connections
+		brokenPreviousStageCards: string[]; // Cards in previous stage with no outgoing connections
+		invalidOptions: Array<{ blockId: string; optionIndex: number; reason: string }>; // Invalid option connections
+	} | null>(null);
+
+	// State for pending card type selection (when creating new stage)
+	const [pendingCardTypeSelection, setPendingCardTypeSelection] = React.useState<{
+		newBlockId: string;
+		newStageId: string;
+		sourceBlockId: string;
+		optionText: string;
+	} | null>(null);
 
 	// Refs
 	const funnelVisualizerRef = React.useRef<{
@@ -95,13 +190,200 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	const validation = useFunnelValidation();
 	const modals = useModalManagement();
 
+	// Track if we've already checked this funnel to prevent infinite loops
+	const checkedFunnelIdRef = React.useRef<string | null>(null);
+
 	// Effects
 	React.useEffect(() => {
 		setCurrentFunnel(funnel);
 	}, [funnel]);
 
+	// Check for issues when entering Merchant Conversation Editor (run once per funnel)
+	React.useEffect(() => {
+		if (!funnel.flow || !funnel.id) return;
+		
+		// Skip if we've already checked this funnel
+		if (checkedFunnelIdRef.current === funnel.id) return;
+		
+		// Mark this funnel as checked
+		checkedFunnelIdRef.current = funnel.id;
+
+		// Find invalid options
+		const invalidOptions = findInvalidOptions(funnel.flow);
+
+		// Find orphaned cards (cards with no incoming connections)
+		const orphanedCards: string[] = [];
+		for (let stageIndex = 0; stageIndex < funnel.flow.stages.length; stageIndex++) {
+			const stage = funnel.flow.stages[stageIndex];
+			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+			// Skip first stage (start block doesn't need incoming connections)
+			if (stageIndex === 0) continue;
+
+			for (const cardId of stage.blockIds) {
+				// Check if any block has an option pointing to this card
+				const hasIncomingConnection = Object.values(funnel.flow.blocks).some((block: any) => {
+					if (!block || !block.options || !Array.isArray(block.options)) return false;
+					return block.options.some((opt: any) => opt.nextBlockId === cardId);
+				});
+				if (!hasIncomingConnection) {
+					orphanedCards.push(cardId);
+				}
+			}
+		}
+
+		// Find broken cards (cards with no outgoing connections to next stage)
+		const brokenCards: string[] = [];
+		for (let stageIndex = 0; stageIndex < funnel.flow.stages.length - 1; stageIndex++) {
+			const stage = funnel.flow.stages[stageIndex];
+			const nextStage = funnel.flow.stages[stageIndex + 1];
+			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+			if (!nextStage) continue; // No next stage = OK (last stage)
+
+			// If next stage is empty, all cards in current stage are broken
+			if (!nextStage.blockIds || nextStage.blockIds.length === 0) {
+				// All cards in current stage are broken (no valid next stage)
+				for (const cardId of stage.blockIds) {
+					brokenCards.push(cardId);
+				}
+				continue;
+			}
+
+			for (const cardId of stage.blockIds) {
+				const block = funnel.flow.blocks[cardId];
+				if (!block || !block.options || !Array.isArray(block.options)) {
+					brokenCards.push(cardId);
+					continue;
+				}
+
+				// Check if this block has any option pointing to a card in the next stage
+				const hasOutgoingConnection = block.options.some((opt: any) =>
+					opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
+				);
+				if (!hasOutgoingConnection) {
+					brokenCards.push(cardId);
+				}
+			}
+		}
+
+		// If there are any issues, set pendingDelete to show highlights
+		if (invalidOptions.length > 0 || orphanedCards.length > 0 || brokenCards.length > 0) {
+			setPendingDelete({
+				blockId: '', // No specific block being deleted
+				affectedOptions: [],
+				outgoingConnections: [],
+				orphanedNextStageCards: orphanedCards,
+				brokenPreviousStageCards: brokenCards,
+				invalidOptions,
+			});
+		} else {
+			// Clear pending delete if no issues
+			setPendingDelete(null);
+		}
+
+		// Recalculate and update draft status
+		const draftResult = checkDraftStatus(funnel.flow, funnel);
+		logDraftStatus(draftResult);
+		if (funnel.isDraft !== draftResult.isDraft) {
+			const funnelWithDraft = { ...funnel, isDraft: draftResult.isDraft };
+			setCurrentFunnel(funnelWithDraft);
+			onUpdate(funnelWithDraft);
+		}
+	}, [funnel.id, funnel.flow]); // Run only when funnel prop changes (entering editor)
+
+	// Helper function to find invalid option connections
+	const findInvalidOptions = (flow: any): Array<{ blockId: string; optionIndex: number; reason: string }> => {
+		const invalidOptions: Array<{ blockId: string; optionIndex: number; reason: string }> = [];
+		
+		if (!flow || !flow.blocks || !flow.stages) return invalidOptions;
+
+		Object.values(flow.blocks).forEach((block: any) => {
+			if (!block || !block.options || !Array.isArray(block.options)) return;
+			
+			// Find which stage this block is in
+			const blockStage = flow.stages.find((s: any) =>
+				s && s.blockIds && Array.isArray(s.blockIds) && s.blockIds.includes(block.id)
+			);
+			if (!blockStage) return;
+			const blockStageIndex = flow.stages.indexOf(blockStage);
+			
+			block.options.forEach((opt: any, index: number) => {
+				if (!opt.nextBlockId) return;
+				
+				// Check if target block exists
+				const targetBlock = flow.blocks[opt.nextBlockId];
+				if (!targetBlock) {
+					invalidOptions.push({
+						blockId: block.id,
+						optionIndex: index,
+						reason: 'Target block does not exist'
+					});
+					return;
+				}
+				
+				// Check if target block is in a valid stage (must be in next stage or later)
+				const targetStage = flow.stages.find((s: any) =>
+					s && s.blockIds && Array.isArray(s.blockIds) && s.blockIds.includes(opt.nextBlockId)
+				);
+				if (!targetStage) {
+					invalidOptions.push({
+						blockId: block.id,
+						optionIndex: index,
+						reason: 'Target block not in any stage'
+					});
+					return;
+				}
+				
+				const targetStageIndex = flow.stages.indexOf(targetStage);
+				
+				// Option must point to a block in a later stage (not same or earlier)
+				if (targetStageIndex <= blockStageIndex) {
+					invalidOptions.push({
+						blockId: block.id,
+						optionIndex: index,
+						reason: 'Target block is in same or earlier stage'
+					});
+				}
+			});
+		});
+		
+		return invalidOptions;
+	};
+
 	const handleBlockUpdate = (updatedBlock: any) => {
 		if (!updatedBlock) return;
+
+		// For upsell blocks, keep options in sync with upsellBlockId/downsellBlockId (for layout/lines)
+		if (merchantType === "upsell" && (updatedBlock.upsellBlockId !== undefined || updatedBlock.downsellBlockId !== undefined)) {
+			updatedBlock = {
+				...updatedBlock,
+				options: getUpsellBlockOptions(updatedBlock),
+			};
+		}
+		
+		// If flow is null and we're working with minimal flow, save the welcome message (same for qualification and upsell)
+		if (!hasFlow) {
+			// Update the minimal flow structure
+			const minimalFlow = createMinimalFlow(currentFunnel.id, merchantType);
+			const updatedMinimalFlow = {
+				...minimalFlow,
+				blocks: {
+					...minimalFlow.blocks,
+					[updatedBlock.id]: updatedBlock
+				}
+			};
+			
+			// Save welcome message to funnel (store it in the flow field as the minimal flow structure)
+			const updatedFunnel = {
+				...currentFunnel,
+				flow: updatedMinimalFlow
+			};
+			setCurrentFunnel(updatedFunnel);
+			onUpdate(updatedFunnel);
+			validation.setEditingBlockId(null);
+			return;
+		}
+		
+		// Original logic for when flow exists
 		const newFlow = { ...currentFunnel.flow };
 		newFlow.blocks[updatedBlock.id] = updatedBlock;
 
@@ -109,6 +391,1474 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		setCurrentFunnel(updatedFunnel);
 		onUpdate(updatedFunnel);
 		validation.setEditingBlockId(null);
+		
+		// Check draft status after block update
+		const draftResult = checkDraftStatus(newFlow, updatedFunnel);
+		logDraftStatus(draftResult);
+		if (updatedFunnel.isDraft !== draftResult.isDraft) {
+			const funnelWithDraft = { ...updatedFunnel, isDraft: draftResult.isDraft };
+			setCurrentFunnel(funnelWithDraft);
+			onUpdate(funnelWithDraft);
+		}
+
+		// Check if pending delete issues are resolved
+		if (pendingDelete) {
+			// Recalculate orphaned and broken cards
+			const orphanedCards: string[] = [];
+			const brokenCards: string[] = [];
+
+			// Find orphaned cards (cards with no incoming connections)
+			for (let stageIndex = 0; stageIndex < newFlow.stages.length; stageIndex++) {
+				const stage = newFlow.stages[stageIndex];
+				if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+				if (stageIndex === 0) continue; // Skip first stage
+
+				for (const cardId of stage.blockIds) {
+					const hasIncomingConnection = Object.values(newFlow.blocks).some((block: any) => {
+						if (!block || !block.options || !Array.isArray(block.options)) return false;
+						return block.options.some((opt: any) => opt.nextBlockId === cardId);
+					});
+					if (!hasIncomingConnection) {
+						orphanedCards.push(cardId);
+					}
+				}
+			}
+
+			// Find broken cards (cards with no outgoing connections to next stage)
+			for (let stageIndex = 0; stageIndex < newFlow.stages.length - 1; stageIndex++) {
+				const stage = newFlow.stages[stageIndex];
+				const nextStage = newFlow.stages[stageIndex + 1];
+				if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+				if (!nextStage) continue; // No next stage = OK
+
+				// If next stage is empty, mark all cards as broken
+				if (!nextStage.blockIds || nextStage.blockIds.length === 0) {
+					for (const cardId of stage.blockIds) {
+						brokenCards.push(cardId);
+					}
+					continue;
+				}
+
+				for (const cardId of stage.blockIds) {
+					const block = newFlow.blocks[cardId];
+					if (!block || !block.options || !Array.isArray(block.options)) {
+						brokenCards.push(cardId);
+						continue;
+					}
+
+					const hasOutgoingConnection = block.options.some((opt: any) =>
+						opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
+					);
+					if (!hasOutgoingConnection) {
+						brokenCards.push(cardId);
+					}
+				}
+			}
+
+			// Recalculate invalid options
+			const invalidOptions = findInvalidOptions(newFlow);
+
+			// If no orphaned, broken cards, or invalid options remain, clear pending delete
+			if (orphanedCards.length === 0 && brokenCards.length === 0 && invalidOptions.length === 0) {
+				setPendingDelete(null);
+			} else {
+				// Update pending delete with current state
+				setPendingDelete({
+					...pendingDelete,
+					orphanedNextStageCards: orphanedCards,
+					brokenPreviousStageCards: brokenCards,
+					invalidOptions,
+				});
+			}
+		}
+	};
+
+	// Check draft status function; returns isDraft and reason (when draft) for logging
+	const checkDraftStatus = (flow: any, funnel?: Funnel): { isDraft: boolean; reason?: string } => {
+		// Check if at least one trigger is set
+		if (funnel) {
+			const hasMembershipTrigger = !!funnel.membershipTriggerType;
+			const hasAppTrigger = !!funnel.appTriggerType;
+			if (!hasMembershipTrigger && !hasAppTrigger) {
+				return { isDraft: true, reason: "No trigger set (set Membership or App trigger)" };
+			}
+		}
+
+		if (!flow || !flow.blocks || !flow.stages) return { isDraft: false };
+
+		// Check for empty stages (broken flow indicator)
+		for (let i = 0; i < flow.stages.length; i++) {
+			const stage = flow.stages[i];
+			if (i === 0) continue;
+			if (i === flow.stages.length - 1) continue;
+			if (!stage.blockIds || stage.blockIds.length === 0) {
+				return { isDraft: true, reason: "Empty stage in the middle of the funnel" };
+			}
+		}
+
+		const invalidOptions = findInvalidOptions(flow);
+		if (invalidOptions.length > 0) {
+			return { isDraft: true, reason: "Invalid option connections (options point to missing blocks)" };
+		}
+
+		const allBlocks = Object.values(flow.blocks) as Array<any>;
+		const newBlocks = allBlocks.filter(
+			(block: any) => block && block.id && typeof block.id === 'string' && block.id.startsWith('new_block_')
+		);
+
+		if (newBlocks.length > 0) {
+			for (const newBlock of newBlocks) {
+				if (!newBlock || !newBlock.id) continue;
+				const newBlockStage = flow.stages.find((s: any) =>
+					s && s.blockIds && Array.isArray(s.blockIds) && s.blockIds.includes(newBlock.id)
+				);
+				if (!newBlockStage) continue;
+				const stageIndex = flow.stages.indexOf(newBlockStage);
+				const nextStage = flow.stages[stageIndex + 1];
+				if (!nextStage) continue;
+				if (!nextStage.blockIds || nextStage.blockIds.length === 0) {
+					return { isDraft: true, reason: "New card's next stage is empty" };
+				}
+				const nextNextStage = flow.stages[stageIndex + 2];
+				if (!nextNextStage) {
+					if (nextStage.blockIds && nextStage.blockIds.length > 0) continue;
+					return { isDraft: true, reason: "New card's next stage is empty" };
+				}
+				const hasNextStageConnection = newBlock.options && Array.isArray(newBlock.options) && newBlock.options.some((opt: any) => {
+					if (!opt || !opt.nextBlockId) return false;
+					return nextStage.blockIds && Array.isArray(nextStage.blockIds) && nextStage.blockIds.includes(opt.nextBlockId);
+				});
+				if (!hasNextStageConnection) {
+					return { isDraft: true, reason: `New card "${newBlock.id}" has no connection to the next stage` };
+				}
+			}
+		}
+
+		// Orphaned cards
+		for (let stageIndex = 0; stageIndex < flow.stages.length; stageIndex++) {
+			const stage = flow.stages[stageIndex];
+			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+			if (stageIndex === 0) continue;
+			for (const cardId of stage.blockIds) {
+				const hasIncomingConnection = Object.values(flow.blocks).some((block: any) => {
+					if (!block || !block.options || !Array.isArray(block.options)) return false;
+					return block.options.some((opt: any) => opt.nextBlockId === cardId);
+				});
+				if (!hasIncomingConnection) {
+					return { isDraft: true, reason: `Orphaned card "${cardId}" (no incoming connection)` };
+				}
+			}
+		}
+
+		// Broken cards
+		for (let stageIndex = 0; stageIndex < flow.stages.length - 1; stageIndex++) {
+			const stage = flow.stages[stageIndex];
+			const nextStage = flow.stages[stageIndex + 1];
+			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+			if (!nextStage) continue;
+			if (!nextStage.blockIds || nextStage.blockIds.length === 0) {
+				return { isDraft: true, reason: "Empty next stage (cards in previous stage have no valid target)" };
+			}
+			for (const cardId of stage.blockIds) {
+				const block = flow.blocks[cardId];
+				if (!block || !block.options || !Array.isArray(block.options)) {
+					return { isDraft: true, reason: `Card "${cardId}" has no options` };
+				}
+				const hasOutgoingConnection = block.options.some((opt: any) =>
+					opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
+				);
+				if (!hasOutgoingConnection) {
+					return { isDraft: true, reason: `Card "${cardId}" has no connection to the next stage` };
+				}
+			}
+		}
+
+		return { isDraft: false };
+	};
+
+	const logDraftStatus = (result: { isDraft: boolean; reason?: string }) => {
+		if (result.isDraft) {
+			console.log("[Funnel] Draft —", result.reason ?? "Unknown reason");
+		} else {
+			console.log("[Funnel] Go Live — ready to deploy");
+		}
+	};
+
+	// Handle adding new option - immediately create new card and enter selection mode
+	const handleAddNewOption = (blockId: string, optionText: string) => {
+		if (!currentFunnel.flow) return;
+
+		// Find current block's stage
+		const currentStage = currentFunnel.flow.stages.find((stage: any) =>
+			stage.blockIds && stage.blockIds.includes(blockId)
+		);
+		if (!currentStage) return;
+
+		const currentStageIndex = currentFunnel.flow.stages.indexOf(currentStage);
+		const nextStage = currentFunnel.flow.stages[currentStageIndex + 1];
+
+		// If no next stage, create a new stage
+		if (!nextStage) {
+			// Create new stage
+			const newStageId = `stage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			// Generate new block ID
+			const newBlockId = `new_block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			
+			// Create a placeholder block so the card can be rendered with card type selection UI
+			const placeholderBlock = {
+				id: newBlockId,
+				message: "", // Empty message - will be set when card type is selected
+				options: [],
+			};
+			
+			const newFlow = { ...currentFunnel.flow };
+			newFlow.blocks[newBlockId] = placeholderBlock;
+			
+			const newStage: any = {
+				id: newStageId,
+				name: "New Stage",
+				explanation: "",
+				blockIds: [newBlockId],
+			};
+			
+			newFlow.stages.push(newStage);
+			
+			// Update flow with new stage and placeholder block
+			const updatedFunnel = { ...currentFunnel, flow: newFlow };
+			setCurrentFunnel(updatedFunnel);
+			onUpdate(updatedFunnel);
+			
+			// Show card type selection (block already exists, so it will render)
+			setPendingCardTypeSelection({
+				newBlockId,
+				newStageId,
+				sourceBlockId: blockId,
+				optionText: optionText,
+			});
+			return;
+		}
+
+		// Determine card type from existing stage
+		const stageCardType = nextStage.cardType || 
+			(nextStage.name === "OFFER" || nextStage.name === "VALUE_DELIVERY" || nextStage.name === "TRANSITION" 
+				? "product" 
+				: "qualification");
+
+		// Generate unique block ID for new card
+		const newBlockId = `new_block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+		// Create new block based on stage card type
+		const newBlock = {
+			id: newBlockId,
+			message: "New conversation block",
+			options: [],
+			...(stageCardType === "product" ? { resourceName: undefined } : {}),
+		};
+
+		// Add new block to flow
+		const newFlow = { ...currentFunnel.flow };
+		newFlow.blocks[newBlockId] = newBlock;
+
+		// Add block to next stage
+		const updatedNextStage = {
+			...nextStage,
+			blockIds: [...(nextStage.blockIds || []), newBlockId],
+		};
+		newFlow.stages[currentStageIndex + 1] = updatedNextStage;
+
+		// Update funnel with new card
+		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+
+		// Enter selection mode - highlight new card and existing cards in next stage
+		// Get existing block IDs (before adding the new one)
+		const existingNextStageBlockIds = (nextStage.blockIds || []).filter((id: string) => id !== newBlockId);
+		
+		setPendingOptionSelection({
+			isActive: true,
+			sourceBlockId: blockId,
+			optionText: optionText,
+			newBlockId: newBlockId,
+			nextStageBlockIds: existingNextStageBlockIds,
+		});
+	};
+
+	// Upsell flow: add/create Upsell or Downsell target and enter selection mode (no card type modal)
+	const handleUpsellDownsellClick = (blockId: string, kind: "upsell" | "downsell") => {
+		// If this button already generated a placeholder and connection is not yet specified, do not create another card
+		if (
+			pendingOptionSelection?.isActive &&
+			pendingOptionSelection.sourceBlockId === blockId &&
+			pendingOptionSelection.upsellKind === kind
+		) {
+			return; // Re-clicking same Upsell/Downsell while selection is active: no-op, keep existing placeholder
+		}
+
+		let flow = currentFunnel.flow ?? (hasFlow ? undefined : createMinimalFlow(currentFunnel.id, merchantType));
+		if (!flow) return;
+
+		// Switching from Upsell to Downsell (or vice versa): remove the previous placeholder so only one exists
+		if (pendingOptionSelection?.isActive && pendingOptionSelection.upsellKind !== kind) {
+			const oldPlaceholderId = pendingOptionSelection.newBlockId;
+			const newBlocks = { ...flow.blocks };
+			delete newBlocks[oldPlaceholderId];
+			const newStages = flow.stages.map((s: any) =>
+				s.blockIds && s.blockIds.includes(oldPlaceholderId)
+					? { ...s, blockIds: s.blockIds.filter((id: string) => id !== oldPlaceholderId) }
+					: s
+			);
+			flow = { ...flow, blocks: newBlocks, stages: newStages };
+		}
+
+		const currentStage = flow.stages.find((s: any) => s.blockIds && s.blockIds.includes(blockId));
+		if (!currentStage) return;
+
+		const currentStageIndex = flow.stages.indexOf(currentStage);
+		const nextStage = flow.stages[currentStageIndex + 1];
+		const optionText = kind === "upsell" ? "Upsell" : "Downsell";
+
+		const newBlockId = `new_block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		const newUpsellBlock = {
+			id: newBlockId,
+			message: "",
+			options: [
+				{ text: "Upsell", nextBlockId: null },
+				{ text: "Downsell", nextBlockId: null },
+			],
+		};
+
+		if (!nextStage) {
+			const newStageId = `stage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			const newStage: any = {
+				id: newStageId,
+				name: "OFFER",
+				explanation: "",
+				blockIds: [newBlockId],
+				cardType: "product",
+			};
+			const newFlow = { ...flow };
+			newFlow.blocks[newBlockId] = newUpsellBlock;
+			newFlow.stages = [...flow.stages, newStage];
+			const updatedFunnel = { ...currentFunnel, flow: newFlow };
+			setCurrentFunnel(updatedFunnel);
+			onUpdate(updatedFunnel);
+			setPendingOptionSelection({
+				isActive: true,
+				sourceBlockId: blockId,
+				optionText,
+				newBlockId,
+				nextStageBlockIds: [],
+				upsellKind: kind,
+				onlyPlaceholderSelectable: true,
+			});
+			return;
+		}
+
+		const newFlow = { ...flow };
+		newFlow.blocks[newBlockId] = newUpsellBlock;
+		const updatedNextStage = { ...nextStage, blockIds: [...(nextStage.blockIds || []), newBlockId] };
+		newFlow.stages[currentStageIndex + 1] = updatedNextStage;
+		const existingNextStageBlockIds = (nextStage.blockIds || []).filter((id: string) => id !== newBlockId);
+		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+		setPendingOptionSelection({
+			isActive: true,
+			sourceBlockId: blockId,
+			optionText,
+			newBlockId,
+			nextStageBlockIds: existingNextStageBlockIds,
+			upsellKind: kind,
+			onlyPlaceholderSelectable: false,
+		});
+	};
+
+	// Handle card type selection (for new stages)
+	const handleCardTypeSelection = (cardType: "qualification" | "product") => {
+		if (!pendingCardTypeSelection || !currentFunnel.flow) return;
+		
+		// Create a proper copy of the flow with updated stage
+		const newFlow = {
+			...currentFunnel.flow,
+			stages: currentFunnel.flow.stages.map((s: any) => 
+				s.id === pendingCardTypeSelection.newStageId
+					? { ...s, cardType } // Create new stage object with cardType, preserving all other fields
+					: s
+			),
+		};
+		
+		const newStage = newFlow.stages.find((s: any) => s.id === pendingCardTypeSelection.newStageId);
+		
+		// Create block based on card type
+		const defaultMessage = cardType === "product" 
+			? "New conversation block\n\n[LINK]"
+			: "New conversation block";
+		
+		const newBlock = {
+			id: pendingCardTypeSelection.newBlockId,
+			message: defaultMessage,
+			options: [],
+			...(cardType === "product" ? { resourceName: undefined } : {}), // Product cards may need resourceName
+		};
+		
+		newFlow.blocks[pendingCardTypeSelection.newBlockId] = newBlock;
+		
+		// Add block to new stage (block already exists, just ensure it's in the stage)
+		if (newStage && !newStage.blockIds.includes(pendingCardTypeSelection.newBlockId)) {
+			newStage.blockIds = [...newStage.blockIds, pendingCardTypeSelection.newBlockId];
+		}
+		
+		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+		
+		// Enter selection mode for connecting option
+		setPendingOptionSelection({
+			isActive: true,
+			sourceBlockId: pendingCardTypeSelection.sourceBlockId,
+			optionText: pendingCardTypeSelection.optionText,
+			newBlockId: pendingCardTypeSelection.newBlockId,
+			nextStageBlockIds: [], // New stage, no existing cards
+		});
+		
+		setPendingCardTypeSelection(null);
+	};
+
+	// Handle card selection - connect option to selected card (or set upsellBlockId/downsellBlockId for upsell)
+	const handleCardSelection = (selectedBlockId: string) => {
+		if (!pendingOptionSelection || !currentFunnel.flow) return;
+
+		const sourceBlock = currentFunnel.flow.blocks[pendingOptionSelection.sourceBlockId];
+		if (!sourceBlock) return;
+
+		// Check if user selected an existing card (not the new card)
+		const isExistingCard = selectedBlockId !== pendingOptionSelection.newBlockId;
+
+		// If existing card was selected, remove the new card that was created (and remove stage if it becomes empty)
+		if (isExistingCard) {
+			const newFlow = { ...currentFunnel.flow };
+			
+			// Remove new block from blocks
+			delete newFlow.blocks[pendingOptionSelection.newBlockId];
+
+			// Remove new block from its stage; if stage is now empty, remove the stage label too
+			const stageWithNewBlockIndex = newFlow.stages.findIndex((stage: any) =>
+				stage.blockIds && stage.blockIds.includes(pendingOptionSelection.newBlockId)
+			);
+			if (stageWithNewBlockIndex >= 0) {
+				const stageWithNewBlock = newFlow.stages[stageWithNewBlockIndex];
+				stageWithNewBlock.blockIds = stageWithNewBlock.blockIds.filter(
+					(id: string) => id !== pendingOptionSelection.newBlockId
+				);
+				if (stageWithNewBlock.blockIds.length === 0 && stageWithNewBlockIndex > 0) {
+					newFlow.stages = newFlow.stages.filter((_: any, index: number) => index !== stageWithNewBlockIndex);
+				}
+			}
+
+			// Update funnel without the new card
+			const updatedFunnel = { ...currentFunnel, flow: newFlow };
+			setCurrentFunnel(updatedFunnel);
+			onUpdate(updatedFunnel);
+		}
+
+		// Upsell flow: set upsellBlockId or downsellBlockId and sync options; same card cannot be both upsell and downsell
+		if (pendingOptionSelection.upsellKind) {
+			const flow = currentFunnel.flow;
+			const getStageIndex = (blockId: string) =>
+				flow.stages.findIndex((s: any) => s.blockIds && s.blockIds.includes(blockId));
+			// Last-stage case: only placeholder is valid; reject wrong block or selection from above stage
+			if (pendingOptionSelection.onlyPlaceholderSelectable) {
+				if (selectedBlockId !== pendingOptionSelection.newBlockId) {
+					setPendingOptionSelection(null);
+					return;
+				}
+				const sourceStageIndex = getStageIndex(pendingOptionSelection.sourceBlockId);
+				const targetStageIndex = getStageIndex(selectedBlockId);
+				if (targetStageIndex >= 0 && sourceStageIndex >= 0 && targetStageIndex < sourceStageIndex) {
+					setPendingOptionSelection(null);
+					return;
+				}
+			}
+			const targetStage = flow.stages.find((s: any) => s.blockIds && s.blockIds.includes(selectedBlockId));
+			if (targetStage?.name === "WELCOME") {
+				setPendingOptionSelection(null);
+				return;
+			}
+			const sourceStageIndex = getStageIndex(pendingOptionSelection.sourceBlockId);
+			const targetStageIndex = getStageIndex(selectedBlockId);
+			const isCrossStage = sourceStageIndex >= 0 && targetStageIndex >= 0 && targetStageIndex !== sourceStageIndex + 1;
+
+			const style = isCrossStage ? pickRandomUnusedCrossStageStyle(flow) : null;
+
+			const updatedBlock = {
+				...sourceBlock,
+				...(pendingOptionSelection.upsellKind === "upsell"
+					? {
+							upsellBlockId: selectedBlockId,
+							downsellBlockId: sourceBlock.downsellBlockId === selectedBlockId ? null : sourceBlock.downsellBlockId,
+							upsellCrossStageStyle: isCrossStage && style ? style : null,
+						}
+					: {
+							downsellBlockId: selectedBlockId,
+							upsellBlockId: sourceBlock.upsellBlockId === selectedBlockId ? null : sourceBlock.upsellBlockId,
+							downsellCrossStageStyle: isCrossStage && style ? style : null,
+						}),
+			};
+			handleBlockUpdate(updatedBlock);
+			setPendingOptionSelection(null);
+			return;
+		}
+
+		// Qualification flow: add new option to source block pointing to selected card
+		const newOption = {
+			text: pendingOptionSelection.optionText,
+			nextBlockId: selectedBlockId,
+		};
+
+		const updatedBlock = {
+			...sourceBlock,
+			options: [...(sourceBlock.options || []), newOption],
+		};
+
+		// Update block
+		handleBlockUpdate(updatedBlock);
+
+		// Exit selection mode
+		setPendingOptionSelection(null);
+	};
+
+	// Handle delete click - first click: calculate affected connections and show highlights
+	const handleDeleteClick = (blockId: string) => {
+		if (!currentFunnel.flow) return;
+
+		const blockToDelete = currentFunnel.flow.blocks[blockId];
+		if (!blockToDelete) return;
+
+		// Find options leading TO deleted card (and upsell blocks: upsellBlockId/downsellBlockId/referencedBlockId)
+		const affectedOptions: Array<{ blockId: string; optionIndex: number }> = [];
+		Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
+			if (block.options && Array.isArray(block.options)) {
+				block.options.forEach((opt: any, index: number) => {
+					if (opt.nextBlockId === blockId) {
+						affectedOptions.push({ blockId: block.id, optionIndex: index });
+					}
+				});
+			}
+			// Upsell: blocks pointing to this block via upsellBlockId, downsellBlockId, or referencedBlockId
+			if (block.upsellBlockId === blockId) {
+				affectedOptions.push({ blockId: block.id, optionIndex: 0 }); // Upsell is index 0
+			}
+			if (block.downsellBlockId === blockId) {
+				affectedOptions.push({ blockId: block.id, optionIndex: 1 }); // Downsell is index 1
+			}
+		});
+
+		// Find outgoing connections FROM deleted card
+		const outgoingConnections: Array<{ targetBlockId: string }> = [];
+		if (blockToDelete.options && Array.isArray(blockToDelete.options)) {
+			blockToDelete.options.forEach((opt: any) => {
+				if (opt.nextBlockId) {
+					outgoingConnections.push({ targetBlockId: opt.nextBlockId });
+				}
+			});
+		}
+
+		// Find the stage containing the block to delete
+		const blockStage = currentFunnel.flow.stages.find((stage: any) =>
+			stage.blockIds && stage.blockIds.includes(blockId)
+		);
+		if (!blockStage) return;
+
+		const stageIndex = currentFunnel.flow.stages.indexOf(blockStage);
+		const nextStage = currentFunnel.flow.stages[stageIndex + 1];
+		const previousStage = currentFunnel.flow.stages[stageIndex - 1];
+
+		// Find orphaned cards in next stage (will be calculated after deletion)
+		const orphanedNextStageCards: string[] = [];
+
+		// Find broken cards in previous stage (will be calculated after deletion)
+		const brokenPreviousStageCards: string[] = [];
+
+		// Find invalid options
+		const invalidOptions = findInvalidOptions(currentFunnel.flow);
+
+		setPendingDelete({
+			blockId,
+			affectedOptions,
+			outgoingConnections,
+			orphanedNextStageCards,
+			brokenPreviousStageCards,
+			invalidOptions,
+		});
+	};
+
+	// Handle confirm delete - second click: actually delete the card
+	const handleConfirmDelete = () => {
+		if (!pendingDelete || !currentFunnel.flow) return;
+
+		const newFlow = { ...currentFunnel.flow };
+
+		// Find the stage that contained the deleted block BEFORE removing it
+		const deletedStageIndex = newFlow.stages.findIndex((stage: any) =>
+			stage.blockIds && stage.blockIds.includes(pendingDelete.blockId)
+		);
+		const deletedStage = deletedStageIndex >= 0 ? newFlow.stages[deletedStageIndex] : null;
+		const nextStage = deletedStageIndex >= 0 ? newFlow.stages[deletedStageIndex + 1] : null;
+		const previousStage = deletedStageIndex >= 0 ? newFlow.stages[deletedStageIndex - 1] : null;
+
+		// Remove options leading to deleted card
+		pendingDelete.affectedOptions.forEach(({ blockId, optionIndex }) => {
+			const block = newFlow.blocks[blockId];
+			if (block && block.options && Array.isArray(block.options)) {
+				block.options = block.options.filter((_: any, index: number) => index !== optionIndex);
+			}
+		});
+
+		// Upsell: clear upsellBlockId, downsellBlockId, or referencedBlockId pointing to deleted block
+		Object.keys(newFlow.blocks).forEach((bid) => {
+			const b = newFlow.blocks[bid] as any;
+			if (!b) return;
+			let changed = false;
+			if (b.upsellBlockId === pendingDelete.blockId) {
+				b.upsellBlockId = null;
+				changed = true;
+			}
+			if (b.downsellBlockId === pendingDelete.blockId) {
+				b.downsellBlockId = null;
+				changed = true;
+			}
+			if (b.referencedBlockId === pendingDelete.blockId) {
+				b.referencedBlockId = null;
+				changed = true;
+			}
+			if (changed && (b.upsellBlockId !== undefined || b.downsellBlockId !== undefined)) {
+				b.options = getUpsellBlockOptions(b);
+			}
+		});
+
+		// Remove deleted block from flow
+		delete newFlow.blocks[pendingDelete.blockId];
+
+		// Remove block ID from its stage
+		if (deletedStage) {
+			deletedStage.blockIds = deletedStage.blockIds.filter(
+				(id: string) => id !== pendingDelete.blockId
+			);
+			
+			// If stage is now empty (and not first stage), remove it
+			if (deletedStage.blockIds.length === 0 && deletedStageIndex > 0) {
+				// Remove stage from stages array
+				newFlow.stages = newFlow.stages.filter((_: any, index: number) => index !== deletedStageIndex);
+				
+				// Previous stage is now the last stage
+				// No additional action needed - it's already the last
+			}
+		}
+
+		// Find ALL orphaned cards (cards with no incoming connections) - check all stages
+		const orphanedNextStageCards: string[] = [];
+		for (let stageIndex = 0; stageIndex < newFlow.stages.length; stageIndex++) {
+			const stage = newFlow.stages[stageIndex];
+			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+			// Skip first stage (start block doesn't need incoming connections)
+			if (stageIndex === 0) continue;
+
+			for (const cardId of stage.blockIds) {
+				// Check if any block has an option pointing to this card
+				const hasIncomingConnection = Object.values(newFlow.blocks).some((block: any) => {
+					if (!block || !block.options || !Array.isArray(block.options)) return false;
+					return block.options.some((opt: any) => opt.nextBlockId === cardId);
+				});
+				if (!hasIncomingConnection) {
+					orphanedNextStageCards.push(cardId);
+				}
+			}
+		}
+
+		// Find ALL broken cards (cards with no outgoing connections to next stage) - check all stages
+		const brokenPreviousStageCards: string[] = [];
+		for (let stageIndex = 0; stageIndex < newFlow.stages.length - 1; stageIndex++) {
+			const stage = newFlow.stages[stageIndex];
+			const nextStage = newFlow.stages[stageIndex + 1];
+			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
+			if (!nextStage) continue; // No next stage = OK (last stage)
+
+			// If next stage is empty, all cards in current stage are broken
+			if (!nextStage.blockIds || nextStage.blockIds.length === 0) {
+				// All cards in current stage are broken (no valid next stage)
+				for (const cardId of stage.blockIds) {
+					brokenPreviousStageCards.push(cardId);
+				}
+				continue;
+			}
+
+			for (const cardId of stage.blockIds) {
+				const block = newFlow.blocks[cardId];
+				if (!block || !block.options || !Array.isArray(block.options)) {
+					brokenPreviousStageCards.push(cardId);
+					continue;
+				}
+
+				// Check if this block has any option pointing to a card in the next stage
+				const hasOutgoingConnection = block.options.some((opt: any) =>
+					opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
+				);
+				if (!hasOutgoingConnection) {
+					brokenPreviousStageCards.push(cardId);
+				}
+			}
+		}
+
+		// Update flow
+		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+
+		// Find invalid options after deletion
+		const invalidOptions = findInvalidOptions(newFlow);
+
+		// Update pendingDelete with current orphaned/broken cards and invalid options (highlights persist)
+		setPendingDelete({
+			blockId: pendingDelete.blockId, // Keep for reference
+			affectedOptions: [], // No longer relevant after deletion
+			outgoingConnections: [], // No longer relevant after deletion
+			orphanedNextStageCards,
+			brokenPreviousStageCards,
+			invalidOptions,
+		});
+
+		// Recalculate draft status
+		const draftResult = checkDraftStatus(newFlow, updatedFunnel);
+		logDraftStatus(draftResult);
+		if (updatedFunnel.isDraft !== draftResult.isDraft) {
+			const funnelWithDraft = { ...updatedFunnel, isDraft: draftResult.isDraft };
+			setCurrentFunnel(funnelWithDraft);
+			onUpdate(funnelWithDraft);
+		}
+		
+		// If stage was removed, check if previous stage is now last
+		// (No additional action needed - it's already the last)
+	};
+
+	// Handle cancel delete - clear pending deletion
+	const handleCancelDelete = () => {
+		setPendingDelete(null);
+	};
+
+	// Handle stage update (name or explanation)
+	const handleStageUpdate = (stageId: string, updates: { name?: string; explanation?: string }) => {
+		if (!currentFunnel.flow) return;
+
+		// Create a proper copy of the flow with new stages array
+		const newFlow = {
+			...currentFunnel.flow,
+			stages: currentFunnel.flow.stages.map((s: any) => 
+				s.id === stageId 
+					? { ...s, ...updates } // Create new stage object with updates, preserving cardType
+					: s
+			),
+		};
+		
+		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+	};
+
+	// Fetch resources when needed
+	React.useEffect(() => {
+		if (user?.experienceId) {
+			setLoadingResources(true);
+			fetch(`/api/resources?experienceId=${user.experienceId}&limit=100`)
+				.then((res) => res.json())
+				.then((data) => {
+					if (data.success && data.data?.resources) {
+						setResources(data.data.resources.map((r: any) => ({ id: r.id, name: r.name })));
+					}
+				})
+				.catch((err) => console.error("Error fetching resources:", err))
+				.finally(() => setLoadingResources(false));
+		}
+	}, [user?.experienceId]);
+
+	// Fetch funnels when needed
+	React.useEffect(() => {
+		setLoadingFunnels(true);
+		fetch(`/api/funnels?limit=100`)
+			.then((res) => res.json())
+			.then((data) => {
+				if (data.success && data.data?.funnels) {
+					setFunnels(data.data.funnels.map((f: any) => ({ id: f.id, name: f.name })));
+				}
+			})
+			.catch((err) => console.error("Error fetching funnels:", err))
+			.finally(() => setLoadingFunnels(false));
+	}, []);
+
+	// Handle trigger type selection (just for UI, doesn't save)
+	const handleTriggerSelect = (category: "Membership" | "App", triggerId?: TriggerType, config?: TriggerConfig) => {
+		// Update canvas immediately (optimistic update)
+		const updatedFunnel = { 
+			...currentFunnel, 
+			[`${category.toLowerCase()}TriggerType`]: triggerId,
+			[`${category.toLowerCase()}TriggerConfig`]: config || {},
+		};
+		setCurrentFunnel(updatedFunnel);
+		
+		// Check draft status after trigger change
+		const draftResult = checkDraftStatus(updatedFunnel.flow, updatedFunnel);
+		logDraftStatus(draftResult);
+		if (updatedFunnel.isDraft !== draftResult.isDraft) {
+			const funnelWithDraft = { ...updatedFunnel, isDraft: draftResult.isDraft };
+			setCurrentFunnel(funnelWithDraft);
+		}
+		
+		// Don't save yet - save happens via handleTriggerSave
+	};
+
+	// Handle resource change (for membership_buy and cancel_membership triggers)
+	const handleResourceChange = (resourceId: string) => {
+		const membershipTrigger = currentFunnel.membershipTriggerType;
+		const config: TriggerConfig = { ...currentFunnel.membershipTriggerConfig, resourceId: resourceId || undefined };
+		handleTriggerSelect("Membership", membershipTrigger || "membership_buy", config);
+	};
+
+	// Handle membership filter change (filterResourceIdsRequired / filterResourceIdsExclude)
+	const handleMembershipFilterChange = (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => {
+		const membershipTrigger = currentFunnel.membershipTriggerType;
+		const merged: TriggerConfig = { ...currentFunnel.membershipTriggerConfig, ...updates };
+		handleTriggerSelect("Membership", membershipTrigger || "membership_buy", merged);
+	};
+
+	// Handle funnel change (for qualification/upsell/delete_merchant_conversation triggers)
+	const handleFunnelChange = (funnelId: string) => {
+		const config: TriggerConfig = { ...currentFunnel.appTriggerConfig, funnelId: funnelId || undefined };
+		const appTrigger = currentFunnel.appTriggerType ?? "on_app_entry";
+		handleTriggerSelect("App", appTrigger, config);
+	};
+
+	// Handle qualification profile change (qualification_merchant_complete: trigger when user has this profile)
+	const handleQualificationProfileChange = (profileId: string) => {
+		const appTrigger = currentFunnel.appTriggerType ?? "on_app_entry";
+		const config: TriggerConfig = { ...currentFunnel.appTriggerConfig, profileId: profileId || undefined };
+		handleTriggerSelect("App", appTrigger, config);
+	};
+
+
+	// Handle trigger save (saves trigger selection and config)
+	const handleTriggerSave = (category: "Membership" | "App", triggerId?: TriggerType, config?: TriggerConfig) => {
+		const updatedFunnel = { 
+			...currentFunnel, 
+			[`${category.toLowerCase()}TriggerType`]: triggerId,
+			[`${category.toLowerCase()}TriggerConfig`]: config || {},
+		};
+		
+		// Check draft status after trigger save
+		const draftResult = checkDraftStatus(updatedFunnel.flow, updatedFunnel);
+		logDraftStatus(draftResult);
+		const funnelWithDraft = { ...updatedFunnel, isDraft: draftResult.isDraft };
+		
+		setCurrentFunnel(funnelWithDraft);
+		onUpdate(funnelWithDraft);
+		setShowTriggerPanel(false);
+		setTriggerPanelCategory(null);
+	};
+
+	// Handle app delay change (just for UI, doesn't save)
+	const handleDelayChange = (minutes: number) => {
+		// This is called when delay input changes, but doesn't save
+		// Save happens via handleDelaySave
+	};
+
+	// Handle app delay save (saves delay value)
+	const handleDelaySave = (minutes: number) => {
+		const updatedFunnel = { 
+			...currentFunnel, 
+			delayMinutes: minutes,
+		};
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+	};
+
+	// Handle membership delay change (just for UI, doesn't save)
+	const handleMembershipDelayChange = (minutes: number) => {
+		// This is called when delay input changes, but doesn't save
+		// Save happens via handleMembershipDelaySave
+	};
+
+	// Handle membership delay save (saves delay value)
+	const handleMembershipDelaySave = (minutes: number) => {
+		const updatedFunnel = { 
+			...currentFunnel, 
+			membershipDelayMinutes: minutes,
+		};
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+	};
+
+	// Handle notification change - optimistic update (updates canvas immediately, no backend)
+	const handleNotificationChange = (input: FunnelNotificationInput) => {
+		// Create a temporary notification object for display
+		const tempNotification: FunnelNotification = {
+			id: selectedNotificationId || `temp-${input.stageId}-${input.sequence}`,
+			funnelId: input.funnelId,
+			stageId: input.stageId,
+			sequence: input.sequence,
+			message: input.message,
+			inactivityMinutes: input.inactivityMinutes,
+			notificationType: input.notificationType,
+			isReset: false,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		// Update local state immediately (optimistic update)
+		setNotifications((prev) => {
+			// Try to find existing by ID
+			if (selectedNotificationId) {
+				const existing = prev.find((n) => n.id === selectedNotificationId);
+				if (existing) {
+					return prev.map((n) => (n.id === selectedNotificationId ? tempNotification : n));
+				}
+			}
+
+			// Try to find by stageId and sequence
+			const existingIndex = prev.findIndex(
+				(n) => n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset
+			);
+			if (existingIndex >= 0) {
+				return prev.map((n, i) => (i === existingIndex ? tempNotification : n));
+			} else {
+				// New notification - add it
+				return [...prev, tempNotification];
+			}
+		});
+	};
+
+	// Handle notification save - saves to backend
+	const handleNotificationSave = async (input: FunnelNotificationInput) => {
+		try {
+			const response = await fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(input),
+			});
+			const data = await response.json();
+			if (data.success && data.data) {
+				// Update local state with real data from backend
+				setNotifications((prev) => {
+					// Try to find by returned ID first (most reliable)
+					const existingById = prev.find((n) => n.id === data.data.id);
+					if (existingById) {
+						return prev.map((n) => (n.id === data.data.id ? { ...data.data } : n));
+					}
+					
+					// If we have a selectedNotificationId, try to find by that
+					if (selectedNotificationId) {
+						const existingBySelectedId = prev.find((n) => n.id === selectedNotificationId);
+						if (existingBySelectedId) {
+							return prev.map((n) => (n.id === selectedNotificationId ? { ...data.data } : n));
+						}
+					}
+					
+					// Try to find by stageId and sequence
+					const existingIndex = prev.findIndex(
+						(n) => n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset
+					);
+					if (existingIndex >= 0) {
+						return prev.map((n, i) => (i === existingIndex ? { ...data.data } : n));
+					} else {
+						// Remove any temp notification with same stageId and sequence
+						const filtered = prev.filter(
+							(n) => !(n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset && n.id !== data.data.id)
+						);
+						return [...filtered, { ...data.data }];
+					}
+				});
+				// Close edit mode after saving
+				handleNotificationClose();
+			}
+		} catch (error) {
+			console.error("Error saving notification:", error);
+		}
+	};
+
+
+	// Handle notification delete
+	const handleNotificationDelete = async (notificationId: string) => {
+		try {
+			const response = await fetch(
+				`/api/funnels/${currentFunnel.id}/notifications?notificationId=${notificationId}`,
+				{
+					method: "DELETE",
+				}
+			);
+			const data = await response.json();
+			if (data.success) {
+				setNotifications(notifications.filter((n) => n.id !== notificationId));
+				if (selectedNotificationId === notificationId) {
+					setSelectedNotificationId(null);
+					setSelectedNotificationSequence(null);
+					setSelectedNotificationStageId(null);
+				}
+			}
+		} catch (error) {
+			console.error("Error deleting notification:", error);
+		}
+	};
+
+	// Handle notification click from canvas
+	const handleNotificationClick = (notification: FunnelNotification | null, stageId: string, sequence: number) => {
+		if (notification) {
+			setSelectedNotificationId(notification.id);
+			setSelectedNotificationSequence(null);
+			setSelectedNotificationStageId(stageId);
+		} else {
+			// Adding new notification - always create a new one
+			// Use a unique temp ID with timestamp to ensure it's always new
+			const tempId = `temp-${stageId}-${sequence}-${Date.now()}`;
+			setSelectedNotificationId(tempId);
+			handleNotificationChange({
+				funnelId: currentFunnel.id,
+				stageId,
+				sequence,
+				inactivityMinutes: 30,
+				message: "Reminder message",
+				notificationType: "standard",
+				isReset: false,
+			});
+			setSelectedNotificationSequence(null);
+			setSelectedNotificationStageId(stageId);
+		}
+		setSelectedResetId(null);
+		setSelectedResetStageId(null);
+		setShowConfigPanel(true);
+	};
+
+	// Handle notification close (deselect)
+	const handleNotificationClose = () => {
+		setSelectedNotificationId(null);
+		setSelectedNotificationSequence(null);
+		setSelectedNotificationStageId(null);
+	};
+
+	// Handle reset click from canvas
+	const handleResetClick = (reset: FunnelNotification | null, stageId: string) => {
+		// CRITICAL: Always set selectedResetStageId, even if reset doesn't exist yet
+		setSelectedResetId(reset?.id || null);
+		setSelectedResetStageId(stageId); // Must be set for sidebar to show reset options
+		setSelectedNotificationId(null);
+		setSelectedNotificationSequence(null);
+		setSelectedNotificationStageId(null);
+		setShowConfigPanel(true);
+	};
+
+
+	// Handle reset change - optimistic update (updates canvas immediately, no backend)
+	const handleResetChange = (stageId: string, resetAction: "delete" | "complete", delayMinutes: number) => {
+		// Find existing reset notification for this stage
+		const existingReset = notifications.find((n) => n.stageId === stageId && n.isReset);
+
+		// Get max sequence for this stage
+		const stageNotifications = notifications.filter((n) => n.stageId === stageId && !n.isReset);
+		const maxSequence = stageNotifications.length > 0 
+			? Math.max(...stageNotifications.map((n) => n.sequence))
+			: 0;
+
+		// Create temporary reset object for display
+		const tempReset: FunnelNotification = {
+			id: existingReset?.id || `temp-reset-${stageId}`,
+			funnelId: currentFunnel.id,
+			stageId,
+			sequence: existingReset?.sequence ?? maxSequence + 1,
+			inactivityMinutes: 0,
+			message: resetAction === "delete" ? "Delete conversation" : "Mark as completed",
+			isReset: true,
+			resetAction,
+			delayMinutes,
+			createdAt: existingReset?.createdAt || new Date(),
+			updatedAt: new Date(),
+		};
+
+		// Update local state immediately (optimistic update)
+		setNotifications((prev) => {
+			if (existingReset) {
+				return prev.map((n) => (n.id === existingReset.id ? tempReset : n));
+			} else {
+				// Remove any temp reset for this stage
+				const filtered = prev.filter((n) => !(n.stageId === stageId && n.isReset && n.id.startsWith("temp-")));
+				return [...filtered, tempReset];
+			}
+		});
+	};
+
+	// Handle reset save - saves to backend
+	const handleResetSave = async (stageId: string, resetAction: "delete" | "complete", delayMinutes: number) => {
+		try {
+			// Find existing reset notification for this stage (regardless of action type)
+			const existingReset = notifications.find((n) => n.stageId === stageId && n.isReset);
+
+			// If delayMinutes is 0, delete the reset
+			if (delayMinutes === 0 && existingReset) {
+				await handleNotificationDelete(existingReset.id);
+				setSelectedResetId(null);
+				setSelectedResetStageId(null);
+				return;
+			}
+
+			// Get max sequence for this stage
+			const stageNotifications = notifications.filter((n) => n.stageId === stageId && !n.isReset);
+			const maxSequence = stageNotifications.length > 0 
+				? Math.max(...stageNotifications.map((n) => n.sequence))
+				: 0;
+
+			const input: FunnelNotificationInput = {
+				funnelId: currentFunnel.id,
+				stageId,
+				sequence: existingReset?.sequence ?? maxSequence + 1,
+				inactivityMinutes: 0, // Not used for reset
+				message: resetAction === "delete" ? "Delete conversation" : "Mark as completed",
+				isReset: true,
+				resetAction,
+				delayMinutes,
+			};
+
+			const response = await fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(input),
+			});
+			const data = await response.json();
+			if (data.success && data.data) {
+				// Update local state using functional update to ensure we have latest state
+				setNotifications((prev) => {
+					// Try to find by ID first (if updating existing)
+					const existingById = prev.find((n) => n.id === data.data.id);
+					if (existingById) {
+						// Update existing reset by ID - create new object to force re-render
+						return prev.map((n) => (n.id === data.data.id ? { ...data.data } : n));
+					}
+					
+					// Try to find by stageId and isReset (for existing reset)
+					const existingResetInState = prev.find((n) => n.stageId === stageId && n.isReset);
+					if (existingResetInState) {
+						// Update the existing reset with new action type - create new object
+						return prev.map((n) => (n.id === existingResetInState.id ? { ...data.data } : n));
+					} else {
+						// Remove any temp reset for this stage and add the real one
+						const filtered = prev.filter((n) => !(n.stageId === stageId && n.isReset && n.id.startsWith("temp-")));
+						return [...filtered, { ...data.data }];
+					}
+				});
+				setSelectedResetId(data.data.id);
+			}
+		} catch (error) {
+			console.error("Error saving reset:", error);
+		}
+	};
+
+	// Handle handout configuration change
+	const handleHandoutChange = (keyword: string, adminNotification?: string, userMessage?: string) => {
+		const updatedFunnel = {
+			...currentFunnel,
+			handoutKeyword: keyword,
+			handoutAdminNotification: adminNotification,
+			handoutUserMessage: userMessage,
+		};
+		setCurrentFunnel(updatedFunnel);
+		onUpdate(updatedFunnel);
+	};
+
+	// Handle product FAQ change
+	const handleProductFaqChange = async (input: FunnelProductFaqInput) => {
+		try {
+			const response = await fetch(`/api/funnels/${currentFunnel.id}/product-faqs`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(input),
+			});
+			
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({ error: `HTTP error! status: ${response.status}` }));
+				console.error("Product FAQ API error:", errorData);
+				return; // Don't throw, just log and return
+			}
+			
+			const data = await response.json();
+			if (data.success && data.data) {
+				// Update local state
+				const existingIndex = productFaqs.findIndex((f) => f.resourceId === input.resourceId);
+				if (existingIndex >= 0) {
+					setProductFaqs(productFaqs.map((f, i) => (i === existingIndex ? data.data : f)));
+				} else {
+					setProductFaqs([...productFaqs, data.data]);
+				}
+			}
+		} catch (error) {
+			console.error("Error saving product FAQ:", error);
+		}
+	};
+
+	// Fetch notifications when entering Configure view
+	React.useEffect(() => {
+		// Only fetch if we have all required data
+		if (!showConfigureView || !currentFunnel.id || !user?.experienceId || !currentFunnel.flow?.stages) {
+			return;
+		}
+		
+		// Fetch existing notifications
+		fetch(`/api/funnels/${currentFunnel.id}/notifications`)
+			.then((res) => {
+					if (!res.ok) {
+						// If 400 or 401, try to get error message from response
+						if (res.status === 400 || res.status === 401) {
+							return res.json().then((errorData) => {
+								console.error("API error:", errorData);
+								throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+							}).catch(() => {
+								throw new Error(`HTTP error! status: ${res.status}`);
+							});
+						}
+						throw new Error(`HTTP error! status: ${res.status}`);
+					}
+					const contentType = res.headers.get("content-type");
+					if (!contentType || !contentType.includes("application/json")) {
+						throw new Error("Response is not JSON");
+					}
+					return res.json();
+				})
+				.then(async (data) => {
+					if (data.success && data.data) {
+						const fetchedNotifications = data.data;
+						const stages = currentFunnel.flow.stages;
+						
+						// Create optimistic default notifications/resets immediately (before API calls)
+						const optimisticDefaults: FunnelNotification[] = [];
+						
+						for (const stage of stages) {
+							// Check if stage has a notification with sequence 1
+							const hasNotification = fetchedNotifications.some(
+								(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
+							);
+							
+							// Check if stage has a reset
+							const hasReset = fetchedNotifications.some(
+								(n: FunnelNotification) => n.stageId === stage.id && n.isReset
+							);
+							
+							// Create optimistic default notification (Standard) if missing
+							if (!hasNotification) {
+								const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow);
+								optimisticDefaults.push({
+									id: `temp-notif-${stage.id}-1`,
+									funnelId: currentFunnel.id,
+									stageId: stage.id,
+									sequence: 1,
+									inactivityMinutes: 30,
+									message: lastMessage || "Reminder message",
+									notificationType: "standard",
+									isReset: false,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								});
+							}
+							
+							// Create optimistic default reset (Delete) if missing
+							if (!hasReset) {
+								const stageNotifs = fetchedNotifications.filter(
+									(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
+								);
+								const maxSequence = stageNotifs.length > 0 
+									? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
+									: 0;
+								
+								optimisticDefaults.push({
+									id: `temp-reset-${stage.id}`,
+									funnelId: currentFunnel.id,
+									stageId: stage.id,
+									sequence: maxSequence + 1,
+									inactivityMinutes: 0,
+									message: "",
+									isReset: true,
+									resetAction: "delete",
+									delayMinutes: 60,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								});
+							}
+						}
+						
+						// Set optimistic defaults immediately so they appear on canvas
+						setNotifications((prev) => {
+							const allNotifications = [...fetchedNotifications, ...optimisticDefaults];
+							const uniqueNotifications = allNotifications.reduce((acc: FunnelNotification[], notif: FunnelNotification) => {
+								const existing = acc.find((n: FunnelNotification) => n.id === notif.id || 
+									(n.stageId === notif.stageId && n.sequence === notif.sequence && n.isReset === notif.isReset));
+								if (!existing) {
+									acc.push(notif);
+								} else {
+									// Update existing with latest data (prefer fetched over optimistic)
+									const index = acc.indexOf(existing);
+									if (!notif.id.startsWith("temp-")) {
+										acc[index] = notif; // Prefer real data over temp
+									}
+								}
+								return acc;
+							}, [] as FunnelNotification[]);
+							return uniqueNotifications;
+						});
+						
+						// Create defaults via API in background (non-blocking)
+						// These will replace optimistic ones when they complete
+						for (const stage of stages) {
+							const hasNotification = fetchedNotifications.some(
+								(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
+							);
+							
+							const hasReset = fetchedNotifications.some(
+								(n: FunnelNotification) => n.stageId === stage.id && n.isReset
+							);
+							
+							// Create default notification (Standard) if missing - fire and forget
+							if (!hasNotification) {
+								const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow);
+								fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
+									method: "POST",
+									headers: { "Content-Type": "application/json" },
+									body: JSON.stringify({
+										funnelId: currentFunnel.id,
+										stageId: stage.id,
+										sequence: 1,
+										inactivityMinutes: 30,
+										message: lastMessage || "Reminder message",
+										notificationType: "standard",
+										isReset: false,
+									}),
+								})
+									.then((res) => res.json())
+									.then((result) => {
+										if (result.success && result.data) {
+											// Replace optimistic notification with real one
+											setNotifications((prev) => {
+												const withoutTemp = prev.filter((n) => 
+													!(n.id.startsWith("temp-notif-") && n.stageId === stage.id && n.sequence === 1)
+												);
+												const existing = withoutTemp.find((n) => n.id === result.data.id);
+												if (!existing) {
+													return [...withoutTemp, result.data];
+												}
+												return withoutTemp.map((n) => n.id === result.data.id ? result.data : n);
+											});
+										}
+									})
+									.catch((err) => {
+										console.error("Error creating default notification:", err);
+										// Keep optimistic notification on error
+									});
+							}
+							
+							// Create default reset (Delete) if missing - fire and forget
+							if (!hasReset) {
+								const stageNotifs = fetchedNotifications.filter(
+									(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
+								);
+								const maxSequence = stageNotifs.length > 0 
+									? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
+									: 0;
+								
+								fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
+									method: "POST",
+									headers: { "Content-Type": "application/json" },
+									body: JSON.stringify({
+										funnelId: currentFunnel.id,
+										stageId: stage.id,
+										sequence: maxSequence + 1,
+										inactivityMinutes: 0,
+										message: "",
+										isReset: true,
+										resetAction: "delete",
+										delayMinutes: 60,
+									}),
+								})
+									.then((res) => res.json())
+									.then((result) => {
+										if (result.success && result.data) {
+											// Replace optimistic reset with real one
+											setNotifications((prev) => {
+												const withoutTemp = prev.filter((n) => 
+													!(n.id.startsWith("temp-reset-") && n.stageId === stage.id)
+												);
+												const existing = withoutTemp.find((n) => n.id === result.data.id);
+												if (!existing) {
+													return [...withoutTemp, result.data];
+												}
+												return withoutTemp.map((n) => n.id === result.data.id ? result.data : n);
+											});
+										}
+									})
+									.catch((err) => {
+										console.error("Error creating default reset:", err);
+										// Keep optimistic reset on error
+									});
+							}
+						}
+					}
+				})
+				.catch((err) => {
+					console.error("Error fetching notifications:", err);
+					// On error, still create optimistic defaults so UI works
+					if (currentFunnel.flow?.stages) {
+						const stages = currentFunnel.flow.stages;
+						const optimisticDefaults: FunnelNotification[] = [];
+						
+						for (const stage of stages) {
+							// Create optimistic default notification (Standard)
+							const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow);
+							optimisticDefaults.push({
+								id: `temp-notif-${stage.id}-1`,
+								funnelId: currentFunnel.id,
+								stageId: stage.id,
+								sequence: 1,
+								inactivityMinutes: 30,
+								message: lastMessage || "Reminder message",
+								notificationType: "standard",
+								isReset: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							});
+							
+							// Create optimistic default reset (Delete)
+							optimisticDefaults.push({
+								id: `temp-reset-${stage.id}`,
+								funnelId: currentFunnel.id,
+								stageId: stage.id,
+								sequence: 2,
+								inactivityMinutes: 0,
+								message: "",
+								isReset: true,
+								resetAction: "delete",
+								delayMinutes: 60,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							});
+						}
+						
+						setNotifications(optimisticDefaults);
+					} else {
+						setNotifications([]);
+					}
+				});
+	}, [showConfigureView, currentFunnel.id, currentFunnel.flow, user?.experienceId]);
+
+	// Get stages from flow for ConfigPanel
+	const getStagesForConfig = () => {
+		if (!currentFunnel.flow?.stages) return [];
+		return currentFunnel.flow.stages.map((s: { id: string; name: string; explanation?: string; blockIds: string[] }) => ({
+			id: s.id,
+			name: s.name,
+			explanation: s.explanation || "",
+			blockIds: s.blockIds || [],
+		}));
 	};
 
 	// Deployment logic is now handled by useFunnelDeployment hook
@@ -119,89 +1869,285 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		// User can manually navigate to preview when ready
 	};
 
-	// Get offer blocks for selection - Same simple logic as Go Live validation
-	const offerBlocks = validation.getOfferBlocks(currentFunnel);
-
 	// Cleanup is now handled by useFunnelDeployment hook
 
+	// Header height for canvas offset (fixed header)
+	const HEADER_HEIGHT = 140; // Approximate header height in pixels
+
+	// If in configure mode, show the notification canvas view
+	if (showConfigureView) {
+		return (
+			<div className="h-screen overflow-hidden bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+				{/* Whop Design System Background Pattern */}
+				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
+				
+				{/* Header */}
+				<FunnelBuilderHeader
+					onBack={onBack}
+					isDeployed={currentFunnel.isDeployed || false}
+					hasFlow={!!currentFunnel.flow}
+					hasApiError={!!validation.apiError}
+					onOpenConfiguration={() => {
+						setShowConfigureView(false);
+						setShowConfigPanel(false);
+					}}
+					onOpenOfflineConfirmation={modals.openOfflineConfirmation}
+					onDeploy={deployment.handleDeploy}
+					hasAnyLiveFunnel={hasAnyLiveFunnel}
+					isPanelOpen={showConfigPanel}
+					showMerchantButton={true}
+					isDraft={currentFunnel.isDraft}
+				/>
+
+				{/* Main Layout Container */}
+				<div 
+					className="relative flex"
+					style={{ 
+						height: `calc(100vh - ${HEADER_HEIGHT}px)`,
+						marginTop: `${HEADER_HEIGHT}px`
+					}}
+				>
+					{/* Canvas Area - Notification Canvas View */}
+					<div className="flex-1 min-w-0 transition-all duration-300 ease-in-out overflow-hidden">
+					<NotificationCanvasView
+						funnelId={currentFunnel.id}
+						stages={getStagesForConfig()}
+						notifications={notifications}
+						selectedNotificationId={selectedNotificationId || undefined}
+						selectedResetId={selectedResetId || undefined}
+						selectedResetStageId={selectedResetStageId || undefined}
+						onNotificationClick={handleNotificationClick}
+						onNotificationClose={handleNotificationClose}
+						onResetClick={handleResetClick}
+						onNotificationDelete={handleNotificationDelete}
+						onNotificationChange={handleNotificationChange}
+						onNotificationSave={handleNotificationSave}
+						onResetChange={handleResetChange}
+						onResetSave={handleResetSave}
+					/>
+					</div>
+
+					{/* Right Side Panel - Notification and Reset Type Selection */}
+					<ConfigPanel
+						isOpen={showConfigPanel}
+						funnelId={currentFunnel.id}
+						stages={getStagesForConfig()}
+						notifications={notifications}
+						selectedNotificationId={selectedNotificationId ?? undefined}
+						selectedResetId={selectedResetId ?? undefined}
+						selectedNotificationSequence={selectedNotificationSequence ?? undefined}
+						selectedNotificationStageId={selectedNotificationStageId ?? undefined}
+						selectedResetStageId={selectedResetStageId ?? undefined}
+						funnelFlow={currentFunnel.flow}
+						onNotificationTypeSelect={(notificationId, stageId, sequence, type) => {
+							// Find or create notification and update type
+							const existing = notificationId 
+								? notifications.find((n) => n.id === notificationId)
+								: notifications.find((n) => n.stageId === stageId && n.sequence === sequence && !n.isReset);
+							
+							if (existing) {
+								handleNotificationChange({
+									funnelId: currentFunnel.id,
+									stageId: existing.stageId,
+									sequence: existing.sequence,
+									inactivityMinutes: existing.inactivityMinutes,
+									message: existing.message,
+									notificationType: type,
+									isReset: false,
+								});
+							} else {
+								// New notification - create with defaults
+								handleNotificationChange({
+									funnelId: currentFunnel.id,
+									stageId,
+									sequence,
+									inactivityMinutes: 30,
+									message: type === "standard" ? "Reminder message" : "Enter your notification message",
+									notificationType: type,
+									isReset: false,
+								});
+							}
+						}}
+						onResetTypeSelect={(resetId, stageId, type) => {
+							// Find or create reset and update type
+							const existing = resetId
+								? notifications.find((n) => n.id === resetId)
+								: notifications.find((n) => n.stageId === stageId && n.isReset);
+							
+							if (existing) {
+								handleResetChange(stageId, type, existing.delayMinutes || 60);
+							} else {
+								// New reset - create with defaults
+								handleResetChange(stageId, type, 60);
+							}
+						}}
+						onClose={() => {
+							setShowConfigPanel(false);
+							setSelectedNotificationId(null);
+							setSelectedNotificationSequence(null);
+							setSelectedNotificationStageId(null);
+							setSelectedResetId(null);
+							setSelectedResetStageId(null);
+						}}
+					/>
+				</div>
+			</div>
+		);
+	}
+
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
+		<div className="h-screen overflow-hidden bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
 			{/* Whop Design System Background Pattern */}
 			<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
-			<div className="relative p-4 sm:p-6 lg:p-8">
-				<div className="max-w-7xl mx-auto">
-					{/* Enhanced Header with Whop Design Patterns - Hidden when editing */}
+			{/* Fixed Header - Always visible at top, shrinks when panel is open */}
 					{!validation.editingBlockId && (
 						<FunnelBuilderHeader
 							onBack={onBack}
 							isDeployed={!!currentFunnel.isDeployed}
-							selectedOffer={modals.selectedOffer}
 							hasFlow={!!currentFunnel.flow}
 							hasApiError={!!validation.apiError}
-							onOpenOfferSelection={modals.openOfferSelection}
+							onOpenConfiguration={() => {
+								setShowConfigureView(true);
+								setShowTriggerPanel(false);
+							}}
 							onOpenOfflineConfirmation={modals.openOfflineConfirmation}
 							onDeploy={deployment.handleDeploy}
 							hasAnyLiveFunnel={hasAnyLiveFunnel}
+							isPanelOpen={showTriggerPanel}
+							isDraft={currentFunnel.isDraft}
 						/>
 					)}
 
-					{/* Main Content Area */}
-					<div className="flex-grow flex flex-col md:overflow-hidden gap-6 !mt-8">
-						<Card className="w-full flex flex-col relative bg-surface/80 dark:bg-surface/60 backdrop-blur-sm border border-border/50 dark:border-border/30 rounded-2xl md:flex-grow md:overflow-hidden shadow-xl dark:shadow-2xl dark:shadow-black-20 p-0">
-							<div className="relative md:flex-grow md:overflow-auto p-0">
-								{/* API Error Modal */}
-								<ApiErrorModal
-									error={validation.apiError}
-									onClose={() => validation.setApiError(null)}
-								/>
+			{/* Main Layout Container - Flex row for canvas + sidebar panel */}
+			<div 
+				className="relative flex"
+				style={{ 
+					height: validation.editingBlockId ? '100vh' : `calc(100vh - ${HEADER_HEIGHT}px)`,
+					marginTop: validation.editingBlockId ? 0 : `${HEADER_HEIGHT}px`
+				}}
+			>
+				{/* Canvas Area - Full remaining viewport */}
+				<div className={`flex-1 min-w-0 transition-all duration-300 ease-in-out overflow-hidden`}>
+					{/* API Error Modal */}
+					<ApiErrorModal
+						error={validation.apiError}
+						onClose={() => validation.setApiError(null)}
+					/>
 
-								{/* Main Content Area */}
-								<div className="flex-1 p-0">
-									<div className="animate-in fade-in duration-0">
-										<FunnelVisualizer
-											funnelFlow={currentFunnel.flow}
-											editingBlockId={validation.editingBlockId}
-											setEditingBlockId={validation.setEditingBlockId}
-											onBlockUpdate={handleBlockUpdate}
-											selectedOffer={modals.selectedOffer}
-											onOfferSelect={(offerId) =>
-												modals.setSelectedOffer(offerId)
+					{/* Render FunnelVisualizer with actual flow or minimal flow */}
+					<FunnelVisualizer
+										funnelFlow={flowToUse}
+										editingBlockId={validation.editingBlockId}
+										setEditingBlockId={validation.setEditingBlockId}
+										onBlockUpdate={handleBlockUpdate}
+										selectedOffer={modals.selectedOffer}
+										onOfferSelect={(offerId) =>
+											modals.setSelectedOffer(offerId)
+										}
+										funnelId={currentFunnel.id}
+										user={user}
+										isDeployed={currentFunnel.isDeployed}
+										selectedCategory={triggerPanelCategory}
+										membershipTriggerType={currentFunnel.membershipTriggerType}
+										appTriggerType={currentFunnel.appTriggerType}
+										membershipTriggerConfig={currentFunnel.membershipTriggerConfig}
+										appTriggerConfig={currentFunnel.appTriggerConfig}
+										delayMinutes={currentFunnel.delayMinutes || 0} // App trigger delay (backward compatibility)
+										membershipDelayMinutes={currentFunnel.membershipDelayMinutes || 0} // Membership trigger delay
+										resources={resources}
+										funnels={funnels}
+										loadingResources={loadingResources}
+										loadingFunnels={loadingFunnels}
+										onResourceChange={handleResourceChange}
+										onFunnelChange={handleFunnelChange}
+										onMembershipFilterChange={handleMembershipFilterChange}
+										profiles={[]}
+										onQualificationProfileChange={handleQualificationProfileChange}
+										onMembershipTriggerClick={() => {
+											setTriggerPanelCategory("Membership");
+											setShowTriggerPanel(true);
+										}}
+										onAppTriggerClick={() => {
+											setTriggerPanelCategory("App");
+											setShowTriggerPanel(true);
+										}}
+										onTriggerClick={() => {
+											// Backward compatibility - default to App
+											setTriggerPanelCategory("App");
+											setShowTriggerPanel(true);
+										}}
+										onDelayChange={handleDelayChange} // App trigger delay
+										onMembershipDelayChange={handleMembershipDelayChange} // Membership trigger delay
+										onDelaySave={handleDelaySave} // App trigger delay
+										onMembershipDelaySave={handleMembershipDelaySave} // Membership trigger delay
+										merchantType={merchantType}
+										onUpsellClick={merchantType === "upsell" ? (blockId: string) => handleUpsellDownsellClick(blockId, "upsell") : undefined}
+										onDownsellClick={merchantType === "upsell" ? (blockId: string) => handleUpsellDownsellClick(blockId, "downsell") : undefined}
+										onAddNewOption={merchantType === "qualification" ? handleAddNewOption : undefined}
+										pendingOptionSelection={pendingOptionSelection}
+										pendingCardTypeSelection={pendingCardTypeSelection}
+										onCardTypeSelection={handleCardTypeSelection}
+										onCardSelection={handleCardSelection}
+										onClearCardSelection={() => {
+											if (!pendingOptionSelection?.isActive || !pendingOptionSelection?.upsellKind) return;
+											if (!currentFunnel.flow || !pendingOptionSelection.newBlockId) {
+												setPendingOptionSelection(null);
+												return;
 											}
-											funnelId={currentFunnel.id}
-											user={user}
-											isDeployed={currentFunnel.isDeployed}
-											ref={funnelVisualizerRef}
-										/>
-									</div>
-								</div>
-							</div>
-						</Card>
+											const newFlow = { ...currentFunnel.flow };
+											delete newFlow.blocks[pendingOptionSelection.newBlockId];
+											const stageWithNewBlockIndex = newFlow.stages.findIndex((stage: any) =>
+												stage.blockIds && stage.blockIds.includes(pendingOptionSelection.newBlockId)
+											);
+											if (stageWithNewBlockIndex >= 0) {
+												const stageWithNewBlock = newFlow.stages[stageWithNewBlockIndex];
+												stageWithNewBlock.blockIds = stageWithNewBlock.blockIds.filter(
+													(id: string) => id !== pendingOptionSelection.newBlockId
+												);
+												if (stageWithNewBlock.blockIds.length === 0 && stageWithNewBlockIndex > 0) {
+													newFlow.stages = newFlow.stages.filter((_: any, index: number) => index !== stageWithNewBlockIndex);
+												}
+											}
+											const updatedFunnel = { ...currentFunnel, flow: newFlow };
+											setCurrentFunnel(updatedFunnel);
+											onUpdate(updatedFunnel);
+											setPendingOptionSelection(null);
+										}}
+										pendingDelete={pendingDelete}
+										onDeleteClick={handleDeleteClick}
+										onConfirmDelete={handleConfirmDelete}
+										onCancelDelete={handleCancelDelete}
+										onStageUpdate={handleStageUpdate}
+										ref={funnelVisualizerRef}
+									/>
+				</div>
+
+				{/* Trigger Selection Panel - Slides in from right as part of layout */}
+				<TriggerPanel
+					isOpen={showTriggerPanel}
+					selectedCategory={triggerPanelCategory || undefined}
+					selectedTrigger={triggerPanelCategory === "App" ? (currentFunnel.appTriggerType ?? "on_app_entry") : (currentFunnel.membershipTriggerType)}
+					membershipTrigger={currentFunnel.membershipTriggerType}
+					appTrigger={currentFunnel.appTriggerType}
+					triggerConfig={triggerPanelCategory === "App" ? (currentFunnel.appTriggerConfig ?? {}) : (currentFunnel.membershipTriggerConfig ?? {})}
+					membershipTriggerConfig={currentFunnel.membershipTriggerConfig}
+					appTriggerConfig={currentFunnel.appTriggerConfig}
+					experienceId={user?.experienceId}
+					onSelect={handleTriggerSelect}
+					onSave={handleTriggerSave}
+					onClose={() => {
+						setShowTriggerPanel(false);
+						setTriggerPanelCategory(null);
+					}}
+				/>
 					</div>
 
-					{/* Modals */}
+			{/* Modals - Positioned outside main layout */}
 					<DeploymentModal
 						isDeploying={deployment.isDeploying}
 						deploymentLog={deployment.deploymentLog}
 						action={deployment.deploymentAction}
-					/>
-
-					{/* Bottom margin spacer */}
-					<div className="h-14"></div>
-
-					{/* Floating Offers Selection Panel */}
-					<OfferSelectionModal
-						isOpen={modals.showOfferSelection}
-						offerBlocks={offerBlocks}
-						onClose={modals.closeOfferSelection}
-						onOfferSelect={(offerId: string) =>
-							modals.setSelectedOffer(offerId)
-						}
-						onBlockClick={(blockId: string) => {
-							if (blockId) {
-								funnelVisualizerRef.current?.handleBlockClick(blockId);
-							}
-						}}
 					/>
 
 					{/* Offline Confirmation Modal */}
@@ -239,8 +2185,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 						isFunnelBuilder={true}
 						isSingleMerchant={isSingleMerchant}
 					/>
-				</div>
-			</div>
+
 		</div>
 	);
 };

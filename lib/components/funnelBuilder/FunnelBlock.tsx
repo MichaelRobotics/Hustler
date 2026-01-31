@@ -1,6 +1,6 @@
 "use client";
 
-import type React from "react";
+import React from "react";
 import CollapsibleText from "../common/CollapsibleText";
 import BlockEditor from "./BlockEditor";
 import { formatBlockName } from "../../utils/format-names";
@@ -34,6 +34,7 @@ interface FunnelBlockProps {
 	highlightedPath: { blocks: Set<string>; options: Set<string> };
 	isDeployed?: boolean;
 	funnelFlow?: FunnelFlow;
+	onAddNewOption?: (blockId: string, optionText: string) => void; // Callback for adding new option
 }
 
 const FunnelBlock: React.FC<FunnelBlockProps> = ({
@@ -46,7 +47,9 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 	highlightedPath,
 	isDeployed = false,
 	funnelFlow,
+	onAddNewOption,
 }) => {
+	const [newOptionText, setNewOptionText] = React.useState("");
 	return (
 		<div
 			ref={(el) => {
@@ -169,29 +172,79 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 							{block.message}
 						</p>
 					</div>
-					{block.options && block.options.length > 0 && (
-						<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
-							{block.options.map((opt, i) => (
-								<div
-									key={`${block.id}-opt-${i}`}
-									className={`text-foreground text-xs rounded-xl p-3 text-left transition-all duration-300 ${highlightedPath.options.has(`${block.id}_${opt.nextBlockId}`) ? "bg-amber-500/20 ring-1 ring-amber-500/50 shadow-lg shadow-amber-500/20" : "bg-surface/50 dark:bg-surface/30 hover:bg-surface/60 dark:hover:bg-surface/40 border border-border/30 dark:border-border/20"}`}
-								>
-									<div className="flex items-start gap-2">
-										<div className="flex-shrink-0 w-5 h-5 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
-											<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
-												{i + 1}
-											</span>
-										</div>
-										<div className="flex-1">
-											<p className="whitespace-normal font-medium">
-												{opt.text}
-											</p>
+					<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
+						{block.options && block.options.length > 0 && (
+							<>
+								{block.options.map((opt, i) => (
+									<div
+										key={`${block.id}-opt-${i}`}
+										className={`text-foreground text-xs rounded-xl p-3 text-left transition-all duration-300 ${highlightedPath.options.has(`${block.id}_${opt.nextBlockId}`) ? "bg-amber-500/20 ring-1 ring-amber-500/50 shadow-lg shadow-amber-500/20" : "bg-surface/50 dark:bg-surface/30 hover:bg-surface/60 dark:hover:bg-surface/40 border border-border/30 dark:border-border/20"}`}
+									>
+										<div className="flex items-start gap-2">
+											<div className="flex-shrink-0 w-5 h-5 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
+												<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+													{i + 1}
+												</span>
+											</div>
+											<div className="flex-1">
+												<p className="whitespace-normal font-medium">
+													{opt.text}
+												</p>
+											</div>
 										</div>
 									</div>
-								</div>
-							))}
-						</div>
-					)}
+								))}
+							</>
+						)}
+						{/* Always visible "+" option with input field */}
+						{!isDeployed && onAddNewOption && (
+							<div className="flex items-center gap-2 rounded-xl p-3 border border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
+								<input
+									type="text"
+									value={newOptionText}
+									onChange={(e) => setNewOptionText(e.target.value)}
+									placeholder="Add new option..."
+									className="flex-1 text-xs bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
+									onKeyDown={(e) => {
+										if (e.key === "Enter" && newOptionText.trim() && !e.shiftKey) {
+											e.preventDefault();
+											onAddNewOption(blockId, newOptionText.trim());
+											setNewOptionText("");
+										}
+									}}
+								/>
+								<button
+									onClick={() => {
+										if (newOptionText.trim()) {
+											onAddNewOption(blockId, newOptionText.trim());
+											setNewOptionText("");
+										}
+									}}
+									disabled={!newOptionText.trim()}
+									className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+										newOptionText.trim()
+											? "bg-violet-500 hover:bg-violet-600 dark:bg-violet-600 dark:hover:bg-violet-700 text-white cursor-pointer"
+											: "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+									}`}
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="w-4 h-4"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M12 4v16m8-8H4"
+										/>
+									</svg>
+								</button>
+							</div>
+						)}
+					</div>
 				</>
 			)}
 		</div>

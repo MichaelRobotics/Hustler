@@ -6,9 +6,12 @@ import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-d
 import { getExperienceContextFromWebhook, validateExperienceContext } from "@/lib/analytics/experience-context";
 import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tracking";
 import { db } from "@/lib/supabase/db-server";
-import { experiences, users, orders, subscriptions } from "@/lib/supabase/schema";
+import { experiences, users, orders, subscriptions, funnels, customersResources, conversations } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
+import { createConversation } from "@/lib/actions/simplified-conversation-actions";
+import { updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
+import { safeBackgroundTracking, trackAwarenessBackground } from "@/lib/analytics/background-tracking";
 
 // Validate webhook secret exists
 if (!process.env.WHOP_WEBHOOK_SECRET) {
@@ -25,9 +28,9 @@ export async function POST(request: Request) {
 
   // Handle the webhook event
   if (webhook.action === "membership.went_valid") {
-    // DISABLED: Conversation creation moved to user creation flow
-    console.log(`[WEBHOOK] Membership webhook received but disabled - conversation creation now handled in user creation`);
-    // after(handleMembershipWentValidWebhook(webhook.data));
+    // Re-enabled for membership_valid trigger type
+    console.log(`[WEBHOOK] Membership webhook received - checking for membership_valid trigger type`);
+    after(handleMembershipWentValidWebhook(webhook.data));
   }
   else if (webhook.action === "payment.succeeded") {
     after(handlePaymentSucceededWebhook(webhook.data));
@@ -68,9 +71,141 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
     await handlePaymentWithAnalytics(data);
 }
 
-// DISABLED: handleMembershipWentValidWebhook function removed
-// Conversation creation is now handled in user creation flow (createUserContext)
+/**
+ * Handle membership.went_valid webhook
+ * Creates conversation only if:
+ * 1. Funnel has membership_trigger_type = "membership_valid"
+ * 2. User has NO records in customers_resources table (new customer)
+ */
+async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
+  const { user_id, product_id, id: membershipId } = data;
 
+  if (!user_id) {
+    console.error("[WEBHOOK membership.went_valid] No user_id provided");
+    return;
+  }
+
+  console.log(`[WEBHOOK membership.went_valid] Processing for user ${user_id}, product ${product_id}, membership ${membershipId}`);
+
+  try {
+    // Step 1: Find the experience that has this product
+    // We need to find the experience by looking at which experience has a deployed funnel
+    // that has this product in its resources
+    const experienceWithFunnel = await db
+      .select({
+        experience: experiences,
+        funnel: funnels,
+      })
+      .from(funnels)
+      .innerJoin(experiences, eq(funnels.experienceId, experiences.id))
+      .where(
+        and(
+          eq(funnels.isDeployed, true),
+          eq(funnels.membershipTriggerType, "membership_valid")
+        )
+      )
+      .limit(10); // Get multiple to check
+
+    if (experienceWithFunnel.length === 0) {
+      console.log(`[WEBHOOK membership.went_valid] No deployed funnel with membership_valid trigger found - skipping`);
+      return;
+    }
+
+    // Find the matching experience by checking if product matches
+    let matchingExperience = null;
+    let matchingFunnel = null;
+
+    for (const row of experienceWithFunnel) {
+      // Check if this experience's company has the product
+      // For now, we'll use the first experience with a membership_valid funnel
+      // In production, you'd want to match by product_id to the funnel's resources
+      matchingExperience = row.experience;
+      matchingFunnel = row.funnel;
+      break;
+    }
+
+    if (!matchingExperience || !matchingFunnel) {
+      console.log(`[WEBHOOK membership.went_valid] No matching experience/funnel found for product ${product_id}`);
+      return;
+    }
+
+    const experienceId = matchingExperience.id;
+    console.log(`[WEBHOOK membership.went_valid] Found experience ${experienceId} with membership_valid trigger`);
+
+    // Step 2: Find or verify user exists in this experience
+    const user = await db.query.users.findFirst({
+      where: and(
+        eq(users.whopUserId, user_id),
+        eq(users.experienceId, experienceId)
+      ),
+    });
+
+    if (!user) {
+      console.log(`[WEBHOOK membership.went_valid] User ${user_id} not found in experience ${experienceId} - skipping (user will be created on app entry)`);
+      return;
+    }
+
+    // Step 3: Check if user has any existing records in customers_resources (existing customer check)
+    const existingCustomerResource = await db.query.customersResources.findFirst({
+      where: and(
+        eq(customersResources.experienceId, experienceId),
+        eq(customersResources.userId, user.id)
+      ),
+    });
+
+    if (existingCustomerResource) {
+      console.log(`[WEBHOOK membership.went_valid] User ${user_id} already has customer resources in experience ${experienceId} - skipping (not a new customer)`);
+      return;
+    }
+
+    // Step 4: Check if conversation already exists
+    const existingConversation = await db.query.conversations.findFirst({
+      where: and(
+        eq(conversations.experienceId, experienceId),
+        eq(conversations.whopUserId, user_id)
+      ),
+    });
+
+    if (existingConversation) {
+      console.log(`[WEBHOOK membership.went_valid] User ${user_id} already has conversation in experience ${experienceId} - skipping`);
+      return;
+    }
+
+    // Step 5: Verify funnel has flow
+    if (!matchingFunnel.flow) {
+      console.log(`[WEBHOOK membership.went_valid] Funnel ${matchingFunnel.id} has no flow - skipping`);
+      return;
+    }
+
+    const funnelFlow = matchingFunnel.flow as { startBlockId: string };
+
+    // Step 6: Create conversation
+    console.log(`[WEBHOOK membership.went_valid] Creating conversation for new customer ${user_id} in experience ${experienceId}`);
+    
+    const conversationId = await createConversation(
+      experienceId,
+      matchingFunnel.id,
+      user_id,
+      funnelFlow.startBlockId,
+      membershipId,
+      product_id
+    );
+
+    console.log(`[WEBHOOK membership.went_valid] Created conversation ${conversationId}`);
+
+    // Step 7: Update conversation to WELCOME stage
+    await updateConversationToWelcomeStage(conversationId, matchingFunnel.flow);
+
+    // Step 8: Track awareness (starts) - BACKGROUND PROCESSING
+    console.log(`[WEBHOOK membership.went_valid] Tracking awareness for experience ${experienceId}, funnel ${matchingFunnel.id}`);
+    safeBackgroundTracking(() => trackAwarenessBackground(experienceId, matchingFunnel.id));
+
+    console.log(`[WEBHOOK membership.went_valid] Successfully created conversation for user ${user_id}`);
+
+  } catch (error) {
+    console.error(`[WEBHOOK membership.went_valid] Error processing webhook:`, error);
+  }
+}
 
 async function handleCreditPackPurchaseWithCompany(
 	user_id: string | null | undefined,

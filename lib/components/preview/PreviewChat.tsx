@@ -1,7 +1,7 @@
 "use client";
 
 import { Text } from "frosted-ui";
-import { ArrowLeft, Moon, Send, Sun, User } from "lucide-react";
+import { ArrowLeft, Moon, Send, Sun, User, Settings } from "lucide-react";
 import React, {
 	useState,
 	useRef,
@@ -12,16 +12,24 @@ import React, {
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 // No WebSocket imports - this is preview only
-import type { FunnelFlow } from "../../types/funnel";
+import type { FunnelFlow, FunnelProductFaq, FunnelProductFaqInput } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import { ChatRestartButton } from "../funnelBuilder/components/ChatRestartButton";
 import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
+import ChatConfigPanel from "./ChatConfigPanel";
 
 interface PreviewChatProps {
 	funnelFlow: FunnelFlow;
 	resources?: any[];
 	experienceId?: string;
+	funnelId?: string;
+	handoutKeyword?: string;
+	handoutAdminNotification?: string;
+	handoutUserMessage?: string;
+	productFaqs?: FunnelProductFaq[];
+	onHandoutChange?: (keyword: string, adminNotification?: string, userMessage?: string) => void;
+	onProductFaqChange?: (faq: FunnelProductFaqInput) => void;
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
@@ -37,6 +45,13 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 	funnelFlow,
 	resources = [],
 	experienceId,
+	funnelId,
+	handoutKeyword,
+	handoutAdminNotification,
+	handoutUserMessage,
+	productFaqs = [],
+	onHandoutChange,
+	onProductFaqChange,
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
@@ -44,10 +59,64 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 	const [message, setMessage] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
 	const [currentStage, setCurrentStage] = useState("WELCOME");
+	const [showConfigPanel, setShowConfigPanel] = useState(false);
+	const [localProductFaqs, setLocalProductFaqs] = useState<FunnelProductFaq[]>(productFaqs);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
+
+	// Fetch product FAQs when component mounts
+	useEffect(() => {
+		if (funnelId && experienceId) {
+			fetch(`/api/funnels/${funnelId}/product-faqs`)
+				.then((res) => res.json())
+				.then((data) => {
+					if (data.success && data.data) {
+						setLocalProductFaqs(data.data);
+					}
+				})
+				.catch((err) => console.error("Error fetching product FAQs:", err));
+		}
+	}, [funnelId, experienceId]);
+
+	// Sync local state when props change
+	useEffect(() => {
+		setLocalProductFaqs(productFaqs);
+	}, [productFaqs]);
+
+	// Handle handout change
+	const handleHandoutChange = (keyword: string, adminNotification?: string, userMessage?: string) => {
+		if (onHandoutChange) {
+			onHandoutChange(keyword, adminNotification, userMessage);
+		}
+	};
+
+	// Handle product FAQ change
+	const handleProductFaqChange = async (input: FunnelProductFaqInput) => {
+		if (onProductFaqChange) {
+			onProductFaqChange(input);
+		}
+		// Also update local state optimistically
+		try {
+			const response = await fetch(`/api/funnels/${funnelId}/product-faqs`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(input),
+			});
+			const data = await response.json();
+			if (data.success && data.data) {
+				const existingIndex = localProductFaqs.findIndex((f) => f.resourceId === input.resourceId);
+				if (existingIndex >= 0) {
+					setLocalProductFaqs(localProductFaqs.map((f, i) => (i === existingIndex ? data.data : f)));
+				} else {
+					setLocalProductFaqs([...localProductFaqs, data.data]);
+				}
+			}
+		} catch (error) {
+			console.error("Error saving product FAQ:", error);
+		}
+	};
 
 	/**
 	 * Handle external link navigation according to Whop best practices
@@ -498,29 +567,21 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 						</div>
 					</div>
 
-					{/* Theme Toggle Button */}
+					{/* Configure Button */}
 					<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 						<button
-							onClick={toggleTheme}
-							className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105"
+							onClick={() => setShowConfigPanel(!showConfigPanel)}
+							className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105 flex items-center gap-2"
 							style={{ WebkitTapHighlightColor: "transparent" }}
-							title={
-								appearance === "dark"
-									? "Switch to light mode"
-									: "Switch to dark mode"
-							}
+							title="Configure handout and AI chat"
 						>
-							{appearance === "dark" ? (
-								<Sun
-									size={20}
-									className="text-foreground/70 dark:text-foreground/70"
-								/>
-							) : (
-								<Moon
-									size={20}
-									className="text-foreground/70 dark:text-foreground/70"
-								/>
-							)}
+							<Settings
+								size={20}
+								className={`text-foreground/70 dark:text-foreground/70 transition-transform duration-300 ${
+									showConfigPanel ? "rotate-90" : ""
+								}`}
+							/>
+							<span className="text-sm font-medium hidden sm:inline">Configure</span>
 						</button>
 					</div>
 				</div>
@@ -777,6 +838,23 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				)}
 
 			</div>
+
+			{/* Chat Config Panel */}
+			{showConfigPanel && funnelId && (
+				<ChatConfigPanel
+					isOpen={showConfigPanel}
+					funnelId={funnelId}
+					handoutKeyword={handoutKeyword}
+					handoutAdminNotification={handoutAdminNotification}
+					handoutUserMessage={handoutUserMessage}
+					productFaqs={localProductFaqs}
+					resources={resources}
+					experienceId={experienceId}
+					onHandoutChange={handleHandoutChange}
+					onProductFaqChange={handleProductFaqChange}
+					onClose={() => setShowConfigPanel(false)}
+				/>
+			)}
 		</div>
 	);
 };

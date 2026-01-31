@@ -654,6 +654,7 @@ export function invalidateUserCache(cacheKey: string): void {
 /**
  * Create conversation for new customer users
  * This handles the conversation creation logic that was previously in webhooks
+ * Only creates conversation if the funnel's app_trigger_type is "on_app_entry"
  */
 async function createConversationForNewCustomer(
 	userId: string,
@@ -681,9 +682,16 @@ async function createConversationForNewCustomer(
 			return;
 		}
 
-		console.log(`[CONVERSATION-CREATION] Found deployed funnel ${liveFunnel.id} for experience ${experienceId}`);
+		// Step 2: Check app trigger type - only create on app entry if configured
+		const appTrigger = liveFunnel.appTriggerType ?? "on_app_entry";
+		if (appTrigger !== "on_app_entry") {
+			console.log(`[CONVERSATION-CREATION] Funnel ${liveFunnel.id} has app trigger "${appTrigger}" - skipping conversation creation on app entry (will be handled by webhook)`);
+			return;
+		}
 
-		// Step 2: Create conversation using the same logic as webhooks
+		console.log(`[CONVERSATION-CREATION] Found deployed funnel ${liveFunnel.id} with app trigger "${appTrigger}" for experience ${experienceId}`);
+
+		// Step 3: Create conversation using the same logic as webhooks
 		const conversationId = await createConversation(
 			experienceId,
 			liveFunnel.id,
@@ -695,10 +703,10 @@ async function createConversationForNewCustomer(
 
 		console.log(`[CONVERSATION-CREATION] Created conversation ${conversationId} for customer user ${userId}`);
 
-		// Step 3: Update conversation to WELCOME stage
+		// Step 4: Update conversation to WELCOME stage
 		await updateConversationToWelcomeStage(conversationId, liveFunnel.flow);
 
-		// Step 4: Track awareness (starts) - BACKGROUND PROCESSING
+		// Step 5: Track awareness (starts) - BACKGROUND PROCESSING
 		console.log(`🚀 [CONVERSATION-CREATION] About to track awareness for experience ${experienceId}, funnel ${liveFunnel.id}`);
 		safeBackgroundTracking(() => trackAwarenessBackground(experienceId, liveFunnel.id));
 

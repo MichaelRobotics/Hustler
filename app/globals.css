@@ -6,6 +6,7 @@
 @import "@whop/react/styles.css" layer(frosted_ui);
 
 @config '../tailwind.config.ts';
+@source '../lib/safelist-cross-stage.txt';
 
 body {
 	background: var(--background);

@@ -209,11 +209,11 @@ const UserChat: React.FC<UserChatProps> = ({
 							
 							// Check for stage changes
 							if (conversationData.conversation.currentStage) {
-								const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
+				const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
 									detail: { newStage: conversationData.conversation.currentStage }
-								});
-								window.dispatchEvent(stageUpdateEvent);
-							}
+				});
+				window.dispatchEvent(stageUpdateEvent);
+			}
 						}
 					}
 				}
@@ -296,19 +296,19 @@ const UserChat: React.FC<UserChatProps> = ({
 		// Handle conversation-based chat
 		if (conversationId && experienceId) {
 			// Add user message to UI immediately (optimistic update)
-			const userMessage = {
-				id: `user-${Date.now()}`,
-				type: "user" as const,
-				content: messageContent,
-				createdAt: new Date(),
-			};
-			setConversationMessages(prev => [...prev, userMessage]);
-			console.log("UserChat: Added user message to UI:", userMessage);
-
+					const userMessage = {
+						id: `user-${Date.now()}`,
+						type: "user" as const,
+						content: messageContent,
+						createdAt: new Date(),
+					};
+					setConversationMessages(prev => [...prev, userMessage]);
+					console.log("UserChat: Added user message to UI:", userMessage);
+					
 			// Process message through funnel system (API handles DB save + WebSocket broadcast)
-			try {
+					try {
 				const response = await apiPost('/api/userchat/process-message', {
-					conversationId,
+							conversationId,
 					messageContent,
 					messageType: "user",
 				}, experienceId);

@@ -447,8 +447,8 @@ async function processFunnelNavigation(
             console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
             
             // Replace [LINK] placeholder with animated button HTML using the resource link directly
-            const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
-            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
+              const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
+              formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
           } else {
             console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
             // Replace [LINK] placeholder with fallback text

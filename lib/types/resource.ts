@@ -46,6 +46,13 @@ export interface Funnel {
 	delay?: number;
 	resources?: Resource[];
 	flow?: any;
+	// Trigger configuration
+	triggerType?: "on_app_entry" | "membership_valid";
+	triggerTimeoutMinutes?: Record<string, number>; // { "on_app_entry": 0, "membership_valid": 30 }
+	// Handout configuration
+	handoutKeyword?: string;
+	handoutAdminNotification?: string;
+	handoutUserMessage?: string;
 	// Generation-related properties
 	generationStatus?: "idle" | "generating" | "completed" | "failed";
 	generationError?: string;
@@ -86,6 +93,8 @@ export interface ResourceLibraryProps {
 	// Deployment state
 	isDeploying?: boolean;
 	hasAnyLiveFunnel?: boolean;
+	// Create merchant manually callback
+	onCreateMerchantManually?: (merchantType: "qualification" | "upsell") => void;
 }
 
 

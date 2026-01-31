@@ -14,53 +14,131 @@ interface FunnelStageProps {
 	}>;
 	itemCanvasWidth: number;
 	EXPLANATION_AREA_WIDTH: number;
+	onStageUpdate?: (stageId: string, updates: { name?: string; explanation?: string }) => void;
+	disableStageEditing?: boolean;
 }
 
 const FunnelStage: React.FC<FunnelStageProps> = ({
 	stageLayouts,
 	itemCanvasWidth,
 	EXPLANATION_AREA_WIDTH,
+	onStageUpdate,
+	disableStageEditing = false,
 }) => {
+	const [editingStageId, setEditingStageId] = React.useState<string | null>(null);
+	const [editingField, setEditingField] = React.useState<"name" | "explanation" | null>(null);
+	const [editValue, setEditValue] = React.useState("");
+
+	const handleStartEdit = (stageId: string, field: "name" | "explanation", currentValue: string) => {
+		setEditingStageId(stageId);
+		setEditingField(field);
+		setEditValue(currentValue);
+	};
+
+	const handleSaveEdit = (stageId: string, field: "name" | "explanation") => {
+		if (onStageUpdate && editValue.trim()) {
+			onStageUpdate(stageId, { [field]: editValue.trim() });
+		}
+		setEditingStageId(null);
+		setEditingField(null);
+		setEditValue("");
+	};
+
+	const handleCancelEdit = () => {
+		setEditingStageId(null);
+		setEditingField(null);
+		setEditValue("");
+	};
+
 	return (
 		<>
 			{/* Stage Explanations */}
-			{stageLayouts.map((layout, index) => (
-				<React.Fragment key={layout.id}>
-					<div
-						className="absolute text-left p-4"
-						style={{
-							left: 0,
-							top: `${layout.y}px`,
-							width: `${EXPLANATION_AREA_WIDTH}px`,
-							height: `${layout.height}px`,
-							display: "flex",
-							flexDirection: "column",
-							justifyContent: "center",
-						}}
-					>
-						<div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200/50 dark:border-violet-700/30 rounded-xl p-3">
-							<h3 className="text-lg font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-2">
-								{formatStageName(layout.name)}
-							</h3>
-							<p className="text-sm text-muted-foreground leading-relaxed">
-								{layout.explanation}
-							</p>
-						</div>
-					</div>
-					{index < stageLayouts.length - 1 && (
+			{stageLayouts.map((layout, index) => {
+				const isEditingName = editingStageId === layout.id && editingField === "name";
+				const isEditingExplanation = editingStageId === layout.id && editingField === "explanation";
+
+				return (
+					<React.Fragment key={layout.id}>
 						<div
-							className="absolute border-t-2 border-dashed border-violet-300 dark:border-violet-600 opacity-40"
+							className="absolute text-left p-4"
 							style={{
-								left: `${EXPLANATION_AREA_WIDTH}px`,
-								top: `${layout.y + layout.height + 60}px`,
-								width: `${itemCanvasWidth}px`,
-								marginLeft: "20px",
-								marginRight: "20px",
+								left: 0,
+								top: `${layout.y}px`,
+								width: `${EXPLANATION_AREA_WIDTH}px`,
+								height: `${layout.height}px`,
+								display: "flex",
+								flexDirection: "column",
+								justifyContent: "center",
 							}}
-						/>
-					)}
-				</React.Fragment>
-			))}
+						>
+							<div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200/50 dark:border-violet-700/30 rounded-xl p-3">
+								{/* Stage Name - Editable */}
+								{isEditingName ? (
+									<input
+										type="text"
+										value={editValue}
+										onChange={(e) => setEditValue(e.target.value)}
+										onBlur={() => handleSaveEdit(layout.id, "name")}
+										onKeyDown={(e) => {
+											if (e.key === "Enter") {
+												e.preventDefault();
+												handleSaveEdit(layout.id, "name");
+											} else if (e.key === "Escape") {
+												handleCancelEdit();
+											}
+										}}
+										autoFocus
+										className="w-full text-lg font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-2 bg-transparent border-b-2 border-violet-500 dark:border-violet-400 focus:outline-none"
+									/>
+								) : (
+									<h3
+										className={`text-lg font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-2 ${disableStageEditing ? "" : "cursor-pointer hover:underline"}`}
+										onClick={disableStageEditing ? undefined : () => onStageUpdate && handleStartEdit(layout.id, "name", layout.name)}
+									>
+										{formatStageName(layout.name)}
+									</h3>
+								)}
+								
+								{/* Stage Explanation - Editable */}
+								{isEditingExplanation ? (
+									<textarea
+										value={editValue}
+										onChange={(e) => setEditValue(e.target.value)}
+										onBlur={() => handleSaveEdit(layout.id, "explanation")}
+										onKeyDown={(e) => {
+											if (e.key === "Escape") {
+												handleCancelEdit();
+											}
+										}}
+										autoFocus
+										rows={3}
+										className="w-full text-sm text-muted-foreground leading-relaxed bg-transparent border-2 border-violet-500 dark:border-violet-400 rounded p-2 focus:outline-none resize-none"
+									/>
+								) : (
+									<p
+										className={`text-sm text-muted-foreground leading-relaxed min-h-[1.5rem] ${disableStageEditing ? "" : "cursor-pointer hover:underline"}`}
+										onClick={disableStageEditing ? undefined : () => onStageUpdate && handleStartEdit(layout.id, "explanation", layout.explanation || "")}
+									>
+										{layout.explanation || "Click to add description..."}
+									</p>
+								)}
+							</div>
+						</div>
+						{index < stageLayouts.length - 1 && (
+							<div
+								className="absolute border-t-2 border-dashed border-violet-300 dark:border-violet-600 opacity-40"
+								style={{
+									left: `${EXPLANATION_AREA_WIDTH}px`,
+									top: `${layout.y + layout.height + 60}px`,
+									width: `${itemCanvasWidth}px`,
+									marginLeft: "20px",
+									marginRight: "20px",
+								}}
+							/>
+						)}
+					</React.Fragment>
+				);
+			})}
 		</>
 	);
 };

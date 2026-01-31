@@ -104,7 +104,7 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 																<div className="flex-1 min-w-0 mr-2">
 																	<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
 																		<CollapsibleText
-																			text={formatBlockName(block.id)}
+																			text={(block as any).headline ?? formatBlockName(block.id)}
 																			maxLength={20}
 																		/>
 																	</span>

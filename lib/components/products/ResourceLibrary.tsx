@@ -51,6 +51,8 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 	// Deployment state
 	isDeploying = false,
 	hasAnyLiveFunnel = false,
+	// Create merchant manually callback
+	onCreateMerchantManually,
 }) => {
 	// Auto-navigation to funnel builder when generation completes (only in funnel context)
 	useAutoNavigation({
@@ -446,6 +448,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({
 										allResources={allResources}
 										onHighlightCards={handleHighlightCards}
 										onCreateAssetsStateChange={handleCreateAssetsStateChange}
+										onCreateMerchantManually={onCreateMerchantManually}
 									/>
 								</div>
               )}

@@ -1,37 +1,44 @@
 "use client";
 
 import { Button, Heading } from "frosted-ui";
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft, Play, Settings } from "lucide-react";
 import type React from "react";
 import { ThemeToggle } from "../common/ThemeToggle";
 
 interface FunnelBuilderHeaderProps {
 	onBack: () => void;
 	isDeployed: boolean;
-	selectedOffer: string | null;
 	hasFlow: boolean;
 	hasApiError: boolean;
-	onOpenOfferSelection: () => void;
+	onOpenConfiguration: () => void;
 	onOpenOfflineConfirmation: () => void;
 	onDeploy: () => void;
 	hasAnyLiveFunnel?: boolean;
+	isPanelOpen?: boolean; // When true, header shrinks to make room for side panel
+	showMerchantButton?: boolean; // When true, show "Merchant" button instead of "Configure"
+	isDraft?: boolean; // Draft mode - prevents deployment when new cards don't have complete connections
 }
 
 export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 	onBack,
 	isDeployed,
-	selectedOffer,
 	hasFlow,
 	hasApiError,
-	onOpenOfferSelection,
+	onOpenConfiguration,
 	onOpenOfflineConfirmation,
 	onDeploy,
 	hasAnyLiveFunnel = false,
+	isPanelOpen = false,
+	showMerchantButton = false,
+	isDraft = false,
 }) => {
 	return (
-		<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
+		<div 
+			className="fixed top-0 left-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-3 px-4 sm:px-6 border-b border-border/30 dark:border-border/20 shadow-lg transition-all duration-300"
+			style={{ right: isPanelOpen ? '400px' : '0' }}
+		>
 			{/* Top Section: Back Button + Title */}
-			<div className="flex items-center gap-4 mb-6">
+			<div className="flex items-center gap-4 mb-4">
 				<Button
 					size="2"
 					variant="ghost"
@@ -59,33 +66,21 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 
 			{/* Bottom Section: Action Buttons - Always Horizontal Layout */}
 			<div className="flex justify-between items-center gap-2 sm:gap-3">
-				{/* Left Side: Offers Button */}
+				{/* Left Side: Configure/Merchant Button */}
 				<div className="flex-shrink-0 flex items-center gap-2">
 					<Button
 						size="3"
 						variant="ghost"
 						color="violet"
-						onClick={onOpenOfferSelection}
-						className={`px-4 sm:px-6 py-3 border transition-all duration-200 group ${
-							selectedOffer
-								? "bg-violet-50 dark:bg-violet-900/20 border-violet-400 dark:border-violet-500 text-violet-700 dark:text-violet-300"
-								: "border-violet-200 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20"
-						}`}
+						onClick={onOpenConfiguration}
+						className="px-4 sm:px-6 py-3 border transition-all duration-200 group border-violet-200 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20"
 					>
-						<svg
-							className="w-4 h-4 sm:w-5 sm:h-5 mr-2 group-hover:scale-110 transition-transform duration-200"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth="2"
-								d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"
-							/>
-						</svg>
-						<span className="font-semibold text-sm sm:text-base">Offers</span>
+						<Settings
+							className="w-4 h-4 sm:w-5 sm:h-5 mr-2 group-hover:rotate-90 transition-transform duration-300"
+						/>
+						<span className="font-semibold text-sm sm:text-base">
+							{showMerchantButton ? "Merchant" : "Notifications"}
+						</span>
 					</Button>
 				</div>
 
@@ -96,7 +91,7 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 					</div>
 				</div>
 
-				{/* Right Side: Go Live Button */}
+				{/* Right Side: Go Live / Draft Button */}
 				<div className="flex-shrink-0">
 					{isDeployed ? (
 						<Button
@@ -117,6 +112,18 @@ export const FunnelBuilderHeader: React.FC<FunnelBuilderHeaderProps> = ({
 							{/* Live Text */}
 							<span className="font-semibold text-sm sm:text-base text-red-600 dark:text-red-400">
 								Live
+							</span>
+						</Button>
+					) : isDraft ? (
+						<Button
+							size="3"
+							color="gray"
+							disabled
+							className="px-4 sm:px-6 py-3 shadow-lg shadow-gray-500/25 group bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-75"
+							title="Funnel is in draft mode. Complete new card connections to enable deployment."
+						>
+							<span className="font-semibold text-sm sm:text-base text-gray-600 dark:text-gray-400">
+								Draft
 							</span>
 						</Button>
 					) : (

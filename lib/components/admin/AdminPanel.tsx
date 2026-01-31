@@ -17,6 +17,7 @@ import { DeploymentModal } from "../funnelBuilder/modals/DeploymentModal";
 import EditFunnelModal from "./modals/EditFunnelModal";
 import { OfflineConfirmationModal } from "../funnelBuilder/modals/OfflineConfirmationModal";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
+import { createMinimalFlow } from "@/lib/utils/funnelUtils";
 import { useFunnelManagement } from "@/lib/hooks/useFunnelManagement";
 import { useFunnelDeployment } from "@/lib/hooks/useFunnelDeployment";
 import { useResourceManagement } from "@/lib/hooks/useResourceManagement";
@@ -610,6 +611,48 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 		setIsLibraryModalOpen(isModalOpen);
 	}, []);
 
+	// Handle create merchant manually - set current merchant to minimal flow (no resources), treat as "generated", navigate to builder
+	const handleCreateMerchantManually = useCallback(async (merchantType: "qualification" | "upsell") => {
+		const currentMerchant = selectedFunnelForLibrary;
+		if (!currentMerchant) {
+			console.error("No current merchant selected");
+			alert("No merchant selected. Please select a merchant from My Merchants first.");
+			return;
+		}
+		if (!user?.experienceId) {
+			console.error("Experience ID is required");
+			return;
+		}
+
+		try {
+			const minimalFlow = createMinimalFlow(currentMerchant.id, merchantType);
+
+			const response = await apiPut(`/api/funnels/${currentMerchant.id}`, {
+				flow: minimalFlow,
+				resources: [], // Clear resources so current merchant has no selected resources from Merchant Market Stall
+			}, user.experienceId);
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to update merchant");
+			}
+
+			const data = await response.json();
+			const updatedFunnel = data.data;
+
+			// Update funnels state and selection so merchant is treated as "generated" (has flow)
+			setFunnels(funnels.map((f) => (f.id === updatedFunnel.id ? updatedFunnel : f)));
+			setSelectedFunnelForLibrary(updatedFunnel);
+			setSelectedFunnel(updatedFunnel);
+
+			// Navigate to funnel builder so user can edit triggers and welcome DM
+			setCurrentView("funnelBuilder");
+		} catch (error) {
+			console.error("Error creating merchant manually:", error);
+			alert("Failed to update merchant. Please try again.");
+		}
+	}, [user?.experienceId, selectedFunnelForLibrary, funnels, setFunnels, setSelectedFunnelForLibrary, setSelectedFunnel, setCurrentView]);
+
 	// Render different views based on current state
 	if (currentView === "analytics" && selectedFunnel) {
 		// Debug logging
@@ -797,6 +840,8 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 								console.log("🚀 [AUTO-NAV] Navigation blocked - invalid funnel or no valid flow");
 							}
 						}}
+						// Create merchant manually callback
+						onCreateMerchantManually={handleCreateMerchantManually}
 					/>
 					
 					{/* Deployment Modal for Library in funnel context */}
@@ -835,12 +880,18 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 				funnel={selectedFunnel}
 				onBack={handleBackToDashboard}
 				onUpdate={async (updatedFunnel) => {
+					// Track if this is a deployment change (went from not deployed to deployed)
+					const wasDeployed = selectedFunnel?.isDeployed;
+					const nowDeployed = updatedFunnel.isDeployed;
+					const isNewDeployment = !wasDeployed && nowDeployed;
+
 					// Debug logging
 					console.log("AdminPanel onUpdate called:", {
 						updatedFunnel,
 						isDeployed: updatedFunnel.isDeployed,
 						wasEverDeployed: updatedFunnel.wasEverDeployed,
 						hasValidFlow: hasValidFlow(updatedFunnel),
+						isNewDeployment,
 					});
 
 					// Update funnel state immediately for responsive UI
@@ -849,11 +900,18 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 						funnels.map((f) => (f.id === updatedFunnel.id ? updatedFunnel : f)),
 					);
 
-					// Save flow data to database
+					// Save flow data to database (including all fields)
 					try {
 						const response = await apiPut(`/api/funnels/${updatedFunnel.id}`, {
 							flow: updatedFunnel.flow,
 							name: updatedFunnel.name,
+							membershipTriggerType: updatedFunnel.membershipTriggerType,
+							appTriggerType: updatedFunnel.appTriggerType,
+							membershipTriggerConfig: updatedFunnel.membershipTriggerConfig,
+							appTriggerConfig: updatedFunnel.appTriggerConfig,
+							delayMinutes: updatedFunnel.delayMinutes, // App trigger delay (backward compatibility)
+							membershipDelayMinutes: updatedFunnel.membershipDelayMinutes,
+							isDraft: updatedFunnel.isDraft,
 						}, user?.experienceId);
 
 						if (!response.ok) {
@@ -879,8 +937,9 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 						// The user can try to save again or refresh to get the latest state
 					}
 
-					if (updatedFunnel.isDeployed && hasValidFlow(updatedFunnel)) {
-						console.log("Redirecting to store...");
+					// Only redirect to store on NEW deployments, not on every update to a deployed funnel
+					if (isNewDeployment && hasValidFlow(updatedFunnel)) {
+						console.log("Redirecting to store after new deployment...");
 						setTimeout(() => {
 							setCurrentView("store");
 						}, 100);

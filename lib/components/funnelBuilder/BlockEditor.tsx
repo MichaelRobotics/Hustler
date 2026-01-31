@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Trash2, Clock } from "lucide-react";
 import AutoResizeTextarea from "../common/AutoResizeTextarea";
 
 interface FunnelBlockOption {
@@ -10,8 +11,15 @@ interface FunnelBlockOption {
 
 interface FunnelBlock {
 	id: string;
+	headline?: string | null;
 	message: string;
 	options: FunnelBlockOption[];
+	upsellBlockId?: string | null;
+	downsellBlockId?: string | null;
+	timeoutMinutes?: number | null;
+	resourceId?: string | null;
+	productSelectionType?: "ai_suggested" | "manual" | "from_stage";
+	referencedBlockId?: string | null;
 }
 
 interface FunnelFlow {
@@ -27,6 +35,17 @@ interface BlockEditorProps {
 	funnelFlow?: FunnelFlow;
 	onSave: (block: FunnelBlock) => void;
 	onCancel: () => void;
+	onAddNewOption?: (blockId: string, optionText: string) => void; // Callback for adding new option
+	merchantType?: "qualification" | "upsell";
+	resources?: Array<{ id: string; name: string }>; // For upsell: select product from resources
+	pendingDelete?: {
+		blockId: string;
+		affectedOptions: Array<{ blockId: string; optionIndex: number }>;
+		outgoingConnections: Array<{ targetBlockId: string }>;
+		orphanedNextStageCards: string[];
+		brokenPreviousStageCards: string[];
+		invalidOptions: Array<{ blockId: string; optionIndex: number; reason: string }>;
+	} | null; // Pending delete state
 }
 
 /**
@@ -46,9 +65,46 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 	funnelFlow,
 	onSave,
 	onCancel,
+	onAddNewOption,
+	merchantType = "qualification",
+	resources = [],
+	pendingDelete,
 }) => {
 	// State to hold the changes to the block as the user edits it.
 	const [editedBlock, setEditedBlock] = React.useState<FunnelBlock>(block);
+	const [newOptionText, setNewOptionText] = React.useState("");
+	const isUpsell = merchantType === "upsell";
+
+	// Timeout UX (upsell): same pattern as trigger delay - value + unit + Save
+	type TimeUnit = "minutes" | "hours" | "days";
+	const getBestUnit = (minutes: number): { value: number; unit: TimeUnit } => {
+		if (minutes === 0) return { value: 0, unit: "minutes" };
+		if (minutes % (24 * 60) === 0) return { value: minutes / (24 * 60), unit: "days" };
+		if (minutes % 60 === 0) return { value: minutes / 60, unit: "hours" };
+		return { value: minutes, unit: "minutes" };
+	};
+	const convertToMinutes = (value: number, unit: TimeUnit): number => {
+		switch (unit) {
+			case "days": return value * 24 * 60;
+			case "hours": return value * 60;
+			default: return value;
+		}
+	};
+	const timeoutMinutes = editedBlock.timeoutMinutes ?? 0;
+	const initialTimeoutDisplay = getBestUnit(timeoutMinutes);
+	const [localTimeoutValue, setLocalTimeoutValue] = React.useState(initialTimeoutDisplay.value);
+	const [localTimeoutUnit, setLocalTimeoutUnit] = React.useState<TimeUnit>(initialTimeoutDisplay.unit);
+	const [timeoutHasUnsaved, setTimeoutHasUnsaved] = React.useState(false);
+	React.useEffect(() => {
+		const display = getBestUnit(editedBlock.timeoutMinutes ?? 0);
+		setLocalTimeoutValue(display.value);
+		setLocalTimeoutUnit(display.unit);
+		setTimeoutHasUnsaved(false);
+	}, [editedBlock.timeoutMinutes]);
+
+	React.useEffect(() => {
+		setEditedBlock(block);
+	}, [block]);
 
 	// Handler for updating the main message of the block.
 	const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -171,8 +227,42 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 		setEditedBlock({ ...editedBlock, options: newOptions });
 	};
 
+	// Check if an option can be deleted (only if multiple options lead to the same nextBlockId)
+	const canDeleteOption = (optionIndex: number): boolean => {
+		if (!editedBlock.options || editedBlock.options.length === 0) return false;
+		const targetBlockId = editedBlock.options[optionIndex]?.nextBlockId;
+		if (!targetBlockId) return false;
+		
+		const optionsLeadingToSameBlock = editedBlock.options.filter(
+			opt => opt.nextBlockId === targetBlockId
+		).length;
+		
+		return optionsLeadingToSameBlock > 1;
+	};
+
+	// Handler for deleting an option
+	const handleOptionDelete = (index: number) => {
+		if (!canDeleteOption(index)) return;
+		
+		const newOptions = editedBlock.options.filter((_, i) => i !== index);
+		setEditedBlock({ ...editedBlock, options: newOptions });
+	};
+
 	return (
 		<div className="p-4 space-y-4">
+			{/* Headline (card title) */}
+			<div>
+				<label className="block text-xs text-violet-600 dark:text-violet-400 font-bold uppercase tracking-wider mb-2">
+					Headline
+				</label>
+				<input
+					type="text"
+					value={editedBlock.headline ?? ""}
+					onChange={(e) => setEditedBlock({ ...editedBlock, headline: e.target.value || null })}
+					placeholder={editedBlock.id}
+					className="w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200"
+				/>
+			</div>
 			{/* Message Section with Action Buttons */}
 			<div>
 				<div className="flex justify-between items-center mb-2">
@@ -192,8 +282,14 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 								let messageWithPlaceholders = ensureLinkPlaceholder(editedBlock.message, editedBlock.id);
 								// Ensure [USER] and [WHOP] placeholders are present for WELCOME blocks
 								messageWithPlaceholders = ensureUserWhopPlaceholders(messageWithPlaceholders, editedBlock.id);
-								const updatedBlock = { ...editedBlock, message: messageWithPlaceholders };
+								const timeoutMinutes = isUpsell ? convertToMinutes(localTimeoutValue, localTimeoutUnit) : editedBlock.timeoutMinutes;
+								const updatedBlock = {
+									...editedBlock,
+									message: messageWithPlaceholders,
+									...(isUpsell ? { timeoutMinutes } : {}),
+								};
 								onSave(updatedBlock);
+								if (isUpsell) setTimeoutHasUnsaved(false);
 							}}
 							className="px-3 py-1.5 text-xs rounded-lg bg-violet-500 hover:bg-violet-600 dark:bg-violet-600 dark:hover:bg-violet-700 text-white font-medium transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 flex items-center gap-1.5"
 						>
@@ -302,34 +398,166 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 				})()}
 			</div>
 
-			{/* Options Section */}
-			{editedBlock.options && editedBlock.options.length > 0 && (
-				<div>
-					<label className="text-xs text-violet-600 dark:text-violet-400 font-bold mb-2 block uppercase tracking-wider">
-						Options
-					</label>
-					<div className="space-y-3">
-						{editedBlock.options &&
-							editedBlock.options.map((opt, i) => (
-								<div key={i} className="flex items-start gap-3">
-									<div className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
-										<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
-											{i + 1}
-										</span>
-									</div>
-									<div className="flex-1">
-										<AutoResizeTextarea
-											className="w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl p-3 text-foreground text-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200 resize-none"
-											value={opt.text}
-											onChange={(e) => handleOptionChange(i, e.target.value)}
-											placeholder={`Option ${i + 1} text...`}
-											rows={2}
-										/>
-									</div>
-								</div>
-							))}
+			{/* Upsell: Timeout (Product is shown on card above Upsell/Downsell) */}
+			{isUpsell && (
+				<>
+					<div>
+						<div
+							className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30"
+						>
+							<Clock className="w-4 h-4 text-violet-500 dark:text-violet-400 flex-shrink-0" />
+							<span className="text-xs text-violet-600 dark:text-violet-400 font-medium">Delay</span>
+							<input
+								type="number"
+								min={0}
+								step={localTimeoutUnit === "minutes" ? "1" : "0.01"}
+								value={localTimeoutValue}
+								onChange={(e) => {
+									const value = parseInt(e.target.value, 10);
+									const newValue = isNaN(value) ? 0 : Math.max(0, value);
+									setLocalTimeoutValue(newValue);
+									const minutesValue = convertToMinutes(newValue, localTimeoutUnit);
+									setTimeoutHasUnsaved(minutesValue !== (editedBlock.timeoutMinutes ?? 0));
+								}}
+								className="w-16 px-2 py-1.5 text-sm bg-background border border-border/50 dark:border-border/30 rounded-lg focus:ring-2 focus:ring-violet-500/50"
+							/>
+							<select
+								value={localTimeoutUnit}
+								onChange={(e) => {
+									const newUnit = e.target.value as TimeUnit;
+									const currentMinutes = convertToMinutes(localTimeoutValue, localTimeoutUnit);
+									const display = getBestUnit(currentMinutes);
+									let newDisplayValue = localTimeoutValue;
+									if (newUnit === "minutes") newDisplayValue = currentMinutes;
+									else if (newUnit === "hours") newDisplayValue = currentMinutes / 60;
+									else if (newUnit === "days") newDisplayValue = currentMinutes / (24 * 60);
+									setLocalTimeoutValue(Math.round(newDisplayValue * 100) / 100);
+									setLocalTimeoutUnit(newUnit);
+									const minutesValue = convertToMinutes(newDisplayValue, newUnit);
+									setTimeoutHasUnsaved(minutesValue !== (editedBlock.timeoutMinutes ?? 0));
+								}}
+								className="px-2 py-1 text-xs bg-background border border-border/50 dark:border-border/30 rounded-lg focus:ring-2 focus:ring-violet-500/50"
+							>
+								<option value="minutes">min</option>
+								<option value="hours">hours</option>
+								<option value="days">days</option>
+							</select>
+						</div>
 					</div>
+				</>
+			)}
+
+			{/* Options Section (qualification only; upsell uses fixed Upsell/Downsell on canvas) */}
+			{!isUpsell && (
+			<div>
+				<label className="text-xs text-violet-600 dark:text-violet-400 font-bold mb-2 block uppercase tracking-wider">
+					Options
+				</label>
+				<div className="space-y-3">
+					{editedBlock.options && editedBlock.options.length > 0 && (
+						<>
+							{editedBlock.options.map((opt, i) => {
+								const canDelete = canDeleteOption(i);
+								// Check if this option is invalid
+								const isInvalidOption = pendingDelete && pendingDelete.invalidOptions.some(
+									invalid => invalid.blockId === block.id && invalid.optionIndex === i
+								);
+								// Check if this option is affected by pending delete (leads to deleted card)
+								const isAffectedOption = pendingDelete && pendingDelete.affectedOptions.some(
+									affected => affected.blockId === block.id && affected.optionIndex === i
+								);
+								
+								return (
+									<div key={i} className="flex items-start gap-3">
+										<div className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
+											<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+												{i + 1}
+											</span>
+										</div>
+										<div className="flex-1">
+											<AutoResizeTextarea
+												className={`w-full rounded-xl p-3 text-foreground text-sm focus:ring-2 transition-all duration-200 resize-none ${
+													isInvalidOption || isAffectedOption
+														? "bg-red-500/10 border-red-500 ring-2 ring-red-500 focus:ring-red-500/50 focus:border-red-300"
+														: "bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 focus:ring-violet-500/50 focus:border-violet-300"
+												}`}
+												value={opt.text}
+												onChange={(e) => handleOptionChange(i, e.target.value)}
+												placeholder={`Option ${i + 1} text...`}
+												rows={2}
+											/>
+										</div>
+										{canDelete && (
+											<button
+												onClick={() => handleOptionDelete(i)}
+												className="flex-shrink-0 p-1.5 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors duration-200"
+												title="Delete option"
+											>
+												<Trash2 className="w-4 h-4" />
+											</button>
+										)}
+									</div>
+								);
+							})}
+						</>
+					)}
+					{/* Always visible "+" option with input field */}
+					{onAddNewOption && (
+						<div className="flex items-center gap-3">
+							<div className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
+								<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+									+
+								</span>
+							</div>
+							<div className="flex-1 flex items-center gap-2">
+								<AutoResizeTextarea
+									className="w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl p-3 text-foreground text-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200 resize-none"
+									value={newOptionText}
+									onChange={(e) => setNewOptionText(e.target.value)}
+									placeholder="Add new option..."
+									rows={2}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" && newOptionText.trim() && !e.shiftKey) {
+											e.preventDefault();
+											onAddNewOption(block.id, newOptionText.trim());
+											setNewOptionText("");
+										}
+									}}
+								/>
+								<button
+									onClick={() => {
+										if (newOptionText.trim()) {
+											onAddNewOption(block.id, newOptionText.trim());
+											setNewOptionText("");
+										}
+									}}
+									disabled={!newOptionText.trim()}
+									className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+										newOptionText.trim()
+											? "bg-violet-500 hover:bg-violet-600 dark:bg-violet-600 dark:hover:bg-violet-700 text-white cursor-pointer"
+											: "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+									}`}
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="w-4 h-4"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M12 4v16m8-8H4"
+										/>
+									</svg>
+								</button>
+							</div>
+						</div>
+					)}
 				</div>
+			</div>
 			)}
 		</div>
 	);

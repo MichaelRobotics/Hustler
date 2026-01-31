@@ -109,17 +109,35 @@ export const useFunnelLayout = (
 
 				return () => clearTimeout(timer);
 			}
+
+			// Fallback timeout: force transition to final phase even if blocks aren't measured
+			// This ensures layout completes even if ref measurement fails
+			const fallbackTimer = setTimeout(() => {
+				setLayoutPhase("final");
+			}, 500); // 500ms fallback
+
+			return () => clearTimeout(fallbackTimer);
 		}
 	}, [layoutPhase, funnelFlow]); // Removed positions dependency to avoid circular dependency
 
 	// Layout effect to calculate positions and draw the funnel.
 	React.useLayoutEffect(() => {
-		if (
-			!funnelFlow ||
-			!funnelFlow.stages ||
-			!funnelFlow.blocks ||
-			Object.keys(funnelFlow.blocks).length === 0
-		) {
+		if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks) {
+			return;
+		}
+
+		const hasNoBlocks = Object.keys(funnelFlow.blocks).length === 0;
+		const hasNoStages = funnelFlow.stages.length === 0;
+
+		// Upsell minimal flow: empty stages and blocks (trigger-only). Set minimal layout so canvas has valid dimensions.
+		if (hasNoStages || hasNoBlocks) {
+			setItemCanvasWidth(ITEM_WIDTH);
+			setTotalCanvasHeight(0);
+			setPositions({});
+			setStageLayouts([]);
+			setLines([]);
+			setLayoutCompleted(true);
+			setPerformanceMode(true);
 			return;
 		}
 
@@ -171,7 +189,27 @@ export const useFunnelLayout = (
 				tempY += ESTIMATED_BLOCK_HEIGHT + STAGE_Y_GAP;
 			});
 			setStageLayouts(tempStageLayouts);
-			setLines([]);
+
+			// Calculate lines with estimated heights (so arrows are visible immediately)
+			const measureLines: Line[] = [];
+			Object.values(funnelFlow.blocks).forEach((block) => {
+				block.options?.forEach((opt, index) => {
+					if (
+						opt.nextBlockId &&
+						measurePositions[block.id] &&
+						measurePositions[opt.nextBlockId]
+					) {
+						measureLines.push({
+							id: `${block.id}-${opt.nextBlockId}-${index}`,
+							x1: measurePositions[block.id].x,
+							y1: measurePositions[block.id].y + ESTIMATED_BLOCK_HEIGHT,
+							x2: measurePositions[opt.nextBlockId].x,
+							y2: measurePositions[opt.nextBlockId].y,
+						});
+					}
+				});
+			});
+			setLines(measureLines);
 		} else if (layoutPhase === "final") {
 			// Phase 2: Calculate final positions based on actual heights
 			const heights: Record<string, number> = {};

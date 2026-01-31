@@ -59,6 +59,18 @@ export const reviewStatusEnum = pgEnum("review_status", [
 	"published",
 	"removed",
 ]);
+export const funnelTriggerTypeEnum = pgEnum("funnel_trigger_type", [
+	"on_app_entry",      // Current behavior - create on first app visit if no conversation
+	"membership_valid",  // Create when membership goes valid (if no customers_resources record)
+	"any_membership_buy", // Any membership buy
+	"membership_buy",     // Membership buy (specific product)
+	"no_active_conversation", // No active conversation
+	"qualification_merchant_complete", // Qualification merchant complete
+	"upsell_merchant_complete", // Upsell merchant complete
+	"delete_merchant_conversation", // Delete merchant conversation
+	"cancel_membership", // Cancel Membership (specific)
+	"any_cancel_membership", // Any membership cancel
+]);
 
 
 // ===== CORE WHOP INTEGRATION TABLES =====
@@ -189,12 +201,24 @@ export const funnels = pgTable(
 		description: text("description"),
 		flow: jsonb("flow"), // The complete funnel flow JSON
 		visualizationState: jsonb("visualization_state").default("{}"), // User visualization preferences and layout
+		membershipTriggerType: funnelTriggerTypeEnum("membership_trigger_type"), // Membership trigger
+		appTriggerType: funnelTriggerTypeEnum("app_trigger_type"), // App trigger
 		isDeployed: boolean("is_deployed").default(false).notNull(),
 		wasEverDeployed: boolean("was_ever_deployed").default(false).notNull(),
+		isDraft: boolean("is_draft").default(false).notNull(), // Draft mode - prevents deployment when new cards don't have complete connections
 		generationStatus: generationStatusEnum("generation_status")
 			.default("idle")
 			.notNull(),
 		sends: integer("sends").default(0).notNull(),
+		membershipTriggerConfig: jsonb("membership_trigger_config").default("{}"), // Membership trigger config
+		appTriggerConfig: jsonb("app_trigger_config").default("{}"), // App trigger config
+		delayMinutes: integer("delay_minutes").default(0).notNull(), // App trigger delay
+		membershipDelayMinutes: integer("membership_delay_minutes").default(0).notNull(), // Membership trigger delay
+		// Handout configuration
+		handoutKeyword: text("handout_keyword").default("handout"),
+		handoutAdminNotification: text("handout_admin_notification"),
+		handoutUserMessage: text("handout_user_message"),
+		merchantType: text("merchant_type").default("qualification").notNull(), // "qualification" | "upsell"
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -369,6 +393,61 @@ export const funnelResources = pgTable(
 			table.resourceId,
 		),
 		uniqueFunnelResource: unique("unique_funnel_resource").on(
+			table.funnelId,
+			table.resourceId,
+		),
+	}),
+);
+
+// ===== FUNNEL NOTIFICATIONS (Reminder notifications per stage) =====
+export const funnelNotifications = pgTable(
+	"funnel_notifications",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		funnelId: uuid("funnel_id")
+			.notNull()
+			.references(() => funnels.id, { onDelete: "cascade" }),
+		stageId: text("stage_id").notNull(), // References stage ID in funnel flow JSON
+		sequence: integer("sequence").notNull(), // 1, 2, or 3 (max 3 per stage)
+		inactivityMinutes: integer("inactivity_minutes").notNull(), // Time before notification triggers
+		message: text("message").notNull(), // Notification content
+		isReset: boolean("is_reset").default(false).notNull(), // If true, this is a reset card
+		resetAction: text("reset_action"), // For reset cards: "delete" or "complete"
+		delayMinutes: integer("delay_minutes"), // Delay in minutes for reset card (after all notifications)
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		funnelIdIdx: index("funnel_notifications_funnel_id_idx").on(table.funnelId),
+		stageIdIdx: index("funnel_notifications_stage_id_idx").on(table.stageId),
+		funnelStageSequenceUnique: unique("funnel_notifications_funnel_stage_sequence_unique").on(
+			table.funnelId,
+			table.stageId,
+			table.sequence,
+		),
+	}),
+);
+
+// ===== FUNNEL PRODUCT FAQ (FAQ and objection handling per product) =====
+export const funnelProductFaq = pgTable(
+	"funnel_product_faq",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		funnelId: uuid("funnel_id")
+			.notNull()
+			.references(() => funnels.id, { onDelete: "cascade" }),
+		resourceId: uuid("resource_id")
+			.notNull()
+			.references(() => resources.id, { onDelete: "cascade" }),
+		faqContent: text("faq_content"), // FAQ text or document content
+		objectionHandling: text("objection_handling"), // Objection handling guidelines
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		funnelIdIdx: index("funnel_product_faq_funnel_id_idx").on(table.funnelId),
+		resourceIdIdx: index("funnel_product_faq_resource_id_idx").on(table.resourceId),
+		funnelResourceUnique: unique("funnel_product_faq_funnel_resource_unique").on(
 			table.funnelId,
 			table.resourceId,
 		),
@@ -593,6 +672,8 @@ export const funnelsRelations = relations(funnels, ({ one, many }) => ({
 		references: [users.id],
 	}),
 	funnelResources: many(funnelResources),
+	funnelNotifications: many(funnelNotifications),
+	funnelProductFaq: many(funnelProductFaq),
 	conversations: many(conversations),
 	funnelAnalytics: many(funnelAnalytics),
 }));
@@ -626,6 +707,30 @@ export const funnelResourcesRelations = relations(
 		}),
 		resource: one(resources, {
 			fields: [funnelResources.resourceId],
+			references: [resources.id],
+		}),
+	}),
+);
+
+export const funnelNotificationsRelations = relations(
+	funnelNotifications,
+	({ one }) => ({
+		funnel: one(funnels, {
+			fields: [funnelNotifications.funnelId],
+			references: [funnels.id],
+		}),
+	}),
+);
+
+export const funnelProductFaqRelations = relations(
+	funnelProductFaq,
+	({ one }) => ({
+		funnel: one(funnels, {
+			fields: [funnelProductFaq.funnelId],
+			references: [funnels.id],
+		}),
+		resource: one(resources, {
+			fields: [funnelProductFaq.resourceId],
 			references: [resources.id],
 		}),
 	}),

@@ -7,6 +7,8 @@ import {
 	funnelAnalytics,
 	funnelResourceAnalytics,
 	funnelResources,
+	funnelNotifications,
+	funnelProductFaq,
 	funnels,
 	resources,
 	users,
@@ -14,7 +16,7 @@ import {
 import { generateFunnelFlow } from "./ai-actions";
 import { PRODUCT_LIMITS, GLOBAL_LIMITS } from "../types/resource";
 import { resourceAssignmentQueue } from "../queue/ResourceAssignmentQueue";
-import type { FunnelFlow } from "../types/funnel";
+import type { FunnelFlow, FunnelNotification, FunnelNotificationInput, FunnelProductFaq, FunnelProductFaqInput } from "../types/funnel";
 
 /**
  * Look up admin user by experience ID
@@ -181,13 +183,24 @@ export interface CreateFunnelInput {
 	name: string;
 	description?: string;
 	resources?: string[]; // Resource IDs
+	merchantType?: "qualification" | "upsell"; // Merchant type: qualification or upsell
 }
 
 export interface UpdateFunnelInput {
 	name?: string;
 	description?: string;
 	flow?: any;
+	membershipTriggerType?: "any_membership_buy" | "membership_buy" | "cancel_membership" | "any_cancel_membership";
+	appTriggerType?: "on_app_entry" | "no_active_conversation" | "qualification_merchant_complete" | "upsell_merchant_complete" | "delete_merchant_conversation";
+	membershipTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] };
+	appTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string };
+	delayMinutes?: number; // App trigger delay (backward compatibility)
+	membershipDelayMinutes?: number; // Membership trigger delay
+	handoutKeyword?: string;
+	handoutAdminNotification?: string;
+	handoutUserMessage?: string;
 	resources?: string[]; // Resource IDs
+	isDraft?: boolean; // Draft mode - prevents deployment when new cards don't have complete connections
 }
 
 export interface FunnelWithResources {
@@ -195,13 +208,24 @@ export interface FunnelWithResources {
 	name: string;
 	description?: string;
 	flow?: any;
+	membershipTriggerType?: "any_membership_buy" | "membership_buy" | "cancel_membership" | "any_cancel_membership";
+	appTriggerType?: "on_app_entry" | "no_active_conversation" | "qualification_merchant_complete" | "upsell_merchant_complete" | "delete_merchant_conversation";
+	membershipTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] };
+	appTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string };
+	delayMinutes?: number; // App trigger delay (backward compatibility)
+	membershipDelayMinutes?: number; // Membership trigger delay
+	handoutKeyword?: string;
+	handoutAdminNotification?: string;
+	handoutUserMessage?: string;
+	merchantType?: "qualification" | "upsell"; // Merchant type: qualification or upsell
 	isDeployed: boolean;
 	wasEverDeployed: boolean;
+	isDraft: boolean;
 	generationStatus: "idle" | "generating" | "completed" | "failed";
 	sends: number;
-		createdAt: Date;
-		updatedAt: Date;
-		resources: Array<{
+	createdAt: Date;
+	updatedAt: Date;
+	resources: Array<{
 		id: string;
 		name: string;
 		type: "AFFILIATE" | "MY_PRODUCTS";
@@ -259,8 +283,10 @@ export async function createFunnel(
 				flow: null,
 				isDeployed: false,
 				wasEverDeployed: false,
+				isDraft: false,
 				generationStatus: "idle",
 				sends: 0,
+				merchantType: input.merchantType || "qualification", // Default to qualification for backward compatibility
 			})
 			.returning();
 
@@ -325,8 +351,10 @@ export async function createFunnel(
 			name: newFunnel.name,
 			description: newFunnel.description || undefined,
 			flow: newFunnel.flow,
+			merchantType: (newFunnel.merchantType as "qualification" | "upsell") || "qualification", // Default to qualification for backward compatibility
 			isDeployed: newFunnel.isDeployed,
 			wasEverDeployed: newFunnel.wasEverDeployed,
+			isDraft: newFunnel.isDraft || false,
 			generationStatus: newFunnel.generationStatus,
 			sends: newFunnel.sends,
 			createdAt: newFunnel.createdAt,
@@ -421,8 +449,16 @@ export async function getFunnelById(
 			name: funnel.name,
 			description: funnel.description || undefined,
 			flow: funnel.flow,
+			membershipTriggerType: funnel.membershipTriggerType || undefined,
+			appTriggerType: funnel.appTriggerType || undefined,
+			membershipTriggerConfig: (funnel.membershipTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
+			appTriggerConfig: (funnel.appTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
+			delayMinutes: funnel.delayMinutes || undefined, // App trigger delay (backward compatibility)
+			membershipDelayMinutes: funnel.membershipDelayMinutes || undefined, // Membership trigger delay
+			merchantType: (funnel.merchantType as "qualification" | "upsell") || "qualification", // Default to qualification for backward compatibility
 			isDeployed: funnel.isDeployed,
 			wasEverDeployed: funnel.wasEverDeployed,
+			isDraft: funnel.isDraft || false,
 			generationStatus: funnel.generationStatus,
 			sends: funnel.sends,
 			createdAt: funnel.createdAt,
@@ -506,8 +542,16 @@ export async function getFunnels(
 					name: funnel.name,
 					description: funnel.description || undefined,
 					flow: funnel.flow,
+					membershipTriggerType: funnel.membershipTriggerType || undefined,
+					appTriggerType: funnel.appTriggerType || undefined,
+					membershipTriggerConfig: (funnel.membershipTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
+					appTriggerConfig: (funnel.appTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
+					delayMinutes: funnel.delayMinutes || undefined, // App trigger delay (backward compatibility)
+					membershipDelayMinutes: funnel.membershipDelayMinutes || undefined, // Membership trigger delay
+					merchantType: (funnel.merchantType as "qualification" | "upsell") || "qualification", // Default to qualification for backward compatibility
 					isDeployed: funnel.isDeployed,
 					wasEverDeployed: funnel.wasEverDeployed,
+					isDraft: funnel.isDraft || false,
 					generationStatus: funnel.generationStatus,
 					sends: funnel.sends,
 					createdAt: funnel.createdAt,
@@ -586,6 +630,34 @@ export async function updateFunnel(
 						? input.description
 						: existingFunnel.description,
 				flow: input.flow || existingFunnel.flow,
+				membershipTriggerType:
+					input.membershipTriggerType !== undefined
+						? input.membershipTriggerType
+						: existingFunnel.membershipTriggerType,
+				appTriggerType:
+					input.appTriggerType !== undefined
+						? input.appTriggerType
+						: existingFunnel.appTriggerType,
+				membershipTriggerConfig:
+					input.membershipTriggerConfig !== undefined
+						? input.membershipTriggerConfig
+						: existingFunnel.membershipTriggerConfig,
+				appTriggerConfig:
+					input.appTriggerConfig !== undefined
+						? input.appTriggerConfig
+						: existingFunnel.appTriggerConfig,
+				delayMinutes:
+					input.delayMinutes !== undefined
+						? input.delayMinutes
+						: existingFunnel.delayMinutes, // App trigger delay (backward compatibility)
+				membershipDelayMinutes:
+					input.membershipDelayMinutes !== undefined
+						? input.membershipDelayMinutes
+						: existingFunnel.membershipDelayMinutes,
+				isDraft:
+					input.isDraft !== undefined
+						? input.isDraft
+						: existingFunnel.isDraft,
 				updatedAt: new Date(),
 			})
 			.where(eq(funnels.id, funnelId))
@@ -755,6 +827,11 @@ export async function deployFunnel(
 		// Check if funnel has a flow
 		if (!existingFunnel.flow) {
 			throw new Error("Cannot deploy funnel without a flow");
+		}
+
+		// Check if funnel is in draft mode
+		if (existingFunnel.isDraft) {
+			throw new Error("Cannot deploy funnel in draft mode. Complete new card connections to enable deployment.");
 		}
 
 		// Check if any other funnel is currently live for this experience
@@ -1267,6 +1344,358 @@ export async function removeResourceFromFunnel(
 			);
 	} catch (error) {
 		console.error("Error removing resource from funnel:", error);
+		throw error;
+	}
+}
+
+// ===== FUNNEL NOTIFICATIONS CRUD =====
+
+/**
+ * Get all notifications for a funnel
+ */
+export async function getFunnelNotifications(
+	user: AuthenticatedUser,
+	funnelId: string,
+): Promise<FunnelNotification[]> {
+	try {
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, funnelId),
+				eq(funnels.experienceId, user.experience.id),
+			),
+		});
+
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		const notifications = await db.query.funnelNotifications.findMany({
+			where: eq(funnelNotifications.funnelId, funnelId),
+			orderBy: [asc(funnelNotifications.stageId), asc(funnelNotifications.sequence)],
+		});
+
+		return notifications.map((n: typeof funnelNotifications.$inferSelect) => ({
+			id: n.id,
+			funnelId: n.funnelId,
+			stageId: n.stageId,
+			sequence: n.sequence,
+			inactivityMinutes: n.inactivityMinutes,
+			message: n.message,
+			notificationType: (n as any).notificationType ?? undefined,
+			isReset: n.isReset,
+			resetAction: n.resetAction ?? undefined,
+			delayMinutes: n.delayMinutes ?? undefined,
+			createdAt: n.createdAt,
+			updatedAt: n.updatedAt,
+		}));
+	} catch (error) {
+		console.error("Error getting funnel notifications:", error);
+		throw error;
+	}
+}
+
+/**
+ * Create or update a funnel notification
+ */
+export async function upsertFunnelNotification(
+	user: AuthenticatedUser,
+	input: FunnelNotificationInput,
+): Promise<FunnelNotification> {
+	try {
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, input.funnelId),
+				eq(funnels.experienceId, user.experience.id),
+			),
+		});
+
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		// Check if notification already exists for this funnel/stage/sequence
+		const existingNotification = await db.query.funnelNotifications.findFirst({
+			where: and(
+				eq(funnelNotifications.funnelId, input.funnelId),
+				eq(funnelNotifications.stageId, input.stageId),
+				eq(funnelNotifications.sequence, input.sequence),
+			),
+		});
+
+		if (existingNotification) {
+			// Update existing notification
+			const updateData: any = {
+				inactivityMinutes: input.inactivityMinutes,
+				message: input.message,
+				isReset: input.isReset ?? false,
+				resetAction: input.resetAction,
+				delayMinutes: input.delayMinutes,
+				updatedAt: new Date(),
+			};
+
+			// Add notificationType if provided (column may not exist yet)
+			if (input.notificationType !== undefined) {
+				updateData.notificationType = input.notificationType;
+			}
+
+			const [updated] = await db
+				.update(funnelNotifications)
+				.set(updateData)
+				.where(eq(funnelNotifications.id, existingNotification.id))
+				.returning();
+
+			return {
+				id: updated.id,
+				funnelId: updated.funnelId,
+				stageId: updated.stageId,
+				sequence: updated.sequence,
+				inactivityMinutes: updated.inactivityMinutes,
+				message: updated.message,
+				notificationType: (updated as any).notificationType ?? undefined,
+				isReset: updated.isReset,
+				resetAction: updated.resetAction ?? undefined,
+				delayMinutes: updated.delayMinutes ?? undefined,
+				createdAt: updated.createdAt,
+				updatedAt: updated.updatedAt,
+			};
+		}
+
+		// Create new notification
+		const insertData: any = {
+			funnelId: input.funnelId,
+			stageId: input.stageId,
+			sequence: input.sequence,
+			inactivityMinutes: input.inactivityMinutes,
+			message: input.message,
+			isReset: input.isReset ?? false,
+			resetAction: input.resetAction,
+			delayMinutes: input.delayMinutes,
+		};
+
+		// Add notificationType if provided (column may not exist yet)
+		if (input.notificationType !== undefined) {
+			insertData.notificationType = input.notificationType;
+		}
+
+		const [created] = await db
+			.insert(funnelNotifications)
+			.values(insertData)
+			.returning();
+
+		return {
+			id: created.id,
+			funnelId: created.funnelId,
+			stageId: created.stageId,
+			sequence: created.sequence,
+			inactivityMinutes: created.inactivityMinutes,
+			message: created.message,
+			notificationType: (created as any).notificationType ?? undefined,
+			isReset: created.isReset,
+			resetAction: created.resetAction ?? undefined,
+			delayMinutes: created.delayMinutes ?? undefined,
+			createdAt: created.createdAt,
+			updatedAt: created.updatedAt,
+		};
+	} catch (error) {
+		console.error("Error upserting funnel notification:", error);
+		throw error;
+	}
+}
+
+/**
+ * Delete a funnel notification
+ */
+export async function deleteFunnelNotification(
+	user: AuthenticatedUser,
+	notificationId: string,
+): Promise<void> {
+	try {
+		// Get notification to check funnel access
+		const notification = await db.query.funnelNotifications.findFirst({
+			where: eq(funnelNotifications.id, notificationId),
+		});
+
+		if (!notification) {
+			throw new Error("Notification not found");
+		}
+
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, notification.funnelId),
+				eq(funnels.experienceId, user.experience.id),
+			),
+		});
+
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		// Delete the notification
+		await db
+			.delete(funnelNotifications)
+			.where(eq(funnelNotifications.id, notificationId));
+	} catch (error) {
+		console.error("Error deleting funnel notification:", error);
+		throw error;
+	}
+}
+
+// ===== FUNNEL PRODUCT FAQ CRUD =====
+
+/**
+ * Get all product FAQs for a funnel
+ */
+export async function getFunnelProductFaqs(
+	user: AuthenticatedUser,
+	funnelId: string,
+): Promise<FunnelProductFaq[]> {
+	try {
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, funnelId),
+				eq(funnels.experienceId, user.experience.id),
+			),
+		});
+
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		const faqs = await db.query.funnelProductFaq.findMany({
+			where: eq(funnelProductFaq.funnelId, funnelId),
+		});
+
+		return faqs.map((f: typeof funnelProductFaq.$inferSelect) => ({
+			id: f.id,
+			funnelId: f.funnelId,
+			resourceId: f.resourceId,
+			faqContent: f.faqContent ?? undefined,
+			objectionHandling: f.objectionHandling ?? undefined,
+			createdAt: f.createdAt,
+			updatedAt: f.updatedAt,
+		}));
+	} catch (error) {
+		console.error("Error getting funnel product FAQs:", error);
+		throw error;
+	}
+}
+
+/**
+ * Create or update a product FAQ
+ */
+export async function upsertFunnelProductFaq(
+	user: AuthenticatedUser,
+	input: FunnelProductFaqInput,
+): Promise<FunnelProductFaq> {
+	try {
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, input.funnelId),
+				eq(funnels.experienceId, user.experience.id),
+			),
+		});
+
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		// Check if FAQ already exists for this funnel/resource
+		const existingFaq = await db.query.funnelProductFaq.findFirst({
+			where: and(
+				eq(funnelProductFaq.funnelId, input.funnelId),
+				eq(funnelProductFaq.resourceId, input.resourceId),
+			),
+		});
+
+		if (existingFaq) {
+			// Update existing FAQ
+			const [updated] = await db
+				.update(funnelProductFaq)
+				.set({
+					faqContent: input.faqContent,
+					objectionHandling: input.objectionHandling,
+					updatedAt: new Date(),
+				})
+				.where(eq(funnelProductFaq.id, existingFaq.id))
+				.returning();
+
+			return {
+				id: updated.id,
+				funnelId: updated.funnelId,
+				resourceId: updated.resourceId,
+				faqContent: updated.faqContent ?? undefined,
+				objectionHandling: updated.objectionHandling ?? undefined,
+				createdAt: updated.createdAt,
+				updatedAt: updated.updatedAt,
+			};
+		}
+
+		// Create new FAQ
+		const [created] = await db
+			.insert(funnelProductFaq)
+			.values({
+				funnelId: input.funnelId,
+				resourceId: input.resourceId,
+				faqContent: input.faqContent,
+				objectionHandling: input.objectionHandling,
+			})
+			.returning();
+
+		return {
+			id: created.id,
+			funnelId: created.funnelId,
+			resourceId: created.resourceId,
+			faqContent: created.faqContent ?? undefined,
+			objectionHandling: created.objectionHandling ?? undefined,
+			createdAt: created.createdAt,
+			updatedAt: created.updatedAt,
+		};
+	} catch (error) {
+		console.error("Error upserting funnel product FAQ:", error);
+		throw error;
+	}
+}
+
+/**
+ * Delete a product FAQ
+ */
+export async function deleteFunnelProductFaq(
+	user: AuthenticatedUser,
+	faqId: string,
+): Promise<void> {
+	try {
+		// Get FAQ to check funnel access
+		const faq = await db.query.funnelProductFaq.findFirst({
+			where: eq(funnelProductFaq.id, faqId),
+		});
+
+		if (!faq) {
+			throw new Error("FAQ not found");
+		}
+
+		// Check if funnel exists and user has access
+		const existingFunnel = await db.query.funnels.findFirst({
+			where: and(
+				eq(funnels.id, faq.funnelId),
+				eq(funnels.experienceId, user.experience.id),
+			),
+		});
+
+		if (!existingFunnel) {
+			throw new Error("Funnel not found");
+		}
+
+		// Delete the FAQ
+		await db
+			.delete(funnelProductFaq)
+			.where(eq(funnelProductFaq.id, faqId));
+	} catch (error) {
+		console.error("Error deleting funnel product FAQ:", error);
 		throw error;
 	}
 }
