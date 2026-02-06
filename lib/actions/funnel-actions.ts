@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { updateUserCredits } from "../context/user-context";
 import { db } from "../supabase/db-server";
@@ -193,12 +193,9 @@ export interface UpdateFunnelInput {
 	membershipTriggerType?: "any_membership_buy" | "membership_buy" | "cancel_membership" | "any_cancel_membership";
 	appTriggerType?: "on_app_entry" | "no_active_conversation" | "qualification_merchant_complete" | "upsell_merchant_complete" | "delete_merchant_conversation";
 	membershipTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] };
-	appTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string };
+	appTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] };
 	delayMinutes?: number; // App trigger delay (backward compatibility)
 	membershipDelayMinutes?: number; // Membership trigger delay
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
 	resources?: string[]; // Resource IDs
 	isDraft?: boolean; // Draft mode - prevents deployment when new cards don't have complete connections
 }
@@ -211,12 +208,9 @@ export interface FunnelWithResources {
 	membershipTriggerType?: "any_membership_buy" | "membership_buy" | "cancel_membership" | "any_cancel_membership";
 	appTriggerType?: "on_app_entry" | "no_active_conversation" | "qualification_merchant_complete" | "upsell_merchant_complete" | "delete_merchant_conversation";
 	membershipTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] };
-	appTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string };
+	appTriggerConfig?: { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] };
 	delayMinutes?: number; // App trigger delay (backward compatibility)
 	membershipDelayMinutes?: number; // Membership trigger delay
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
 	merchantType?: "qualification" | "upsell"; // Merchant type: qualification or upsell
 	isDeployed: boolean;
 	wasEverDeployed: boolean;
@@ -233,7 +227,6 @@ export interface FunnelWithResources {
 		link: string;
 		code?: string;
 		description?: string;
-		productApps?: any;
 		image?: string;
 		storageUrl?: string;
 		price?: string;
@@ -421,11 +414,16 @@ export async function getFunnelById(
 			link: string;
 			code?: string;
 			description?: string;
-			productApps?: any;
 			image?: string;
 			storageUrl?: string;
 			price?: string;
 		}>();
+		const effectiveLink = (r: { link?: string | null; whopProductId?: string | null; purchaseUrl?: string | null }): string => {
+			const link = (r.link ?? "").trim();
+			if (link) return link;
+			if (r.whopProductId) return "";
+			return (r.purchaseUrl ?? "").trim() || "";
+		};
 		funnelWithResourcesRaw.forEach((row: any) => {
 			if (row.resource && !resourcesMap.has(row.resource.id)) {
 				resourcesMap.set(row.resource.id, {
@@ -433,16 +431,72 @@ export async function getFunnelById(
 					name: row.resource.name,
 					type: row.resource.type,
 					category: row.resource.category,
-					link: row.resource.link,
+					link: effectiveLink(row.resource),
 					code: row.resource.code || undefined,
 					description: row.resource.description || undefined,
-					productApps: row.resource.productApps || undefined,
 					image: row.resource.image || undefined,
 					storageUrl: row.resource.storageUrl || undefined,
 					price: row.resource.price || undefined,
 				});
 			}
 		});
+
+		// Include resources referenced in flow.blocks (by resourceId or resourceName) so preview link resolution has them
+		const flow = funnel.flow as FunnelFlow | null | undefined;
+		if (flow?.blocks && typeof flow.blocks === "object" && user.experience?.id) {
+			const resourceIds = new Set<string>();
+			const resourceNames = new Set<string>();
+			for (const block of Object.values(flow.blocks) as { resourceId?: string | null; resourceName?: string | null }[]) {
+				const rid = block.resourceId != null ? String(block.resourceId).trim() : "";
+				if (rid && !resourcesMap.has(rid)) resourceIds.add(rid);
+				const rname = block.resourceName != null ? String(block.resourceName).trim() : "";
+				if (rname) resourceNames.add(rname);
+			}
+			if (resourceIds.size > 0 || resourceNames.size > 0) {
+				const conditions = [
+					...(resourceIds.size > 0 ? [inArray(resources.id, [...resourceIds])] : []),
+					...(resourceNames.size > 0 ? [inArray(resources.name, [...resourceNames])] : []),
+				];
+				if (conditions.length > 0) {
+					const extraResources = await db.query.resources.findMany({
+						where: and(
+							eq(resources.experienceId, user.experience.id),
+							or(...conditions),
+						),
+						columns: {
+							id: true,
+							name: true,
+							type: true,
+							category: true,
+							link: true,
+							whopProductId: true,
+							purchaseUrl: true,
+							code: true,
+							description: true,
+							image: true,
+							storageUrl: true,
+							price: true,
+						},
+					});
+					for (const r of extraResources) {
+						if (!resourcesMap.has(r.id)) {
+							resourcesMap.set(r.id, {
+								id: r.id,
+								name: r.name,
+								type: r.type,
+								category: r.category,
+								link: effectiveLink(r),
+								code: r.code ?? undefined,
+								description: r.description ?? undefined,
+								image: r.image ?? undefined,
+								storageUrl: r.storageUrl ?? undefined,
+								price: r.price ?? undefined,
+							});
+						}
+					}
+				}
+			}
+		}
 
 		return {
 			id: funnel.id,
@@ -451,20 +505,20 @@ export async function getFunnelById(
 			flow: funnel.flow,
 			membershipTriggerType: funnel.membershipTriggerType || undefined,
 			appTriggerType: funnel.appTriggerType || undefined,
-			membershipTriggerConfig: (funnel.membershipTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
-			appTriggerConfig: (funnel.appTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
-			delayMinutes: funnel.delayMinutes || undefined, // App trigger delay (backward compatibility)
-			membershipDelayMinutes: funnel.membershipDelayMinutes || undefined, // Membership trigger delay
-			merchantType: (funnel.merchantType as "qualification" | "upsell") || "qualification", // Default to qualification for backward compatibility
-			isDeployed: funnel.isDeployed,
-			wasEverDeployed: funnel.wasEverDeployed,
-			isDraft: funnel.isDraft || false,
-			generationStatus: funnel.generationStatus,
-			sends: funnel.sends,
-			createdAt: funnel.createdAt,
-			updatedAt: funnel.updatedAt,
-			resources: Array.from(resourcesMap.values()),
-		};
+			membershipTriggerConfig: (funnel.membershipTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) || undefined,
+			appTriggerConfig: (funnel.appTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) || undefined,
+					delayMinutes: funnel.delayMinutes || undefined, // App trigger delay (backward compatibility)
+					membershipDelayMinutes: funnel.membershipDelayMinutes || undefined, // Membership trigger delay
+					merchantType: (funnel.merchantType as "qualification" | "upsell") || "qualification", // Default to qualification for backward compatibility
+					isDeployed: funnel.isDeployed,
+					wasEverDeployed: funnel.wasEverDeployed,
+					isDraft: funnel.isDraft || false,
+					generationStatus: funnel.generationStatus,
+					sends: funnel.sends,
+					createdAt: funnel.createdAt,
+					updatedAt: funnel.updatedAt,
+					resources: Array.from(resourcesMap.values()),
+				};
 	} catch (error) {
 		console.error("Error getting funnel:", error);
 		throw error;
@@ -479,6 +533,7 @@ export async function getFunnels(
 	page = 1,
 	limit = 10,
 	search?: string,
+	merchantType?: "qualification" | "upsell",
 ): Promise<FunnelListResponse> {
 	try {
 		const offset = (page - 1) * limit;
@@ -489,6 +544,11 @@ export async function getFunnels(
 		// For customers, also filter by user ID to ensure data isolation
 		if (user.accessLevel === "customer") {
 			whereConditions = and(whereConditions, eq(funnels.userId, user.id))!;
+		}
+
+		// Filter by merchant type (qualification vs upsell) for app trigger dropdown
+		if (merchantType) {
+			whereConditions = and(whereConditions, eq(funnels.merchantType, merchantType))!;
 		}
 
 		// Add search filter
@@ -544,8 +604,8 @@ export async function getFunnels(
 					flow: funnel.flow,
 					membershipTriggerType: funnel.membershipTriggerType || undefined,
 					appTriggerType: funnel.appTriggerType || undefined,
-					membershipTriggerConfig: (funnel.membershipTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
-					appTriggerConfig: (funnel.appTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific" }) || undefined,
+					membershipTriggerConfig: (funnel.membershipTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) || undefined,
+					appTriggerConfig: (funnel.appTriggerConfig as { resourceId?: string; funnelId?: string; cancelType?: "any" | "specific"; profileId?: string; filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) || undefined,
 					delayMinutes: funnel.delayMinutes || undefined, // App trigger delay (backward compatibility)
 					membershipDelayMinutes: funnel.membershipDelayMinutes || undefined, // Membership trigger delay
 					merchantType: (funnel.merchantType as "qualification" | "upsell") || "qualification", // Default to qualification for backward compatibility
@@ -573,7 +633,6 @@ export async function getFunnels(
 					link: resource.link,
 					code: resource.code || undefined,
 					description: resource.description || undefined,
-					productApps: resource.productApps || undefined,
 				});
 			}
 		});
@@ -760,46 +819,6 @@ export async function deleteFunnel(
 }
 
 /**
- * Check if any other funnel is currently deployed for the experience
- */
-export async function checkForOtherLiveFunnels(
-	user: AuthenticatedUser,
-	excludeFunnelId?: string,
-): Promise<{ hasLiveFunnel: boolean; liveFunnelName?: string }> {
-	try {
-		console.log(`ℹ️ [DEPLOYMENT CHECK] Checking for existing live funnels in experience: ${user.experience.id}`);
-		console.log(`ℹ️ [DEPLOYMENT CHECK] Excluding funnel ID: ${excludeFunnelId || 'none'}`);
-		
-		const liveFunnel = await db.query.funnels.findFirst({
-			where: and(
-				eq(funnels.experienceId, user.experience.id),
-				eq(funnels.isDeployed, true),
-				excludeFunnelId ? sql`${funnels.id} != ${excludeFunnelId}` : sql`1=1`,
-			),
-			columns: {
-				id: true,
-				name: true,
-			},
-		});
-
-		if (liveFunnel) {
-			console.log(`ℹ️ [DEPLOYMENT CHECK] Found existing live funnel: "${liveFunnel.name}" (ID: ${liveFunnel.id})`);
-		} else {
-			console.log(`ℹ️ [DEPLOYMENT CHECK] No existing live funnels found - deployment can proceed`);
-		}
-
-		return {
-			hasLiveFunnel: !!liveFunnel,
-			liveFunnelName: liveFunnel?.name,
-		};
-	} catch (error) {
-		console.error("Error checking for live funnels:", error);
-		return { hasLiveFunnel: false };
-	}
-}
-
-
-/**
  * Deploy funnel
  */
 export async function deployFunnel(
@@ -832,13 +851,6 @@ export async function deployFunnel(
 		// Check if funnel is in draft mode
 		if (existingFunnel.isDraft) {
 			throw new Error("Cannot deploy funnel in draft mode. Complete new card connections to enable deployment.");
-		}
-
-		// Check if any other funnel is currently live for this experience
-		const liveFunnelCheck = await checkForOtherLiveFunnels(user, funnelId);
-		if (liveFunnelCheck.hasLiveFunnel) {
-			console.log(`ℹ️ [DEPLOYMENT BLOCKED] Cannot deploy funnel - another funnel is already live: "${liveFunnelCheck.liveFunnelName}"`);
-			throw new Error(`Funnel "${liveFunnelCheck.liveFunnelName}" is currently live for this experience.`);
 		}
 
 		// Update funnel deployment status
@@ -932,7 +944,6 @@ export async function regenerateFunnelFlow(
 								code: true,
 								description: true,
 								whopProductId: true,
-								productApps: true, // Explicitly select productApps
 							},
 						},
 					},
@@ -968,15 +979,6 @@ export async function regenerateFunnelFlow(
 
 		try {
 			// Prepare resources for AI generation
-			console.log(`🔍 [DEBUG] Raw funnel resources from DB:`, existingFunnel.funnelResources.map((fr: any) => ({
-				name: fr.resource.name,
-				hasProductApps: !!fr.resource.productApps,
-				productAppsValue: fr.resource.productApps,
-				productAppsType: typeof fr.resource.productApps,
-				productAppsKeys: fr.resource.productApps ? Object.keys(fr.resource.productApps) : 'none',
-				productAppsLength: fr.resource.productApps ? (Array.isArray(fr.resource.productApps) ? fr.resource.productApps.length : Object.keys(fr.resource.productApps).length) : 0
-			})));
-			
 			const resourcesForAI = existingFunnel.funnelResources.map((fr: any) => ({
 				id: fr.resource.id,
 				name: fr.resource.name,
@@ -984,7 +986,6 @@ export async function regenerateFunnelFlow(
 				category: fr.resource.category,
 				link: fr.resource.link,
 				code: fr.resource.code || "",
-				productApps: fr.resource.productApps || undefined,
 			}));
 
 			// Send progress update

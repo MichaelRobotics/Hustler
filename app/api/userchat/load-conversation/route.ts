@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
 import { getConversationMessages, filterMessagesFromWelcomeStage } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, funnels, messages, funnelAnalytics } from "@/lib/supabase/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { conversations, experiences, funnels, funnelResources, resources } from "@/lib/supabase/schema";
+import { eq, and, or, inArray } from "drizzle-orm";
 import {
   type AuthContext,
   createErrorResponse,
@@ -11,8 +11,17 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
+import { isProductCardBlock, getStageNameForBlock } from "@/lib/utils/funnelUtils";
 import { updateFunnelGrowthPercentages } from "@/lib/actions/funnel-actions";
+import { getConversationTypingState, getAdminAvatarForExperience } from "@/lib/actions/livechat-integration-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
+
+function effectiveLink(r: { link?: string | null; whopProductId?: string | null; purchaseUrl?: string | null }): string {
+  const link = (r.link ?? "").trim();
+  if (link) return link;
+  if (r.whopProductId) return "";
+  return (r.purchaseUrl ?? "").trim() || "";
+}
 
 async function loadConversationHandler(
   request: NextRequest,
@@ -57,6 +66,38 @@ async function loadConversationHandler(
       );
     }
 
+    // Reject archived conversations (not loadable in chat; analytics only)
+    if (conversation.status === "archived") {
+      return NextResponse.json(
+        { success: false, error: "Conversation not found" },
+        { status: 404 }
+      );
+    }
+
+    // Verify conversation belongs to the requesting user (same experience and whopUserId)
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.whopExperienceId, experienceId),
+    });
+    if (!experience || conversation.experienceId !== experience.id || conversation.whopUserId !== user.userId) {
+      return NextResponse.json(
+        { success: false, error: "Conversation not found" },
+        { status: 404 }
+      );
+    }
+
+    // When customer (conversation owner) loads conversation, mark as read so admin can see "read by user"
+    const isConversationOwner = conversation.whopUserId === user.userId;
+    if (userType === "customer" || isConversationOwner) {
+      await db
+        .update(conversations)
+        .set({
+          userLastReadAt: new Date(),
+          updatedAt: new Date(),
+          unreadCountUser: 0,
+        })
+        .where(eq(conversations.id, conversationId));
+    }
+
     // Debug logging for conversation details
     console.log(`[load-conversation] Debug - Conversation ${conversationId} found:`);
     console.log(`[load-conversation] Debug - whopUserId: ${conversation.whopUserId}`);
@@ -95,9 +136,7 @@ async function loadConversationHandler(
     const isPainPointQualificationStage = currentBlockId && funnelFlow.stages.some(
       stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
     );
-    const isOfferStage = currentBlockId && funnelFlow.stages.some(
-      stage => stage.name === "OFFER" && stage.blockIds.includes(currentBlockId)
-    );
+    const isOfferStage = currentBlockId ? isProductCardBlock(currentBlockId, funnelFlow) : false;
     const isWelcomeStage = currentBlockId && funnelFlow.stages.some(
       stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlockId)
     );
@@ -145,13 +184,9 @@ async function loadConversationHandler(
 
       const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
       
+      const currentStageName = currentBlockId ? getStageNameForBlock(currentBlockId, funnelFlow) : "UNKNOWN";
       console.log(`Load-conversation final stage info being returned:`, {
-        currentStage: isTransitionStage ? "TRANSITION" : 
-                    isExperienceQualificationStage ? "EXPERIENCE_QUALIFICATION" :
-                    isPainPointQualificationStage ? "PAIN_POINT_QUALIFICATION" :
-                    isOfferStage ? "OFFER" :
-                    isWelcomeStage ? "WELCOME" :
-                    isValueDeliveryStage ? "VALUE_DELIVERY" : "UNKNOWN",
+        currentStage: currentStageName,
         isDMFunnelActive,
         isTransitionStage,
         isExperienceQualificationStage: finalIsExperienceQualificationStage,
@@ -162,24 +197,116 @@ async function loadConversationHandler(
         }
       });
 
+      const funnelRecord = conversation.funnel as { merchantType?: string } | undefined;
+      const merchantType = funnelRecord?.merchantType ?? "qualification";
+
+      // Load funnel resources (funnel_resources + flow-referenced) so client can resolve product links
+      let funnelResourcesList: Array<{ id: string; name: string; type: string; category: string; link: string; code?: string; description?: string; image?: string; storageUrl?: string; price?: string }> = [];
+      if (conversation.funnelId && experience?.id) {
+        const funnelResourcesRaw = await db.query.funnelResources.findMany({
+          where: eq(funnelResources.funnelId, conversation.funnelId),
+          with: { resource: true },
+        });
+        const resourcesMap = new Map<string, { id: string; name: string; type: string; category: string; link: string; code?: string; description?: string; image?: string; storageUrl?: string; price?: string }>();
+        for (const fr of funnelResourcesRaw) {
+          const r = (fr as { resource: Record<string, unknown> }).resource;
+          if (r && typeof r === "object" && r.id && !resourcesMap.has(String(r.id))) {
+            resourcesMap.set(String(r.id), {
+              id: String(r.id),
+              name: String(r.name ?? ""),
+              type: String(r.type ?? "MY_PRODUCTS"),
+              category: String(r.category ?? "PAID"),
+              link: effectiveLink({
+                link: r.link != null ? String(r.link) : null,
+                whopProductId: r.whopProductId != null ? String(r.whopProductId) : null,
+                purchaseUrl: r.purchaseUrl != null ? String(r.purchaseUrl) : null,
+              }),
+              code: r.code != null ? String(r.code) : undefined,
+              description: r.description != null ? String(r.description) : undefined,
+              image: r.image != null ? String(r.image) : undefined,
+              storageUrl: r.storageUrl != null ? String(r.storageUrl) : undefined,
+              price: r.price != null ? String(r.price) : undefined,
+            });
+          }
+        }
+        if (funnelFlow?.blocks && typeof funnelFlow.blocks === "object") {
+          const resourceIds = new Set<string>();
+          const resourceNames = new Set<string>();
+          for (const block of Object.values(funnelFlow.blocks) as { resourceId?: string | null; resourceName?: string | null }[]) {
+            const rid = block.resourceId != null ? String(block.resourceId).trim() : "";
+            if (rid && !resourcesMap.has(rid)) resourceIds.add(rid);
+            const rname = block.resourceName != null ? String(block.resourceName).trim() : "";
+            if (rname) resourceNames.add(rname);
+          }
+          if (resourceIds.size > 0 || resourceNames.size > 0) {
+            const conditions = [
+              ...(resourceIds.size > 0 ? [inArray(resources.id, [...resourceIds])] : []),
+              ...(resourceNames.size > 0 ? [inArray(resources.name, [...resourceNames])] : []),
+            ];
+            if (conditions.length > 0) {
+              const extraResources = await db.query.resources.findMany({
+                where: and(
+                  eq(resources.experienceId, experience.id),
+                  or(...conditions),
+                ),
+                columns: {
+                  id: true,
+                  name: true,
+                  type: true,
+                  category: true,
+                  link: true,
+                  whopProductId: true,
+                  purchaseUrl: true,
+                  code: true,
+                  description: true,
+                  image: true,
+                  storageUrl: true,
+                  price: true,
+                },
+              });
+              for (const r of extraResources) {
+                if (!resourcesMap.has(r.id)) {
+                  resourcesMap.set(r.id, {
+                    id: r.id,
+                    name: r.name,
+                    type: r.type,
+                    category: r.category,
+                    link: effectiveLink(r),
+                    code: r.code ?? undefined,
+                    description: r.description ?? undefined,
+                    image: r.image ?? undefined,
+                    storageUrl: r.storageUrl ?? undefined,
+                    price: r.price ?? undefined,
+                  });
+                }
+              }
+            }
+          }
+        }
+        funnelResourcesList = Array.from(resourcesMap.values());
+      }
+
+      const typing = await getConversationTypingState(conversationId);
+      const adminAvatar = await getAdminAvatarForExperience(experienceId);
       return NextResponse.json({
         success: true,
         conversation: {
           ...conversationData,
           messages: finalMessages, // Use filtered messages
+          userLastReadAt: conversation.userLastReadAt ?? null,
+          adminLastReadAt: conversation.adminLastReadAt ?? null,
+          typing,
+          adminAvatar: adminAvatar ?? null,
         },
         funnelFlow: funnelFlow,
         stageInfo: {
-          currentStage: isTransitionStage ? "TRANSITION" : 
-                      isExperienceQualificationStage ? "EXPERIENCE_QUALIFICATION" :
-                      isPainPointQualificationStage ? "PAIN_POINT_QUALIFICATION" :
-                      isOfferStage ? "OFFER" :
-                      isWelcomeStage ? "WELCOME" :
-                      isValueDeliveryStage ? "VALUE_DELIVERY" : "UNKNOWN",
+          currentStage: currentStageName,
           isDMFunnelActive: isDMFunnelActive,
           isTransitionStage: isTransitionStage,
           isExperienceQualificationStage: finalIsExperienceQualificationStage,
-        }
+        },
+        merchantType: merchantType,
+        resources: funnelResourcesList,
       });
     } else {
       return createErrorResponse(

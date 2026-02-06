@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { experiences, funnels, funnelAnalytics, users } from "@/lib/supabase/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { experiences, users } from "@/lib/supabase/schema";
+import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { handleUserJoinEvent } from "@/lib/actions/user-join-actions";
+import { findFunnelForTrigger } from "@/lib/helpers/conversation-trigger";
 import { headers } from "next/headers";
 import type { UserJoinWebhookData } from "@/lib/actions/user-join-actions";
 
@@ -69,31 +70,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 3: Find a live (deployed) funnel for this experience - REQUIRED
-    const liveFunnel = await db.query.funnels.findFirst({
+    // Step 3: Resolve internal user for membership filter, then find funnel by membership_activated trigger
+    const user = await db.query.users.findFirst({
       where: and(
-        eq(funnels.experienceId, experience.id),
-        eq(funnels.isDeployed, true) // Only use deployed funnels for admin DM triggering
+        eq(users.whopUserId, whopUserId),
+        eq(users.experienceId, experience.id),
       ),
     });
 
-    if (!liveFunnel) {
-      const errorMessage = `No deployed funnel found for experience ${experienceId}. Please deploy a funnel first.`;
-        
-      return NextResponse.json(
-        { 
-          error: "No live funnel found",
-          details: errorMessage
-        },
-        { status: 400 }
-      );
-    }
+    const effectiveProductId = productId || "admin-test-product";
+    const funnel = await findFunnelForTrigger(experience.id, "membership_activated", {
+      userId: user?.id,
+      whopUserId,
+      productId: effectiveProductId,
+    });
 
-    if (!liveFunnel.flow) {
+    if (!funnel?.flow) {
       return NextResponse.json(
-        { 
-          error: "Invalid funnel configuration",
-          details: `Funnel ${liveFunnel.id} has no flow. Please create a funnel flow first.`
+        {
+          error: "No funnel configured for this product/membership trigger",
+          details: `No funnel with membership_activated trigger found for experience ${experienceId}${productId ? ` and product ${productId}` : ""}. Deploy a funnel with a membership trigger (e.g. any_membership_buy or membership_buy) that matches.`,
         },
         { status: 400 }
       );
@@ -103,7 +99,7 @@ export async function POST(request: NextRequest) {
     // Note: page_id should be the company ID (whopCompanyId), not the experience ID
     const simulatedWebhookData: UserJoinWebhookData = {
       user_id: whopUserId,
-      product_id: productId || "admin-test-product", // Use provided productId or default
+      product_id: effectiveProductId,
       page_id: experience.whopCompanyId, // Use the company ID, not experience ID
       company_buyer_id: undefined, // Admin doesn't have company context
       membership_id: undefined, // Admin doesn't have membership
@@ -116,7 +112,7 @@ export async function POST(request: NextRequest) {
     // This includes: user creation, conversation creation, DM sending, analytics tracking, etc.
     await handleUserJoinEvent(
       whopUserId,
-      productId || "admin-test-product",
+      effectiveProductId,
       simulatedWebhookData,
       undefined // membershipId
     );
@@ -128,7 +124,7 @@ export async function POST(request: NextRequest) {
       message: "Admin DM processed using handleUserJoinEvent - same flow as real webhooks",
       whopUserId,
       experienceId,
-      productId: productId || "admin-test-product",
+      productId: effectiveProductId,
       adminMode: true,
       webhookSimulated: true,
       usedHandleUserJoinEvent: true

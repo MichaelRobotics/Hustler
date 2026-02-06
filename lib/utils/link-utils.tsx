@@ -31,27 +31,15 @@ export function renderTextWithLinks(text: string): React.ReactNode[] {
           href={part}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline hover:no-underline break-all touch-manipulation cursor-pointer"
-          style={{ 
-            minHeight: '44px', // iOS minimum touch target
-            display: 'inline-block',
+          className="underline hover:no-underline break-all touch-manipulation cursor-pointer py-0.5 inline-block"
+          style={{
             WebkitTouchCallout: 'default',
             WebkitUserSelect: 'text'
           }}
           onClick={(e) => {
-            // Handle click according to Whop best practices
             e.preventDefault();
-            
-            // Check if it's a Whop internal link
-            const isWhopInternalLink = part.includes('whop.com') && !part.includes('whop.com/checkout') && !part.includes('whop.com/hub');
-            
-            if (isWhopInternalLink) {
-              // For Whop internal links, navigate in same window
-              window.location.href = part;
-            } else {
-              // For external links, open in new tab
-              window.open(part, '_blank', 'noopener,noreferrer');
-            }
+            // Always open in new tab so the app page stays open
+            window.open(part, '_blank', 'noopener,noreferrer');
           }}
         >
           {part}

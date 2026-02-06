@@ -1,13 +1,15 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, checkDatabaseConnection } from "../supabase/db-server";
-import { experiences, users, funnels } from "../supabase/schema";
+import { experiences, users } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 // Removed direct import - now using API routes for product sync
 import { cleanupAbandonedExperiences, checkIfCleanupNeeded } from "../sync/experience-cleanup";
 import type { AuthenticatedUser, UserContext } from "../types/user";
+import type { FunnelFlow } from "../types/funnel";
 import { createConversation } from "../actions/simplified-conversation-actions";
 import { updateConversationToWelcomeStage } from "../actions/user-join-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
+import { hasActiveConversation, findFunnelForTrigger } from "../helpers/conversation-trigger";
 
 // Re-export types for backward compatibility
 export type { AuthenticatedUser, UserContext };
@@ -89,6 +91,8 @@ async function createUserContext(
 		console.log("✅ Database connection is healthy");
 
 		// Get or create experience with retry logic
+		// Accept either Whop experience ID (e.g. exp_xxx) or internal experience UUID (funnels.experienceId)
+		const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(whopExperienceId);
 		let experience;
 		let retryCount = 0;
 		const maxRetries = 3;
@@ -97,7 +101,7 @@ async function createUserContext(
 			try {
 				console.log(`🔍 Attempting to find experience (attempt ${retryCount + 1}/${maxRetries})...`);
 				experience = await db.query.experiences.findFirst({
-					where: eq(experiences.whopExperienceId, whopExperienceId),
+					where: isUuid ? eq(experiences.id, whopExperienceId) : eq(experiences.whopExperienceId, whopExperienceId),
 				});
 				console.log(`✅ Experience query successful`);
 				break;
@@ -118,6 +122,11 @@ async function createUserContext(
 		}
 
 		if (!experience) {
+			// If we looked up by internal UUID and found nothing, do not create (invalid UUID or wrong experience)
+			if (isUuid) {
+				console.log("Experience not found for given UUID");
+				return null;
+			}
 			console.log("Experience not found, creating new experience...");
 			
 			// Get the company ID from the Whop API if not provided
@@ -245,8 +254,68 @@ async function createUserContext(
 					},
 				});
 			} else {
-				// Fetch user data from WHOP API
-				const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
+				// Try copy from same company: find any user with this whopUserId in an experience of the same company
+				const sameCompanyUsers = await db
+					.select({ user: users })
+					.from(users)
+					.innerJoin(experiences, eq(users.experienceId, experiences.id))
+					.where(
+						and(
+							eq(users.whopUserId, whopUserId),
+							eq(experiences.whopCompanyId, experience.whopCompanyId)
+						)
+					)
+					.orderBy(asc(users.createdAt))
+					.limit(1);
+
+				const sourceRow = sameCompanyUsers[0];
+				if (sourceRow?.user) {
+					const source = sourceRow.user;
+					let accessLevelForExperience = "customer";
+					let creditsForExperience = 0;
+					try {
+						const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+							userId: whopUserId,
+							experienceId: whopExperienceId,
+						});
+						accessLevelForExperience = accessResult.accessLevel ?? "customer";
+						creditsForExperience = accessLevelForExperience === "admin" ? 2 : 0;
+					} catch {
+						// keep defaults
+					}
+					const [newUser] = await db
+						.insert(users)
+						.values({
+							whopUserId: source.whopUserId,
+							experienceId: experience.id,
+							email: source.email,
+							name: source.name,
+							avatar: source.avatar,
+							credits: creditsForExperience,
+							accessLevel: accessLevelForExperience,
+							// subscription and membership left null
+						})
+						.returning();
+					if (newUser) {
+						user = await db.query.users.findFirst({
+							where: eq(users.id, newUser.id),
+							with: { experience: true },
+						});
+						if (user && accessLevelForExperience === "customer") {
+							try {
+								await createConversationForNewCustomer(newUser.id, whopUserId, experience.id);
+							} catch {
+								// non-blocking
+							}
+						}
+						console.log(`✅ Copied user from same company: new id=${newUser.id}, experienceId=${experience.id}`);
+					}
+				}
+
+				if (!user) {
+					// No same-company user: create from Whop API
+					// Fetch user data from WHOP API
+					const whopUser = await whopSdk.users.getUser({ userId: whopUserId });
 
 				if (!whopUser) {
 					console.error("User not found in WHOP API:", whopUserId);
@@ -371,6 +440,7 @@ async function createUserContext(
 						console.error("❌ Failed to import product sync function:", importError);
 					});
 				}
+				}
 			}
 		} else {
 		// Sync user data with WHOP (only for the same experience)
@@ -384,8 +454,9 @@ async function createUserContext(
 					userId: whopUserId,
 					experienceId: whopExperienceId,
 				});
-				
-				if (currentAccessResult.accessLevel !== user.accessLevel) {
+				const validLevels = ["admin", "customer", "no_access"];
+				const storedInvalid = !user.accessLevel || !validLevels.includes(user.accessLevel);
+				if (currentAccessResult.accessLevel !== user.accessLevel || storedInvalid) {
 					console.log(`⚠️  SYNCING: User access level changed from ${user.accessLevel} to ${currentAccessResult.accessLevel} for experience ${experience.id}`);
 					await db
 						.update(users)
@@ -652,9 +723,9 @@ export function invalidateUserCache(cacheKey: string): void {
 }
 
 /**
- * Create conversation for new customer users
- * This handles the conversation creation logic that was previously in webhooks
- * Only creates conversation if the funnel's app_trigger_type is "on_app_entry"
+ * Create conversation for new customer users (app entry).
+ * Guard: if user already has an active conversation in this experience, do nothing.
+ * Uses findFunnelForTrigger(experienceId, 'app_entry') then creates conversation and updates to WELCOME.
  */
 async function createConversationForNewCustomer(
 	userId: string,
@@ -663,50 +734,38 @@ async function createConversationForNewCustomer(
 ): Promise<void> {
 	try {
 		console.log(`[CONVERSATION-CREATION] Starting conversation creation for customer user ${userId}`);
-		
-		// Step 1: Find deployed funnel for this experience
-		const liveFunnel = await db.query.funnels.findFirst({
-			where: and(
-				eq(funnels.experienceId, experienceId),
-				eq(funnels.isDeployed, true)
-			),
+
+		if (await hasActiveConversation(experienceId, whopUserId)) {
+			console.log(`[CONVERSATION-CREATION] User ${whopUserId} already has active conversation in experience ${experienceId} - skipping`);
+			return;
+		}
+
+		const liveFunnel = await findFunnelForTrigger(experienceId, "app_entry", {
+			userId,
+			whopUserId,
 		});
 
-		if (!liveFunnel) {
-			console.log(`[CONVERSATION-CREATION] No deployed funnel found for experience ${experienceId} - skipping conversation creation`);
+		if (!liveFunnel?.flow) {
+			console.log(`[CONVERSATION-CREATION] No funnel found for app_entry in experience ${experienceId} - skipping`);
 			return;
 		}
 
-		if (!liveFunnel.flow) {
-			console.log(`[CONVERSATION-CREATION] Funnel ${liveFunnel.id} has no flow - skipping conversation creation`);
-			return;
-		}
+		const flow = liveFunnel.flow as FunnelFlow;
+		console.log(`[CONVERSATION-CREATION] Found funnel ${liveFunnel.id} for app_entry in experience ${experienceId}`);
 
-		// Step 2: Check app trigger type - only create on app entry if configured
-		const appTrigger = liveFunnel.appTriggerType ?? "on_app_entry";
-		if (appTrigger !== "on_app_entry") {
-			console.log(`[CONVERSATION-CREATION] Funnel ${liveFunnel.id} has app trigger "${appTrigger}" - skipping conversation creation on app entry (will be handled by webhook)`);
-			return;
-		}
-
-		console.log(`[CONVERSATION-CREATION] Found deployed funnel ${liveFunnel.id} with app trigger "${appTrigger}" for experience ${experienceId}`);
-
-		// Step 3: Create conversation using the same logic as webhooks
 		const conversationId = await createConversation(
 			experienceId,
 			liveFunnel.id,
 			whopUserId,
-			liveFunnel.flow.startBlockId,
-			undefined, // membershipId
-			undefined  // whopProductId
+			flow.startBlockId,
+			undefined,
+			undefined
 		);
 
 		console.log(`[CONVERSATION-CREATION] Created conversation ${conversationId} for customer user ${userId}`);
 
-		// Step 4: Update conversation to WELCOME stage
-		await updateConversationToWelcomeStage(conversationId, liveFunnel.flow);
+		await updateConversationToWelcomeStage(conversationId, flow);
 
-		// Step 5: Track awareness (starts) - BACKGROUND PROCESSING
 		console.log(`🚀 [CONVERSATION-CREATION] About to track awareness for experience ${experienceId}, funnel ${liveFunnel.id}`);
 		safeBackgroundTracking(() => trackAwarenessBackground(experienceId, liveFunnel.id));
 

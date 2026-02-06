@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UserPlus, UserCheck, ChevronRight, ShoppingCart, MessageSquare, CheckCircle, ArrowUpCircle, Clock, Trash2, XCircle, X } from "lucide-react";
+import { UserPlus, UserCheck, ChevronRight, ChevronDown, ShoppingCart, MessageSquare, CheckCircle, ArrowUpCircle, Clock, Trash2, XCircle, X } from "lucide-react";
 import type { TriggerType, TriggerConfig } from "@/lib/types/funnel";
 
 // Re-export TriggerType for backward compatibility
@@ -102,7 +102,9 @@ interface TriggerBlockProps {
 	membershipDelayMinutes?: number; // Membership trigger delay
 	experienceId?: string;
 	resources?: Array<{ id: string; name: string }>; // For membership_buy
-	funnels?: Array<{ id: string; name: string }>; // For qualification/upsell
+	funnels?: Array<{ id: string; name: string }>; // All (e.g. delete_merchant_conversation)
+	qualificationFunnels?: Array<{ id: string; name: string }>; // Qualification-type for qualification_merchant_complete
+	upsellFunnels?: Array<{ id: string; name: string }>; // Upsell-type for upsell_merchant_complete
 	loadingResources?: boolean;
 	loadingFunnels?: boolean;
 	onClick?: () => void; // Backward compatibility
@@ -115,8 +117,17 @@ interface TriggerBlockProps {
 	onResourceChange?: (resourceId: string) => void; // For membership_buy, cancel_membership
 	onFunnelChange?: (funnelId: string) => void; // For qualification/upsell/delete_merchant_conversation
 	onMembershipFilterChange?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void;
+	onAppFilterChange?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void;
 	profiles?: Array<{ id: string; name: string }>; // For qualification_merchant_complete - profile to match
 	onQualificationProfileChange?: (profileId: string) => void;
+	/** @deprecated Use hasUnsavedAppTriggerConfig / hasUnsavedMembershipTriggerConfig for per-trigger Save */
+	hasUnsavedTriggerConfig?: boolean;
+	/** @deprecated Use onAppTriggerConfigSave / onMembershipTriggerConfigSave for per-trigger Save */
+	onTriggerConfigSave?: () => void;
+	hasUnsavedAppTriggerConfig?: boolean;
+	hasUnsavedMembershipTriggerConfig?: boolean;
+	onAppTriggerConfigSave?: () => void;
+	onMembershipTriggerConfigSave?: () => void;
 }
 
 /**
@@ -137,6 +148,8 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 	experienceId,
 	resources = [],
 	funnels = [],
+	qualificationFunnels = [],
+	upsellFunnels = [],
 	loadingResources = false,
 	loadingFunnels = false,
 	onClick, // Backward compatibility
@@ -149,9 +162,21 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 	onResourceChange,
 	onFunnelChange,
 	onMembershipFilterChange,
+	onAppFilterChange,
 	profiles = [],
 	onQualificationProfileChange,
+	hasUnsavedTriggerConfig = false,
+	onTriggerConfigSave,
+	hasUnsavedAppTriggerConfig = false,
+	hasUnsavedMembershipTriggerConfig = false,
+	onAppTriggerConfigSave,
+	onMembershipTriggerConfigSave,
 }) => {
+	// Per-trigger unsaved/save: use new props when provided, else fall back to legacy single flag/callback
+	const appUnsaved = hasUnsavedAppTriggerConfig ?? hasUnsavedTriggerConfig;
+	const membershipUnsaved = hasUnsavedMembershipTriggerConfig ?? hasUnsavedTriggerConfig;
+	const onAppSave = onAppTriggerConfigSave ?? onTriggerConfigSave;
+	const onMembershipSave = onMembershipTriggerConfigSave ?? onTriggerConfigSave;
 	// Support both old single trigger and new dual trigger format
 	// Always show dual triggers if both click handlers are provided (Merchant Conversation Editor mode)
 	const useDualTriggers = (onMembershipTriggerClick !== undefined && onAppTriggerClick !== undefined) || 
@@ -196,6 +221,18 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 	const [localDisplayValue, setLocalDisplayValue] = useState(initialDisplay.value);
 	const [localTimeUnit, setLocalTimeUnit] = useState<TimeUnit>(initialDisplay.unit);
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+	// Filter section expand/collapse. In Merchant Conversation Editor (useDualTriggers), keep filter section collapsed when filters are selected so the trigger doesn't unwrap on enter.
+	const hasMembershipFilter = (membershipTriggerConfig?.filterResourceIdsRequired?.length ?? 0) + (membershipTriggerConfig?.filterResourceIdsExclude?.length ?? 0) > 0;
+	const hasAppFilter = (appTriggerConfig?.filterResourceIdsRequired?.length ?? 0) + (appTriggerConfig?.filterResourceIdsExclude?.length ?? 0) > 0;
+	const [filterExpandedMembership, setFilterExpandedMembership] = useState(
+		useDualTriggers && hasMembershipFilter ? false : hasMembershipFilter
+	);
+	const [filterExpandedApp, setFilterExpandedApp] = useState(
+		useDualTriggers && hasAppFilter ? false : hasAppFilter
+	);
+	const hasSingleFilter = (triggerConfig?.filterResourceIdsRequired?.length ?? 0) + (triggerConfig?.filterResourceIdsExclude?.length ?? 0) > 0;
+	const [filterExpandedSingle, setFilterExpandedSingle] = useState(hasSingleFilter);
 
 	// Sync local state when prop changes
 	useEffect(() => {
@@ -272,10 +309,13 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 	};
 
 	const handleSave = () => {
-		if (onDelaySave) {
+		if (hasUnsavedChanges && onDelaySave) {
 			const minutesValue = convertToMinutes(localDisplayValue, localTimeUnit);
 			onDelaySave(minutesValue);
 			setHasUnsavedChanges(false);
+		}
+		if (appUnsaved && onAppSave) {
+			onAppSave();
 		}
 	};
 
@@ -327,10 +367,13 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 	};
 
 	const handleMembershipSave = () => {
-		if (onMembershipDelaySave) {
+		if (membershipHasUnsavedChanges && onMembershipDelaySave) {
 			const minutesValue = convertToMinutes(membershipLocalDisplayValue, membershipLocalTimeUnit);
 			onMembershipDelaySave(minutesValue);
 			setMembershipHasUnsavedChanges(false);
+		}
+		if (membershipUnsaved && onMembershipSave) {
+			onMembershipSave();
 		}
 	};
 
@@ -348,8 +391,11 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 		loadingResourcesState?: boolean,
 		loadingFunnelsState?: boolean,
 		onMembershipFilterChangeHandler?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void,
+		onAppFilterChangeHandler?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void,
 		profilesList?: Array<{ id: string; name: string }>,
-		onQualificationProfileChangeHandler?: (profileId: string) => void
+		onQualificationProfileChangeHandler?: (profileId: string) => void,
+		filterExpanded?: boolean,
+		onFilterToggle?: () => void
 	) => {
 		if (!triggerOption && !triggerId) {
 			// Empty trigger - show placeholder
@@ -501,85 +547,107 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 							</div>
 						)}
 
-						{/* Filter (Membership trigger only) */}
-						{category === "Membership" && (triggerId === "any_membership_buy" || triggerId === "membership_buy" || triggerId === "any_cancel_membership" || triggerId === "cancel_membership") && onMembershipFilterChangeHandler && (resourcesList || resources).length > 0 && (() => {
+						{/* Filter (collapsible, Membership or App) */}
+						{((category === "Membership" && (triggerId === "any_membership_buy" || triggerId === "membership_buy" || triggerId === "any_cancel_membership" || triggerId === "cancel_membership") && onMembershipFilterChangeHandler) || (category === "App" && onAppFilterChangeHandler)) && (resourcesList || resources).length > 0 && onFilterToggle && (() => {
 							const resList = resourcesList || resources;
 							const requiredIds = config.filterResourceIdsRequired ?? [];
 							const excludeIds = config.filterResourceIdsExclude ?? [];
 							const requiredAvailable = resList.filter((r) => !requiredIds.includes(r.id));
 							const excludeAvailable = resList.filter((r) => !excludeIds.includes(r.id));
+							const isMembership = category === "Membership" && onMembershipFilterChangeHandler;
+							const onRequiredAdd = (id: string) => isMembership ? onMembershipFilterChangeHandler!({ filterResourceIdsRequired: [...requiredIds, id] }) : onAppFilterChangeHandler!({ filterResourceIdsRequired: [...requiredIds, id] });
+							const onRequiredRemove = (id: string) => { const next = requiredIds.filter((x) => x !== id); (isMembership ? onMembershipFilterChangeHandler! : onAppFilterChangeHandler!)({ filterResourceIdsRequired: next.length ? next : undefined }); };
+							const onExcludeAdd = (id: string) => isMembership ? onMembershipFilterChangeHandler!({ filterResourceIdsExclude: [...excludeIds, id] }) : onAppFilterChangeHandler!({ filterResourceIdsExclude: [...excludeIds, id] });
+							const onExcludeRemove = (id: string) => { const next = excludeIds.filter((x) => x !== id); (isMembership ? onMembershipFilterChangeHandler! : onAppFilterChangeHandler!)({ filterResourceIdsExclude: next.length ? next : undefined }); };
+							const expanded = filterExpanded ?? false;
 							return (
-								<div className="w-full space-y-3" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-									<div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Filter</div>
-									<div>
-										<div className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 mb-1">
-											<CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
-											Member must have bought
-										</div>
-										<select
-											value=""
-											onChange={(e) => {
-												const id = e.target.value;
-												if (!id) return;
-												onMembershipFilterChangeHandler({ filterResourceIdsRequired: [...requiredIds, id] });
-												e.target.value = "";
-											}}
-											className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-green-200 dark:border-green-800 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500/50"
-										>
-											<option value="">Add product...</option>
-											{requiredAvailable.map((r) => (
-												<option key={r.id} value={r.id}>{r.name}</option>
-											))}
-										</select>
-										{requiredIds.length > 0 && (
-											<div className="mt-1.5 flex flex-wrap gap-1.5">
-												{requiredIds.map((id) => {
-													const r = resList.find((x) => x.id === id);
-													return (
-														<div key={id} className="flex items-center gap-1.5 text-xs bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-md pl-1.5 pr-1 py-1">
-															<CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-															<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
-															<button type="button" onClick={() => { const next = requiredIds.filter((x) => x !== id); onMembershipFilterChangeHandler({ filterResourceIdsRequired: next.length ? next : undefined }); }} className="p-0.5 rounded hover:bg-green-200 dark:hover:bg-green-800/50 text-green-700 dark:text-green-300" aria-label="Remove"><X className="w-3 h-3" /></button>
-														</div>
-													);
-												})}
+								<div className="w-full" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+									<button
+										type="button"
+										onClick={onFilterToggle}
+										className="flex items-center gap-2 w-full py-1.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+									>
+										<span>Filter</span>
+										<span className={`flex-shrink-0 transition-transform duration-200 ease-out ${expanded ? "rotate-0" : "-rotate-90"}`}>
+											<ChevronDown className="w-4 h-4" />
+										</span>
+									</button>
+									<div
+										className="overflow-hidden transition-[max-height] duration-200 ease-out"
+										style={{ maxHeight: expanded ? "400px" : "0" }}
+									>
+										<div className="w-full space-y-3 pt-2">
+											<div>
+												<div className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 mb-1">
+													<CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+													Member must have bought
+												</div>
+												<select
+													value=""
+													onChange={(e) => {
+														const id = e.target.value;
+														if (!id) return;
+														onRequiredAdd(id);
+														e.target.value = "";
+													}}
+													className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-green-200 dark:border-green-800 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500/50"
+												>
+													<option value="">Add product...</option>
+													{requiredAvailable.map((r) => (
+														<option key={r.id} value={r.id}>{r.name}</option>
+													))}
+												</select>
+												{requiredIds.length > 0 && (
+													<div className="mt-1.5 flex flex-wrap gap-1.5">
+														{requiredIds.map((id) => {
+															const r = resList.find((x) => x.id === id);
+															return (
+																<div key={id} className="flex items-center gap-1.5 text-xs bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-md pl-1.5 pr-1 py-1">
+																	<CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+																	<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
+																	<button type="button" onClick={() => onRequiredRemove(id)} className="p-0.5 rounded hover:bg-green-200 dark:hover:bg-green-800/50 text-green-700 dark:text-green-300" aria-label="Remove"><X className="w-3 h-3" /></button>
+																</div>
+															);
+														})}
+													</div>
+												)}
 											</div>
-										)}
-									</div>
-									<div>
-										<div className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-400 mb-1">
-											<XCircle className="w-3.5 h-3.5 flex-shrink-0" />
-											Member must not have bought
-										</div>
-										<select
-											value=""
-											onChange={(e) => {
-												const id = e.target.value;
-												if (!id) return;
-												onMembershipFilterChangeHandler({ filterResourceIdsExclude: [...excludeIds, id] });
-												e.target.value = "";
-											}}
-											className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/50"
-										>
-											<option value="">Add product...</option>
-											{excludeAvailable.map((r) => (
-												<option key={r.id} value={r.id}>{r.name}</option>
-											))}
-										</select>
-										{excludeIds.length > 0 && (
-											<div className="mt-1.5 flex flex-wrap gap-1.5">
-												{excludeIds.map((id) => {
-													const r = resList.find((x) => x.id === id);
-													return (
-														<div key={id} className="flex items-center gap-1.5 text-xs bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 rounded-md pl-1.5 pr-1 py-1">
-															<XCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 flex-shrink-0" />
-															<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
-															<button type="button" onClick={() => { const next = excludeIds.filter((x) => x !== id); onMembershipFilterChangeHandler({ filterResourceIdsExclude: next.length ? next : undefined }); }} className="p-0.5 rounded hover:bg-red-200 dark:hover:bg-red-800/50 text-red-700 dark:text-red-300" aria-label="Remove"><X className="w-3 h-3" /></button>
-														</div>
-													);
-												})}
+											<div>
+												<div className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-400 mb-1">
+													<XCircle className="w-3.5 h-3.5 flex-shrink-0" />
+													Member must not have bought
+												</div>
+												<select
+													value=""
+													onChange={(e) => {
+														const id = e.target.value;
+														if (!id) return;
+														onExcludeAdd(id);
+														e.target.value = "";
+													}}
+													className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/50"
+												>
+													<option value="">Add product...</option>
+													{excludeAvailable.map((r) => (
+														<option key={r.id} value={r.id}>{r.name}</option>
+													))}
+												</select>
+												{excludeIds.length > 0 && (
+													<div className="mt-1.5 flex flex-wrap gap-1.5">
+														{excludeIds.map((id) => {
+															const r = resList.find((x) => x.id === id);
+															return (
+																<div key={id} className="flex items-center gap-1.5 text-xs bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 rounded-md pl-1.5 pr-1 py-1">
+																	<XCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 flex-shrink-0" />
+																	<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
+																	<button type="button" onClick={() => onExcludeRemove(id)} className="p-0.5 rounded hover:bg-red-200 dark:hover:bg-red-800/50 text-red-700 dark:text-red-300" aria-label="Remove"><X className="w-3 h-3" /></button>
+																</div>
+															);
+														})}
+													</div>
+												)}
 											</div>
-										)}
+										</div>
 									</div>
 								</div>
 							);
@@ -610,7 +678,12 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 						funnels,
 						loadingResources,
 						loadingFunnels,
-						onMembershipFilterChange
+						onMembershipFilterChange,
+						undefined,
+						undefined,
+						onQualificationProfileChange,
+						filterExpandedMembership,
+						() => setFilterExpandedMembership((p) => !p)
 					)}
 				</div>
 
@@ -641,7 +714,7 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 							<option value="hours">hours</option>
 							<option value="days">days</option>
 						</select>
-						{membershipHasUnsavedChanges && onMembershipDelaySave && (
+						{(membershipHasUnsavedChanges || membershipUnsaved) && (onMembershipDelaySave || onMembershipSave) && (
 							<button
 								onClick={handleMembershipSave}
 								className="ml-auto px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-md transition-colors"
@@ -652,7 +725,7 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 					</div>
 				</div>
 
-				{/* App Trigger */}
+				{/* App Trigger - qualification shows qualification funnels, upsell shows upsell funnels */}
 				<div>
 					<div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider">
 						App Trigger
@@ -666,12 +739,19 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 						onResourceChange,
 						onFunnelChange,
 						resources,
-						funnels,
+						appTrigger === "qualification_merchant_complete"
+							? (qualificationFunnels?.length ? qualificationFunnels : funnels)
+							: appTrigger === "upsell_merchant_complete"
+								? (upsellFunnels?.length ? upsellFunnels : funnels)
+								: funnels,
 						loadingResources,
 						loadingFunnels,
 						undefined,
+						onAppFilterChange,
 						profiles,
-						onQualificationProfileChange
+						onQualificationProfileChange,
+						filterExpandedApp,
+						() => setFilterExpandedApp((p) => !p)
 					)}
 				</div>
 
@@ -702,7 +782,7 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 							<option value="hours">hours</option>
 							<option value="days">days</option>
 						</select>
-						{hasUnsavedChanges && onDelaySave && (
+						{(hasUnsavedChanges || appUnsaved) && (onDelaySave || onAppSave) && (
 							<button
 								onClick={handleSave}
 								className="ml-auto px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-md transition-colors"
@@ -789,7 +869,12 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 							className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/50"
 						>
 							<option value="">Select a funnel...</option>
-							{funnels.map((funnel) => (
+							{(selectedTrigger === "qualification_merchant_complete"
+								? (qualificationFunnels?.length ? qualificationFunnels : funnels)
+								: selectedTrigger === "upsell_merchant_complete"
+									? (upsellFunnels?.length ? upsellFunnels : funnels)
+									: funnels
+							).map((funnel) => (
 								<option key={funnel.id} value={funnel.id}>
 									{funnel.name}
 								</option>
@@ -819,84 +904,103 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 					</div>
 				)}
 
-				{/* Filter (single-trigger mode, membership triggers only) */}
-				{(selectedTrigger === "any_membership_buy" || selectedTrigger === "membership_buy" || selectedTrigger === "any_cancel_membership" || selectedTrigger === "cancel_membership") && onMembershipFilterChange && resources.length > 0 && (() => {
+				{/* Filter (single-trigger mode, collapsible; membership or app) */}
+				{(((selectedTrigger === "any_membership_buy" || selectedTrigger === "membership_buy" || selectedTrigger === "any_cancel_membership" || selectedTrigger === "cancel_membership") && onMembershipFilterChange) || (["on_app_entry", "no_active_conversation", "qualification_merchant_complete", "upsell_merchant_complete", "delete_merchant_conversation"].includes(selectedTrigger ?? "") && onAppFilterChange)) && resources.length > 0 && (() => {
 					const requiredIds = triggerConfig.filterResourceIdsRequired ?? [];
 					const excludeIds = triggerConfig.filterResourceIdsExclude ?? [];
 					const requiredAvailable = resources.filter((r) => !requiredIds.includes(r.id));
 					const excludeAvailable = resources.filter((r) => !excludeIds.includes(r.id));
+					const isMembership = (selectedTrigger === "any_membership_buy" || selectedTrigger === "membership_buy" || selectedTrigger === "any_cancel_membership" || selectedTrigger === "cancel_membership") && onMembershipFilterChange;
+					const onFilterChange = isMembership ? onMembershipFilterChange! : onAppFilterChange!;
+					const expanded = filterExpandedSingle;
 					return (
-						<div className="w-full space-y-3" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-							<div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Filter</div>
-							<div>
-								<div className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 mb-1">
-									<CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
-									Member must have bought
-								</div>
-								<select
-									value=""
-									onChange={(e) => {
-										const id = e.target.value;
-										if (!id) return;
-										onMembershipFilterChange({ filterResourceIdsRequired: [...requiredIds, id] });
-										e.target.value = "";
-									}}
-									className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-green-200 dark:border-green-800 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500/50"
-								>
-									<option value="">Add product...</option>
-									{requiredAvailable.map((r) => (
-										<option key={r.id} value={r.id}>{r.name}</option>
-									))}
-								</select>
-								{requiredIds.length > 0 && (
-									<div className="mt-1.5 flex flex-wrap gap-1.5">
-										{requiredIds.map((id) => {
-											const r = resources.find((x) => x.id === id);
-											return (
-												<div key={id} className="flex items-center gap-1.5 text-xs bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-md pl-1.5 pr-1 py-1">
-													<CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-													<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
-													<button type="button" onClick={() => { const next = requiredIds.filter((x) => x !== id); onMembershipFilterChange({ filterResourceIdsRequired: next.length ? next : undefined }); }} className="p-0.5 rounded hover:bg-green-200 dark:hover:bg-green-800/50 text-green-700 dark:text-green-300" aria-label="Remove"><X className="w-3 h-3" /></button>
-												</div>
-											);
-										})}
+						<div className="w-full" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+							<button
+								type="button"
+								onClick={() => setFilterExpandedSingle((p) => !p)}
+								className="flex items-center gap-2 w-full py-1.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+							>
+								<span>Filter</span>
+								<span className={`flex-shrink-0 transition-transform duration-200 ease-out ${expanded ? "rotate-0" : "-rotate-90"}`}>
+									<ChevronDown className="w-4 h-4" />
+								</span>
+							</button>
+							<div
+								className="overflow-hidden transition-[max-height] duration-200 ease-out"
+								style={{ maxHeight: expanded ? "400px" : "0" }}
+							>
+								<div className="w-full space-y-3 pt-2">
+									<div>
+										<div className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 mb-1">
+											<CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+											Member must have bought
+										</div>
+										<select
+											value=""
+											onChange={(e) => {
+												const id = e.target.value;
+												if (!id) return;
+												onFilterChange({ filterResourceIdsRequired: [...requiredIds, id] });
+												e.target.value = "";
+											}}
+											className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-green-200 dark:border-green-800 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500/50"
+										>
+											<option value="">Add product...</option>
+											{requiredAvailable.map((r) => (
+												<option key={r.id} value={r.id}>{r.name}</option>
+											))}
+										</select>
+										{requiredIds.length > 0 && (
+											<div className="mt-1.5 flex flex-wrap gap-1.5">
+												{requiredIds.map((id) => {
+													const r = resources.find((x) => x.id === id);
+													return (
+														<div key={id} className="flex items-center gap-1.5 text-xs bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-md pl-1.5 pr-1 py-1">
+															<CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+															<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
+															<button type="button" onClick={() => { const next = requiredIds.filter((x) => x !== id); onFilterChange({ filterResourceIdsRequired: next.length ? next : undefined }); }} className="p-0.5 rounded hover:bg-green-200 dark:hover:bg-green-800/50 text-green-700 dark:text-green-300" aria-label="Remove"><X className="w-3 h-3" /></button>
+														</div>
+													);
+												})}
+											</div>
+										)}
 									</div>
-								)}
-							</div>
-							<div>
-								<div className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-400 mb-1">
-									<XCircle className="w-3.5 h-3.5 flex-shrink-0" />
-									Member must not have bought
-								</div>
-								<select
-									value=""
-									onChange={(e) => {
-										const id = e.target.value;
-										if (!id) return;
-										onMembershipFilterChange({ filterResourceIdsExclude: [...excludeIds, id] });
-										e.target.value = "";
-									}}
-									className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/50"
-								>
-									<option value="">Add product...</option>
-									{excludeAvailable.map((r) => (
-										<option key={r.id} value={r.id}>{r.name}</option>
-									))}
-								</select>
-								{excludeIds.length > 0 && (
-									<div className="mt-1.5 flex flex-wrap gap-1.5">
-										{excludeIds.map((id) => {
-											const r = resources.find((x) => x.id === id);
-											return (
-												<div key={id} className="flex items-center gap-1.5 text-xs bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 rounded-md pl-1.5 pr-1 py-1">
-													<XCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 flex-shrink-0" />
-													<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
-													<button type="button" onClick={() => { const next = excludeIds.filter((x) => x !== id); onMembershipFilterChange({ filterResourceIdsExclude: next.length ? next : undefined }); }} className="p-0.5 rounded hover:bg-red-200 dark:hover:bg-red-800/50 text-red-700 dark:text-red-300" aria-label="Remove"><X className="w-3 h-3" /></button>
-												</div>
-											);
-										})}
+									<div>
+										<div className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-400 mb-1">
+											<XCircle className="w-3.5 h-3.5 flex-shrink-0" />
+											Member must not have bought
+										</div>
+										<select
+											value=""
+											onChange={(e) => {
+												const id = e.target.value;
+												if (!id) return;
+												onFilterChange({ filterResourceIdsExclude: [...excludeIds, id] });
+												e.target.value = "";
+											}}
+											className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/50"
+										>
+											<option value="">Add product...</option>
+											{excludeAvailable.map((r) => (
+												<option key={r.id} value={r.id}>{r.name}</option>
+											))}
+										</select>
+										{excludeIds.length > 0 && (
+											<div className="mt-1.5 flex flex-wrap gap-1.5">
+												{excludeIds.map((id) => {
+													const r = resources.find((x) => x.id === id);
+													return (
+														<div key={id} className="flex items-center gap-1.5 text-xs bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 rounded-md pl-1.5 pr-1 py-1">
+															<XCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 flex-shrink-0" />
+															<span className="truncate max-w-[120px]">{r?.name ?? id}</span>
+															<button type="button" onClick={() => { const next = excludeIds.filter((x) => x !== id); onFilterChange({ filterResourceIdsExclude: next.length ? next : undefined }); }} className="p-0.5 rounded hover:bg-red-200 dark:hover:bg-red-800/50 text-red-700 dark:text-red-300" aria-label="Remove"><X className="w-3 h-3" /></button>
+														</div>
+													);
+												})}
+											</div>
+										)}
 									</div>
-								)}
+								</div>
 							</div>
 						</div>
 					);
@@ -929,7 +1033,7 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 					<option value="hours">hours</option>
 					<option value="days">days</option>
 				</select>
-				{hasUnsavedChanges && onDelaySave && (
+				{(hasUnsavedChanges || hasUnsavedTriggerConfig) && (onDelaySave || onTriggerConfigSave) && (
 					<button
 						onClick={handleSave}
 						className="ml-auto px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-md transition-colors"

@@ -23,6 +23,9 @@ async function getFunnelsHandler(request: NextRequest, context: AuthContext) {
 		const page = Number.parseInt(url.searchParams.get("page") || "1");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "10");
 		const search = url.searchParams.get("search") || undefined;
+		const merchantType = (url.searchParams.get("merchantType") === "qualification" || url.searchParams.get("merchantType") === "upsell")
+			? url.searchParams.get("merchantType") as "qualification" | "upsell"
+			: undefined;
 
 		// Validate experience ID is provided
 		if (!user.experienceId) {
@@ -49,8 +52,8 @@ async function getFunnelsHandler(request: NextRequest, context: AuthContext) {
 			);
 		}
 
-		// Get funnels using the full user context
-		const funnels = await getFunnels(userContext.user, page, limit, search);
+		// Get funnels using the full user context (optionally filtered by merchant type)
+		const funnels = await getFunnels(userContext.user, page, limit, search, merchantType);
 
 		return NextResponse.json({
 			success: true,

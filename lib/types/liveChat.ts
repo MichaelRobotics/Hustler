@@ -14,7 +14,7 @@ export interface LiveChatUser {
 export interface LiveChatMessage {
 	id: string;
 	conversationId: string;
-	type: "user" | "bot" | "system" | "agent"; // Added 'agent' type for agent messages
+	type: "user" | "bot" | "system" | "admin"; // Admin = sent from LiveChat by admin; bot = automated
 	text: string;
 	timestamp: string;
 	isRead: boolean;
@@ -23,9 +23,11 @@ export interface LiveChatMessage {
 		optionId?: string;
 		funnelStage?: string;
 		offerId?: string;
-		isOptimistic?: boolean; // ✅ FIXED: Add optimistic flag
-		userId?: string; // ✅ FIXED: Add user ID for duplicate prevention
-		experienceId?: string; // ✅ FIXED: Add experience ID for multitenancy
+		isOptimistic?: boolean;
+		optimisticAddedAt?: number; // timestamp when optimistic message was added (for "not sent" warning)
+		failedToSend?: boolean; // set when send API failed so UI can show "Failed to send"
+		userId?: string;
+		experienceId?: string;
 	};
 }
 
@@ -55,6 +57,17 @@ export interface LiveChatConversation {
 	currentStage?: string; // Current funnel stage (WELCOME, TRANSITION, etc.)
 	whopUserId?: string; // Whop user ID for WebSocket integration
 	experienceId?: string; // Experience ID for multi-tenancy
+	// Read receipts: message is "read by user" when createdAt <= userLastReadAt (bot/admin msgs); "read by admin" when createdAt <= adminLastReadAt (user msgs)
+	userLastReadAt?: string | null;
+	adminLastReadAt?: string | null;
+	// Unread and handover
+	unreadCountAdmin?: number;
+	unreadCountUser?: number;
+	controlledBy?: "bot" | "admin";
+	/** Typing indicator: other side is typing when true */
+	typing?: { user?: boolean; admin?: boolean };
+	/** Avatar URL of the admin user for this experience (from users table) */
+	adminAvatar?: string;
 }
 
 export interface LiveChatFilters {
@@ -80,7 +93,7 @@ export interface LiveChatConversationResponse {
 export interface CreateMessageRequest {
 	conversationId: string;
 	text: string;
-	type: "bot" | "system" | "agent";
+	type: "bot" | "system" | "admin";
 }
 
 export interface CreateMessageResponse {
@@ -116,6 +129,8 @@ export interface LiveChatPageProps {
 	onChatStateChange?: (isInChat: boolean) => void;
 	user: AuthenticatedUser | null;
 	experienceId: string; // Add experienceId prop for multi-tenant isolation
+	/** Merchant/bot icon URL for bot messages (optional, fetched from origin template if not provided) */
+	merchantIconUrl?: string | null;
 }
 
 export interface ConversationListProps {
@@ -135,6 +150,16 @@ export interface LiveChatViewProps {
 	onSendMessage: (message: string) => void;
 	onBack: () => void;
 	isLoading?: boolean;
+	/** Merchant/bot icon URL (e.g. from origin_templates.companyLogoUrl) for bot messages */
+	merchantIconUrl?: string | null;
+	/** Admin avatar URL (from users table, admin for this experience); fallback when conversation.adminAvatar not set */
+	adminAvatarUrl?: string | null;
+	/** Called when admin opens/views conversation to mark messages as read (sets admin_last_read_at) */
+	onMarkAsRead?: (conversationId: string) => void;
+	/** Called when admin resolves conversation (back to bot) */
+	onResolve?: (conversationId: string) => void;
+	/** Called when admin typing state changes (active: true when typing, false when stopped/sent) */
+	onTypingChange?: (conversationId: string, active: boolean) => void;
 }
 
 export interface ConversationCardProps {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, messages, experiences } from "@/lib/supabase/schema";
-import { eq } from "drizzle-orm";
+import { conversations, messages, experiences, users } from "@/lib/supabase/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { sendWhopNotification } from "@/lib/helpers/whop-notifications";
 import {
   type AuthContext,
   createErrorResponse,
@@ -135,10 +136,40 @@ async function sendMessageHandler(
 
     console.log(`[send-message] Message saved with ID: ${savedMessage.id}`);
 
-    // Update conversation timestamp
+    // Notify admin of new message (unread count); handover to admin only when admin sends in LiveChat
+    const now = new Date();
     await db.update(conversations)
-      .set({ updatedAt: new Date() })
+      .set({
+        updatedAt: now,
+        unreadCountAdmin: sql`${conversations.unreadCountAdmin} + 1`,
+      })
       .where(eq(conversations.id, sanitizedConversationId));
+
+    // Notify admin(s) via Whop push notification
+    const adminUsers = await db.query.users.findMany({
+      where: and(
+        eq(users.experienceId, conversation.experienceId),
+        eq(users.accessLevel, "admin"),
+      ),
+      columns: { whopUserId: true, name: true },
+    });
+    const adminWhopIds = adminUsers.map((u: { whopUserId: string; name: string | null }) => u.whopUserId);
+    const customerName = (await db.query.users.findFirst({
+      where: and(
+        eq(users.whopUserId, whopUserId),
+        eq(users.experienceId, conversation.experienceId),
+      ),
+      columns: { name: true },
+    }))?.name ?? "A customer";
+    if (adminWhopIds.length > 0 && experience.whopExperienceId) {
+      sendWhopNotification({
+        experience_id: experience.whopExperienceId,
+        user_ids: adminWhopIds,
+        title: "New message",
+        content: `${customerName}: ${sanitizedContent.slice(0, 80)}${sanitizedContent.length > 80 ? "…" : ""}`,
+        rest_path: `/chat/${sanitizedConversationId}`,
+      }).catch((err) => console.warn("[send-message] Whop notification failed:", err));
+    }
 
     console.log(`[send-message] ✅ Message saved successfully`);
 

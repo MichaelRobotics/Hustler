@@ -131,12 +131,82 @@ export const createErrorFunnelFlow = (): FunnelFlow => ({
 });
 
 /**
+ * Returns the stage name for the block (for display only). Do not use for control flow.
+ */
+export function getStageNameForBlock(blockId: string, funnelFlow: FunnelFlow): string {
+	const stage = funnelFlow.stages.find((s) => s.blockIds.includes(blockId));
+	return stage?.name ?? "UNKNOWN";
+}
+
+/**
+ * Progress 0–100% based on which stage contains the current block.
+ * Formula: (stage position / total stages) × 100 — e.g. stage 1/5 = 20%, 2/5 = 40%, 5/5 = 100%.
+ * Works for any number of stages (qualification and upsell). No hardcoded percentages.
+ * @param blockId - Current block ID (from conversation); null when no block (e.g. completed).
+ * @param stages - funnelFlow.stages (order defines position)
+ */
+export function getFunnelProgressPercentageFromBlock(
+	blockId: string | null,
+	stages: Array<{ blockIds: string[] }>,
+): number {
+	if (!stages?.length || !blockId) return 0;
+	const stageIndex = stages.findIndex((s) => s.blockIds?.includes(blockId));
+	if (stageIndex < 0) return 0;
+	const total = stages.length;
+	const position = stageIndex + 1;
+	return position >= total ? 100 : (position / total) * 100;
+}
+
+/**
+ * Progress 0–100% based on current stage name (fallback when blockId not available).
+ * Formula: (stage position / total stages) × 100. Stage name match is case-insensitive.
+ * Prefer getFunnelProgressPercentageFromBlock when you have currentBlockId (correct for upsell with duplicate stage names).
+ */
+export function getFunnelProgressPercentage(
+	currentStageName: string,
+	stages: Array<{ name: string; blockIds: string[] }>,
+): number {
+	if (!stages?.length || !currentStageName) return 0;
+	const normalized = currentStageName.trim().toUpperCase();
+	const stageIndex = stages.findIndex(
+		(s) => (s.name ?? "").trim().toUpperCase() === normalized,
+	);
+	if (stageIndex < 0) return 0;
+	const total = stages.length;
+	const position = stageIndex + 1;
+	return position >= total ? 100 : (position / total) * 100;
+}
+
+/**
+ * True if the block belongs to a stage with cardType === "product".
+ * Use this (not stage.name) to decide: show product CTA button, hide numbered options in message.
+ */
+export function isProductCardBlock(blockId: string, funnelFlow: FunnelFlow): boolean {
+	const stage = funnelFlow.stages.find((s) => s.blockIds.includes(blockId));
+	return stage?.cardType === "product";
+}
+
+/**
+ * Button label for product cards: "Claim!" for value-delivery stages, "Get Started!" otherwise.
+ * Uses stage.name for value-delivery detection (display-only; can be replaced by stage.variant later).
+ */
+export function getProductCardButtonLabel(blockId: string, funnelFlow: FunnelFlow): "Claim!" | "Get Started!" {
+	const stage = funnelFlow.stages.find((s) => s.blockIds.includes(blockId));
+	return stage?.name === "VALUE_DELIVERY" ? "Claim!" : "Get Started!";
+}
+
+/**
  * Returns options array for an upsell block from upsellBlockId/downsellBlockId (for layout/lines).
  * Use when reading or persisting upsell blocks so existing layout code works.
+ * @param validBlockIds - When provided, nextBlockId is set to null if the target is not in this set (avoids "missing block" validation errors).
  */
-export function getUpsellBlockOptions(block: FunnelBlock): FunnelBlockOption[] {
-	const upsellId = block.upsellBlockId ?? null;
-	const downsellId = block.downsellBlockId ?? null;
+export function getUpsellBlockOptions(block: FunnelBlock, validBlockIds?: Set<string>): FunnelBlockOption[] {
+	let upsellId = block.upsellBlockId ?? null;
+	let downsellId = block.downsellBlockId ?? null;
+	if (validBlockIds) {
+		if (upsellId != null && !validBlockIds.has(upsellId)) upsellId = null;
+		if (downsellId != null && !validBlockIds.has(downsellId)) downsellId = null;
+	}
 	return [
 		{ text: "Upsell", nextBlockId: upsellId },
 		{ text: "Downsell", nextBlockId: downsellId }

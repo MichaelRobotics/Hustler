@@ -11,6 +11,7 @@ import AdminHeader from "./AdminHeader";
 import AdminSidebar from "./AdminSidebar";
 import FunnelAnalyticsPage from "./FunnelAnalyticsPage";
 import FunnelsDashboard from "./FunnelsDashboard";
+import MerchantsGraphView, { type GraphFunnel } from "./MerchantsGraphView";
 import AddFunnelModal from "./modals/AddFunnelModal";
 import DeleteFunnelModal from "./modals/DeleteFunnelModal";
 import { DeploymentModal } from "../funnelBuilder/modals/DeploymentModal";
@@ -189,6 +190,9 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 	// State for tracking when modals are open (to disable sidebar)
 	const [isLibraryModalOpen, setIsLibraryModalOpen] = React.useState(false);
 
+	// Dashboard view mode: cards grid or graph (My Merchants)
+	const [dashboardViewMode, setDashboardViewMode] = React.useState<"cards" | "graph">("cards");
+
 	// Use the extracted hooks
 	const {
 		funnels,
@@ -348,6 +352,12 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 			);
 		}
 	}, [allResources, setFunnels]);
+
+	// Stable list for funnel builder so it can skip fetching /api/resources when opening Merchant Conversation Editor
+	const allResourcesForBuilder = useMemo(
+		() => allResources?.map((r) => ({ id: r.id, name: r.name })) ?? [],
+		[allResources],
+	);
 
 	const {
 		currentView,
@@ -612,6 +622,7 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 	}, []);
 
 	// Handle create merchant manually - set current merchant to minimal flow (no resources), treat as "generated", navigate to builder
+	// Use current merchant's merchantType so upsell always gets OFFER stage (no WELCOME stage in upsell)
 	const handleCreateMerchantManually = useCallback(async (merchantType: "qualification" | "upsell") => {
 		const currentMerchant = selectedFunnelForLibrary;
 		if (!currentMerchant) {
@@ -623,9 +634,10 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 			console.error("Experience ID is required");
 			return;
 		}
+		const type = (currentMerchant as { merchantType?: "qualification" | "upsell" })?.merchantType ?? merchantType ?? "qualification";
 
 		try {
-			const minimalFlow = createMinimalFlow(currentMerchant.id, merchantType);
+			const minimalFlow = createMinimalFlow(currentMerchant.id, type);
 
 			const response = await apiPut(`/api/funnels/${currentMerchant.id}`, {
 				flow: minimalFlow,
@@ -878,6 +890,7 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 		return (
 			<AIFunnelBuilderPage
 				funnel={selectedFunnel}
+				allResources={allResourcesForBuilder}
 				onBack={handleBackToDashboard}
 				onUpdate={async (updatedFunnel) => {
 					// Track if this is a deployment change (went from not deployed to deployed)
@@ -1030,6 +1043,7 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 				experienceId={user?.experienceId}
 				onBack={handleBackFromPreview}
 				sourcePage={previewSource}
+				onPreviewNextMerchant={(funnel) => setSelectedFunnel(funnel)}
 			/>
 		);
 	}
@@ -1164,9 +1178,12 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 								experienceId={user?.experienceId}
 								user={user}
 								onPurchaseSuccess={handlePurchaseSuccess}
+								dashboardViewMode={dashboardViewMode}
+								onDashboardViewModeChange={setDashboardViewMode}
 							/>
 
 							<div className="mt-8">
+							{dashboardViewMode === "cards" ? (
 							<FunnelsDashboard
 								funnels={funnels}
 								setFunnels={setFunnels}
@@ -1192,6 +1209,13 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 								isFunnelNameAvailable={isFunnelNameAvailable}
 								user={user}
 								/>
+							) : (
+								<MerchantsGraphView
+									funnels={funnels as GraphFunnel[]}
+									onFunnelClick={handleFunnelClickWithNavigation}
+									allResources={allResources}
+								/>
+							)}
 							</div>
 
 							{/* Modals */}

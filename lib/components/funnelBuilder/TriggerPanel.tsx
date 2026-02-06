@@ -5,6 +5,7 @@ import { Text, Heading } from "frosted-ui";
 import { Search, X } from "lucide-react";
 import { type TriggerType, type TriggerOption, TRIGGER_OPTIONS } from "./TriggerBlock";
 import type { TriggerConfig } from "@/lib/types/funnel";
+import { apiGet } from "@/lib/utils/api-client";
 
 
 interface Resource {
@@ -81,11 +82,11 @@ const TriggerPanel: React.FC<TriggerPanelProps> = ({
 		setLocalSelectedTrigger(trigger || "on_app_entry");
 	}, [selectedCategory, selectedTrigger, membershipTrigger, appTrigger, triggerConfig, membershipTriggerConfig, appTriggerConfig]);
 
-	// Fetch resources when panel opens and experienceId is available
+	// Fetch resources when panel opens (scoped by experience)
 	useEffect(() => {
 		if (isOpen && experienceId) {
 			setLoadingResources(true);
-			fetch(`/api/resources?experienceId=${experienceId}&limit=100`)
+			apiGet(`/api/resources?experienceId=${experienceId}&limit=100`, experienceId)
 				.then((res) => res.json())
 				.then((data) => {
 					if (data.success && data.data?.resources) {
@@ -97,15 +98,18 @@ const TriggerPanel: React.FC<TriggerPanelProps> = ({
 		}
 	}, [isOpen, experienceId]);
 
-	// Fetch funnels when panel opens and experienceId is available
+	// Fetch funnels when panel opens (scoped by experience UUID for app trigger; show by name)
+	// experienceId can be Whop ID or internal UUID; API resolves and returns funnels for current experience
 	useEffect(() => {
 		if (isOpen && experienceId) {
 			setLoadingFunnels(true);
-			fetch(`/api/funnels?limit=100`)
+			apiGet(`/api/funnels?limit=100`, experienceId)
 				.then((res) => res.json())
 				.then((data) => {
 					if (data.success && data.data?.funnels) {
-						setFunnels(data.data.funnels.map((f: any) => ({ id: f.id, name: f.name })));
+						const list = data.data.funnels.map((f: any) => ({ id: f.id, name: f.name ?? "" }));
+						list.sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+						setFunnels(list);
 					}
 				})
 				.catch((err) => console.error("Error fetching funnels:", err))

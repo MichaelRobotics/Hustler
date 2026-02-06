@@ -28,6 +28,7 @@ import { useModalManagement } from "../../hooks/useModalManagement";
 // Types
 import type { FunnelNotification, FunnelNotificationInput, FunnelProductFaq, FunnelProductFaqInput } from "@/lib/types/funnel";
 import { getLastBotMessageFromStage, createMinimalFlow, getUpsellBlockOptions } from "../../utils/funnelUtils";
+import { apiGet } from "../../utils/api-client";
 import { pickRandomUnusedCrossStageStyle } from "../../utils/crossStageStyles";
 
 // Type definitions
@@ -41,10 +42,6 @@ interface Funnel {
 	appTriggerConfig?: TriggerConfig; // Config for app trigger
 	delayMinutes?: number; // App trigger delay (backward compatibility)
 	membershipDelayMinutes?: number; // Membership trigger delay
-	// Handout configuration
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
 	isDeployed?: boolean;
 	wasEverDeployed?: boolean; // Track if funnel was ever live
 	isDraft?: boolean; // Draft mode - prevents deployment when new cards don't have complete connections
@@ -70,9 +67,11 @@ interface AIFunnelBuilderPageProps {
 	onGoToPreview?: () => void; // New: Navigate to separate preview page
 	onGenerationComplete?: (funnelId: string) => void; // New: callback when generation is fully complete
 	onGenerationError?: (funnelId: string, error: Error) => void; // New: callback when generation fails
-	user?: { experienceId?: string } | null;
+	user?: { experienceId?: string; experience?: { id: string } } | null;
 	hasAnyLiveFunnel?: boolean; // New: indicates if any funnel is live globally
 	isSingleMerchant?: boolean; // New: indicates if there's only 1 merchant card
+	/** Pre-loaded resources (e.g. from AdminPanel allResources). When set, avoids a separate /api/resources fetch for card product dropdown. */
+	allResources?: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -95,11 +94,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	user,
 	hasAnyLiveFunnel = false, // Default to false if not provided
 	isSingleMerchant = false, // Default to false if not provided
+	allResources: allResourcesProp,
 }) => {
 	// State Management
 	const [currentFunnel, setCurrentFunnel] = React.useState<Funnel>(funnel);
 	const [showTriggerPanel, setShowTriggerPanel] = React.useState(false);
 	const [triggerPanelCategory, setTriggerPanelCategory] = React.useState<"Membership" | "App" | null>(null);
+	const [hasUnsavedAppTriggerConfig, setHasUnsavedAppTriggerConfig] = React.useState(false);
+	const [hasUnsavedMembershipTriggerConfig, setHasUnsavedMembershipTriggerConfig] = React.useState(false);
 	const [showConfigureView, setShowConfigureView] = React.useState(false); // Configure mode for notification canvas
 	const [showConfigPanel, setShowConfigPanel] = React.useState(true); // Show config panel in Configure view
 	
@@ -108,14 +110,16 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	const hasFlow = !!currentFunnel.flow;
 	
 	// Get flow to use (actual flow or minimal flow). For upsell, normalize block options from upsellBlockId/downsellBlockId.
+	// Pass validBlockIds so options never point to missing blocks (avoids "Invalid option connections" draft).
 	const flowToUse = React.useMemo(() => {
 		const raw = hasFlow ? currentFunnel.flow : createMinimalFlow(currentFunnel.id, merchantType);
 		if (!raw || merchantType !== "upsell") return raw;
+		const validBlockIds = new Set(Object.keys(raw.blocks ?? {}));
 		const blocks = { ...raw.blocks };
 		Object.keys(blocks).forEach((id) => {
 			const b = blocks[id] as any;
 			if (b && (b.upsellBlockId !== undefined || b.downsellBlockId !== undefined)) {
-				blocks[id] = { ...b, options: getUpsellBlockOptions(b) };
+				blocks[id] = { ...b, options: getUpsellBlockOptions(b, validBlockIds) };
 			}
 		});
 		return { ...raw, blocks };
@@ -137,6 +141,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	// Resources and funnels state for trigger selection
 	const [resources, setResources] = React.useState<Array<{ id: string; name: string }>>([]);
 	const [funnels, setFunnels] = React.useState<Array<{ id: string; name: string }>>([]);
+	const [qualificationFunnels, setQualificationFunnels] = React.useState<Array<{ id: string; name: string }>>([]);
+	const [upsellFunnels, setUpsellFunnels] = React.useState<Array<{ id: string; name: string }>>([]);
 	const [loadingResources, setLoadingResources] = React.useState(false);
 	const [loadingFunnels, setLoadingFunnels] = React.useState(false);
 
@@ -151,6 +157,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		upsellKind?: "upsell" | "downsell";
 		/** When true (last-stage upsell/downsell), only the new placeholder may be selected; above-stage cards blocked */
 		onlyPlaceholderSelectable?: boolean;
+		/** When set, reconnecting existing option (change connection); update options[optionIndex] instead of adding option */
+		optionIndex?: number;
+		/** Option's nextBlockId before we set it to new block; restored on cancel */
+		previousNextBlockId?: string | null;
 	} | null>(null);
 
 	// State for pending delete
@@ -169,6 +179,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		newStageId: string;
 		sourceBlockId: string;
 		optionText: string;
+		/** When set, reconnecting existing option (change connection); after type selection set options[optionIndex].nextBlockId */
+		optionIndex?: number;
 	} | null>(null);
 
 	// Refs
@@ -190,42 +202,41 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	const validation = useFunnelValidation();
 	const modals = useModalManagement();
 
-	// Track if we've already checked this funnel to prevent infinite loops
-	const checkedFunnelIdRef = React.useRef<string | null>(null);
-
 	// Effects
 	React.useEffect(() => {
 		setCurrentFunnel(funnel);
+		setHasUnsavedAppTriggerConfig(false);
+		setHasUnsavedMembershipTriggerConfig(false);
 	}, [funnel]);
 
-	// Check for issues when entering Merchant Conversation Editor (run once per funnel)
+	// Recompute orphaned/broken and draft whenever current flow changes (so abandoned block gets red highlight after connection change).
+	// Use flowToUse (normalized for upsell: options synced from upsellBlockId/downsellBlockId) so validation matches what we display and cross-connections are respected.
+	// Skip error check while user is in Upsell/Downsell or qualification selection mode; run after they have made a selection.
 	React.useEffect(() => {
-		if (!funnel.flow || !funnel.id) return;
-		
-		// Skip if we've already checked this funnel
-		if (checkedFunnelIdRef.current === funnel.id) return;
-		
-		// Mark this funnel as checked
-		checkedFunnelIdRef.current = funnel.id;
+		if (!currentFunnel.flow || !currentFunnel.id) return;
+		if (pendingOptionSelection?.isActive || pendingCardTypeSelection) return;
+		const flowToValidate = flowToUse ?? currentFunnel.flow;
 
 		// Find invalid options
-		const invalidOptions = findInvalidOptions(funnel.flow);
+		const invalidOptions = findInvalidOptions(flowToValidate);
 
-		// Find orphaned cards (cards with no incoming connections)
+		// Find orphaned cards (cards with no normal incoming connection: must have at least one inbound from previous stage; cross-only inbounds don't count)
 		const orphanedCards: string[] = [];
-		for (let stageIndex = 0; stageIndex < funnel.flow.stages.length; stageIndex++) {
-			const stage = funnel.flow.stages[stageIndex];
+		for (let stageIndex = 0; stageIndex < flowToValidate.stages.length; stageIndex++) {
+			const stage = flowToValidate.stages[stageIndex];
 			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
-			// Skip first stage (start block doesn't need incoming connections)
-			if (stageIndex === 0) continue;
+			if (stageIndex === 0) continue; // First stage has no previous stage
+
+			const previousStage = flowToValidate.stages[stageIndex - 1];
+			if (!previousStage?.blockIds?.length) continue;
 
 			for (const cardId of stage.blockIds) {
-				// Check if any block has an option pointing to this card
-				const hasIncomingConnection = Object.values(funnel.flow.blocks).some((block: any) => {
+				const hasNormalIncoming = previousStage.blockIds.some((prevBlockId: string) => {
+					const block = flowToValidate.blocks[prevBlockId] as any;
 					if (!block || !block.options || !Array.isArray(block.options)) return false;
 					return block.options.some((opt: any) => opt.nextBlockId === cardId);
 				});
-				if (!hasIncomingConnection) {
+				if (!hasNormalIncoming) {
 					orphanedCards.push(cardId);
 				}
 			}
@@ -233,9 +244,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 		// Find broken cards (cards with no outgoing connections to next stage)
 		const brokenCards: string[] = [];
-		for (let stageIndex = 0; stageIndex < funnel.flow.stages.length - 1; stageIndex++) {
-			const stage = funnel.flow.stages[stageIndex];
-			const nextStage = funnel.flow.stages[stageIndex + 1];
+		for (let stageIndex = 0; stageIndex < flowToValidate.stages.length - 1; stageIndex++) {
+			const stage = flowToValidate.stages[stageIndex];
+			const nextStage = flowToValidate.stages[stageIndex + 1];
 			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
 			if (!nextStage) continue; // No next stage = OK (last stage)
 
@@ -249,23 +260,26 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			}
 
 			for (const cardId of stage.blockIds) {
-				const block = funnel.flow.blocks[cardId];
+				const block = flowToValidate.blocks[cardId];
 				if (!block || !block.options || !Array.isArray(block.options)) {
 					brokenCards.push(cardId);
 					continue;
 				}
 
-				// Check if this block has any option pointing to a card in the next stage
-				const hasOutgoingConnection = block.options.some((opt: any) =>
+				// Normal connection: option pointing to a card in the next stage
+				const hasNormalConnection = block.options.some((opt: any) =>
 					opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
 				);
-				if (!hasOutgoingConnection) {
+				// Cross-stage outbound: upsell/downsell pointing to a block not in the next stage (treat as valid outbound)
+				const hasCrossStageOutbound = (block as any).upsellBlockId && !nextStage.blockIds.includes((block as any).upsellBlockId)
+					|| (block as any).downsellBlockId && !nextStage.blockIds.includes((block as any).downsellBlockId);
+				if (!hasNormalConnection && !hasCrossStageOutbound) {
 					brokenCards.push(cardId);
 				}
 			}
 		}
 
-		// If there are any issues, set pendingDelete to show highlights
+		// If there are any issues, set pendingDelete to show red highlights (including abandoned block after connection change)
 		if (invalidOptions.length > 0 || orphanedCards.length > 0 || brokenCards.length > 0) {
 			setPendingDelete({
 				blockId: '', // No specific block being deleted
@@ -280,17 +294,19 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			setPendingDelete(null);
 		}
 
-		// Recalculate and update draft status
-		const draftResult = checkDraftStatus(funnel.flow, funnel);
+		// Recalculate and update draft status (use same normalized flow for consistency)
+		const draftResult = checkDraftStatus(flowToValidate, currentFunnel);
 		logDraftStatus(draftResult);
-		if (funnel.isDraft !== draftResult.isDraft) {
-			const funnelWithDraft = { ...funnel, isDraft: draftResult.isDraft };
+		if (currentFunnel.isDraft !== draftResult.isDraft) {
+			const funnelWithDraft = { ...currentFunnel, isDraft: draftResult.isDraft };
 			setCurrentFunnel(funnelWithDraft);
 			onUpdate(funnelWithDraft);
 		}
-	}, [funnel.id, funnel.flow]); // Run only when funnel prop changes (entering editor)
+	}, [currentFunnel.id, currentFunnel.flow, flowToUse, pendingOptionSelection?.isActive, !!pendingCardTypeSelection]); // Run after flow change or when selection ends (so error check runs after user selects a card)
 
-	// Helper function to find invalid option connections
+	// Helper function to find invalid option connections.
+	// For upsell/downsell options (option index 0 or 1 on blocks with upsellBlockId/downsellBlockId), only "target does not exist" is invalid;
+	// "target not in any stage" and "target in earlier stage" are allowed so 2 cross-connections don't trigger draft.
 	const findInvalidOptions = (flow: any): Array<{ blockId: string; optionIndex: number; reason: string }> => {
 		const invalidOptions: Array<{ blockId: string; optionIndex: number; reason: string }> = [];
 		
@@ -298,6 +314,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 		Object.values(flow.blocks).forEach((block: any) => {
 			if (!block || !block.options || !Array.isArray(block.options)) return;
+
+			const isUpsellBlock = (block.upsellBlockId !== undefined || block.downsellBlockId !== undefined);
 			
 			// Find which stage this block is in
 			const blockStage = flow.stages.find((s: any) =>
@@ -309,7 +327,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			block.options.forEach((opt: any, index: number) => {
 				if (!opt.nextBlockId) return;
 				
-				// Check if target block exists
+				// Check if target block exists (always invalid if missing)
 				const targetBlock = flow.blocks[opt.nextBlockId];
 				if (!targetBlock) {
 					invalidOptions.push({
@@ -319,6 +337,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 					});
 					return;
 				}
+				
+				// For upsell/downsell cross-connections (option 0 or 1 on upsell block), skip stage checks so 2 cross outbounds don't trigger draft
+				if (isUpsellBlock && (index === 0 || index === 1)) return;
 				
 				// Check if target block is in a valid stage (must be in next stage or later)
 				const targetStage = flow.stages.find((s: any) =>
@@ -335,12 +356,12 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 				
 				const targetStageIndex = flow.stages.indexOf(targetStage);
 				
-				// Option must point to a block in a later stage (not same or earlier)
-				if (targetStageIndex <= blockStageIndex) {
+				// Option must point to a block in the same stage or later (only earlier stage is invalid; same-stage upsell/downsell is allowed)
+				if (targetStageIndex < blockStageIndex) {
 					invalidOptions.push({
 						blockId: block.id,
 						optionIndex: index,
-						reason: 'Target block is in same or earlier stage'
+						reason: 'Target block is in earlier stage'
 					});
 				}
 			});
@@ -387,13 +408,49 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		const newFlow = { ...currentFunnel.flow };
 		newFlow.blocks[updatedBlock.id] = updatedBlock;
 
-		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		let updatedFunnel = { ...currentFunnel, flow: newFlow };
+
+		// Sync card product selection to app and membership trigger filters (qualification/upsell only)
+		if (merchantType === "qualification" || merchantType === "upsell") {
+			const collectedIds: string[] = [];
+			const blocks = Object.values(newFlow.blocks) as Array<{ id: string; resourceId?: string | null }>;
+			for (const block of blocks) {
+				if (!block?.resourceId) continue;
+				if (merchantType === "upsell") {
+					collectedIds.push(block.resourceId);
+				} else {
+					const stage = newFlow.stages?.find((s: any) => s?.blockIds?.includes(block.id));
+					if (stage?.cardType === "product") collectedIds.push(block.resourceId);
+				}
+			}
+			const filterIds = collectedIds.length ? [...new Set(collectedIds)] : undefined;
+			updatedFunnel = {
+				...updatedFunnel,
+				appTriggerConfig: { ...currentFunnel.appTriggerConfig, filterResourceIdsRequired: filterIds },
+				membershipTriggerConfig: { ...currentFunnel.membershipTriggerConfig, filterResourceIdsRequired: filterIds },
+			};
+		}
+
 		setCurrentFunnel(updatedFunnel);
 		onUpdate(updatedFunnel);
 		validation.setEditingBlockId(null);
 		
-		// Check draft status after block update
-		const draftResult = checkDraftStatus(newFlow, updatedFunnel);
+		// Check draft status after block update (use normalized flow for upsell so cross-connections are respected)
+		const flowForDraft =
+			merchantType === "upsell"
+				? (() => {
+						const validBlockIds = new Set(Object.keys(newFlow.blocks ?? {}));
+						const blocks = { ...newFlow.blocks };
+						Object.keys(blocks).forEach((id) => {
+							const b = (blocks as any)[id];
+							if (b && (b.upsellBlockId !== undefined || b.downsellBlockId !== undefined)) {
+								(blocks as any)[id] = { ...b, options: getUpsellBlockOptions(b, validBlockIds) };
+							}
+						});
+						return { ...newFlow, blocks };
+					})()
+				: newFlow;
+		const draftResult = checkDraftStatus(flowForDraft, updatedFunnel);
 		logDraftStatus(draftResult);
 		if (updatedFunnel.isDraft !== draftResult.isDraft) {
 			const funnelWithDraft = { ...updatedFunnel, isDraft: draftResult.isDraft };
@@ -401,33 +458,50 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			onUpdate(funnelWithDraft);
 		}
 
-		// Check if pending delete issues are resolved
+		// Check if pending delete issues are resolved (use normalized flow for upsell so cross-connections are respected)
 		if (pendingDelete) {
+			const flowToValidate =
+				merchantType === "upsell"
+					? (() => {
+							const validBlockIds = new Set(Object.keys(newFlow.blocks ?? {}));
+							const blocks = { ...newFlow.blocks };
+							Object.keys(blocks).forEach((id) => {
+								const b = (blocks as any)[id];
+								if (b && (b.upsellBlockId !== undefined || b.downsellBlockId !== undefined)) {
+									(blocks as any)[id] = { ...b, options: getUpsellBlockOptions(b, validBlockIds) };
+								}
+							});
+							return { ...newFlow, blocks };
+						})()
+					: newFlow;
+
 			// Recalculate orphaned and broken cards
 			const orphanedCards: string[] = [];
 			const brokenCards: string[] = [];
 
-			// Find orphaned cards (cards with no incoming connections)
-			for (let stageIndex = 0; stageIndex < newFlow.stages.length; stageIndex++) {
-				const stage = newFlow.stages[stageIndex];
+			// Find orphaned cards (no normal incoming: must have at least one inbound from previous stage)
+			for (let stageIndex = 0; stageIndex < flowToValidate.stages.length; stageIndex++) {
+				const stage = flowToValidate.stages[stageIndex];
 				if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
-				if (stageIndex === 0) continue; // Skip first stage
+				if (stageIndex === 0) continue;
+
+				const previousStage = flowToValidate.stages[stageIndex - 1];
+				if (!previousStage?.blockIds?.length) continue;
 
 				for (const cardId of stage.blockIds) {
-					const hasIncomingConnection = Object.values(newFlow.blocks).some((block: any) => {
+					const hasNormalIncoming = previousStage.blockIds.some((prevBlockId: string) => {
+						const block = flowToValidate.blocks[prevBlockId] as any;
 						if (!block || !block.options || !Array.isArray(block.options)) return false;
 						return block.options.some((opt: any) => opt.nextBlockId === cardId);
 					});
-					if (!hasIncomingConnection) {
-						orphanedCards.push(cardId);
-					}
+					if (!hasNormalIncoming) orphanedCards.push(cardId);
 				}
 			}
 
 			// Find broken cards (cards with no outgoing connections to next stage)
-			for (let stageIndex = 0; stageIndex < newFlow.stages.length - 1; stageIndex++) {
-				const stage = newFlow.stages[stageIndex];
-				const nextStage = newFlow.stages[stageIndex + 1];
+			for (let stageIndex = 0; stageIndex < flowToValidate.stages.length - 1; stageIndex++) {
+				const stage = flowToValidate.stages[stageIndex];
+				const nextStage = flowToValidate.stages[stageIndex + 1];
 				if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
 				if (!nextStage) continue; // No next stage = OK
 
@@ -440,23 +514,25 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 				}
 
 				for (const cardId of stage.blockIds) {
-					const block = newFlow.blocks[cardId];
+					const block = flowToValidate.blocks[cardId];
 					if (!block || !block.options || !Array.isArray(block.options)) {
 						brokenCards.push(cardId);
 						continue;
 					}
 
-					const hasOutgoingConnection = block.options.some((opt: any) =>
+					const hasNormalConnection = block.options.some((opt: any) =>
 						opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
 					);
-					if (!hasOutgoingConnection) {
+					const hasCrossStageOutbound = (block as any).upsellBlockId && !nextStage.blockIds.includes((block as any).upsellBlockId)
+						|| (block as any).downsellBlockId && !nextStage.blockIds.includes((block as any).downsellBlockId);
+					if (!hasNormalConnection && !hasCrossStageOutbound) {
 						brokenCards.push(cardId);
 					}
 				}
 			}
 
 			// Recalculate invalid options
-			const invalidOptions = findInvalidOptions(newFlow);
+			const invalidOptions = findInvalidOptions(flowToValidate);
 
 			// If no orphaned, broken cards, or invalid options remain, clear pending delete
 			if (orphanedCards.length === 0 && brokenCards.length === 0 && invalidOptions.length === 0) {
@@ -534,18 +610,23 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			}
 		}
 
-		// Orphaned cards
+		// Orphaned cards: each block must have at least one normal (non-cross) incoming connection from the previous stage
 		for (let stageIndex = 0; stageIndex < flow.stages.length; stageIndex++) {
 			const stage = flow.stages[stageIndex];
 			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
 			if (stageIndex === 0) continue;
+
+			const previousStage = flow.stages[stageIndex - 1];
+			if (!previousStage?.blockIds?.length) continue;
+
 			for (const cardId of stage.blockIds) {
-				const hasIncomingConnection = Object.values(flow.blocks).some((block: any) => {
+				const hasNormalIncoming = previousStage.blockIds.some((prevBlockId: string) => {
+					const block = flow.blocks[prevBlockId] as any;
 					if (!block || !block.options || !Array.isArray(block.options)) return false;
 					return block.options.some((opt: any) => opt.nextBlockId === cardId);
 				});
-				if (!hasIncomingConnection) {
-					return { isDraft: true, reason: `Orphaned card "${cardId}" (no incoming connection)` };
+				if (!hasNormalIncoming) {
+					return { isDraft: true, reason: `Card "${cardId}" has no normal incoming connection (need at least one from previous stage)` };
 				}
 			}
 		}
@@ -564,11 +645,26 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 				if (!block || !block.options || !Array.isArray(block.options)) {
 					return { isDraft: true, reason: `Card "${cardId}" has no options` };
 				}
-				const hasOutgoingConnection = block.options.some((opt: any) =>
+				const hasNormalConnection = block.options.some((opt: any) =>
 					opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
 				);
-				if (!hasOutgoingConnection) {
+				const hasCrossStageOutbound = (block as any).upsellBlockId && !nextStage.blockIds.includes((block as any).upsellBlockId)
+					|| (block as any).downsellBlockId && !nextStage.blockIds.includes((block as any).downsellBlockId);
+				if (!hasNormalConnection && !hasCrossStageOutbound) {
 					return { isDraft: true, reason: `Card "${cardId}" has no connection to the next stage` };
+				}
+			}
+		}
+
+		// Draft when any product-selectable card has no product selected
+		if (flow.blocks && flow.stages && funnel) {
+			const mt = funnel.merchantType ?? "qualification";
+			for (const block of Object.values(flow.blocks) as Array<any>) {
+				if (!block?.id) continue;
+				const stage = flow.stages.find((s: any) => s?.blockIds?.includes(block.id));
+				const hasProductSelection = mt === "upsell" || stage?.cardType === "product";
+				if (hasProductSelection && !block.resourceId) {
+					return { isDraft: true, reason: "Select a product for all product cards" };
 				}
 			}
 		}
@@ -582,6 +678,90 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		} else {
 			console.log("[Funnel] Go Live — ready to deploy");
 		}
+	};
+
+	// Change connection: same flow as add-new-option (show new placeholder + existing cards; user picks new or existing)
+	const handleOptionConnectRequest = (blockId: string, optionIndex: number) => {
+		if (!currentFunnel.flow) return;
+		const block = currentFunnel.flow.blocks[blockId];
+		if (!block?.options?.[optionIndex]) return;
+
+		const optionText = block.options[optionIndex].text;
+		const previousNextBlockId = block.options[optionIndex].nextBlockId ?? null;
+
+		const currentStage = currentFunnel.flow.stages.find((stage: any) =>
+			stage.blockIds && stage.blockIds.includes(blockId)
+		);
+		if (!currentStage) return;
+
+		const currentStageIndex = currentFunnel.flow.stages.indexOf(currentStage);
+		const nextStage = currentFunnel.flow.stages[currentStageIndex + 1];
+
+		// No next stage: create new stage + placeholder, show card type selection
+		if (!nextStage) {
+			const newStageId = `stage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			const newBlockId = `new_block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			const placeholderBlock = {
+				id: newBlockId,
+				message: "",
+				options: [],
+			};
+			const newFlow = { ...currentFunnel.flow };
+			newFlow.blocks[newBlockId] = placeholderBlock;
+			const newStage: any = {
+				id: newStageId,
+				name: "New Stage",
+				explanation: "",
+				blockIds: [newBlockId],
+			};
+			newFlow.stages.push(newStage);
+			const updatedFunnel = { ...currentFunnel, flow: newFlow };
+			setCurrentFunnel(updatedFunnel);
+			setPendingCardTypeSelection({
+				newBlockId,
+				newStageId,
+				sourceBlockId: blockId,
+				optionText,
+				optionIndex,
+			});
+			return;
+		}
+
+		// Next stage exists: create new block (stage type), add to next stage, enter selection mode (do not set option yet; arrow stays on old connection until user selects)
+		const stageCardType = nextStage.cardType ||
+			(nextStage.name === "OFFER" || nextStage.name === "VALUE_DELIVERY" || nextStage.name === "TRANSITION"
+				? "product"
+				: "qualification");
+
+		const newBlockId = `new_block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		const newBlock = {
+			id: newBlockId,
+			message: "New conversation block",
+			options: [],
+			...(stageCardType === "product" ? { resourceName: undefined } : {}),
+		};
+
+		const newFlow = { ...currentFunnel.flow };
+		newFlow.blocks[newBlockId] = newBlock;
+		const updatedNextStage = {
+			...nextStage,
+			blockIds: [...(nextStage.blockIds || []), newBlockId],
+		};
+		newFlow.stages[currentStageIndex + 1] = updatedNextStage;
+
+		const updatedFunnel = { ...currentFunnel, flow: newFlow };
+		setCurrentFunnel(updatedFunnel);
+
+		const existingNextStageBlockIds = (nextStage.blockIds || []).filter((id: string) => id !== newBlockId);
+		setPendingOptionSelection({
+			isActive: true,
+			sourceBlockId: blockId,
+			optionText,
+			newBlockId,
+			nextStageBlockIds: existingNextStageBlockIds,
+			optionIndex,
+			previousNextBlockId,
+		});
 	};
 
 	// Handle adding new option - immediately create new card and enter selection mode
@@ -623,10 +803,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			
 			newFlow.stages.push(newStage);
 			
-			// Update flow with new stage and placeholder block
+			// Update local state only; persist only after user selects type and then card
 			const updatedFunnel = { ...currentFunnel, flow: newFlow };
 			setCurrentFunnel(updatedFunnel);
-			onUpdate(updatedFunnel);
 			
 			// Show card type selection (block already exists, so it will render)
 			setPendingCardTypeSelection({
@@ -666,10 +845,9 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		};
 		newFlow.stages[currentStageIndex + 1] = updatedNextStage;
 
-		// Update funnel with new card
+		// Update local state only; persist when user selects card in handleCardSelection
 		const updatedFunnel = { ...currentFunnel, flow: newFlow };
 		setCurrentFunnel(updatedFunnel);
-		onUpdate(updatedFunnel);
 
 		// Enter selection mode - highlight new card and existing cards in next stage
 		// Get existing block IDs (before adding the new one)
@@ -719,9 +897,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		const optionText = kind === "upsell" ? "Upsell" : "Downsell";
 
 		const newBlockId = `new_block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		const defaultBlockMessage = kind === "downsell" ? "New downsell block" : "New upsell block";
 		const newUpsellBlock = {
 			id: newBlockId,
-			message: "",
+			message: defaultBlockMessage,
 			options: [
 				{ text: "Upsell", nextBlockId: null },
 				{ text: "Downsell", nextBlockId: null },
@@ -791,9 +970,8 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		const newStage = newFlow.stages.find((s: any) => s.id === pendingCardTypeSelection.newStageId);
 		
 		// Create block based on card type
-		const defaultMessage = cardType === "product" 
-			? "New conversation block\n\n[LINK]"
-			: "New conversation block";
+		// Product/OFFER cards: no [LINK] in message; backend adds button at bottom with selected product link
+		const defaultMessage = merchantType === "upsell" ? "New upsell block" : "New conversation block";
 		
 		const newBlock = {
 			id: pendingCardTypeSelection.newBlockId,
@@ -808,12 +986,28 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		if (newStage && !newStage.blockIds.includes(pendingCardTypeSelection.newBlockId)) {
 			newStage.blockIds = [...newStage.blockIds, pendingCardTypeSelection.newBlockId];
 		}
-		
+
+		// Change connection (reconnect existing option): set option's nextBlockId and done; no selection mode
+		if (pendingCardTypeSelection.optionIndex != null) {
+			const sourceBlock = newFlow.blocks[pendingCardTypeSelection.sourceBlockId];
+			if (sourceBlock?.options?.[pendingCardTypeSelection.optionIndex]) {
+				const opts = [...sourceBlock.options];
+				opts[pendingCardTypeSelection.optionIndex] = {
+					...opts[pendingCardTypeSelection.optionIndex],
+					nextBlockId: pendingCardTypeSelection.newBlockId,
+				};
+				newFlow.blocks[pendingCardTypeSelection.sourceBlockId] = { ...sourceBlock, options: opts };
+			}
+			const updatedFunnel = { ...currentFunnel, flow: newFlow };
+			setCurrentFunnel(updatedFunnel);
+			onUpdate(updatedFunnel);
+			setPendingCardTypeSelection(null);
+			return;
+		}
+
+		// New option: enter selection mode for connecting option
 		const updatedFunnel = { ...currentFunnel, flow: newFlow };
 		setCurrentFunnel(updatedFunnel);
-		onUpdate(updatedFunnel);
-		
-		// Enter selection mode for connecting option
 		setPendingOptionSelection({
 			isActive: true,
 			sourceBlockId: pendingCardTypeSelection.sourceBlockId,
@@ -821,7 +1015,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			newBlockId: pendingCardTypeSelection.newBlockId,
 			nextStageBlockIds: [], // New stage, no existing cards
 		});
-		
 		setPendingCardTypeSelection(null);
 	};
 
@@ -856,10 +1049,28 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 				}
 			}
 
+			// Change connection: update source block's option to point to selected card
+			if (pendingOptionSelection.optionIndex != null) {
+				const sourceBlock = newFlow.blocks[pendingOptionSelection.sourceBlockId];
+				if (sourceBlock?.options?.[pendingOptionSelection.optionIndex]) {
+					const opts = [...sourceBlock.options];
+					opts[pendingOptionSelection.optionIndex] = {
+						...opts[pendingOptionSelection.optionIndex],
+						nextBlockId: selectedBlockId,
+					};
+					newFlow.blocks[pendingOptionSelection.sourceBlockId] = { ...sourceBlock, options: opts };
+				}
+			}
+
 			// Update funnel without the new card
 			const updatedFunnel = { ...currentFunnel, flow: newFlow };
 			setCurrentFunnel(updatedFunnel);
 			onUpdate(updatedFunnel);
+			// Change connection: we updated the option and removed new block; done
+			if (pendingOptionSelection.optionIndex != null) {
+				setPendingOptionSelection(null);
+				return;
+			}
 		}
 
 		// Upsell flow: set upsellBlockId or downsellBlockId and sync options; same card cannot be both upsell and downsell
@@ -910,7 +1121,26 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			return;
 		}
 
-		// Qualification flow: add new option to source block pointing to selected card
+		// Change connection: user selected the new card; set option to point to it, persist, then clear
+		if (pendingOptionSelection.optionIndex != null) {
+			const newFlow = { ...currentFunnel.flow };
+			const sourceBlockForUpdate = newFlow.blocks[pendingOptionSelection.sourceBlockId];
+			if (sourceBlockForUpdate?.options?.[pendingOptionSelection.optionIndex]) {
+				const opts = [...sourceBlockForUpdate.options];
+				opts[pendingOptionSelection.optionIndex] = {
+					...opts[pendingOptionSelection.optionIndex],
+					nextBlockId: pendingOptionSelection.newBlockId,
+				};
+				newFlow.blocks[pendingOptionSelection.sourceBlockId] = { ...sourceBlockForUpdate, options: opts };
+			}
+			const updatedFunnel = { ...currentFunnel, flow: newFlow };
+			setCurrentFunnel(updatedFunnel);
+			onUpdate(updatedFunnel);
+			setPendingOptionSelection(null);
+			return;
+		}
+
+		// Qualification flow (add new option): add new option to source block pointing to selected card
 		const newOption = {
 			text: pendingOptionSelection.optionText,
 			nextBlockId: selectedBlockId,
@@ -921,10 +1151,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			options: [...(sourceBlock.options || []), newOption],
 		};
 
-		// Update block
 		handleBlockUpdate(updatedBlock);
-
-		// Exit selection mode
 		setPendingOptionSelection(null);
 	};
 
@@ -1056,31 +1283,47 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			}
 		}
 
-		// Find ALL orphaned cards (cards with no incoming connections) - check all stages
+		// Use normalized flow for upsell so cross-connections are respected when recalculating orphaned/broken
+		const flowAfterDelete =
+			merchantType === "upsell"
+				? (() => {
+						const validBlockIds = new Set(Object.keys(newFlow.blocks ?? {}));
+						const blocks = { ...newFlow.blocks };
+						Object.keys(blocks).forEach((id) => {
+							const b = (blocks as any)[id];
+							if (b && (b.upsellBlockId !== undefined || b.downsellBlockId !== undefined)) {
+								(blocks as any)[id] = { ...b, options: getUpsellBlockOptions(b, validBlockIds) };
+							}
+						});
+						return { ...newFlow, blocks };
+					})()
+				: newFlow;
+
+		// Find ALL orphaned cards (no normal incoming: must have at least one inbound from previous stage)
 		const orphanedNextStageCards: string[] = [];
-		for (let stageIndex = 0; stageIndex < newFlow.stages.length; stageIndex++) {
-			const stage = newFlow.stages[stageIndex];
+		for (let stageIndex = 0; stageIndex < flowAfterDelete.stages.length; stageIndex++) {
+			const stage = flowAfterDelete.stages[stageIndex];
 			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
-			// Skip first stage (start block doesn't need incoming connections)
 			if (stageIndex === 0) continue;
 
+			const previousStage = flowAfterDelete.stages[stageIndex - 1];
+			if (!previousStage?.blockIds?.length) continue;
+
 			for (const cardId of stage.blockIds) {
-				// Check if any block has an option pointing to this card
-				const hasIncomingConnection = Object.values(newFlow.blocks).some((block: any) => {
+				const hasNormalIncoming = previousStage.blockIds.some((prevBlockId: string) => {
+					const block = flowAfterDelete.blocks[prevBlockId] as any;
 					if (!block || !block.options || !Array.isArray(block.options)) return false;
 					return block.options.some((opt: any) => opt.nextBlockId === cardId);
 				});
-				if (!hasIncomingConnection) {
-					orphanedNextStageCards.push(cardId);
-				}
+				if (!hasNormalIncoming) orphanedNextStageCards.push(cardId);
 			}
 		}
 
 		// Find ALL broken cards (cards with no outgoing connections to next stage) - check all stages
 		const brokenPreviousStageCards: string[] = [];
-		for (let stageIndex = 0; stageIndex < newFlow.stages.length - 1; stageIndex++) {
-			const stage = newFlow.stages[stageIndex];
-			const nextStage = newFlow.stages[stageIndex + 1];
+		for (let stageIndex = 0; stageIndex < flowAfterDelete.stages.length - 1; stageIndex++) {
+			const stage = flowAfterDelete.stages[stageIndex];
+			const nextStage = flowAfterDelete.stages[stageIndex + 1];
 			if (!stage || !stage.blockIds || !Array.isArray(stage.blockIds)) continue;
 			if (!nextStage) continue; // No next stage = OK (last stage)
 
@@ -1094,17 +1337,18 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 			}
 
 			for (const cardId of stage.blockIds) {
-				const block = newFlow.blocks[cardId];
+				const block = flowAfterDelete.blocks[cardId];
 				if (!block || !block.options || !Array.isArray(block.options)) {
 					brokenPreviousStageCards.push(cardId);
 					continue;
 				}
 
-				// Check if this block has any option pointing to a card in the next stage
-				const hasOutgoingConnection = block.options.some((opt: any) =>
+				const hasNormalConnection = block.options.some((opt: any) =>
 					opt.nextBlockId && nextStage.blockIds.includes(opt.nextBlockId)
 				);
-				if (!hasOutgoingConnection) {
+				const hasCrossStageOutbound = (block as any).upsellBlockId && !nextStage.blockIds.includes((block as any).upsellBlockId)
+					|| (block as any).downsellBlockId && !nextStage.blockIds.includes((block as any).downsellBlockId);
+				if (!hasNormalConnection && !hasCrossStageOutbound) {
 					brokenPreviousStageCards.push(cardId);
 				}
 			}
@@ -1116,7 +1360,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		onUpdate(updatedFunnel);
 
 		// Find invalid options after deletion
-		const invalidOptions = findInvalidOptions(newFlow);
+		const invalidOptions = findInvalidOptions(flowAfterDelete);
 
 		// Update pendingDelete with current orphaned/broken cards and invalid options (highlights persist)
 		setPendingDelete({
@@ -1146,30 +1390,35 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		setPendingDelete(null);
 	};
 
-	// Handle stage update (name or explanation)
-	const handleStageUpdate = (stageId: string, updates: { name?: string; explanation?: string }) => {
+	// Handle stage update (name, explanation, or block order)
+	const handleStageUpdate = (stageId: string, updates: { name?: string; explanation?: string; blockIds?: string[] }) => {
 		if (!currentFunnel.flow) return;
 
 		// Create a proper copy of the flow with new stages array
 		const newFlow = {
 			...currentFunnel.flow,
-			stages: currentFunnel.flow.stages.map((s: any) => 
-				s.id === stageId 
+			stages: currentFunnel.flow.stages.map((s: any) =>
+				s.id === stageId
 					? { ...s, ...updates } // Create new stage object with updates, preserving cardType
 					: s
 			),
 		};
-		
+
 		const updatedFunnel = { ...currentFunnel, flow: newFlow };
 		setCurrentFunnel(updatedFunnel);
 		onUpdate(updatedFunnel);
 	};
 
-	// Fetch resources when needed
+	// Use pre-loaded allResources when provided (from AdminPanel); otherwise fetch resources for card product dropdown and trigger panel
 	React.useEffect(() => {
+		if (allResourcesProp?.length) {
+			setResources(allResourcesProp.map((r) => ({ id: r.id, name: r.name })));
+			setLoadingResources(false);
+			return;
+		}
 		if (user?.experienceId) {
 			setLoadingResources(true);
-			fetch(`/api/resources?experienceId=${user.experienceId}&limit=100`)
+			apiGet(`/api/resources?experienceId=${user.experienceId}&limit=100`, user.experienceId)
 				.then((res) => res.json())
 				.then((data) => {
 					if (data.success && data.data?.resources) {
@@ -1179,21 +1428,37 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 				.catch((err) => console.error("Error fetching resources:", err))
 				.finally(() => setLoadingResources(false));
 		}
-	}, [user?.experienceId]);
+	}, [user?.experienceId, allResourcesProp]);
 
-	// Fetch funnels when needed
+	// Fetch funnels by type for app trigger dropdown (qualification vs upsell)
+	// Qualification trigger → qualification-type funnels; upsell trigger → upsell-type funnels
+	const experienceId = user?.experience?.id ?? user?.experienceId;
 	React.useEffect(() => {
+		if (!experienceId) return;
 		setLoadingFunnels(true);
-		fetch(`/api/funnels?limit=100`)
-			.then((res) => res.json())
-			.then((data) => {
-				if (data.success && data.data?.funnels) {
-					setFunnels(data.data.funnels.map((f: any) => ({ id: f.id, name: f.name })));
+		const sortByName = (list: Array<{ id: string; name: string }>) =>
+			[...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+		Promise.all([
+			apiGet(`/api/funnels?limit=100&merchantType=qualification`, experienceId).then((r) => r.json()),
+			apiGet(`/api/funnels?limit=100&merchantType=upsell`, experienceId).then((r) => r.json()),
+		])
+			.then(([qualData, upsellData]) => {
+				if (qualData.success && qualData.data?.funnels) {
+					setQualificationFunnels(sortByName(qualData.data.funnels.map((f: any) => ({ id: f.id, name: f.name ?? "" }))));
 				}
+				if (upsellData.success && upsellData.data?.funnels) {
+					setUpsellFunnels(sortByName(upsellData.data.funnels.map((f: any) => ({ id: f.id, name: f.name ?? "" }))));
+				}
+				// Merged list for delete_merchant_conversation and any other use
+				const all = [
+					...(qualData.success && qualData.data?.funnels ? qualData.data.funnels.map((f: any) => ({ id: f.id, name: f.name ?? "" })) : []),
+					...(upsellData.success && upsellData.data?.funnels ? upsellData.data.funnels.map((f: any) => ({ id: f.id, name: f.name ?? "" })) : []),
+				];
+				setFunnels(sortByName(all));
 			})
 			.catch((err) => console.error("Error fetching funnels:", err))
 			.finally(() => setLoadingFunnels(false));
-	}, []);
+	}, [experienceId]);
 
 	// Handle trigger type selection (just for UI, doesn't save)
 	const handleTriggerSelect = (category: "Membership" | "App", triggerId?: TriggerType, config?: TriggerConfig) => {
@@ -1218,6 +1483,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 	// Handle resource change (for membership_buy and cancel_membership triggers)
 	const handleResourceChange = (resourceId: string) => {
+		setHasUnsavedMembershipTriggerConfig(true);
 		const membershipTrigger = currentFunnel.membershipTriggerType;
 		const config: TriggerConfig = { ...currentFunnel.membershipTriggerConfig, resourceId: resourceId || undefined };
 		handleTriggerSelect("Membership", membershipTrigger || "membership_buy", config);
@@ -1225,6 +1491,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 	// Handle membership filter change (filterResourceIdsRequired / filterResourceIdsExclude)
 	const handleMembershipFilterChange = (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => {
+		setHasUnsavedMembershipTriggerConfig(true);
 		const membershipTrigger = currentFunnel.membershipTriggerType;
 		const merged: TriggerConfig = { ...currentFunnel.membershipTriggerConfig, ...updates };
 		handleTriggerSelect("Membership", membershipTrigger || "membership_buy", merged);
@@ -1232,6 +1499,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 	// Handle funnel change (for qualification/upsell/delete_merchant_conversation triggers)
 	const handleFunnelChange = (funnelId: string) => {
+		setHasUnsavedAppTriggerConfig(true);
 		const config: TriggerConfig = { ...currentFunnel.appTriggerConfig, funnelId: funnelId || undefined };
 		const appTrigger = currentFunnel.appTriggerType ?? "on_app_entry";
 		handleTriggerSelect("App", appTrigger, config);
@@ -1239,11 +1507,19 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 	// Handle qualification profile change (qualification_merchant_complete: trigger when user has this profile)
 	const handleQualificationProfileChange = (profileId: string) => {
+		setHasUnsavedAppTriggerConfig(true);
 		const appTrigger = currentFunnel.appTriggerType ?? "on_app_entry";
 		const config: TriggerConfig = { ...currentFunnel.appTriggerConfig, profileId: profileId || undefined };
 		handleTriggerSelect("App", appTrigger, config);
 	};
 
+	// Handle app trigger filter change (filterResourceIdsRequired / filterResourceIdsExclude)
+	const handleAppFilterChange = (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => {
+		setHasUnsavedAppTriggerConfig(true);
+		const appTrigger = currentFunnel.appTriggerType ?? "on_app_entry";
+		const merged: TriggerConfig = { ...currentFunnel.appTriggerConfig, ...updates };
+		handleTriggerSelect("App", appTrigger, merged);
+	};
 
 	// Handle trigger save (saves trigger selection and config)
 	const handleTriggerSave = (category: "Membership" | "App", triggerId?: TriggerType, config?: TriggerConfig) => {
@@ -1260,8 +1536,23 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		
 		setCurrentFunnel(funnelWithDraft);
 		onUpdate(funnelWithDraft);
+		setHasUnsavedAppTriggerConfig(false);
+		setHasUnsavedMembershipTriggerConfig(false);
 		setShowTriggerPanel(false);
 		setTriggerPanelCategory(null);
+	};
+
+	// Save trigger config (product, filter, funnel, profile) from the block without closing panel. category = which trigger's Save was clicked.
+	const handleTriggerConfigSave = (category?: "App" | "Membership") => {
+		onUpdate(currentFunnel);
+		if (category === "App") {
+			setHasUnsavedAppTriggerConfig(false);
+		} else if (category === "Membership") {
+			setHasUnsavedMembershipTriggerConfig(false);
+		} else {
+			setHasUnsavedAppTriggerConfig(false);
+			setHasUnsavedMembershipTriggerConfig(false);
+		}
 	};
 
 	// Handle app delay change (just for UI, doesn't save)
@@ -1555,18 +1846,6 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		} catch (error) {
 			console.error("Error saving reset:", error);
 		}
-	};
-
-	// Handle handout configuration change
-	const handleHandoutChange = (keyword: string, adminNotification?: string, userMessage?: string) => {
-		const updatedFunnel = {
-			...currentFunnel,
-			handoutKeyword: keyword,
-			handoutAdminNotification: adminNotification,
-			handoutUserMessage: userMessage,
-		};
-		setCurrentFunnel(updatedFunnel);
-		onUpdate(updatedFunnel);
 	};
 
 	// Handle product FAQ change
@@ -2057,11 +2336,14 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 										membershipDelayMinutes={currentFunnel.membershipDelayMinutes || 0} // Membership trigger delay
 										resources={resources}
 										funnels={funnels}
+										qualificationFunnels={qualificationFunnels}
+										upsellFunnels={upsellFunnels}
 										loadingResources={loadingResources}
 										loadingFunnels={loadingFunnels}
 										onResourceChange={handleResourceChange}
 										onFunnelChange={handleFunnelChange}
 										onMembershipFilterChange={handleMembershipFilterChange}
+										onAppFilterChange={handleAppFilterChange}
 										profiles={[]}
 										onQualificationProfileChange={handleQualificationProfileChange}
 										onMembershipTriggerClick={() => {
@@ -2081,15 +2363,84 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 										onMembershipDelayChange={handleMembershipDelayChange} // Membership trigger delay
 										onDelaySave={handleDelaySave} // App trigger delay
 										onMembershipDelaySave={handleMembershipDelaySave} // Membership trigger delay
+										hasUnsavedAppTriggerConfig={hasUnsavedAppTriggerConfig}
+										hasUnsavedMembershipTriggerConfig={hasUnsavedMembershipTriggerConfig}
+										onAppTriggerConfigSave={() => handleTriggerConfigSave("App")}
+										onMembershipTriggerConfigSave={() => handleTriggerConfigSave("Membership")}
 										merchantType={merchantType}
-										onUpsellClick={merchantType === "upsell" ? (blockId: string) => handleUpsellDownsellClick(blockId, "upsell") : undefined}
-										onDownsellClick={merchantType === "upsell" ? (blockId: string) => handleUpsellDownsellClick(blockId, "downsell") : undefined}
+										onUpsellClick={(blockId: string) => handleUpsellDownsellClick(blockId, "upsell")}
+										onDownsellClick={(blockId: string) => handleUpsellDownsellClick(blockId, "downsell")}
 										onAddNewOption={merchantType === "qualification" ? handleAddNewOption : undefined}
 										pendingOptionSelection={pendingOptionSelection}
 										pendingCardTypeSelection={pendingCardTypeSelection}
 										onCardTypeSelection={handleCardTypeSelection}
+										onOptionConnectRequest={handleOptionConnectRequest}
 										onCardSelection={handleCardSelection}
 										onClearCardSelection={() => {
+											// Card-type selection (qualification new stage): remove placeholder and new stage if empty
+											if (pendingCardTypeSelection) {
+												if (!currentFunnel.flow) {
+													setPendingCardTypeSelection(null);
+													return;
+												}
+												const newFlow = { ...currentFunnel.flow };
+												delete newFlow.blocks[pendingCardTypeSelection.newBlockId];
+												const stageWithNewBlockIndex = newFlow.stages.findIndex((stage: any) =>
+													stage.blockIds && stage.blockIds.includes(pendingCardTypeSelection!.newBlockId)
+												);
+												if (stageWithNewBlockIndex >= 0) {
+													const stageWithNewBlock = newFlow.stages[stageWithNewBlockIndex];
+													stageWithNewBlock.blockIds = stageWithNewBlock.blockIds.filter(
+														(id: string) => id !== pendingCardTypeSelection!.newBlockId
+													);
+													if (stageWithNewBlock.blockIds.length === 0 && stageWithNewBlockIndex > 0) {
+														newFlow.stages = newFlow.stages.filter((_: any, index: number) => index !== stageWithNewBlockIndex);
+													}
+												}
+												// Revert local state only; placeholder was never persisted
+												const updatedFunnel = { ...currentFunnel, flow: newFlow };
+												setCurrentFunnel(updatedFunnel);
+												setPendingCardTypeSelection(null);
+												return;
+											}
+											// Qualification option selection (new block in existing stage or change connection): remove placeholder, restore option if change connection
+											if (pendingOptionSelection?.isActive && !pendingOptionSelection?.upsellKind) {
+												if (!currentFunnel.flow || !pendingOptionSelection.newBlockId) {
+													setPendingOptionSelection(null);
+													return;
+												}
+												const newFlow = { ...currentFunnel.flow };
+												delete newFlow.blocks[pendingOptionSelection.newBlockId];
+												const stageWithNewBlockIndex = newFlow.stages.findIndex((stage: any) =>
+													stage.blockIds && stage.blockIds.includes(pendingOptionSelection.newBlockId)
+												);
+												if (stageWithNewBlockIndex >= 0) {
+													const stageWithNewBlock = newFlow.stages[stageWithNewBlockIndex];
+													stageWithNewBlock.blockIds = stageWithNewBlock.blockIds.filter(
+														(id: string) => id !== pendingOptionSelection.newBlockId
+													);
+													if (stageWithNewBlock.blockIds.length === 0 && stageWithNewBlockIndex > 0) {
+														newFlow.stages = newFlow.stages.filter((_: any, index: number) => index !== stageWithNewBlockIndex);
+													}
+												}
+												// Change connection: restore option's nextBlockId to previous value
+												if (pendingOptionSelection.optionIndex != null && pendingOptionSelection.previousNextBlockId !== undefined) {
+													const sourceBlock = newFlow.blocks[pendingOptionSelection.sourceBlockId];
+													if (sourceBlock?.options?.[pendingOptionSelection.optionIndex]) {
+														const opts = [...sourceBlock.options];
+														opts[pendingOptionSelection.optionIndex] = {
+															...opts[pendingOptionSelection.optionIndex],
+															nextBlockId: pendingOptionSelection.previousNextBlockId,
+														};
+														newFlow.blocks[pendingOptionSelection.sourceBlockId] = { ...sourceBlock, options: opts };
+													}
+												}
+												const updatedFunnel = { ...currentFunnel, flow: newFlow };
+												setCurrentFunnel(updatedFunnel);
+												setPendingOptionSelection(null);
+												return;
+											}
+											// Upsell/downsell: remove placeholder and new stage if empty
 											if (!pendingOptionSelection?.isActive || !pendingOptionSelection?.upsellKind) return;
 											if (!currentFunnel.flow || !pendingOptionSelection.newBlockId) {
 												setPendingOptionSelection(null);
@@ -2133,7 +2484,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 					triggerConfig={triggerPanelCategory === "App" ? (currentFunnel.appTriggerConfig ?? {}) : (currentFunnel.membershipTriggerConfig ?? {})}
 					membershipTriggerConfig={currentFunnel.membershipTriggerConfig}
 					appTriggerConfig={currentFunnel.appTriggerConfig}
-					experienceId={user?.experienceId}
+					experienceId={user?.experience?.id ?? user?.experienceId}
 					onSelect={handleTriggerSelect}
 					onSave={handleTriggerSave}
 					onClose={() => {

@@ -284,7 +284,8 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 						name: data.funnel.name,
 						flow: data.funnelFlow,
 						isDeployed: data.funnel.isDeployed,
-						resources: data.resources || []
+						resources: data.resources || [],
+						merchantType: data.funnel.merchantType ?? "qualification",
 					};
 					setFunnelFlow(data.funnelFlow);
 					setLiveFunnel(funnelData);
@@ -791,6 +792,7 @@ const StorePreview: React.FC<StorePreviewProps> = ({
 							<StorePreviewChat
 								funnelFlow={funnelFlow}
 								resources={liveFunnel?.resources || []}
+								merchantType={liveFunnel?.merchantType}
 								onMessageSent={handleMessageSentInternal}
 								hideAvatar={true} // Hide avatar as requested
 								onEditMerchant={onEditMerchant}

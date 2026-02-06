@@ -12,6 +12,7 @@ import { Text, Button } from "frosted-ui";
 import { MessageSquare, Play, RotateCcw, Settings, User, MessageCircle, Sun, Moon } from "lucide-react";
 import FunnelProgressBar from "./FunnelProgressBar";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { AvatarSquare } from "../common/AvatarSquare";
 import { useTheme } from "../common/ThemeProvider";
 import { TemplateRenderer } from "./TemplateRenderer";
 import { CustomerDashboard } from "../customers/CustomerDashboard";
@@ -45,6 +46,19 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [conversation, setConversation] = useState<ConversationWithMessages | null>(null);
 	const [conversationId, setConversationId] = useState<string | null>(null);
+	/** List of conversations (active + closed) for sidebar; oldest first. */
+	const [conversationList, setConversationList] = useState<Array<{
+		id: string;
+		status: string;
+		funnelId: string | null;
+		funnelName: string | null;
+		merchantType: string;
+		createdAt: string;
+		updatedAt: string;
+	}>>([]);
+	const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+	/** True when the currently selected conversation is closed (read-only chat, no input/options). */
+	const [isChatReadOnly, setIsChatReadOnly] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [stageInfo, setStageInfo] = useState<{
@@ -53,6 +67,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		isTransitionStage: boolean;
 		isExperienceQualificationStage: boolean;
 	} | null>(null);
+	const [merchantType, setMerchantType] = useState<"qualification" | "upsell">("qualification");
+	/** Funnel resources (for product link resolution in chat). */
+	const [funnelResources, setFunnelResources] = useState<Array<{ id: string; name: string; link?: string; [key: string]: unknown }>>([]);
 	
 	// Admin state
 	const [adminLoading, setAdminLoading] = useState(false);
@@ -81,7 +98,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	
 	// Auto-scroll reveal state (removed - now handled by iframe content)
 	
-	// User context for admin features
+	// User context for admin features (and user avatar in UserChat)
 	const [userContext, setUserContext] = useState<{
 		user_id?: string;
 		company_id?: string;
@@ -92,6 +109,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			accessLevel?: string;
 		};
 	} | null>(null);
+
+	// Merchant (company) logo for bot/typing avatar in UserChat – same source as LiveChat (origin-templates)
+	const [merchantIconUrl, setMerchantIconUrl] = useState<string | null>(null);
 
 	// Customer Dashboard view state - managed internally
 	// Check URL params for dashboard query
@@ -349,11 +369,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				const data = await response.json();
 				console.log(`[CustomerView] User context response:`, data);
 				
-				// Set user context for all users (needed for CustomerDashboard)
+				// Set user context for all users (needed for CustomerDashboard and UserChat user avatar)
 				if (data.user) {
 					setUserContext({
 						user_id: data.user.whopUserId,
-						company_id: data.user.experience.whopCompanyId,
+						company_id: data.user.experience?.whopCompanyId,
 						user: {
 							id: data.user.id,
 							name: data.user.name,
@@ -408,6 +428,83 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, [experienceId]);
 
+	// Fetch merchant (company) logo from origin template for bot/typing avatar in UserChat – same as LiveChat
+	useEffect(() => {
+		if (!experienceId) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const response = await apiGet(`/api/origin-templates/${experienceId}`, experienceId);
+				const data = await response.json();
+				if (!cancelled && data?.originTemplate?.companyLogoUrl) {
+					setMerchantIconUrl(data.originTemplate.companyLogoUrl);
+				} else if (!cancelled) {
+					setMerchantIconUrl(null);
+				}
+			} catch {
+				if (!cancelled) setMerchantIconUrl(null);
+			}
+		})();
+		return () => { cancelled = true; };
+	}, [experienceId]);
+
+	// Fetch conversation list (active + closed, oldest first) for sidebar
+	const fetchConversationList = useCallback(async () => {
+		if (!experienceId) return;
+		try {
+			const response = await apiGet('/api/userchat/conversations', experienceId);
+			if (!response.ok) return;
+			const json = await response.json();
+			const data = json.data ?? json;
+			const list = data.conversations ?? [];
+			const activeId = data.activeId ?? null;
+			setConversationList(list);
+			setActiveConversationId(activeId);
+		} catch (e) {
+			console.error("[CustomerView] Error fetching conversation list:", e);
+		}
+	}, [experienceId]);
+
+	// Load a single conversation by id (active or closed); sets conversation + funnel/stage; returns whether it's read-only
+	const loadConversationById = useCallback(async (convId: string): Promise<{ readOnly: boolean }> => {
+		if (!experienceId) return { readOnly: true };
+		try {
+			const loadResponse = await apiPost('/api/userchat/load-conversation', {
+				conversationId: convId,
+				whopUserId: whopUserId,
+				userType: userType,
+			}, experienceId);
+			const loadResult = await loadResponse.json();
+			const data = loadResult.data ?? loadResult;
+			const ok = loadResult.success === true || data.success === true;
+			if (!ok || !(data.conversation ?? loadResult.conversation)) {
+				console.error("Failed to load conversation:", data.error ?? loadResult.error);
+				return { readOnly: true };
+			}
+			const conv = data.conversation ?? loadResult.conversation;
+			const funnelFlowData = data.funnelFlow ?? loadResult.funnelFlow;
+			const stageInfoData = data.stageInfo ?? loadResult.stageInfo;
+			const merchantTypeData = data.merchantType ?? loadResult.merchantType;
+			const resourcesData = data.resources ?? loadResult.resources;
+			setConversation(conv);
+			setConversationId(convId);
+			if (funnelFlowData) setFunnelFlow(funnelFlowData);
+			if (stageInfoData) setStageInfo(stageInfoData);
+			if (merchantTypeData === "upsell" || merchantTypeData === "qualification") setMerchantType(merchantTypeData);
+			setFunnelResources(Array.isArray(resourcesData) ? resourcesData : []);
+			const status = (conv as { status?: string } | undefined)?.status;
+			return { readOnly: status === "closed" };
+		} catch (err) {
+			console.error("Error loading conversation by id:", err);
+			return { readOnly: true };
+		}
+	}, [experienceId, whopUserId, userType]);
+
+	const handleSelectConversation = useCallback(async (convId: string) => {
+		const { readOnly } = await loadConversationById(convId);
+		setIsChatReadOnly(readOnly);
+	}, [loadConversationById]);
+
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
 		if (!experienceId) {
@@ -420,8 +517,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setIsLoading(true);
 			setError(null);
 
-			// Debug logging for CustomerView
-			console.log(`[CustomerView] Debug - Loading conversation for experienceId: ${experienceId}, whopUserId: ${whopUserId}`);
+			// Fetch list of conversations (active + closed) first
+			await fetchConversationList();
 
 			// Step 1: Check if there's an active conversation
 			const checkResponse = await apiPost('/api/userchat/check-conversation', {
@@ -431,73 +528,55 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			const checkResult = await checkResponse.json();
 
 			if (checkResult.success) {
-				// Set funnel flow from API response
+				// Set funnel flow from API response (may be from default/first funnel when no conversation)
 				if (checkResult.funnelFlow) {
 					setFunnelFlow(checkResult.funnelFlow);
 				}
 
-				// Set stage information
+				// Set stage information and merchant type
 				if (checkResult.stageInfo) {
 					setStageInfo(checkResult.stageInfo);
+				}
+				if (checkResult.merchantType === "upsell" || checkResult.merchantType === "qualification") {
+					setMerchantType(checkResult.merchantType);
 				}
 
 				// If there's an active conversation, load it
 				if (checkResult.hasActiveConversation && checkResult.conversation) {
-					setConversationId(checkResult.conversation.id);
-					
-					// Set stage info from check result first
-					if (checkResult.stageInfo) {
-						setStageInfo(checkResult.stageInfo);
-					}
-					
-					// Try to load the full conversation data (optimized)
+					const activeId = checkResult.conversation.id;
+					setConversationId(activeId);
+					if (checkResult.stageInfo) setStageInfo(checkResult.stageInfo);
+
 					try {
 						const loadResponse = await apiPost('/api/userchat/load-conversation', {
-							conversationId: checkResult.conversation.id,
+							conversationId: activeId,
 							whopUserId: whopUserId,
-							userType: userType, // Pass userType for message filtering
+							userType: userType,
 						}, experienceId);
 
 						const loadResult = await loadResponse.json();
+						const data = loadResult.data ?? loadResult;
 
-						if (loadResult.success) {
-							// Set conversation data (messages included)
-							if (loadResult.conversation) {
-								setConversation(loadResult.conversation);
+						if (data.success !== false && (loadResult.success || data.conversation)) {
+							const conv = data.conversation ?? loadResult.conversation;
+							if (conv) setConversation(conv);
+							if (data.stageInfo ?? loadResult.stageInfo) setStageInfo(data.stageInfo ?? loadResult.stageInfo);
+							if (data.merchantType === "upsell" || data.merchantType === "qualification" || loadResult.merchantType === "upsell" || loadResult.merchantType === "qualification") {
+								setMerchantType(data.merchantType ?? loadResult.merchantType ?? "qualification");
 							}
-
-							// Update stage information with latest data
-							if (loadResult.stageInfo) {
-								setStageInfo(loadResult.stageInfo);
-							}
-
-							console.log("CustomerView loaded conversation with messages:", {
-								experienceId,
-								conversationId: checkResult.conversation.id,
-								hasFunnelFlow: !!checkResult.funnelFlow,
-								hasConversation: !!loadResult.conversation,
-								messageCount: loadResult.conversation?.messages?.length || 0,
-								stageInfo: loadResult.stageInfo,
-							});
-						} else {
-							console.error("Failed to load conversation details:", loadResult.error);
-							// Don't clear the conversation - we still have basic info from check
+							const resourcesData = data.resources ?? loadResult.resources;
+							setFunnelResources(Array.isArray(resourcesData) ? resourcesData : []);
+							setIsChatReadOnly(false);
 						}
 					} catch (loadError) {
 						console.error("Error loading conversation details:", loadError);
-						// Don't clear the conversation - we still have basic info from check
 					}
 				} else {
-					// No active conversation
+					// No active conversation: show list (already fetched)
 					setConversationId(null);
 					setConversation(null);
-					console.log("CustomerView: No active conversation found");
-					console.log("CustomerView: checkResult details:", {
-						success: checkResult.success,
-						hasActiveConversation: checkResult.hasActiveConversation,
-						conversation: checkResult.conversation,
-						error: checkResult.error
-					});
+					setFunnelResources([]);
+					setIsChatReadOnly(true); // no active chat; if user picks closed, stays true
 				}
 			} else {
 				throw new Error(checkResult.error || "Failed to check conversation status");
@@ -508,7 +587,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [experienceId, userName, whopUserId]);
+	}, [experienceId, userName, whopUserId, fetchConversationList]);
 
 	// Admin functions
 	const checkConversationStatus = async () => {
@@ -526,13 +605,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			const result = await response.json();
 			
 			if (result.success) {
+				await fetchConversationList();
 				if (result.hasActiveConversation) {
 					setConversationId(result.conversation.id);
 					setStageInfo(result.stageInfo);
+					if (result.merchantType === "upsell" || result.merchantType === "qualification") {
+						setMerchantType(result.merchantType);
+					}
 					setAdminSuccess(`Found active conversation: ${result.conversation.id}`);
 				} else {
 					setConversationId(null);
 					setStageInfo(result.stageInfo);
+					setMerchantType("qualification");
 					setAdminSuccess("No active conversation found");
 				}
 			} else {
@@ -570,6 +654,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				const productInfo = result.productId ? ` for product ${result.productId}` : '';
 				setAdminSuccess(`DM sent successfully${productInfo}! Conversation ID: ${result.conversationId}`);
 				setConversationId(result.conversationId);
+				await fetchConversationList();
 				await checkConversationStatus();
 			} else {
 				setAdminError(result.error || "Failed to trigger DM");
@@ -605,7 +690,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				setAdminSuccess(`Conversations reset successfully! Closed ${result.data.closedConversations} conversations`);
 				setConversationId(null);
 				setConversation(null);
+				setFunnelResources([]);
 				setStageInfo(null);
+				await fetchConversationList();
 			} else {
 				setAdminError(result.error || "Failed to reset conversations");
 			}
@@ -617,13 +704,19 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	};
 
-	// Load data on mount
+	// Load data once when experienceId is available; avoid re-running when callback identities change (prevents endless load-conversation loop)
+	const lastLoadedExperienceIdRef = useRef<string | null>(null);
 	useEffect(() => {
+		if (!experienceId) return;
+		if (lastLoadedExperienceIdRef.current === experienceId) return;
+		lastLoadedExperienceIdRef.current = experienceId;
 		loadFunnelAndConversation();
 		fetchUserContext();
-		fetchExperienceLink(); // Get experience link for iframe
-		checkLiveTemplate(); // Check for live template
-	}, [loadFunnelAndConversation, fetchUserContext, fetchExperienceLink, checkLiveTemplate]);
+		fetchExperienceLink();
+		checkLiveTemplate();
+		// Intentionally depend only on experienceId so we don't re-run when callbacks get new refs (e.g. userType resolving)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [experienceId]);
 
 	// Validate discount settings against database (same logic as usePreviewLiveTemplate)
 	useEffect(() => {
@@ -1007,6 +1100,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				conversation={conversation || undefined}
 				stageInfo={stageInfo || undefined}
 				userType={userType}
+				merchantType={merchantType}
 				onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
 					onPurchaseSuccess={handleProductPurchaseSuccess}
 			/>
@@ -1176,22 +1270,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			<div className="px-4 py-3">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-4">
-						{/* Avatar Icon */}
-						<div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
-							<img 
-								src="https://img-v2-prod.whop.com/unsafe/rs:fit:256:0/plain/https%3A%2F%2Fassets.whop.com%2Fuploads%2F2025-10-02%2Fuser_16843562_c991d27a-feaa-4318-ab44-2aaa27937382.jpeg@avif?w=256&q=75"
-								alt="User Avatar"
-								className="w-20 h-20 object-cover"
-								onError={(e) => {
-									const target = e.target as HTMLImageElement;
-									target.style.display = 'none';
-									const parent = target.parentElement;
-									if (parent) {
-										parent.innerHTML = '<div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
-									}
-								}}
-							/>
-						</div>
+						{/* Avatar - square, non-square images cropped from top (bottom visible) */}
+						<AvatarSquare
+							src={userContext?.user?.avatar ?? undefined}
+							alt="User Avatar"
+							sizeClass="w-12 h-12"
+							className="flex items-center justify-center"
+							fallback={
+								<div className="w-full h-full bg-blue-500 flex items-center justify-center">
+									<User className="w-6 h-6 text-white" />
+								</div>
+							}
+						/>
 					</div>
 
 		{/* Center: CLAIM YOUR GIFT Button */}
@@ -1452,8 +1542,51 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						<div className="h-0.5 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-pulse"></div>
 					</div>
 				)}
-				{shouldShowUserChat && funnelFlow ? (
-						<div className={`relative h-full w-full ${isTransitioning ? 'pointer-events-none' : ''} ${viewMode === 'split-view' && !isMobile ? 'border-t border-yellow-500/20' : ''}`}>
+				{shouldShowUserChat && (funnelFlow || conversationList.length > 0) ? (
+						<div className={`relative h-full w-full flex ${isTransitioning ? 'pointer-events-none' : ''} ${viewMode === 'split-view' && !isMobile ? 'border-t border-yellow-500/20' : ''}`}>
+							{/* Conversation list sidebar: active + closed (oldest first); show when list has items */}
+							{conversationList.length > 0 && (
+								<div className="flex-shrink-0 w-48 border-r border-border/30 dark:border-border/20 bg-surface/50 overflow-y-auto flex flex-col">
+									<div className="p-2 text-xs font-medium text-foreground/70 uppercase tracking-wider sticky top-0 bg-surface/95 backdrop-blur py-2">
+										Chats
+									</div>
+									<nav className="p-2 space-y-0.5">
+										{(() => {
+											// Display: active first (if any), then rest in createdAt order (oldest first)
+											const active = conversationList.find(c => c.status === "active");
+											const closed = conversationList.filter(c => c.status === "closed");
+											const ordered = active ? [active, ...closed] : closed;
+											return ordered.map((c) => {
+												const isActive = c.id === conversationId;
+												const isCurrentChat = c.status === "active";
+												return (
+													<button
+														key={c.id}
+														type="button"
+														onClick={() => handleSelectConversation(c.id)}
+														className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+															isActive
+																? "bg-blue-500/20 text-blue-700 dark:text-blue-300 font-medium"
+																: "text-foreground/80 hover:bg-surface/80"
+														}`}
+													>
+														<span className="block truncate">
+															{isCurrentChat ? "Current chat" : (c.funnelName || "Past chat")}
+														</span>
+														{!isCurrentChat && (
+															<span className="block truncate text-xs text-foreground/60 mt-0.5">
+																{new Date(c.createdAt).toLocaleDateString()}
+															</span>
+														)}
+													</button>
+												);
+											});
+										})()}
+									</nav>
+								</div>
+							)}
+							<div className="flex-1 min-w-0">
+								{funnelFlow && (conversationId || conversation) ? (
 					<UserChat
 						funnelFlow={funnelFlow}
 						conversationId={conversationId || undefined}
@@ -1462,7 +1595,26 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						onMessageSent={handleMessageSentInternal}
 						userType={userType}
 						stageInfo={stageInfo || undefined}
+						merchantType={merchantType}
+						readOnly={isChatReadOnly}
+						resources={funnelResources}
+						userAvatar={userContext?.user?.avatar ?? undefined}
+						merchantIconUrl={merchantIconUrl ?? undefined}
+						adminAvatarUrl={conversation?.adminAvatar ?? undefined}
 					/>
+								) : (
+									<div className="h-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90 p-4">
+										<div className="text-center max-w-sm">
+											<MessageSquare className="w-10 h-10 text-foreground/50 mx-auto mb-2" />
+											<p className="text-sm text-foreground/80">
+												{conversationList.length > 0
+													? "Select a chat from the list or start a new conversation."
+													: "No active chat."}
+											</p>
+										</div>
+									</div>
+								)}
+							</div>
 						</div>
 				) : (
 					<div className="h-full flex items-center justify-center bg-gradient-to-br from-surface via-surface/95 to-surface/90">

@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, sql, or, ilike } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
+import { startConversationForMerchantClosedTrigger } from "./simplified-conversation-actions";
 import { db } from "../supabase/db-server";
 import {
 	conversations,
@@ -137,14 +138,31 @@ export async function loadRealConversations(
 		// Transform to LiveChat format
 		const liveChatConversations: LiveChatConversation[] = await Promise.all(
 			conversationsList.map(async (conv: any) => {
-				// Get user information (we'll need to add this to the schema or use metadata)
-				const userInfo = conv.metadata?.user || {
-					id: "unknown",
-					name: "Unknown User",
-					email: "unknown@example.com",
-					isOnline: false,
-					lastSeen: conv.updatedAt,
-				};
+				// Resolve user from users table by (whopUserId, experienceId)
+				const dbUser = await db.query.users.findFirst({
+					where: and(
+						eq(users.whopUserId, conv.whopUserId),
+						eq(users.experienceId, conv.experienceId),
+					),
+					columns: { id: true, name: true, email: true, avatar: true },
+				});
+				const userInfo = dbUser
+					? {
+							id: dbUser.id,
+							name: dbUser.name,
+							email: dbUser.email ?? "unknown@example.com",
+							avatar: dbUser.avatar ?? undefined,
+							isOnline: false,
+							lastSeen: conv.updatedAt,
+						}
+					: {
+							id: conv.whopUserId,
+							name: "Unknown User",
+							email: "unknown@example.com",
+							avatar: undefined,
+							isOnline: false,
+							lastSeen: conv.updatedAt,
+						};
 
 				// Get last message
 				const lastMessage = conv.messages[conv.messages.length - 1];
@@ -168,6 +186,7 @@ export async function loadRealConversations(
 						id: userInfo.id,
 						name: userInfo.name,
 						email: userInfo.email,
+						avatar: userInfo.avatar,
 						isOnline: userInfo.isOnline || false,
 						lastSeen: userInfo.lastSeen || conv.updatedAt,
 					},
@@ -303,16 +322,33 @@ export async function getConversationList(
 			},
 		});
 
-		// Transform to LiveChat format
-		const liveChatConversations: LiveChatConversation[] = conversationsList.map((conv: any) => {
-			// Get user information from metadata
-			const userInfo = conv.metadata?.user || {
-				id: "unknown",
-				name: "Unknown User",
-				email: "unknown@example.com",
-				isOnline: false,
-				lastSeen: conv.updatedAt,
-			};
+		// Transform to LiveChat format (resolve user from users table)
+		const liveChatConversations: LiveChatConversation[] = await Promise.all(
+			conversationsList.map(async (conv: any) => {
+				const dbUser = await db.query.users.findFirst({
+					where: and(
+						eq(users.whopUserId, conv.whopUserId),
+						eq(users.experienceId, conv.experienceId),
+					),
+					columns: { id: true, name: true, email: true, avatar: true },
+				});
+				const userInfo = dbUser
+					? {
+							id: dbUser.id,
+							name: dbUser.name,
+							email: dbUser.email ?? "unknown@example.com",
+							avatar: dbUser.avatar ?? undefined,
+							isOnline: false,
+							lastSeen: conv.updatedAt,
+						}
+					: {
+							id: conv.whopUserId,
+							name: "Unknown User",
+							email: "unknown@example.com",
+							avatar: undefined,
+							isOnline: false,
+							lastSeen: conv.updatedAt,
+						};
 
 			// Get last message - ensure we have messages and they're properly ordered
 			const messages = conv.messages || [];
@@ -339,6 +375,9 @@ export async function getConversationList(
 				abandoned: "closed",
 			};
 
+			const adminLastReadAt = conv.adminLastReadAt ? new Date(conv.adminLastReadAt) : null;
+			const userLastReadAt = conv.userLastReadAt ? new Date(conv.userLastReadAt) : null;
+
 			return {
 				id: conv.id,
 				userId: userInfo.id,
@@ -346,6 +385,7 @@ export async function getConversationList(
 					id: userInfo.id,
 					name: userInfo.name,
 					email: userInfo.email,
+					avatar: userInfo.avatar,
 					isOnline: userInfo.isOnline || false,
 					lastSeen: userInfo.lastSeen || conv.updatedAt,
 				},
@@ -355,22 +395,35 @@ export async function getConversationList(
 				startedAt: conv.createdAt,
 				lastMessageAt: lastMessage?.createdAt || conv.updatedAt,
 				lastMessage: lastMessageText,
-				messages: sortedMessages.map((msg: any) => ({
-					id: msg.id,
-					conversationId: msg.conversationId,
-					type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
-					text: msg.content,
-					timestamp: msg.createdAt,
-					isRead: true,
-					metadata: msg.metadata,
-				})),
+				messages: sortedMessages.map((msg: any) => {
+					const msgTime = new Date(msg.createdAt).getTime();
+					const isUserMsg = msg.type === "user";
+					const isRead = isUserMsg
+						? (!!adminLastReadAt && msgTime <= adminLastReadAt.getTime())
+						: (!!userLastReadAt && msgTime <= userLastReadAt.getTime());
+					return {
+						id: msg.id,
+						conversationId: msg.conversationId,
+						type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : msg.type === "admin" ? "admin" : "system",
+						text: msg.content,
+						timestamp: msg.createdAt,
+						isRead,
+						metadata: msg.metadata,
+					};
+				}),
 				// Backend-ready fields
 				autoCloseAt: conv.metadata?.autoCloseAt || undefined,
 				isArchived: conv.metadata?.isArchived || false,
 				createdAt: conv.createdAt,
 				updatedAt: conv.updatedAt,
+				userLastReadAt: conv.userLastReadAt ?? null,
+				adminLastReadAt: conv.adminLastReadAt ?? null,
+				unreadCountAdmin: (conv as any).unreadCountAdmin ?? 0,
+				unreadCountUser: (conv as any).unreadCountUser ?? 0,
+				controlledBy: ((conv as any).controlledBy as "bot" | "admin") ?? "bot",
 			};
-		});
+			})
+		);
 
 		return {
 			conversations: liveChatConversations,
@@ -423,14 +476,31 @@ export async function loadConversationDetails(
 			throw new Error("Access denied: You can only access conversations for your own funnels");
 		}
 
-		// Get user information from metadata
-		const userInfo = conversation.metadata?.user || {
-			id: "unknown",
-			name: "Unknown User",
-			email: "unknown@example.com",
-			isOnline: false,
-			lastSeen: conversation.updatedAt,
-		};
+		// Resolve user from users table by (whopUserId, experienceId)
+		const dbUser = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, conversation.whopUserId),
+				eq(users.experienceId, conversation.experienceId),
+			),
+			columns: { id: true, name: true, email: true, avatar: true },
+		});
+		const userInfo = dbUser
+			? {
+					id: dbUser.id,
+					name: dbUser.name,
+					email: dbUser.email ?? "unknown@example.com",
+					avatar: dbUser.avatar ?? undefined,
+					isOnline: false,
+					lastSeen: conversation.updatedAt,
+				}
+			: {
+					id: conversation.whopUserId,
+					name: "Unknown User",
+					email: "unknown@example.com",
+					avatar: undefined,
+					isOnline: false,
+					lastSeen: conversation.updatedAt,
+				};
 
 		// Get last message
 		const lastMessage = conversation.messages[conversation.messages.length - 1];
@@ -444,6 +514,10 @@ export async function loadConversationDetails(
 			abandoned: "closed",
 		};
 
+		const now = new Date();
+		const adminLastReadAt = (conversation as any).adminLastReadAt ? new Date((conversation as any).adminLastReadAt) : null;
+		const userLastReadAt = (conversation as any).userLastReadAt ? new Date((conversation as any).userLastReadAt) : null;
+
 		return {
 			id: conversation.id,
 			userId: userInfo.id,
@@ -451,6 +525,7 @@ export async function loadConversationDetails(
 				id: userInfo.id,
 				name: userInfo.name,
 				email: userInfo.email,
+				avatar: userInfo.avatar,
 				isOnline: userInfo.isOnline || false,
 				lastSeen: userInfo.lastSeen || conversation.updatedAt,
 			},
@@ -461,24 +536,125 @@ export async function loadConversationDetails(
 			lastMessageAt: lastMessage?.createdAt || conversation.updatedAt,
 			lastMessage: lastMessageText,
 			messageCount: conversation.messages.length,
-			messages: conversation.messages.map((msg: any) => ({
-				id: msg.id,
-				conversationId: msg.conversationId,
-				type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
-				text: msg.content,
-				timestamp: msg.createdAt,
-				isRead: true,
-				metadata: msg.metadata,
-			})),
+			messages: conversation.messages.map((msg: any) => {
+				const msgTime = new Date(msg.createdAt).getTime();
+				const isUserMsg = msg.type === "user";
+				const isRead = isUserMsg
+					? (!!adminLastReadAt && msgTime <= adminLastReadAt.getTime())
+					: (!!userLastReadAt && msgTime <= userLastReadAt.getTime());
+				return {
+					id: msg.id,
+					conversationId: msg.conversationId,
+					type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : msg.type === "admin" ? "admin" : "system",
+					text: msg.content,
+					timestamp: msg.createdAt,
+					isRead,
+					metadata: msg.metadata,
+				};
+			}),
 			// Backend-ready fields
 			autoCloseAt: conversation.metadata?.autoCloseAt || undefined,
 			isArchived: conversation.metadata?.isArchived || false,
 			createdAt: conversation.createdAt,
 			updatedAt: conversation.updatedAt,
+			userLastReadAt: (conversation as any).userLastReadAt ?? null,
+			adminLastReadAt: (conversation as any).adminLastReadAt ?? null,
+			unreadCountAdmin: (conversation as any).unreadCountAdmin ?? 0,
+			unreadCountUser: (conversation as any).unreadCountUser ?? 0,
+			controlledBy: ((conversation as any).controlledBy as "bot" | "admin") ?? "bot",
 		};
 	} catch (error) {
 		console.error("Error loading conversation details:", error);
 		throw new Error("Failed to load conversation details");
+	}
+}
+
+/**
+ * Mark conversation as read by user or admin (for read receipts)
+ */
+export async function markConversationRead(
+	user: AuthenticatedUser,
+	conversationId: string,
+	side: "user" | "admin",
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, user.experience.id),
+			),
+			columns: { id: true, whopUserId: true },
+		});
+		if (!conversation) {
+			return { success: false, error: "Conversation not found" };
+		}
+		const now = new Date();
+		if (side === "admin") {
+			if (user.accessLevel !== "admin") {
+				return { success: false, error: "Only admins can mark as read (admin)" };
+			}
+			await db
+				.update(conversations)
+				.set({
+					adminLastReadAt: now,
+					updatedAt: now,
+					unreadCountAdmin: 0,
+				})
+				.where(eq(conversations.id, conversationId));
+		} else {
+			if (user.whopUserId !== conversation.whopUserId) {
+				return { success: false, error: "Only the conversation user can mark as read (user)" };
+			}
+			await db
+				.update(conversations)
+				.set({
+					userLastReadAt: now,
+					updatedAt: now,
+					unreadCountUser: 0,
+				})
+				.where(eq(conversations.id, conversationId));
+		}
+		return { success: true };
+	} catch (error) {
+		console.error("Error marking conversation read:", error);
+		return { success: false, error: (error as Error).message };
+	}
+}
+
+/**
+ * Resolve conversation (back to bot): set controlled_by = 'bot', unread_count_admin = 0. Admin only.
+ */
+export async function resolveConversation(
+	user: AuthenticatedUser,
+	conversationId: string,
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		if (user.accessLevel !== "admin") {
+			return { success: false, error: "Only admins can resolve" };
+		}
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, user.experience.id),
+			),
+			columns: { id: true },
+		});
+		if (!conversation) {
+			return { success: false, error: "Conversation not found" };
+		}
+		const now = new Date();
+		await db
+			.update(conversations)
+			.set({
+				controlledBy: "bot",
+				unreadCountAdmin: 0,
+				updatedAt: now,
+			})
+			.where(eq(conversations.id, conversationId));
+		return { success: true };
+	} catch (error) {
+		console.error("Error resolving conversation:", error);
+		return { success: false, error: (error as Error).message };
 	}
 }
 
@@ -660,6 +836,13 @@ export async function manageConversation(
 			.update(conversations)
 			.set(updateData)
 			.where(eq(conversations.id, conversationId));
+
+		// When merchant closes conversation, optionally start a new one if a funnel has delete_merchant_conversation trigger
+		if (action.status === "closed") {
+			startConversationForMerchantClosedTrigger(conversation.experienceId, conversation.whopUserId).catch((err) => {
+				console.error("[manageConversation] startConversationForMerchantClosedTrigger failed:", err);
+			});
+		}
 
 		// Return updated conversation
 		const updatedConversation = await loadConversationDetails(user, conversationId);

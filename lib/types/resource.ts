@@ -8,7 +8,6 @@ export interface Resource {
 	category: "PAID" | "FREE_VALUE";
 	description?: string;
 	promoCode?: string;
-	productApps?: any; // JSON field for product apps data
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
 	productImages?: string[]; // Array of up to 3 product image URLs for FILE type products
@@ -47,12 +46,8 @@ export interface Funnel {
 	resources?: Resource[];
 	flow?: any;
 	// Trigger configuration
-	triggerType?: "on_app_entry" | "membership_valid";
-	triggerTimeoutMinutes?: Record<string, number>; // { "on_app_entry": 0, "membership_valid": 30 }
-	// Handout configuration
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
+	triggerType?: "on_app_entry";
+	triggerTimeoutMinutes?: Record<string, number>; // { "on_app_entry": 0 }
 	// Generation-related properties
 	generationStatus?: "idle" | "generating" | "completed" | "failed";
 	generationError?: string;

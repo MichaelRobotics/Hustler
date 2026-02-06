@@ -36,6 +36,7 @@ interface BlockEditorProps {
 	onSave: (block: FunnelBlock) => void;
 	onCancel: () => void;
 	onAddNewOption?: (blockId: string, optionText: string) => void; // Callback for adding new option
+	onOptionConnectRequest?: (blockId: string, optionIndex: number) => void; // Callback to change option connection (closes editor, enters connect mode)
 	merchantType?: "qualification" | "upsell";
 	resources?: Array<{ id: string; name: string }>; // For upsell: select product from resources
 	pendingDelete?: {
@@ -66,6 +67,7 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 	onSave,
 	onCancel,
 	onAddNewOption,
+	onOptionConnectRequest,
 	merchantType = "qualification",
 	resources = [],
 	pendingDelete,
@@ -112,112 +114,21 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 		setEditedBlock({ ...editedBlock, message: newMessage });
 	};
 
-	// Auto-insert [LINK] placeholder if missing for specific block types
-	const ensureLinkPlaceholder = (message: string, blockId: string): string => {
-		// Check if this block belongs to a stage that should have [LINK] placeholder
-		let shouldHaveLink = false;
-		
-		if (funnelFlow) {
-			// Find which stage this block belongs to
-			const blockStage = funnelFlow.stages.find(stage => 
-				stage.blockIds.includes(blockId)
-			);
-			
-			// Check if the stage requires [LINK] placeholder
-			if (blockStage) {
-				shouldHaveLink = blockStage.name === 'VALUE_DELIVERY' || 
-				                blockStage.name === 'TRANSITION' || 
-				                blockStage.name === 'OFFER';
-			}
-		} else {
-			// Fallback to keyword matching if no funnel flow provided
-			shouldHaveLink = blockId.includes('value_') || 
-			                blockId.includes('transition') || 
-			                blockId.includes('offer');
-		}
-		
-		if (!shouldHaveLink) return message;
-		
-		// Check if [LINK] already exists
-		if (message.includes('[LINK]')) return message;
-		
-		// Add [LINK] placeholder with proper formatting
-		const lines = message.split('\n');
-		const trimmedLines = lines.map(line => line.trim());
-		
-		// Find the last non-empty line
-		let lastNonEmptyIndex = -1;
-		for (let i = trimmedLines.length - 1; i >= 0; i--) {
-			if (trimmedLines[i] !== '') {
-				lastNonEmptyIndex = i;
-				break;
-			}
-		}
-		
-		// Insert [LINK] after the last non-empty line with proper spacing
-		if (lastNonEmptyIndex >= 0) {
-			// Add empty line before [LINK] if the last line doesn't end with empty line
-			if (lastNonEmptyIndex < lines.length - 1 || lines[lastNonEmptyIndex] !== '') {
-				lines.splice(lastNonEmptyIndex + 1, 0, '');
-			}
-			// Add [LINK] on its own line
-			lines.splice(lastNonEmptyIndex + 2, 0, '[LINK]');
-			// Don't add empty line after [LINK] - it should be the end of the message
-		} else {
-			// If message is empty or only whitespace, just add [LINK]
-			lines.push('[LINK]');
-		}
-		
-		return lines.join('\n');
-	};
+	// No [LINK] placeholder: product link is resolved from the card's selected resource; backend appends button at end.
 
-	// Auto-insert [USER] and [WHOP] placeholders if missing for WELCOME blocks
-	const ensureUserWhopPlaceholders = (message: string, blockId: string): string => {
-		// Check if this block belongs to WELCOME stage
-		let isWelcomeBlock = false;
-		
+	// Auto-insert [USER] placeholder if missing for WELCOME blocks. [WHOP] is resolved when generating merchant, not in card text.
+	const ensureUserPlaceholder = (message: string, blockId: string): string => {
+		let shouldHaveUser = false;
 		if (funnelFlow) {
-			// Find which stage this block belongs to
-			const blockStage = funnelFlow.stages.find(stage => 
-				stage.blockIds.includes(blockId)
-			);
-			
-			// Check if the stage is WELCOME
-			if (blockStage) {
-				isWelcomeBlock = blockStage.name === 'WELCOME';
-			}
+			const blockStage = funnelFlow.stages.find(stage => stage.blockIds.includes(blockId));
+			if (blockStage) shouldHaveUser = blockStage.name === "WELCOME";
 		} else {
-			// Fallback to keyword matching if no funnel flow provided
-			isWelcomeBlock = blockId.includes('welcome');
+			shouldHaveUser = blockId.includes("welcome");
 		}
-		
-		if (!isWelcomeBlock) return message;
-		
-		// Check if [USER] and [WHOP] already exist
-		if (message.includes('[USER]') && message.includes('[WHOP]')) return message;
-		
-		// Add [USER] and [WHOP] placeholders with proper formatting
-		let updatedMessage = message;
-		
-		// Add [USER] if missing
-		if (!updatedMessage.includes('[USER]')) {
-			// Add empty line before [USER] if message doesn't end with empty line
-			if (updatedMessage.trim() !== '' && !updatedMessage.endsWith('\n\n')) {
-				updatedMessage += '\n\n';
-			}
-			updatedMessage += '[USER]';
-		}
-		
-		// Add [WHOP] if missing
-		if (!updatedMessage.includes('[WHOP]')) {
-			// Add empty line before [WHOP] if message doesn't end with empty line
-			if (updatedMessage.trim() !== '' && !updatedMessage.endsWith('\n\n')) {
-				updatedMessage += '\n\n';
-			}
-			updatedMessage += '[WHOP]';
-		}
-		
-		return updatedMessage;
+		if (!shouldHaveUser) return message;
+		if (message.includes("[USER]")) return message;
+		const trimmed = message.trim();
+		return trimmed ? `[USER], ${trimmed}` : "[USER]";
 	};
 
 	// Handler for updating the text of a specific option.
@@ -278,10 +189,8 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 						</button>
 						<button
 							onClick={() => {
-								// Ensure [LINK] placeholder is present before saving
-								let messageWithPlaceholders = ensureLinkPlaceholder(editedBlock.message, editedBlock.id);
-								// Ensure [USER] and [WHOP] placeholders are present for WELCOME blocks
-								messageWithPlaceholders = ensureUserWhopPlaceholders(messageWithPlaceholders, editedBlock.id);
+								// Ensure [USER] placeholder for WELCOME blocks ([WHOP] resolved when generating merchant). No [LINK]; button added by backend from card's resource.
+								const messageWithPlaceholders = ensureUserPlaceholder(editedBlock.message, editedBlock.id);
 								const timeoutMinutes = isUpsell ? convertToMinutes(localTimeoutValue, localTimeoutUnit) : editedBlock.timeoutMinutes;
 								const updatedBlock = {
 									...editedBlock,
@@ -313,37 +222,15 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 				<AutoResizeTextarea
 					className={`w-full bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 rounded-xl p-3 text-foreground text-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-300 transition-all duration-200 resize-none ${
 						(() => {
-							// Check if this block belongs to a stage that requires [LINK]
-							let requiresLink = false;
-							let requiresUserWhop = false;
-							
+							let requiresUser = false;
 							if (funnelFlow) {
-								const blockStage = funnelFlow.stages.find(stage => 
-									stage.blockIds.includes(editedBlock.id)
-								);
-								
-								if (blockStage) {
-									requiresLink = blockStage.name === 'VALUE_DELIVERY' || 
-									              blockStage.name === 'TRANSITION' || 
-									              blockStage.name === 'OFFER';
-									requiresUserWhop = blockStage.name === 'WELCOME';
-								}
+								const blockStage = funnelFlow.stages.find(stage => stage.blockIds.includes(editedBlock.id));
+								if (blockStage) requiresUser = blockStage.name === "WELCOME";
 							} else {
-								// Fallback to keyword matching
-								requiresLink = editedBlock.id.includes('value_') || 
-								              editedBlock.id.includes('transition') || 
-								              editedBlock.id.includes('offer');
-								requiresUserWhop = editedBlock.id.includes('welcome');
+								requiresUser = editedBlock.id.includes("welcome");
 							}
-							
-							// Check for missing placeholders
-							const missingLink = requiresLink && !editedBlock.message.includes('[LINK]');
-							const missingUser = requiresUserWhop && !editedBlock.message.includes('[USER]');
-							const missingWhop = requiresUserWhop && !editedBlock.message.includes('[WHOP]');
-							
-							return (missingLink || missingUser || missingWhop)
-								? 'ring-2 ring-amber-500/50 border-amber-300' 
-								: '';
+							const missingUser = requiresUser && !editedBlock.message.includes("[USER]");
+							return missingUser ? 'ring-2 ring-amber-500/50 border-amber-300' : '';
 						})()
 					}`}
 					value={editedBlock.message}
@@ -352,47 +239,21 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 					rows={4}
 				/>
 				{(() => {
-					// Check if this block belongs to a stage that requires placeholders
-					let requiresLink = false;
-					let requiresUserWhop = false;
-					
+					let requiresUser = false;
 					if (funnelFlow) {
-						const blockStage = funnelFlow.stages.find(stage => 
-							stage.blockIds.includes(editedBlock.id)
-						);
-						
-						if (blockStage) {
-							requiresLink = blockStage.name === 'VALUE_DELIVERY' || 
-							              blockStage.name === 'TRANSITION' || 
-							              blockStage.name === 'OFFER';
-							requiresUserWhop = blockStage.name === 'WELCOME';
-						}
+						const blockStage = funnelFlow.stages.find(stage => stage.blockIds.includes(editedBlock.id));
+						if (blockStage) requiresUser = blockStage.name === "WELCOME";
 					} else {
-						// Fallback to keyword matching
-						requiresLink = editedBlock.id.includes('value_') || 
-						              editedBlock.id.includes('transition') || 
-						              editedBlock.id.includes('offer');
-						requiresUserWhop = editedBlock.id.includes('welcome');
+						requiresUser = editedBlock.id.includes("welcome");
 					}
-					
-					// Check for missing placeholders
-					const missingLink = requiresLink && !editedBlock.message.includes('[LINK]');
-					const missingUser = requiresUserWhop && !editedBlock.message.includes('[USER]');
-					const missingWhop = requiresUserWhop && !editedBlock.message.includes('[WHOP]');
-					
-					if (!missingLink && !missingUser && !missingWhop) return null;
-					
-					const missingPlaceholders = [];
-					if (missingLink) missingPlaceholders.push('[LINK]');
-					if (missingUser) missingPlaceholders.push('[USER]');
-					if (missingWhop) missingPlaceholders.push('[WHOP]');
-					
+					const missingUser = requiresUser && !editedBlock.message.includes("[USER]");
+					if (!missingUser) return null;
 					return (
 						<div className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
 							<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
 								<path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
 							</svg>
-							{`${missingPlaceholders.join(', ')} placeholder${missingPlaceholders.length > 1 ? 's' : ''} will be automatically added when saving`}
+							[USER] placeholder will be automatically added when saving
 						</div>
 					);
 				})()}
@@ -469,11 +330,24 @@ const BlockEditor: React.FC<BlockEditorProps> = ({
 								
 								return (
 									<div key={i} className="flex items-start gap-3">
-										<div className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
-											<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
-												{i + 1}
-											</span>
-										</div>
+										{onOptionConnectRequest && !isUpsell ? (
+											<button
+												type="button"
+												onClick={() => onOptionConnectRequest(block.id, i)}
+												className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center hover:bg-violet-200 dark:hover:bg-violet-700/50 hover:border-violet-400 transition-colors cursor-pointer"
+												title="Change connection"
+											>
+												<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+													{i + 1}
+												</span>
+											</button>
+										) : (
+											<div className="flex-shrink-0 w-6 h-6 bg-violet-100 dark:bg-violet-800/50 border border-violet-200 dark:border-violet-700/50 rounded-full flex items-center justify-center">
+												<span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+													{i + 1}
+												</span>
+											</div>
+										)}
 										<div className="flex-1">
 											<AutoResizeTextarea
 												className={`w-full rounded-xl p-3 text-foreground text-sm focus:ring-2 transition-all duration-200 resize-none ${

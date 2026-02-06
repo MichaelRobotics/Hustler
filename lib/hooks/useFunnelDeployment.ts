@@ -77,23 +77,25 @@ export const useFunnelDeployment = (
 
 		// Frontend live funnel check removed - backend validation is sufficient and more reliable
 
-		// Extract product names from the generated funnel flow (what the AI actually offers)
+		// Extract product names and resource IDs from the funnel flow (AI-generated and user-selected in cards / Merchant Market Stall)
 		const generatedProductNames = new Set<string>();
+		const generatedResourceIds = new Set<string>();
 
-		// Look for blocks in both OFFER and VALUE_DELIVERY stages using resourceName field
+		// Look for blocks in product-card stages (OFFER, VALUE_DELIVERY, etc.) using resourceName and resourceId
 		Object.values(currentFunnel.flow.blocks).forEach((block: any) => {
-			// Check if this block is in the OFFER or VALUE_DELIVERY stage and has a resourceName field
 			const isRelevantBlock = currentFunnel.flow.stages.some(
 				(stage: any) =>
-					(stage.name === "OFFER" || stage.name === "VALUE_DELIVERY") && 
-					stage.blockIds.includes(block.id),
+					stage.cardType === "product" && stage.blockIds.includes(block.id),
 			);
-			if (
-				isRelevantBlock &&
-				block.resourceName &&
-				typeof block.resourceName === "string"
-			) {
+			if (!isRelevantBlock) return;
+			if (block.resourceName && typeof block.resourceName === "string") {
 				generatedProductNames.add(block.resourceName);
+			}
+			// Products selected in cards (Merchant Market Stall) are stored by resourceId
+			if (block.resourceId && typeof block.resourceId === "string") {
+				generatedResourceIds.add(block.resourceId);
+				const res = currentFunnel.resources?.find((r) => r.id === block.resourceId);
+				if (res?.name) generatedProductNames.add(res.name);
 			}
 		});
 
@@ -101,7 +103,7 @@ export const useFunnelDeployment = (
 		const missingProducts: string[] = [];
 		const extraProducts: string[] = [];
 
-		// Find missing products (generated but not assigned)
+		// Find missing products (in flow but not in Library)
 		generatedProductNames.forEach((productName) => {
 			const isAssigned = currentFunnel.resources?.some(
 				(resource) => resource.name.toLowerCase() === productName.toLowerCase(),
@@ -111,13 +113,13 @@ export const useFunnelDeployment = (
 			}
 		});
 
-		// Find extra products (assigned but not generated)
+		// Find extra products (in Library but not used in funnel). Don't flag resources that are selected in cards (resourceId in flow).
 		currentFunnel.resources?.forEach((resource) => {
-			const isGenerated = Array.from(generatedProductNames).some(
-				(generatedName) =>
-					generatedName.toLowerCase() === resource.name.toLowerCase(),
+			const isGeneratedByName = Array.from(generatedProductNames).some(
+				(n) => n.toLowerCase() === resource.name.toLowerCase(),
 			);
-			if (!isGenerated) {
+			const isGeneratedById = generatedResourceIds.has(resource.id);
+			if (!isGeneratedByName && !isGeneratedById) {
 				extraProducts.push(resource.id);
 			}
 		});
@@ -221,29 +223,18 @@ export const useFunnelDeployment = (
 
 		} catch (error) {
 			console.error("Deployment failed:", error);
-			
-			// Update deployment log with error
+			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			setDeploymentLog((prev) => [
 				...prev,
 				"❌ Deployment failed!",
-				`Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				`Error: ${errorMessage}`,
 			]);
-
-			// Parse error message to extract live funnel name if it's a live funnel conflict
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			const liveFunnelMatch = errorMessage.match(/Funnel "([^"]+)" is currently live/);
-			const liveFunnelName = liveFunnelMatch ? liveFunnelMatch[1] : undefined;
-
-			// Show error in validation modal
 			setDeploymentValidation({
 				isValid: false,
 				message: errorMessage,
 				missingProducts: [],
 				extraProducts: [],
-				liveFunnelName: liveFunnelName, // Set liveFunnelName if it's a live funnel conflict
 			});
-
-			// Stop deployment after showing error
 			setTimeout(() => {
 				setIsDeploying(false);
 			}, 3000);

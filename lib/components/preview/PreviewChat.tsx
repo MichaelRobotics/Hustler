@@ -1,7 +1,7 @@
 "use client";
 
-import { Text } from "frosted-ui";
-import { ArrowLeft, Moon, Send, Sun, User, Settings } from "lucide-react";
+import { Text, Heading } from "frosted-ui";
+import { ArrowLeft, FastForward, Moon, Send, Sun, User, Settings } from "lucide-react";
 import React, {
 	useState,
 	useRef,
@@ -12,27 +12,66 @@ import React, {
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 // No WebSocket imports - this is preview only
-import type { FunnelFlow, FunnelProductFaq, FunnelProductFaqInput } from "../../types/funnel";
+import type { FunnelFlow } from "../../types/funnel";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
 import { ChatRestartButton } from "../funnelBuilder/components/ChatRestartButton";
 import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
 import ChatConfigPanel from "./ChatConfigPanel";
+import { apiGet } from "../../utils/api-client";
+import { getFunnelProgressPercentageFromBlock } from "../../utils/funnelUtils";
+
+/** Funnel shape returned by next-trigger-funnels API (enough for PreviewPage / setSelectedFunnel) */
+export interface NextTriggerFunnel {
+	id: string;
+	name: string;
+	flow?: FunnelFlow;
+	resources?: unknown[];
+	merchantType?: string;
+	isDeployed?: boolean;
+	wasEverDeployed?: boolean;
+	triggerType?: string | null;
+	sourceFunnelName?: string | null;
+	resourceName?: string | null;
+}
+
+export type TriggerLabelType = "afterConversation" | "whenUserBuys" | "whenUserCancels";
+
+/** One trigger with type and product/merchant name for display */
+export interface TriggerDetail {
+	type: TriggerLabelType;
+	triggerType: string;
+	productOrMerchantName: string | null;
+}
+
+/** One merchant with its applicable trigger(s) for the unified trigger section */
+export interface MerchantWithTriggers {
+	funnel: NextTriggerFunnel;
+	triggers: TriggerDetail[];
+}
+
+/** Human-readable labels for trigger type enum values */
+const TRIGGER_TYPE_LABELS: Record<string, string> = {
+	qualification_merchant_complete: "After this qualification",
+	upsell_merchant_complete: "After this upsell",
+	any_membership_buy: "Any purchase",
+	membership_buy: "Purchase",
+	any_cancel_membership: "Any cancel",
+	cancel_membership: "Cancel",
+};
 
 interface PreviewChatProps {
 	funnelFlow: FunnelFlow;
 	resources?: any[];
 	experienceId?: string;
 	funnelId?: string;
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
-	productFaqs?: FunnelProductFaq[];
-	onHandoutChange?: (keyword: string, adminNotification?: string, userMessage?: string) => void;
-	onProductFaqChange?: (faq: FunnelProductFaqInput) => void;
+	/** "qualification" | "upsell" – Upsell: link button uses only resource (product) link; Qualification: may fallback to app experience link */
+	merchantType?: string;
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
-	hideAvatar?: boolean;
+	/** Display name for the merchant/funnel in the header (replaces generic "Hustler" branding) */
+	merchantName?: string;
+	onPreviewNextMerchant?: (funnel: NextTriggerFunnel) => void;
 }
 
 /**
@@ -46,106 +85,30 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 	resources = [],
 	experienceId,
 	funnelId,
-	handoutKeyword,
-	handoutAdminNotification,
-	handoutUserMessage,
-	productFaqs = [],
-	onHandoutChange,
-	onProductFaqChange,
+	merchantType,
 	onMessageSent,
 	onBack,
-	hideAvatar = false,
+	merchantName,
+	onPreviewNextMerchant,
 }) => {
 	const [message, setMessage] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
 	const [currentStage, setCurrentStage] = useState("WELCOME");
 	const [showConfigPanel, setShowConfigPanel] = useState(false);
-	const [localProductFaqs, setLocalProductFaqs] = useState<FunnelProductFaq[]>(productFaqs);
+	const [merchantsWithTriggers, setMerchantsWithTriggers] = useState<MerchantWithTriggers[]>([]);
+	const [nextTriggerLoading, setNextTriggerLoading] = useState(false);
+	const [nextTriggerError, setNextTriggerError] = useState<string | null>(null);
+	const [nextTriggerHasFetched, setNextTriggerHasFetched] = useState(false);
+	const nextTriggerFetchedRef = useRef(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
-	// Fetch product FAQs when component mounts
-	useEffect(() => {
-		if (funnelId && experienceId) {
-			fetch(`/api/funnels/${funnelId}/product-faqs`)
-				.then((res) => res.json())
-				.then((data) => {
-					if (data.success && data.data) {
-						setLocalProductFaqs(data.data);
-					}
-				})
-				.catch((err) => console.error("Error fetching product FAQs:", err));
-		}
-	}, [funnelId, experienceId]);
-
-	// Sync local state when props change
-	useEffect(() => {
-		setLocalProductFaqs(productFaqs);
-	}, [productFaqs]);
-
-	// Handle handout change
-	const handleHandoutChange = (keyword: string, adminNotification?: string, userMessage?: string) => {
-		if (onHandoutChange) {
-			onHandoutChange(keyword, adminNotification, userMessage);
-		}
-	};
-
-	// Handle product FAQ change
-	const handleProductFaqChange = async (input: FunnelProductFaqInput) => {
-		if (onProductFaqChange) {
-			onProductFaqChange(input);
-		}
-		// Also update local state optimistically
-		try {
-			const response = await fetch(`/api/funnels/${funnelId}/product-faqs`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(input),
-			});
-			const data = await response.json();
-			if (data.success && data.data) {
-				const existingIndex = localProductFaqs.findIndex((f) => f.resourceId === input.resourceId);
-				if (existingIndex >= 0) {
-					setLocalProductFaqs(localProductFaqs.map((f, i) => (i === existingIndex ? data.data : f)));
-				} else {
-					setLocalProductFaqs([...localProductFaqs, data.data]);
-				}
-			}
-		} catch (error) {
-			console.error("Error saving product FAQ:", error);
-		}
-	};
-
-	/**
-	 * Handle external link navigation according to Whop best practices
-	 * Uses iframe SDK when available, falls back to window.location for standalone
-	 */
+	/** Open link in new tab only; never navigate the current page (or iframe). */
 	const handleExternalLink = useCallback((href: string): void => {
-		try {
-			// Check if it's a Whop internal link (should stay in iframe)
-			const isWhopInternalLink = href.includes('whop.com') && !href.includes('whop.com/checkout') && !href.includes('whop.com/hub');
-			
-			if (isInIframe && iframeSdk && iframeSdk.openExternalUrl) {
-				// Use Whop iframe SDK for external links (best practice)
-				console.log(`🔗 [PreviewChat] Opening external link via Whop iframe SDK: ${href}`);
-				iframeSdk.openExternalUrl({ url: href });
-			} else if (isWhopInternalLink) {
-				// For Whop internal links, use window.location to stay in iframe
-				console.log(`🔗 [PreviewChat] Opening Whop internal link: ${href}`);
-				window.location.href = href;
-			} else {
-				// For external links outside iframe, open in new tab
-				console.log(`🔗 [PreviewChat] Opening external link in new tab: ${href}`);
-				window.open(href, '_blank', 'noopener,noreferrer');
-			}
-		} catch (error) {
-			console.error("❌ [PreviewChat] Error handling external link:", error);
-			// Fallback to window.location
-			window.location.href = href;
-		}
-	}, [iframeSdk, isInIframe]);
+		window.open(href, '_blank', 'noopener,noreferrer');
+	}, []);
 
 	// Use the preview chat hook (no WebSocket)
 	const {
@@ -155,7 +118,87 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		startConversation,
 		handleOptionClick,
 		handleCustomInput,
-	} = useFunnelPreviewChat(funnelFlow, resources, undefined, undefined, experienceId);
+		offerTimerActive,
+		startOfferTimer,
+		resolveOfferTimer,
+		getMessageForBlock,
+		offerTimerDelayLabel,
+		offerTimerHasUpsell,
+		offerTimerHasDownsell,
+	} = useFunnelPreviewChat(funnelFlow, resources, undefined, undefined, experienceId, merchantType);
+
+	// Fetch next-trigger funnels when conversation is completed (funnel_completed + membership_activated + membership_deactivated)
+	const isConversationCompleted = history.length > 0 && options.length === 0 && !currentBlockId;
+
+	// Progress = (stage position / total stages) × 100 — 1/5 = 20%, 2/5 = 40%, etc. Works for qualification and upsell.
+	const progressPercentage = useMemo(() => {
+		if (isConversationCompleted && funnelFlow?.stages?.length) return 100;
+		return funnelFlow?.stages?.length
+			? getFunnelProgressPercentageFromBlock(currentBlockId, funnelFlow.stages)
+			: 0;
+	}, [isConversationCompleted, currentBlockId, funnelFlow]);
+	useEffect(() => {
+		if (!isConversationCompleted || !experienceId || !funnelId || nextTriggerFetchedRef.current) return;
+		nextTriggerFetchedRef.current = true;
+		setNextTriggerLoading(true);
+		setNextTriggerError(null);
+		const url = `/api/next-trigger-funnels?experienceId=${encodeURIComponent(experienceId)}&completedFunnelId=${encodeURIComponent(funnelId)}`;
+		apiGet(url, experienceId)
+			.then((res) => res.json())
+			.then((data) => {
+				if (!data.success) {
+					setMerchantsWithTriggers([]);
+					return;
+				}
+				const funnelCompleted = Array.isArray(data.funnels) ? data.funnels : [];
+				const membershipActivated = Array.isArray(data.membershipActivated) ? data.membershipActivated : [];
+				const membershipDeactivated = Array.isArray(data.membershipDeactivated) ? data.membershipDeactivated : [];
+				const byId = new Map<string, { funnel: NextTriggerFunnel; triggers: TriggerDetail[] }>();
+				const add = (
+					list: (NextTriggerFunnel & { triggerType?: string | null; sourceFunnelName?: string | null; resourceName?: string | null })[],
+					category: TriggerLabelType,
+				) => {
+					for (const f of list) {
+						const productOrMerchantName =
+							category === "afterConversation"
+								? (f.sourceFunnelName ?? null)
+								: f.resourceName ?? (f.triggerType === "any_membership_buy" || f.triggerType === "any_cancel_membership" ? "Any product" : null);
+						const detail: TriggerDetail = {
+							type: category,
+							triggerType: f.triggerType ?? "",
+							productOrMerchantName,
+						};
+						const existing = byId.get(f.id);
+						if (existing) {
+							existing.triggers.push(detail);
+						} else {
+							byId.set(f.id, { funnel: f, triggers: [detail] });
+						}
+					}
+				};
+				add(funnelCompleted, "afterConversation");
+				add(membershipActivated, "whenUserBuys");
+				add(membershipDeactivated, "whenUserCancels");
+				setMerchantsWithTriggers(Array.from(byId.values()));
+			})
+			.catch((err) => {
+				console.error("Error fetching next-trigger funnels:", err);
+				setNextTriggerError("Could not load merchants.");
+				setMerchantsWithTriggers([]);
+			})
+			.finally(() => {
+				setNextTriggerLoading(false);
+				setNextTriggerHasFetched(true);
+			});
+	}, [isConversationCompleted, experienceId, funnelId]);
+
+	// Reset when funnel or experience changes (e.g. user clicked Preview on another merchant)
+	useEffect(() => {
+		nextTriggerFetchedRef.current = false;
+		setMerchantsWithTriggers([]);
+		setNextTriggerError(null);
+		setNextTriggerHasFetched(false);
+	}, [funnelId, experienceId]);
 
 	// Function to determine current stage based on currentBlockId
 	const determineCurrentStage = useCallback(() => {
@@ -197,9 +240,6 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		console.log('[PreviewChat] Current block ID:', currentBlockId);
 		console.log('[PreviewChat] Options:', options);
 	}, [history, currentBlockId, options]);
-
-	// Determine if conversation is completed (Start Over button shown)
-	const isConversationCompleted = history.length > 0 && options.length === 0 && !currentBlockId;
 
 	// Auto-scroll to bottom when new messages arrive
 	useEffect(() => {
@@ -260,8 +300,8 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		[handleSubmit],
 	);
 
-	// Function to render messages with [LINK] resolution for different stages
-	const renderMessageWithLinks = useCallback((text: string, currentBlockId: string | null) => {
+	// Function to render messages with [LINK] resolution for different stages. blockId used for offer timer when button is clicked.
+	const renderMessageWithLinks = useCallback((text: string, blockId: string | null) => {
 		// Check for animated button HTML first
 		if (text.includes('animated-gold-button')) {
 			// Parse the HTML and extract the button data
@@ -274,26 +314,41 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 			
 			parts.forEach((part, partIndex) => {
 				if (partIndex % 3 === 1) {
-					// This is the href
-					const href = part;
+					// This is the href (may contain &quot; from HTML escape)
+					const href = (part || "").replace(/&quot;/g, '"').trim() || "#";
 					const buttonText = parts[partIndex + 1] || "Get Started!";
+					const isLinkReady = href !== "#" && href.startsWith("http");
 					
 					// Determine if this is a VALUE_DELIVERY button (free resource) or OFFER button (paid resource)
 					const isValueDeliveryButton = buttonText === "Claim!";
 					const buttonIcon = isValueDeliveryButton ? "gift" : "sparkles";
 					
-					buttons.push(
-						<AnimatedGoldButton 
-							key={partIndex} 
-							href={href}
-							text={buttonText}
-							icon={buttonIcon}
-							onClick={() => {
-								// Handle link navigation according to Whop best practices
-								handleExternalLink(href);
-							}}
-						/>
-					);
+					if (isLinkReady) {
+						buttons.push(
+							<AnimatedGoldButton
+								key={partIndex}
+								href={href}
+								text={buttonText}
+								icon={buttonIcon}
+								onClick={() => {
+									if (!isValueDeliveryButton && blockId) startOfferTimer(blockId);
+								}}
+							/>
+						);
+					} else {
+						// Link not resolved yet or failed: show grey disabled button (loading or unavailable)
+						buttons.push(
+							<div
+								key={partIndex}
+								className="relative inline-flex items-center justify-center px-6 py-3 text-lg font-bold text-gray-500 dark:text-gray-400 transition-all duration-300 ease-out bg-gray-200 dark:bg-gray-700 rounded-full shadow cursor-not-allowed select-none"
+							>
+								<span className="flex items-center gap-2">
+									{buttonIcon === "gift" ? "🎁" : "✨"}
+									<span>{href === "#" ? "Loading…" : buttonText}</span>
+								</span>
+							</div>
+						);
+					}
 				} else if (partIndex % 3 === 0) {
 					// This is text content
 					if (part.trim()) {
@@ -350,11 +405,15 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				{text}
 			</Text>
 		);
-	}, [handleExternalLink]);
+	}, [handleExternalLink, startOfferTimer]);
 
-	// Memoized message component for better performance
+	// Memoized message component. Re-resolves bot message when blockId present so button link updates when resources load.
 	const MessageComponent = React.memo(
-		({ msg, index }: { msg: any; index: number }) => {
+		({ msg, index, funnelFlowForResolve, getMessageForBlockFn }: { msg: any; index: number; funnelFlowForResolve: typeof funnelFlow; getMessageForBlockFn: (block: any) => string }) => {
+			const block = msg.metadata?.blockId && funnelFlowForResolve?.blocks ? funnelFlowForResolve.blocks[msg.metadata.blockId] : null;
+			const displayText = msg.type === "bot" && block && getMessageForBlockFn ? getMessageForBlockFn(block) : msg.text;
+			const blockIdForButton = msg.metadata?.blockId ?? null;
+
 			// Special handling for system messages
 			if (msg.type === "system") {
 				// Special handling for live chat redirect marker
@@ -402,7 +461,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 						className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
 							msg.type === "user"
 								? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
-								: msg.text.includes('animated-gold-button')
+								: displayText.includes('animated-gold-button')
 									? "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
 									: "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50"
 						}`}
@@ -413,7 +472,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							msUserSelect: "text",
 						}}
 					>
-						{renderMessageWithLinks(msg.text, currentBlockId)}
+						{renderMessageWithLinks(displayText, blockIdForButton)}
 					</div>
 				</div>
 			);
@@ -453,6 +512,8 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				key={`${msg.type}-${index}`}
 				msg={msg}
 				index={index}
+				funnelFlowForResolve={funnelFlow}
+				getMessageForBlockFn={getMessageForBlock}
 			/>
 		));
 
@@ -481,7 +542,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 		}
 
 		return messageElements;
-	}, [history]);
+	}, [history, funnelFlow, getMessageForBlock]);
 
 	// Memoized options list
 	const optionsList = useMemo(
@@ -530,40 +591,15 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							</button>
 						)}
 
-						{/* Avatar Icon - only show if not hidden */}
-						{!hideAvatar && (
-							<div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
-								<img 
-									src="https://img-v2-prod.whop.com/unsafe/rs:fit:256:0/plain/https%3A%2F%2Fassets.whop.com%2Fuploads%2F2025-10-02%2Fuser_16843562_c991d27a-feaa-4318-ab44-2aaa27937382.jpeg@avif?w=256&q=75"
-									alt="User Avatar"
-									className="w-20 h-20 object-cover"
-									onError={(e) => {
-										// Fallback to default icon if image fails to load
-										const target = e.target as HTMLImageElement;
-										target.style.display = 'none';
-										const parent = target.parentElement;
-										if (parent) {
-											parent.innerHTML = '<div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
-										}
-									}}
-								/>
-							</div>
-						)}
-
 						<div>
 							<Text
 								size="3"
 								weight="semi-bold"
 								className="text-black dark:text-white"
 							>
-								Hustler
+								{merchantName ?? "Preview"}
 							</Text>
-							<div className="flex items-center gap-2 mt-1">
-								<div className="w-2 h-2 rounded-full bg-green-500"></div>
-								<span className="text-xs text-gray-500 dark:text-gray-400">
-									Preview Mode
-								</span>
-							</div>
+							<span className="block text-xs text-muted-foreground mt-0.5">Preview</span>
 						</div>
 					</div>
 
@@ -573,7 +609,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							onClick={() => setShowConfigPanel(!showConfigPanel)}
 							className="p-2 rounded-lg touch-manipulation transition-all duration-200 hover:scale-105 flex items-center gap-2"
 							style={{ WebkitTapHighlightColor: "transparent" }}
-							title="Configure handout and AI chat"
+							title="Configure AI chat"
 						>
 							<Settings
 								size={20}
@@ -593,87 +629,20 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 			{/* Progress Bar - Same as UserChat */}
 			{funnelFlow && (
 				<div className="px-4 py-3 border-t border-border/20 dark:border-border/10">
-					{/* Completion Percentage - Above progress bar */}
+					{/* Completion Percentage - Above progress bar (stage N of total = N/total*100%) */}
 					<div className="flex justify-center mb-3">
 						<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
-							{(() => {
-								const stageOrder = [
-									{ key: "TRANSITION", name: "Getting Started" },
-									{ key: "WELCOME", name: "Welcome" },
-									{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-									{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-									{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-									{ key: "OFFER", name: "Offer" },
-								];
-								const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-								const availableStages = stageOrder.filter(stage => 
-									funnelFlow.stages.some(s => s.name === stage.key)
-								);
-								
-								// Special case: OFFER stage should be 100%
-								if (currentStage === "OFFER") {
-									return 100;
-								}
-								
-								const progressPercentage = availableStages.length > 0 
-									? ((currentStageIndex + 1) / availableStages.length) * 100 
-									: 0;
-								return Math.round(progressPercentage);
-							})()}%
+							{Math.round(progressPercentage)}%
 						</span>
 					</div>
 					<div className="relative w-full">
 						{/* Background Track - Smooth and subtle */}
 						<div className="w-full bg-gray-200/30 dark:bg-gray-600/30 rounded-full h-1">
 							<div
-								className={`h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden ${
-									(() => {
-										const stageOrder = [
-											{ key: "TRANSITION", name: "Getting Started" },
-											{ key: "WELCOME", name: "Welcome" },
-											{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-											{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-											{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-											{ key: "OFFER", name: "Offer" },
-										];
-										const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-										const availableStages = stageOrder.filter(stage => 
-											funnelFlow.stages.some(s => s.name === stage.key)
-										);
-										const progressPercentage = availableStages.length > 0 
-											? ((currentStageIndex + 1) / availableStages.length) * 100 
-											: 0;
-										return progressPercentage >= 100;
-									})()
-										? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600' 
-										: 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
-								}`}
-									style={{ 
-										width: `${(() => {
-											const stageOrder = [
-												{ key: "TRANSITION", name: "Getting Started" },
-												{ key: "WELCOME", name: "Welcome" },
-												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-												{ key: "OFFER", name: "Offer" },
-											];
-											const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-											const availableStages = stageOrder.filter(stage => 
-												funnelFlow.stages.some(s => s.name === stage.key)
-											);
-											
-											// Special case: OFFER stage should be 100%
-											if (currentStage === "OFFER") {
-												return 100;
-											}
-											
-											const progressPercentage = availableStages.length > 0 
-												? ((currentStageIndex + 1) / availableStages.length) * 100 
-												: 0;
-											return progressPercentage;
-										})()}%`
-									}}
+								className="h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600"
+								style={{
+									width: `${progressPercentage}%`,
+								}}
 							>
 								{/* Multiple Random Shining Spots - Sun/Lava Effect */}
 								<div className="absolute inset-0 overflow-hidden">
@@ -699,10 +668,7 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 						</div>
 
 						{/* Completion Button - Centered with Faded Background (when progress is 100%) */}
-						{(() => {
-							// Show completion button when OFFER stage is reached
-							return currentStage === "OFFER";
-						})() && (
+						{progressPercentage >= 100 && (
 							<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
 								{/* Faded Background Line */}
 								<div className="absolute inset-0 flex items-center">
@@ -786,11 +752,37 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 							</div>
 						)}
 
+					{/* Speed up timer (preview): simulate outcome after offer CTA click; only show options that have a next block */}
+					{offerTimerActive && (offerTimerHasDownsell || offerTimerHasUpsell) && (
+						<div className="flex flex-wrap gap-3 justify-center mb-4">
+							{offerTimerHasDownsell && (
+								<button
+									type="button"
+									onClick={() => resolveOfferTimer("didnt_buy")}
+									className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+								>
+									<FastForward size={16} className="shrink-0" />
+									Downsell {offerTimerDelayLabel ? `(${offerTimerDelayLabel})` : ""}
+								</button>
+							)}
+							{offerTimerHasUpsell && (
+								<button
+									type="button"
+									onClick={() => resolveOfferTimer("bought")}
+									className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors"
+								>
+									<FastForward size={16} className="shrink-0" />
+									Upsell {offerTimerDelayLabel ? `(${offerTimerDelayLabel})` : ""}
+								</button>
+							)}
+						</div>
+					)}
+
 					{/* Typing Indicator */}
 					{isTyping && (
 						<div className="flex justify-start mb-4">
 							<div className="max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-border/30 dark:border-border/20 text-gray-900 dark:text-gray-100 shadow-sm">
-								<TypingIndicator text="Hustler is typing..." />
+								<TypingIndicator text={`${merchantName ?? "Chat"} is typing...`} />
 							</div>
 						</div>
 					)}
@@ -832,9 +824,103 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 					</div>
 				)}
 
-				{/* Start Over Button - Show when conversation has ended (no more options) */}
+				{/* Available merchants to trigger - Show when conversation is completed */}
 				{history.length > 0 && options.length === 0 && !currentBlockId && (
-					<ChatRestartButton onRestart={startConversation} />
+					<>
+						<div className="flex-shrink-0 border-t border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30 p-4 space-y-4">
+							<Heading size="3" weight="bold" className="text-foreground">
+								Available merchants to trigger
+							</Heading>
+							{nextTriggerLoading && (
+								<ul className="space-y-3">
+									{[1, 2, 3].map((i) => (
+										<li
+											key={i}
+											className="bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl p-4 shadow-sm animate-pulse"
+											aria-hidden
+										>
+											<div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-gray-700 mb-3" />
+											<div className="flex gap-2 flex-wrap">
+												<div className="h-6 w-24 rounded-full bg-gray-200 dark:bg-gray-700" />
+												<div className="h-6 w-28 rounded-full bg-gray-200 dark:bg-gray-700" />
+											</div>
+										</li>
+									))}
+								</ul>
+							)}
+							{!nextTriggerLoading && nextTriggerError && (
+								<p className="text-center text-sm text-amber-600 dark:text-amber-400">{nextTriggerError}</p>
+							)}
+							{!nextTriggerLoading && !nextTriggerError && merchantsWithTriggers.length > 0 && (
+								<ul className="space-y-3">
+									{merchantsWithTriggers.map(({ funnel, triggers }) => (
+										<li
+											key={funnel.id}
+											role="button"
+											tabIndex={0}
+											onClick={() => onPreviewNextMerchant?.(funnel)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault();
+													onPreviewNextMerchant?.(funnel);
+												}
+											}}
+											className="bg-gradient-to-br from-white via-gray-50 to-violet-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-900/50 border-2 border-border dark:border-violet-500/40 rounded-xl p-4 shadow-sm flex flex-col gap-3 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-violet-400/60 dark:hover:border-violet-400/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2"
+										>
+											<Text size="3" weight="semi-bold" className="text-foreground line-clamp-2">
+												{funnel.name}
+											</Text>
+											<div className="flex flex-wrap gap-2">
+												{triggers.map((t, idx) => {
+													const friendlyLabel = TRIGGER_TYPE_LABELS[t.triggerType] ?? t.triggerType;
+													const isPurchaseOrCancelWithProduct =
+														(t.type === "whenUserBuys" || t.type === "whenUserCancels") &&
+														(t.triggerType === "membership_buy" || t.triggerType === "cancel_membership") &&
+														t.productOrMerchantName;
+													const badgeText = isPurchaseOrCancelWithProduct
+														? `${friendlyLabel}: ${t.productOrMerchantName}`
+														: friendlyLabel;
+													const secondLine =
+														isPurchaseOrCancelWithProduct
+															? null
+															: t.type === "afterConversation" &&
+																	t.triggerType !== "qualification_merchant_complete" &&
+																	t.triggerType !== "upsell_merchant_complete" &&
+																	t.productOrMerchantName
+																? `From: ${t.productOrMerchantName}`
+																: null;
+													return (
+														<span
+															key={`${t.type}-${t.triggerType}-${t.productOrMerchantName ?? ""}-${idx}`}
+															className={
+																t.type === "afterConversation"
+																	? "inline-flex flex-col gap-0.5 px-2.5 py-1.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200 border border-violet-300/60 dark:border-violet-500/40"
+																	: t.type === "whenUserBuys"
+																		? "inline-flex flex-col gap-0.5 px-2.5 py-1.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 border border-emerald-300/60 dark:border-emerald-500/40"
+																		: "inline-flex flex-col gap-0.5 px-2.5 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-300/60 dark:border-amber-500/40"
+															}
+															title={secondLine ? `Trigger · ${secondLine}` : badgeText ? `Trigger · ${badgeText}` : "Trigger"}
+														>
+															<span>{badgeText}</span>
+															{secondLine && (
+																<span className="opacity-90 font-normal">{secondLine}</span>
+															)}
+														</span>
+													);
+												})}
+											</div>
+										</li>
+									))}
+								</ul>
+							)}
+							{!nextTriggerLoading && nextTriggerHasFetched && !nextTriggerError && merchantsWithTriggers.length === 0 && (
+								<p className="text-center text-sm text-muted-foreground">
+									No available merchants to trigger
+								</p>
+							)}
+						</div>
+						<ChatRestartButton onRestart={startConversation} />
+					</>
 				)}
 
 			</div>
@@ -844,14 +930,6 @@ const PreviewChat: React.FC<PreviewChatProps> = ({
 				<ChatConfigPanel
 					isOpen={showConfigPanel}
 					funnelId={funnelId}
-					handoutKeyword={handoutKeyword}
-					handoutAdminNotification={handoutAdminNotification}
-					handoutUserMessage={handoutUserMessage}
-					productFaqs={localProductFaqs}
-					resources={resources}
-					experienceId={experienceId}
-					onHandoutChange={handleHandoutChange}
-					onProductFaqChange={handleProductFaqChange}
 					onClose={() => setShowConfigPanel(false)}
 				/>
 			)}

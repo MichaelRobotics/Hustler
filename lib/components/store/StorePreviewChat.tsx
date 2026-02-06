@@ -1,7 +1,7 @@
 "use client";
 
 import { Text, Button } from "frosted-ui";
-import { ArrowLeft, Moon, Send, Sun, Pencil } from "lucide-react";
+import { ArrowLeft, FastForward, Moon, Send, Sun, Pencil } from "lucide-react";
 import React, {
 	useState,
 	useRef,
@@ -17,11 +17,14 @@ import TypingIndicator from "../common/TypingIndicator";
 import { ChatRestartButton } from "../funnelBuilder/components/ChatRestartButton";
 import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
 import { renderTextWithLinks } from "../../utils/link-utils";
+import { getFunnelProgressPercentageFromBlock } from "../../utils/funnelUtils";
 
 interface StorePreviewChatProps {
 	funnelFlow: FunnelFlow;
 	resources?: any[];
 	experienceId?: string;
+	/** "qualification" | "upsell" – Upsell: link button uses only resource (product) link */
+	merchantType?: string;
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
@@ -42,6 +45,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 	funnelFlow,
 	resources = [],
 	experienceId,
+	merchantType,
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
@@ -55,34 +59,10 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
-	/**
-	 * Handle external link navigation according to Whop best practices
-	 * Uses iframe SDK when available, falls back to window.location for standalone
-	 */
+	/** Open link in new tab only; never navigate the current page (or iframe). */
 	const handleExternalLink = useCallback((href: string): void => {
-		try {
-			// Check if it's a Whop internal link (should stay in iframe)
-			const isWhopInternalLink = href.includes('whop.com') && !href.includes('whop.com/checkout') && !href.includes('whop.com/hub');
-			
-			if (isInIframe && iframeSdk && iframeSdk.openExternalUrl) {
-				// Use Whop iframe SDK for external links (best practice)
-				console.log(`🔗 [StorePreviewChat] Opening external link via Whop iframe SDK: ${href}`);
-				iframeSdk.openExternalUrl({ url: href });
-			} else if (isWhopInternalLink) {
-				// For Whop internal links, use window.location to stay in iframe
-				console.log(`🔗 [StorePreviewChat] Opening Whop internal link: ${href}`);
-				window.location.href = href;
-			} else {
-				// For external links outside iframe, open in new tab
-				console.log(`🔗 [StorePreviewChat] Opening external link in new tab: ${href}`);
-				window.open(href, '_blank', 'noopener,noreferrer');
-			}
-		} catch (error) {
-			console.error("❌ [StorePreviewChat] Error handling external link:", error);
-			// Fallback to window.location
-			window.location.href = href;
-		}
-	}, [iframeSdk, isInIframe]);
+		window.open(href, '_blank', 'noopener,noreferrer');
+	}, []);
 
 	// Use the preview chat hook (no WebSocket)
 	const {
@@ -92,7 +72,14 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 		startConversation,
 		handleOptionClick,
 		handleCustomInput,
-	} = useFunnelPreviewChat(funnelFlow, resources, undefined, undefined, experienceId);
+		offerTimerActive,
+		startOfferTimer,
+		resolveOfferTimer,
+		getMessageForBlock,
+		offerTimerDelayLabel,
+		offerTimerHasUpsell,
+		offerTimerHasDownsell,
+	} = useFunnelPreviewChat(funnelFlow, resources, undefined, undefined, experienceId, merchantType);
 
 	// Function to determine current stage based on currentBlockId
 	const determineCurrentStage = useCallback(() => {
@@ -118,6 +105,15 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 		setCurrentStage(newStage);
 	}, [determineCurrentStage]);
 
+	const isConversationCompleted = history.length > 0 && options.length === 0 && !currentBlockId;
+	// Progress = (stage position / total stages) × 100 — 1/5 = 20%, 2/5 = 40%, etc. Works for qualification and upsell.
+	const progressPercentage = useMemo(() => {
+		if (isConversationCompleted && funnelFlow?.stages?.length) return 100;
+		return funnelFlow?.stages?.length
+			? getFunnelProgressPercentageFromBlock(currentBlockId, funnelFlow.stages)
+			: 0;
+	}, [isConversationCompleted, currentBlockId, funnelFlow]);
+
 	// Ensure conversation starts when component mounts
 	useEffect(() => {
 		if (funnelFlow && history.length === 0) {
@@ -134,9 +130,6 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 		console.log('[StorePreviewChat] Current block ID:', currentBlockId);
 		console.log('[StorePreviewChat] Options:', options);
 	}, [history, currentBlockId, options]);
-
-	// Determine if conversation is completed (Start Over button shown)
-	const isConversationCompleted = history.length > 0 && options.length === 0 && !currentBlockId;
 
 	// Auto-scroll to bottom when new messages arrive
 	useEffect(() => {
@@ -226,7 +219,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 	);
 
 	// Function to render messages with [LINK] resolution for different stages
-	const renderMessageWithLinks = useCallback((text: string, currentBlockId: string | null) => {
+	const renderMessageWithLinks = useCallback((text: string, blockId: string | null) => {
 		// Check for animated button HTML first
 		if (text.includes('animated-gold-button')) {
 			// Parse the HTML and extract the button data
@@ -239,26 +232,36 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 			
 			parts.forEach((part, partIndex) => {
 				if (partIndex % 3 === 1) {
-					// This is the href
-					const href = part;
+					const href = (part || "").replace(/&quot;/g, '"').trim() || "#";
 					const buttonText = parts[partIndex + 1] || "Get Started!";
-					
-					// Determine if this is a VALUE_DELIVERY button (free resource) or OFFER button (paid resource)
+					const isLinkReady = href !== "#" && href.startsWith("http");
 					const isValueDeliveryButton = buttonText === "Claim!";
 					const buttonIcon = isValueDeliveryButton ? "gift" : "sparkles";
-					
-					buttons.push(
-						<AnimatedGoldButton 
-							key={partIndex} 
-							href={href}
-							text={buttonText}
-							icon={buttonIcon}
-							onClick={() => {
-								// Handle link navigation according to Whop best practices
-								handleExternalLink(href);
-							}}
-						/>
-					);
+					if (isLinkReady) {
+						buttons.push(
+							<AnimatedGoldButton
+								key={partIndex}
+								href={href}
+								text={buttonText}
+								icon={buttonIcon}
+								onClick={() => {
+									if (!isValueDeliveryButton && blockId) startOfferTimer(blockId);
+								}}
+							/>
+						);
+					} else {
+						buttons.push(
+							<div
+								key={partIndex}
+								className="relative inline-flex items-center justify-center px-6 py-3 text-lg font-bold text-gray-500 dark:text-gray-400 transition-all duration-300 ease-out bg-gray-200 dark:bg-gray-700 rounded-full shadow cursor-not-allowed select-none"
+							>
+								<span className="flex items-center gap-2">
+									{buttonIcon === "gift" ? "🎁" : "✨"}
+									<span>{href === "#" ? "Loading…" : buttonText}</span>
+								</span>
+							</div>
+						);
+					}
 				} else if (partIndex % 3 === 0) {
 					// This is text content
 					if (part.trim()) {
@@ -315,12 +318,13 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 				{text}
 			</Text>
 		);
-	}, [handleExternalLink]);
+	}, [handleExternalLink, startOfferTimer]);
 
-	// Memoized message component for better performance
 	const MessageComponent = React.memo(
-		({ msg, index }: { msg: any; index: number }) => {
-			// Special handling for system messages
+		({ msg, index, funnelFlowForResolve, getMessageForBlockFn }: { msg: any; index: number; funnelFlowForResolve: typeof funnelFlow; getMessageForBlockFn: (block: any) => string }) => {
+			const block = msg.metadata?.blockId && funnelFlowForResolve?.blocks ? funnelFlowForResolve.blocks[msg.metadata.blockId] : null;
+			const displayText = msg.type === "bot" && block && getMessageForBlockFn ? getMessageForBlockFn(block) : msg.text;
+			const blockIdForButton = msg.metadata?.blockId ?? null;
 			if (msg.type === "system") {
 				// Special handling for live chat redirect marker
 				if (msg.text === "redirect_to_live_chat") {
@@ -367,7 +371,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 						className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
 							msg.type === "user"
 								? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
-								: msg.text.includes('animated-gold-button')
+								: displayText.includes('animated-gold-button')
 									? "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
 									: "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50"
 						}`}
@@ -378,7 +382,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 							msUserSelect: "text",
 						}}
 					>
-						{renderMessageWithLinks(msg.text, currentBlockId)}
+						{renderMessageWithLinks(displayText, blockIdForButton)}
 					</div>
 				</div>
 			);
@@ -411,13 +415,15 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 		),
 	);
 
-	// Memoized message list
+	// Memoized message list (re-run when funnelFlow/resources change so button links re-resolve)
 	const messageList = useMemo(() => {
 		const messageElements = history.map((msg, index) => (
 			<MessageComponent
 				key={`${msg.type}-${index}`}
 				msg={msg}
 				index={index}
+				funnelFlowForResolve={funnelFlow}
+				getMessageForBlockFn={getMessageForBlock}
 			/>
 		));
 
@@ -446,7 +452,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 		}
 
 		return messageElements;
-	}, [history]);
+	}, [history, funnelFlow, getMessageForBlock]);
 
 	// Memoized options list
 	const optionsList = useMemo(
@@ -498,6 +504,32 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 							</div>
 						)}
 
+					{/* Speed up timer (preview): simulate outcome after offer CTA click; only show options that have a next block */}
+					{offerTimerActive && (offerTimerHasDownsell || offerTimerHasUpsell) && (
+						<div className="flex flex-wrap gap-3 justify-center mb-4">
+							{offerTimerHasDownsell && (
+								<button
+									type="button"
+									onClick={() => resolveOfferTimer("didnt_buy")}
+									className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+								>
+									<FastForward size={16} className="shrink-0" />
+									Downsell {offerTimerDelayLabel ? `(${offerTimerDelayLabel})` : ""}
+								</button>
+							)}
+							{offerTimerHasUpsell && (
+								<button
+									type="button"
+									onClick={() => resolveOfferTimer("bought")}
+									className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors"
+								>
+									<FastForward size={16} className="shrink-0" />
+									Upsell {offerTimerDelayLabel ? `(${offerTimerDelayLabel})` : ""}
+								</button>
+							)}
+						</div>
+					)}
+
 					{/* Typing Indicator */}
 					{isTyping && (
 						<div className="flex justify-start mb-4">
@@ -516,83 +548,16 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 						{/* Floating Golden Percentage - Above progress bar, centered */}
 						<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full z-50">
 							<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
-							{(() => {
-								const stageOrder = [
-									{ key: "TRANSITION", name: "Getting Started" },
-									{ key: "WELCOME", name: "Welcome" },
-									{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-									{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-									{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-									{ key: "OFFER", name: "Offer" },
-								];
-								const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-								const availableStages = stageOrder.filter(stage => 
-									funnelFlow.stages.some(s => s.name === stage.key)
-								);
-								
-								// Special case: OFFER stage should be 100%
-								if (currentStage === "OFFER") {
-									return 100;
-								}
-								
-								const progressPercentage = availableStages.length > 0 
-									? ((currentStageIndex + 1) / availableStages.length) * 100 
-									: 0;
-								return Math.round(progressPercentage);
-							})()}%
+								{Math.round(progressPercentage)}%
 							</span>
 						</div>
 						<div className="relative w-full">
 							{/* Background Track - Smooth and subtle */}
 							<div className="w-full bg-gray-200/30 dark:bg-gray-600/30 rounded-full h-1">
 								<div
-									className={`h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden ${
-										(() => {
-											const stageOrder = [
-												{ key: "TRANSITION", name: "Getting Started" },
-												{ key: "WELCOME", name: "Welcome" },
-												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-												{ key: "OFFER", name: "Offer" },
-											];
-											const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-											const availableStages = stageOrder.filter(stage => 
-												funnelFlow.stages.some(s => s.name === stage.key)
-											);
-											const progressPercentage = availableStages.length > 0 
-												? ((currentStageIndex + 1) / availableStages.length) * 100 
-												: 0;
-											return progressPercentage >= 100;
-										})()
-											? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600' 
-											: 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
-									}`}
-									style={{ 
-										width: `${(() => {
-											const stageOrder = [
-												{ key: "TRANSITION", name: "Getting Started" },
-												{ key: "WELCOME", name: "Welcome" },
-												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-												{ key: "OFFER", name: "Offer" },
-											];
-											const currentStageIndex = stageOrder.findIndex(stage => stage.key === currentStage);
-											const availableStages = stageOrder.filter(stage => 
-												funnelFlow.stages.some(s => s.name === stage.key)
-											);
-											
-											// Special case: OFFER stage should be 100%
-											if (currentStage === "OFFER") {
-												return 100;
-											}
-											
-											const progressPercentage = availableStages.length > 0 
-												? ((currentStageIndex + 1) / availableStages.length) * 100 
-												: 0;
-											return progressPercentage;
-										})()}%`
+									className="h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600"
+									style={{
+										width: `${progressPercentage}%`,
 									}}
 								>
 									{/* Multiple Random Shining Spots - Sun/Lava Effect */}
@@ -619,10 +584,7 @@ const StorePreviewChat: React.FC<StorePreviewChatProps> = ({
 							</div>
 
 							{/* Completion Button - Centered with Faded Background (when progress is 100%) */}
-						{(() => {
-							// Show completion button when OFFER stage is reached
-							return currentStage === "OFFER";
-						})() && (
+						{progressPercentage >= 100 && (
 								<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
 									{/* Faded Background Line */}
 									<div className="absolute inset-0 flex items-center">

@@ -21,9 +21,11 @@ interface AdminHeaderProps {
 		credits?: number;
 		messages?: number;
 	}) => void;
+	dashboardViewMode?: "cards" | "graph";
+	onDashboardViewModeChange?: (mode: "cards" | "graph") => void;
 }
 
-export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId, user, onPurchaseSuccess }: AdminHeaderProps) {
+export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subscription, experienceId, user, onPurchaseSuccess, dashboardViewMode, onDashboardViewModeChange }: AdminHeaderProps) {
 	const isAtLimit = funnelCount >= maxFunnels;
 	const [showCreditModal, setShowCreditModal] = useState(false);
 	
@@ -78,7 +80,20 @@ export default function AdminHeader({ onAddFunnel, funnelCount, maxFunnels, subs
 			<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
 
 			<div className="flex justify-between items-center gap-2 sm:gap-3">
-				<div className="flex-shrink-0">
+				<div className="flex-shrink-0 flex items-center gap-2">
+					{dashboardViewMode !== undefined && onDashboardViewModeChange && (
+						<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+							{dashboardViewMode === "cards" ? (
+								<Button size="2" color="gray" variant="soft" onClick={() => onDashboardViewModeChange("graph")}>
+									Graph
+								</Button>
+							) : (
+								<Button size="2" color="gray" variant="soft" onClick={() => onDashboardViewModeChange("cards")}>
+									Cards
+								</Button>
+							)}
+						</div>
+					)}
 					<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 						<ThemeToggle />
 					</div>

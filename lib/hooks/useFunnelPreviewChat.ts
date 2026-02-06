@@ -4,6 +4,7 @@ import type {
 	FunnelBlockOption,
 	FunnelFlow,
 } from "../types/funnel";
+import { isProductCardBlock, getProductCardButtonLabel } from "../utils/funnelUtils";
 
 export const useFunnelPreviewChat = (
 	funnelFlow: FunnelFlow | null,
@@ -11,9 +12,11 @@ export const useFunnelPreviewChat = (
 	selectedOffer?: string | null,
 	conversation?: any,
 	experienceId?: string,
+	merchantType?: string,
 ) => {
 	const [history, setHistory] = useState<ChatMessage[]>([]);
 	const [currentBlockId, setCurrentBlockId] = useState<string | null>(null);
+	const [offerTimerBlockId, setOfferTimerBlockId] = useState<string | null>(null);
 	const [experienceLink, setExperienceLink] = useState<string | null>(null);
 	const [whopCompanyId, setWhopCompanyId] = useState<string | null>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
@@ -21,10 +24,12 @@ export const useFunnelPreviewChat = (
 	const lastProcessedInputRef = useRef<string>("");
 	const lastProcessedTimeRef = useRef<number>(0);
 
-	// Fetch experience link on mount
+	// Fetch experience link on mount (only for qualification – upsell uses only resource.link and must not wait on this)
 	useEffect(() => {
 		if (!experienceId) return;
-		
+		// Skip fetch for upsell (check at run time; merchantType not in deps to keep array size stable)
+		if (merchantType === "upsell") return;
+
 		const fetchExperienceData = async () => {
 			try {
 				const response = await fetch(`/api/experience/link?experienceId=${experienceId}`);
@@ -43,73 +48,51 @@ export const useFunnelPreviewChat = (
 				console.error("Error fetching experience data:", error);
 			}
 		};
-		
+
 		fetchExperienceData();
 	}, [experienceId]);
 
-	// Helper function to resolve [LINK] placeholders based on stage
+	// Build experience fallback URL (qualification only; upsell never uses it)
+	const experienceFallbackUrl =
+		(experienceId && whopCompanyId
+			? `https://whop.com/joined/${whopCompanyId}/${experienceId.replace(/^exp_/, "upsell-")}/app/`
+			: experienceId
+				? `https://whop.com/joined/${experienceId}/${experienceId.replace(/^exp_/, "upsell-")}/app/`
+				: null) ?? null;
+
+	// No [LINK] in messages. Strip [LINK] and append button: product cards always show button; link from resource only.
 	const resolveLinkPlaceholder = useCallback((message: string, block: any, blockId: string): string => {
-		// Check if this block is in VALUE_DELIVERY stage
-		const isValueDelivery = funnelFlow?.stages.some(
-			stage => stage.name === 'VALUE_DELIVERY' && stage.blockIds.includes(blockId)
-		);
-		
-		// Check if this block is in OFFER stage
-		const isOfferBlock = funnelFlow?.stages.some(
-			stage => stage.name === 'OFFER' && stage.blockIds.includes(blockId)
-		);
-		
-		// Check if this block is in TRANSITION stage
-		const isTransitionBlock = funnelFlow?.stages.some(
-			stage => stage.name === 'TRANSITION' && stage.blockIds.includes(blockId)
-		);
-		
-		if (isOfferBlock && block.resourceName) {
-			// For OFFER stage, lookup the resource and create "Get Started!" button
-			const resource = resources.find(r => r.name === block.resourceName);
-			if (resource && resource.link) {
-				const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
-				return message.replace('[LINK]', buttonHtml);
-			} else {
-				// Fallback if resource not found
-				return message.replace('[LINK]', '[Resource not found]');
-			}
-		} else if (isValueDelivery && block.resourceName) {
-			// For VALUE_DELIVERY stage, lookup the resource and create "Claim!" button
-			const resource = resources.find(r => r.name === block.resourceName);
-			if (resource && resource.link) {
-				const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Claim!</div>`;
-				return message.replace('[LINK]', buttonHtml);
-			} else {
-				// Fallback if resource not found
-				return message.replace('[LINK]', '[Resource not found]');
-			}
-		} else if (isTransitionBlock) {
-			// For TRANSITION stage, use the same app link logic as DM messages
-			if (experienceLink) {
-				// Use the stored experience link (same as in generateAppLink)
-				return message.replace('[LINK]', experienceLink);
-			} else if (whopCompanyId && experienceId) {
-				// Fallback: construct app link using the correct format
-				// Format: https://whop.com/joined/{whopCompanyId}/{appName}/app/
-				// Transform experience ID from exp_ to upsell- format
-				const appName = experienceId.replace(/^exp_/, 'upsell-');
-				const appLink = `https://whop.com/joined/${whopCompanyId}/${appName}/app/`;
-				return message.replace('[LINK]', appLink);
-			} else if (experienceId) {
-				// Fallback without company ID
-				const appName = experienceId.replace(/^exp_/, 'upsell-');
-				const appLink = `https://whop.com/joined/${experienceId}/${appName}/app/`;
-				return message.replace('[LINK]', appLink);
-			} else {
-				// Final fallback (same as generateAppLink)
-				return message.replace('[LINK]', 'https://whop.com/apps/');
-			}
+		let msg = (message || "").replace(/\[LINK\]/g, "").trim();
+		const isProductCard = funnelFlow ? isProductCardBlock(blockId, funnelFlow) : false;
+		const buttonLabel = funnelFlow ? getProductCardButtonLabel(blockId, funnelFlow) : "Get Started!";
+		const effectiveResourceLink = (r: any): string | null => {
+			const raw = r?.link != null ? String(r.link).trim() : "";
+			if (raw) return raw;
+			if (r?.whopProductId) return null;
+			const pur = r?.purchaseUrl != null ? String(r.purchaseUrl).trim() : "";
+			return pur || null;
+		};
+		let link: string | null = null;
+		// Resolve only by resource: resourceId first, then resourceName (same order and semantics as backend getBlockResourceLink).
+		const rawRid = block.resourceId != null ? String(block.resourceId).trim() : "";
+		if (rawRid) {
+			const byId = resources.find((r: any) => r != null && String(r.id).trim() === rawRid);
+			link = byId ? effectiveResourceLink(byId) : null;
 		}
-		
-		// For other stages, just replace with a simple link
-		return message.replace('[LINK]', 'https://example.com/link');
-	}, [funnelFlow, resources, experienceLink, experienceId, whopCompanyId]);
+		const rawName = block.resourceName != null ? String(block.resourceName).trim() : "";
+		if (!link && rawName) {
+			const byName = resources.find((r: any) => r?.name != null && String(r.name).trim() === rawName);
+			link = byName ? effectiveResourceLink(byName) : null;
+		}
+		// Product cards: button href = resource.link only (no experience fallback).
+		if (isProductCard) {
+			const href = link || "#";
+			const safeHref = (href || "#").replace(/"/g, "&quot;");
+			const buttonHtml = `<div class="animated-gold-button" data-href="${safeHref}">${buttonLabel}</div>`;
+			return msg ? `${msg}\n\n${buttonHtml}` : buttonHtml;
+		}
+		return msg;
+	}, [funnelFlow, resources]);
 
 	// Helper function to construct complete message with numbered options
 	const constructCompleteMessage = useCallback((block: any): string => {
@@ -117,28 +100,33 @@ export const useFunnelPreviewChat = (
 			return "";
 		}
 
-		// First resolve [LINK] placeholders based on stage
-		let resolvedMessage = resolveLinkPlaceholder(block.message, block, block.id);
+		// Strip [LINK] and append button (matches backend: product link from card resource, or app link)
+		let resolvedMessage = resolveLinkPlaceholder(block.message || "", block, block.id);
 
 		if (!block.options || block.options.length === 0) {
 			return resolvedMessage;
 		}
 
-		// Check if this block is in a stage that should not show numbered options
-		// Stages without numbered options: WELCOME, VALUE_DELIVERY, TRANSITION, PAIN_POINT_QUALIFICATION, EXPERIENCE_QUALIFICATION, OFFER
-		const shouldHideOptions = funnelFlow?.stages.some(
-			stage => 
-				(stage.name === "WELCOME" ||
-				 stage.name === "VALUE_DELIVERY" ||
-				 stage.name === "TRANSITION" || 
-				 stage.name === "PAIN_POINT_QUALIFICATION" || 
-				 stage.name === "EXPERIENCE_QUALIFICATION" ||
-				 stage.name === "OFFER") && 
+		// Qualification merchant: never show options as text in bot message; options are clickable in UI only.
+		if (merchantType === "qualification") {
+			return resolvedMessage;
+		}
+
+		// Don't show numbered options for: product cards, WELCOME, TRANSITION, or Upsell/Downsell pair.
+		const inNoOptionsStage = funnelFlow?.stages.some(
+			(stage) =>
+				(stage.cardType === "product" ||
+					stage.name === "WELCOME" ||
+					stage.name === "TRANSITION") &&
 				stage.blockIds.includes(block.id)
 		);
+		const isUpsellDownsellPair =
+			block.options.length === 2 &&
+			block.options.some((o: any) => (o.text || "").toLowerCase() === "upsell") &&
+			block.options.some((o: any) => (o.text || "").toLowerCase() === "downsell");
 
-		if (shouldHideOptions) {
-			return resolvedMessage; // Don't include options for specified stages
+		if (inNoOptionsStage || isUpsellDownsellPair) {
+			return resolvedMessage;
 		}
 
 		const numberedOptions = block.options
@@ -146,7 +134,7 @@ export const useFunnelPreviewChat = (
 			.join("\n");
 
 		return `${resolvedMessage}\n\n${numberedOptions}`;
-	}, [funnelFlow]);
+	}, [funnelFlow, resolveLinkPlaceholder, merchantType]);
 
 	// Function to start or restart the conversation
 	const startConversation = useCallback(() => {
@@ -157,7 +145,7 @@ export const useFunnelPreviewChat = (
 			
 			if (startBlock) {
 				const completeMessage = constructCompleteMessage(startBlock);
-				setHistory([{ type: "bot", text: completeMessage }]);
+				setHistory([{ type: "bot", text: completeMessage, metadata: { blockId: startBlockId } }]);
 				setCurrentBlockId(startBlockId);
 			}
 		}
@@ -185,9 +173,8 @@ export const useFunnelPreviewChat = (
 						(lastMessage.type === "user" && lastMessage.metadata?.blockId !== startBlockId);
 					
 					if (needsBotMessage) {
-						// Call constructCompleteMessage directly without including it in dependencies
 						const completeMessage = constructCompleteMessage(currentBlock);
-						setHistory(prev => [...prev, { type: "bot", text: completeMessage }]);
+						setHistory(prev => [...prev, { type: "bot", text: completeMessage, metadata: { blockId: startBlockId } }]);
 					}
 				}
 			}
@@ -293,17 +280,37 @@ export const useFunnelPreviewChat = (
 	}, [funnelFlow, currentBlockId]);
 
 	// Memoize options to prevent unnecessary re-computations
+	// In preview: hide Upsell/Downsell option buttons for product-card blocks (user sees only CTA; timer starts on CTA click)
+	// When block has Upsell/Downsell options, only show the option if that next block exists (upsellBlockId / downsellBlockId).
 	const options = useMemo(() => {
 		if (!currentBlock?.options) return [];
-		
+
+		// Product card with upsell or downsell target: show only message + CTA, no Upsell/Downsell option buttons
+		const isOfferWithUpsellDownsell = funnelFlow && isProductCardBlock(currentBlock.id, funnelFlow) && (currentBlock.upsellBlockId || currentBlock.downsellBlockId);
+		if (isOfferWithUpsellDownsell) return [];
+
+		// Upsell merchant: only show Upsell/Downsell option if the block has that next block configured
+		const isUpsellDownsellPair =
+			currentBlock.options.length === 2 &&
+			currentBlock.options.some((o: any) => (o.text || "").toLowerCase() === "upsell") &&
+			currentBlock.options.some((o: any) => (o.text || "").toLowerCase() === "downsell");
+		if (isUpsellDownsellPair) {
+			return currentBlock.options.filter((o: any) => {
+				const t = (o.text || "").toLowerCase();
+				if (t === "upsell") return !!currentBlock.upsellBlockId;
+				if (t === "downsell") return !!currentBlock.downsellBlockId;
+				return true;
+			});
+		}
+
 		// Check if this block is in a TRANSITION stage - don't show options for these
 		const isTransitionBlock = funnelFlow?.stages.some(
 			stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
 		);
-		
+
 		// Return empty array for TRANSITION blocks (they auto-proceed)
 		if (isTransitionBlock) return [];
-		
+
 		return currentBlock.options;
 	}, [currentBlock, funnelFlow]);
 
@@ -419,7 +426,7 @@ export const useFunnelPreviewChat = (
 				}
 
 				const completeMessage = constructCompleteMessage(nextBlock);
-				const botMessage: ChatMessage = { type: "bot", text: completeMessage };
+				const botMessage: ChatMessage = { type: "bot", text: completeMessage, metadata: { blockId: option.nextBlockId } };
 				setHistory((prev) => [...prev, botMessage]);
 				setCurrentBlockId(option.nextBlockId);
 			} else {
@@ -493,12 +500,12 @@ export const useFunnelPreviewChat = (
 		if (currentBlockId && funnelFlow) {
 			const currentBlock = funnelFlow.blocks[currentBlockId];
 			if (!currentBlock) return;
-			
+
 			// Check if this is a TRANSITION stage block - auto-proceed to next stage
 			const isTransitionBlock = funnelFlow.stages.some(
 				stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
 			);
-			
+
 			if (isTransitionBlock && currentBlock.options && currentBlock.options.length > 0) {
 				// Auto-proceed to the first option (there should only be one for TRANSITION blocks)
 				const firstOption = currentBlock.options[0];
@@ -511,13 +518,86 @@ export const useFunnelPreviewChat = (
 				}
 				return;
 			}
-			
-			// If we reach a block with no options, end the conversation silently
+
+			// If we reach a block with no options, end the conversation silently (unless offer timer is active)
 			if (!currentBlock.options || currentBlock.options.length === 0) {
-				setCurrentBlockId(null);
+				if (!offerTimerBlockId) setCurrentBlockId(null);
 			}
 		}
-	}, [currentBlockId, funnelFlow]);
+	}, [currentBlockId, funnelFlow, offerTimerBlockId]);
+
+	// Start offer timer when user clicks offer CTA in preview (no real wait; shows Downsell/Upsell controls)
+	const startOfferTimer = useCallback((blockId: string) => {
+		const block = funnelFlow?.blocks[blockId];
+		if (!block || (!block.upsellBlockId && !block.downsellBlockId)) return;
+		setOfferTimerBlockId(blockId);
+	}, [funnelFlow]);
+
+	// Resolve offer timer in preview: apply upsell or downsell outcome without waiting
+	const resolveOfferTimer = useCallback(
+		(outcome: "bought" | "didnt_buy") => {
+			if (!offerTimerBlockId || !funnelFlow) return;
+			const offerBlock = funnelFlow.blocks[offerTimerBlockId];
+			if (!offerBlock) {
+				setOfferTimerBlockId(null);
+				return;
+			}
+			const upsellBlockId = outcome === "bought" ? offerBlock.upsellBlockId : null;
+			const downsellBlockId = outcome === "didnt_buy" ? offerBlock.downsellBlockId : null;
+			const nextBlockId = upsellBlockId ?? downsellBlockId;
+			if (!nextBlockId) {
+				setOfferTimerBlockId(null);
+				return;
+			}
+			const nextBlock = funnelFlow.blocks[nextBlockId];
+			if (!nextBlock) {
+				setOfferTimerBlockId(null);
+				return;
+			}
+			const message = constructCompleteMessage(nextBlock);
+			const botEntry: ChatMessage = { type: "bot", text: message, metadata: { blockId: nextBlockId } };
+			if (outcome === "didnt_buy") {
+				setHistory((prev) => {
+					const last = prev[prev.length - 1];
+					const withoutLast = last?.type === "bot" ? prev.slice(0, -1) : prev;
+					return [...withoutLast, botEntry];
+				});
+			} else {
+				setHistory((prev) => [...prev, botEntry]);
+			}
+			setCurrentBlockId(nextBlockId);
+			setOfferTimerBlockId(null);
+		},
+		[offerTimerBlockId, funnelFlow, constructCompleteMessage],
+	);
+
+	const getMessageForBlock = useCallback(
+		(block: any) => (block ? constructCompleteMessage(block) : ""),
+		[constructCompleteMessage],
+	);
+
+	// Format offer timer delay for preview "Speed up" buttons: 6s, 3m, 1h, 1d
+	const formatDelayMinutes = useCallback((minutes: number): string => {
+		if (minutes <= 0) return "0m";
+		if (minutes >= 24 * 60) return Math.round(minutes / (24 * 60)) + "d";
+		if (minutes >= 60) return Math.round(minutes / 60) + "h";
+		if (minutes >= 1) return Math.round(minutes) + "m";
+		const sec = Math.round(minutes * 60);
+		return sec + "s";
+	}, []);
+
+	const offerTimerBlock = useMemo(
+		() => (offerTimerBlockId && funnelFlow?.blocks[offerTimerBlockId]) || null,
+		[offerTimerBlockId, funnelFlow],
+	);
+
+	const offerTimerDelayLabel = useMemo(
+		() => formatDelayMinutes(offerTimerBlock?.timeoutMinutes ?? 0),
+		[offerTimerBlock?.timeoutMinutes, formatDelayMinutes],
+	);
+
+	const offerTimerHasUpsell = !!(offerTimerBlock?.upsellBlockId);
+	const offerTimerHasDownsell = !!(offerTimerBlock?.downsellBlockId);
 
 	return {
 		history,
@@ -530,5 +610,13 @@ export const useFunnelPreviewChat = (
 		handleCustomInput,
 		currentBlock,
 		options,
+		offerTimerBlockId,
+		offerTimerActive: offerTimerBlockId !== null,
+		startOfferTimer,
+		resolveOfferTimer,
+		getMessageForBlock,
+		offerTimerDelayLabel,
+		offerTimerHasUpsell,
+		offerTimerHasDownsell,
 	};
 };

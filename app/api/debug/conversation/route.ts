@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { whopSdk } from "@/lib/whop-sdk";
 import { headers } from "next/headers";
 import type { FunnelFlow } from "@/lib/types/funnel";
+import { isProductCardBlock } from "@/lib/utils/funnelUtils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,9 +80,7 @@ export async function POST(request: NextRequest) {
     const isPainPointQualificationStage = currentBlockId && funnelFlow?.stages.some(
       stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
     );
-    const isOfferStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "OFFER" && stage.blockIds.includes(currentBlockId)
-    );
+    const isOfferStage = currentBlockId && funnelFlow ? isProductCardBlock(currentBlockId, funnelFlow) : false;
     const isWelcomeStage = currentBlockId && funnelFlow?.stages.some(
       stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlockId)
     );

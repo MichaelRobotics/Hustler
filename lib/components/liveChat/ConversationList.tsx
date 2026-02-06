@@ -26,7 +26,7 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(
 			[filters.searchQuery],
 		);
 
-		// Filter and sort conversations based on current filters
+		// Filter only; order comes from parent (sorted once on page load / sort change).
 		const filteredConversations = useMemo(() => {
 			let filtered = conversations.filter((conv) => conv && conv.status); // Add defensive check
 
@@ -45,13 +45,8 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(
 				);
 			}
 
-			// Sort by last message time (using string comparison)
-			return filtered.sort((a, b) => {
-				const timeA = a.lastMessageAt;
-				const timeB = b.lastMessageAt;
-				return filters.sortBy === "oldest" ? timeA.localeCompare(timeB) : timeB.localeCompare(timeA);
-			});
-		}, [conversations, filters.status, searchQuery, filters.sortBy]);
+			return filtered;
+		}, [conversations, filters.status, searchQuery]);
 
 		const handleSortChange = useCallback(
 			(sortBy: "newest" | "oldest") => {

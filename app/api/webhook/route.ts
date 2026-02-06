@@ -5,13 +5,19 @@ import type { CreditPackId } from "@/lib/types/credit";
 import { detectScenario, validateScenarioData } from "@/lib/analytics/scenario-detection";
 import { getExperienceContextFromWebhook, validateExperienceContext } from "@/lib/analytics/experience-context";
 import { trackPurchaseConversionWithScenario } from "@/lib/analytics/purchase-tracking";
+import { advanceUpSellConversationOnPurchase } from "@/lib/actions/simplified-conversation-actions";
 import { db } from "@/lib/supabase/db-server";
-import { experiences, users, orders, subscriptions, funnels, customersResources, conversations } from "@/lib/supabase/schema";
+import { experiences, users, orders, subscriptions, funnels, conversations, resources } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
+import type { TriggerContext } from "@/lib/helpers/conversation-trigger";
+import type { FunnelForTrigger } from "@/lib/helpers/conversation-trigger";
 import { whopSdk } from "@/lib/whop-sdk";
+import { getMembershipUserInfo } from "@/lib/helpers/whop-membership-user";
 import { createConversation } from "@/lib/actions/simplified-conversation-actions";
 import { updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "@/lib/analytics/background-tracking";
+import { hasActiveConversation, findFunnelForTrigger } from "@/lib/helpers/conversation-trigger";
+import type { FunnelFlow } from "@/lib/types/funnel";
 
 // Validate webhook secret exists
 if (!process.env.WHOP_WEBHOOK_SECRET) {
@@ -27,10 +33,15 @@ export async function POST(request: Request) {
   const webhook = await validateWebhook(request);
 
   // Handle the webhook event
+  // Membership webhooks are events; funnel TRIGGERS (any_membership_buy, membership_buy, cancel_membership, any_cancel_membership) use these events.
+  const action = webhook.action as string;
   if (webhook.action === "membership.went_valid") {
-    // Re-enabled for membership_valid trigger type
-    console.log(`[WEBHOOK] Membership webhook received - checking for membership_valid trigger type`);
-    after(handleMembershipWentValidWebhook(webhook.data));
+    // Membership-buy conversations are now created from payment.succeeded only; keep for logging.
+    console.log(`[WEBHOOK] membership.went_valid - membership-buy handled by payment.succeeded`);
+  }
+  else if (action === "membership.deactivated") {
+    console.log(`[WEBHOOK] membership.deactivated - triggers: any_cancel_membership, cancel_membership`);
+    after(handleMembershipDeactivatedWebhook(webhook.data as MembershipWebhookData));
   }
   else if (webhook.action === "payment.succeeded") {
     after(handlePaymentSucceededWebhook(webhook.data));
@@ -38,6 +49,119 @@ export async function POST(request: Request) {
 
   // Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
   return new Response("OK", { status: 200 });
+}
+
+/** Payload may include company_id (Whop membership webhooks). Use for correlation. */
+type MembershipWebhookPayload = MembershipWebhookData & { company_id?: string };
+
+/** Normalize payment.succeeded payload to flat user_id, company_id, product_id, plan_id (supports nested data.user.id, data.product.id, etc.). */
+function normalizePaymentPayload(data: Record<string, unknown>): {
+	user_id: string | null;
+	company_id: string | null;
+	product_id: string | null;
+	plan_id: string | null;
+	membership_id: string | null;
+} {
+	const user = data.user as { id?: string } | undefined;
+	const company = data.company as { id?: string } | undefined;
+	const product = data.product as { id?: string } | undefined;
+	const plan = data.plan as { id?: string } | undefined;
+	const membership = data.membership as { id?: string } | undefined;
+	return {
+		user_id: (user?.id ?? data.user_id ?? null) as string | null,
+		company_id: (company?.id ?? data.company_id ?? null) as string | null,
+		product_id: (product?.id ?? data.product_id ?? null) as string | null,
+		plan_id: (plan?.id ?? data.plan_id ?? null) as string | null,
+		membership_id: (membership?.id ?? data.membership_id ?? null) as string | null,
+	};
+}
+
+/** Resolve company_id from payment payload (company_id or from product_id via resources -> experience). */
+async function resolveCompanyIdFromPaymentPayload(data: Record<string, unknown>): Promise<string | null> {
+	const companyId = (data.company_id ?? (data.company as { id?: string })?.id) as string | undefined;
+	if (companyId) return companyId;
+	const productId = (data.product_id ?? (data.product as { id?: string })?.id) as string | undefined;
+	if (!productId) return null;
+	try {
+		const resource = await db.query.resources.findFirst({
+			where: eq(resources.whopProductId, productId),
+			columns: { experienceId: true },
+		});
+		if (!resource?.experienceId) return null;
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, resource.experienceId),
+			columns: { whopCompanyId: true },
+		});
+		return experience?.whopCompanyId ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Resolve company_id from membership webhook payload.
+ * Uses payload.company_id if present; otherwise tries to resolve from product_id via resources table (resource.whopProductId -> experience.whopCompanyId).
+ */
+async function resolveCompanyIdFromMembershipPayload(data: MembershipWebhookPayload): Promise<string | null> {
+  const companyId = data.company_id ?? (data as { company_id?: string }).company_id;
+  if (companyId) return companyId;
+  const productId = data.product_id;
+  if (!productId) return null;
+  try {
+    const resource = await db.query.resources.findFirst({
+      where: eq(resources.whopProductId, productId),
+      columns: { experienceId: true },
+    });
+    if (!resource?.experienceId) return null;
+    const experience = await db.query.experiences.findFirst({
+      where: eq(experiences.id, resource.experienceId),
+      columns: { whopCompanyId: true },
+    });
+    return experience?.whopCompanyId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface MembershipFunnelMatch {
+  experienceId: string;
+  user: { id: string };
+  funnel: FunnelForTrigger;
+}
+
+/**
+ * Find all experiences in the given company where the user has an active (deployed) funnel with the given trigger context.
+ * Returns all (experienceId, user, funnel) matches; does not limit to one per company.
+ */
+async function findExperiencesWithActiveFunnelForUser(
+  companyId: string,
+  whopUserId: string,
+  context: TriggerContext,
+  productId?: string
+): Promise<MembershipFunnelMatch[]> {
+  const companyExperiences = await db.query.experiences.findMany({
+    where: eq(experiences.whopCompanyId, companyId),
+    columns: { id: true },
+  });
+  const matches: MembershipFunnelMatch[] = [];
+  for (const exp of companyExperiences) {
+    const user = await db.query.users.findFirst({
+      where: and(
+        eq(users.whopUserId, whopUserId),
+        eq(users.experienceId, exp.id)
+      ),
+      columns: { id: true },
+    });
+    if (!user) continue;
+    const funnel = await findFunnelForTrigger(exp.id, context, {
+      userId: user.id,
+      whopUserId,
+      productId,
+    });
+    if (!funnel?.flow) continue;
+    matches.push({ experienceId: exp.id, user, funnel });
+  }
+  return matches;
 }
 
 async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
@@ -67,15 +191,56 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
     return;
   }
 
-    // Handle other payment types with scenario detection and analytics
-    await handlePaymentWithAnalytics(data);
+  // Normalize payload for nested or flat shape (user, company, product, plan)
+	const normalized = normalizePaymentPayload(data as unknown as Record<string, unknown>);
+	const uid = normalized.user_id ?? user_id;
+	const cid = normalized.company_id ?? company_id;
+
+	// Membership-buy: create conversation for any_membership_buy / membership_buy (same logic as former membership.went_valid)
+	if (uid && (cid || normalized.product_id)) {
+		try {
+			const companyId = cid ?? (await resolveCompanyIdFromPaymentPayload(data as unknown as Record<string, unknown>));
+			if (companyId) {
+				const matches = await findExperiencesWithActiveFunnelForUser(
+					companyId,
+					uid,
+					"membership_activated",
+					normalized.product_id ?? undefined
+				);
+				for (const { experienceId, funnel } of matches) {
+					if (await hasActiveConversation(experienceId, uid)) continue;
+					const funnelFlow = funnel.flow as FunnelFlow;
+					const conversationId = await createConversation(
+						experienceId,
+						funnel.id,
+						uid,
+						funnelFlow.startBlockId,
+						normalized.membership_id ?? undefined,
+						normalized.product_id ?? undefined
+					);
+					await updateConversationToWelcomeStage(conversationId, funnelFlow);
+					safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
+					console.log(`[WEBHOOK payment.succeeded] Created membership-buy conversation ${conversationId} for user ${uid}`);
+				}
+			}
+		} catch (err) {
+			console.error("[WEBHOOK payment.succeeded] Membership-buy conversation creation error:", err);
+		}
+	}
+
+	// Scenario detection, analytics, and product/plan-matched upsell advancement
+	await handlePaymentWithAnalytics({
+		...data,
+		user_id: uid ?? data.user_id,
+		company_id: cid ?? data.company_id,
+		product_id: normalized.product_id ?? (data as unknown as Record<string, unknown>).product_id,
+		plan_id: normalized.plan_id ?? (data as unknown as Record<string, unknown>).plan_id,
+	});
 }
 
 /**
- * Handle membership.went_valid webhook
- * Creates conversation only if:
- * 1. Funnel has membership_trigger_type = "membership_valid"
- * 2. User has NO records in customers_resources table (new customer)
+ * Handle membership.went_valid webhook (membership activated).
+ * Resolve by company_id only; for each experience in that company where the user has an active funnel with the matching trigger, create a conversation only if the user does not already have an active conversation in that same experience.
  */
 async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
   const { user_id, product_id, id: membershipId } = data;
@@ -88,122 +253,104 @@ async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
   console.log(`[WEBHOOK membership.went_valid] Processing for user ${user_id}, product ${product_id}, membership ${membershipId}`);
 
   try {
-    // Step 1: Find the experience that has this product
-    // We need to find the experience by looking at which experience has a deployed funnel
-    // that has this product in its resources
-    const experienceWithFunnel = await db
-      .select({
-        experience: experiences,
-        funnel: funnels,
-      })
-      .from(funnels)
-      .innerJoin(experiences, eq(funnels.experienceId, experiences.id))
-      .where(
-        and(
-          eq(funnels.isDeployed, true),
-          eq(funnels.membershipTriggerType, "membership_valid")
-        )
-      )
-      .limit(10); // Get multiple to check
-
-    if (experienceWithFunnel.length === 0) {
-      console.log(`[WEBHOOK membership.went_valid] No deployed funnel with membership_valid trigger found - skipping`);
+    const companyId = await resolveCompanyIdFromMembershipPayload(data as MembershipWebhookPayload);
+    if (!companyId) {
+      console.log(`[WEBHOOK membership.went_valid] No company_id in payload and could not resolve from product_id - skipping`);
       return;
     }
 
-    // Find the matching experience by checking if product matches
-    let matchingExperience = null;
-    let matchingFunnel = null;
-
-    for (const row of experienceWithFunnel) {
-      // Check if this experience's company has the product
-      // For now, we'll use the first experience with a membership_valid funnel
-      // In production, you'd want to match by product_id to the funnel's resources
-      matchingExperience = row.experience;
-      matchingFunnel = row.funnel;
-      break;
-    }
-
-    if (!matchingExperience || !matchingFunnel) {
-      console.log(`[WEBHOOK membership.went_valid] No matching experience/funnel found for product ${product_id}`);
-      return;
-    }
-
-    const experienceId = matchingExperience.id;
-    console.log(`[WEBHOOK membership.went_valid] Found experience ${experienceId} with membership_valid trigger`);
-
-    // Step 2: Find or verify user exists in this experience
-    const user = await db.query.users.findFirst({
-      where: and(
-        eq(users.whopUserId, user_id),
-        eq(users.experienceId, experienceId)
-      ),
-    });
-
-    if (!user) {
-      console.log(`[WEBHOOK membership.went_valid] User ${user_id} not found in experience ${experienceId} - skipping (user will be created on app entry)`);
-      return;
-    }
-
-    // Step 3: Check if user has any existing records in customers_resources (existing customer check)
-    const existingCustomerResource = await db.query.customersResources.findFirst({
-      where: and(
-        eq(customersResources.experienceId, experienceId),
-        eq(customersResources.userId, user.id)
-      ),
-    });
-
-    if (existingCustomerResource) {
-      console.log(`[WEBHOOK membership.went_valid] User ${user_id} already has customer resources in experience ${experienceId} - skipping (not a new customer)`);
-      return;
-    }
-
-    // Step 4: Check if conversation already exists
-    const existingConversation = await db.query.conversations.findFirst({
-      where: and(
-        eq(conversations.experienceId, experienceId),
-        eq(conversations.whopUserId, user_id)
-      ),
-    });
-
-    if (existingConversation) {
-      console.log(`[WEBHOOK membership.went_valid] User ${user_id} already has conversation in experience ${experienceId} - skipping`);
-      return;
-    }
-
-    // Step 5: Verify funnel has flow
-    if (!matchingFunnel.flow) {
-      console.log(`[WEBHOOK membership.went_valid] Funnel ${matchingFunnel.id} has no flow - skipping`);
-      return;
-    }
-
-    const funnelFlow = matchingFunnel.flow as { startBlockId: string };
-
-    // Step 6: Create conversation
-    console.log(`[WEBHOOK membership.went_valid] Creating conversation for new customer ${user_id} in experience ${experienceId}`);
-    
-    const conversationId = await createConversation(
-      experienceId,
-      matchingFunnel.id,
+    const matches = await findExperiencesWithActiveFunnelForUser(
+      companyId,
       user_id,
-      funnelFlow.startBlockId,
-      membershipId,
-      product_id
+      "membership_activated",
+      product_id ?? undefined
     );
 
-    console.log(`[WEBHOOK membership.went_valid] Created conversation ${conversationId}`);
+    if (matches.length === 0) {
+      console.log(`[WEBHOOK membership.went_valid] No experience in company ${companyId} with active funnel for user ${user_id} - skipping`);
+      return;
+    }
 
-    // Step 7: Update conversation to WELCOME stage
-    await updateConversationToWelcomeStage(conversationId, matchingFunnel.flow);
-
-    // Step 8: Track awareness (starts) - BACKGROUND PROCESSING
-    console.log(`[WEBHOOK membership.went_valid] Tracking awareness for experience ${experienceId}, funnel ${matchingFunnel.id}`);
-    safeBackgroundTracking(() => trackAwarenessBackground(experienceId, matchingFunnel.id));
-
-    console.log(`[WEBHOOK membership.went_valid] Successfully created conversation for user ${user_id}`);
-
+    for (const { experienceId, user, funnel } of matches) {
+      if (await hasActiveConversation(experienceId, user_id)) {
+        console.log(`[WEBHOOK membership.went_valid] User ${user_id} already has active conversation in experience ${experienceId} - skipping this experience`);
+        continue;
+      }
+      const funnelFlow = funnel.flow as FunnelFlow;
+      console.log(`[WEBHOOK membership.went_valid] Creating conversation for user ${user_id} in experience ${experienceId}`);
+      const conversationId = await createConversation(
+        experienceId,
+        funnel.id,
+        user_id,
+        funnelFlow.startBlockId,
+        membershipId,
+        product_id
+      );
+      await updateConversationToWelcomeStage(conversationId, funnelFlow);
+      safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
+      console.log(`[WEBHOOK membership.went_valid] Created conversation ${conversationId} for experience ${experienceId}`);
+    }
+    console.log(`[WEBHOOK membership.went_valid] Successfully processed for user ${user_id}`);
   } catch (error) {
     console.error(`[WEBHOOK membership.went_valid] Error processing webhook:`, error);
+  }
+}
+
+/**
+ * Handle membership.deactivated webhook (membership deactivated).
+ * Resolve by company_id only; for each experience in that company where the user has an active funnel with the matching trigger, create a conversation only if the user does not already have an active conversation in that same experience.
+ */
+async function handleMembershipDeactivatedWebhook(data: MembershipWebhookData) {
+  const { user_id, product_id, id: membershipId } = data;
+
+  if (!user_id) {
+    console.error("[WEBHOOK membership.deactivated] No user_id provided");
+    return;
+  }
+
+  console.log(`[WEBHOOK membership.deactivated] Processing for user ${user_id}, product ${product_id}, membership ${membershipId}`);
+
+  try {
+    const companyId = await resolveCompanyIdFromMembershipPayload(data as MembershipWebhookPayload);
+    if (!companyId) {
+      console.log(`[WEBHOOK membership.deactivated] No company_id in payload and could not resolve from product_id - skipping`);
+      return;
+    }
+
+    const matches = await findExperiencesWithActiveFunnelForUser(
+      companyId,
+      user_id,
+      "membership_deactivated",
+      product_id ?? undefined
+    );
+
+    if (matches.length === 0) {
+      console.log(`[WEBHOOK membership.deactivated] No experience in company ${companyId} with active funnel for user ${user_id} - skipping`);
+      return;
+    }
+
+    for (const { experienceId, user, funnel } of matches) {
+      if (await hasActiveConversation(experienceId, user_id)) {
+        console.log(`[WEBHOOK membership.deactivated] User ${user_id} already has active conversation in experience ${experienceId} - skipping this experience`);
+        continue;
+      }
+      const funnelFlow = funnel.flow as FunnelFlow;
+      console.log(`[WEBHOOK membership.deactivated] Creating conversation for user ${user_id} in experience ${experienceId}`);
+      const conversationId = await createConversation(
+        experienceId,
+        funnel.id,
+        user_id,
+        funnelFlow.startBlockId,
+        membershipId,
+        product_id
+      );
+      await updateConversationToWelcomeStage(conversationId, funnelFlow);
+      safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
+      console.log(`[WEBHOOK membership.deactivated] Created conversation ${conversationId} for experience ${experienceId}`);
+    }
+    console.log(`[WEBHOOK membership.deactivated] Successfully processed for user ${user_id}`);
+  } catch (error) {
+    console.error(`[WEBHOOK membership.deactivated] Error processing webhook:`, error);
   }
 }
 
@@ -361,8 +508,8 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 		const experienceRecord = experience[0];
 		const experienceId = experienceRecord.id;
 
-		// 2. Find user by user_id and experience_id
-		const user = await db
+		// 2. Find or create user by user_id and experience_id
+		let user = await db
 			.select()
 			.from(users)
 			.where(
@@ -374,8 +521,43 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 			.limit(1);
 
 		if (user.length === 0) {
-			console.error(`No user found with whop_user_id ${user_id} in experience ${experienceId}`);
-			return;
+			// Create user when missing: get email from membership, avatar from user API; do not set subscription/membership
+			const membershipInfo = await getMembershipUserInfo(membership_id);
+			const whopUser = await whopSdk.users.getUser({ userId: user_id }).catch(() => null);
+			let accessLevel = "customer" as string;
+			try {
+				const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+					userId: user_id,
+					experienceId: whopExperienceId,
+				});
+				accessLevel = accessResult.accessLevel ?? "customer";
+			} catch {
+				// keep default customer
+			}
+			const email = membershipInfo?.email ?? "";
+			const name = membershipInfo?.name ?? whopUser?.name ?? whopUser?.username ?? "Unknown User";
+			const avatar = (whopUser?.profilePicture && "sourceUrl" in whopUser.profilePicture)
+				? (whopUser.profilePicture as { sourceUrl?: string | null }).sourceUrl ?? null
+				: null;
+			const [newUser] = await db
+				.insert(users)
+				.values({
+					whopUserId: user_id,
+					experienceId,
+					email: email || "unknown@example.com",
+					name: name || "Unknown User",
+					avatar,
+					credits: 0,
+					accessLevel,
+					// subscription and membership left null; only updateUserSubscription touches them
+				})
+				.returning();
+			if (!newUser) {
+				console.error(`Failed to create user for whop_user_id ${user_id} in experience ${experienceId}`);
+				return;
+			}
+			user = [newUser];
+			console.log(`Created user ${newUser.id} for whop_user_id ${user_id} in experience ${experienceId}`);
 		}
 
 		const userRecord = user[0];
@@ -482,7 +664,7 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 			paymentId: id,
 			accessLevel: userRecord.accessLevel,
 			avatar: userRecord.avatar || null,
-			userName: userRecord.userName || "Unknown",
+			userName: userRecord.name || "Unknown",
 			email: userRecord.email || "unknown@example.com",
 			amount: paymentAmount.toString(),
 			messages: messages || null,
@@ -547,6 +729,19 @@ async function handlePaymentWithAnalytics(webhookData: any) {
 			console.log(`[Webhook Analytics] ✅ Purchase THROUGH your funnel - analytics updated for scenario: ${scenarioData.scenario}`);
 		} else {
 			console.log(`[Webhook Analytics] ❌ Purchase THROUGH your funnel but failed to update analytics for scenario: ${scenarioData.scenario}`);
+		}
+
+		// Step 4: Advance UpSell conversation only when payment matches current offer product/plan
+		const paymentProductId = webhookData.product_id ?? (webhookData as unknown as { product?: { id?: string } }).product?.id ?? null;
+		const paymentPlanId = webhookData.plan_id ?? (webhookData as unknown as { plan?: { id?: string } }).plan?.id ?? null;
+		const advanceResult = await advanceUpSellConversationOnPurchase(
+			conversation!.conversationId,
+			experience!.experienceId,
+			paymentProductId,
+			paymentPlanId
+		);
+		if (advanceResult.advanced) {
+			console.log(`[Webhook Analytics] ✅ UpSell conversation advanced for conversation ${conversation!.conversationId}`);
 		}
 
 	} catch (error) {

@@ -5,7 +5,7 @@ import type { LiveChatViewProps } from "../../types/liveChat";
 import LiveChatUserInterface from "./LiveChatUserInterface";
 
 const LiveChatView: React.FC<LiveChatViewProps> = React.memo(
-	({ conversation, onSendMessage, onBack, isLoading = false }) => {
+	({ conversation, onSendMessage, onBack, isLoading = false, merchantIconUrl, adminAvatarUrl, onMarkAsRead, onResolve, onTypingChange }) => {
 		return (
 			<div className="h-full w-full">
 				<LiveChatUserInterface
@@ -13,6 +13,11 @@ const LiveChatView: React.FC<LiveChatViewProps> = React.memo(
 					onSendMessage={onSendMessage}
 					onBack={onBack}
 					isLoading={isLoading}
+					merchantIconUrl={merchantIconUrl}
+					adminAvatarUrl={adminAvatarUrl}
+					onMarkAsRead={onMarkAsRead}
+					onResolve={onResolve}
+					onTypingChange={onTypingChange}
 				/>
 			</div>
 		);

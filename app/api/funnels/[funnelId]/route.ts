@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
 	deleteFunnel,
+	getFunnelById,
 	updateFunnel,
 } from "../../../../lib/actions/funnel-actions";
 import { getUserContext } from "../../../../lib/context/user-context";
@@ -13,8 +14,38 @@ import type { AuthContext } from "../../../../lib/middleware/whop-auth";
 
 /**
  * Individual Funnel API Route
- * Handles PUT and DELETE operations for specific funnels with proper authentication and authorization
+ * Handles GET, PUT and DELETE operations for specific funnels with proper authentication and authorization
  */
+
+/**
+ * GET /api/funnels/[funnelId] - Get a single funnel with resources (for preview, etc.)
+ */
+async function getFunnelHandler(request: NextRequest, context: AuthContext) {
+	try {
+		const { user } = context;
+		const funnelId = request.nextUrl.pathname.split("/")[3];
+		if (!funnelId) {
+			return createErrorResponse("MISSING_RESOURCE_ID", "Funnel ID is required");
+		}
+		if (!user.experienceId) {
+			return NextResponse.json({ error: "Experience ID is required" }, { status: 400 });
+		}
+		const userContext = await getUserContext(
+			user.userId,
+			"",
+			user.experienceId,
+			false,
+		);
+		if (!userContext) {
+			return NextResponse.json({ error: "User context not found" }, { status: 401 });
+		}
+		const funnel = await getFunnelById(userContext.user, funnelId);
+		return createSuccessResponse(funnel, "Funnel retrieved successfully");
+	} catch (error) {
+		console.error("Error getting funnel:", error);
+		return createErrorResponse("INTERNAL_ERROR", (error as Error).message);
+	}
+}
 
 /**
  * PUT /api/funnels/[funnelId] - Update a specific funnel
@@ -127,5 +158,6 @@ async function deleteFunnelHandler(request: NextRequest, context: AuthContext) {
 }
 
 // Export the protected route handlers with resource protection
+export const GET = withFunnelAuth(getFunnelHandler);
 export const PUT = withFunnelAuth(updateFunnelHandler);
 export const DELETE = withFunnelAuth(deleteFunnelHandler);

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import type { FunnelFlow, FunnelProductFaq, FunnelProductFaqInput } from "../../types/funnel";
+import type { FunnelFlow } from "../../types/funnel";
+import { apiGet, apiPut } from "../../utils/api-client";
 import PreviewChat from "./PreviewChat";
 
 interface Funnel {
@@ -10,10 +11,8 @@ interface Funnel {
 	flow?: FunnelFlow;
 	isDeployed?: boolean;
 	wasEverDeployed?: boolean;
+	merchantType?: string;
 	resources?: any[];
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
 }
 
 interface PreviewPageProps {
@@ -21,6 +20,7 @@ interface PreviewPageProps {
 	experienceId?: string;
 	onBack: () => void;
 	sourcePage?: "resources" | "funnelBuilder" | "analytics" | "resourceLibrary";
+	onPreviewNextMerchant?: (funnel: Funnel) => void;
 }
 
 /**
@@ -35,6 +35,7 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
 	experienceId,
 	onBack,
 	sourcePage = "resources",
+	onPreviewNextMerchant,
 }) => {
 	// Get the funnel flow, fallback to empty flow if not available
 	const funnelFlow = funnel.flow || {
@@ -43,21 +44,25 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
 		blocks: {},
 	};
 
-	const [productFaqs, setProductFaqs] = useState<FunnelProductFaq[]>([]);
+	// When funnel has no resources (e.g. opened from builder before save), fetch funnel with resources so offer buttons resolve
+	const [resources, setResources] = useState<any[]>(funnel.resources ?? []);
 
-	// Fetch product FAQs when component mounts
 	useEffect(() => {
-		if (funnel.id && experienceId) {
-			fetch(`/api/funnels/${funnel.id}/product-faqs`)
-				.then((res) => res.json())
-				.then((data) => {
-					if (data.success && data.data) {
-						setProductFaqs(data.data);
-					}
-				})
-				.catch((err) => console.error("Error fetching product FAQs:", err));
-		}
-	}, [funnel.id, experienceId]);
+		setResources(funnel.resources ?? []);
+	}, [funnel.resources, funnel.id]);
+
+	// Fetch funnel with resources when resources are empty so product links resolve in preview
+	useEffect(() => {
+		if (!funnel.id || !experienceId || (funnel.resources?.length ?? 0) > 0) return;
+		apiGet(`/api/funnels/${funnel.id}`, experienceId)
+			.then((res) => res.json())
+			.then((data) => {
+				if (data.success && data.data?.resources?.length) {
+					setResources(data.data.resources);
+				}
+			})
+			.catch((err) => console.error("Error fetching funnel resources for preview:", err));
+	}, [funnel.id, experienceId, funnel.resources?.length]);
 
 	const handleMessageSent = (message: string, conversationId?: string) => {
 		// Handle message sent - could be used for analytics or logging
@@ -69,63 +74,17 @@ const PreviewPage: React.FC<PreviewPageProps> = ({
 		});
 	};
 
-	const handleHandoutChange = async (keyword: string, adminNotification?: string, userMessage?: string) => {
-		try {
-			// Update funnel via API
-			const response = await fetch(`/api/funnels/${funnel.id}`, {
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					handoutKeyword: keyword,
-					handoutAdminNotification: adminNotification,
-					handoutUserMessage: userMessage,
-				}),
-			});
-			if (!response.ok) {
-				console.error("Error updating handout configuration");
-			}
-		} catch (error) {
-			console.error("Error saving handout configuration:", error);
-		}
-	};
-
-	const handleProductFaqChange = async (input: FunnelProductFaqInput) => {
-		try {
-			const response = await fetch(`/api/funnels/${funnel.id}/product-faqs`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(input),
-			});
-			const data = await response.json();
-			if (data.success && data.data) {
-				// Update local state
-				const existingIndex = productFaqs.findIndex((f) => f.resourceId === input.resourceId);
-				if (existingIndex >= 0) {
-					setProductFaqs(productFaqs.map((f, i) => (i === existingIndex ? data.data : f)));
-				} else {
-					setProductFaqs([...productFaqs, data.data]);
-				}
-			}
-		} catch (error) {
-			console.error("Error saving product FAQ:", error);
-		}
-	};
-
 	return (
 		<PreviewChat
 			funnelFlow={funnelFlow}
-			resources={funnel.resources || []}
+			resources={resources}
 			experienceId={experienceId}
 			funnelId={funnel.id}
-			handoutKeyword={funnel.handoutKeyword}
-			handoutAdminNotification={funnel.handoutAdminNotification}
-			handoutUserMessage={funnel.handoutUserMessage}
-			productFaqs={productFaqs}
-			onHandoutChange={handleHandoutChange}
-			onProductFaqChange={handleProductFaqChange}
+			merchantType={funnel.merchantType}
+			merchantName={funnel.name}
 			onMessageSent={handleMessageSent}
 			onBack={onBack}
-			hideAvatar={false}
+			onPreviewNextMerchant={onPreviewNextMerchant}
 		/>
 	);
 };

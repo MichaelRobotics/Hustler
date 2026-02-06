@@ -7,13 +7,13 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../supabase/db-server";
-import { experiences, funnels, conversations, messages, users, funnelAnalytics } from "../supabase/schema";
+import { experiences, conversations, messages, users, funnelAnalytics } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import { createConversation, addMessage } from "./simplified-conversation-actions";
-import { deleteExistingConversationsByWhopUserId, deleteExistingConversationsByMembershipId } from "./user-management-actions";
 import type { FunnelFlow } from "../types/funnel";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
+import { hasActiveConversation, findFunnelForTrigger } from "../helpers/conversation-trigger";
 
 // Type definition for webhook data passed to handleUserJoinEvent
 export interface UserJoinWebhookData {
@@ -177,24 +177,12 @@ async function lookupCompanyName(experienceId: string): Promise<string | null> {
 }
 
 /**
- * Resolve placeholders in message content
- * Handles [USER], [WHOP_OWNER], and [WHOP] placeholders
+ * Resolve [USER] placeholder only. [WHOP] and [WHOP_OWNER] are resolved when generating/saving the funnel, not at conversation time.
  */
 async function resolvePlaceholders(message: string, experienceId: string, conversationId: string): Promise<string> {
 	let resolvedMessage = message;
 
-	// Resolve [WHOP_OWNER] placeholder
-	if (resolvedMessage.includes('[WHOP_OWNER]')) {
-		const adminName = await lookupAdminUser(experienceId);
-		if (adminName) {
-			resolvedMessage = resolvedMessage.replace(/\[WHOP_OWNER\]/g, adminName);
-			console.log(`[Placeholder Resolution] Replaced [WHOP_OWNER] with: ${adminName}`);
-		} else {
-			console.log(`[Placeholder Resolution] Admin user not found, keeping [WHOP_OWNER] placeholder`);
-		}
-	}
-
-	// Resolve [USER] placeholder
+	// Resolve [USER] placeholder (per-conversation)
 	if (resolvedMessage.includes('[USER]')) {
 		const userName = await lookupCurrentUser(conversationId);
 		if (userName) {
@@ -202,17 +190,6 @@ async function resolvePlaceholders(message: string, experienceId: string, conver
 			console.log(`[Placeholder Resolution] Replaced [USER] with: ${userName}`);
 		} else {
 			console.log(`[Placeholder Resolution] Current user not found, keeping [USER] placeholder`);
-		}
-	}
-
-	// Resolve [WHOP] placeholder
-	if (resolvedMessage.includes('[WHOP]')) {
-		const companyName = await lookupCompanyName(experienceId);
-		if (companyName) {
-			resolvedMessage = resolvedMessage.replace(/\[WHOP\]/g, companyName);
-			console.log(`[Placeholder Resolution] Replaced [WHOP] with: ${companyName}`);
-		} else {
-			console.log(`[Placeholder Resolution] Company name not found, keeping [WHOP] placeholder`);
 		}
 	}
 
@@ -335,27 +312,7 @@ export async function handleUserJoinEvent(
 			console.log(`User ${userId} already exists in experience ${experience.id}`);
 		}
 
-		// Step 3: Find deployed funnel for this experience (no product filtering)
-		const liveFunnel = await db.query.funnels.findFirst({
-			where: and(
-				eq(funnels.experienceId, experience.id),
-				eq(funnels.isDeployed, true)
-			),
-			columns: {
-				id: true,
-				flow: true,
-				experienceId: true,
-			},
-		});
-
-		if (!liveFunnel || !liveFunnel.flow) {
-			console.log(`✅ Correctly handled: No deployed funnel found for experience ${experience.id} - user joined but no DM needed`);
-			return;
-		}
-
-		console.log(`Found live funnel ${liveFunnel.id} for experience ${experience.id} and product ${productId}`);
-
-		// Step 4: Get user name and company name for personalization
+		// Step 3: Get user (internal id) for trigger filter
 		const user = await db.query.users.findFirst({
 			where: and(
 				eq(users.whopUserId, userId),
@@ -363,7 +320,33 @@ export async function handleUserJoinEvent(
 			),
 		});
 
-		// Step 5: Get admin name for [WHOP_OWNER] placeholder
+		if (!user) {
+			console.error(`[USER-JOIN] User ${userId} not found in experience ${experience.id}`);
+			return;
+		}
+
+		// Step 4: Find funnel by membership_activated trigger (hierarchy + config filters)
+		const liveFunnel = await findFunnelForTrigger(experience.id, "membership_activated", {
+			userId: user.id,
+			whopUserId: userId,
+			productId,
+		});
+
+		if (!liveFunnel?.flow) {
+			console.log(`✅ Correctly handled: No funnel with membership_activated trigger found for experience ${experience.id} - user joined but no DM needed`);
+			return;
+		}
+
+		const funnelFlow = liveFunnel.flow as FunnelFlow & { startBlockId: string };
+		console.log(`Found funnel ${liveFunnel.id} for experience ${experience.id} and product ${productId} (membership_activated)`);
+
+		// Step 5: Guard — one active conversation per user per experience; do not create a second
+		if (await hasActiveConversation(experience.id, userId)) {
+			console.log(`[USER-JOIN] User ${userId} already has active conversation in experience ${experience.id} - skipping conversation creation`);
+			return;
+		}
+
+		// Step 6: Get admin name for [WHOP_OWNER] placeholder
 		const adminUser = await db.query.users.findFirst({
 			where: and(
 				eq(users.experienceId, experience.id),
@@ -375,7 +358,7 @@ export async function handleUserJoinEvent(
 		// Step 6: Extract transition message from funnel flow with personalization
 		// We'll get the user name after conversation is created using lookupCurrentUser()
 		let transitionMessage = await getTransitionMessage(
-			liveFunnel.flow, 
+			funnelFlow,
 			undefined, // Will be resolved after conversation creation
 			adminName,
 			experience.whopExperienceId
@@ -385,38 +368,14 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Step 6: Delete any existing conversations for this user
-		// Delete by both whopUserId and membershipId to be safe
-		const deletedByUserId = await deleteExistingConversationsByWhopUserId(userId, experience.id);
-		console.log(`[USER-JOIN] Deleted ${deletedByUserId} conversations by whopUserId ${userId}`);
-		
-		let deletedByMembershipId = 0;
-		if (membershipId) {
-			deletedByMembershipId = await deleteExistingConversationsByMembershipId(membershipId, experience.id);
-			console.log(`[USER-JOIN] Deleted ${deletedByMembershipId} conversations by membershipId ${membershipId}`);
-		}
-
-		// Step 6: Check if conversation already exists (race condition protection)
-		const existingConversation = await db.query.conversations.findFirst({
-			where: and(
-				eq(conversations.whopUserId, userId),
-				eq(conversations.experienceId, experience.id),
-				eq(conversations.status, "active")
-			),
-		});
-
-		if (existingConversation) {
-			console.log(`[USER-JOIN] Conversation still exists for user ${userId} in experience ${experience.id} after deleting ${deletedByUserId + deletedByMembershipId} conversations - this indicates a race condition or deletion failed`);
-			return;
-		}
-
+		// Create conversation (createConversation closes any previous active for this user, then inserts)
 		// Step 8: Create conversation record with TRANSITION stage
 		console.log(`[USER-JOIN] Creating new conversation for user ${userId} in experience ${experience.id}`);
 		const conversationId = await createConversation(
 			experience.id,
 			liveFunnel.id,
 			userId, // Use actual whopUserId
-			liveFunnel.flow.startBlockId, // This should be TRANSITION block
+			funnelFlow.startBlockId, // This should be TRANSITION block
 			membershipId, // Pass membershipId separately
 			productId, // Pass whop_product_id
 		);
@@ -439,7 +398,7 @@ export async function handleUserJoinEvent(
 
 	// Step 9: Update conversation to WELCOME stage and save WELCOME message
 	console.log(`[USER-JOIN] Updating conversation ${conversationId} to WELCOME stage`);
-	await updateConversationToWelcomeStage(conversationId, liveFunnel.flow);
+	await updateConversationToWelcomeStage(conversationId, funnelFlow);
 
 	// Track awareness (starts) when welcome message is sent - BACKGROUND PROCESSING
 	console.log(`🚀 [USER-JOIN] About to track awareness for experience ${experience.id}, funnel ${liveFunnel.id}`);
@@ -463,8 +422,8 @@ export async function handleUserJoinEvent(
  * 
  * @param funnelFlow - The funnel flow object
  * @param userName - User's name for [USER] replacement
- * @param companyName - Company name for [WHOP] replacement
- * @param experienceId - Experience ID for [LINK] replacement
+ * @param companyName - Unused; [WHOP] is resolved when generating/saving the funnel
+ * @param experienceId - Experience ID for app-link button appended at end (no [LINK] in message)
  * @returns Transition message or null
  */
 export async function getTransitionMessage(
@@ -492,41 +451,19 @@ export async function getTransitionMessage(
 
 		let transitionMessage = startBlock.message;
 
-		// Replace [USER] with first word of user name
+		// Replace [USER] with first word of user name ([WHOP] and [WHOP_OWNER] resolved when generating funnel)
 		if (userName) {
-			const firstName = userName.split(' ')[0]; // Get only the first word
+			const firstName = userName.split(' ')[0];
 			transitionMessage = transitionMessage.replace(/\[USER\]/g, firstName);
 		}
 
-		// Replace [WHOP] with actual company name
-		if (companyName) {
-			transitionMessage = transitionMessage.replace(/\[WHOP\]/g, companyName);
-		}
-
-		// Replace [WHOP_OWNER] with actual company name (new format)
-		if (companyName) {
-			transitionMessage = transitionMessage.replace(/\[WHOP_OWNER\]/g, companyName);
-		}
-
-		// Resolve [LINK] placeholder with app link
-		if (transitionMessage.includes('[LINK]')) {
-			if (experienceId) {
-				const appLink = await generateAppLink(experienceId);
-				transitionMessage = transitionMessage.replace(/\[LINK\]/g, appLink);
-				console.log(`[Transition Message] Replaced [LINK] with: ${appLink}`);
-			} else {
-				console.log(`[Transition Message] No experienceId provided, keeping [LINK] placeholder`);
-			}
-		}
-
-		// Add UserChat link if not already present and no [LINK] placeholder
-		if (!transitionMessage.includes('[LINK]') && !transitionMessage.includes('UserChat') && !transitionMessage.includes('whop.com')) {
-			if (experienceId) {
-				const appLink = await generateAppLink(experienceId);
-				transitionMessage += `\n\n${appLink}`;
-			} else {
-				transitionMessage += "\n\n[LINK]";
-			}
+		// No [LINK] in messages. Strip any [LINK] and append a single button with app link (opens in new window in chat).
+		transitionMessage = transitionMessage.replace(/\[LINK\]/g, "").trim();
+		if (experienceId) {
+			const appLink = await generateAppLink(experienceId);
+			const safeHref = appLink.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+			const buttonHtml = `<div class="animated-gold-button" data-href="${safeHref}">Get Started!</div>`;
+			transitionMessage = transitionMessage ? `${transitionMessage}\n\n${buttonHtml}` : buttonHtml;
 		}
 
 		return transitionMessage;
@@ -622,13 +559,16 @@ export async function updateConversationToWelcomeStage(
 			return;
 		}
 		
-		// Update conversation to WELCOME stage (using same pattern as navigate-funnel)
+		const now = new Date();
+		// Update conversation to WELCOME stage (using same pattern as navigate-funnel); set entered-at and reset notification sequence
 		const updatedConversation = await db
 			.update(conversations)
 			.set({
 				currentBlockId: firstWelcomeBlockId,
+				currentBlockEnteredAt: now,
+				lastNotificationSequenceSent: null,
 				userPath: [firstWelcomeBlockId], // Start fresh with WELCOME block
-				updatedAt: new Date(),
+				updatedAt: now,
 			})
 			.where(eq(conversations.id, conversationId))
 			.returning();
@@ -648,9 +588,6 @@ export async function updateConversationToWelcomeStage(
 				conversationId: conversationId,
 				type: "bot",
 				content: resolvedMessage,
-				metadata: {
-					blockId: firstWelcomeBlockId,
-				},
 			});
 			console.log(`[USER-JOIN] Saved WELCOME message to database for conversation ${conversationId}:`, resolvedMessage.substring(0, 100) + '...');
 		}

@@ -186,7 +186,6 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     link: trackingUrl,
     description: product.description,
     whopProductId: product.id,
-    productApps: productCategory === "FREE_VALUE" ? [] : undefined,
     image: productImage,
     price: formattedPrice
   });
@@ -197,7 +196,6 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
     link: trackingUrl,
     description: product.description,
     whopProductId: product.id,
-    productApps: productCategory === "FREE_VALUE" ? [] : undefined,
     image: productImage,
     price: formattedPrice,
     sold: product.activeUsersCount || null, // Map member_count to sold

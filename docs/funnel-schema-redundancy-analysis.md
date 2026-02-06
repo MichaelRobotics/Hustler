@@ -21,7 +21,7 @@
 
 **Redundancy:** The app uses **dual triggers** (Membership + App). `trigger_type` is kept for backward compatibility and is still written (e.g. when the App trigger is set, `trigger_type` is set to the same value). So one of the two “real” columns duplicates `trigger_type`.
 
-**Runtime usage (before migration):** user-context (conversation creation) read `triggerType` only; webhook (membership.went_valid) read `triggerType === "membership_valid"` only. Both have been updated to use `app_trigger_type` / `membership_trigger_type` with fallback to `trigger_type`.
+**Runtime usage (before migration):** user-context (conversation creation) read `triggerType` only; webhook (membership.went_valid) used membership trigger types. Both have been updated to use `app_trigger_type` / `membership_trigger_type` with fallback to `trigger_type`. Membership activation now uses `any_membership_buy` / `membership_buy` (not `membership_valid`).
 
 **Recommendation:** Treat `trigger_type` as read-only legacy. Runtime now prefers `membership_trigger_type` and `app_trigger_type` with fallback. New code should rely only on the new columns. Eventually drop `trigger_type` after all readers are migrated and UI stops writing it.
 
@@ -42,7 +42,7 @@
 
 | Column | Purpose |
 |--------|--------|
-| `trigger_timeout_minutes` | JSON per-trigger timeout (e.g. `{ "on_app_entry": 0, "membership_valid": 30 }`) |
+| `trigger_timeout_minutes` | JSON per-trigger timeout (e.g. `{ "on_app_entry": 0 }`) — column dropped |
 | `delay_minutes` | App trigger delay (single value) |
 | `membership_delay_minutes` | Membership trigger delay (single value) |
 

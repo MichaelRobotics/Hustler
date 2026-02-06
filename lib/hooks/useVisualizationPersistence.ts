@@ -60,9 +60,9 @@ export function useVisualizationPersistence({
 					isSavingRef.current = true;
 					lastErrorRef.current = null;
 
-					// Check if user context is available
+					// Skip save when user context is not available (e.g. initial load, preview)
 					if (!user?.experienceId) {
-						throw new Error("Experience ID is required");
+						return;
 					}
 
 					const response = await apiPut(

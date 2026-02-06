@@ -35,6 +35,7 @@ export const conversationStatusEnum = pgEnum("conversation_status", [
 	"completed",
 	"closed",
 	"abandoned",
+	"archived",
 ]);
 export const messageTypeEnum = pgEnum("message_type", [
 	"user",
@@ -61,7 +62,6 @@ export const reviewStatusEnum = pgEnum("review_status", [
 ]);
 export const funnelTriggerTypeEnum = pgEnum("funnel_trigger_type", [
 	"on_app_entry",      // Current behavior - create on first app visit if no conversation
-	"membership_valid",  // Create when membership goes valid (if no customers_resources record)
 	"any_membership_buy", // Any membership buy
 	"membership_buy",     // Membership buy (specific product)
 	"no_active_conversation", // No active conversation
@@ -214,10 +214,6 @@ export const funnels = pgTable(
 		appTriggerConfig: jsonb("app_trigger_config").default("{}"), // App trigger config
 		delayMinutes: integer("delay_minutes").default(0).notNull(), // App trigger delay
 		membershipDelayMinutes: integer("membership_delay_minutes").default(0).notNull(), // Membership trigger delay
-		// Handout configuration
-		handoutKeyword: text("handout_keyword").default("handout"),
-		handoutAdminNotification: text("handout_admin_notification"),
-		handoutUserMessage: text("handout_user_message"),
 		merchantType: text("merchant_type").default("qualification").notNull(), // "qualification" | "upsell"
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -263,9 +259,7 @@ export const resources = pgTable(
 		code: text("code"), // Promo code
 		description: text("description"),
 		whopProductId: text("whop_product_id"), // For MY_PRODUCTS sync
-		whopAppId: text("whop_app_id"), // For app-based products
 		whopMembershipId: text("whop_membership_id"), // For membership-based products
-		productApps: jsonb("product_apps"), // JSON field for product apps data
 		price: decimal("price", { precision: 10, scale: 2 }), // Price from access pass plan or user input
 		image: text("image"), // Link to icon of app/product/digital resource image
 		storageUrl: text("storage_url"), // Link that triggers digital asset upload
@@ -287,7 +281,6 @@ export const resources = pgTable(
 		whopProductIdIdx: index("resources_whop_product_id_idx").on(
 			table.whopProductId,
 		),
-		whopAppIdIdx: index("resources_whop_app_id_idx").on(table.whopAppId),
 		whopMembershipIdIdx: index("resources_whop_membership_id_idx").on(table.whopMembershipId),
 		checkoutConfigurationIdIdx: index("resources_checkout_configuration_id_idx").on(table.checkoutConfigurationId),
 		experienceUserUpdatedIdx: index("resources_experience_user_updated_idx").on(
@@ -470,6 +463,20 @@ export const conversations = pgTable(
 		whopProductId: text("whop_product_id"), // Whop product ID for product-specific conversations
 		status: conversationStatusEnum("status").default("active").notNull(),
 		currentBlockId: text("current_block_id"),
+		currentBlockEnteredAt: timestamp("current_block_entered_at"), // When user entered this block (for inactivity / notifications)
+		lastNotificationSequenceSent: integer("last_notification_sequence_sent"), // Last notification sequence sent for this block (1, 2, or 3)
+		offerCtaClickedAt: timestamp("offer_cta_clicked_at"), // When user clicked offer CTA (starts upsell/downsell timer)
+		offerCtaBlockId: text("offer_cta_block_id"), // Block ID of the OFFER block whose CTA was clicked
+		offerPurchasedAt: timestamp("offer_purchased_at"), // When user purchased this offer (payment.succeeded matched); cron uses for upsell vs downsell
+		userLastReadAt: timestamp("user_last_read_at"), // When user last read (for read receipts: bot/admin messages with createdAt <= this are "read by user")
+		adminLastReadAt: timestamp("admin_last_read_at"), // When admin last read (user messages with createdAt <= this are "read by admin")
+		unreadCountAdmin: integer("unread_count_admin").default(0).notNull(), // Unread user messages for admin; zeroed when admin marks read
+		unreadCountUser: integer("unread_count_user").default(0).notNull(), // Unread admin messages for user; zeroed when user marks read
+		controlledBy: text("controlled_by").default("bot").notNull(), // 'bot' | 'admin'; handover to admin on any user message
+		userTyping: boolean("user_typing").default(false).notNull(), // true = show "user is typing" animation
+		adminTyping: boolean("admin_typing").default(false).notNull(), // true = show "admin is typing" animation
+		userTypingAt: timestamp("user_typing_at"), // when user typing was last set true; if >1 min ago we treat as false
+		adminTypingAt: timestamp("admin_typing_at"), // when admin typing was last set true; if >1 min ago we treat as false
 		flow: jsonb("flow"), // Customized funnel flow for this conversation
 		userPath: jsonb("user_path"), // Track user's path through funnel
 		phase2StartTime: timestamp("phase2_start_time"), // When Phase 2 (VALUE_DELIVERY) begins
@@ -485,11 +492,6 @@ export const conversations = pgTable(
 		funnelIdIdx: index("conversations_funnel_id_idx").on(table.funnelId),
 		whopUserIdIdx: index("conversations_whop_user_id_idx").on(table.whopUserId),
 		statusIdx: index("conversations_status_idx").on(table.status),
-		// Unique constraint for one active conversation per whop_user per experience
-		uniqueActiveUserConversation: unique("unique_active_user_conversation").on(
-			table.experienceId,
-			table.whopUserId,
-		),
 	}),
 );
 
@@ -503,6 +505,7 @@ export const messages = pgTable(
 		type: messageTypeEnum("type").notNull(),
 		content: text("content").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
+		metadata: jsonb("metadata"), // e.g. { senderType: "admin", senderId, timestamp } for LiveChat
 	},
 	(table) => ({
 		conversationIdIdx: index("messages_conversation_id_idx").on(

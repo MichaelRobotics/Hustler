@@ -369,13 +369,6 @@ export async function triggerProductSyncForNewAdmin(
 							console.log(`✅ Using fallback checkout link: ${trackingUrl}`);
 						}
 						
-						// FREE discovery products start with empty product_apps array
-						// They will be populated later by access pass processing
-						const productApps = productCategory === "FREE_VALUE" ? [] : undefined;
-						if (productApps) {
-							console.log(`� FREE discovery product "${product.title.trim()}" starts with empty product_apps (will be populated by access pass processing)`);
-						}
-						
 						// Fetch product image from Whop SDK galleryImages ONLY (no product.logo/bannerImage/imageUrl)
 						const defaultPlaceholder = 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp';
 						let productImage = defaultPlaceholder;
@@ -426,8 +419,7 @@ export async function triggerProductSyncForNewAdmin(
 								link: trackingUrl, // Product link (affiliate tracking added later in funnel navigation)
 								description: product.description,
 								whopProductId: product.id,
-								productApps: productApps,
-								// NEW: Add image and price data
+								// Add image and price data
 								image: productImage,
 								price: formattedPrice,
 								// Add plan selection if cheapestPlan exists
@@ -476,93 +468,8 @@ export async function triggerProductSyncForNewAdmin(
 			updateProgress("discovery_resources_skipped", true);
 		}
 
-		// Step 4: REMOVED - App sync is no longer supported
-		// Apps are no longer synced, only products are synced
-		// Step 5: Sync FREE_VALUE resources with "prod_..." whop_product_id to PAID resources' product_apps
-		updateProgress("syncing_free_to_paid_resources");
-		console.log("� Syncing FREE_VALUE resources with 'prod_...' whop_product_id to PAID resources' product_apps...");
-		
-		try {
-			// Get all resources in the current experience
-			const allExperienceResources = await db.query.resources.findMany({
-				where: eq(resources.experienceId, experienceId),
-				columns: {
-					id: true,
-					name: true,
-					category: true,
-					whopProductId: true,
-					productApps: true
-				}
-			});
-			
-			// Find FREE_VALUE resources with "prod_..." in whop_product_id
-			const freeResourcesWithProdId = allExperienceResources.filter((resource: any) => 
-				resource.category === "FREE_VALUE" && 
-				resource.whopProductId && 
-				resource.whopProductId.startsWith("prod_")
-			);
-			
-			// Find PAID resources
-			const paidResources = allExperienceResources.filter((resource: any) => 
-				resource.category === "PAID"
-			);
-			
-			console.log(`� Found ${freeResourcesWithProdId.length} FREE_VALUE resources with 'prod_...' whop_product_id`);
-			console.log(`� Found ${paidResources.length} PAID resources`);
-			
-			if (freeResourcesWithProdId.length > 0 && paidResources.length > 0) {
-				// Create mapping of FREE resource names to add to PAID resources' product_apps
-				const freeResourceNames = freeResourcesWithProdId.map((resource: any) => resource.name);
-				
-				// Update each PAID resource with FREE resource names in product_apps
-				const syncPromises: Promise<void>[] = [];
-				
-				for (const paidResource of paidResources) {
-					const currentProductApps = paidResource.productApps || [];
-					const newFreeResourceNames = freeResourceNames.filter((name: any) => !currentProductApps.includes(name));
-					
-					if (newFreeResourceNames.length > 0) {
-						const updatedProductApps = [...currentProductApps, ...newFreeResourceNames];
-						
-						syncPromises.push(
-							db.update(resources)
-								.set({
-									productApps: updatedProductApps,
-									updatedAt: new Date()
-								})
-								.where(eq(resources.id, paidResource.id))
-								.then(() => {
-									console.log(`✅ Added FREE resources [${newFreeResourceNames.join(', ')}] to PAID resource ${paidResource.name}'s product_apps`);
-								})
-								.catch((error: any) => {
-									console.error(`❌ Error updating product_apps for PAID resource ${paidResource.id}:`, error);
-								})
-						);
-					} else {
-						console.log(`ℹ️ No new FREE resources to add to PAID resource ${paidResource.name}`);
-					}
-				}
-				
-				// Execute all sync updates in parallel
-				if (syncPromises.length > 0) {
-					console.log(`� Executing ${syncPromises.length} FREE-to-PAID sync updates in parallel...`);
-					await Promise.all(syncPromises);
-				}
-				
-				updateProgress("free_to_paid_sync_completed", true);
-			} else {
-				console.log(`ℹ️ No FREE_VALUE resources with 'prod_...' whop_product_id or no PAID resources found for sync`);
-				updateProgress("free_to_paid_sync_skipped", true);
-			}
-		} catch (error) {
-			console.error(`❌ Error syncing FREE_VALUE resources to PAID resources:`, error);
-			syncState.errors.push(`FREE-to-PAID sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-			updateProgress("free_to_paid_sync_failed", true);
-		}
 
-		// Resources are now created in the library (no funnel assignment needed)
-
-		// Step 6: Mark user as synced
+		// Step 5: Mark user as synced
 		await db.update(users)
 			.set({ productsSynced: true })
 			.where(eq(users.id, userId));

@@ -10,15 +10,22 @@ import { db } from "../supabase/db-server";
 import { conversations, messages, funnelInteractions, funnels, funnelAnalytics, experiences, users, resources } from "../supabase/schema";
 import { whopSdk } from "../whop-sdk";
 import type { FunnelFlow, FunnelBlock } from "../types/funnel";
+import { isProductCardBlock, getProductCardButtonLabel } from "../utils/funnelUtils";
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "../analytics/background-tracking";
+import { findFunnelForTrigger, hasActiveConversation } from "../helpers/conversation-trigger";
+import { updateConversationToWelcomeStage } from "./user-join-actions";
+
+function escapeHtmlAttr(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 export interface Conversation {
 	id: string;
 	experienceId: string;
 	funnelId: string;
 	whopUserId: string;
-	status: "active" | "closed" | "abandoned";
+	status: "active" | "closed" | "abandoned" | "archived";
 	currentBlockId?: string;
 	userPath?: string[];
 	createdAt: Date;
@@ -117,35 +124,20 @@ export async function createConversation(
 ): Promise<string> {
 	try {
 		console.log(`[CREATE-CONVERSATION] Starting conversation creation for whopUserId ${whopUserId} in experience ${experienceId}`);
-		
-		// Delete any existing conversations for this user
-		// First, get conversation IDs to delete related data
-		const existingConversations = await db.query.conversations.findMany({
-			where: and(
-				eq(conversations.whopUserId, whopUserId),
-				eq(conversations.experienceId, experienceId)
-			),
-			columns: { id: true }
-		});
 
-		if (existingConversations.length > 0) {
-			const conversationIds = existingConversations.map((c: any) => c.id);
-
-			// Delete related data first (foreign key constraints)
-			await db.delete(messages).where(inArray(messages.conversationId, conversationIds));
-			await db.delete(funnelInteractions).where(inArray(funnelInteractions.conversationId, conversationIds));
-
-			// Delete conversations
-			const deleteResult = await db
-				.delete(conversations)
-				.where(and(
+		// Close only the single active conversation for this user (do not delete; archived only from notification "delete conversation")
+		const closeResult = await db
+			.update(conversations)
+			.set({ status: "closed", updatedAt: new Date() })
+			.where(
+				and(
 					eq(conversations.whopUserId, whopUserId),
-					eq(conversations.experienceId, experienceId)
-				));
-			
-			console.log(`[CREATE-CONVERSATION] Deleted ${deleteResult.rowCount || 0} existing conversations for whopUserId ${whopUserId}`);
-		} else {
-			console.log(`[CREATE-CONVERSATION] No existing conversations found for whopUserId ${whopUserId}`);
+					eq(conversations.experienceId, experienceId),
+					eq(conversations.status, "active")
+				)
+			);
+		if (closeResult.rowCount && closeResult.rowCount > 0) {
+			console.log(`[CREATE-CONVERSATION] Closed ${closeResult.rowCount} active conversation(s) for whopUserId ${whopUserId}`);
 		}
 
 		// Get the original funnel flow
@@ -160,18 +152,9 @@ export async function createConversation(
 		const originalFlow = funnel.flow as FunnelFlow;
 		console.log(`[CREATE-CONVERSATION] Retrieved original funnel flow with ${Object.keys(originalFlow.blocks).length} blocks`);
 
-		// Customize the flow based on whopProductId if provided
-		let customizedFlow = originalFlow;
-		if (whopProductId) {
-			console.log(`[CREATE-CONVERSATION] Customizing flow for whopProductId: ${whopProductId}`);
-			customizedFlow = await customizeFlowForProduct(originalFlow, whopProductId, experienceId);
-			console.log(`[CREATE-CONVERSATION] Flow customized with ${Object.keys(customizedFlow.blocks).length} blocks`);
-		} else {
-			console.log(`[CREATE-CONVERSATION] No whopProductId provided, using original flow`);
-		}
-
-		// Create new conversation with customized flow
+		// Create new conversation with funnel flow
 		console.log(`[CREATE-CONVERSATION] Creating new conversation with funnelId ${funnelId}, startBlockId ${startBlockId}, whopProductId ${whopProductId}`);
+		const now = new Date();
 		const [newConversation] = await db.insert(conversations).values({
 			experienceId,
 			funnelId,
@@ -180,170 +163,17 @@ export async function createConversation(
 			whopProductId,
 			status: "active",
 			currentBlockId: startBlockId,
+			currentBlockEnteredAt: now,
+			lastNotificationSequenceSent: null,
 			userPath: [startBlockId],
-			flow: customizedFlow, // Store the customized flow
+			flow: originalFlow,
 		}).returning();
 
-		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId} with customized flow`);
+		console.log(`[CREATE-CONVERSATION] Successfully created conversation ${newConversation.id} for whopUserId ${whopUserId}`);
 		return newConversation.id;
 	} catch (error) {
 		console.error("Error creating conversation:", error);
 		throw error;
-	}
-}
-
-/**
- * Customize funnel flow for a specific product based on whopProductId
- * This function:
- * 1. Filters WELCOME stage options to only show those that match the product's apps
- * 2. Removes blocks that have ONLY the product resource in their availableOffers
- * 3. Removes options that lead to blocks containing ONLY the product resource
- */
-async function customizeFlowForProduct(
-	originalFlow: FunnelFlow,
-	whopProductId: string,
-	experienceId: string
-): Promise<FunnelFlow> {
-	try {
-		console.log(`[CUSTOMIZE-FLOW] Customizing flow for whopProductId: ${whopProductId}`);
-		
-		// Find the resource that matches the whopProductId
-		const matchingResource = await db.query.resources.findFirst({
-			where: and(
-				eq(resources.whopProductId, whopProductId),
-				eq(resources.experienceId, experienceId)
-			),
-			columns: {
-				id: true,
-				name: true,
-				productApps: true,
-				whopProductId: true
-			}
-		});
-
-		if (!matchingResource) {
-			console.log(`[CUSTOMIZE-FLOW] No resource found with whopProductId: ${whopProductId} - using original flow`);
-			return originalFlow;
-		}
-
-		const productApps = matchingResource.productApps as string[] || [];
-		if (productApps.length === 0) {
-			console.log(`[CUSTOMIZE-FLOW] No product_apps found in resource - using original flow`);
-			return originalFlow;
-		}
-
-		console.log(`[CUSTOMIZE-FLOW] Found matching resource: ${matchingResource.name} with apps: ${JSON.stringify(productApps)}`);
-
-		// Deep clone the original flow
-		const customizedFlow: FunnelFlow = JSON.parse(JSON.stringify(originalFlow));
-
-		// Step 1: Find WELCOME stage blocks and filter options
-		const welcomeStage = customizedFlow.stages.find(stage => stage.name === "WELCOME");
-		if (!welcomeStage) {
-			console.log(`[CUSTOMIZE-FLOW] No WELCOME stage found - using original flow`);
-			return originalFlow;
-		}
-
-		console.log(`[CUSTOMIZE-FLOW] Processing WELCOME stage blocks: ${welcomeStage.blockIds.join(', ')}`);
-
-		// Filter options in each WELCOME block
-		let totalOptionsBefore = 0;
-		let totalOptionsAfter = 0;
-
-		for (const blockId of welcomeStage.blockIds) {
-			const block = customizedFlow.blocks[blockId];
-			if (!block || !block.options) continue;
-
-			const originalOptionsCount = block.options.length;
-			totalOptionsBefore += originalOptionsCount;
-
-			// Filter options to only include those that lead to blocks with resourceName matching product_apps
-			const filteredOptions = block.options.filter(option => {
-				const targetBlockId = option.nextBlockId;
-				if (!targetBlockId) return true; // Keep options without nextBlockId
-
-				const targetBlock = customizedFlow.blocks[targetBlockId];
-				if (!targetBlock) return true; // Keep options with invalid target blocks
-
-				// If target block has no resourceName, keep the option
-				if (!targetBlock.resourceName) return true;
-
-				// Check if resourceName matches any of the product_apps
-				const resourceNameMatches = productApps.some(appName => 
-					appName.toLowerCase().trim() === (targetBlock.resourceName || '').toLowerCase().trim()
-				);
-
-				if (resourceNameMatches) {
-					console.log(`[CUSTOMIZE-FLOW] ✅ Keeping option "${option.text}" -> "${targetBlock.resourceName}"`);
-				} else {
-					console.log(`[CUSTOMIZE-FLOW] ❌ Filtering out option "${option.text}" -> "${targetBlock.resourceName}" (not in product_apps)`);
-				}
-
-				return resourceNameMatches;
-			});
-
-			block.options = filteredOptions;
-			totalOptionsAfter += filteredOptions.length;
-
-			console.log(`[CUSTOMIZE-FLOW] Block ${blockId}: ${originalOptionsCount} -> ${filteredOptions.length} options`);
-		}
-
-		console.log(`[CUSTOMIZE-FLOW] WELCOME stage total options: ${totalOptionsBefore} -> ${totalOptionsAfter}`);
-
-		// Step 2: Remove blocks that have ONLY the product resource in their availableOffers
-		const blocksToRemove: string[] = [];
-		for (const [blockId, block] of Object.entries(customizedFlow.blocks)) {
-			if (!block.availableOffers || block.availableOffers.length === 0) continue;
-
-			// Check if this block has ONLY the product resource
-			const hasOnlyProductResource = block.availableOffers.length === 1 && 
-				block.availableOffers[0].toLowerCase().trim() === matchingResource.name.toLowerCase().trim();
-
-			if (hasOnlyProductResource) {
-				console.log(`[CUSTOMIZE-FLOW] 🗑️ Removing block "${blockId}" - has only product resource "${block.availableOffers[0]}"`);
-				blocksToRemove.push(blockId);
-			}
-		}
-
-		// Step 3: Remove options that lead to blocks containing ONLY the product resource
-		for (const [blockId, block] of Object.entries(customizedFlow.blocks)) {
-			if (!block.options) continue;
-
-			// Filter out options that lead to blocks with only the product resource
-			block.options = block.options.filter(option => {
-				const targetBlockId = option.nextBlockId;
-				if (!targetBlockId) return true; // Keep options without nextBlockId
-
-				// Check if target block is in the removal list
-				if (blocksToRemove.includes(targetBlockId)) {
-					console.log(`[CUSTOMIZE-FLOW] 🗑️ Removing option "${option.text}" -> block "${targetBlockId}" (has only product resource)`);
-					return false;
-				}
-
-				return true;
-			});
-		}
-
-		// Step 4: Remove the identified blocks from the flow
-		for (const blockId of blocksToRemove) {
-			delete customizedFlow.blocks[blockId];
-			console.log(`[CUSTOMIZE-FLOW] 🗑️ Deleted block "${blockId}" from flow`);
-		}
-
-		// Step 5: Update stage blockIds to remove deleted blocks
-		for (const stage of customizedFlow.stages) {
-			stage.blockIds = stage.blockIds.filter(blockId => !blocksToRemove.includes(blockId));
-		}
-
-		console.log(`[CUSTOMIZE-FLOW] Removed ${blocksToRemove.length} blocks with only product resource`);
-		console.log(`[CUSTOMIZE-FLOW] Flow customization completed`);
-
-		return customizedFlow;
-
-	} catch (error) {
-		console.error(`[CUSTOMIZE-FLOW] Error customizing flow:`, error);
-		// Return original flow if customization fails
-		return originalFlow;
 	}
 }
 
@@ -408,6 +238,71 @@ export async function addMessage(
 	}
 }
 
+/**
+ * Delete the most recent bot message for a conversation (e.g. to "remove old offer" before showing downsell).
+ */
+export async function deleteLastBotMessage(conversationId: string): Promise<boolean> {
+	try {
+		const lastBot = await db.query.messages.findFirst({
+			where: and(
+				eq(messages.conversationId, conversationId),
+				eq(messages.type, "bot"),
+			),
+			orderBy: [desc(messages.createdAt)],
+			columns: { id: true },
+		});
+		if (!lastBot) return false;
+		await db.delete(messages).where(eq(messages.id, lastBot.id));
+		return true;
+	} catch (error) {
+		console.error("[deleteLastBotMessage] Error:", error);
+		return false;
+	}
+}
+
+/**
+ * Format a funnel block message for storage (resolve [USER] only; [WHOP]/[WHOP_OWNER] resolved when generating merchant).
+ * Used when appending upsell/downsell messages from cron.
+ */
+export async function formatFunnelBlockMessage(
+	block: FunnelBlock,
+	experienceId: string,
+	conversationId: string,
+	flow: FunnelFlow,
+): Promise<string> {
+	let msg = block.message ?? "";
+
+	// [USER] (per-conversation; [WHOP] and [WHOP_OWNER] are resolved at funnel generation/save, not here)
+	if (msg.includes("[USER]")) {
+		const conv = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+			columns: { whopUserId: true },
+		});
+		const u = conv?.whopUserId
+			? await db.query.users.findFirst({
+					where: eq(users.whopUserId, conv.whopUserId),
+					columns: { name: true },
+				})
+			: null;
+		const name = u?.name?.split(" ")[0];
+		if (name) msg = msg.replace(/\[USER\]/g, name);
+	}
+	// No [LINK] in messages. Product link comes from the card's selected resource only; button is appended at the end.
+	msg = msg.replace(/\[LINK\]/g, "").trim();
+	const isProductCard = isProductCardBlock(block.id, flow);
+	if (isProductCard) {
+		const link = await getBlockResourceLink(block, experienceId);
+		const label = getProductCardButtonLabel(block.id, flow);
+		const href = link || "#";
+		const buttonHtml = `<div class="animated-gold-button" data-href="${escapeHtmlAttr(href)}">${label}</div>`;
+		msg = msg ? `${msg}\n\n${buttonHtml}` : buttonHtml;
+	} else {
+		const link = await getExperienceAppLink(experienceId);
+		const buttonHtml = `<div class="animated-gold-button" data-href="${escapeHtmlAttr(link)}">Get Started!</div>`;
+		msg = msg ? `${msg}\n\n${buttonHtml}` : buttonHtml;
+	}
+	return msg;
+}
 
 
 
@@ -474,10 +369,8 @@ export async function processUserMessage(
 			return { success: false, error: "Current block not found" };
 		}
 
-		// Check if current block is in OFFER stage
-		const isOfferStage = funnelFlow.stages.some(
-			stage => stage.name === 'OFFER' && stage.blockIds.includes(currentBlockId)
-		);
+		// Check if current block is in a product-card stage (cardType === "product")
+		const isOfferStage = isProductCardBlock(currentBlockId, funnelFlow);
 
 		console.log(`[processUserMessage] Current block: ${currentBlockId}`, {
 			message: currentBlock.message?.substring(0, 100),
@@ -536,6 +429,12 @@ export async function processUserMessage(
 
 		// No valid option found - handle escalation (unless in OFFER stage)
 		if (isOfferStage) {
+			const controlledBy = (conversation as { controlledBy?: string }).controlledBy;
+			if (controlledBy === "admin") {
+				// Handed out to admin: do not send bot acknowledgment; admin will handle
+				console.log(`[processUserMessage] In OFFER stage, controlled by admin - no acknowledgment for: "${messageContent}"`);
+				return { success: true };
+			}
 			console.log(`[processUserMessage] In OFFER stage - escalation disabled for: "${messageContent}"`);
 			// In OFFER stage, just acknowledge the message without escalation
 			const acknowledgmentMessage = "Thank you for your message. I'll make sure the Whop owner sees it.";
@@ -590,21 +489,19 @@ async function processValidOptionSelection(
 			conversationId: conversationId,
 			blockId: currentBlockId,
 			optionText: messageContent,
-			optionValue: messageContent,
 			nextBlockId: nextBlockId,
-			metadata: {
-				timestamp: new Date().toISOString(),
-				userChoice: true,
-			},
 		});
 
-		// Update conversation state (same as navigate-funnel)
+		const now = new Date();
+		// Update conversation state (same as navigate-funnel); set entered-at and reset notification sequence
 		const updatedConversation = await db
 			.update(conversations)
 			.set({
 				currentBlockId: nextBlockId,
+				currentBlockEnteredAt: now,
+				lastNotificationSequenceSent: null,
 				userPath: [...(await getCurrentUserPath(conversationId)), nextBlockId].filter(Boolean),
-				updatedAt: new Date(),
+				updatedAt: now,
 			})
 			.where(eq(conversations.id, conversationId))
 			.returning();
@@ -732,7 +629,9 @@ function resetEscalationLevel(conversationId: string): void {
 
 /**
  * Handle funnel completion in UserChat
- * 
+ * Closes the current conversation, then optionally starts a new conversation for the "next" merchant
+ * (findFunnelForTrigger with funnel_completed + completedFunnelId).
+ *
  * @param conversationId - ID of the conversation to complete
  * @returns Success status
  */
@@ -740,7 +639,20 @@ export async function handleFunnelCompletionInUserChat(
 	conversationId: string,
 ): Promise<{ success: boolean; error?: string }> {
 	try {
-		// Update conversation status to closed
+		const conversation = await db.query.conversations.findFirst({
+			where: eq(conversations.id, conversationId),
+			with: { funnel: true },
+		});
+
+		if (!conversation) {
+			return { success: false, error: "Conversation not found" };
+		}
+
+		const experienceId = conversation.experienceId;
+		const whopUserId = conversation.whopUserId;
+		const completedFunnelId = conversation.funnelId;
+
+		// Close current conversation
 		await db
 			.update(conversations)
 			.set({
@@ -748,6 +660,34 @@ export async function handleFunnelCompletionInUserChat(
 				updatedAt: new Date(),
 			})
 			.where(eq(conversations.id, conversationId));
+
+		// Find next funnel for funnel_completed (e.g. after qualification → upsell merchant)
+		const user = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, whopUserId),
+				eq(users.experienceId, experienceId)
+			),
+		});
+
+		const nextFunnel = await findFunnelForTrigger(experienceId, "funnel_completed", {
+			completedFunnelId,
+			userId: user?.id,
+			whopUserId,
+		});
+
+		if (nextFunnel?.flow) {
+			const flow = nextFunnel.flow as FunnelFlow & { startBlockId: string };
+			const newConversationId = await createConversation(
+				experienceId,
+				nextFunnel.id,
+				whopUserId,
+				flow.startBlockId,
+				undefined,
+				undefined
+			);
+			await updateConversationToWelcomeStage(newConversationId, flow);
+			safeBackgroundTracking(() => trackInterestBackground(experienceId, nextFunnel.id));
+		}
 
 		return { success: true };
 	} catch (error) {
@@ -759,6 +699,287 @@ export async function handleFunnelCompletionInUserChat(
 	}
 }
 
+/**
+ * Start a new conversation when merchant closes one, if a funnel with trigger delete_merchant_conversation exists.
+ * Called from manageConversation (livechat-actions) when status is set to closed.
+ * Guard: only create if !hasActiveConversation (after close, user has no active conversation).
+ */
+export async function startConversationForMerchantClosedTrigger(
+	experienceId: string,
+	whopUserId: string
+): Promise<void> {
+	try {
+		const hasActive = await hasActiveConversation(experienceId, whopUserId);
+		if (hasActive) return;
 
+		const user = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, whopUserId),
+				eq(users.experienceId, experienceId)
+			),
+		});
+
+		const funnel = await findFunnelForTrigger(experienceId, "merchant_conversation_deleted", {
+			userId: user?.id,
+			whopUserId,
+		});
+
+		if (!funnel?.flow) return;
+
+		const flow = funnel.flow as FunnelFlow & { startBlockId: string };
+		const newConversationId = await createConversation(
+			experienceId,
+			funnel.id,
+			whopUserId,
+			flow.startBlockId,
+			undefined,
+			undefined
+		);
+		await updateConversationToWelcomeStage(newConversationId, flow);
+		safeBackgroundTracking(() => trackInterestBackground(experienceId, funnel.id));
+	} catch (error) {
+		console.error("[startConversationForMerchantClosedTrigger] Error:", error);
+		// Do not throw: merchant close should still succeed; trigger flow is best-effort.
+	}
+}
+
+/**
+ * Get app link for an experience (button at end of message for non-OFFER stages).
+ * experienceId is the experience UUID (experiences.id).
+ */
+export async function getExperienceAppLink(experienceId: string): Promise<string> {
+	try {
+		const experience = await db.query.experiences.findFirst({
+			where: eq(experiences.id, experienceId),
+			columns: { link: true, whopCompanyId: true },
+		});
+		if (experience?.link) return experience.link;
+		if (experience?.whopCompanyId) return `https://whop.com/joined/${experience.whopCompanyId}/app/`;
+	} catch (e) {
+		console.error("[getExperienceAppLink] Error:", e);
+	}
+	return "https://whop.com/apps/";
+}
+
+/**
+ * Resolve a block's resource (by resourceId or resourceName) to get its link for OFFER/VALUE_DELIVERY buttons.
+ * Uses resource.link; if empty and resource has no whopProductId, uses resource.purchaseUrl.
+ */
+export async function getBlockResourceLink(
+	block: FunnelBlock,
+	experienceId: string
+): Promise<string | null> {
+	const trimLink = (url: string | null | undefined): string | null => {
+		const s = url?.trim();
+		return s && s.length > 0 ? s : null;
+	};
+	const pickLink = (r: { link?: string | null; whopProductId?: string | null; purchaseUrl?: string | null } | null): string | null => {
+		if (!r) return null;
+		const link = trimLink(r.link ?? null);
+		if (link) return link;
+		if (r.whopProductId) return null;
+		return trimLink(r.purchaseUrl ?? null);
+	};
+	if (block.resourceId) {
+		const resource = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.id, block.resourceId),
+				eq(resources.experienceId, experienceId)
+			),
+			columns: { link: true, whopProductId: true, purchaseUrl: true },
+		});
+		return pickLink(resource);
+	}
+	if (block.resourceName) {
+		const resource = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.experienceId, experienceId),
+				eq(resources.name, block.resourceName!)
+			),
+			columns: { link: true, whopProductId: true, purchaseUrl: true },
+		});
+		return pickLink(resource);
+	}
+	return null;
+}
+
+/**
+ * Resolve an OFFER block's resource to Whop product and plan IDs for matching payment.succeeded.
+ * Uses block.resourceName or block.resourceId; returns nulls if block has no resource or resource has no whopProductId.
+ */
+export async function getOfferBlockProductPlan(
+	offerBlock: FunnelBlock,
+	experienceId: string
+): Promise<{ whopProductId: string | null; planId: string | null }> {
+	if (offerBlock.resourceId) {
+		const resource = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.id, offerBlock.resourceId),
+				eq(resources.experienceId, experienceId)
+			),
+			columns: { whopProductId: true, planId: true },
+		});
+		return {
+			whopProductId: resource?.whopProductId ?? null,
+			planId: resource?.planId ?? null,
+		};
+	}
+	if (offerBlock.resourceName) {
+		const resource = await db.query.resources.findFirst({
+			where: and(
+				eq(resources.experienceId, experienceId),
+				eq(resources.name, offerBlock.resourceName!)
+			),
+			columns: { whopProductId: true, planId: true },
+		});
+		return {
+			whopProductId: resource?.whopProductId ?? null,
+			planId: resource?.planId ?? null,
+		};
+	}
+	return { whopProductId: null, planId: null };
+}
+
+/**
+ * Advance UpSell conversation to next OFFER block after purchase.
+ * When payment succeeds, if the user's active conversation is UpSell and currentBlockId is an OFFER block,
+ * only advance when payment product/plan match the current offer's resource (or if no resource, do not advance for safety).
+ * When advancing from a timer state (offerCtaClickedAt set), clears timer and records purchase for cron.
+ */
+export async function advanceUpSellConversationOnPurchase(
+	conversationId: string,
+	experienceId: string,
+	paymentProductId?: string | null,
+	paymentPlanId?: string | null
+): Promise<{ advanced: boolean; error?: string }> {
+	try {
+		const conversation = await db.query.conversations.findFirst({
+			where: and(
+				eq(conversations.id, conversationId),
+				eq(conversations.experienceId, experienceId),
+				eq(conversations.status, "active")
+			),
+			with: { funnel: true },
+		});
+
+		if (!conversation?.funnel?.flow) return { advanced: false };
+		const funnel = conversation.funnel as { merchantType?: string };
+		if (funnel.merchantType !== "upsell") return { advanced: false };
+
+		const flow = (conversation.flow as FunnelFlow) ?? (conversation.funnel.flow as FunnelFlow);
+		// Current offer block: either the one whose CTA was clicked (timer active) or current block
+		const offerBlockId = conversation.offerCtaBlockId ?? conversation.currentBlockId;
+		if (!offerBlockId) return { advanced: false };
+
+		const offerBlock = flow.blocks[offerBlockId];
+		if (!offerBlock) return { advanced: false };
+
+		const offerStages = flow.stages.filter((s) => s.cardType === "product");
+		const currentStage = flow.stages.find((s) => s.blockIds.includes(offerBlockId));
+		if (!currentStage || currentStage.cardType !== "product") return { advanced: false };
+
+		// When payment product/plan are provided, only advance if they match the offer block's resource
+		if (paymentProductId != null || paymentPlanId != null) {
+			const { whopProductId: offerProductId, planId: offerPlanId } = await getOfferBlockProductPlan(offerBlock, experienceId);
+			if (offerProductId != null || offerPlanId != null) {
+				const productMatch = offerProductId == null || paymentProductId === offerProductId;
+				const planMatch = offerPlanId == null || paymentPlanId === offerPlanId;
+				if (!productMatch || !planMatch) return { advanced: false };
+			} else {
+				// Block has no resource: do not advance on product payment to avoid wrong-path advancement
+				return { advanced: false };
+			}
+		}
+
+		const stageBlockIds = currentStage.blockIds;
+		const idx = stageBlockIds.indexOf(offerBlockId);
+		let nextBlockId: string | null = null;
+		if (idx >= 0 && idx < stageBlockIds.length - 1) {
+			nextBlockId = stageBlockIds[idx + 1];
+		} else {
+			const currentStageIndex = flow.stages.indexOf(currentStage);
+			const nextOfferStage = flow.stages.slice(currentStageIndex + 1).find((s) => s.cardType === "product");
+			if (nextOfferStage?.blockIds?.length) {
+				nextBlockId = nextOfferStage.blockIds[0];
+			}
+		}
+
+		// If this offer has upsell/downsell and we're in timer state, go to upsell block instead of next OFFER
+		const hasTimer = conversation.offerCtaClickedAt != null && conversation.offerCtaBlockId != null;
+		const upsellBlockId = offerBlock.upsellBlockId ?? null;
+		if (hasTimer && upsellBlockId) {
+			const nextBlock = flow.blocks[upsellBlockId];
+			if (nextBlock) {
+				const now = new Date();
+				await db
+					.update(conversations)
+					.set({
+						currentBlockId: upsellBlockId,
+						currentBlockEnteredAt: now,
+						lastNotificationSequenceSent: null,
+						offerCtaClickedAt: null,
+						offerCtaBlockId: null,
+						userPath: [...((conversation.userPath as string[]) || []), upsellBlockId].filter(Boolean),
+						updatedAt: now,
+					})
+					.where(eq(conversations.id, conversationId));
+				let message = (nextBlock?.message ?? "Thank you for your purchase. Here's your next option.").replace(/\[LINK\]/g, "").trim();
+				if (nextBlock) {
+					const link = await getBlockResourceLink(nextBlock, experienceId);
+					const label = getProductCardButtonLabel(nextBlock.id, flow);
+					const href = link || "#";
+					const buttonHtml = `<div class="animated-gold-button" data-href="${escapeHtmlAttr(href)}">${label}</div>`;
+					message = message ? `${message}\n\n${buttonHtml}` : buttonHtml;
+				}
+				await addMessage(conversationId, "bot", message);
+				await db.update(conversations).set({ offerPurchasedAt: now }).where(eq(conversations.id, conversationId));
+				return { advanced: true };
+			}
+		}
+
+		if (!nextBlockId) {
+			await db
+				.update(conversations)
+				.set({
+					status: "closed",
+					updatedAt: new Date(),
+					...(hasTimer ? { offerCtaClickedAt: null, offerCtaBlockId: null } : {}),
+				})
+				.where(eq(conversations.id, conversationId));
+			return { advanced: true };
+		}
+
+		const nextBlock = flow.blocks[nextBlockId];
+		const now = new Date();
+		await db
+			.update(conversations)
+			.set({
+				currentBlockId: nextBlockId,
+				currentBlockEnteredAt: now,
+				lastNotificationSequenceSent: null,
+				...(hasTimer ? { offerCtaClickedAt: null, offerCtaBlockId: null } : {}),
+				userPath: [...((conversation.userPath as string[]) || []), nextBlockId].filter(Boolean),
+				updatedAt: now,
+			})
+			.where(eq(conversations.id, conversationId));
+
+		let message = (nextBlock?.message ?? "Thank you for your purchase. Here's your next option.").replace(/\[LINK\]/g, "").trim();
+		if (nextBlock) {
+			const link = await getBlockResourceLink(nextBlock, experienceId);
+			const label = getProductCardButtonLabel(nextBlock.id, flow);
+			const href = link || "#";
+			const buttonHtml = `<div class="animated-gold-button" data-href="${escapeHtmlAttr(href)}">${label}</div>`;
+			message = message ? `${message}\n\n${buttonHtml}` : buttonHtml;
+		}
+		await addMessage(conversationId, "bot", message);
+		return { advanced: true };
+	} catch (error) {
+		console.error("Error advancing UpSell conversation on purchase:", error);
+		return {
+			advanced: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
+	}
+}
 
 // Tracking functions removed to prevent database conflicts and timeouts

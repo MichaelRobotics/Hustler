@@ -9,6 +9,8 @@ import {
 } from "@/lib/middleware/whop-auth";
 import { safeBackgroundTracking, trackInterestBackground } from "@/lib/analytics/background-tracking";
 import { whopSdk } from "@/lib/whop-sdk";
+import { getBlockResourceLink, getExperienceAppLink } from "@/lib/actions/simplified-conversation-actions";
+import { isProductCardBlock, getProductCardButtonLabel } from "@/lib/utils/funnelUtils";
 
 /**
  * Look up resource by name and experience ID
@@ -172,23 +174,12 @@ async function sendStageTransitionWebSocket(
 }
 
 /**
- * Replace [LINK], [WHOP_OWNER], and [USER] placeholders with actual values
+ * Replace [USER] placeholder only. [WHOP] and [WHOP_OWNER] are resolved when generating/saving the funnel, not when selecting next block.
  */
 async function resolvePlaceholders(message: string, block: FunnelBlock, experienceId: string, conversationId?: string): Promise<string> {
   let resolvedMessage = message;
 
-  // Resolve [WHOP_OWNER] placeholder
-  if (resolvedMessage.includes('[WHOP_OWNER]')) {
-    const adminName = await lookupAdminUser(experienceId);
-    if (adminName) {
-      resolvedMessage = resolvedMessage.replace(/\[WHOP_OWNER\]/g, adminName);
-      console.log(`[Placeholder Resolution] Replaced [WHOP_OWNER] with: ${adminName}`);
-    } else {
-      console.log(`[Placeholder Resolution] Admin user not found, keeping [WHOP_OWNER] placeholder`);
-    }
-  }
-
-  // Resolve [USER] placeholder
+  // Resolve [USER] placeholder (per-conversation)
   if (resolvedMessage.includes('[USER]') && conversationId) {
     const userName = await lookupCurrentUser(conversationId);
     if (userName) {
@@ -363,21 +354,19 @@ async function processFunnelNavigation(
       conversationId: conversationId,
       blockId: currentBlockId,
       optionText: text,
-      optionValue: value,
       nextBlockId: nextBlockId,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        userChoice: true,
-      },
     });
 
-    // Update conversation state
+    const now = new Date();
+    // Update conversation state; set entered-at and reset notification sequence
     const updatedConversation = await db
       .update(conversations)
       .set({
         currentBlockId: nextBlockId,
+        currentBlockEnteredAt: now,
+        lastNotificationSequenceSent: null,
         userPath: [...(conversation.userPath || []), nextBlockId].filter(Boolean),
-        updatedAt: new Date(),
+        updatedAt: now,
       })
       .where(eq(conversations.id, conversationId))
       .returning();
@@ -416,84 +405,27 @@ async function processFunnelNavigation(
     // Generate bot response
     let botMessage = null;
     if (nextBlock) {
-      // Check if this is a VALUE_DELIVERY block
-      const isValueDelivery = nextBlockId ? funnelFlow.stages.some(
-        stage => stage.name === 'VALUE_DELIVERY' && stage.blockIds.includes(nextBlockId)
-      ) : false;
-      
-      // Check if this block is in OFFER stage
-      const isOfferBlock = nextBlockId ? funnelFlow.stages.some(
-        stage => stage.name === 'OFFER' && stage.blockIds.includes(nextBlockId)
-      ) : false;
-      
-      console.log(`[Navigate Funnel] Block ${nextBlockId} - isValueDelivery: ${isValueDelivery}, isOfferBlock: ${isOfferBlock}`);
-      
+      const isProductCard = nextBlockId ? isProductCardBlock(nextBlockId, funnelFlow) : false;
+      console.log(`[Navigate Funnel] Block ${nextBlockId} - isProductCard: ${isProductCard}`);
+
       // Start with the base message
       let formattedMessage = nextBlock.message || "Thank you for your response.";
-      
-      if (isOfferBlock && nextBlock.resourceName) {
-        console.log(`[OFFER] Processing OFFER block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
-        
-        try {
-          // Lookup resource by name and experience
-          const resource = await db.query.resources.findFirst({
-            where: and(
-              eq(resources.name, nextBlock.resourceName),
-              eq(resources.experienceId, conversation.experienceId)
-            ),
-          });
-          
-          if (resource) {
-            console.log(`[OFFER] Found resource: ${resource.name} with link: ${resource.link}`);
-            
-            // Replace [LINK] placeholder with animated button HTML using the resource link directly
-              const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Get Started!</div>`;
-              formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
-          } else {
-            console.log(`[OFFER] Resource not found: ${nextBlock.resourceName}`);
-            // Replace [LINK] placeholder with fallback text
-            formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
-          }
-        } catch (error) {
-          console.error(`[OFFER] Error processing resource lookup:`, error);
-          // Keep the original message with resolved placeholders
-        }
-      } else if (isValueDelivery && nextBlock.resourceName) {
-        console.log(`[VALUE_DELIVERY] Processing VALUE_DELIVERY block: ${nextBlockId} with resourceName: ${nextBlock.resourceName}`);
-        
-        // First resolve placeholders for [USER], [WHOP_OWNER], [WHOP]
-        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
-        
-        try {
-          // Lookup resource by name and experience
-          const resource = await db.query.resources.findFirst({
-            where: and(
-              eq(resources.name, nextBlock.resourceName),
-              eq(resources.experienceId, conversation.experienceId)
-            ),
-          });
-          
-          if (resource) {
-            console.log(`[VALUE_DELIVERY] Found resource: ${resource.name} with link: ${resource.link}`);
-            
-            // Replace [LINK] placeholder with animated button HTML for VALUE_DELIVERY
-            const buttonHtml = `<div class="animated-gold-button" data-href="${resource.link}">Claim!</div>`;
-            formattedMessage = formattedMessage.replace('[LINK]', buttonHtml);
-            console.log(`[VALUE_DELIVERY] Replaced [LINK] with VALUE_DELIVERY button: ${buttonHtml}`);
-          } else {
-            console.log(`[VALUE_DELIVERY] Resource not found: ${nextBlock.resourceName}`);
-            // Replace [LINK] placeholder with fallback text
-            formattedMessage = formattedMessage.replace('[LINK]', '[Resource not found]');
-          }
-        } catch (error) {
-          console.error(`[VALUE_DELIVERY] Error processing resource lookup:`, error);
-          // Replace [LINK] placeholder with fallback text
-          formattedMessage = formattedMessage.replace('[LINK]', '[Error loading resource]');
-        }
+      formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
+      formattedMessage = formattedMessage.replace(/\[LINK\]/g, "").trim();
+
+      if (isProductCard) {
+        // Product card: always append button (grey/non-clickable when no link)
+        const link = await getBlockResourceLink(nextBlock, conversation.experienceId);
+        const label = nextBlockId ? getProductCardButtonLabel(nextBlockId, funnelFlow) : "Get Started!";
+        const href = link || "#";
+        const safeHref = href.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+        const buttonHtml = `<div class="animated-gold-button" data-href="${safeHref}">${label}</div>`;
+        formattedMessage = formattedMessage ? `${formattedMessage}\n\n${buttonHtml}` : buttonHtml;
       } else {
-        // For other blocks, use simple placeholder resolution
-        console.log(`[Navigate Funnel] Resolving placeholders for other block ${nextBlockId}`);
-        formattedMessage = await resolvePlaceholders(formattedMessage, nextBlock, conversation.experienceId, conversationId);
+        // Other blocks: append button with app link
+        const appLink = await getExperienceAppLink(conversation.experienceId);
+        const buttonHtml = `<div class="animated-gold-button" data-href="${appLink.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">Get Started!</div>`;
+        formattedMessage = formattedMessage ? `${formattedMessage}\n\n${buttonHtml}` : buttonHtml;
       }
       
       // UserChat system: Options are handled by frontend buttons

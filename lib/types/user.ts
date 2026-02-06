@@ -37,15 +37,21 @@ export interface UserContext {
 export interface ConversationWithMessages {
 	id: string;
 	funnelId: string;
-	status: "active" | "closed" | "abandoned";
+	status: "active" | "closed" | "abandoned" | "archived";
 	currentBlockId?: string;
 	userPath?: any;
 	metadata?: any;
 	createdAt: Date;
 	updatedAt: Date;
+	/** When user last read (bot messages with createdAt <= this are "read by user"). For read receipts. */
+	userLastReadAt?: string | null;
+	/** When admin last read (user messages with createdAt <= this are "read by admin"). For read receipts. */
+	adminLastReadAt?: string | null;
+	/** Admin avatar URL for this experience (from load-conversation); used to show Admin vs Bot in UserChat */
+	adminAvatar?: string | null;
 	messages: Array<{
 		id: string;
-		type: "user" | "bot" | "system";
+		type: "user" | "bot" | "system" | "admin";
 		content: string;
 		metadata?: any;
 		createdAt: Date;

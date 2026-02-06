@@ -14,7 +14,6 @@ export interface CreateResourceInput {
 	code?: string;
 	description?: string;
 	whopProductId?: string; // For Whop product sync
-	productApps?: string[]; // Array of app names associated with this product
 	price?: string; // Price from access pass plan or user input
 	image?: string; // Link to icon of app/product/digital resource image
 	storageUrl?: string; // Link that triggers digital asset upload
@@ -54,7 +53,6 @@ export interface ResourceWithFunnels {
 	promoCode?: string; // Frontend compatibility field
 	description?: string;
 	whopProductId?: string;
-	productApps?: any; // JSON field for product apps data
 	price?: string; // Price from access pass plan or user input
 	planId?: string; // Whop plan ID (for products with plans)
 	purchaseUrl?: string; // Purchase URL from plan or checkout configuration
@@ -234,7 +232,6 @@ export async function createResource(
 				code: input.code || null,
 				description: input.description || null,
 				whopProductId: input.whopProductId || null,
-				productApps: input.productApps || null,
 				price: finalPrice,
 				planId: planId,
 				purchaseUrl: purchaseUrl,
@@ -268,7 +265,7 @@ export async function createResource(
 			promoCode: newResource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: newResource.description || undefined,
 			whopProductId: newResource.whopProductId || undefined,
-			price: newResource.price || undefined,
+			price: newResource.price ?? undefined,
 			planId: newResource.planId || undefined,
 			purchaseUrl: newResource.purchaseUrl || undefined,
 			checkoutConfigurationId: newResource.checkoutConfigurationId || undefined,
@@ -327,7 +324,6 @@ export async function getResourceById(
 			promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 			description: resource.description || undefined,
 			whopProductId: resource.whopProductId || undefined,
-			productApps: resource.productApps || undefined,
 			image: resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
 			storageUrl: resource.storageUrl || undefined,
 			productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined,
@@ -436,7 +432,6 @@ export async function getResources(
 					promoCode: resource.code || undefined, // Map code to promoCode for frontend compatibility
 					description: resource.description || undefined,
 					whopProductId: resource.whopProductId || undefined,
-					productApps: resource.productApps || undefined,
 					image: resource.image || 'https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp',
 					storageUrl: resource.storageUrl || undefined,
 					productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined,

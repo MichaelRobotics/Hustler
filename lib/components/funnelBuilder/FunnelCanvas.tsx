@@ -20,11 +20,14 @@ interface FunnelCanvasProps {
 	experienceId?: string;
 	resources?: Array<{ id: string; name: string }>;
 	funnels?: Array<{ id: string; name: string }>;
+	qualificationFunnels?: Array<{ id: string; name: string }>;
+	upsellFunnels?: Array<{ id: string; name: string }>;
 	loadingResources?: boolean;
 	loadingFunnels?: boolean;
 	onResourceChange?: (resourceId: string) => void;
 	onFunnelChange?: (funnelId: string) => void;
 	onMembershipFilterChange?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void;
+	onAppFilterChange?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void;
 	profiles?: Array<{ id: string; name: string }>;
 	onQualificationProfileChange?: (profileId: string) => void;
 	onTriggerClick?: () => void; // Backward compatibility
@@ -34,6 +37,12 @@ interface FunnelCanvasProps {
 	onMembershipDelayChange?: (minutes: number) => void; // Membership trigger delay
 	onDelaySave?: (minutes: number) => void; // App trigger delay (backward compatibility)
 	onMembershipDelaySave?: (minutes: number) => void; // Membership trigger delay
+	hasUnsavedTriggerConfig?: boolean;
+	onTriggerConfigSave?: () => void;
+	hasUnsavedAppTriggerConfig?: boolean;
+	hasUnsavedMembershipTriggerConfig?: boolean;
+	onAppTriggerConfigSave?: () => void;
+	onMembershipTriggerConfigSave?: () => void;
 	startBlockId?: string;
 	firstBlockY?: number;
 	firstStageY?: number;
@@ -65,11 +74,14 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 	experienceId,
 	resources = [],
 	funnels = [],
+	qualificationFunnels = [],
+	upsellFunnels = [],
 	loadingResources = false,
 	loadingFunnels = false,
 	onResourceChange,
 	onFunnelChange,
 	onMembershipFilterChange,
+	onAppFilterChange,
 	profiles = [],
 	onQualificationProfileChange,
 	onTriggerClick, // Backward compatibility
@@ -79,6 +91,12 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 	onMembershipDelayChange, // Membership trigger delay
 	onDelaySave, // App trigger delay (backward compatibility)
 	onMembershipDelaySave, // Membership trigger delay
+	hasUnsavedTriggerConfig,
+	onTriggerConfigSave,
+	hasUnsavedAppTriggerConfig,
+	hasUnsavedMembershipTriggerConfig,
+	onAppTriggerConfigSave,
+	onMembershipTriggerConfigSave,
 	startBlockId,
 	firstBlockY = 80,
 	firstStageY = 80,
@@ -316,6 +334,8 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 						experienceId={experienceId}
 						resources={resources}
 						funnels={funnels}
+						qualificationFunnels={qualificationFunnels}
+						upsellFunnels={upsellFunnels}
 						loadingResources={loadingResources}
 						loadingFunnels={loadingFunnels}
 						onClick={onTriggerClick} // Backward compatibility
@@ -325,9 +345,16 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 						onMembershipDelayChange={onMembershipDelayChange} // Membership trigger delay
 						onDelaySave={onDelaySave} // App trigger delay (backward compatibility)
 						onMembershipDelaySave={onMembershipDelaySave} // Membership trigger delay
+						hasUnsavedTriggerConfig={hasUnsavedTriggerConfig}
+						onTriggerConfigSave={onTriggerConfigSave}
+						hasUnsavedAppTriggerConfig={hasUnsavedAppTriggerConfig}
+						hasUnsavedMembershipTriggerConfig={hasUnsavedMembershipTriggerConfig}
+						onAppTriggerConfigSave={onAppTriggerConfigSave}
+						onMembershipTriggerConfigSave={onMembershipTriggerConfigSave}
 						onResourceChange={onResourceChange}
 						onFunnelChange={onFunnelChange}
 						onMembershipFilterChange={onMembershipFilterChange}
+						onAppFilterChange={onAppFilterChange}
 						profiles={profiles}
 						onQualificationProfileChange={onQualificationProfileChange}
 					/>

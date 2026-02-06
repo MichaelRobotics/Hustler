@@ -10,14 +10,13 @@ interface AnimatedGoldButtonProps {
   className?: string;
 }
 
-const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({ 
+const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
   href,
-  text, 
-  icon = 'sparkles', 
+  text,
+  icon = 'sparkles',
   onClick,
-  className = ''
+  className = '',
 }) => {
-  
   const getIcon = () => {
     switch (icon) {
       case 'sparkles':
@@ -34,20 +33,19 @@ const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    if (onClick) {
-      e.preventDefault();
-      onClick();
-    } else {
-      // Keep user inside Whop - navigate to the same page
-      window.location.href = href;
+    e.preventDefault();
+    e.stopPropagation();
+    if (href && href !== '#') {
+      window.open(href, '_blank', 'noopener,noreferrer');
     }
+    onClick?.();
   };
 
   return (
-    <a
-      href={href}
+    <button
+      type="button"
       onClick={handleClick}
-      className={`relative inline-flex items-center justify-center px-6 py-3 text-lg font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group ${className}`}
+      className={`relative inline-flex items-center justify-center px-6 py-3 text-lg font-bold text-white transition-all duration-300 ease-in-out bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full shadow-lg hover:shadow-xl active:scale-95 overflow-hidden group cursor-pointer border-0 ${className}`}
     >
       {/* Animated background overlay */}
       <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-yellow-500 via-amber-600 to-yellow-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
@@ -63,7 +61,7 @@ const AnimatedGoldButton: React.FC<AnimatedGoldButtonProps> = ({
       
       {/* Glow effect */}
       <span className="absolute inset-0 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 opacity-0 group-hover:opacity-30 blur-sm transition-opacity duration-300"></span>
-    </a>
+    </button>
   );
 };
 

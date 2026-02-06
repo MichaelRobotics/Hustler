@@ -14,7 +14,7 @@ interface FunnelStageProps {
 	}>;
 	itemCanvasWidth: number;
 	EXPLANATION_AREA_WIDTH: number;
-	onStageUpdate?: (stageId: string, updates: { name?: string; explanation?: string }) => void;
+	onStageUpdate?: (stageId: string, updates: { name?: string; explanation?: string; blockIds?: string[] }) => void;
 	disableStageEditing?: boolean;
 }
 

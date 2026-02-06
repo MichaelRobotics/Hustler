@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences, funnels, resources } from "@/lib/supabase/schema";
-import { eq, and, or } from "drizzle-orm";
+import { conversations, experiences, funnels } from "@/lib/supabase/schema";
+import { eq, and } from "drizzle-orm";
 import { getUserContext } from "@/lib/context/user-context";
 import {
   type AuthContext,
   createErrorResponse,
-  createSuccessResponse,
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
+import { isProductCardBlock } from "@/lib/utils/funnelUtils";
+import { findFunnelForTrigger } from "@/lib/helpers/conversation-trigger";
+import { createConversation } from "@/lib/actions/simplified-conversation-actions";
+import { updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
 
 
 async function checkConversationHandler(
@@ -129,16 +132,45 @@ async function checkConversationHandler(
         funnelFlow = conversationFunnel.flow as FunnelFlow;
       }
     } else {
-      // If no conversation, get any live funnel for this experience
-      const liveFunnel = await db.query.funnels.findFirst({
-        where: and(
-          eq(funnels.experienceId, experience.id),
-          eq(funnels.isDeployed, true)
-        ),
+      // No active conversation: optionally auto-start one for app_entry so user sees first message when they open chat
+      const funnelForAppEntry = await findFunnelForTrigger(experience.id, "app_entry", {
+        userId: userContext.user.id,
+        whopUserId: targetWhopUserId,
       });
-      if (liveFunnel) {
-        funnelFlow = liveFunnel.flow as FunnelFlow;
+      if (funnelForAppEntry?.flow) {
+        const flow = funnelForAppEntry.flow as FunnelFlow;
+        try {
+          const conversationId = await createConversation(
+            experience.id,
+            funnelForAppEntry.id,
+            targetWhopUserId,
+            flow.startBlockId,
+            undefined,
+            undefined
+          );
+          await updateConversationToWelcomeStage(conversationId, flow);
+          // Re-fetch so we return the new conversation
+          activeConversation = await db.query.conversations.findFirst({
+            where: and(
+              eq(conversations.whopUserId, targetWhopUserId),
+              eq(conversations.experienceId, experience.id),
+              eq(conversations.status, "active")
+            ),
+            with: { funnel: true },
+          });
+          if (activeConversation) {
+            const conversationFunnel = await db.query.funnels.findFirst({
+              where: eq(funnels.id, activeConversation.funnelId),
+            });
+            if (conversationFunnel) {
+              funnelFlow = conversationFunnel.flow as FunnelFlow;
+            }
+          }
+        } catch (err) {
+          console.error("[check-conversation] Error auto-starting conversation:", err);
+        }
       }
+      // No fallback to "any live funnel"—if no app_entry funnel matched, funnelFlow stays null
     }
 
     if (!activeConversation) {
@@ -182,9 +214,7 @@ async function checkConversationHandler(
     const isPainPointQualificationStage = currentBlockId && funnelFlow?.stages.some(
       stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
     );
-    const isOfferStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "OFFER" && stage.blockIds.includes(currentBlockId)
-    );
+    const isOfferStage = currentBlockId && funnelFlow ? isProductCardBlock(currentBlockId, funnelFlow) : false;
 
     // Check if conversation is in UserChat phase (all stages are UserChat now)
     const isDMFunnelActive = false; // No more DM funnel - everything is UserChat
@@ -246,6 +276,9 @@ async function checkConversationHandler(
       finalFunnelFlow = activeConversation.flow as FunnelFlow;
     }
 
+    const funnelRecord = activeConversation.funnel as { merchantType?: string } | undefined;
+    const merchantType = funnelRecord?.merchantType ?? "qualification";
+
     return NextResponse.json({
       success: true,
       hasActiveConversation: true,
@@ -262,7 +295,8 @@ async function checkConversationHandler(
         isDMFunnelActive: isDMFunnelActive,
         isTransitionStage: isTransitionStage,
         isExperienceQualificationStage: finalIsExperienceQualificationStage,
-      }
+      },
+      merchantType: merchantType,
     });
 
   } catch (error) {

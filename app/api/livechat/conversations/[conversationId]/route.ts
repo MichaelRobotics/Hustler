@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLiveChatConversationDetails, sendLiveChatMessage } from "@/lib/actions/livechat-integration-actions";
+import { resolveConversation } from "@/lib/actions/livechat-actions";
 import { getConversationMessages } from "@/lib/actions/unified-message-actions";
 import { getUserContext } from "@/lib/context/user-context";
 import {
@@ -161,12 +162,23 @@ async function postConversationHandler(
           result.error || "Failed to send message"
         );
       }
-    } else {
+    }
+
+    if (action === "resolve") {
+      const result = await resolveConversation(authenticatedUser, conversationId);
+      if (result.success) {
+        return createSuccessResponse({ ok: true });
+      }
       return createErrorResponse(
-        "INVALID_ACTION",
-        "Invalid action. Use 'send_message'"
+        "RESOLVE_FAILED",
+        result.error || "Failed to resolve"
       );
     }
+
+    return createErrorResponse(
+      "INVALID_ACTION",
+      "Invalid action. Use 'send_message' or 'resolve'"
+    );
   } catch (error) {
     console.error("Error handling conversation action:", error);
     return createErrorResponse("INTERNAL_ERROR", (error as Error).message);

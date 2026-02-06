@@ -199,20 +199,6 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 						{/* Always visible "+" option with input field */}
 						{!isDeployed && onAddNewOption && (
 							<div className="flex items-center gap-2 rounded-xl p-3 border border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-								<input
-									type="text"
-									value={newOptionText}
-									onChange={(e) => setNewOptionText(e.target.value)}
-									placeholder="Add new option..."
-									className="flex-1 text-xs bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
-									onKeyDown={(e) => {
-										if (e.key === "Enter" && newOptionText.trim() && !e.shiftKey) {
-											e.preventDefault();
-											onAddNewOption(blockId, newOptionText.trim());
-											setNewOptionText("");
-										}
-									}}
-								/>
 								<button
 									onClick={() => {
 										if (newOptionText.trim()) {
@@ -242,6 +228,20 @@ const FunnelBlock: React.FC<FunnelBlockProps> = ({
 										/>
 									</svg>
 								</button>
+								<input
+									type="text"
+									value={newOptionText}
+									onChange={(e) => setNewOptionText(e.target.value)}
+									placeholder="Add new option..."
+									className="flex-1 text-xs bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
+									onKeyDown={(e) => {
+										if (e.key === "Enter" && newOptionText.trim() && !e.shiftKey) {
+											e.preventDefault();
+											onAddNewOption(blockId, newOptionText.trim());
+											setNewOptionText("");
+										}
+									}}
+								/>
 							</div>
 						)}
 					</div>

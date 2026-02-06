@@ -6,6 +6,11 @@ export interface FunnelBlockOption {
 /** How product was selected for an upsell card */
 export type UpsellProductSelectionType = "ai_suggested" | "manual" | "from_stage";
 
+/**
+ * A message block in a funnel. Blocks do not have a type; card type is determined by the
+ * stage they belong to (FunnelStage.cardType). Use isProductCardBlock(blockId, flow) to
+ * check if a block is in a product-card stage.
+ */
 export interface FunnelBlock {
 	id: string;
 	/** Optional display headline for the card (editable); falls back to id when unset */
@@ -31,10 +36,12 @@ export interface FunnelBlock {
 
 export interface FunnelStage {
 	id: string;
+	/** Display name only (e.g. progress bar, admin UI). Do not use for control flow; use cardType instead. */
 	name: string;
 	explanation: string;
 	blockIds: string[];
-	cardType?: "qualification" | "product"; // Card type for this stage
+	/** Card type for this stage: "product" = product CTA (always show button; grey if no link), "qualification" = options-based. Single source of truth for card behavior. */
+	cardType?: "qualification" | "product";
 }
 
 export interface FunnelFlow {
@@ -46,6 +53,7 @@ export interface FunnelFlow {
 export interface ChatMessage {
 	type: "user" | "bot" | "system";
 	text: string;
+	metadata?: { blockId?: string };
 }
 
 export interface FunnelPreviewChatProps {
@@ -59,7 +67,6 @@ export interface FunnelPreviewChatProps {
 // Trigger type definition
 export type TriggerType = 
 	| "on_app_entry"
-	| "membership_valid"
 	| "any_membership_buy"
 	| "membership_buy"
 	| "no_active_conversation"
@@ -83,14 +90,6 @@ export interface TriggerConfig {
 // Trigger timeout configuration per trigger type (deprecated - use delayMinutes instead)
 export interface TriggerTimeoutConfig {
 	on_app_entry?: number; // Minutes before conversation starts for app entry
-	membership_valid?: number; // Minutes before conversation starts for membership valid
-}
-
-// Handout configuration
-export interface HandoutConfig {
-	keyword: string; // Default: "handout"
-	adminNotification?: string; // Message admin receives when handout triggered
-	userMessage?: string; // AI message sent to user when handout occurs
 }
 
 // Funnel notification (reminder notifications per stage)
@@ -153,9 +152,6 @@ export interface FunnelWithConfig {
 	appTriggerConfig?: TriggerConfig; // Config for app trigger
 	delayMinutes?: number; // App trigger delay (backward compatibility)
 	membershipDelayMinutes?: number; // Membership trigger delay
-	handoutKeyword?: string;
-	handoutAdminNotification?: string;
-	handoutUserMessage?: string;
 	merchantType?: "qualification" | "upsell"; // Merchant type: qualification or upsell
 	isDeployed?: boolean;
 	wasEverDeployed?: boolean;

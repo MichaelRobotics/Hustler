@@ -35,8 +35,7 @@ export const useFunnelValidation = () => {
 			.filter((block: any) => {
 				const isRelevantBlock = currentFunnel.flow.stages.some(
 					(stage: any) =>
-						(stage.name === "OFFER" || stage.name === "VALUE_DELIVERY") && 
-						stage.blockIds.includes(block.id),
+						stage.cardType === "product" && stage.blockIds.includes(block.id),
 				);
 				return (
 					isRelevantBlock &&

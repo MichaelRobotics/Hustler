@@ -179,7 +179,7 @@ ${badJson}
   "blocks": {
     "transition_1": {
       "id": "transition_1",
-      "message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!\\n\\n[LINK]",
+      "message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!",
       "options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
     },
     "welcome_1": {
@@ -192,13 +192,13 @@ ${badJson}
     },
     "value_trading_guide": {
       "id": "value_trading_guide",
-      "message": "Charts help you spot profitable trades.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
+      "message": "Charts help you spot profitable trades.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.",
       "resourceName": "The 3 Core Principles of Crypto Charting",
       "options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
     },
     "value_crypto_basics": {
       "id": "value_crypto_basics",
-      "message": "Basics help you avoid costly mistakes.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
+      "message": "Basics help you avoid costly mistakes.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.",
       "resourceName": "Crypto Basics Guide",
       "options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
     },
@@ -214,7 +214,7 @@ ${badJson}
     },
     "offer_risk_management": {
       "id": "offer_risk_management",
-      "message": "That makes perfect sense. Managing risk is the #1 skill that separates successful traders from gamblers.\\n\\nBased on everything you've told me, the clear next step is our \\"Crypto Risk Management\\" video workshop.\\n\\nYou can get instant access here:\\n\\n[LINK]",
+      "message": "That makes perfect sense. Managing risk is the #1 skill that separates successful traders from gamblers.\\n\\nBased on everything you've told me, the clear next step is our \\"Crypto Risk Management\\" video workshop.\\n\\nYou can get instant access below.",
       "resourceName": "Crypto Risk Management Workshop",
       "options": []
     }
@@ -625,95 +625,40 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 			// No PAID offers - check for free resources
 			if (freeResources.length >= 2) {
 				console.log("🔄 No PAID offers found, converting first 2 FREE_VALUE resources to PAID");
-				
-				// FIRST PRIORITY: FREE apps with product_apps (regardless of category)
-				const freeAppsWithProductApps = freeResources.filter(r => 
-					(r.link || r.whopProductId) && 
-					r.productApps && 
-					Object.keys(r.productApps).length > 0
-				);
-				
+				const hierarchy = ['learn', 'community', 'earn', 'other'];
 				let totalConverted = 0;
 				const maxToConvert = 2;
 				
-				// Convert FREE apps with product_apps first (up to 2)
-				if (freeAppsWithProductApps.length > 0) {
-					const appsToConvert = freeAppsWithProductApps.slice(0, maxToConvert);
-					appsToConvert.forEach(resource => {
-						const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
-						if (resourceIndex !== -1) {
-							processedResources[resourceIndex] = {
-								...processedResources[resourceIndex],
-								category: "PAID" as const
-							};
-							console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (has product_apps, for AI processing only)`);
-							totalConverted++;
-						}
+				for (const category of hierarchy) {
+					if (totalConverted >= maxToConvert) break;
+					const remainingResources = freeResources.filter(r => {
+						const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
+						return !alreadyConverted && (r.type === "LINK" || r.type === "FILE") && r.name.toLowerCase().includes(category);
 					});
-				}
-				
-				// SECOND PRIORITY: If still need more, use hierarchy for remaining resources
-				if (totalConverted < maxToConvert) {
-					console.log("🔄 Converting additional FREE apps by category hierarchy");
-					const hierarchy = ['learn', 'community', 'earn', 'other'];
-					
-					for (const category of hierarchy) {
-						if (totalConverted >= maxToConvert) break;
-						
-						// Look for remaining free resources that match category
-						const remainingResources = freeResources.filter(r => {
-							const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
-							return !alreadyConverted && 
-								   (r.type === "LINK" || r.type === "FILE") &&
-								   (r.name.toLowerCase().includes(category) || 
-								    (r.productApps && typeof r.productApps === 'object' && 
-								     Object.values(r.productApps).some((app: any) => 
-								     	app && typeof app === 'object' && 
-								     	app.category && app.category.toLowerCase() === category
-								     )
-								    ))
-						});
-						
-						if (remainingResources.length > 0) {
-							const remainingSlots = maxToConvert - totalConverted;
-							const resourcesToConvert = remainingResources.slice(0, remainingSlots);
-							
-							resourcesToConvert.forEach(resource => {
-								const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
-								if (resourceIndex !== -1) {
-									processedResources[resourceIndex] = {
-										...processedResources[resourceIndex],
-										category: "PAID" as const
-									};
-									console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (${category} category, for AI processing only)`);
-									totalConverted++;
-								}
-							});
-						}
-					}
-					
-					// FINAL FALLBACK: If still need more, convert any remaining FREE resources
-					if (totalConverted < maxToConvert) {
-						console.log("🔄 Using final fallback: converting any remaining FREE resources");
+					if (remainingResources.length > 0) {
 						const remainingSlots = maxToConvert - totalConverted;
-						const remainingFreeResources = freeResources.filter(r => {
-							const alreadyConverted = processedResources.find(pr => pr.id === r.id)?.category === "PAID";
-							return !alreadyConverted && (r.type === "LINK" || r.type === "FILE");
-						});
-						
-						const resourcesToConvert = remainingFreeResources.slice(0, remainingSlots);
+						const resourcesToConvert = remainingResources.slice(0, remainingSlots);
 						resourcesToConvert.forEach(resource => {
 							const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
 							if (resourceIndex !== -1) {
-								processedResources[resourceIndex] = {
-									...processedResources[resourceIndex],
-									category: "PAID" as const
-								};
-								console.log(`✅ AI Display: Converted "${resource.name}" from FREE_VALUE to PAID (final fallback, for AI processing only)`);
+								processedResources[resourceIndex] = { ...processedResources[resourceIndex], category: "PAID" as const };
 								totalConverted++;
 							}
 						});
 					}
+				}
+				if (totalConverted < maxToConvert) {
+					const remainingSlots = maxToConvert - totalConverted;
+					const remainingFreeResources = freeResources.filter(r =>
+						processedResources.find(pr => pr.id === r.id)?.category !== "PAID" && (r.type === "LINK" || r.type === "FILE")
+					);
+					remainingFreeResources.slice(0, remainingSlots).forEach(resource => {
+						const resourceIndex = processedResources.findIndex(r => r.id === resource.id);
+						if (resourceIndex !== -1) {
+							processedResources[resourceIndex] = { ...processedResources[resourceIndex], category: "PAID" as const };
+							totalConverted++;
+						}
+					});
 				}
 			} else if (freeResources.length === 1) {
 				console.log("🔄 Only 1 FREE_VALUE resource found, converting to PAID");
@@ -732,48 +677,18 @@ const processResourcesForAI = (resources: Resource[]): Resource[] => {
 			console.log("🔄 1 PAID offer found, looking for 1 additional FREE_VALUE resource");
 			
 			if (freeResources.length >= 1) {
-				// FIRST PRIORITY: FREE apps with product_apps
-				const freeAppsWithProductApps = freeResources.filter(r => 
-					(r.type === "LINK" || r.type === "FILE") && 
-					r.productApps && 
-					Object.keys(r.productApps).length > 0
-				);
-				
-				let resourceToConvert = null;
-				
-				// Try to find a FREE app with product_apps first
-				if (freeAppsWithProductApps.length > 0) {
-					resourceToConvert = freeAppsWithProductApps[0];
-					console.log(`✅ AI Display: Found FREE app with product_apps: "${resourceToConvert.name}"`);
-				} else {
-					// SECOND PRIORITY: Use hierarchy for remaining resources
-					const hierarchy = ['learn', 'community', 'earn', 'other'];
-					
-					for (const category of hierarchy) {
-						const categoryResources = freeResources.filter(r => 
-							(r.link || r.whopProductId) &&
-							(r.name.toLowerCase().includes(category) || 
-							 (r.productApps && typeof r.productApps === 'object' && 
-							  Object.values(r.productApps).some((app: any) => 
-							  	app && typeof app === 'object' && 
-							  	app.category && app.category.toLowerCase() === category
-							  )
-							))
-						);
-						
-						if (categoryResources.length > 0) {
-							resourceToConvert = categoryResources[0];
-							console.log(`✅ AI Display: Found FREE app by category (${category}): "${resourceToConvert.name}"`);
-							break;
-						}
-					}
-					
-					// FALLBACK: Any remaining free resource
-					if (!resourceToConvert) {
-						resourceToConvert = freeResources[0];
-						console.log(`✅ AI Display: Using fallback FREE resource: "${resourceToConvert.name}"`);
+				const hierarchy = ['learn', 'community', 'earn', 'other'];
+				let resourceToConvert: (typeof freeResources)[number] | null = null;
+				for (const category of hierarchy) {
+					const categoryResources = freeResources.filter(r =>
+						(r.link || r.whopProductId) && r.name.toLowerCase().includes(category)
+					);
+					if (categoryResources.length > 0) {
+						resourceToConvert = categoryResources[0];
+						break;
 					}
 				}
+				if (!resourceToConvert) resourceToConvert = freeResources[0];
 					
 				if (resourceToConvert) {
 					const resourceIndex = processedResources.findIndex(r => r.id === resourceToConvert.id);
@@ -909,7 +824,7 @@ export const generateFunnelFlow = async (
 	**Line 4**: Empty line
 	**Line 5**: For PRO users, UNLOCK hidden offers.
 	**Line 6**: Empty line
-	**Line 7**: [LINK]"
+	**Line 7**: (A button with the resource link is added automatically at the end—do not put links in the message.)"
 	
 	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'unlock' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
@@ -924,7 +839,7 @@ export const generateFunnelFlow = async (
 	**Line 4**: Empty line
 	**Line 5**: [WHOP_OWNER] is waiting!
 	**Line 6**: Empty line
-	**Line 7**: [LINK]"
+	**Line 7**: (A button with the app link is added automatically at the end—do not put links in the message.)"
 
 	
 	
@@ -956,7 +871,7 @@ export const generateFunnelFlow = async (
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
 	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile (but stay within line limits)
-	- **LINK FORMATTING**: [LINK] must be on its own separate line with empty line above it. No explanatory text like "Review it here:" before [LINK]. If there's text below [LINK], add empty line after it
+	- **NO [LINK] IN MESSAGES**: Do not use [LINK] or any link placeholder in message text. The product link is resolved from the card's selected resource; a button is appended at the end automatically (OFFER/VALUE_DELIVERY = product link, TRANSITION = app link). User clicks the button to open the link in a new window.
 	
 	**7. OFFER MESSAGE DESIGN (CRITICAL FOR PAID PRODUCTS):**
 	Each OFFER message must follow this exact 3-part structure:
@@ -979,7 +894,7 @@ export const generateFunnelFlow = async (
 	**Part 3: Call to Action (2 lines)**
 	- Time-sensitive urgency: "If you start now..." vs "If you wait..."
 	- Strong CTA: "Seize Your Advantage Now"
-	- **LINK RULE**: [LINK] must be alone on its own line with empty line above it
+	- **LINK RULE**: Do not put [LINK] or links in the message; a button is added automatically at the end
 	
 	**Example Structure (6-LINE OFFER MESSAGE):**
 	"You're ready to transform your sales game! But here's the thing...
@@ -988,7 +903,7 @@ export const generateFunnelFlow = async (
 
 	Which one will you be?
 
-	[LINK]"
+	(A button with the product link is added automatically at the end.)"
 	
 	---
 	
@@ -1124,9 +1039,9 @@ export const generateFunnelFlow = async (
 	3. **VALUE_DELIVERY STRUCTURE**: VALUE_DELIVERY messages must include [WHOP_OWNER] and [USER] placeholders in the VIP chat invitation section
 	4. **EXACT NAMES**: resourceName fields match exactly with provided resource names
 	5. **CATEGORY MAPPING**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks, PAID resources ONLY in OFFER blocks
-	6. **LINK PLACEHOLDERS**: Use [LINK] placeholder instead of actual links in messages; [LINK] must be on separate line with empty line above it; no explanatory text before [LINK]
-	7. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA) with link in button
-	8. **TRANSITION MESSAGE ENFORCEMENT**: TRANSITION messages must be EXACTLY "Wait! [WHOP_OWNER] has a gift for you, [USER]!\n\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\n\n[WHOP_OWNER] is waiting!\n\n[LINK]" - NO VARIATIONS ALLOWED
+	6. **NO [LINK] IN MESSAGES**: Do not use [LINK] or link placeholders. A button (product or app link) is added automatically at the end; user clicks to open in new window.
+	7. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA); button with product link is added automatically.
+	8. **TRANSITION MESSAGE ENFORCEMENT**: TRANSITION messages must be EXACTLY "Wait! [WHOP_OWNER] has a gift for you, [USER]!\n\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\n\n[WHOP_OWNER] is waiting!" (no [LINK]; a button with app link is added automatically) - NO VARIATIONS ALLOWED
 	9. **NO DUPLICATES**: Each resource appears in exactly one block
 	10. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	11. **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
@@ -1180,7 +1095,7 @@ export const generateFunnelFlow = async (
 	  "blocks": {
 		 "transition_1": {
 			"id": "transition_1",
-			"message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!\\n\\n[LINK]",
+			"message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!",
 			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
 		 },
 		 "welcome_1": {
@@ -1195,13 +1110,13 @@ export const generateFunnelFlow = async (
 		 // This provides general value to anyone exploring without specific interests
 		 "value_trading_guide": {
 			"id": "value_trading_guide",
-			"message": "Charts help you spot profitable trades.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
+			"message": "Charts help you spot profitable trades.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.",
 			"resourceName": "The 3 Core Principles of Crypto Charting",
 			"options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
 		 },
 		 "value_crypto_basics": {
 			"id": "value_crypto_basics",
-			"message": "Basics help you avoid costly mistakes.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.\\n\\n[LINK]",
+			"message": "Basics help you avoid costly mistakes.\\n\\nWARNING! [USER], This is just an appetizer.\\n\\nFor PRO users, UNLOCK hidden offers.",
 			"resourceName": "[EXAMPLE - Use actual FREE_VALUE resource name from provided list]",
 			"options": [{"text": "unlock", "nextBlockId": "experience_qual_1"}]
 		 },

@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, Send, User } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Send, Store, User } from "lucide-react";
 import React, {
 	useState,
 	useRef,
 	useEffect,
+	useLayoutEffect,
 	useCallback,
 	useMemo,
 } from "react";
@@ -12,7 +13,10 @@ import type {
 	LiveChatConversation,
 	LiveChatMessage,
 } from "../../types/liveChat";
+import { useTypingIndicator } from "../../hooks/useTypingIndicator";
 import { ThemeToggle } from "../common/ThemeToggle";
+import { AvatarSquare } from "../common/AvatarSquare";
+import TypingIndicator from "../common/TypingIndicator";
 import AnimatedGoldButton from "../userChat/AnimatedGoldButton";
 import { renderTextWithLinks } from "../../utils/link-utils";
 
@@ -21,16 +25,28 @@ interface LiveChatUserInterfaceProps {
 	onSendMessage: (message: string) => void;
 	onBack: () => void;
 	isLoading?: boolean;
+	/** Merchant/bot icon URL for bot messages (round avatar) */
+	merchantIconUrl?: string | null;
+	/** Admin avatar URL (from users table); fallback when conversation.adminAvatar not set */
+	adminAvatarUrl?: string | null;
+	/** Called when admin views conversation (mark as read) */
+	onMarkAsRead?: (conversationId: string) => void;
+	/** Called when admin resolves conversation (back to bot) */
+	onResolve?: (conversationId: string) => void;
+	/** Called when admin typing state changes */
+	onTypingChange?: (conversationId: string, active: boolean) => void;
 }
 
 const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
-	({ conversation, onSendMessage, onBack, isLoading = false }) => {
+	({ conversation, onSendMessage, onBack, isLoading = false, merchantIconUrl, adminAvatarUrl, onMarkAsRead, onResolve, onTypingChange }) => {
 		const [newMessage, setNewMessage] = useState("");
 		const [isSendingMessage, setIsSendingMessage] = useState(false);
 	const chatEndRef = useRef<HTMLDivElement>(null);
-	const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const messagesScrollRef = useRef<HTMLDivElement>(null);
 	const lastMessageCountRef = useRef<number>(0);
-
+	// Kept for cleanup compatibility (no longer used for typing debounce)
+	const typingStartRef = useRef<NodeJS.Timeout | null>(null);
+	const typingStopRef = useRef<NodeJS.Timeout | null>(null);
 
 		// Memoized message count to prevent unnecessary re-renders
 		const messageCount = useMemo(
@@ -39,56 +55,57 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 		);
 
 		const scrollToBottom = useCallback(() => {
-			if (chatEndRef.current) {
-				// Use requestAnimationFrame for smoother scrolling
-				requestAnimationFrame(() => {
-					if (chatEndRef.current) {
-						chatEndRef.current.scrollIntoView({
-							behavior: "auto",
-							block: "end",
-							inline: "nearest",
-						});
-					}
-				});
+			const el = messagesScrollRef.current;
+			if (el) {
+				el.scrollTop = el.scrollHeight;
 			}
 		}, []);
 
-		// Optimized auto-scroll with throttling
+		// Mark conversation as read when admin opens/views it
 		useEffect(() => {
-			// Only scroll if message count actually changed
-			if (messageCount > 0 && messageCount !== lastMessageCountRef.current) {
-				lastMessageCountRef.current = messageCount;
-
-				// Clear any existing scroll timeout
-				if (scrollTimeoutRef.current) {
-					clearTimeout(scrollTimeoutRef.current);
-				}
-
-				// Throttle scroll to prevent excessive DOM manipulation
-				scrollTimeoutRef.current = setTimeout(scrollToBottom, 100);
+			if (conversation?.id && onMarkAsRead) {
+				onMarkAsRead(conversation.id);
 			}
-		}, [messageCount, scrollToBottom]);
+		}, [conversation?.id, onMarkAsRead]);
+
+		// Set scroll position to bottom before paint so first frame shows latest messages (no visible scroll)
+		useLayoutEffect(() => {
+			if (messageCount > 0) {
+				lastMessageCountRef.current = messageCount;
+				const el = messagesScrollRef.current;
+				if (el) {
+					el.scrollTop = el.scrollHeight;
+				}
+			}
+		}, [messageCount]);
 
 		const handleSendMessage = useCallback(async () => {
 			if (newMessage.trim() && !isSendingMessage) {
+				onTypingChange?.(conversation.id, false);
 				setIsSendingMessage(true);
 
 				try {
 					// Send message as bot type
 					await onSendMessage(newMessage.trim());
 					setNewMessage("");
-
-					// Optimized scroll with requestAnimationFrame
-					requestAnimationFrame(() => {
-						scrollToBottom();
-					});
+					scrollToBottom();
 				} catch (error) {
 					console.error("Failed to send message:", error);
 				} finally {
 					setIsSendingMessage(false);
 				}
 			}
-		}, [newMessage, isSendingMessage, onSendMessage, scrollToBottom]);
+		}, [newMessage, isSendingMessage, onSendMessage, scrollToBottom, conversation.id, onTypingChange]);
+
+		// Debounced typing: send true after short delay, false after idle or on unmount
+		const hasText = Boolean(conversation?.id && onTypingChange && newMessage.trim().length > 0);
+		const sendAdminTyping = useCallback(
+			(active: boolean) => {
+				if (conversation?.id && onTypingChange) onTypingChange(conversation.id, active);
+			},
+			[conversation?.id, onTypingChange]
+		);
+		useTypingIndicator(hasText, sendAdminTyping);
 
 		const handleKeyDown = useCallback(
 			(e: React.KeyboardEvent) => {
@@ -99,16 +116,6 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 			},
 			[handleSendMessage],
 		);
-
-	// Cleanup timeouts on unmount
-	useEffect(() => {
-		return () => {
-			if (scrollTimeoutRef.current) {
-				clearTimeout(scrollTimeoutRef.current);
-			}
-		};
-	}, []);
-
 
 		const handleTextareaInput = useCallback(
 			(e: React.FormEvent<HTMLTextAreaElement>) => {
@@ -163,11 +170,12 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 				);
 			}
 
-			// Agent perspective: agent messages on right, user messages on left
+			// Right side: bot and admin messages; left: user
 			const isAgent =
 				message.type === "bot" ||
-				message.type === "agent";
+				message.type === "admin";
 			const isUser = message.type === "user";
+			const isAdminMessage = message.type === "admin";
 
 			// Handle animated gold button HTML in bot messages
 			const renderMessageWithLinks = (text: string) => {
@@ -193,8 +201,8 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 									text={buttonText}
 									icon="sparkles"
 									onClick={() => {
-										// Redirect to the link
-										window.location.href = href;
+										// Open in new tab so app page stays open
+										window.open(href, "_blank", "noopener,noreferrer");
 									}}
 								/>
 							);
@@ -202,7 +210,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 							// This is text content
 							if (part.trim()) {
 								textParts.push(
-									<div key={partIndex} className="text-sm leading-relaxed whitespace-pre-wrap">
+									<div key={partIndex} className="text-base leading-relaxed whitespace-pre-wrap">
 										{part.trim()}
 									</div>
 								);
@@ -224,17 +232,51 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 					);
 				}
 				
-				// Regular message rendering with clickable links
-				return <div className="text-sm leading-relaxed whitespace-pre-wrap">{renderTextWithLinks(text)}</div>;
+				// Regular message rendering with clickable links (same as UserChat: text-base, whitespace-pre-wrap, leading-relaxed)
+				return <div className="text-base leading-relaxed whitespace-pre-wrap">{renderTextWithLinks(text)}</div>;
 			};
 
+			const userAvatar = !isAgent ? (
+				<AvatarSquare
+					src={conversation.user?.avatar}
+					alt={conversation.user?.name ?? "User"}
+					sizeClass="w-8 h-8"
+					borderClass="border-2 border-gray-200 dark:border-gray-600"
+					fallback={
+						<div className="w-full h-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center">
+							<User size={14} className="text-white" />
+						</div>
+					}
+				/>
+			) : null;
+			const agentAvatar = isAgent ? (
+				<div className="flex flex-col items-end gap-0.5">
+					<span className="text-[10px] font-medium text-muted-foreground" title={isAdminMessage ? "Sent by admin" : "Bot message"}>
+						{isAdminMessage ? "Admin" : "Bot"}
+					</span>
+					<AvatarSquare
+						src={isAdminMessage ? (conversation.adminAvatar ?? adminAvatarUrl ?? undefined) : (merchantIconUrl ?? undefined)}
+						alt={isAdminMessage ? "Admin" : "Merchant"}
+						sizeClass="w-8 h-8"
+						borderClass={isAdminMessage ? "border-2 border-violet-400 dark:border-violet-500" : "border-2 border-blue-200 dark:border-blue-600"}
+						fallback={
+							<div className={`w-full h-full flex items-center justify-center ${isAdminMessage ? "bg-violet-500" : "bg-blue-600"}`}>
+								<User size={14} className="text-white" />
+							</div>
+						}
+					/>
+				</div>
+			) : null;
+
+			// Same row and bubble rules as UserChat: direct bubble in row, no wrapper; receipt inside bubble
 			return (
 				<div
 					key={message.id}
-					className={`flex ${isAgent ? "justify-end" : "justify-start"} mb-4`}
+					className={`flex ${isAgent ? "justify-end" : "justify-start"} mb-4 px-1 gap-2 items-end`}
 				>
+					{!isAgent && userAvatar}
 					<div
-						className={`max-w-[80%] px-4 py-3 rounded-xl ${
+						className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
 							isAgent
 								? message.text.includes('animated-gold-button')
 									? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25 border-3 border-blue-400 dark:border-blue-500"
@@ -251,18 +293,47 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 						}}
 					>
 						{renderMessageWithLinks(message.text)}
+						{/* Read receipt on admin/bot messages only: one check = sent, two = user has seen */}
+						{isAgent && (
+							<div className="flex items-center justify-end mt-1.5 gap-0.5" aria-label={message.isRead ? "Read by user" : "Sent"}>
+								{message.isRead ? (
+									<CheckCheck size={14} className="opacity-90 text-white/90" strokeWidth={2.5} />
+								) : (
+									<Check size={14} className="opacity-90 text-white/90" strokeWidth={2.5} />
+								)}
+							</div>
+						)}
+						{/* Failed to send - LiveChat only, inside bubble at bottom */}
+						{isAgent && (message.metadata?.failedToSend === true || message.metadata?.isOptimistic === true) && (() => {
+							if (message.metadata?.failedToSend === true) {
+								return (
+									<span className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 block" title="Message could not be sent">
+										Failed to send
+									</span>
+								);
+							}
+							const addedAt = message.metadata?.optimisticAddedAt ?? new Date(message.timestamp).getTime();
+							const ageMs = Date.now() - addedAt;
+							if (ageMs < 15000) return null;
+							return (
+								<span className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 block" title="Message may not have been delivered">
+									Sending failed or delayed
+								</span>
+							);
+						})()}
 					</div>
+					{isAgent && agentAvatar}
 				</div>
 			);
 		},
-		[],
+		[conversation.user?.avatar, conversation.user?.name, merchantIconUrl],
 	);
 
 		// Removed pattern detection logic - it was dead code not used in customer flow
 
-		// Memoized messages list to prevent unnecessary re-renders
+		// Message list: chat messages from cache/DB, then one synthetic "Pass to Merchant" message record last when admin controlling
 		const messagesList = useMemo(() => {
-			const messageElements = conversation.messages.map((message, index) => 
+			const messageElements = conversation.messages.map((message, index) =>
 				renderMessage(message, index, conversation.messages)
 			);
 
@@ -290,8 +361,30 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 				));
 			}
 
+			// Last message record: Pass to Merchant (only when conversation is controlled by admin)
+			if (conversation.controlledBy === "admin" && onResolve) {
+				messageElements.push(
+					<div
+						key="pass-to-merchant-record"
+						className="flex justify-center mb-4"
+						role="article"
+						aria-label="Pass conversation back to merchant"
+					>
+						<button
+							type="button"
+							onClick={() => onResolve(conversation.id)}
+							className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 dark:border-amber-400/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition-colors text-sm font-medium shadow-sm"
+							title="Return conversation to merchant bot; timers and triggers will resume"
+						>
+							<Store size={16} className="shrink-0" />
+							Pass to Merchant
+						</button>
+					</div>
+				);
+			}
+
 			return messageElements;
-		}, [conversation.messages, renderMessage]);
+		}, [conversation.messages, conversation.controlledBy, conversation.id, renderMessage, onResolve]);
 
 		return (
 			<div
@@ -332,17 +425,17 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 								</button>
 							)}
 							<div className="flex items-center gap-3">
-								{conversation.user.avatar ? (
-									<img
-										src={conversation.user.avatar}
-										alt={conversation.user.name}
-										className="w-8 h-8 rounded-lg object-cover border-2 border-blue-200 dark:border-blue-400"
-									/>
-								) : (
-									<div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-										<User size={16} className="text-white" />
-									</div>
-								)}
+								<AvatarSquare
+									src={conversation.user.avatar}
+									alt={conversation.user.name}
+									sizeClass="w-8 h-8"
+									borderClass="border-2 border-blue-200 dark:border-blue-400"
+									fallback={
+										<div className="w-full h-full bg-blue-500 flex items-center justify-center">
+											<User size={16} className="text-white" />
+										</div>
+									}
+								/>
 								<div>
 									<h1 className="text-lg font-semibold text-foreground">
 										{conversation.user.name}
@@ -351,8 +444,19 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 							</div>
 						</div>
 
-						<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
-							<ThemeToggle />
+						<div className="flex items-center gap-2">
+							{conversation.controlledBy === "admin" && onResolve && (
+								<button
+									onClick={() => onResolve(conversation.id)}
+									className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500 hover:bg-amber-600 text-white dark:bg-amber-600 dark:hover:bg-amber-700 transition-colors"
+									title="Back to bot"
+								>
+									Resolve
+								</button>
+							)}
+							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
+								<ThemeToggle />
+							</div>
 						</div>
 					</div>
 					<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mt-3" />
@@ -360,8 +464,9 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 
 				{/* Chat Container */}
 				<div className="flex-1 flex flex-col min-h-0">
-					{/* Messages */}
+					{/* Messages - ref used to set scrollTop before paint so latest messages show first */}
 					<div
+						ref={messagesScrollRef}
 						className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide"
 						style={{
 							WebkitOverflowScrolling: "touch",
@@ -387,8 +492,24 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 						) : (
 							<>
 								{messagesList}
-
-
+								{conversation.typing?.user && (
+									<div className="flex justify-start mb-4 gap-2 items-center">
+										<AvatarSquare
+											src={conversation.user?.avatar}
+											alt={conversation.user?.name ?? "User"}
+											sizeClass="w-8 h-8"
+											borderClass="border-2 border-gray-200 dark:border-gray-600"
+											fallback={
+												<div className="w-full h-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center">
+													<User size={14} className="text-white" />
+												</div>
+											}
+										/>
+										<div className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center">
+											<TypingIndicator isVisible showText={false} />
+										</div>
+									</div>
+								)}
 								<div ref={chatEndRef} />
 							</>
 						)}

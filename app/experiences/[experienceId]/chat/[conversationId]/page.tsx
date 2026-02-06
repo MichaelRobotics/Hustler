@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { get as getConversationMessageCache, set as setConversationMessageCache } from "@/lib/cache/conversation-message-cache";
 import { UserChat } from "@/lib/components/userChat";
 // Database actions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "@/lib/types/funnel";
@@ -45,15 +46,50 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 		});
 	}, [params]);
 
-	// Load conversation and funnel data on mount
+	// Load conversation and funnel data on mount; use cache for instant display when returning to a conversation
 	useEffect(() => {
-		const loadData = async () => {
+		const loadData = async (backgroundRefresh = false) => {
 			try {
-				setLoading(true);
-				setError(null);
+				if (!backgroundRefresh) {
+					setError(null);
+				}
 
+				// Try cache first for instant display when returning to this conversation
+				const cached = getConversationMessageCache(experienceId, conversationId);
+				if (cached?.messages?.length && !backgroundRefresh) {
+					const hasFullRestore = cached.funnelFlow != null && cached.conversationSnapshot != null;
+					if (hasFullRestore && cached.conversationSnapshot) {
+						const snapshot = cached.conversationSnapshot;
+						const conversationFromCache: ConversationWithMessages = {
+							...snapshot,
+							id: snapshot.id,
+							funnelId: snapshot.funnelId,
+							status: snapshot.status,
+							currentBlockId: snapshot.currentBlockId,
+							funnel: snapshot.funnel,
+							interactions: snapshot.interactions ?? [],
+							createdAt: snapshot.createdAt ? new Date(snapshot.createdAt) : new Date(),
+							updatedAt: snapshot.updatedAt ? new Date(snapshot.updatedAt) : new Date(),
+							messages: (cached.messages ?? []).map((m) => ({
+								id: m.id,
+								type: m.type,
+								content: m.text ?? m.content ?? "",
+								metadata: m.metadata,
+								createdAt: (m.createdAt ?? m.timestamp) ? new Date(String(m.createdAt ?? m.timestamp)) : new Date(),
+							})),
+						};
+						setConversation(conversationFromCache);
+						if (cached.funnelFlow != null) setFunnelFlow(cached.funnelFlow as FunnelFlow);
+						if (cached.stageInfo != null) setStageInfo(cached.stageInfo as typeof stageInfo);
+						setLoading(false);
+					}
+				}
 
-				// Call API route to load conversation
+				if (!backgroundRefresh && !cached?.messages?.length) {
+					setLoading(true);
+				}
+
+				// Always fetch to get latest (or initial load)
 				const response = await fetch('/api/userchat/load-conversation', {
 					method: 'POST',
 					headers: {
@@ -65,15 +101,48 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 				});
 
 				const result = await response.json();
-				
+
 				if (!result.success) {
 					setError(result.error || "Failed to load conversation");
 					return;
 				}
 
-				setConversation(result.conversation || null);
-				setFunnelFlow(result.funnelFlow || null);
-				setStageInfo(result.stageInfo || null);
+				const conv = result.conversation || null;
+				const flow = result.funnelFlow || null;
+				const info = result.stageInfo || null;
+				setConversation(conv);
+				setFunnelFlow(flow);
+				setStageInfo(info);
+
+				// Persist to cache for next time user returns to this conversation
+				if (conv?.messages && flow != null) {
+					const snapshot = conv as ConversationWithMessages;
+					setConversationMessageCache(experienceId, conversationId, {
+						messages: conv.messages.map((m: { id: string; type: string; content?: string; text?: string; metadata?: unknown; createdAt?: unknown; timestamp?: unknown }) => ({
+							id: m.id,
+							type: m.type,
+							text: m.text ?? m.content,
+							content: m.content ?? m.text,
+							metadata: m.metadata,
+							createdAt: m.createdAt,
+							timestamp: m.timestamp ?? m.createdAt,
+						})),
+						updatedAt: new Date().toISOString(),
+						meta: { currentBlockId: conv.currentBlockId, currentStage: info?.currentStage },
+						funnelFlow: flow,
+						stageInfo: info,
+						conversationSnapshot: {
+							id: snapshot.id,
+							funnelId: snapshot.funnelId,
+							status: snapshot.status,
+							currentBlockId: snapshot.currentBlockId,
+							funnel: snapshot.funnel,
+							interactions: snapshot.interactions,
+							createdAt: typeof snapshot.createdAt === 'string' ? snapshot.createdAt : snapshot.createdAt?.toISOString?.(),
+							updatedAt: typeof snapshot.updatedAt === 'string' ? snapshot.updatedAt : snapshot.updatedAt?.toISOString?.(),
+						},
+					});
+				}
 			} catch (err) {
 				console.error("Error loading conversation:", err);
 				setError("An unexpected error occurred");
@@ -83,7 +152,7 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 		};
 
 		if (conversationId && experienceId) {
-			loadData();
+			loadData(false);
 		}
 	}, [conversationId, experienceId]);
 
@@ -171,6 +240,7 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 				onBack={handleBack}
 				hideAvatar={false}
 				stageInfo={stageInfo || undefined}
+				adminAvatarUrl={conversation?.adminAvatar ?? undefined}
 			/>
 		</div>
 	);

@@ -28,6 +28,7 @@ export function useLiveFunnel({ experienceId }: UseLiveFunnelProps) {
             flow: data.funnelFlow,
             isDeployed: data.funnel.isDeployed,
             resources: data.resources || [],
+            merchantType: data.funnel.merchantType ?? "qualification",
           };
           setLiveFunnel(funnelData);
           setFunnelFlow(data.funnelFlow);

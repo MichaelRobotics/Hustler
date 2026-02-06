@@ -21,8 +21,27 @@ import {
 	RectangleVertical,
 	CircleDashed,
 	VectorSquare,
+	GripVertical,
 } from "lucide-react";
 import React from "react";
+import {
+	DndContext,
+	closestCenter,
+	KeyboardSensor,
+	MouseSensor,
+	TouchSensor,
+	useSensor,
+	useSensors,
+	DragEndEvent,
+} from "@dnd-kit/core";
+import {
+	arrayMove,
+	SortableContext,
+	horizontalListSortingStrategy,
+	useSortable,
+	sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
 	CROSS_STAGE_SHAPE_POOL,
 	getCrossStageColorById,
@@ -70,20 +89,6 @@ const AddOptionInput: React.FC<AddOptionInputProps> = ({ blockId, onAdd }) => {
 
 	return (
 		<div className="flex items-center gap-2 rounded-xl p-3 border border-border/30 dark:border-border/20 bg-surface/50 dark:bg-surface/30">
-			<input
-				type="text"
-				value={newOptionText}
-				onChange={(e) => setNewOptionText(e.target.value)}
-				placeholder="Add new option..."
-				className="flex-1 text-xs bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
-				onKeyDown={(e) => {
-					if (e.key === "Enter" && newOptionText.trim() && !e.shiftKey) {
-						e.preventDefault();
-						onAdd(blockId, newOptionText.trim());
-						setNewOptionText("");
-					}
-				}}
-			/>
 			<button
 				onClick={() => {
 					if (newOptionText.trim()) {
@@ -113,6 +118,49 @@ const AddOptionInput: React.FC<AddOptionInputProps> = ({ blockId, onAdd }) => {
 					/>
 				</svg>
 			</button>
+			<input
+				type="text"
+				value={newOptionText}
+				onChange={(e) => setNewOptionText(e.target.value)}
+				placeholder="Add new option..."
+				className="flex-1 text-xs bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
+				onKeyDown={(e) => {
+					if (e.key === "Enter" && newOptionText.trim() && !e.shiftKey) {
+						e.preventDefault();
+						onAdd(blockId, newOptionText.trim());
+						setNewOptionText("");
+					}
+				}}
+			/>
+		</div>
+	);
+};
+
+// Wrapper for horizontal reorder within a stage (uses @dnd-kit useSortable)
+const SortableBlockWrapper: React.FC<{
+	blockId: string;
+	blockRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+	positionStyle: React.CSSProperties;
+	disabled: boolean;
+	children: (dragHandleProps: { attributes: Record<string, unknown>; listeners: Record<string, unknown> } | null) => React.ReactNode;
+}> = ({ blockId, blockRefs, positionStyle, disabled, children }) => {
+	const { setNodeRef, transform, attributes, listeners } = useSortable({
+		id: blockId,
+		disabled,
+	});
+	const combinedRef = (el: HTMLDivElement | null) => {
+		(blockRefs as React.MutableRefObject<Record<string, HTMLDivElement | null>>).current[blockId] = el;
+		setNodeRef(el);
+	};
+	return (
+		<div
+			ref={combinedRef}
+			style={{
+				...positionStyle,
+				transform: CSS.Transform.toString(transform),
+			}}
+		>
+			{children(disabled ? null : { attributes: attributes as unknown as Record<string, unknown>, listeners: (listeners ?? {}) as unknown as Record<string, unknown> })}
 		</div>
 	);
 };
@@ -248,6 +296,7 @@ interface FunnelStage {
 	name: string;
 	explanation: string;
 	blockIds: string[];
+	cardType?: "qualification" | "product";
 }
 
 interface FunnelFlow {
@@ -274,12 +323,15 @@ interface FunnelVisualizerProps {
 	delayMinutes?: number; // App trigger delay (backward compatibility)
 	membershipDelayMinutes?: number; // Membership trigger delay
 	resources?: Array<{ id: string; name: string }>; // For membership_buy trigger
-	funnels?: Array<{ id: string; name: string }>; // For qualification/upsell triggers
+	funnels?: Array<{ id: string; name: string }>; // All funnels (e.g. for delete_merchant_conversation)
+	qualificationFunnels?: Array<{ id: string; name: string }>; // Qualification-type funnels for qualification_merchant_complete
+	upsellFunnels?: Array<{ id: string; name: string }>; // Upsell-type funnels for upsell_merchant_complete
 	loadingResources?: boolean;
 	loadingFunnels?: boolean;
 	onResourceChange?: (resourceId: string) => void; // For membership_buy, cancel_membership triggers
 	onFunnelChange?: (funnelId: string) => void; // For qualification/upsell/delete_merchant_conversation triggers
 	onMembershipFilterChange?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void;
+	onAppFilterChange?: (updates: { filterResourceIdsRequired?: string[]; filterResourceIdsExclude?: string[] }) => void;
 	profiles?: Array<{ id: string; name: string }>;
 	onQualificationProfileChange?: (profileId: string) => void;
 	onTriggerClick?: () => void; // Callback when trigger block is clicked (backward compatibility)
@@ -289,11 +341,17 @@ interface FunnelVisualizerProps {
 	onMembershipDelayChange?: (minutes: number) => void; // Callback when membership delay changes
 	onDelaySave?: (minutes: number) => void; // Callback when app delay is saved (backward compatibility)
 	onMembershipDelaySave?: (minutes: number) => void; // Callback when membership delay is saved
+	hasUnsavedTriggerConfig?: boolean;
+	onTriggerConfigSave?: () => void;
+	hasUnsavedAppTriggerConfig?: boolean;
+	hasUnsavedMembershipTriggerConfig?: boolean;
+	onAppTriggerConfigSave?: () => void;
+	onMembershipTriggerConfigSave?: () => void;
 	merchantType?: "qualification" | "upsell";
 	onUpsellClick?: (blockId: string) => void;
 	onDownsellClick?: (blockId: string) => void;
 	onAddNewOption?: (blockId: string, optionText: string) => void;
-	onStageUpdate?: (stageId: string, updates: { name?: string; explanation?: string }) => void; // Callback for adding new option
+	onStageUpdate?: (stageId: string, updates: { name?: string; explanation?: string; blockIds?: string[] }) => void; // Callback for stage name/explanation or card order
 	pendingOptionSelection?: {
 		isActive: boolean;
 		sourceBlockId: string;
@@ -302,14 +360,18 @@ interface FunnelVisualizerProps {
 		nextStageBlockIds: string[];
 		upsellKind?: "upsell" | "downsell";
 		onlyPlaceholderSelectable?: boolean;
+		optionIndex?: number;
+		previousNextBlockId?: string | null;
 	} | null; // Selection mode state
 	pendingCardTypeSelection?: {
 		newBlockId: string;
 		newStageId: string;
 		sourceBlockId: string;
 		optionText: string;
+		optionIndex?: number;
 	} | null; // Card type selection state (for new stages)
 	onCardTypeSelection?: (cardType: "qualification" | "product") => void; // Callback when card type is selected
+	onOptionConnectRequest?: (blockId: string, optionIndex: number) => void; // Callback to enter connect mode (same flow as add new option: new + existing cards)
 	onCardSelection?: (blockId: string) => void; // Callback when card is selected in selection mode
 	onClearCardSelection?: () => void; // Callback when click outside card (clear upsell/downsell selection)
 	pendingDelete?: {
@@ -360,11 +422,14 @@ const FunnelVisualizer = React.memo(
 				membershipDelayMinutes = 0, // Membership trigger delay
 				resources = [],
 				funnels = [],
+				qualificationFunnels = [],
+				upsellFunnels = [],
 				loadingResources = false,
 				loadingFunnels = false,
 				onResourceChange,
 				onFunnelChange,
 				onMembershipFilterChange,
+				onAppFilterChange,
 				profiles,
 				onQualificationProfileChange,
 				onTriggerClick, // Backward compatibility
@@ -374,6 +439,12 @@ const FunnelVisualizer = React.memo(
 				onMembershipDelayChange, // Membership trigger delay
 				onDelaySave, // App trigger delay (backward compatibility)
 				onMembershipDelaySave, // Membership trigger delay
+				hasUnsavedTriggerConfig,
+				onTriggerConfigSave,
+				hasUnsavedAppTriggerConfig,
+				hasUnsavedMembershipTriggerConfig,
+				onAppTriggerConfigSave,
+				onMembershipTriggerConfigSave,
 				merchantType,
 				onUpsellClick,
 				onDownsellClick,
@@ -388,6 +459,7 @@ const FunnelVisualizer = React.memo(
 				onStageUpdate,
 				pendingCardTypeSelection,
 				onCardTypeSelection,
+				onOptionConnectRequest,
 			},
 			ref,
 		) => {
@@ -487,6 +559,24 @@ const FunnelVisualizer = React.memo(
 				enableCalculationsForGoLive,
 			}));
 
+			// Drag-and-drop: reorder cards horizontally within a stage
+			const sensors = useSensors(
+				useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+				useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+				useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+			);
+			const handleStageBlockReorder = (event: DragEndEvent) => {
+				const { active, over } = event;
+				if (!over || active.id === over.id || !onStageUpdate || !funnelFlow?.stages) return;
+				const stage = funnelFlow.stages.find((s) => s.blockIds?.includes(active.id as string));
+				if (!stage || !stage.blockIds.includes(over.id as string)) return;
+				const oldIndex = stage.blockIds.indexOf(active.id as string);
+				const newIndex = stage.blockIds.indexOf(over.id as string);
+				if (oldIndex === -1 || newIndex === -1) return;
+				const newBlockIds = arrayMove(stage.blockIds, oldIndex, newIndex);
+				onStageUpdate(stage.id, { blockIds: newBlockIds });
+			};
+
 			if (!funnelFlow || !funnelFlow.stages || !funnelFlow.blocks) {
 				return (
 					<div className="flex items-center justify-center h-full text-gray-400 p-8 text-center">
@@ -510,11 +600,14 @@ const FunnelVisualizer = React.memo(
 			}
 
 			const isUpsellDownsellSelectionActive = !!(pendingOptionSelection?.isActive && pendingOptionSelection?.upsellKind);
+			const isCardTypeSelectionActive = !!(pendingCardTypeSelection && merchantType !== "upsell");
+			const isQualificationOptionSelectionActive = !!(pendingOptionSelection?.isActive && !pendingOptionSelection?.upsellKind);
+			const shouldClearOnCanvasClick = isUpsellDownsellSelectionActive || isCardTypeSelectionActive || isQualificationOptionSelectionActive;
 
 			return (
 				<div
 					className="w-full h-full"
-					onClick={isUpsellDownsellSelectionActive ? () => onClearCardSelection?.() : undefined}
+					onClick={shouldClearOnCanvasClick ? () => onClearCardSelection?.() : undefined}
 				>
 					{/* Mobile View */}
 					<MobileFunnelView
@@ -545,11 +638,14 @@ const FunnelVisualizer = React.memo(
 						experienceId={user?.experienceId}
 						resources={resources}
 						funnels={funnels}
+						qualificationFunnels={qualificationFunnels}
+						upsellFunnels={upsellFunnels}
 						loadingResources={loadingResources}
 						loadingFunnels={loadingFunnels}
 						onResourceChange={onResourceChange}
 						onFunnelChange={onFunnelChange}
 						onMembershipFilterChange={onMembershipFilterChange}
+						onAppFilterChange={onAppFilterChange}
 						profiles={profiles}
 						onQualificationProfileChange={onQualificationProfileChange}
 						onTriggerClick={onTriggerClick} // Backward compatibility
@@ -559,6 +655,12 @@ const FunnelVisualizer = React.memo(
 						onMembershipDelayChange={onMembershipDelayChange} // Membership trigger delay
 						onDelaySave={onDelaySave} // App trigger delay (backward compatibility)
 						onMembershipDelaySave={onMembershipDelaySave} // Membership trigger delay
+						hasUnsavedTriggerConfig={hasUnsavedTriggerConfig}
+						onTriggerConfigSave={onTriggerConfigSave}
+						hasUnsavedAppTriggerConfig={hasUnsavedAppTriggerConfig}
+						hasUnsavedMembershipTriggerConfig={hasUnsavedMembershipTriggerConfig}
+						onAppTriggerConfigSave={onAppTriggerConfigSave}
+						onMembershipTriggerConfigSave={onMembershipTriggerConfigSave}
 						startBlockId={funnelFlow?.startBlockId}
 						firstBlockY={positions[funnelFlow?.startBlockId || ""]?.y || 120}
 						firstStageY={stageLayouts[0]?.y || 80}
@@ -719,16 +821,20 @@ const FunnelVisualizer = React.memo(
 											);
 										})}
 									</svg>
-									{Object.values(funnelFlow.blocks).map((block) => {
-										// Check if this block is in selection mode (suggested targets: amber pulse)
-										const isInSelectionMode = pendingOptionSelection?.isActive && (
-											block.id === pendingOptionSelection.newBlockId ||
-											pendingOptionSelection.nextStageBlockIds.includes(block.id)
-										);
+									<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleStageBlockReorder}>
+									{funnelFlow.stages.map((stage) => (
+										<SortableContext key={stage.id} items={stage.blockIds} strategy={horizontalListSortingStrategy}>
+										{stage.blockIds.map((blockId) => {
+											const block = funnelFlow.blocks[blockId];
+											if (!block) return null;
+											// Qualification selection (add new option or change connection): selectable = new card + next-stage cards
+											const isInSelectionMode = pendingOptionSelection?.isActive && !pendingOptionSelection?.upsellKind && (
+												block.id === pendingOptionSelection.newBlockId ||
+												pendingOptionSelection.nextStageBlockIds.includes(block.id)
+											);
 
-										// Upsell selection: last-stage = only placeholder + block above stages; else current behavior
-										const isSelectionModeActive = pendingOptionSelection?.isActive;
-										const blockStage = funnelFlow.stages.find((s) => s.blockIds?.includes(block.id));
+											const isSelectionModeActive = !!pendingOptionSelection?.isActive;
+											const blockStage = funnelFlow.stages.find((s) => s.blockIds?.includes(block.id));
 										const isInWelcomeStage = blockStage?.name === "WELCOME";
 										const isThisBlockSelectable = (() => {
 											if (merchantType === "upsell" && pendingOptionSelection?.isActive) {
@@ -744,6 +850,8 @@ const FunnelVisualizer = React.memo(
 											}
 											return isInSelectionMode;
 										})();
+										// Upsell/Downsell selection: treat selectable cards as highlighted (same as qualification)
+										const isUpsellDownsellSelectable = !!(pendingOptionSelection?.isActive && pendingOptionSelection?.upsellKind && isThisBlockSelectable);
 
 										// Check if this card should be highlighted red (orphaned or broken)
 										const isOrphaned = pendingDelete && pendingDelete.orphanedNextStageCards.includes(block.id);
@@ -791,13 +899,22 @@ const FunnelVisualizer = React.memo(
 										const downsellCrossStageShape = isDownsellCrossStage && blockAny.downsellCrossStageStyle ? getCrossStageShapeById(blockAny.downsellCrossStageStyle.shapeId) : null;
 										const DownsellIconComponent = downsellCrossStageShape ? SHAPE_ICON_MAP[downsellCrossStageShape.name] : null;
 
-										return (
+											const dragDisabled = isDeployed || !!pendingOptionSelection?.isActive || !!pendingCardTypeSelection;
+											const positionStyle = {
+												left: `calc(50% + ${(positions[block.id]?.x || 0) - (editingBlockId === block.id ? 160 : 112)}px)`,
+												top: `${positions[block.id]?.y || 0}px`,
+												position: "absolute" as const,
+											};
+											return (
+												<SortableBlockWrapper key={block.id} blockId={block.id} blockRefs={blockRefs} positionStyle={positionStyle} disabled={dragDisabled}>
+													{(dragHandleProps) => (
 										<div
-											key={block.id}
-											ref={(el) => {
-												blockRefs.current[block.id] = el;
-											}}
 											onClick={(e) => {
+												// Clicks on the type-selection placeholder must not bubble (so canvas click-outside clears it)
+												if (pendingCardTypeSelection && block.id === pendingCardTypeSelection.newBlockId) {
+													e.stopPropagation();
+													return;
+												}
 												// If in selection mode and this block is selectable, handle selection
 												if (isSelectionModeActive && isThisBlockSelectable && onCardSelection) {
 													e.stopPropagation();
@@ -809,16 +926,16 @@ const FunnelVisualizer = React.memo(
 													handleBlockClick(block.id);
 												}
 											}}
-											className={`absolute bg-surface/95 dark:bg-surface/90 border rounded-2xl shadow-2xl transform transition-all duration-300 backdrop-blur-sm ${
+											className={`relative bg-surface/95 dark:bg-surface/90 border rounded-2xl shadow-2xl transform transition-all duration-300 backdrop-blur-sm ${
 												showReferencedVisual ? "border-teal-500 dark:border-teal-400 ring-1 ring-teal-500/50 " : ""
 											}${
 												editingBlockId === block.id
 													? "border-violet-500 ring-2 ring-violet-500/50 scale-105 w-80"
-													: isInSelectionMode
+													: isInSelectionMode || isUpsellDownsellSelectable
 														? "w-56 border-amber-500 ring-4 ring-amber-500 animate-pulse shadow-lg shadow-amber-500/50 cursor-pointer"
 														: isRedHighlighted
 															? "w-56 border-red-500 ring-2 ring-red-500"
-															: isThisBlockSelectable && !isInSelectionMode
+															: isThisBlockSelectable && !isInSelectionMode && !isUpsellDownsellSelectable
 																? "w-56 border-dashed border-amber-400/60 cursor-pointer hover:border-amber-400/80 " + (highlightedPath.blocks.has(block.id) ? "border-amber-400 shadow-lg shadow-amber-400/20" : "border-border/50 dark:border-border/30")
 																: `w-56 hover:scale-105 hover:shadow-violet-500/20 ${
 																		isSelectionModeActive
@@ -831,10 +948,8 @@ const FunnelVisualizer = React.memo(
 																	}`
 											}`}
 											style={{
-												left: `calc(50% + ${(positions[block.id]?.x || 0) - (editingBlockId === block.id ? 160 : 112)}px)`,
-												top: `${positions[block.id]?.y || 0}px`,
 												opacity: positions[block.id]?.opacity ?? 1,
-												...(isInSelectionMode && {
+												...((isInSelectionMode || isUpsellDownsellSelectable) && {
 													boxShadow: "0 0 0 4px rgba(245, 158, 11, 0.4), 0 0 15px rgba(245, 158, 11, 0.5), 0 0 25px rgba(245, 158, 11, 0.3)",
 												}),
 											}}
@@ -846,6 +961,7 @@ const FunnelVisualizer = React.memo(
 													onSave={onBlockUpdate}
 													onCancel={() => setEditingBlockId(null)}
 													onAddNewOption={merchantType === "qualification" ? onAddNewOption : undefined}
+													onOptionConnectRequest={onOptionConnectRequest ? (blockId, optionIndex) => { setEditingBlockId(null); onOptionConnectRequest(blockId, optionIndex); } : undefined}
 													pendingDelete={pendingDelete}
 													merchantType={merchantType}
 													resources={merchantType === "upsell" ? resources : undefined}
@@ -853,6 +969,18 @@ const FunnelVisualizer = React.memo(
 											) : (
 												<>
 													<div className={`border-b border-border/30 dark:border-border/20 p-3 rounded-t-2xl flex justify-between items-center ${crossStageBadges.length > 0 ? getCrossStageColorById(crossStageBadges[0].colorId)?.bgClass ?? "" : ""} bg-gradient-to-r from-violet-500/5 to-purple-500/5 dark:from-violet-900/10 dark:to-purple-900/10`}>
+														{dragHandleProps && !isDeployed && (
+															<span
+																{...dragHandleProps.attributes}
+																{...dragHandleProps.listeners}
+																data-no-drag
+																className="cursor-grab active:cursor-grabbing touch-none p-1 rounded hover:bg-violet-100 dark:hover:bg-violet-900/30 flex-shrink-0"
+																title="Drag to reorder"
+																onClick={(e) => e.stopPropagation()}
+															>
+																<GripVertical className="w-4 h-4 text-muted-foreground" />
+															</span>
+														)}
 														<div className="flex-1 min-w-0 mr-2 flex flex-wrap items-center gap-1.5">
 															{showReferencedVisual && (
 																<svg className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -867,10 +995,10 @@ const FunnelVisualizer = React.memo(
 																	? <IconComponent key={`${badge.kind}-${badge.colorId}-${badge.shapeId}-${idx}`} className={`w-3 h-3 flex-shrink-0 self-center ${color.textClass}`} />
 																	: null;
 															})}
-															<span className={`text-xs font-bold leading-none ${crossStageBadges.length > 0 ? (getCrossStageColorById(crossStageBadges[0].colorId)?.textClass ?? "text-violet-600 dark:text-violet-400") : "text-violet-600 dark:text-violet-400"}`}>
+															<span className={`text-xs font-bold leading-none min-w-0 truncate ${crossStageBadges.length > 0 ? (getCrossStageColorById(crossStageBadges[0].colorId)?.textClass ?? "text-violet-600 dark:text-violet-400") : "text-violet-600 dark:text-violet-400"}`}>
 																<CollapsibleText
 																	text={(block as any).headline ?? block.id}
-																	maxLength={20}
+																	maxLength={12}
 																/>
 															</span>
 														</div>
@@ -1031,55 +1159,32 @@ const FunnelVisualizer = React.memo(
 													<div className="p-4">
 														{/* Card Type Selection UI (for new stages - qualification only; upsell always uses product cards) */}
 														{pendingCardTypeSelection && block.id === pendingCardTypeSelection.newBlockId && merchantType !== "upsell" ? (
-															<div className="space-y-3">
-																<p className="text-sm font-semibold text-foreground mb-3 text-center">
-																	Select Card Type
-																</p>
-																<div className="grid grid-cols-2 gap-2">
+															<div className="flex flex-col gap-2">
 																	{/* Qualification Card Option */}
 																	<button
 																		onClick={() => onCardTypeSelection?.("qualification")}
-																		className="p-3 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-violet-500 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all text-left group"
+																		className="p-3 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-violet-500 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all group flex flex-col items-center gap-2"
 																	>
-																		<div className="flex items-start gap-2">
-																			<div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors flex-shrink-0">
-																				<svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-																				</svg>
-																			</div>
-																			<div className="flex-1 min-w-0">
-																				<div className="text-xs font-semibold text-gray-900 dark:text-white mb-0.5">
-																					Qualification
-																				</div>
-																				<div className="text-xs text-gray-600 dark:text-gray-400">
-																					Text with choices
-																				</div>
-																			</div>
+																		<div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+																			<svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																				<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+																			</svg>
 																		</div>
+																		<span className="text-xs font-semibold text-gray-900 dark:text-white">Qualification</span>
 																	</button>
 
 																	{/* Product Card Option */}
 																	<button
 																		onClick={() => onCardTypeSelection?.("product")}
-																		className="p-3 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-violet-500 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all text-left group"
+																		className="p-3 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-violet-500 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all group flex flex-col items-center gap-2"
 																	>
-																		<div className="flex items-start gap-2">
-																			<div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg group-hover:bg-green-200 dark:group-hover:bg-green-900/50 transition-colors flex-shrink-0">
-																				<svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-																				</svg>
-																			</div>
-																			<div className="flex-1 min-w-0">
-																				<div className="text-xs font-semibold text-gray-900 dark:text-white mb-0.5">
-																					Product
-																				</div>
-																				<div className="text-xs text-gray-600 dark:text-gray-400">
-																					Text with [LINK]
-																				</div>
-																			</div>
+																		<div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg group-hover:bg-green-200 dark:group-hover:bg-green-900/50 transition-colors">
+																			<svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																				<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+																			</svg>
 																		</div>
+																		<span className="text-xs font-semibold text-gray-900 dark:text-white">Product</span>
 																	</button>
-																</div>
 															</div>
 														) : isInSelectionMode && block.id === pendingOptionSelection?.newBlockId ? (
 															<div className="flex items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
@@ -1105,9 +1210,10 @@ const FunnelVisualizer = React.memo(
 															</p>
 														)}
 													</div>
+													{!(pendingCardTypeSelection && block.id === pendingCardTypeSelection.newBlockId && merchantType !== "upsell") && (
 													<div className="p-4 border-t border-border/30 dark:border-border/20 space-y-2">
-														{/* Upsell flow: Product (on card, above Upsell/Downsell) */}
-														{merchantType === "upsell" && (
+														{/* Product selection: upsell always; qualification when stage is product card (same UX and link resolution as upsell) */}
+														{(merchantType === "upsell" || blockStage?.cardType === "product") && (
 															<div
 																onClick={(e) => e.stopPropagation()}
 																onMouseDown={(e) => e.stopPropagation()}
@@ -1117,24 +1223,10 @@ const FunnelVisualizer = React.memo(
 																</div>
 																{!isDeployed && !isSelectionModeActive ? (
 																	<select
-																		value={
-																			(block as any).productSelectionType === "manual" && (block as any).resourceId
-																				? (block as any).resourceId
-																				: (block as any).productSelectionType === "ai_suggested"
-																					? "ai_suggested"
-																					: ""
-																		}
+																		value={(block as any).resourceId ?? ""}
 																		onChange={(e) => {
 																			const v = e.target.value;
-																			const blockAny = block as any;
-																			if (v === "ai_suggested") {
-																				onBlockUpdate({
-																					...block,
-																					productSelectionType: "ai_suggested",
-																					resourceId: null,
-																					referencedBlockId: null,
-																				} as any);
-																			} else if (v === "" || !v) {
+																			if (v === "" || !v) {
 																				onBlockUpdate({
 																					...block,
 																					productSelectionType: undefined,
@@ -1155,7 +1247,6 @@ const FunnelVisualizer = React.memo(
 																		className="w-full text-xs rounded-xl px-3 py-2 text-foreground bg-surface/50 dark:bg-surface/30 border border-border/50 dark:border-border/30 focus:ring-2 focus:ring-violet-500/50 cursor-pointer"
 																	>
 																		<option value="">Select product...</option>
-																		<option value="ai_suggested">AI Suggested (based on conversation)</option>
 																		{(resources ?? []).map((r) => (
 																			<option key={r.id} value={r.id}>
 																				{r.name}
@@ -1164,63 +1255,92 @@ const FunnelVisualizer = React.memo(
 																	</select>
 																) : (
 																	<div className="text-xs text-foreground rounded-xl px-3 py-2 bg-surface/50 dark:bg-surface/30 border border-border/30 dark:border-border/20">
-																		{(block as any).productSelectionType === "ai_suggested"
-																			? "AI Suggested (based on conversation)"
-																			: (block as any).resourceId && (resources?.length ?? 0) > 0
-																				? ((resources ?? []).find((r) => r.id === (block as any).resourceId)?.name ?? (block as any).resourceId)
-																				: "—"}
+																		{(block as any).resourceId && (resources?.length ?? 0) > 0
+																			? ((resources ?? []).find((r) => r.id === (block as any).resourceId)?.name ?? (block as any).resourceId)
+																			: "—"}
 																	</div>
 																)}
 															</div>
 														)}
-														{merchantType === "upsell" && !isDeployed && (onUpsellClick || onDownsellClick) ? (
+														{merchantType === "upsell" ? (
 															<div className="grid grid-cols-2 gap-2">
-																<button
-																	type="button"
-																	disabled={isSelectionModeActive}
-																	aria-disabled={isSelectionModeActive}
-																	onClick={() => {
-																		if (isSelectionModeActive) return;
-																		onUpsellClick?.(block.id);
-																	}}
-																	className={`text-xs font-medium rounded-xl p-3 text-left transition-all border flex items-center gap-2 ${
-																		isSelectionModeActive
-																			? "opacity-50 cursor-not-allowed pointer-events-none"
-																			: ""
-																	} ${
-																		(block as any).upsellBlockId
-																			? isUpsellCrossStage && upsellCrossStageColor
-																				? `${upsellCrossStageColor.bgClass} ${upsellCrossStageColor.borderClass} ${upsellCrossStageColor.textClass}`
-																				: "bg-amber-500/15 dark:bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300"
-																			: "bg-surface/50 dark:bg-surface/30 border-border/30 dark:border-border/20 hover:bg-surface/60 dark:hover:bg-surface/40 text-foreground"
-																	}`}
-																>
-																	{isUpsellCrossStage && UpsellIconComponent ? <UpsellIconComponent className="w-4 h-4 flex-shrink-0" /> : <ArrowUpCircle className="w-4 h-4 flex-shrink-0" />}
-																	Upsell
-																</button>
-																<button
-																	type="button"
-																	disabled={isSelectionModeActive}
-																	aria-disabled={isSelectionModeActive}
-																	onClick={() => {
-																		if (isSelectionModeActive) return;
-																		onDownsellClick?.(block.id);
-																	}}
-																	className={`text-xs font-medium rounded-xl p-3 text-left transition-all border flex items-center gap-2 ${
-																		isSelectionModeActive
-																			? "opacity-50 cursor-not-allowed pointer-events-none"
-																			: ""
-																	} ${
-																		(block as any).downsellBlockId
-																			? isDownsellCrossStage && downsellCrossStageColor
-																				? `${downsellCrossStageColor.bgClass} ${downsellCrossStageColor.borderClass} ${downsellCrossStageColor.textClass}`
-																				: "bg-teal-500/15 dark:bg-teal-500/20 border-teal-500/50 text-teal-700 dark:text-teal-300"
-																			: "bg-surface/50 dark:bg-surface/30 border-border/30 dark:border-border/20 hover:bg-surface/60 dark:hover:bg-surface/40 text-foreground"
-																	}`}
-																>
-																	{isDownsellCrossStage && DownsellIconComponent ? <DownsellIconComponent className="w-4 h-4 flex-shrink-0" /> : <ArrowDownCircle className="w-4 h-4 flex-shrink-0" />}
-																	Downsell
-																</button>
+																{!isDeployed && (onUpsellClick || onDownsellClick) ? (
+																	<>
+																		<button
+																			type="button"
+																			disabled={isSelectionModeActive}
+																			aria-disabled={isSelectionModeActive}
+																			onClick={() => {
+																				if (isSelectionModeActive) return;
+																				onUpsellClick?.(block.id);
+																			}}
+																			className={`text-xs font-medium rounded-xl py-3 px-3 transition-all border flex items-center justify-center gap-2 ${
+																				isSelectionModeActive
+																					? "opacity-50 cursor-not-allowed pointer-events-none"
+																					: ""
+																			} ${
+																				(block as any).upsellBlockId
+																					? isUpsellCrossStage && upsellCrossStageColor
+																						? `${upsellCrossStageColor.bgClass} ${upsellCrossStageColor.borderClass} ${upsellCrossStageColor.textClass}`
+																						: "bg-amber-500/15 dark:bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300"
+																					: "bg-surface/50 dark:bg-surface/30 border-border/30 dark:border-border/20 hover:bg-surface/60 dark:hover:bg-surface/40 text-foreground"
+																			}`}
+																		>
+																			{isUpsellCrossStage && UpsellIconComponent ? <UpsellIconComponent className="w-4 h-4 flex-shrink-0" /> : <ArrowUpCircle className="w-4 h-4 flex-shrink-0" />}
+																			Upsell
+																		</button>
+																		<button
+																			type="button"
+																			disabled={isSelectionModeActive}
+																			aria-disabled={isSelectionModeActive}
+																			onClick={() => {
+																				if (isSelectionModeActive) return;
+																				onDownsellClick?.(block.id);
+																			}}
+																			className={`text-xs font-medium rounded-xl py-3 pl-1.5 pr-4 text-left transition-all border flex items-center gap-2 ${
+																				isSelectionModeActive
+																					? "opacity-50 cursor-not-allowed pointer-events-none"
+																					: ""
+																			} ${
+																				(block as any).downsellBlockId
+																					? isDownsellCrossStage && downsellCrossStageColor
+																						? `${downsellCrossStageColor.bgClass} ${downsellCrossStageColor.borderClass} ${downsellCrossStageColor.textClass}`
+																						: "bg-teal-500/15 dark:bg-teal-500/20 border-teal-500/50 text-teal-700 dark:text-teal-300"
+																					: "bg-surface/50 dark:bg-surface/30 border-border/30 dark:border-border/20 hover:bg-surface/60 dark:hover:bg-surface/40 text-foreground"
+																			}`}
+																		>
+																			{isDownsellCrossStage && DownsellIconComponent ? <DownsellIconComponent className="w-4 h-4 flex-shrink-0" /> : <ArrowDownCircle className="w-4 h-4 flex-shrink-0" />}
+																			Downsell
+																		</button>
+																	</>
+																) : (
+																	<>
+																		<div
+																			className={`text-xs font-medium rounded-xl py-3 px-3 transition-all border flex items-center justify-center gap-2 ${
+																				(block as any).upsellBlockId
+																					? isUpsellCrossStage && upsellCrossStageColor
+																						? `${upsellCrossStageColor.bgClass} ${upsellCrossStageColor.borderClass} ${upsellCrossStageColor.textClass}`
+																						: "bg-amber-500/15 dark:bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300"
+																					: "bg-surface/50 dark:bg-surface/30 border-border/30 dark:border-border/20 text-foreground"
+																			}`}
+																		>
+																			{isUpsellCrossStage && UpsellIconComponent ? <UpsellIconComponent className="w-4 h-4 flex-shrink-0" /> : <ArrowUpCircle className="w-4 h-4 flex-shrink-0" />}
+																			Upsell
+																		</div>
+																		<div
+																			className={`text-xs font-medium rounded-xl py-3 pl-1.5 pr-4 text-left transition-all border flex items-center gap-2 ${
+																				(block as any).downsellBlockId
+																					? isDownsellCrossStage && downsellCrossStageColor
+																						? `${downsellCrossStageColor.bgClass} ${downsellCrossStageColor.borderClass} ${downsellCrossStageColor.textClass}`
+																						: "bg-teal-500/15 dark:bg-teal-500/20 border-teal-500/50 text-teal-700 dark:text-teal-300"
+																					: "bg-surface/50 dark:bg-surface/30 border-border/30 dark:border-border/20 text-foreground"
+																			}`}
+																		>
+																			{isDownsellCrossStage && DownsellIconComponent ? <DownsellIconComponent className="w-4 h-4 flex-shrink-0" /> : <ArrowDownCircle className="w-4 h-4 flex-shrink-0" />}
+																			Downsell
+																		</div>
+																	</>
+																)}
 															</div>
 														) : block.options && block.options.length > 0 && (() => {
 															// Check if this block is in a TRANSITION stage
@@ -1246,6 +1366,7 @@ const FunnelVisualizer = React.memo(
 																			affected => affected.blockId === block.id && affected.optionIndex === i
 																		);
 																		
+																		const isThisOptionConnecting = pendingOptionSelection?.sourceBlockId === block.id && pendingOptionSelection?.optionIndex === i;
 																		return (
 																		<div
 																			key={`${block.id}-opt-${i}`}
@@ -1254,6 +1375,8 @@ const FunnelVisualizer = React.memo(
 																					? "border-red-500 ring-2 ring-red-500 bg-red-500/10"
 																					: highlightedPath.options.has(`${block.id}_${opt.nextBlockId}`)
 																					? "bg-amber-500/20 ring-1 ring-amber-500/50 shadow-lg shadow-amber-500/20"
+																					: isThisOptionConnecting
+																					? "bg-amber-500/20 ring-1 ring-amber-500/50"
 																					: "bg-surface/50 dark:bg-surface/30 hover:bg-surface/60 dark:hover:bg-surface/40 border border-border/30 dark:border-border/20"
 																			}`}
 																			onClick={pendingOptionSelection?.isActive && pendingOptionSelection.sourceBlockId !== block.id ? () => onCardSelection?.(block.id) : undefined}
@@ -1265,11 +1388,24 @@ const FunnelVisualizer = React.memo(
 																						{i + 1}
 																					</span>
 																				</div>
-																				<div className="flex-1">
+																				<div className="flex-1 min-w-0">
 																					<p className="whitespace-normal font-medium">
 																						{opt.text}
 																					</p>
 																				</div>
+																				{!isDeployed && onOptionConnectRequest && !opt.nextBlockId && (
+																					<button
+																						type="button"
+																						onClick={(e) => {
+																							e.stopPropagation();
+																							onOptionConnectRequest(block.id, i);
+																						}}
+																						className="flex-shrink-0 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 hover:underline"
+																						title="Connect to a card"
+																					>
+																						Connect
+																					</button>
+																				)}
 																			</div>
 																		</div>
 																		);
@@ -1292,11 +1428,17 @@ const FunnelVisualizer = React.memo(
 															return <AddOptionInput blockId={block.id} onAdd={onAddNewOption} />;
 														})()}
 													</div>
+													)}
 												</>
 											)}
 										</div>
-										);
-									})}
+													)}
+												</SortableBlockWrapper>
+											);
+										})}
+										</SortableContext>
+									))}
+									</DndContext>
 								</>
 							)}
 						</div>

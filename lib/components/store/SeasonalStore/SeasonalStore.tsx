@@ -2245,6 +2245,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
                   funnelFlow={funnelFlow}
                   resources={liveFunnel?.resources || []}
                   experienceId={experienceId}
+                  merchantType={liveFunnel?.merchantType}
                   onMessageSent={(message, conversationId) => {
                     console.log('Chat message sent:', message, conversationId);
                   }}

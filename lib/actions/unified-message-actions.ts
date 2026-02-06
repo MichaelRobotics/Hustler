@@ -12,7 +12,7 @@ import { messages, conversations } from "../supabase/schema";
 export interface UnifiedMessage {
   id: string;
   conversationId: string;
-  type: "user" | "bot" | "system";
+  type: "user" | "bot" | "system" | "admin";
   text: string;
   timestamp: string;
   isRead: boolean;
@@ -46,22 +46,39 @@ export async function getConversationMessages(
       return [];
     }
 
+    const conv = conversation as typeof conversation & { userLastReadAt?: Date | string | null; adminLastReadAt?: Date | string | null };
+    const adminLastReadAt = conv.adminLastReadAt ? new Date(conv.adminLastReadAt) : null;
+    const userLastReadAt = conv.userLastReadAt ? new Date(conv.userLastReadAt) : null;
+
     // Get all messages for this conversation, ordered by creation time
     const conversationMessages = await db.query.messages.findMany({
       where: eq(messages.conversationId, conversationId),
       orderBy: [asc(messages.createdAt)],
     });
 
-    // Transform to unified format
-    const unifiedMessages: UnifiedMessage[] = conversationMessages.map((msg: any) => ({
-      id: msg.id,
-      conversationId: msg.conversationId,
-      type: msg.type === "bot" ? "bot" : msg.type === "user" ? "user" : "system",
-      text: msg.content,
-      timestamp: msg.createdAt,
-      isRead: true, // For now, assume all messages are read
-      metadata: msg.metadata,
-    }));
+    // Transform to unified format with read receipts; admin-sent messages (metadata.senderType === "admin") as type "admin"
+    const unifiedMessages: UnifiedMessage[] = conversationMessages.map((msg: any) => {
+      const msgTime = new Date(msg.createdAt).getTime();
+      const isUserMsg = msg.type === "user";
+      const isRead = isUserMsg
+        ? (!!adminLastReadAt && msgTime <= adminLastReadAt.getTime())
+        : (!!userLastReadAt && msgTime <= userLastReadAt.getTime());
+      const resolvedType =
+        msg.type === "user"
+          ? "user"
+          : msg.type === "bot"
+            ? (msg.metadata?.senderType === "admin" ? "admin" : "bot")
+            : "system";
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        type: resolvedType,
+        text: msg.content,
+        timestamp: msg.createdAt,
+        isRead,
+        metadata: msg.metadata,
+      };
+    });
 
     console.log(`[UNIFIED-MESSAGES] Loaded ${unifiedMessages.length} messages for conversation ${conversationId}`);
     console.log(`[UNIFIED-MESSAGES] Sample messages:`, unifiedMessages.slice(0, 3).map(m => ({

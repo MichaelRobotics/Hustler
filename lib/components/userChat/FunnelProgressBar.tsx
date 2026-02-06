@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Text } from "frosted-ui";
+import { getFunnelProgressPercentage } from "@/lib/utils/funnelUtils";
 
 // Add custom shimmer animation
 const shimmerKeyframes = `
@@ -70,20 +71,10 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 		};
 	}, [activeStage, onStageUpdate]);
 
-	// Find current stage index
-	const currentStageIndex = stageOrder.findIndex(stage => stage.key === activeStage);
-	
-	// Filter stages that exist in the funnel
-	const availableStages = stageOrder.filter(stage => 
-		stages.some(s => s.name === stage.key)
-	);
-
-	// Calculate progress percentage
-	const progressPercentage = isCompleted 
-		? 100 // Show full completion when conversation is done
-		: availableStages.length > 0 
-			? ((currentStageIndex + 1) / availableStages.length) * 100 
-			: 0;
+	// Progress = (current stage number / total stages) × 100, e.g. stage 3 of 6 = 50%
+	const progressPercentage = isCompleted
+		? 100
+		: getFunnelProgressPercentage(activeStage, stages);
 
 	// Get stage display name
 	const getStageDisplayName = (stageKey: string) => {

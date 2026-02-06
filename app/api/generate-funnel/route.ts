@@ -202,7 +202,6 @@ async function generateFunnelHandler(
 			link: resource.link,
 			code: resource.code || "",
 			category: resource.price || "FREE_VALUE", // Map price to category
-			productApps: resource.productApps || undefined, // Include productApps field
 		}));
 
 		// Generate the funnel flow using AI

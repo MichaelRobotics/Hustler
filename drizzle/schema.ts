@@ -1,7 +1,7 @@
 import { pgTable, index, foreignKey, unique, uuid, timestamp, text, jsonb, boolean, integer, numeric, pgEnum } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
-export const conversationStatus = pgEnum("conversation_status", ['active', 'completed', 'closed', 'abandoned'])
+export const conversationStatus = pgEnum("conversation_status", ['active', 'completed', 'closed', 'abandoned', 'archived'])
 export const generationStatus = pgEnum("generation_status", ['idle', 'generating', 'completed', 'failed'])
 export const messageType = pgEnum("message_type", ['user', 'bot'])
 export const resourceCategory = pgEnum("resource_category", ['PAID', 'FREE_VALUE'])
@@ -97,9 +97,7 @@ export const resources = pgTable("resources", {
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 	experienceId: uuid("experience_id").notNull(),
-	whopAppId: text("whop_app_id"),
 	whopMembershipId: text("whop_membership_id"),
-	productApps: jsonb("product_apps"),
 	price: numeric({ precision: 10, scale:  2 }),
 	image: text(),
 	storageUrl: text("storage_url"),
@@ -109,7 +107,6 @@ export const resources = pgTable("resources", {
 	index("resources_type_category_idx").using("btree", table.type.asc().nullsLast().op("enum_ops"), table.category.asc().nullsLast().op("enum_ops")),
 	index("resources_type_idx").using("btree", table.type.asc().nullsLast().op("enum_ops")),
 	index("resources_user_id_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
-	index("resources_whop_app_id_idx").using("btree", table.whopAppId.asc().nullsLast().op("text_ops")),
 	index("resources_whop_membership_id_idx").using("btree", table.whopMembershipId.asc().nullsLast().op("text_ops")),
 	index("resources_whop_product_id_idx").using("btree", table.whopProductId.asc().nullsLast().op("text_ops")),
 	foreignKey({
@@ -245,6 +242,15 @@ export const conversations = pgTable("conversations", {
 	myAffiliateLink: text("my_affiliate_link"),
 	affiliateSend: boolean("affiliate_send").default(false).notNull(),
 	whopProductId: text("whop_product_id"),
+	userLastReadAt: timestamp("user_last_read_at", { mode: 'string' }),
+	adminLastReadAt: timestamp("admin_last_read_at", { mode: 'string' }),
+	unreadCountAdmin: integer("unread_count_admin").default(0).notNull(),
+	unreadCountUser: integer("unread_count_user").default(0).notNull(),
+	controlledBy: text("controlled_by").default("bot").notNull(),
+	userTyping: boolean("user_typing").default(false).notNull(),
+	adminTyping: boolean("admin_typing").default(false).notNull(),
+	userTypingAt: timestamp("user_typing_at", { mode: 'string' }),
+	adminTypingAt: timestamp("admin_typing_at", { mode: 'string' }),
 	flow: jsonb(),
 }, (table) => [
 	index("conversations_experience_id_idx").using("btree", table.experienceId.asc().nullsLast().op("uuid_ops")),
@@ -261,7 +267,6 @@ export const conversations = pgTable("conversations", {
 			foreignColumns: [funnels.id],
 			name: "conversations_funnel_id_funnels_id_fk"
 		}).onDelete("cascade"),
-	unique("unique_active_user_conversation").on(table.experienceId, table.whopUserId),
 ]);
 
 export const messages = pgTable("messages", {
@@ -270,6 +275,7 @@ export const messages = pgTable("messages", {
 	type: messageType().notNull(),
 	content: text().notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	metadata: jsonb("metadata"), // e.g. { senderType: "admin", senderId, timestamp } for LiveChat
 }, (table) => [
 	index("messages_conversation_id_idx").using("btree", table.conversationId.asc().nullsLast().op("uuid_ops")),
 	index("messages_created_at_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamp_ops")),

@@ -2,6 +2,7 @@ import { Text } from "frosted-ui";
 import { ChevronDown, User } from "lucide-react";
 import type React from "react";
 import { useState, useRef, useEffect } from "react";
+import { AvatarSquare } from "../common/AvatarSquare";
 
 interface User {
 	id: string;
@@ -57,30 +58,16 @@ export const UserSelectionDropdown: React.FC<UserSelectionDropdownProps> = ({
 				onClick={() => setIsOpen(!isOpen)}
 				className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 shadow-sm"
 			>
-				{selectedUser?.avatar ? (
-					<div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center">
-						<img
-							src={selectedUser.avatar}
-							alt={selectedUser.name}
-							className="w-full h-full object-cover object-center"
-							onError={(e) => {
-								const target = e.target as HTMLImageElement;
-								target.style.display = 'none';
-								const parent = target.parentElement;
-								if (parent) {
-									const fallback = document.createElement('div');
-									fallback.className = 'w-8 h-8 bg-violet-500 rounded-full flex items-center justify-center';
-									fallback.innerHTML = `<span class="text-white text-sm font-semibold">${selectedUser.name.charAt(0).toUpperCase()}</span>`;
-									parent.appendChild(fallback);
-								}
-							}}
-						/>
-					</div>
-				) : (
-					<div className="w-8 h-8 bg-violet-500 rounded-full flex items-center justify-center flex-shrink-0">
-						<User className="w-4 h-4 text-white" strokeWidth={2.5} />
-					</div>
-				)}
+				<AvatarSquare
+					src={selectedUser?.avatar}
+					alt={selectedUser?.name ?? "User"}
+					sizeClass="w-8 h-8"
+					fallback={
+						<div className="w-full h-full bg-violet-500 flex items-center justify-center">
+							<User className="w-4 h-4 text-white" strokeWidth={2.5} />
+						</div>
+					}
+				/>
 				<Text size="3" weight="medium" className="text-gray-900 dark:text-white">
 					{selectedUser?.id === currentUserId ? "Admin - You" : (selectedUser?.name || users[0]?.name || "No users")}
 				</Text>
@@ -113,32 +100,18 @@ export const UserSelectionDropdown: React.FC<UserSelectionDropdownProps> = ({
 										: ""
 								}`}
 							>
-								{user.avatar ? (
-									<div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center">
-										<img
-											src={user.avatar}
-											alt={user.name}
-											className="w-full h-full object-cover object-center"
-											onError={(e) => {
-												const target = e.target as HTMLImageElement;
-												target.style.display = 'none';
-												const parent = target.parentElement;
-												if (parent) {
-													const fallback = document.createElement('div');
-													fallback.className = 'w-10 h-10 bg-violet-500 rounded-full flex items-center justify-center';
-													fallback.innerHTML = `<span class="text-white text-sm font-semibold">${user.name.charAt(0).toUpperCase()}</span>`;
-													parent.appendChild(fallback);
-												}
-											}}
-										/>
-									</div>
-								) : (
-									<div className="w-10 h-10 bg-violet-500 rounded-full flex items-center justify-center flex-shrink-0">
-										<span className="text-white text-sm font-semibold">
-											{user.name.charAt(0).toUpperCase()}
-										</span>
-									</div>
-								)}
+								<AvatarSquare
+									src={user.avatar}
+									alt={user.name}
+									sizeClass="w-10 h-10"
+									fallback={
+										<div className="w-full h-full bg-violet-500 flex items-center justify-center">
+											<span className="text-white text-sm font-semibold">
+												{user.name.charAt(0).toUpperCase()}
+											</span>
+										</div>
+									}
+								/>
 								<div className="flex-1 text-left">
 									<Text
 										size="3"

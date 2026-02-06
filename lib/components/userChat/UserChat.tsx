@@ -1,7 +1,7 @@
 "use client";
 
 import { Text } from "frosted-ui";
-import { ArrowLeft, Moon, Send, Sun, User } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, MessageCircle, Moon, Send, Sun, User } from "lucide-react";
 import React, {
 	useState,
 	useRef,
@@ -9,16 +9,20 @@ import React, {
 	useCallback,
 	useMemo,
 } from "react";
+import { set as setConversationMessageCache } from "@/lib/cache/conversation-message-cache";
 import { useFunnelPreviewChat } from "../../hooks/useFunnelPreviewChat";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
+import { useTypingIndicator } from "../../hooks/useTypingIndicator";
 // Server-side functions moved to API routes to avoid client-side imports
 import type { FunnelFlow } from "../../types/funnel";
 import type { ConversationWithMessages } from "../../types/user";
-import { apiPost } from "../../utils/api-client";
+import { apiGet, apiPost } from "../../utils/api-client";
 import { useTheme } from "../common/ThemeProvider";
 import TypingIndicator from "../common/TypingIndicator";
+import { AvatarSquare } from "../common/AvatarSquare";
 import AnimatedGoldButton from "./AnimatedGoldButton";
 import { renderTextWithLinks } from "../../utils/link-utils";
+import { getFunnelProgressPercentageFromBlock } from "../../utils/funnelUtils";
 
 /**
  * Track intent by calling the API endpoint
@@ -36,33 +40,9 @@ async function trackIntent(experienceId: string, funnelId: string): Promise<void
   }
 }
 
-/**
- * Handle external link navigation according to Whop best practices
- * Uses iframe SDK when available, falls back to window.location for standalone
- */
-function handleExternalLink(href: string, iframeSdk: any, isInIframe: boolean): void {
-  try {
-    // Check if it's a Whop internal link (should stay in iframe)
-    const isWhopInternalLink = href.includes('whop.com') && !href.includes('whop.com/checkout') && !href.includes('whop.com/hub');
-    
-    if (isInIframe && iframeSdk && iframeSdk.openExternalUrl) {
-      // Use Whop iframe SDK for external links (best practice)
-      console.log(`🔗 [UserChat] Opening external link via Whop iframe SDK: ${href}`);
-      iframeSdk.openExternalUrl({ url: href });
-    } else if (isWhopInternalLink) {
-      // For Whop internal links, use window.location to stay in iframe
-      console.log(`🔗 [UserChat] Opening Whop internal link: ${href}`);
-      window.location.href = href;
-    } else {
-      // For external links outside iframe, open in new tab
-      console.log(`🔗 [UserChat] Opening external link in new tab: ${href}`);
-      window.open(href, '_blank', 'noopener,noreferrer');
-    }
-  } catch (error) {
-    console.error("❌ [UserChat] Error handling external link:", error);
-    // Fallback to window.location
-    window.location.href = href;
-  }
+/** Open link in new tab only; never navigate the current page (or iframe). */
+function handleExternalLink(href: string): void {
+  window.open(href, '_blank', 'noopener,noreferrer');
 }
 
 interface UserChatProps {
@@ -73,6 +53,12 @@ interface UserChatProps {
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	onBack?: () => void;
 	hideAvatar?: boolean;
+	/** User (customer) avatar URL for their messages */
+	userAvatar?: string | null;
+	/** Merchant/bot avatar URL for bot messages and typing indicator */
+	merchantIconUrl?: string | null;
+	/** Admin avatar URL for admin-sent messages (from users table); so customer sees Admin vs Bot */
+	adminAvatarUrl?: string | null;
 	userType?: "admin" | "customer";
 	stageInfo?: {
 		currentStage: string;
@@ -80,6 +66,12 @@ interface UserChatProps {
 		isTransitionStage: boolean;
 		isExperienceQualificationStage: boolean;
 	};
+	/** Funnel merchant type: qualification (options shown) or upsell (no options in OFFER, only latest offer message) */
+	merchantType?: "qualification" | "upsell";
+	/** When true, hide input and option buttons (e.g. for closed conversations - read-only history) */
+	readOnly?: boolean;
+	/** Funnel resources for product link resolution (from load-conversation). */
+	resources?: { id: string; name: string; link?: string }[];
 }
 
 /**
@@ -100,11 +92,24 @@ const UserChat: React.FC<UserChatProps> = ({
 	onMessageSent,
 	onBack,
 	hideAvatar = false,
+	userAvatar,
+	merchantIconUrl,
+	adminAvatarUrl,
 	userType,
 	stageInfo,
+	merchantType = "qualification",
+	readOnly = false,
+	resources,
 }) => {
 	const [message, setMessage] = useState("");
-	// ✅ REMOVED: isTyping state - no typing indicators needed
+	const [adminTyping, setAdminTyping] = useState(false);
+	// Resolved avatar URLs when not passed as props (same sources as LiveChat / CustomerView)
+	const [resolvedUserAvatar, setResolvedUserAvatar] = useState<string | null>(null);
+	const [resolvedMerchantIconUrl, setResolvedMerchantIconUrl] = useState<string | null>(null);
+	// Use props when provided, otherwise resolved (from internal fetch) – avoids timing issues when parent passes later
+	const displayUserAvatar = (userAvatar != null && userAvatar !== "") ? userAvatar : (resolvedUserAvatar ?? undefined);
+	const displayMerchantIconUrl = (merchantIconUrl != null && merchantIconUrl !== "") ? merchantIconUrl : (resolvedMerchantIconUrl ?? undefined);
+	const displayAdminAvatarUrl = (adminAvatarUrl != null && adminAvatarUrl !== "") ? adminAvatarUrl : undefined;
 	const [conversationMessages, setConversationMessages] = useState<Array<{
 		id: string;
 		type: "user" | "bot" | "system";
@@ -113,9 +118,16 @@ const UserChat: React.FC<UserChatProps> = ({
 		createdAt: Date;
 	}>>([]);
 	const [localCurrentBlockId, setLocalCurrentBlockId] = useState<string | null>(null);
+	/** Read receipts: kept in sync with conversation and poll/refresh so check icons stay up to date. */
+	const [readReceipts, setReadReceipts] = useState<{ userLastReadAt: string | null; adminLastReadAt: string | null }>({ userLastReadAt: null, adminLastReadAt: null });
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
-	// ✅ REMOVED: typingTimeoutRef - no typing indicators needed
+	const messageRef = useRef("");
+	messageRef.current = message;
+	// Latest typing from server (so we don't lose admin typing if a response omits it or state batches)
+	const lastTypingRef = useRef<{ user?: boolean; admin?: boolean } | null>(null);
+	// Track which conversation we've seeded messages for (initialize once per conversationId to avoid blink on parent updates)
+	const initializedConversationIdRef = useRef<string | null>(null);
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
@@ -134,140 +146,220 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Removed OFFER link resolution logic - links are now handled by backend
 
-	// Initialize conversation messages from backend data IMMEDIATELY
+	// Fetch user + merchant avatars when not passed (same as LiveChat: user from context, merchant from origin-templates)
 	useEffect(() => {
-		if (conversation?.messages) {
-			const processMessages = async () => {
-				const formattedMessages = await Promise.all(
-					conversation.messages.map(async (msg: any) => {
-						let content = msg.text || msg.content;
-						
-						// Links are now handled by backend - no frontend processing needed
-						
-						return {
-							id: msg.id,
-							type: msg.type,
-							content,
-							metadata: msg.metadata,
-							createdAt: msg.timestamp || msg.createdAt,
-						};
-					})
-				);
-				
-				setConversationMessages(formattedMessages);
-				console.log("UserChat: Loaded conversation messages from backend:", formattedMessages.length);
-				console.log("UserChat: Sample message:", formattedMessages[0]);
-				console.log("UserChat: All messages:", formattedMessages.map(m => ({
-					id: m.id,
-					type: m.type,
-					content: m.content.substring(0, 50) + (m.content.length > 50 ? '...' : ''),
-					createdAt: m.createdAt
-				})));
-				// Scroll to bottom after loading messages
-				setTimeout(() => scrollToBottom(), 100);
-			};
-			
-			processMessages();
+		if (!experienceId) return;
+		let cancelled = false;
+		const needUser = userAvatar == null || userAvatar === "";
+		const needMerchant = merchantIconUrl == null || merchantIconUrl === "";
+		if (!needUser && !needMerchant) return;
+		(async () => {
+			try {
+				if (needUser) {
+					const res = await apiGet(`/api/user/context?experienceId=${experienceId}`, experienceId);
+					if (!cancelled && res.ok) {
+						const data = await res.json();
+						const url = data?.user?.avatar ?? null;
+						if (url && typeof url === "string") setResolvedUserAvatar(url);
+					}
+				}
+				if (needMerchant) {
+					const res = await apiGet(`/api/origin-templates/${experienceId}`, experienceId);
+					if (!cancelled && res.ok) {
+						const data = await res.json();
+						const url = data?.originTemplate?.companyLogoUrl ?? null;
+						if (url && typeof url === "string") setResolvedMerchantIconUrl(url);
+					}
+				}
+			} catch {
+				// ignore
+			}
+		})();
+		return () => { cancelled = true; };
+	}, [experienceId, userAvatar, merchantIconUrl]);
+
+	// Single source for read receipts and typing: conversation prop (from load-conversation or parent)
+	useEffect(() => {
+		const conv = conversation as { userLastReadAt?: string | null; adminLastReadAt?: string | null; typing?: { user?: boolean; admin?: boolean } } | undefined;
+		if (conv?.userLastReadAt !== undefined || conv?.adminLastReadAt !== undefined) {
+			setReadReceipts((prev) => ({
+				userLastReadAt: conv?.userLastReadAt ?? prev.userLastReadAt,
+				adminLastReadAt: conv?.adminLastReadAt ?? prev.adminLastReadAt,
+			}));
 		}
-	}, [conversation?.messages]);
+		if (conv?.typing !== undefined) setAdminTyping(!!conv.typing.admin);
+	}, [conversation]);
+
+	// Reset initialized ref when conversationId changes so we re-seed for the new conversation
+	useEffect(() => {
+		initializedConversationIdRef.current = null;
+	}, [conversationId]);
+
+	// Initialize conversation messages from backend data ONCE per conversationId (avoids blink when parent updates conversation again e.g. cache then API)
+	useEffect(() => {
+		if (!conversation?.messages?.length || !conversationId) return;
+		if (initializedConversationIdRef.current === conversationId) return;
+
+		const processMessages = async () => {
+			const formattedMessages = await Promise.all(
+				conversation.messages.map(async (msg: any) => {
+					const content = msg.text || msg.content;
+					return {
+						id: msg.id,
+						type: msg.type,
+						content,
+						metadata: msg.metadata,
+						createdAt: msg.timestamp || msg.createdAt,
+					};
+				})
+			);
+			setConversationMessages(formattedMessages);
+			initializedConversationIdRef.current = conversationId;
+			setTimeout(() => scrollToBottom(), 100);
+		};
+		processMessages();
+	}, [conversation?.messages, conversationId]);
+
+	// Persist messages to sessionStorage cache when they change (so returning to this conversation shows them immediately)
+	useEffect(() => {
+		if (!experienceId || !conversationId || conversationMessages.length === 0) return;
+		setConversationMessageCache(experienceId, conversationId, {
+			messages: conversationMessages.map((m) => ({
+				id: m.id,
+				type: m.type,
+				content: m.content,
+				text: m.content,
+				metadata: m.metadata,
+				createdAt: m.createdAt,
+				timestamp: m.createdAt,
+			})),
+			updatedAt: new Date().toISOString(),
+			meta: conversation?.currentBlockId ? { currentBlockId: conversation.currentBlockId } : undefined,
+		});
+	}, [conversationMessages, experienceId, conversationId, conversation?.currentBlockId]);
 
 	// Polling for new messages (replaces WebSocket)
-	// Poll every 3 seconds for new admin/bot messages
-	const lastMessageCountRef = useRef(conversationMessages.length);
-	
+	const scrollToBottomRef = useRef(scrollToBottom);
+	scrollToBottomRef.current = scrollToBottom;
+
+	const POLL_INTERVAL_MS = 2000;
+
 	useEffect(() => {
 		if (!conversationId || !experienceId) return;
-		
+
 		const pollForNewMessages = async () => {
 			try {
 				const response = await apiPost('/api/userchat/load-conversation', {
 					conversationId,
 					experienceId,
+					userType: userType ?? undefined,
 				}, experienceId);
-				
+
 				if (response.ok) {
 					const result = await response.json();
 					const conversationData = result.data || result;
 					if (conversationData.success && conversationData.conversation?.messages) {
 						const serverMessages = conversationData.conversation.messages;
-						
-						// Only update if we have new messages
-						if (serverMessages.length > lastMessageCountRef.current) {
-							console.log(`📨 [UserChat] Polling found ${serverMessages.length - lastMessageCountRef.current} new messages`);
-							
-							const formattedMessages = serverMessages.map((msg: any) => ({
-								id: msg.id,
-								type: msg.type,
-								content: msg.content,
-								metadata: msg.metadata,
-								createdAt: new Date(msg.createdAt || msg.timestamp),
-							}));
-							
-							setConversationMessages(formattedMessages);
-							lastMessageCountRef.current = serverMessages.length;
-							scrollToBottom();
-							
-							// Check for stage changes
-							if (conversationData.conversation.currentStage) {
-				const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
-									detail: { newStage: conversationData.conversation.currentStage }
-				});
-				window.dispatchEvent(stageUpdateEvent);
-			}
+						type FormattedMsg = { id: string; type: "user" | "bot" | "system"; content: string; metadata?: unknown; createdAt: Date };
+						const formattedServer: FormattedMsg[] = serverMessages.map((msg: { id?: string; type?: string; text?: string; content?: string; metadata?: unknown; createdAt?: string; timestamp?: string }) => ({
+							id: msg.id ?? "",
+							type: (msg.type === "user" || msg.type === "system" ? msg.type : "bot") as "user" | "bot" | "system",
+							content: (msg.text ?? msg.content ?? "").trim(),
+							metadata: msg.metadata,
+							createdAt: new Date(msg.createdAt ?? msg.timestamp ?? Date.now()),
+						}));
+
+						setConversationMessages((prev) => {
+							const existingIds = new Set(prev.map((m) => m.id));
+							const OPTIMISTIC_PREFIXES = /^(user-|bot-|temp-|error-)/;
+							const isOptimistic = (id: string) => OPTIMISTIC_PREFIXES.test(id);
+							const sameContent = (a: string, b: string) => (a || "").trim() === (b || "").trim();
+							const within60s = (t1: Date, t2: Date) => Math.abs(t1.getTime() - t2.getTime()) <= 60_000;
+
+							const withoutDupedOptimistic = prev.filter((local) => {
+								if (!isOptimistic(local.id)) return true;
+								const match = formattedServer.find(
+									(s) =>
+										s.type === local.type &&
+										sameContent(s.content, local.content) &&
+										within60s(s.createdAt, local.createdAt instanceof Date ? local.createdAt : new Date(local.createdAt))
+								);
+								return !match;
+							});
+
+							const newFromServer = formattedServer.filter((s) => !existingIds.has(s.id));
+							const mergedIds = new Set(withoutDupedOptimistic.map((m) => m.id));
+							const reallyNew = newFromServer.filter((s) => !mergedIds.has(s.id));
+							const next = [...withoutDupedOptimistic, ...reallyNew].sort(
+								(a, b) =>
+									(a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)).getTime() -
+									(b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)).getTime()
+							);
+							if (reallyNew.length > 0) {
+								queueMicrotask(() => scrollToBottomRef.current());
+							}
+							return next;
+						});
+						if (conversationData.conversation.currentStage) {
+							const stageUpdateEvent = new CustomEvent('funnel-stage-update', {
+								detail: { newStage: conversationData.conversation.currentStage }
+							});
+							window.dispatchEvent(stageUpdateEvent);
 						}
+						const conv = conversationData.conversation as {
+							userLastReadAt?: string | null;
+							adminLastReadAt?: string | null;
+							typing?: { user?: boolean; admin?: boolean };
+						} | undefined;
+						if (conv?.userLastReadAt !== undefined || conv?.adminLastReadAt !== undefined) {
+							setReadReceipts((prev) => ({
+								userLastReadAt: conv?.userLastReadAt ?? prev.userLastReadAt,
+								adminLastReadAt: conv?.adminLastReadAt ?? prev.adminLastReadAt,
+							}));
+						}
+						if (conv?.typing !== undefined) setAdminTyping(!!conv.typing.admin);
 					}
 				}
 			} catch (error) {
 				console.error("[UserChat] Polling error:", error);
 			}
 		};
-		
-		// Poll every 3 seconds
-		const pollInterval = setInterval(pollForNewMessages, 3000);
-		
-		return () => clearInterval(pollInterval);
-	}, [conversationId, experienceId, scrollToBottom]);
 
-	// Refresh conversation data when WebSocket receives new messages (optimized)
-	const refreshConversation = useCallback(async () => {
-		if (!conversationId || !experienceId) return;
-		
-		try {
-			console.log("UserChat: Refreshing conversation data...");
-			const response = await apiPost('/api/userchat/load-conversation', {
-				conversationId,
-				experienceId,
-			}, experienceId);
-			
-			if (response.ok) {
-				const result = await response.json();
-				// Note: result.data because load-conversation uses createSuccessResponse
-				const conversationData = result.data || result;
-				if (conversationData.success && conversationData.conversation?.messages) {
-					const formattedMessages = conversationData.conversation.messages.map((msg: any) => ({
-						id: msg.id,
-						type: msg.type,
-						content: msg.content,
-						metadata: msg.metadata,
-						createdAt: msg.createdAt,
-					}));
-					setConversationMessages(formattedMessages);
-					console.log("UserChat: Refreshed conversation messages:", formattedMessages.length);
-					// Scroll to bottom after refreshing
-					setTimeout(() => scrollToBottom(), 50);
-				}
-			}
-		} catch (error) {
-			console.error("UserChat: Error refreshing conversation:", error);
-		}
-	}, [conversationId, experienceId]);
+		const pollInterval = setInterval(pollForNewMessages, POLL_INTERVAL_MS);
+		return () => clearInterval(pollInterval);
+		// Intentionally omit scrollToBottom so the interval is never restarted by callback identity changes
+	}, [conversationId, experienceId, userType]);
+
+	// Debounced typing: send true after short delay, false after idle or on unmount (single source, fewer requests)
+	const sendUserTyping = useCallback(
+		(active: boolean) => {
+			if (!conversationId || !experienceId) return;
+			apiPost(
+				`/api/livechat/conversations/${conversationId}/typing`,
+				{ side: "user", active },
+				experienceId
+			).catch(() => {});
+		},
+		[conversationId, experienceId]
+	);
+	useTypingIndicator(Boolean(conversationId && experienceId && (message || "").trim().length > 0), sendUserTyping);
 
 	// Get current block ID from conversation state or local state
 	const currentBlockId = localCurrentBlockId || conversation?.currentBlockId || null;
 	
-	// Get options for current block from funnel flow
+	// Get options for current block from funnel flow. Upsell funnels never show option buttons (e.g. "Upsell"/"Downsell").
 	const currentBlock = currentBlockId ? funnelFlow?.blocks[currentBlockId] : null;
-	const options = currentBlock?.options || [];
+	const isUpsell = merchantType === "upsell";
+	const isUpsellOfferStage = isUpsell && stageInfo?.currentStage === "OFFER";
+	const options = isUpsell ? [] : (currentBlock?.options || []);
+
+	// UpSell OFFER: show only the latest bot message (hide previous offers)
+	const displayedMessages = useMemo(() => {
+		if (!isUpsellOfferStage || conversationMessages.length === 0) return conversationMessages;
+		const lastBotIdx = [...conversationMessages].map((m, i) => ({ m, i })).filter(({ m }) => m.type === "bot").pop()?.i ?? -1;
+		if (lastBotIdx < 0) return conversationMessages;
+		return conversationMessages.filter((msg, i) => msg.type !== "bot" || i === lastBotIdx);
+	}, [conversationMessages, isUpsellOfferStage]);
 
 	// Update local current block ID when conversation changes
 	useEffect(() => {
@@ -283,7 +375,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const {
 		handleOptionClick: previewHandleOptionClick,
 		handleCustomInput: previewHandleCustomInput,
-	} = useFunnelPreviewChat(funnelFlow, undefined, undefined, conversation);
+	} = useFunnelPreviewChat(funnelFlow, resources ?? [], undefined, conversation);
 
 	// Direct handlers - no callbacks for maximum performance
 	const handleSubmit = async (e?: React.FormEvent) => {
@@ -553,7 +645,7 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// Memoized message component for better performance
 	const MessageComponent = React.memo(
-		({ msg, index }: { msg: any; index: number }) => {
+		({ msg, index, adminLastReadAt, userLastReadAt, userType: msgUserType, userAvatar: msgUserAvatar, merchantIconUrl: msgMerchantIconUrl, adminAvatarUrl: msgAdminAvatarUrl, hideAvatar: msgHideAvatar }: { msg: any; index: number; adminLastReadAt?: string | null; userLastReadAt?: string | null; userType?: "admin" | "customer"; userAvatar?: string | null; merchantIconUrl?: string | null; adminAvatarUrl?: string | null; hideAvatar?: boolean }) => {
 			// Special handling for system messages (redirect indicator)
 			if (msg.type === "system") {
 				if (msg.text === "redirect_to_live_chat") {
@@ -599,11 +691,11 @@ const UserChat: React.FC<UserChatProps> = ({
 				type: msg.type, 
 				hasAnimatedButton: hasButton,
 				text: text.substring(0, 200) + '...',
-				willApplySpecialStyling: hasButton && msg.type === 'bot'
+				willApplySpecialStyling: hasButton && (msg.type === 'bot' || msg.type === 'admin')
 			});
 			
-			// Check for animated button HTML first
-			if (msg.type === "bot" && text.includes('animated-gold-button')) {
+			// Check for animated button HTML first (bot or admin message)
+			if ((msg.type === "bot" || msg.type === "admin") && text.includes('animated-gold-button')) {
 					// Parse the HTML and extract the button data
 					const buttonRegex = /<div class="animated-gold-button" data-href="([^"]+)">([^<]+)<\/div>/g;
 					const parts = text.split(buttonRegex);
@@ -636,8 +728,15 @@ const UserChat: React.FC<UserChatProps> = ({
 										} else if (isValueDeliveryButton) {
 											console.log(`🎁 [UserChat] Free resource claim - no intent tracking for VALUE_DELIVERY button`);
 										}
-										// Handle link navigation according to Whop best practices
-										handleExternalLink(href, iframeSdk, isInIframe);
+										// Start offer timer for OFFER CTA (upsell/downsell delay)
+										if (!isValueDeliveryButton && conversation?.id && conversation.currentBlockId) {
+											apiPost("/api/userchat/offer-cta-clicked", {
+												conversationId: conversation.id,
+												blockId: conversation.currentBlockId,
+											}).catch(() => {});
+										}
+										// Product/app link: always open in new window
+										window.open(href, "_blank", "noopener,noreferrer");
 									}}
 								/>
 							);
@@ -680,16 +779,52 @@ const UserChat: React.FC<UserChatProps> = ({
 				);
 			};
 
+			const showAvatars = !msgHideAvatar;
+			const isAgentMessage = msg.type === "bot" || msg.type === "admin";
+			const isAdminMessage = msg.type === "admin";
+			const userAvatarEl = showAvatars && msg.type === "user" ? (
+				<AvatarSquare
+					src={msgUserAvatar ?? undefined}
+					alt="You"
+					sizeClass="w-8 h-8"
+					borderClass="border-2 border-gray-200 dark:border-gray-600"
+					fallback={
+						<div className="w-full h-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center">
+							<User size={14} className="text-white" />
+						</div>
+					}
+				/>
+			) : null;
+			const agentAvatarEl = showAvatars && isAgentMessage ? (
+				<div className="flex flex-col items-start gap-0.5">
+					<span className="text-[10px] font-medium text-muted-foreground" title={isAdminMessage ? "From your team" : "Automated message"}>
+						{isAdminMessage ? "Admin" : "Bot"}
+					</span>
+					<AvatarSquare
+						src={isAdminMessage ? (msgAdminAvatarUrl ?? undefined) : (msgMerchantIconUrl ?? undefined)}
+						alt={isAdminMessage ? "Admin" : "Bot"}
+						sizeClass="w-8 h-8"
+						borderClass={isAdminMessage ? "border-2 border-violet-400 dark:border-violet-500" : "border-2 border-gray-200 dark:border-gray-600"}
+						fallback={
+							<div className={`w-full h-full flex items-center justify-center ${isAdminMessage ? "bg-violet-500" : "bg-gray-500 dark:bg-gray-600"}`}>
+								{isAdminMessage ? <User size={14} className="text-white" /> : <MessageCircle size={14} className="text-white" />}
+							</div>
+						}
+					/>
+				</div>
+			) : null;
+
 			return (
 				<div
 					key={`${msg.type}-${index}`}
-					className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"} mb-4 px-1`}
-				>
+				className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"} mb-4 px-1 gap-2 items-end`}
+			>
+					{isAgentMessage && agentAvatarEl}
 					<div
 						className={`max-w-[85%] sm:max-w-[80%] px-4 py-3 rounded-xl ${
 							msg.type === "user"
 								? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
-								: msg.text.includes('animated-gold-button')
+								: (msg.type === "admin" || msg.type === "bot") && msg.text.includes('animated-gold-button')
 									? "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border-3 border-amber-500 dark:border-amber-400 text-gray-900 dark:text-gray-100 shadow-lg shadow-amber-300/60 dark:shadow-amber-700/60"
 									: "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-lg shadow-gray-300/50 dark:shadow-gray-800/50"
 						}`}
@@ -701,7 +836,18 @@ const UserChat: React.FC<UserChatProps> = ({
 						}}
 					>
 						{renderMessageWithLinks(msg.text)}
+						{/* Read receipts on user messages only: one check = sent, two checks = admin has seen */}
+						{msg.type === "user" && (
+							<div className="flex justify-end items-center mt-1.5 gap-0.5" aria-label={adminLastReadAt && new Date(adminLastReadAt).getTime() >= new Date(msg.timestamp).getTime() ? "Read" : "Sent"}>
+								{adminLastReadAt && new Date(adminLastReadAt).getTime() >= new Date(msg.timestamp).getTime() ? (
+									<CheckCheck size={14} className="opacity-90 text-white/90" strokeWidth={2.5} />
+								) : (
+									<Check size={14} className="opacity-90 text-white/90" strokeWidth={2.5} />
+								)}
+							</div>
+						)}
 					</div>
+					{msg.type === "user" && userAvatarEl}
 				</div>
 			);
 		},
@@ -733,11 +879,11 @@ const UserChat: React.FC<UserChatProps> = ({
 		),
 	);
 
-	// Memoized message list - show conversation messages
+	// Memoized message list - show conversation messages (UpSell OFFER: only latest offer message)
 	const messageList = useMemo(() => {
-		const messagesToShow = conversationMessages.map(msg => ({
+		const messagesToShow = displayedMessages.map(msg => ({
 			type: msg.type,
-			text: msg.content, // Use content property
+			text: typeof msg.content === "string" ? msg.content : String(msg.content ?? ""),
 			timestamp: msg.createdAt,
 		}));
 
@@ -751,9 +897,9 @@ const UserChat: React.FC<UserChatProps> = ({
 						msg.text.includes("has a gift for you") &&
 						msg.text.includes("VIP chat");
 					
-					// Also check for other transition patterns
+					// Also check for other transition patterns (button or whop link)
 					const isTransitionPattern = msg.text.includes("catch") && 
-						(msg.text.includes("LINK") || msg.text.includes("whop.com"));
+						(msg.text.includes("animated-gold-button") || msg.text.includes("whop.com"));
 					
 					return !(isTransitionMessage || isTransitionPattern);
 				}
@@ -761,10 +907,11 @@ const UserChat: React.FC<UserChatProps> = ({
 			})
 			: messagesToShow;
 
+		const textPreview = (t: string) => (t ?? "").substring(0, 30) + ((t ?? "").length > 30 ? "..." : "");
 		console.log("UserChat: Rendering message list:", filteredMessages.length, "messages");
 		console.log("UserChat: Message list sample:", filteredMessages.slice(0, 2).map(m => ({
 			type: m.type,
-			text: m.text.substring(0, 30) + (m.text.length > 30 ? '...' : ''),
+			text: textPreview(m.text),
 			timestamp: m.timestamp
 		})));
 
@@ -773,6 +920,13 @@ const UserChat: React.FC<UserChatProps> = ({
 				key={`${msg.type}-${index}`}
 				msg={msg}
 				index={index}
+				adminLastReadAt={readReceipts.adminLastReadAt}
+				userLastReadAt={readReceipts.userLastReadAt}
+				userType={userType}
+				userAvatar={displayUserAvatar}
+				merchantIconUrl={displayMerchantIconUrl}
+				adminAvatarUrl={displayAdminAvatarUrl}
+				hideAvatar={hideAvatar}
 			/>
 		));
 
@@ -801,7 +955,7 @@ const UserChat: React.FC<UserChatProps> = ({
 		}
 
 		return messageElements;
-	}, [conversationMessages, userType]);
+	}, [displayedMessages, userType, readReceipts, displayUserAvatar, displayMerchantIconUrl, hideAvatar]);
 
 	// Memoized options list
 	const optionsList = useMemo(
@@ -842,9 +996,10 @@ const UserChat: React.FC<UserChatProps> = ({
 				<div className="flex-1 overflow-y-auto p-4 touch-pan-y scrollbar-hide chat-messages-container">
 					{messageList}
 
-					{/* Options - User side (right side) */}
-					{conversationMessages.length > 0 &&
-						conversationMessages[conversationMessages.length - 1].type === "bot" &&
+					{/* Options - User side (right side); UpSell OFFER has options.length === 0; hidden when readOnly */}
+					{!readOnly &&
+						displayedMessages.length > 0 &&
+						displayedMessages[displayedMessages.length - 1].type === "bot" &&
 						options.length > 0 && (
 							<div className="flex justify-end mb-4 pr-0">
 								<div className="space-y-2 flex flex-col items-end">
@@ -853,7 +1008,33 @@ const UserChat: React.FC<UserChatProps> = ({
 							</div>
 						)}
 
-					{/* ✅ REMOVED: Typing Indicator - no typing indicators needed */}
+					{adminTyping && (
+						<div className="flex justify-start mb-4 gap-2 items-end">
+							{!hideAvatar ? (
+								<div className="flex flex-col items-start gap-0.5">
+									<span className="text-[10px] font-medium text-muted-foreground" title="From your team">Admin</span>
+									<AvatarSquare
+										src={displayAdminAvatarUrl}
+										alt="Admin"
+										sizeClass="w-8 h-8"
+										borderClass="border-2 border-violet-400 dark:border-violet-500"
+										fallback={
+											<div className="w-full h-full bg-violet-500 flex items-center justify-center">
+												<User size={14} className="text-white" />
+											</div>
+										}
+									/>
+								</div>
+							) : (
+								<div className="w-8 h-8 rounded-lg bg-violet-200 dark:bg-violet-800 flex items-center justify-center flex-shrink-0">
+									<User size={16} className="text-violet-600 dark:text-violet-300" />
+								</div>
+							)}
+							<div className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center">
+								<TypingIndicator isVisible showText={false} />
+							</div>
+						</div>
+					)}
 
 					<div ref={chatEndRef} />
 				</div>
@@ -861,74 +1042,23 @@ const UserChat: React.FC<UserChatProps> = ({
 				{/* Progress Bar - Separate element like separation line */}
 				{userType === "admin" && stageInfo && funnelFlow && (
 					<div className="px-4 py-2 border-t border-border/20 dark:border-border/10 relative">
-						{/* Golden Percentage - Directly above progress bar */}
+						{/* Golden Percentage - (stage position / total stages) × 100; 100% when completed */}
 						<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full z-50">
 							<span className="text-yellow-500 font-bold text-2xl drop-shadow-lg">
-								{(() => {
-									const stageOrder = [
-										{ key: "TRANSITION", name: "Getting Started" },
-										{ key: "WELCOME", name: "Welcome" },
-										{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-										{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-										{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-										{ key: "OFFER", name: "Offer" },
-									];
-									const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
-									const availableStages = stageOrder.filter(stage => 
-										funnelFlow.stages.some(s => s.name === stage.key)
-									);
-									const progressPercentage = availableStages.length > 0 
-										? ((currentStageIndex + 1) / availableStages.length) * 100 
-										: 0;
-									return Math.round(progressPercentage);
-								})()}%
+								{Math.round(
+									!currentBlockId && conversation?.messages?.length
+										? 100
+										: getFunnelProgressPercentageFromBlock(currentBlockId, funnelFlow.stages),
+								)}%
 							</span>
 						</div>
 						<div className="relative w-full">
 							{/* Background Track - Smooth and subtle */}
 							<div className="w-full bg-gray-200/30 dark:bg-gray-600/30 rounded-full h-1">
 								<div
-									className={`h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden ${
-										(() => {
-											const stageOrder = [
-												{ key: "TRANSITION", name: "Getting Started" },
-												{ key: "WELCOME", name: "Welcome" },
-												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-												{ key: "OFFER", name: "Offer" },
-											];
-											const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
-											const availableStages = stageOrder.filter(stage => 
-												funnelFlow.stages.some(s => s.name === stage.key)
-											);
-											const progressPercentage = availableStages.length > 0 
-												? ((currentStageIndex + 1) / availableStages.length) * 100 
-												: 0;
-											return progressPercentage >= 100;
-										})()
-											? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600' 
-											: 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
-									}`}
-									style={{ 
-										width: `${(() => {
-											const stageOrder = [
-												{ key: "TRANSITION", name: "Getting Started" },
-												{ key: "WELCOME", name: "Welcome" },
-												{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-												{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-												{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-												{ key: "OFFER", name: "Offer" },
-											];
-											const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
-											const availableStages = stageOrder.filter(stage => 
-												funnelFlow.stages.some(s => s.name === stage.key)
-											);
-											const progressPercentage = availableStages.length > 0 
-												? ((currentStageIndex + 1) / availableStages.length) * 100 
-												: 0;
-											return progressPercentage;
-										})()}%`
+									className="h-1 rounded-full transition-all duration-500 ease-out relative overflow-hidden bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600"
+									style={{
+										width: `${!currentBlockId && conversation?.messages?.length ? 100 : getFunnelProgressPercentageFromBlock(currentBlockId, funnelFlow.stages)}%`,
 									}}
 								>
 									{/* Multiple Random Shining Spots - Sun/Lava Effect */}
@@ -955,24 +1085,7 @@ const UserChat: React.FC<UserChatProps> = ({
 							</div>
 
 							{/* Completion Button - Centered with Faded Background (when progress is 100%) */}
-							{(() => {
-								const stageOrder = [
-									{ key: "TRANSITION", name: "Getting Started" },
-									{ key: "WELCOME", name: "Welcome" },
-									{ key: "VALUE_DELIVERY", name: "Value Delivery" },
-									{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },
-									{ key: "PAIN_POINT_QUALIFICATION", name: "Pain Points" },
-									{ key: "OFFER", name: "Offer" },
-								];
-								const currentStageIndex = stageOrder.findIndex(stage => stage.key === stageInfo.currentStage);
-								const availableStages = stageOrder.filter(stage => 
-									funnelFlow.stages.some(s => s.name === stage.key)
-								);
-								const progressPercentage = availableStages.length > 0 
-									? ((currentStageIndex + 1) / availableStages.length) * 100 
-									: 0;
-								return progressPercentage >= 100;
-							})() && (
+							{((!currentBlockId && !!conversation?.messages?.length) || getFunnelProgressPercentageFromBlock(currentBlockId, funnelFlow.stages) >= 100) && (
 								<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
 									{/* Faded Background Line */}
 									<div className="absolute inset-0 flex items-center">
@@ -1030,8 +1143,8 @@ const UserChat: React.FC<UserChatProps> = ({
 					</div>
 				)}
 
-				{/* Input Area - Now below the overflow container */}
-				{currentBlockId && (
+				{/* Input Area - Now below the overflow container; hidden when readOnly (e.g. closed conversation) */}
+				{!readOnly && currentBlockId && (
 					<div className="flex-shrink-0 chat-input-container safe-area-bottom px-4 py-2">
 						<div className="flex items-end gap-3">
 							<div className="flex-1">

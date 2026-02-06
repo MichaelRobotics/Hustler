@@ -14,8 +14,9 @@ import {
   withWhopAuth,
 } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
-import { conversations, experiences } from "@/lib/supabase/schema";
-import { eq } from "drizzle-orm";
+import { conversations, experiences, users } from "@/lib/supabase/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { sendWhopNotification } from "@/lib/helpers/whop-notifications";
 
 /**
  * Process user message in UserChat and trigger funnel navigation
@@ -163,6 +164,41 @@ async function processMessageHandler(
     // Cache the result for future requests
     if (result.success) {
       cache.set(cacheKey, result, CACHE_TTL.CONVERSATION);
+
+      // Notify admin of new message (same as send-message): increment unread_count_admin and push
+      const now = new Date();
+      await db.update(conversations)
+        .set({
+          updatedAt: now,
+          unreadCountAdmin: sql`${conversations.unreadCountAdmin} + 1`,
+        })
+        .where(eq(conversations.id, sanitizedConversationId));
+
+      const whopUserId = user.userId;
+      const adminUsers = await db.query.users.findMany({
+        where: and(
+          eq(users.experienceId, conversation.experienceId),
+          eq(users.accessLevel, "admin"),
+        ),
+        columns: { whopUserId: true, name: true },
+      });
+      const adminWhopIds = adminUsers.map((u: { whopUserId: string; name: string | null }) => u.whopUserId);
+      const customerName = (await db.query.users.findFirst({
+        where: and(
+          eq(users.whopUserId, whopUserId),
+          eq(users.experienceId, conversation.experienceId),
+        ),
+        columns: { name: true },
+      }))?.name ?? "A customer";
+      if (adminWhopIds.length > 0 && experience.whopExperienceId) {
+        sendWhopNotification({
+          experience_id: experience.whopExperienceId,
+          user_ids: adminWhopIds,
+          title: "New message",
+          content: `${customerName}: ${sanitizedMessageContent.slice(0, 80)}${sanitizedMessageContent.length > 80 ? "…" : ""}`,
+          rest_path: `/chat/${sanitizedConversationId}`,
+        }).catch((err) => console.warn("[process-message] Whop notification failed:", err));
+      }
     }
 
     const processingTime = Date.now() - startTime;

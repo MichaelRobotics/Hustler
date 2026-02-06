@@ -18,10 +18,6 @@
       "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/cron/delete-old-closed-conversations",
-      "schedule": "0 3 * * *"
-    },
-    {
       "path": "/api/cron/daily-rollover",
       "schedule": "0 1 * * *"
     },

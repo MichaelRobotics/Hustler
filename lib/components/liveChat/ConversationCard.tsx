@@ -4,6 +4,7 @@ import { Text } from "frosted-ui";
 import { MessageSquare, Archive, AlertCircle, CheckCircle } from "lucide-react";
 import React from "react";
 import type { ConversationCardProps } from "../../types/liveChat";
+import { AvatarSquare } from "../common/AvatarSquare";
 
 const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 	({ conversation, isSelected, onClick }) => {
@@ -71,21 +72,19 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 				<div className="p-4 border-b-2 border-border dark:border-violet-500/30 bg-gradient-to-r from-gray-50 via-gray-100 to-violet-100 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-800/60">
 					<div className="flex items-center justify-between gap-3">
 						<div className="flex items-center gap-3 flex-1 min-w-0">
-							<div className="flex-shrink-0">
-								{conversation.user.avatar ? (
-									<img
-										src={conversation.user.avatar}
-										alt={conversation.user.name}
-										className="w-10 h-10 rounded-lg object-cover border-2 border-violet-200 dark:border-violet-400"
-									/>
-								) : (
-									<div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
+							<AvatarSquare
+								src={conversation.user.avatar}
+								alt={conversation.user.name}
+								sizeClass="w-10 h-10"
+								borderClass="border-2 border-violet-200 dark:border-violet-400"
+								fallback={
+									<div className="w-full h-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
 										<Text size="2" weight="bold" className="text-white">
 											{conversation.user.name.charAt(0).toUpperCase()}
 										</Text>
 									</div>
-								)}
-							</div>
+								}
+							/>
 
 							<div className="flex-1 min-w-0">
 								<div className="flex items-center gap-2">
@@ -96,6 +95,11 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 									>
 										{conversation.user.name}
 									</Text>
+									{(conversation.unreadCountAdmin ?? 0) > 0 && (
+										<span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-violet-500 text-white text-xs font-bold flex items-center justify-center">
+											{conversation.unreadCountAdmin! > 99 ? "99+" : conversation.unreadCountAdmin}
+										</span>
+									)}
 									{getStatusIcon(conversation.status)}
 									{getPriorityIndicator(conversation)}
 								</div>

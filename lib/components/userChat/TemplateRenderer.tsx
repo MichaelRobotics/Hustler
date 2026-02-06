@@ -40,6 +40,8 @@ interface TemplateRendererProps {
     isExperienceQualificationStage: boolean;
   };
   userType?: "admin" | "customer";
+  /** Funnel merchant type: qualification (show options) or upsell (hide Upsell/Downsell option buttons in chat) */
+  merchantType?: "qualification" | "upsell";
   onShowCustomerDashboard?: () => void;
   onPurchaseSuccess?: (planId: string) => void; // Callback for successful purchase (receives planId)
 }
@@ -65,6 +67,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   conversation,
   stageInfo,
   userType = "customer",
+  merchantType,
   onShowCustomerDashboard,
   onPurchaseSuccess
 }) => {
@@ -935,7 +938,9 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                 onMessageSent={onMessageSent}
                 userType={userType}
                 stageInfo={stageInfo}
+                merchantType={merchantType}
                 onBack={handleChatClose}
+                adminAvatarUrl={conversation?.adminAvatar ?? undefined}
               />
             ) : (
               <div className="h-full flex items-center justify-center bg-white/40 dark:bg-black/40 backdrop-blur-sm">
