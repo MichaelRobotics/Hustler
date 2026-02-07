@@ -711,9 +711,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	};
 
+	// When notification deep link: open chat only after Seasonal Store (template) has loaded, so Claim-button chat opens on top of the loaded store.
+	const pendingOpenChatWhenReadyRef = useRef(false);
+
 	// Load data once when experienceId is available; avoid re-running when callback identities change (prevents endless load-conversation loop)
-	// When initialOpenConversationId is set (e.g. notification deep link), open chat and load that conversation.
-	// Use a separate ref for open-chat so we run it when initialOpenConversationId arrives after the normal path already ran.
+	// When initialOpenConversationId is set (e.g. notification deep link), load that conversation but do NOT open chat yet; open after iframe loads.
 	const lastLoadedExperienceIdRef = useRef<string | null>(null);
 	const lastOpenChatConversationIdRef = useRef<string | null>(null);
 	useEffect(() => {
@@ -725,20 +727,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				return;
 			}
 			lastOpenChatConversationIdRef.current = initialOpenConversationId;
-			console.log("[CustomerView] open-chat: running deep-link path", { experienceId, initialOpenConversationId });
+			console.log("[CustomerView] open-chat: running deep-link path (load conversation; will open chat after store loads)", { experienceId, initialOpenConversationId });
 			setIsLoading(true);
 			setError(null);
 			let cancelled = false;
 			(async () => {
 				try {
-					console.log("[CustomerView] open-chat: fetching conversation list");
 					await fetchConversationList();
-					console.log("[CustomerView] open-chat: loading conversation", initialOpenConversationId);
 					const { readOnly } = await loadConversationById(initialOpenConversationId);
 					if (!cancelled) {
 						setIsChatReadOnly(readOnly);
-						setViewMode("chat-only");
-						console.log("[CustomerView] open-chat: set viewMode=chat-only, readOnly=", readOnly);
+						pendingOpenChatWhenReadyRef.current = true;
+						console.log("[CustomerView] open-chat: conversation loaded, will open chat when Seasonal Store has loaded");
 					}
 					fetchUserContext();
 					fetchExperienceLink();
@@ -748,7 +748,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					if (!cancelled) setError(err instanceof Error ? err.message : "Failed to open conversation");
 				} finally {
 					if (!cancelled) setIsLoading(false);
-					console.log("[CustomerView] open-chat: done");
 				}
 			})();
 			return () => {
@@ -769,6 +768,16 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		// Intentionally omit callback deps to avoid re-running when callbacks get new refs (e.g. userType resolving)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [experienceId, initialOpenConversationId]);
+
+	// After Seasonal Store has loaded (template rendered or iframe loaded), open the Claim-button chat if we came from notification deep link
+	const storeReady = iframeLoaded || (hasLiveTemplate && !!liveTemplate);
+	useEffect(() => {
+		if (storeReady && pendingOpenChatWhenReadyRef.current) {
+			pendingOpenChatWhenReadyRef.current = false;
+			setViewMode("chat-only");
+			console.log("[CustomerView] open-chat: Seasonal Store loaded, opening Claim-button chat");
+		}
+	}, [storeReady]);
 
 	// Validate discount settings against database (same logic as usePreviewLiveTemplate)
 	useEffect(() => {
@@ -1199,8 +1208,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	
 			return (
 				<div className="h-screen w-full relative flex flex-col">
-			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads. Skip when chat-only (e.g. notification deep link). */}
-			{(!iframeLoaded || overlayTransitioning) && viewMode !== "chat-only" && (
+			{/* Whop Native Loading Overlay - Covers entire CustomerView until Seasonal Store / template loads */}
+			{(!iframeLoaded || overlayTransitioning) && (
 				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
 					overlayTransitioning ? 'transition-all duration-500 filter blur-[20px] opacity-0' : ''
 				}`}>
