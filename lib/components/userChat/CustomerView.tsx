@@ -769,14 +769,19 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [experienceId, initialOpenConversationId]);
 
-	// After Seasonal Store has loaded (template rendered or iframe loaded), open the Claim-button chat if we came from notification deep link
+	// After Seasonal Store has loaded (template + products), open the Claim-button chat if we came from notification deep link.
+	// Wait for store ready THEN an extra delay so "template loads, products load" has time to finish (iframe onLoad is just document load).
 	const storeReady = iframeLoaded || (hasLiveTemplate && !!liveTemplate);
+	const OPEN_CHAT_DELAY_MS = 3000; // After store ready: give template + products time to load before opening chat
 	useEffect(() => {
-		if (storeReady && pendingOpenChatWhenReadyRef.current) {
+		if (!storeReady || !pendingOpenChatWhenReadyRef.current) return;
+		const t = setTimeout(() => {
+			if (!pendingOpenChatWhenReadyRef.current) return;
 			pendingOpenChatWhenReadyRef.current = false;
 			setViewMode("chat-only");
-			console.log("[CustomerView] open-chat: Seasonal Store loaded, opening Claim-button chat");
-		}
+			console.log("[CustomerView] open-chat: Store and products ready, opening Claim-button chat");
+		}, OPEN_CHAT_DELAY_MS);
+		return () => clearTimeout(t);
 	}, [storeReady]);
 
 	// Validate discount settings against database (same logic as usePreviewLiveTemplate)
@@ -894,12 +899,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 
 	// Fallback: Remove overlay after 8 seconds regardless of iframe load state
-	// Also handle case when urlLoaded is true but iframeUrl is empty (no live template)
+	// When urlLoaded is true and iframeUrl is empty: only treat as "no template" once we know template check is done and there is no live template
 	useEffect(() => {
-		// If urlLoaded is true but iframeUrl is empty, there's no template to load
-		// Remove overlay immediately in this case
-		if (urlLoaded && !iframeUrl && !iframeLoaded) {
-			console.log('🎭 No live template found, removing overlay immediately');
+		// If experience has no link (iframeUrl empty) and we've confirmed no live template, remove overlay
+		if (urlLoaded && !iframeUrl && !iframeLoaded && !templateLoading && !hasLiveTemplate) {
+			console.log('🎭 No experience link and no live template, removing overlay');
 			setOverlayTransitioning(true);
 			setTimeout(() => {
 				setIframeLoaded(true);
@@ -923,7 +927,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}, 8000);
 
 		return () => clearTimeout(fallbackTimer);
-	}, [iframeLoaded, urlLoaded, iframeUrl]);
+	}, [iframeLoaded, urlLoaded, iframeUrl, templateLoading, hasLiveTemplate]);
 
 	const handleMessageSentInternal = (message: string, convId?: string) => {
 		console.log("Customer message:", {
