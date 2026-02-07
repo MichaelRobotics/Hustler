@@ -361,8 +361,8 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 				));
 			}
 
-			// Last message record: Pass to Merchant (only when conversation is controlled by admin)
-			if (conversation.controlledBy === "admin" && onResolve) {
+			// Last message record: Pass to Merchant (only when conversation is controlled by admin). Render only after messages so it doesn't flicker from top to bottom.
+			if (conversation.controlledBy === "admin" && onResolve && conversation.messages.length > 0) {
 				messageElements.push(
 					<div
 						key="pass-to-merchant-record"

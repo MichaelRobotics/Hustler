@@ -323,11 +323,19 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 					return mergeServerMessagesIntoPrev(prev, serverConv as LiveChatConversation & { messages?: unknown[] }, selectedConversationId);
 				});
 
-				// Sync card in list for sidebar
+				// Sync card in list for sidebar. Preserve unread counts so detail poll never overwrites them (avoids wrong 0 when switching cards).
 				setConversations((prev) =>
 					prev.map((c) =>
 						c.id === selectedConversationId
-							? { ...c, lastMessage: serverConv.lastMessage ?? c.lastMessage, lastMessageAt: serverConv.lastMessageAt ?? c.lastMessageAt, messageCount: serverConv.messageCount ?? c.messageCount, updatedAt: serverConv.updatedAt ?? c.updatedAt }
+							? {
+									...c,
+									lastMessage: serverConv.lastMessage ?? c.lastMessage,
+									lastMessageAt: serverConv.lastMessageAt ?? c.lastMessageAt,
+									messageCount: serverConv.messageCount ?? c.messageCount,
+									updatedAt: serverConv.updatedAt ?? c.updatedAt,
+									unreadCountUser: c.unreadCountUser,
+									unreadCountAdmin: c.unreadCountAdmin,
+								}
 							: c
 					)
 				);
@@ -506,9 +514,21 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			} else {
 				setSelectedConversationDetail(conversation);
 			}
-			// Keep sidebar card in sync (lastMessage, messageCount, etc.)
+			// Keep sidebar card in sync (lastMessage, messageCount, etc.). Never overwrite unread counts from detail – they can be stale when switching cards.
 			setConversations((prev) =>
-				prev.map((conv) => (conv.id === conversationId ? { ...conv, lastMessage: conversation.lastMessage, lastMessageAt: conversation.lastMessageAt, messageCount: conversation.messageCount ?? conv.messageCount, updatedAt: conversation.updatedAt ?? conv.updatedAt } : conv))
+				prev.map((conv) =>
+					conv.id === conversationId
+						? {
+								...conv,
+								lastMessage: conversation.lastMessage,
+								lastMessageAt: conversation.lastMessageAt,
+								messageCount: conversation.messageCount ?? conv.messageCount,
+								updatedAt: conversation.updatedAt ?? conv.updatedAt,
+								unreadCountUser: conv.unreadCountUser,
+								unreadCountAdmin: conv.unreadCountAdmin,
+							}
+						: conv
+				)
 			);
 
 			// Persist to cache for next time admin returns to this conversation (includes controlledBy so Pass to Merchant shows)
