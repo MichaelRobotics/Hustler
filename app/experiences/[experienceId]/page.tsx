@@ -43,6 +43,13 @@ export default function ExperiencePage({
 		}
 		return null;
 	});
+	// Admin notification deep link: open Merchants Conversations (Live Chat) instead of store/dashboard
+	const [initialAdminView, setInitialAdminView] = useState<"liveChat" | null>(() => {
+		if (typeof window === "undefined") return null;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get("view") === "liveChat") return "liveChat";
+		return null;
+	});
 
 	// Function to fetch user context
 	const fetchUserContext = useCallback(async (forceRefresh = false) => {
@@ -129,6 +136,9 @@ export default function ExperiencePage({
 				if (resolved.view === "customer") {
 					setSelectedView("customer");
 				}
+				if (resolved.view === "liveChat") {
+					setInitialAdminView("liveChat");
+				}
 				if (resolved.openChat) {
 					console.log("[ExperiencePage] Setting openChatConversationId from notification deep link:", resolved.openChat);
 					setOpenChatConversationId(resolved.openChat);
@@ -189,7 +199,7 @@ export default function ExperiencePage({
 
 	// Handle user-selected view from ViewSelectionPanel
 	if (selectedView === "admin") {
-		return <AdminPanel user={authContext?.user || null} />;
+		return <AdminPanel user={authContext?.user || null} initialView={initialAdminView ?? undefined} />;
 	}
 
 	if (selectedView === "customer") {
@@ -209,7 +219,7 @@ export default function ExperiencePage({
 	// Handle backend auto-selected views
 	if (authContext.autoSelectedView === "admin") {
 		// Backend determined: show AdminPanel
-		return <AdminPanel user={authContext?.user || null} />;
+		return <AdminPanel user={authContext?.user || null} initialView={initialAdminView ?? undefined} />;
 	}
 
 	if (authContext.autoSelectedView === "customer") {

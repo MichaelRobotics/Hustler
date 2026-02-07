@@ -167,7 +167,7 @@ async function sendMessageHandler(
         user_ids: adminWhopIds,
         title: "New message",
         content: `${customerName}: ${sanitizedContent.slice(0, 80)}${sanitizedContent.length > 80 ? "…" : ""}`,
-        rest_path: `/chat/${sanitizedConversationId}`,
+        rest_path: `?view=liveChat`,
       }).catch((err) => console.warn("[send-message] Whop notification failed:", err));
     }
 

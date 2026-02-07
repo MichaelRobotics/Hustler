@@ -61,9 +61,11 @@ type View =
 
 interface AdminPanelProps {
 	user: AuthenticatedUser | null;
+	/** When set (e.g. from notification ?view=liveChat), open this view instead of default (Merchants Conversations) */
+	initialView?: View;
 }
 
-const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
+const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 	// Local user state - syncs with prop and updates optimistically after purchases
 	const [user, setUser] = React.useState<AuthenticatedUser | null>(userProp);
 	const [showCustomerDashboard, setShowCustomerDashboard] = React.useState(false);
@@ -368,6 +370,15 @@ const AdminPanel = ({ user: userProp }: AdminPanelProps) => {
 		handleManageResources: navigationHandleManageResources,
 		handleBackToDashboard: navigationBackToDashboard,
 	} = useViewNavigation();
+
+	// Apply initial view from URL (e.g. notification ?view=liveChat → Merchants Conversations)
+	const initialViewAppliedRef = React.useRef(false);
+	React.useEffect(() => {
+		if (initialView && !initialViewAppliedRef.current) {
+			initialViewAppliedRef.current = true;
+			setCurrentView(initialView);
+		}
+	}, [initialView, setCurrentView]);
 
 	// Trigger update sync when user first navigates to store view
 	React.useEffect(() => {

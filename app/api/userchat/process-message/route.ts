@@ -196,7 +196,7 @@ async function processMessageHandler(
           user_ids: adminWhopIds,
           title: "New message",
           content: `${customerName}: ${sanitizedMessageContent.slice(0, 80)}${sanitizedMessageContent.length > 80 ? "…" : ""}`,
-          rest_path: `/chat/${sanitizedConversationId}`,
+          rest_path: `?view=liveChat`,
         }).catch((err) => console.warn("[process-message] Whop notification failed:", err));
       }
     }
