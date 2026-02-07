@@ -190,7 +190,9 @@ async function processMessageHandler(
         ),
         columns: { name: true },
       }))?.name ?? "A customer";
-      if (adminWhopIds.length > 0 && experience.whopExperienceId) {
+      // Only notify when this is the first unread (admin had 0 unread before); avoid spamming on every message
+      const hadNoUnread = (conversation.unreadCountAdmin ?? 0) === 0;
+      if (adminWhopIds.length > 0 && experience.whopExperienceId && hadNoUnread) {
         sendWhopNotification({
           experience_id: experience.whopExperienceId,
           user_ids: adminWhopIds,
