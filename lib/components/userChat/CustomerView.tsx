@@ -713,6 +713,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 	// When notification deep link: open chat only after Seasonal Store (template) has loaded, so Claim-button chat opens on top of the loaded store.
 	const pendingOpenChatWhenReadyRef = useRef(false);
+	// When true, TemplateRenderer (live template path) should open its chat; set when store ready + delay fires
+	const [openChatFromDeepLink, setOpenChatFromDeepLink] = useState(false);
 
 	// Load data once when experienceId is available; avoid re-running when callback identities change (prevents endless load-conversation loop)
 	// When initialOpenConversationId is set (e.g. notification deep link), load that conversation but do NOT open chat yet; open after iframe loads.
@@ -778,7 +780,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		const t = setTimeout(() => {
 			if (!pendingOpenChatWhenReadyRef.current) return;
 			pendingOpenChatWhenReadyRef.current = false;
-			setViewMode("chat-only");
+			setViewMode("chat-only"); // for iframe path
+			setOpenChatFromDeepLink(true); // for live template path (TemplateRenderer)
 			console.log("[CustomerView] open-chat: Store and products ready, opening Claim-button chat");
 		}, OPEN_CHAT_DELAY_MS);
 		return () => clearTimeout(t);
@@ -1167,7 +1170,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				userType={userType}
 				merchantType={merchantType}
 				onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
-					onPurchaseSuccess={handleProductPurchaseSuccess}
+				onPurchaseSuccess={handleProductPurchaseSuccess}
+				openChatFromDeepLink={openChatFromDeepLink}
 			/>
 			</div>
 		);

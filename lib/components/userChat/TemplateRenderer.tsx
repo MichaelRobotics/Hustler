@@ -44,6 +44,8 @@ interface TemplateRendererProps {
   merchantType?: "qualification" | "upsell";
   onShowCustomerDashboard?: () => void;
   onPurchaseSuccess?: (planId: string) => void; // Callback for successful purchase (receives planId)
+  /** When true (e.g. from notification deep link), open the Claim-button chat panel */
+  openChatFromDeepLink?: boolean;
 }
 
 /**
@@ -69,13 +71,21 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   userType = "customer",
   merchantType,
   onShowCustomerDashboard,
-  onPurchaseSuccess
+  onPurchaseSuccess,
+  openChatFromDeepLink = false,
 }) => {
   const router = useRouter();
   const { appearance, toggleTheme } = useTheme();
   
   // Chat state management
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // When CustomerView signals open from notification deep link, open the chat panel
+  useEffect(() => {
+    if (openChatFromDeepLink) {
+      setIsChatOpen(true);
+    }
+  }, [openChatFromDeepLink]);
   
   // ProductPageModal state
   const [productPageModal, setProductPageModal] = useState<{ isOpen: boolean; product: Product | null }>({ isOpen: false, product: null });
