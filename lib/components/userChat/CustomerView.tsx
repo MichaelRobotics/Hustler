@@ -527,6 +527,17 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, [loadConversationById, experienceId]);
 
+	// Mark conversation as read when user opens the chat panel (click or deep link)
+	const handleChatOpened = useCallback(() => {
+		if (experienceId && conversationId) {
+			apiPost(
+				`/api/livechat/conversations/${conversationId}/read`,
+				{ side: "user" },
+				experienceId
+			).catch((e) => console.warn("[CustomerView] Mark conversation read (user) failed:", e));
+		}
+	}, [experienceId, conversationId]);
+
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
 		if (!experienceId) {
@@ -1193,6 +1204,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 				onShowCustomerDashboard={() => setShowCustomerDashboard(true)}
 				onPurchaseSuccess={handleProductPurchaseSuccess}
 				openChatFromDeepLink={openChatFromDeepLink}
+				onChatOpened={handleChatOpened}
 			/>
 			</div>
 		);

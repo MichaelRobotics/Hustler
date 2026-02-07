@@ -46,6 +46,8 @@ interface TemplateRendererProps {
   onPurchaseSuccess?: (planId: string) => void; // Callback for successful purchase (receives planId)
   /** When true (e.g. from notification deep link), open the Claim-button chat panel */
   openChatFromDeepLink?: boolean;
+  /** Called when the user opens the chat panel (click or deep link); parent can mark conversation as read */
+  onChatOpened?: () => void;
 }
 
 /**
@@ -73,6 +75,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   onShowCustomerDashboard,
   onPurchaseSuccess,
   openChatFromDeepLink = false,
+  onChatOpened,
 }) => {
   const router = useRouter();
   const { appearance, toggleTheme } = useTheme();
@@ -84,8 +87,9 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   useEffect(() => {
     if (openChatFromDeepLink) {
       setIsChatOpen(true);
+      onChatOpened?.();
     }
-  }, [openChatFromDeepLink]);
+  }, [openChatFromDeepLink, onChatOpened]);
   
   // ProductPageModal state
   const [productPageModal, setProductPageModal] = useState<{ isOpen: boolean; product: Product | null }>({ isOpen: false, product: null });
@@ -117,9 +121,10 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
   }, []);
 
   
-  // Handle chat opening
+  // Handle chat opening (user clicked to open chat panel)
   const handleChatOpen = () => {
     setIsChatOpen(true);
+    onChatOpened?.();
   };
   
   // Handle chat closing

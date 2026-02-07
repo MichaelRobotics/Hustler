@@ -112,7 +112,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	const displayAdminAvatarUrl = (adminAvatarUrl != null && adminAvatarUrl !== "") ? adminAvatarUrl : undefined;
 	const [conversationMessages, setConversationMessages] = useState<Array<{
 		id: string;
-		type: "user" | "bot" | "system";
+		type: "user" | "bot" | "system" | "admin";
 		content: string;
 		metadata?: any;
 		createdAt: Date;
@@ -260,10 +260,10 @@ const UserChat: React.FC<UserChatProps> = ({
 					const conversationData = result.data || result;
 					if (conversationData.success && conversationData.conversation?.messages) {
 						const serverMessages = conversationData.conversation.messages;
-						type FormattedMsg = { id: string; type: "user" | "bot" | "system"; content: string; metadata?: unknown; createdAt: Date };
+						type FormattedMsg = { id: string; type: "user" | "bot" | "system" | "admin"; content: string; metadata?: unknown; createdAt: Date };
 						const formattedServer: FormattedMsg[] = serverMessages.map((msg: { id?: string; type?: string; text?: string; content?: string; metadata?: unknown; createdAt?: string; timestamp?: string }) => ({
 							id: msg.id ?? "",
-							type: (msg.type === "user" || msg.type === "system" ? msg.type : "bot") as "user" | "bot" | "system",
+							type: (msg.type === "user" || msg.type === "system" ? msg.type : msg.type === "admin" ? "admin" : "bot") as "user" | "bot" | "system" | "admin",
 							content: (msg.text ?? msg.content ?? "").trim(),
 							metadata: msg.metadata,
 							createdAt: new Date(msg.createdAt ?? msg.timestamp ?? Date.now()),
