@@ -59,7 +59,7 @@ async function offerCtaClickedHandler(
         eq(conversations.id, conversationId),
         eq(conversations.experienceId, experience.id),
       ),
-      with: { funnel: { columns: { flow: true } } },
+      with: { funnel: { columns: { flow: true, merchantType: true } } },
       columns: {
         id: true,
         experienceId: true,
@@ -93,6 +93,26 @@ async function offerCtaClickedHandler(
     const isOfferStage = isProductCardBlock(blockId, funnelFlow);
     const hasTimeout = typeof block.timeoutMinutes === "number" && block.timeoutMinutes > 0;
     const hasUpsellOrDownsell = !!(block.upsellBlockId || block.downsellBlockId);
+    const merchantType = (conversation.funnel as { merchantType?: string })?.merchantType;
+    const isQualification = merchantType === "qualification";
+
+    // Qualification: cards only have nextBlockId (options), no upsell/downsell. When user reaches a block with no outgoing (no nextBlockId), close.
+    const hasNextBlock = (block.options ?? []).some((o) => o.nextBlockId != null);
+    if (isQualification && isOfferStage && !hasNextBlock) {
+      const now = new Date();
+      const [closedConversation] = await db
+        .update(conversations)
+        .set({ status: "closed", updatedAt: now })
+        .where(eq(conversations.id, conversationId))
+        .returning();
+      return createSuccessResponse({
+        success: true,
+        conversation: closedConversation ?? { id: conversationId, status: "closed" as const },
+      });
+    }
+    if (isQualification && isOfferStage) {
+      return createSuccessResponse({ success: true });
+    }
 
     if (!isOfferStage || !hasTimeout || !hasUpsellOrDownsell) {
       return createErrorResponse(

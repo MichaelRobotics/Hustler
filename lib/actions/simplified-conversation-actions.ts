@@ -361,11 +361,15 @@ export async function processUserMessage(
 
 		// Check if current block is in a product-card stage (cardType === "product")
 		const isOfferStage = isProductCardBlock(currentBlockId, funnelFlow);
+		// Only treat as upsell OFFER stage for escalation/ack; qualification product cards behave like normal qualification blocks
+		const funnel = conversation.funnel as { merchantType?: string } | undefined;
+		const isUpsellOfferStage = isOfferStage && funnel?.merchantType === "upsell";
 
 		console.log(`[processUserMessage] Current block: ${currentBlockId}`, {
 			message: currentBlock.message?.substring(0, 100),
 			optionsCount: currentBlock.options?.length || 0,
-			isOfferStage: isOfferStage
+			isOfferStage,
+			isUpsellOfferStage,
 		});
 
 		// First, add the user message to the database
@@ -417,16 +421,16 @@ export async function processUserMessage(
 			);
 		}
 
-		// No valid option found - handle escalation (unless in OFFER stage)
-		if (isOfferStage) {
+		// No valid option found - handle escalation (unless in Upsell OFFER stage; qualification product cards escalate like normal blocks)
+		if (isUpsellOfferStage) {
 			const controlledBy = (conversation as { controlledBy?: string }).controlledBy;
 			if (controlledBy === "admin") {
 				// Handed out to admin: do not send bot acknowledgment; admin will handle
-				console.log(`[processUserMessage] In OFFER stage, controlled by admin - no acknowledgment for: "${messageContent}"`);
+				console.log(`[processUserMessage] In Upsell OFFER stage, controlled by admin - no acknowledgment for: "${messageContent}"`);
 				return { success: true };
 			}
-			console.log(`[processUserMessage] In OFFER stage - escalation disabled for: "${messageContent}"`);
-			// In OFFER stage, just acknowledge the message without escalation
+			console.log(`[processUserMessage] In Upsell OFFER stage - escalation disabled for: "${messageContent}"`);
+			// In Upsell OFFER stage, just acknowledge the message without escalation
 			const acknowledgmentMessage = "Thank you for your message. I'll make sure the Whop owner sees it.";
 			const botMessageId = await addMessage(conversationId, "bot", acknowledgmentMessage);
 			console.log(`[processUserMessage] Bot acknowledgment message added with ID: ${botMessageId}`);
@@ -618,9 +622,52 @@ function resetEscalationLevel(conversationId: string): void {
 
 
 /**
+ * Find next funnel for funnel_completed and create a new conversation (no close).
+ * Used when a conversation is closed so the next merchant conversation can start.
+ * Safe to call in background (fire-and-forget).
+ */
+export async function createNextConversationForCompletedFunnel(
+	experienceId: string,
+	whopUserId: string,
+	completedFunnelId: string,
+): Promise<void> {
+	try {
+		const user = await db.query.users.findFirst({
+			where: and(
+				eq(users.whopUserId, whopUserId),
+				eq(users.experienceId, experienceId)
+			),
+		});
+
+		const nextFunnel = await findFunnelForTrigger(experienceId, "funnel_completed", {
+			completedFunnelId,
+			userId: user?.id,
+			whopUserId,
+		});
+
+		if (nextFunnel?.flow) {
+			const flow = nextFunnel.flow as FunnelFlow & { startBlockId: string };
+			const newConversationId = await createConversation(
+				experienceId,
+				nextFunnel.id,
+				whopUserId,
+				flow.startBlockId,
+				undefined,
+				undefined
+			);
+			await updateConversationToWelcomeStage(newConversationId, flow);
+			safeBackgroundTracking(() => trackInterestBackground(experienceId, nextFunnel.id));
+		}
+	} catch (error) {
+		console.error("Error creating next conversation for completed funnel:", error);
+	}
+}
+
+/**
  * Handle funnel completion in UserChat
  * Closes the current conversation, then optionally starts a new conversation for the "next" merchant
  * (findFunnelForTrigger with funnel_completed + completedFunnelId).
+ * Creation of next conversation runs in background so the request is not delayed.
  *
  * @param conversationId - ID of the conversation to complete
  * @returns Success status
@@ -651,33 +698,8 @@ export async function handleFunnelCompletionInUserChat(
 			})
 			.where(eq(conversations.id, conversationId));
 
-		// Find next funnel for funnel_completed (e.g. after qualification → upsell merchant)
-		const user = await db.query.users.findFirst({
-			where: and(
-				eq(users.whopUserId, whopUserId),
-				eq(users.experienceId, experienceId)
-			),
-		});
-
-		const nextFunnel = await findFunnelForTrigger(experienceId, "funnel_completed", {
-			completedFunnelId,
-			userId: user?.id,
-			whopUserId,
-		});
-
-		if (nextFunnel?.flow) {
-			const flow = nextFunnel.flow as FunnelFlow & { startBlockId: string };
-			const newConversationId = await createConversation(
-				experienceId,
-				nextFunnel.id,
-				whopUserId,
-				flow.startBlockId,
-				undefined,
-				undefined
-			);
-			await updateConversationToWelcomeStage(newConversationId, flow);
-			safeBackgroundTracking(() => trackInterestBackground(experienceId, nextFunnel.id));
-		}
+		// Create next conversation in background (do not await)
+		void createNextConversationForCompletedFunnel(experienceId, whopUserId, completedFunnelId);
 
 		return { success: true };
 	} catch (error) {

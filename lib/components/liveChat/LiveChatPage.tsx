@@ -400,6 +400,40 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		});
 	}, []);
 
+	// One card per user (per experience): group conversations by whopUserId; each card shows user and primary conversation
+	const userGroupedConversations = useMemo((): LiveChatConversation[] => {
+		if (!conversations.length) return [];
+		const byUser = new Map<string, LiveChatConversation[]>();
+		for (const c of conversations) {
+			const key = c.whopUserId ?? c.userId ?? c.id;
+			if (!byUser.has(key)) byUser.set(key, []);
+			byUser.get(key)!.push(c);
+		}
+		const result: LiveChatConversation[] = [];
+		for (const [, convs] of byUser) {
+			const primary = convs.find((c) => c.status === "open") ?? convs.sort((a, b) =>
+				new Date(b.lastMessageAt ?? b.updatedAt ?? 0).getTime() - new Date(a.lastMessageAt ?? a.updatedAt ?? 0).getTime()
+			)[0];
+			if (!primary) continue;
+			const lastMessageAt = convs.reduce((best, c) => {
+				const t = new Date(c.lastMessageAt ?? c.updatedAt ?? 0).getTime();
+				return t > best ? t : best;
+			}, 0);
+			const lastMessageConv = convs.find((c) => new Date(c.lastMessageAt ?? c.updatedAt ?? 0).getTime() === lastMessageAt) ?? primary;
+			result.push({
+				...primary,
+				id: primary.id,
+				lastMessage: lastMessageConv.lastMessage ?? primary.lastMessage,
+				lastMessageAt: new Date(lastMessageAt).toISOString(),
+				messageCount: convs.reduce((s, c) => s + (c.messageCount ?? 0), 0),
+				unreadCountAdmin: convs.reduce((s, c) => s + (c.unreadCountAdmin ?? 0), 0),
+				conversationCount: convs.length,
+				conversationIds: convs.map((c) => c.id),
+			});
+		}
+		return sortConversationsByFilter(result, filters.sortBy === "oldest" ? "oldest" : "newest");
+	}, [conversations, filters.sortBy, sortConversationsByFilter]);
+
 	// Load conversations from database (statusOverride used when refetching after filter change so request uses new filter)
 	const loadConversations = useCallback(async (page = 1, reset = false, statusOverride?: "open" | "auto") => {
 		if (!user) return;
@@ -451,103 +485,155 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		}
 	}, [user, experienceId, filters.status, filters.sortBy, sortConversationsByFilter]);
 
-	// Load conversation details once on select; after that only merges (detail poll, send, resolve, typing).
-	const loadConversationDetailsCallback = useCallback(async (conversationId: string) => {
+	// Load conversation details once on select; when user has multiple conversations, fetch all and show aggregated timeline.
+	const loadConversationDetailsCallback = useCallback(async (primaryConversationId: string, allConversationIdsForUser?: string[]) => {
 		if (!user) return;
 
+		const idsToLoad = (allConversationIdsForUser?.length ? allConversationIdsForUser : [primaryConversationId]).filter(Boolean);
+		const isAggregated = idsToLoad.length > 1;
+
 		try {
-			// Restore from cache for instant display when returning to this conversation
-			const cached = getConversationMessageCache(experienceId, conversationId);
-			const hadCacheHit = !!(cached?.messages?.length);
-			if (hadCacheHit) {
-				const listCard = conversations.find((c) => c.id === conversationId);
-				const cachedDetail: LiveChatConversation = {
-					id: conversationId,
-					userId: listCard?.userId ?? "",
-					user: listCard?.user ?? { id: "", name: "", isOnline: false },
-					funnelId: listCard?.funnelId ?? "",
-					funnelName: listCard?.funnelName ?? "",
-					status: listCard?.status ?? "open",
-					startedAt: listCard?.startedAt ?? new Date().toISOString(),
-					lastMessageAt: listCard?.lastMessageAt ?? cached.updatedAt ?? new Date().toISOString(),
-					lastMessage: listCard?.lastMessage ?? "",
-					messageCount: cached.messages.length,
-					messages: cached.messages.map((m) => ({
-						id: m.id,
-						conversationId,
-						type: (m.type === "admin" ? "admin" : m.type) as "user" | "bot" | "system" | "admin",
-						text: m.text ?? m.content ?? "",
-						timestamp: typeof m.timestamp === "string" ? m.timestamp : (m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString()),
-						isRead: false,
-						metadata: m.metadata as LiveChatMessage["metadata"],
-					})),
-					createdAt: listCard?.createdAt ?? new Date().toISOString(),
-					updatedAt: cached.updatedAt ?? new Date().toISOString(),
-					currentStage: cached.meta?.currentStage,
-					adminAvatar: cached.adminAvatar,
-					controlledBy: cached.controlledBy ?? listCard?.controlledBy ?? "bot",
-				};
-				setSelectedConversationDetail(cachedDetail);
-			}
+			if (!isAggregated) {
+				// Single conversation: restore from cache for instant display when returning
+				const cached = getConversationMessageCache(experienceId, primaryConversationId);
+				const hadCacheHit = !!(cached?.messages?.length);
+				if (hadCacheHit) {
+					const listCard = conversations.find((c) => c.id === primaryConversationId);
+					const cachedDetail: LiveChatConversation = {
+						id: primaryConversationId,
+						userId: listCard?.userId ?? "",
+						user: listCard?.user ?? { id: "", name: "", isOnline: false },
+						funnelId: listCard?.funnelId ?? "",
+						funnelName: listCard?.funnelName ?? "",
+						status: listCard?.status ?? "open",
+						startedAt: listCard?.startedAt ?? new Date().toISOString(),
+						lastMessageAt: listCard?.lastMessageAt ?? cached.updatedAt ?? new Date().toISOString(),
+						lastMessage: listCard?.lastMessage ?? "",
+						messageCount: cached.messages.length,
+						messages: cached.messages.map((m) => ({
+							id: m.id,
+							conversationId: primaryConversationId,
+							type: (m.type === "admin" ? "admin" : m.type) as "user" | "bot" | "system" | "admin",
+							text: m.text ?? m.content ?? "",
+							timestamp: typeof m.timestamp === "string" ? m.timestamp : (m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString()),
+							isRead: false,
+							metadata: m.metadata as LiveChatMessage["metadata"],
+						})),
+						createdAt: listCard?.createdAt ?? new Date().toISOString(),
+						updatedAt: cached.updatedAt ?? new Date().toISOString(),
+						currentStage: cached.meta?.currentStage,
+						adminAvatar: cached.adminAvatar,
+						controlledBy: cached.controlledBy ?? listCard?.controlledBy ?? "bot",
+					};
+					setSelectedConversationDetail(cachedDetail);
+				}
 
-			console.log(`[LIVECHAT] Loading conversation details for: ${conversationId}`);
-			const response = await apiGet(`/api/livechat/conversations/${conversationId}?experienceId=${encodeURIComponent(experienceId)}`, experienceId, {
-				'x-on-behalf-of': user.whopUserId,
-				'x-company-id': user.experience.whopCompanyId
-			});
-			const result = await response.json();
+				const response = await apiGet(`/api/livechat/conversations/${primaryConversationId}?experienceId=${encodeURIComponent(experienceId)}`, experienceId, {
+					'x-on-behalf-of': user.whopUserId,
+					'x-company-id': user.experience.whopCompanyId
+				});
+				const result = await response.json();
+				if (!result.success) throw new Error(result.error || "Failed to load conversation details");
+				const conversation = result.data?.conversation || result.conversation;
 
-			if (!result.success) {
-				throw new Error(result.error || "Failed to load conversation details");
-			}
-
-			const conversation = result.data?.conversation || result.conversation;
-			console.log(`[LIVECHAT] Loaded conversation details - stage: ${conversation?.currentStage}, messages: ${conversation?.messages?.length || 0}`);
-
-			if (hadCacheHit) {
-				// Merge new messages from DB into cached state; never replace the full list
-				setSelectedConversationDetail((prev) =>
-					prev && prev.id === conversationId
-						? mergeServerMessagesIntoPrev(prev, conversation as LiveChatConversation & { messages?: unknown[] }, conversationId)
-						: prev
+				if (hadCacheHit) {
+					setSelectedConversationDetail((prev) =>
+						prev && prev.id === primaryConversationId
+							? mergeServerMessagesIntoPrev(prev, conversation as LiveChatConversation & { messages?: unknown[] }, primaryConversationId)
+							: prev
+					);
+				} else {
+					setSelectedConversationDetail(conversation);
+				}
+				setConversations((prev) =>
+					prev.map((conv) =>
+						conv.id === primaryConversationId
+							? { ...conv, lastMessage: conversation.lastMessage, lastMessageAt: conversation.lastMessageAt, messageCount: conversation.messageCount ?? conv.messageCount, updatedAt: conversation.updatedAt ?? conv.updatedAt, unreadCountUser: conv.unreadCountUser, unreadCountAdmin: conv.unreadCountAdmin }
+							: conv
+					)
 				);
-			} else {
-				setSelectedConversationDetail(conversation);
+				if (conversation?.messages?.length) {
+					setConversationMessageCache(experienceId, primaryConversationId, {
+						messages: conversation.messages.map((m: LiveChatMessage) => ({ id: m.id, type: m.type as "user" | "bot" | "system" | "admin", text: m.text, content: m.text, metadata: m.metadata, timestamp: m.timestamp, createdAt: m.timestamp })),
+						updatedAt: conversation.updatedAt ?? new Date().toISOString(),
+						adminAvatar: conversation.adminAvatar,
+						controlledBy: conversation.controlledBy,
+						meta: { currentStage: conversation.currentStage },
+					});
+				}
+				return;
 			}
-			// Keep sidebar card in sync (lastMessage, messageCount, etc.). Never overwrite unread counts from detail – they can be stale when switching cards.
-			setConversations((prev) =>
-				prev.map((conv) =>
-					conv.id === conversationId
-						? {
-								...conv,
-								lastMessage: conversation.lastMessage,
-								lastMessageAt: conversation.lastMessageAt,
-								messageCount: conversation.messageCount ?? conv.messageCount,
-								updatedAt: conversation.updatedAt ?? conv.updatedAt,
-								unreadCountUser: conv.unreadCountUser,
-								unreadCountAdmin: conv.unreadCountAdmin,
-							}
-						: conv
+
+			// Aggregated: fetch all conversations for this user, merge messages, sort by time
+			const listCard = conversations.find((c) => c.id === primaryConversationId);
+			const responses = await Promise.all(
+				idsToLoad.map((id) =>
+					apiGet(`/api/livechat/conversations/${id}?experienceId=${encodeURIComponent(experienceId)}`, experienceId, {
+						'x-on-behalf-of': user.whopUserId,
+						'x-company-id': user.experience.whopCompanyId
+					}).then((r) => r.json())
 				)
 			);
 
-			// Persist to cache for next time admin returns to this conversation (includes controlledBy so Pass to Merchant shows)
-			if (conversation?.messages?.length) {
-				setConversationMessageCache(experienceId, conversationId, {
-					messages: conversation.messages.map((m: LiveChatMessage) => ({
+			const allMessages: LiveChatMessage[] = [];
+			let primaryConv: LiveChatConversation | null = null;
+
+			for (let i = 0; i < idsToLoad.length; i++) {
+				const res = responses[i];
+				const conv = res?.data?.conversation ?? res?.conversation;
+				if (!res?.success || !conv) continue;
+				if (conv.id === primaryConversationId) primaryConv = conv;
+				const msgs = Array.isArray(conv.messages) ? conv.messages : [];
+				for (const m of msgs) {
+					const ts = m.timestamp ?? m.createdAt ?? new Date().toISOString();
+					allMessages.push({
 						id: m.id,
-						type: m.type as "user" | "bot" | "system" | "admin",
-						text: m.text,
-						content: m.text,
-						metadata: m.metadata,
-						timestamp: m.timestamp,
-						createdAt: m.timestamp,
-					})),
-					updatedAt: conversation.updatedAt ?? new Date().toISOString(),
-					adminAvatar: conversation.adminAvatar,
-					controlledBy: conversation.controlledBy,
-					meta: { currentStage: conversation.currentStage },
-				});
+						conversationId: conv.id,
+						type: (m.type === "admin" ? "admin" : m.type) as "user" | "bot" | "system" | "admin",
+						text: m.text ?? m.content ?? "",
+						timestamp: typeof ts === "string" ? ts : new Date(ts).toISOString(),
+						isRead: m.isRead ?? false,
+						metadata: { ...(m.metadata || {}), _conversationId: conv.id, _funnelName: conv.funnelName },
+					});
+				}
+			}
+
+			allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+			const seen = new Set<string>();
+			const deduped = allMessages.filter((m) => {
+				if (seen.has(m.id)) return false;
+				seen.add(m.id);
+				return true;
+			});
+
+			const primary = primaryConv ?? (responses.find((r) => r?.data?.conversation ?? r?.conversation) as { data?: { conversation: LiveChatConversation }; conversation?: LiveChatConversation })?.data?.conversation ?? (responses[0] as { data?: { conversation: LiveChatConversation }; conversation?: LiveChatConversation })?.conversation;
+			if (!primary) {
+				setError("Failed to load conversation details");
+				return;
+			}
+
+			const synthetic: LiveChatConversation = {
+				...primary,
+				id: primaryConversationId,
+				messages: deduped,
+				messageCount: deduped.length,
+				lastMessage: deduped.length ? deduped[deduped.length - 1].text : primary.lastMessage ?? "",
+				lastMessageAt: deduped.length ? deduped[deduped.length - 1].timestamp : primary.lastMessageAt ?? primary.updatedAt ?? "",
+			};
+			setSelectedConversationDetail(synthetic);
+
+			// Cache each conversation's messages individually
+			for (let i = 0; i < idsToLoad.length; i++) {
+				const conv = (responses[i]?.data?.conversation ?? responses[i]?.conversation) as LiveChatConversation | undefined;
+				if (conv?.messages?.length) {
+					setConversationMessageCache(experienceId, idsToLoad[i], {
+						messages: conv.messages.map((m: LiveChatMessage) => ({ id: m.id, type: m.type, text: m.text, content: m.text, metadata: m.metadata, timestamp: m.timestamp, createdAt: m.timestamp })),
+						updatedAt: conv.updatedAt ?? new Date().toISOString(),
+						adminAvatar: conv.adminAvatar,
+						controlledBy: conv.controlledBy,
+						meta: { currentStage: conv.currentStage },
+					});
+				}
 			}
 		} catch (err) {
 			console.error("Error loading conversation details:", err);
@@ -921,12 +1007,15 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		loadConversations(1, true);
 	}, [user]);
 
-	// Load conversation details only when selection changes (not when callback ref changes, to avoid refetch loop)
+	// Load conversation details only when selection changes; pass all conversation ids for this user to show aggregated timeline
 	useEffect(() => {
-		if (selectedConversationId) {
-			loadConversationDetailsRef.current(selectedConversationId);
-		}
-	}, [selectedConversationId]);
+		if (!selectedConversationId) return;
+		const userCard = userGroupedConversations.find(
+			(c) => c.id === selectedConversationId || (c.conversationIds && c.conversationIds.includes(selectedConversationId))
+		);
+		const conversationIds = userCard?.conversationIds ?? [selectedConversationId];
+		loadConversationDetailsRef.current(selectedConversationId, conversationIds);
+	}, [selectedConversationId, userGroupedConversations]);
 
 	// Show loading state only if user is not available (same pattern as ResourceLibrary)
 	if (!user) {
@@ -1016,7 +1105,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 						) : (
 							<div className="h-full animate-in fade-in duration-0">
 								<ConversationList
-									conversations={conversations}
+									conversations={userGroupedConversations}
 									selectedConversationId={selectedConversationId || undefined}
 									onSelectConversation={handleSelectConversation}
 									filters={{ ...filters, searchQuery: debouncedSearchQuery }}
@@ -1035,7 +1124,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 						{/* Conversation List */}
 						<div className="lg:col-span-1 overflow-hidden">
 							<ConversationList
-								conversations={conversations}
+								conversations={userGroupedConversations}
 								selectedConversationId={selectedConversationId || undefined}
 								onSelectConversation={handleSelectConversation}
 								filters={{ ...filters, searchQuery: debouncedSearchQuery }}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getConversationById } from "@/lib/actions/simplified-conversation-actions";
+import { getConversationById, createNextConversationForCompletedFunnel } from "@/lib/actions/simplified-conversation-actions";
 import { getConversationMessages, filterMessagesFromWelcomeStage } from "@/lib/actions/unified-message-actions";
 import { db } from "@/lib/supabase/db-server";
 import { conversations, experiences, funnels, funnelResources, resources } from "@/lib/supabase/schema";
@@ -110,7 +110,30 @@ async function loadConversationHandler(
 
     // Determine conversation stage and status
     const currentBlockId = conversation.currentBlockId;
-    
+    const funnelRecord = conversation.funnel as { merchantType?: string } | undefined;
+    const isQualification = (funnelRecord?.merchantType ?? "qualification") === "qualification";
+    // Qualification: when current block has no outgoing (options: [] or no nextBlockIds), mark conversation closed
+    if (
+      conversation.status === "active" &&
+      isQualification &&
+      currentBlockId &&
+      funnelFlow?.blocks?.[currentBlockId]
+    ) {
+      const currentBlock = funnelFlow.blocks[currentBlockId];
+      const blockHasNoOutgoing = !(currentBlock.options ?? []).some((o) => o.nextBlockId != null);
+      if (blockHasNoOutgoing) {
+        await db
+          .update(conversations)
+          .set({ status: "closed", updatedAt: new Date() })
+          .where(eq(conversations.id, conversationId));
+        void createNextConversationForCompletedFunnel(
+          conversation.experienceId,
+          conversation.whopUserId,
+          conversation.funnelId,
+        );
+      }
+    }
+
     // Debug logging
     console.log(`Load-conversation API - Conversation ${conversationId}:`);
     console.log(`  Current blockId: ${currentBlockId}`);

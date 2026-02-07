@@ -358,6 +358,13 @@ async function processFunnelNavigation(
     });
 
     const now = new Date();
+    // Qualification: cards only have nextBlockId. Close when user reaches a block with no outgoing (nextBlockId null or block has options: [] / no nextBlockIds).
+    const isQualification = (conversation.funnel as { merchantType?: string })?.merchantType === "qualification";
+    const blockHasNoOutgoing = (block: { options?: Array<{ nextBlockId?: string | null }> | null }) =>
+      !(block.options ?? []).some((o) => o.nextBlockId != null);
+    const isQualificationLastStage =
+      isQualification &&
+      (nextBlockId === null || (nextBlock !== null && blockHasNoOutgoing(nextBlock)));
     // Update conversation state; set entered-at and reset notification sequence
     const updatedConversation = await db
       .update(conversations)
@@ -367,6 +374,7 @@ async function processFunnelNavigation(
         lastNotificationSequenceSent: null,
         userPath: [...(conversation.userPath || []), nextBlockId].filter(Boolean),
         updatedAt: now,
+        ...(isQualificationLastStage ? { status: "closed" as const } : {}),
       })
       .where(eq(conversations.id, conversationId))
       .returning();

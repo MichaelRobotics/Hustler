@@ -9,7 +9,7 @@ import type { FunnelFlow } from "../types/funnel";
 import { createConversation } from "../actions/simplified-conversation-actions";
 import { updateConversationToWelcomeStage } from "../actions/user-join-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
-import { hasActiveConversation, findFunnelForTrigger } from "../helpers/conversation-trigger";
+import { hasActiveConversation, hasConversationFromFunnel, findFunnelForTrigger } from "../helpers/conversation-trigger";
 
 // Re-export types for backward compatibility
 export type { AuthenticatedUser, UserContext };
@@ -747,6 +747,11 @@ async function createConversationForNewCustomer(
 
 		if (!liveFunnel?.flow) {
 			console.log(`[CONVERSATION-CREATION] No funnel found for app_entry in experience ${experienceId} - skipping`);
+			return;
+		}
+
+		if (await hasConversationFromFunnel(experienceId, whopUserId, liveFunnel.id)) {
+			console.log(`[CONVERSATION-CREATION] User ${whopUserId} already has a conversation from funnel ${liveFunnel.id} in experience ${experienceId} - skipping app_entry trigger`);
 			return;
 		}
 

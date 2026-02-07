@@ -68,6 +68,10 @@ export interface LiveChatConversation {
 	typing?: { user?: boolean; admin?: boolean };
 	/** Avatar URL of the admin user for this experience (from users table) */
 	adminAvatar?: string;
+	/** When list is grouped by user: number of conversations for this user in the experience (display only) */
+	conversationCount?: number;
+	/** When list is grouped by user: all conversation ids for this user (so card is selected when viewing any of them) */
+	conversationIds?: string[];
 }
 
 export interface LiveChatFilters {

@@ -10,7 +10,7 @@ import {
 } from "@/lib/middleware/whop-auth";
 import type { FunnelFlow } from "@/lib/types/funnel";
 import { isProductCardBlock } from "@/lib/utils/funnelUtils";
-import { findFunnelForTrigger } from "@/lib/helpers/conversation-trigger";
+import { findFunnelForTrigger, hasConversationFromFunnel } from "@/lib/helpers/conversation-trigger";
 import { createConversation } from "@/lib/actions/simplified-conversation-actions";
 import { updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
 
@@ -137,7 +137,10 @@ async function checkConversationHandler(
         userId: userContext.user.id,
         whopUserId: targetWhopUserId,
       });
-      if (funnelForAppEntry?.flow) {
+      const alreadyHasConversationFromFunnel =
+        funnelForAppEntry?.id != null &&
+        (await hasConversationFromFunnel(experience.id, targetWhopUserId, funnelForAppEntry.id));
+      if (funnelForAppEntry?.flow && !alreadyHasConversationFromFunnel) {
         const flow = funnelForAppEntry.flow as FunnelFlow;
         try {
           const conversationId = await createConversation(

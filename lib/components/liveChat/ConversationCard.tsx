@@ -105,7 +105,9 @@ const ConversationCard: React.FC<ConversationCardProps> = React.memo(
 								</div>
 								<div className="flex items-center gap-2 mt-1">
 									<Text size="1" color="gray" className="text-muted-foreground">
-										{conversation.funnelName}
+										{(conversation.conversationCount ?? 0) > 1
+											? `${conversation.conversationCount} conversations`
+											: conversation.funnelName}
 									</Text>
 									{conversation.isArchived && (
 										<Archive size={10} className="text-gray-400" />

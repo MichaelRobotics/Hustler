@@ -82,14 +82,19 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(
 						</div>
 					) : (
 						<div className="space-y-3">
-							{filteredConversations.map((conversation) => (
-								<ConversationCard
-									key={conversation.id}
-									conversation={conversation}
-									isSelected={selectedConversationId === conversation.id}
-									onClick={() => handleConversationClick(conversation.id)}
-								/>
-							))}
+							{filteredConversations.map((conversation) => {
+								const isUserSelected =
+									(conversation.conversationIds && selectedConversationId && conversation.conversationIds.includes(selectedConversationId)) ||
+									selectedConversationId === conversation.id;
+								return (
+									<ConversationCard
+										key={conversation.whopUserId ?? conversation.userId ?? conversation.id}
+										conversation={conversation}
+										isSelected={!!isUserSelected}
+										onClick={() => handleConversationClick(conversation.id)}
+									/>
+								);
+							})}
 						</div>
 					)}
 				</div>

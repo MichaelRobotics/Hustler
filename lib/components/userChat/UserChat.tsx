@@ -722,12 +722,18 @@ const UserChat: React.FC<UserChatProps> = ({
 										} else if (isValueDeliveryButton) {
 											console.log(`🎁 [UserChat] Free resource claim - no intent tracking for VALUE_DELIVERY button`);
 										}
-										// Start offer timer for OFFER CTA (upsell/downsell delay)
+										// Start offer timer for OFFER CTA (upsell/downsell delay); qualification last-stage CTA closes conversation
 										if (!isValueDeliveryButton && conversation?.id && conversation.currentBlockId) {
 											apiPost("/api/userchat/offer-cta-clicked", {
 												conversationId: conversation.id,
 												blockId: conversation.currentBlockId,
-											}).catch(() => {});
+											})
+												.then((res: { data?: { conversation?: { status?: string } } }) => {
+													if (res?.data?.conversation?.status === "closed") {
+														handleFunnelCompletion();
+													}
+												})
+												.catch(() => {});
 										}
 										// Product/app link: always open in new window
 										window.open(href, "_blank", "noopener,noreferrer");

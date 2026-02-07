@@ -64,6 +64,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		updatedAt: string;
 	}>>([]);
 	const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+	/** Aggregated messages from all conversations in this experience (merged, sorted by time). Matches ConversationWithMessages.messages shape for UserChat. */
+	type AggregatedMessage = ConversationWithMessages["messages"][number];
+	const [aggregatedMessages, setAggregatedMessages] = useState<AggregatedMessage[]>([]);
 	/** True when the currently selected conversation is closed (read-only chat, no input/options). */
 	const [isChatReadOnly, setIsChatReadOnly] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
@@ -455,22 +458,82 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		return () => { cancelled = true; };
 	}, [experienceId]);
 
-	// Fetch conversation list (active + closed, oldest first) for sidebar
-	const fetchConversationList = useCallback(async () => {
-		if (!experienceId) return;
+	// Normalize API message to ConversationWithMessages.messages item; dedupe by id; sort ascending.
+	const mergeAndSortMessages = useCallback((all: Array<{ id?: string; type?: string; text?: string; content?: string; timestamp?: string; createdAt?: string | Date; metadata?: unknown }>): AggregatedMessage[] => {
+		const toAggregated = (m: (typeof all)[0]): AggregatedMessage | null => {
+			if (!m?.id) return null;
+			const content = (m.text ?? m.content ?? "").trim();
+			const ts = m.timestamp ?? m.createdAt;
+			const createdAt = ts instanceof Date ? ts : new Date(ts ?? 0);
+			const type = (m.type === "user" || m.type === "bot" || m.type === "system" || m.type === "admin" ? m.type : "bot") as AggregatedMessage["type"];
+			return { id: m.id, type, content, metadata: m.metadata, createdAt };
+		};
+		const byId = new Map<string, AggregatedMessage>();
+		for (const m of all) {
+			const norm = toAggregated(m);
+			if (!norm) continue;
+			const existing = byId.get(norm.id);
+			if (!existing || norm.createdAt.getTime() >= existing.createdAt.getTime()) byId.set(norm.id, norm);
+		}
+		return Array.from(byId.values()).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+	}, []);
+
+	// Fetch conversation list (active + closed, oldest first) for sidebar. Closed conversations must be shown. Returns the list for callers that need it.
+	const fetchConversationList = useCallback(async (): Promise<Array<{ id: string }>> => {
+		if (!experienceId) return [];
 		try {
 			const response = await apiGet('/api/userchat/conversations', experienceId);
-			if (!response.ok) return;
+			if (!response.ok) return [];
 			const json = await response.json();
 			const data = json.data ?? json;
-			const list = data.conversations ?? [];
+			const list = Array.isArray(data.conversations) ? data.conversations : [];
 			const activeId = data.activeId ?? null;
 			setConversationList(list);
 			setActiveConversationId(activeId);
+			if (list.length === 0) setAggregatedMessages([]);
+			return list;
 		} catch (e) {
 			console.error("[CustomerView] Error fetching conversation list:", e);
+			return [];
 		}
 	}, [experienceId]);
+
+	// Load messages for all conversations in the list and set aggregated timeline (merged, sorted).
+	const loadAllConversationsMessages = useCallback(
+		async (conversationIds: string[]) => {
+			if (!experienceId || conversationIds.length === 0) return;
+			try {
+				const results = await Promise.all(
+					conversationIds.map((id) =>
+						apiPost("/api/userchat/load-conversation", { conversationId: id, whopUserId, userType }, experienceId).then((r) => r.json())
+					)
+				);
+				const messages: Array<{ id: string; type?: string; text?: string; content?: string; timestamp?: string; createdAt?: string; isRead?: boolean; metadata?: unknown }> = [];
+				for (const res of results) {
+					const data = res.data ?? res;
+					const conv = data.conversation ?? res.conversation;
+					if (conv?.messages?.length) {
+						for (const m of conv.messages) {
+							messages.push({
+								id: m.id,
+								type: m.type,
+								text: m.text ?? m.content,
+								content: m.content ?? m.text,
+								timestamp: m.timestamp ?? m.createdAt,
+								createdAt: m.createdAt ?? m.timestamp,
+								isRead: m.isRead,
+								metadata: m.metadata,
+							});
+						}
+					}
+				}
+				setAggregatedMessages(mergeAndSortMessages(messages));
+			} catch (e) {
+				console.error("[CustomerView] Error loading all conversations messages:", e);
+			}
+		},
+		[experienceId, whopUserId, userType, mergeAndSortMessages]
+	);
 
 	// Load a single conversation by id (active or closed); sets conversation + funnel/stage; returns whether it's read-only
 	const loadConversationById = useCallback(async (convId: string): Promise<{ readOnly: boolean }> => {
@@ -506,13 +569,32 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			if (stageInfoData) setStageInfo(stageInfoData);
 			if (merchantTypeData === "upsell" || merchantTypeData === "qualification") setMerchantType(merchantTypeData);
 			setFunnelResources(Array.isArray(resourcesData) ? resourcesData : []);
+			// Merge this conversation's messages into aggregated timeline so single-conversation loads (e.g. poll or sidebar switch) keep timeline up to date
+			const convMessages = (conv as { messages?: Array<{ id: string; type?: string; text?: string; content?: string; timestamp?: string; createdAt?: string; isRead?: boolean; metadata?: unknown }> }).messages ?? [];
+			if (convMessages.length > 0) {
+				setAggregatedMessages((prev) =>
+					mergeAndSortMessages([
+						...prev,
+						...convMessages.map((m) => ({
+							id: m.id,
+							type: m.type,
+							text: m.text ?? m.content,
+							content: m.content ?? m.text,
+							timestamp: m.timestamp ?? m.createdAt,
+							createdAt: m.createdAt ?? m.timestamp,
+							isRead: m.isRead,
+							metadata: m.metadata,
+						})),
+					])
+				);
+			}
 			const status = (conv as { status?: string } | undefined)?.status;
 			return { readOnly: status === "closed" };
 		} catch (err) {
 			console.error("Error loading conversation by id:", err);
 			return { readOnly: true };
 		}
-	}, [experienceId, whopUserId, userType, fetchConversationList]);
+	}, [experienceId, whopUserId, userType, fetchConversationList, mergeAndSortMessages]);
 
 	const handleSelectConversation = useCallback(async (convId: string) => {
 		const { readOnly } = await loadConversationById(convId);
@@ -551,7 +633,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			setError(null);
 
 			// Fetch list of conversations (active + closed) first
-			await fetchConversationList();
+			const list = await fetchConversationList();
 
 			// Step 1: Check if there's an active conversation
 			const checkResponse = await apiPost('/api/userchat/check-conversation', {
@@ -611,6 +693,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					setFunnelResources([]);
 					setIsChatReadOnly(true); // no active chat; if user picks closed, stays true
 				}
+
+				// Load messages for all conversations and set aggregated timeline (one chronological view)
+				if (list.length > 0) {
+					await loadAllConversationsMessages(list.map((c: { id: string }) => c.id));
+				}
 			} else {
 				throw new Error(checkResult.error || "Failed to check conversation status");
 			}
@@ -620,7 +707,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [experienceId, userName, whopUserId, fetchConversationList]);
+	}, [experienceId, userName, whopUserId, fetchConversationList, loadAllConversationsMessages]);
 
 	// Admin functions
 	const checkConversationStatus = async () => {
@@ -761,8 +848,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			let cancelled = false;
 			(async () => {
 				try {
-					await fetchConversationList();
+					const list = await fetchConversationList();
 					const { readOnly } = await loadConversationById(initialOpenConversationId);
+					if (!cancelled && list.length > 0) {
+						await loadAllConversationsMessages(list.map((c: { id: string }) => c.id));
+					}
 					if (!cancelled) {
 						setIsChatReadOnly(readOnly);
 						pendingOpenChatWhenReadyRef.current = true;
@@ -1654,7 +1744,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 									</div>
 									<nav className="p-2 space-y-0.5">
 										{(() => {
-											// Display: active first (if any), then rest in createdAt order (oldest first)
+											// Display: active first (if any), then closed; all returned conversations shown (API returns active + closed)
 											const active = conversationList.find(c => c.status === "active");
 											const closed = conversationList.filter(c => c.status === "closed");
 											const ordered = active ? [active, ...closed] : closed;
@@ -1692,7 +1782,11 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					<UserChat
 						funnelFlow={funnelFlow}
 						conversationId={conversationId || undefined}
-						conversation={conversation || undefined}
+						conversation={
+							conversation
+								? { ...conversation, messages: aggregatedMessages.length > 0 ? aggregatedMessages : (conversation.messages ?? []) }
+								: undefined
+						}
 						experienceId={experienceId}
 						onMessageSent={handleMessageSentInternal}
 						userType={userType}

@@ -73,6 +73,26 @@ export async function hasActiveConversation(
 	return !!row;
 }
 
+/**
+ * Returns true if the user already has any conversation (active or closed) from the given funnel in this experience.
+ * Used to disable app_entry trigger when the user has already been in that funnel (avoid creating duplicate conversations from the same funnel).
+ */
+export async function hasConversationFromFunnel(
+	experienceId: string,
+	whopUserId: string,
+	funnelId: string
+): Promise<boolean> {
+	const row = await db.query.conversations.findFirst({
+		where: and(
+			eq(conversations.experienceId, experienceId),
+			eq(conversations.whopUserId, whopUserId),
+			eq(conversations.funnelId, funnelId)
+		),
+		columns: { id: true },
+	});
+	return !!row;
+}
+
 /** Trigger-type hierarchy per context: try these trigger types in order until we find a matching deployed funnel */
 const TRIGGER_HIERARCHY: Record<TriggerContext, TriggerTypeValue[]> = {
 	app_entry: ["on_app_entry", "no_active_conversation"],
