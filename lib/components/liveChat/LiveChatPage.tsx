@@ -234,15 +234,17 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	// Latest typing from typing poll (used when list poll merges so we don't lose typing to batching)
 	const lastTypingRef = useRef<{ conversationId: string; typing: { user?: boolean; admin?: boolean } } | null>(null);
 
-	// List poll: merge by id, preserve stable order (no re-sort). Selected conversation messages stay in selectedConversationDetail.
+	// List poll: merge by id, preserve stable order (no re-sort). Use same status filter as current view so we don't merge in Open/Auto-mismatched cards.
 	useEffect(() => {
 		if (!user || !experienceId) return;
+
+		const statusParam = filters.status ?? "open";
 
 		const pollForUpdates = async () => {
 			try {
 				const params = new URLSearchParams({
 					experienceId,
-					status: "all",
+					status: statusParam,
 					page: "1",
 					limit: "50",
 				});
@@ -297,7 +299,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 
 		const pollInterval = setInterval(pollForUpdates, 2000);
 		return () => clearInterval(pollInterval);
-	}, [user, experienceId]);
+	}, [user, experienceId, filters.status]);
 
 	// Detail poll: merge into selectedConversationDetail only (load was already done once on select).
 	useEffect(() => {
@@ -390,17 +392,18 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		});
 	}, []);
 
-	// Load conversations from database
-	const loadConversations = useCallback(async (page = 1, reset = false) => {
+	// Load conversations from database (statusOverride used when refetching after filter change so request uses new filter)
+	const loadConversations = useCallback(async (page = 1, reset = false, statusOverride?: "open" | "auto" | "all") => {
 		if (!user) return;
 
 		setIsLoading(true);
 		setError(null);
 
+		const statusParam = statusOverride ?? filters.status ?? "open";
 		try {
 			const params = new URLSearchParams({
 				experienceId: experienceId,
-				status: "all",
+				status: statusParam,
 				page: page.toString(),
 				limit: "50",
 			});
@@ -438,7 +441,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		} finally {
 			setIsLoading(false);
 		}
-	}, [user, experienceId, filters.sortBy, sortConversationsByFilter]);
+	}, [user, experienceId, filters.status, filters.sortBy, sortConversationsByFilter]);
 
 	// Load conversation details once on select; after that only merges (detail poll, send, resolve, typing).
 	const loadConversationDetailsCallback = useCallback(async (conversationId: string) => {
@@ -863,6 +866,12 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			setSelectedConversationId(null);
 			setSelectedConversationDetail(null);
 		}
+		// Open/Auto change: refetch from API (server filters by user's last convo controlled_by)
+		if (newFilters.status !== filters.status) {
+			setFilters(newFilters);
+			loadConversations(1, true, newFilters.status ?? "open");
+			return;
+		}
 		// Re-sort list once when user changes sort (no refetch)
 		if (newFilters.sortBy !== filters.sortBy) {
 			setConversations((prev) => {
@@ -873,7 +882,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 			});
 		}
 		setFilters(newFilters);
-	}, [selectedConversationId, filters.sortBy, sortConversationsByFilter]);
+	}, [selectedConversationId, filters.status, filters.sortBy, sortConversationsByFilter, loadConversations]);
 
 	const handleSearchChange = useCallback((query: string) => {
 		setSearchQuery(query);

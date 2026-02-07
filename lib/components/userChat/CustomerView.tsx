@@ -485,7 +485,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			const data = loadResult.data ?? loadResult;
 			const ok = loadResult.success === true || data.success === true;
 			if (!ok || !(data.conversation ?? loadResult.conversation)) {
-				console.error("Failed to load conversation:", data.error ?? loadResult.error);
+				// Archived: clear selection and show list so UI recovers without 404
+				if (data.code === "ARCHIVED" || data.error === "Conversation is archived") {
+					setConversationId(null);
+					setConversation(null);
+					fetchConversationList();
+				} else {
+					console.error("Failed to load conversation:", data.error ?? loadResult.error);
+				}
 				return { readOnly: true };
 			}
 			const conv = data.conversation ?? loadResult.conversation;
@@ -505,7 +512,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			console.error("Error loading conversation by id:", err);
 			return { readOnly: true };
 		}
-	}, [experienceId, whopUserId, userType]);
+	}, [experienceId, whopUserId, userType, fetchConversationList]);
 
 	const handleSelectConversation = useCallback(async (convId: string) => {
 		const { readOnly } = await loadConversationById(convId);

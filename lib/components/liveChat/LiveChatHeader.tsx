@@ -67,7 +67,7 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 		const handleStatusToggle = useCallback(() => {
 			onFiltersChange({
 				...filters,
-				status: (filters.status || "open") === "open" ? "closed" : "open",
+				status: (filters.status || "open") === "open" ? "auto" : "open",
 			});
 		}, [filters, onFiltersChange]);
 
@@ -79,8 +79,9 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 		}, [filters, onFiltersChange]);
 
 		// Memoized computed values
+		// Show "Open" when we're filtering for admin (status=auto); show "Auto" when filtering for bot (status=open)
 		const isOpenStatus = useMemo(
-			() => (filters.status || "open") === "open",
+			() => (filters.status || "open") === "auto",
 			[filters.status],
 		);
 		const isNewestSort = useMemo(
@@ -216,7 +217,7 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 								}`}
 							>
 								<span className="font-semibold text-sm sm:text-base">
-									{isOpenStatus ? "Open" : "Closed"}
+									{isOpenStatus ? "Open" : "Auto"}
 								</span>
 							</Button>
 						</div>

@@ -156,10 +156,49 @@ export async function getLiveChatConversations(
 		const offset = (page - 1) * limit;
 
 		let whereConditions = and(eq(conversations.experienceId, experience.id));
+		// Open tab (UI) = admin users → request status=auto. Auto tab (UI) = bot users → request status=open.
+		// Restrict c2/c3 to active+closed so "last" is among loadable convos only.
 		if (filters.status === "open") {
-			whereConditions = and(whereConditions, eq(conversations.status, "active"));
-		} else if (filters.status === "closed") {
-			whereConditions = and(whereConditions, eq(conversations.status, "closed"));
+			whereConditions = and(
+				whereConditions,
+				inArray(conversations.status, ["active", "closed"]),
+				sql`EXISTS (
+					SELECT 1 FROM conversations c2
+					WHERE c2.experience_id = ${experience.id}
+					AND c2.whop_user_id = conversations.whop_user_id
+					AND c2.status IN ('active', 'closed')
+					AND c2.controlled_by = 'bot'
+					AND NOT EXISTS (
+						SELECT 1 FROM conversations c3
+						WHERE c3.experience_id = c2.experience_id
+						AND c3.whop_user_id = c2.whop_user_id
+						AND c3.status IN ('active', 'closed')
+						AND c3.updated_at > c2.updated_at
+					)
+				)`
+			);
+		} else if (filters.status === "auto") {
+			whereConditions = and(
+				whereConditions,
+				inArray(conversations.status, ["active", "closed"]),
+				sql`EXISTS (
+					SELECT 1 FROM conversations c2
+					WHERE c2.experience_id = ${experience.id}
+					AND c2.whop_user_id = conversations.whop_user_id
+					AND c2.status IN ('active', 'closed')
+					AND c2.controlled_by = 'admin'
+					AND NOT EXISTS (
+						SELECT 1 FROM conversations c3
+						WHERE c3.experience_id = c2.experience_id
+						AND c3.whop_user_id = c2.whop_user_id
+						AND c3.status IN ('active', 'closed')
+						AND c3.updated_at > c2.updated_at
+					)
+				)`
+			);
+		} else {
+			// No status filter: still exclude archived (never show in list)
+			whereConditions = and(whereConditions, inArray(conversations.status, ["active", "closed"]));
 		}
 		if (filters.searchQuery) {
 			whereConditions = and(
@@ -367,7 +406,7 @@ export async function getLiveChatConversationDetails(
 		// Determine conversation stage
 		const currentStage = determineConversationStage(conversation.currentBlockId, conversation.funnel?.flow as FunnelFlow);
 
-		// Status mapping: active and completed = open, closed and abandoned = closed
+		// Status mapping: active = open, closed/archived = closed
 		const displayStatus = conversation.status === "active" ? "open" : "closed";
 
 		const conv = conversation as typeof conversation & { userLastReadAt?: Date | string | null; adminLastReadAt?: Date | string | null };
@@ -495,7 +534,7 @@ export async function sendLiveChatMessage(
 			throw new Error("Conversation not found");
 		}
 
-		// Allow sending messages to active and completed conversations
+		// Allow sending messages only to active conversations
 		if (conversation.status !== "active") {
 			console.error("sendLiveChatMessage: Conversation not in valid state for messaging:", {
 				conversationId,

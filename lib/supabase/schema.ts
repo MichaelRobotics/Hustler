@@ -32,9 +32,7 @@ export const generationStatusEnum = pgEnum("generation_status", [
 ]);
 export const conversationStatusEnum = pgEnum("conversation_status", [
 	"active",
-	"completed",
 	"closed",
-	"abandoned",
 	"archived",
 ]);
 export const messageTypeEnum = pgEnum("message_type", [

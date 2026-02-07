@@ -1,7 +1,7 @@
 import { pgTable, index, foreignKey, unique, uuid, timestamp, text, jsonb, boolean, integer, numeric, pgEnum } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
-export const conversationStatus = pgEnum("conversation_status", ['active', 'completed', 'closed', 'abandoned', 'archived'])
+export const conversationStatus = pgEnum("conversation_status", ['active', 'closed', 'archived'])
 export const generationStatus = pgEnum("generation_status", ['idle', 'generating', 'completed', 'failed'])
 export const messageType = pgEnum("message_type", ['user', 'bot'])
 export const resourceCategory = pgEnum("resource_category", ['PAID', 'FREE_VALUE'])

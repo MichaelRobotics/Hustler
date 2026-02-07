@@ -66,11 +66,11 @@ async function loadConversationHandler(
       );
     }
 
-    // Reject archived conversations (not loadable in chat; analytics only)
+    // Archived conversations are not loadable in chat; return structured response so client can handle (no 404)
     if (conversation.status === "archived") {
       return NextResponse.json(
-        { success: false, error: "Conversation not found" },
-        { status: 404 }
+        { success: false, code: "ARCHIVED", error: "Conversation is archived" },
+        { status: 200 }
       );
     }
 

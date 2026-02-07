@@ -25,7 +25,7 @@ export interface Conversation {
 	experienceId: string;
 	funnelId: string;
 	whopUserId: string;
-	status: "active" | "closed" | "abandoned" | "archived";
+	status: "active" | "closed" | "archived";
 	currentBlockId?: string;
 	userPath?: string[];
 	createdAt: Date;
@@ -125,19 +125,9 @@ export async function createConversation(
 	try {
 		console.log(`[CREATE-CONVERSATION] Starting conversation creation for whopUserId ${whopUserId} in experience ${experienceId}`);
 
-		// Close only the single active conversation for this user (do not delete; archived only from notification "delete conversation")
-		const closeResult = await db
-			.update(conversations)
-			.set({ status: "closed", updatedAt: new Date() })
-			.where(
-				and(
-					eq(conversations.whopUserId, whopUserId),
-					eq(conversations.experienceId, experienceId),
-					eq(conversations.status, "active")
-				)
-			);
-		if (closeResult.rowCount && closeResult.rowCount > 0) {
-			console.log(`[CREATE-CONVERSATION] Closed ${closeResult.rowCount} active conversation(s) for whopUserId ${whopUserId}`);
+		// Safeguard: callers should check hasActiveConversation first; refuse to create if one already active
+		if (await hasActiveConversation(experienceId, whopUserId)) {
+			throw new Error(`Cannot create conversation: user already has an active conversation in experience ${experienceId}`);
 		}
 
 		// Get the original funnel flow

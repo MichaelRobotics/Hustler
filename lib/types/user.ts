@@ -37,7 +37,7 @@ export interface UserContext {
 export interface ConversationWithMessages {
 	id: string;
 	funnelId: string;
-	status: "active" | "closed" | "abandoned" | "archived";
+	status: "active" | "closed" | "archived";
 	currentBlockId?: string;
 	userPath?: any;
 	metadata?: any;

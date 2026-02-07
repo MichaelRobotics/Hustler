@@ -631,15 +631,9 @@ const UserChat: React.FC<UserChatProps> = ({
 
 	// ✅ REMOVED: Typing timeout cleanup - no typing indicators needed
 
-	// Auto-scroll when conversation messages change (optimized for mobile performance)
-	useEffect(() => {
-		if (conversationMessages.length > 0) {
-			// Use requestAnimationFrame for better performance
-			requestAnimationFrame(() => {
-				scrollToBottom();
-			});
-		}
-	}, [conversationMessages, scrollToBottom]);
+	// Do NOT auto-scroll on every conversationMessages change: the poll updates state with a new array ref every 2s,
+	// which was resetting scroll when the user had scrolled up. Scrolling is already done when: initial load,
+	// poll finds reallyNew messages (scrollToBottomRef in setConversationMessages), and on send/reply.
 
 	// ✅ REMOVED: Auto-scroll for typing indicator - no typing indicators needed
 

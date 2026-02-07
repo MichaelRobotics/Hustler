@@ -35,7 +35,7 @@ export type CachedConversation = {
   conversationSnapshot?: {
     id: string;
     funnelId: string;
-    status: "active" | "closed" | "abandoned" | "archived";
+    status: "active" | "closed" | "archived";
     currentBlockId?: string;
     funnel: { id: string; name: string; isDeployed: boolean };
     interactions?: Array<{ id: string; blockId: string; optionText: string; nextBlockId?: string; createdAt: Date }>;

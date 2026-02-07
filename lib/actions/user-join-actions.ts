@@ -368,7 +368,7 @@ export async function handleUserJoinEvent(
 			return;
 		}
 
-		// Create conversation (createConversation closes any previous active for this user, then inserts)
+		// Create conversation (only when no active conversation; guard above ensures this)
 		// Step 8: Create conversation record with TRANSITION stage
 		console.log(`[USER-JOIN] Creating new conversation for user ${userId} in experience ${experience.id}`);
 		const conversationId = await createConversation(

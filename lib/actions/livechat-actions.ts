@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, sql, or, ilike } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql, or, ilike, inArray } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { startConversationForMerchantClosedTrigger } from "./simplified-conversation-actions";
 import { db } from "../supabase/db-server";
@@ -59,12 +59,46 @@ export async function loadRealConversations(
 		// Build where conditions
 		let whereConditions = eq(conversations.experienceId, experienceId);
 
-		// Add status filter
+		// Align with integration: open param → bot users; auto param → admin users (UI labels Open=admin, Auto=bot)
 		if (filters.status && filters.status !== "all") {
 			if (filters.status === "open") {
-				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
-			} else if (filters.status === "closed") {
-				whereConditions = and(whereConditions, eq(conversations.status, "closed"))!;
+				whereConditions = and(
+					whereConditions,
+					inArray(conversations.status, ["active", "closed"]),
+					sql`EXISTS (
+						SELECT 1 FROM conversations c2
+						WHERE c2.experience_id = ${experienceId}
+						AND c2.whop_user_id = conversations.whop_user_id
+						AND c2.status IN ('active', 'closed')
+						AND c2.controlled_by = 'bot'
+						AND NOT EXISTS (
+							SELECT 1 FROM conversations c3
+							WHERE c3.experience_id = c2.experience_id
+							AND c3.whop_user_id = c2.whop_user_id
+							AND c3.status IN ('active', 'closed')
+							AND c3.updated_at > c2.updated_at
+						)
+					)`
+				)!;
+			} else if (filters.status === "auto") {
+				whereConditions = and(
+					whereConditions,
+					inArray(conversations.status, ["active", "closed"]),
+					sql`EXISTS (
+						SELECT 1 FROM conversations c2
+						WHERE c2.experience_id = ${experienceId}
+						AND c2.whop_user_id = conversations.whop_user_id
+						AND c2.status IN ('active', 'closed')
+						AND c2.controlled_by = 'admin'
+						AND NOT EXISTS (
+							SELECT 1 FROM conversations c3
+							WHERE c3.experience_id = c2.experience_id
+							AND c3.whop_user_id = c2.whop_user_id
+							AND c3.status IN ('active', 'closed')
+							AND c3.updated_at > c2.updated_at
+						)
+					)`
+				)!;
 			}
 		}
 
@@ -174,9 +208,8 @@ export async function loadRealConversations(
 				// Map conversation status
 				const statusMap = {
 					active: "open",
-					completed: "open",
 					closed: "closed",
-					abandoned: "closed",
+					archived: "closed",
 				};
 
 				return {
@@ -249,12 +282,46 @@ export async function getConversationList(
 		// Build where conditions
 		let whereConditions = eq(conversations.experienceId, experienceId);
 
-		// Add status filter
+		// Align with integration: open param → bot users; auto param → admin users (UI labels Open=admin, Auto=bot)
 		if (filters.status && filters.status !== "all") {
 			if (filters.status === "open") {
-				whereConditions = and(whereConditions, eq(conversations.status, "active"))!;
-			} else if (filters.status === "closed") {
-				whereConditions = and(whereConditions, eq(conversations.status, "closed"))!;
+				whereConditions = and(
+					whereConditions,
+					inArray(conversations.status, ["active", "closed"]),
+					sql`EXISTS (
+						SELECT 1 FROM conversations c2
+						WHERE c2.experience_id = ${experienceId}
+						AND c2.whop_user_id = conversations.whop_user_id
+						AND c2.status IN ('active', 'closed')
+						AND c2.controlled_by = 'bot'
+						AND NOT EXISTS (
+							SELECT 1 FROM conversations c3
+							WHERE c3.experience_id = c2.experience_id
+							AND c3.whop_user_id = c2.whop_user_id
+							AND c3.status IN ('active', 'closed')
+							AND c3.updated_at > c2.updated_at
+						)
+					)`
+				)!;
+			} else if (filters.status === "auto") {
+				whereConditions = and(
+					whereConditions,
+					inArray(conversations.status, ["active", "closed"]),
+					sql`EXISTS (
+						SELECT 1 FROM conversations c2
+						WHERE c2.experience_id = ${experienceId}
+						AND c2.whop_user_id = conversations.whop_user_id
+						AND c2.status IN ('active', 'closed')
+						AND c2.controlled_by = 'admin'
+						AND NOT EXISTS (
+							SELECT 1 FROM conversations c3
+							WHERE c3.experience_id = c2.experience_id
+							AND c3.whop_user_id = c2.whop_user_id
+							AND c3.status IN ('active', 'closed')
+							AND c3.updated_at > c2.updated_at
+						)
+					)`
+				)!;
 			}
 		}
 
@@ -370,9 +437,8 @@ export async function getConversationList(
 			// Map conversation status
 			const statusMap = {
 				active: "open",
-				completed: "open",
 				closed: "closed",
-				abandoned: "closed",
+				archived: "closed",
 			};
 
 			const adminLastReadAt = conv.adminLastReadAt ? new Date(conv.adminLastReadAt) : null;
@@ -509,9 +575,8 @@ export async function loadConversationDetails(
 		// Map conversation status
 		const statusMap = {
 			active: "open",
-			completed: "open",
 			closed: "closed",
-			abandoned: "closed",
+			archived: "closed",
 		};
 
 		const now = new Date();

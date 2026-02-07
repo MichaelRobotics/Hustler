@@ -48,7 +48,7 @@ async function getConversationsHandler(
     const authenticatedUser = userContext.user;
 
     const filters = {
-      status: status as "all" | "open" | "closed",
+      status: status as "all" | "open" | "auto",
       sortBy: sortBy as "newest" | "oldest" | "most_messages" | "least_messages",
       search,
     };

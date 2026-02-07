@@ -274,9 +274,9 @@ export const useLiveChat = (options: UseLiveChatOptions = {}) => {
 	const selectedConversation =
 		conversations.find((conv) => conv.id === selectedConversationId) || null;
 
-	// Filtered conversations
+	// Filtered conversations (open/auto = API already filtered by user; show all returned)
 	const filteredConversations = conversations.filter((conv) => {
-		if (filters.status && conv.status !== filters.status) return false;
+		if (filters.status && filters.status !== "open" && filters.status !== "auto" && conv.status !== filters.status) return false;
 		if (
 			searchQuery &&
 			!conv.user.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
