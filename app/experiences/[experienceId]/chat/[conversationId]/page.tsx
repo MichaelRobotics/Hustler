@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { get as getConversationMessageCache, set as setConversationMessageCache } from "@/lib/cache/conversation-message-cache";
 import { UserChat } from "@/lib/components/userChat";
 // Database actions moved to API routes to avoid client-side imports
@@ -155,6 +155,20 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 			loadData(false);
 		}
 	}, [conversationId, experienceId]);
+
+	// Mark conversation as read by user when they open the chat page (not just when in app)
+	const lastMarkedReadRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!conversationId || !conversation?.id) return;
+		if (lastMarkedReadRef.current === conversationId) return;
+		lastMarkedReadRef.current = conversationId;
+		fetch(`/api/livechat/conversations/${conversationId}/read`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ side: "user" }),
+			credentials: "same-origin",
+		}).catch((e) => console.warn("[UserChatPage] Mark conversation read (user) failed:", e));
+	}, [conversationId, conversation?.id]);
 
 	// Handle message sent from UserChat
 	const handleMessageSent = async (message: string, conversationId?: string) => {

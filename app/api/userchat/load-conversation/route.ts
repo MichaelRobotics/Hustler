@@ -85,18 +85,7 @@ async function loadConversationHandler(
       );
     }
 
-    // When customer (conversation owner) loads conversation, mark as read so admin can see "read by user"
-    const isConversationOwner = conversation.whopUserId === user.userId;
-    if (userType === "customer" || isConversationOwner) {
-      await db
-        .update(conversations)
-        .set({
-          userLastReadAt: new Date(),
-          updatedAt: new Date(),
-          unreadCountUser: 0,
-        })
-        .where(eq(conversations.id, conversationId));
-    }
+    // Do not mark as read here: "read by user" is set only when the user actually opens the chat (see CustomerView and chat page calling POST .../read with side: "user").
 
     // Debug logging for conversation details
     console.log(`[load-conversation] Debug - Conversation ${conversationId} found:`);

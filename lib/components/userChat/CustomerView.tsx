@@ -519,6 +519,19 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		setIsChatReadOnly(readOnly);
 	}, [loadConversationById]);
 
+	// Mark conversation as read by user only when they actually open the chat (not just when in app)
+	const lastMarkedReadConversationIdRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!experienceId || !conversationId) return;
+		if (lastMarkedReadConversationIdRef.current === conversationId) return;
+		lastMarkedReadConversationIdRef.current = conversationId;
+		apiPost(
+			`/api/livechat/conversations/${conversationId}/read`,
+			{ side: "user" },
+			experienceId
+		).catch((e) => console.warn("[CustomerView] Mark conversation read (user) failed:", e));
+	}, [experienceId, conversationId]);
+
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
 		if (!experienceId) {
