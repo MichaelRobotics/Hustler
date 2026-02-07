@@ -393,7 +393,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	}, []);
 
 	// Load conversations from database (statusOverride used when refetching after filter change so request uses new filter)
-	const loadConversations = useCallback(async (page = 1, reset = false, statusOverride?: "open" | "auto" | "all") => {
+	const loadConversations = useCallback(async (page = 1, reset = false, statusOverride?: "open" | "auto") => {
 		if (!user) return;
 
 		setIsLoading(true);

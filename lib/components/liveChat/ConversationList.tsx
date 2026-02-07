@@ -30,10 +30,7 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(
 		const filteredConversations = useMemo(() => {
 			let filtered = conversations.filter((conv) => conv && conv.status); // Add defensive check
 
-			// For "open" and "auto" the API already filtered by user (admin-controlled vs not); show all returned convos (mix of open/closed)
-			if (filters.status && filters.status !== "open" && filters.status !== "auto") {
-				filtered = filtered.filter((conv) => conv.status === filters.status);
-			}
+			// API already filtered by open/auto (controlled_by); no extra status filter needed
 
 			// Filter by search query (optimized with cached query)
 			if (searchQuery) {

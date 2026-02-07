@@ -14,7 +14,7 @@ async function getConversationsHandler(
 ) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || "all";
+    const status = searchParams.get("status") || "open";
     const sortBy = searchParams.get("sortBy") || "newest";
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
@@ -48,7 +48,7 @@ async function getConversationsHandler(
     const authenticatedUser = userContext.user;
 
     const filters = {
-      status: status as "all" | "open" | "auto",
+      status: (status === "auto" ? "auto" : "open") as "open" | "auto",
       sortBy: sortBy as "newest" | "oldest" | "most_messages" | "least_messages",
       search,
     };

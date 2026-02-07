@@ -71,7 +71,7 @@ export interface LiveChatConversation {
 }
 
 export interface LiveChatFilters {
-	status?: "all" | "open" | "auto";
+	status?: "open" | "auto";
 	sortBy?: "newest" | "oldest" | "most_messages" | "least_messages";
 	searchQuery?: string;
 }
