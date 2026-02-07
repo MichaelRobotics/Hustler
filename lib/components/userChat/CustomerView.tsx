@@ -34,6 +34,8 @@ interface CustomerViewProps {
 	onMessageSent?: (message: string, conversationId?: string) => void;
 	userType?: "admin" | "customer";
 	whopUserId?: string;
+	/** When set (e.g. from notification deep link), open CustomerView with chat visible and this conversation loaded */
+	initialOpenConversationId?: string;
 }
 
 const CustomerView: React.FC<CustomerViewProps> = ({
@@ -42,6 +44,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	onMessageSent,
 	userType = "customer",
 	whopUserId,
+	initialOpenConversationId,
 }) => {
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [conversation, setConversation] = useState<ConversationWithMessages | null>(null);
@@ -705,18 +708,47 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	};
 
 	// Load data once when experienceId is available; avoid re-running when callback identities change (prevents endless load-conversation loop)
+	// When initialOpenConversationId is set (e.g. notification deep link), open chat and load that conversation instead of normal funnel load
 	const lastLoadedExperienceIdRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!experienceId) return;
+
+		if (initialOpenConversationId) {
+			if (lastLoadedExperienceIdRef.current === experienceId) return;
+			lastLoadedExperienceIdRef.current = experienceId;
+			setIsLoading(true);
+			setError(null);
+			let cancelled = false;
+			(async () => {
+				try {
+					await fetchConversationList();
+					const { readOnly } = await loadConversationById(initialOpenConversationId);
+					if (!cancelled) setIsChatReadOnly(readOnly);
+					if (!cancelled) setViewMode("chat-only");
+					fetchUserContext();
+					fetchExperienceLink();
+					checkLiveTemplate();
+				} catch (err) {
+					console.error("Error opening conversation from deep link:", err);
+					if (!cancelled) setError(err instanceof Error ? err.message : "Failed to open conversation");
+				} finally {
+					if (!cancelled) setIsLoading(false);
+				}
+			})();
+			return () => {
+				cancelled = true;
+			};
+		}
+
 		if (lastLoadedExperienceIdRef.current === experienceId) return;
 		lastLoadedExperienceIdRef.current = experienceId;
 		loadFunnelAndConversation();
 		fetchUserContext();
 		fetchExperienceLink();
 		checkLiveTemplate();
-		// Intentionally depend only on experienceId so we don't re-run when callbacks get new refs (e.g. userType resolving)
+		// Intentionally omit callback deps to avoid re-running when callbacks get new refs (e.g. userType resolving)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [experienceId]);
+	}, [experienceId, initialOpenConversationId]);
 
 	// Validate discount settings against database (same logic as usePreviewLiveTemplate)
 	useEffect(() => {

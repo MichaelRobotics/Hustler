@@ -27,11 +27,12 @@ export default function ExperiencePage({
 	searchParams,
 }: {
 	params: Promise<{ experienceId: string }>;
-	searchParams?: Promise<{ view?: string; dashboard?: string }>;
+	searchParams?: Promise<{ view?: string; dashboard?: string; openChat?: string }>;
 }) {
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
 	const [experienceId, setExperienceId] = useState<string>("");
 	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
+	const [openChatConversationId, setOpenChatConversationId] = useState<string | null>(null);
 
 	// Function to fetch user context
 	const fetchUserContext = useCallback(async (forceRefresh = false) => {
@@ -110,12 +111,15 @@ export default function ExperiencePage({
 		console.log("✅ User context refresh complete");
 	}, [fetchUserContext]);
 
-	// Read search params for view
+	// Read search params for view and notification deep link (openChat)
 	useEffect(() => {
 		if (searchParams) {
-			searchParams.then((params) => {
-				if (params.view === "customer") {
+			searchParams.then((resolved) => {
+				if (resolved.view === "customer") {
 					setSelectedView("customer");
+				}
+				if (resolved.openChat) {
+					setOpenChatConversationId(resolved.openChat);
 				}
 			});
 		}
@@ -184,6 +188,7 @@ export default function ExperiencePage({
 				onMessageSent={handleCustomerMessage}
 				userType="admin" // Developer admin gets admin controls on customer view
 				whopUserId={currentUser.whopUserId}
+				initialOpenConversationId={openChatConversationId ?? undefined}
 			/>
 		);
 	}
@@ -203,6 +208,7 @@ export default function ExperiencePage({
 				onMessageSent={handleCustomerMessage}
 				userType="customer"
 				whopUserId={currentUser.whopUserId}
+				initialOpenConversationId={openChatConversationId ?? undefined}
 			/>
 		);
 	}

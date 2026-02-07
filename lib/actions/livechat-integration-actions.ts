@@ -554,14 +554,14 @@ export async function sendLiveChatMessage(
 			})
 			.where(eq(conversations.id, conversationId));
 
-		// Notify the conversation's user via Whop push notification
+		// Notify the conversation's user via Whop push notification (opens CustomerView with chat and this conversation)
 		if (experience.whopExperienceId) {
 			sendWhopNotification({
 				experience_id: experience.whopExperienceId,
 				user_ids: [conversation.whopUserId],
 				title: "New message",
 				content: `You have a new message from the team.`,
-				rest_path: `/chat/${conversationId}`,
+				rest_path: `?openChat=${conversationId}`,
 			}).catch((err) => console.warn("[sendLiveChatMessage] Whop notification failed:", err));
 		}
 
