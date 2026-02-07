@@ -639,12 +639,15 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 					setConversations((prev) =>
 						prev.map((c) => (c.id === conversationId ? { ...c, ...merge } : c))
 					);
+					// Conversation is now bot-controlled; switch view to Auto
+					setFilters((f) => ({ ...f, status: "auto" as const }));
+					loadConversations(1, true, "auto");
 				}
 			} catch (e) {
 				console.warn("Resolve conversation failed:", e);
 			}
 		},
-		[user?.experienceId]
+		[user?.experienceId, loadConversations]
 	);
 
 	const handleTypingChange = useCallback(
@@ -791,6 +794,11 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 								: conv
 						)
 					);
+					// Merchant sent a message → conversation is now admin-controlled; switch view to Open
+					setFilters((f) => (f.status === "auto" ? { ...f, status: "open" as const } : f));
+					if (filters.status === "auto") {
+						loadConversations(1, true, "open");
+					}
 					console.log("✅ [LiveChat] Message sent successfully, server will broadcast via WebSocket");
 				} else {
 					console.error("LiveChat: API returned error:", {
@@ -849,7 +857,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				);
 			}
 		},
-		[selectedConversationId, user],
+		[selectedConversationId, user, filters.status, loadConversations],
 	);
 
 	// Memoized handlers for better performance
