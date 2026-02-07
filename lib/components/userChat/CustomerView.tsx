@@ -1199,8 +1199,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	
 			return (
 				<div className="h-screen w-full relative flex flex-col">
-			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads */}
-			{(!iframeLoaded || overlayTransitioning) && (
+			{/* Whop Native Loading Overlay - Covers entire CustomerView until iframe loads. Skip when chat-only (e.g. notification deep link). */}
+			{(!iframeLoaded || overlayTransitioning) && viewMode !== "chat-only" && (
 				<div className={`absolute inset-0 z-50 bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden ${
 					overlayTransitioning ? 'transition-all duration-500 filter blur-[20px] opacity-0' : ''
 				}`}>
