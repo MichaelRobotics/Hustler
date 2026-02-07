@@ -156,19 +156,21 @@ export default function UserChatPage({ params }: UserChatPageProps) {
 		}
 	}, [conversationId, experienceId]);
 
-	// Mark conversation as read by user when they open the chat page (not just when in app)
+	// Mark conversation as read by user when they open the chat page (user explicitly opened this URL)
 	const lastMarkedReadRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (!conversationId || !conversation?.id) return;
+		if (!conversationId || !conversation?.id || !experienceId) return;
 		if (lastMarkedReadRef.current === conversationId) return;
 		lastMarkedReadRef.current = conversationId;
+		const headers: Record<string, string> = { "Content-Type": "application/json" };
+		headers["X-Experience-ID"] = experienceId;
 		fetch(`/api/livechat/conversations/${conversationId}/read`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers,
 			body: JSON.stringify({ side: "user" }),
 			credentials: "same-origin",
 		}).catch((e) => console.warn("[UserChatPage] Mark conversation read (user) failed:", e));
-	}, [conversationId, conversation?.id]);
+	}, [conversationId, conversation?.id, experienceId]);
 
 	// Handle message sent from UserChat
 	const handleMessageSent = async (message: string, conversationId?: string) => {

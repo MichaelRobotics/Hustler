@@ -517,20 +517,15 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const handleSelectConversation = useCallback(async (convId: string) => {
 		const { readOnly } = await loadConversationById(convId);
 		setIsChatReadOnly(readOnly);
-	}, [loadConversationById]);
-
-	// Mark conversation as read by user only when they actually open the chat (not just when in app)
-	const lastMarkedReadConversationIdRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (!experienceId || !conversationId) return;
-		if (lastMarkedReadConversationIdRef.current === conversationId) return;
-		lastMarkedReadConversationIdRef.current = conversationId;
-		apiPost(
-			`/api/livechat/conversations/${conversationId}/read`,
-			{ side: "user" },
-			experienceId
-		).catch((e) => console.warn("[CustomerView] Mark conversation read (user) failed:", e));
-	}, [experienceId, conversationId]);
+		// Mark as read only when user explicitly opens a conversation (not on app load)
+		if (experienceId) {
+			apiPost(
+				`/api/livechat/conversations/${convId}/read`,
+				{ side: "user" },
+				experienceId
+			).catch((e) => console.warn("[CustomerView] Mark conversation read (user) failed:", e));
+		}
+	}, [loadConversationById, experienceId]);
 
 	// Load real funnel data and create/load conversation
 	const loadFunnelAndConversation = useCallback(async () => {
@@ -761,6 +756,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						setIsChatReadOnly(readOnly);
 						pendingOpenChatWhenReadyRef.current = true;
 						console.log("[CustomerView] open-chat: conversation loaded, will open chat when Seasonal Store has loaded");
+						// User opened this conversation via deep link; mark as read
+						apiPost(
+							`/api/livechat/conversations/${initialOpenConversationId}/read`,
+							{ side: "user" },
+							experienceId
+						).catch((e) => console.warn("[CustomerView] Mark conversation read (user) failed:", e));
 					}
 					fetchUserContext();
 					fetchExperienceLink();
