@@ -59,7 +59,7 @@ export async function loadRealConversations(
 		// Build where conditions
 		let whereConditions = eq(conversations.experienceId, experienceId);
 
-		// Align with integration: open param → bot users; auto param → admin users (UI labels Open=admin, Auto=bot)
+		// Open = user's last convo controlled_by admin; Auto = user's last convo controlled_by bot
 		if (filters.status === "open") {
 			whereConditions = and(
 				whereConditions,
@@ -69,7 +69,7 @@ export async function loadRealConversations(
 					WHERE c2.experience_id = ${experienceId}
 					AND c2.whop_user_id = conversations.whop_user_id
 					AND c2.status IN ('active', 'closed')
-					AND c2.controlled_by = 'bot'
+					AND c2.controlled_by = 'admin'
 					AND NOT EXISTS (
 						SELECT 1 FROM conversations c3
 						WHERE c3.experience_id = c2.experience_id
@@ -88,7 +88,7 @@ export async function loadRealConversations(
 					WHERE c2.experience_id = ${experienceId}
 					AND c2.whop_user_id = conversations.whop_user_id
 					AND c2.status IN ('active', 'closed')
-					AND c2.controlled_by = 'admin'
+					AND c2.controlled_by = 'bot'
 					AND NOT EXISTS (
 						SELECT 1 FROM conversations c3
 						WHERE c3.experience_id = c2.experience_id
@@ -280,7 +280,7 @@ export async function getConversationList(
 		// Build where conditions
 		let whereConditions = eq(conversations.experienceId, experienceId);
 
-		// Align with integration: open param → bot users; auto param → admin users (UI labels Open=admin, Auto=bot)
+		// Open = user's last convo controlled_by admin; Auto = user's last convo controlled_by bot
 		if (filters.status === "open") {
 			whereConditions = and(
 				whereConditions,
@@ -290,7 +290,7 @@ export async function getConversationList(
 					WHERE c2.experience_id = ${experienceId}
 					AND c2.whop_user_id = conversations.whop_user_id
 					AND c2.status IN ('active', 'closed')
-					AND c2.controlled_by = 'bot'
+					AND c2.controlled_by = 'admin'
 					AND NOT EXISTS (
 						SELECT 1 FROM conversations c3
 						WHERE c3.experience_id = c2.experience_id
@@ -309,7 +309,7 @@ export async function getConversationList(
 					WHERE c2.experience_id = ${experienceId}
 					AND c2.whop_user_id = conversations.whop_user_id
 					AND c2.status IN ('active', 'closed')
-					AND c2.controlled_by = 'admin'
+					AND c2.controlled_by = 'bot'
 					AND NOT EXISTS (
 						SELECT 1 FROM conversations c3
 						WHERE c3.experience_id = c2.experience_id

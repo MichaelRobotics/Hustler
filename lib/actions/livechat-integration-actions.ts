@@ -156,7 +156,7 @@ export async function getLiveChatConversations(
 		const offset = (page - 1) * limit;
 
 		let whereConditions = and(eq(conversations.experienceId, experience.id));
-		// Open tab (UI) = admin users → request status=auto. Auto tab (UI) = bot users → request status=open.
+		// Open = user's last convo controlled_by admin; Auto = user's last convo controlled_by bot.
 		// Restrict c2/c3 to active+closed so "last" is among loadable convos only.
 		if (filters.status === "open") {
 			whereConditions = and(
@@ -167,7 +167,7 @@ export async function getLiveChatConversations(
 					WHERE c2.experience_id = ${experience.id}
 					AND c2.whop_user_id = conversations.whop_user_id
 					AND c2.status IN ('active', 'closed')
-					AND c2.controlled_by = 'bot'
+					AND c2.controlled_by = 'admin'
 					AND NOT EXISTS (
 						SELECT 1 FROM conversations c3
 						WHERE c3.experience_id = c2.experience_id
@@ -186,7 +186,7 @@ export async function getLiveChatConversations(
 					WHERE c2.experience_id = ${experience.id}
 					AND c2.whop_user_id = conversations.whop_user_id
 					AND c2.status IN ('active', 'closed')
-					AND c2.controlled_by = 'admin'
+					AND c2.controlled_by = 'bot'
 					AND NOT EXISTS (
 						SELECT 1 FROM conversations c3
 						WHERE c3.experience_id = c2.experience_id

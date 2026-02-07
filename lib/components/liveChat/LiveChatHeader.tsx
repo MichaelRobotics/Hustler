@@ -79,9 +79,9 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 		}, [filters, onFiltersChange]);
 
 		// Memoized computed values
-		// Show "Open" when we're filtering for admin (status=auto); show "Auto" when filtering for bot (status=open)
+		// Open = admin (status=open), Auto = bot (status=auto)
 		const isOpenStatus = useMemo(
-			() => (filters.status || "open") === "auto",
+			() => (filters.status || "open") === "open",
 			[filters.status],
 		);
 		const isNewestSort = useMemo(
