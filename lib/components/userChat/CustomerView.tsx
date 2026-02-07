@@ -774,7 +774,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	// After Seasonal Store has loaded (template + products), open the Claim-button chat if we came from notification deep link.
 	// Wait for store ready THEN an extra delay so "template loads, products load" has time to finish (iframe onLoad is just document load).
 	const storeReady = iframeLoaded || (hasLiveTemplate && !!liveTemplate);
-	const OPEN_CHAT_DELAY_MS = 3000; // After store ready: give template + products time to load before opening chat
+	const OPEN_CHAT_DELAY_MS = 1000; // After store ready: brief delay so template/products can paint before opening chat
 	useEffect(() => {
 		if (!storeReady || !pendingOpenChatWhenReadyRef.current) return;
 		const t = setTimeout(() => {
