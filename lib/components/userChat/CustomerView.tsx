@@ -46,6 +46,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	whopUserId,
 	initialOpenConversationId,
 }) => {
+	// Log when we receive deep-link prop (notification open-chat)
+	if (initialOpenConversationId && typeof window !== "undefined") {
+		console.log("[CustomerView] render with initialOpenConversationId", { experienceId, initialOpenConversationId });
+	}
 	const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
 	const [conversation, setConversation] = useState<ConversationWithMessages | null>(null);
 	const [conversationId, setConversationId] = useState<string | null>(null);
@@ -708,31 +712,43 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	};
 
 	// Load data once when experienceId is available; avoid re-running when callback identities change (prevents endless load-conversation loop)
-	// When initialOpenConversationId is set (e.g. notification deep link), open chat and load that conversation instead of normal funnel load
+	// When initialOpenConversationId is set (e.g. notification deep link), open chat and load that conversation.
+	// Use a separate ref for open-chat so we run it when initialOpenConversationId arrives after the normal path already ran.
 	const lastLoadedExperienceIdRef = useRef<string | null>(null);
+	const lastOpenChatConversationIdRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!experienceId) return;
 
 		if (initialOpenConversationId) {
-			if (lastLoadedExperienceIdRef.current === experienceId) return;
-			lastLoadedExperienceIdRef.current = experienceId;
+			if (lastOpenChatConversationIdRef.current === initialOpenConversationId) {
+				console.log("[CustomerView] open-chat: already ran for this conversation, skip", { initialOpenConversationId });
+				return;
+			}
+			lastOpenChatConversationIdRef.current = initialOpenConversationId;
+			console.log("[CustomerView] open-chat: running deep-link path", { experienceId, initialOpenConversationId });
 			setIsLoading(true);
 			setError(null);
 			let cancelled = false;
 			(async () => {
 				try {
+					console.log("[CustomerView] open-chat: fetching conversation list");
 					await fetchConversationList();
+					console.log("[CustomerView] open-chat: loading conversation", initialOpenConversationId);
 					const { readOnly } = await loadConversationById(initialOpenConversationId);
-					if (!cancelled) setIsChatReadOnly(readOnly);
-					if (!cancelled) setViewMode("chat-only");
+					if (!cancelled) {
+						setIsChatReadOnly(readOnly);
+						setViewMode("chat-only");
+						console.log("[CustomerView] open-chat: set viewMode=chat-only, readOnly=", readOnly);
+					}
 					fetchUserContext();
 					fetchExperienceLink();
 					checkLiveTemplate();
 				} catch (err) {
-					console.error("Error opening conversation from deep link:", err);
+					console.error("[CustomerView] open-chat: Error opening conversation from deep link:", err);
 					if (!cancelled) setError(err instanceof Error ? err.message : "Failed to open conversation");
 				} finally {
 					if (!cancelled) setIsLoading(false);
+					console.log("[CustomerView] open-chat: done");
 				}
 			})();
 			return () => {
@@ -740,8 +756,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			};
 		}
 
-		if (lastLoadedExperienceIdRef.current === experienceId) return;
+		if (lastLoadedExperienceIdRef.current === experienceId) {
+			console.log("[CustomerView] init: already loaded for this experience, skip normal path", { experienceId });
+			return;
+		}
 		lastLoadedExperienceIdRef.current = experienceId;
+		console.log("[CustomerView] init: running normal funnel load", { experienceId, initialOpenConversationId });
 		loadFunnelAndConversation();
 		fetchUserContext();
 		fetchExperienceLink();

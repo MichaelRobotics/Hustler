@@ -32,7 +32,17 @@ export default function ExperiencePage({
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
 	const [experienceId, setExperienceId] = useState<string>("");
 	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
-	const [openChatConversationId, setOpenChatConversationId] = useState<string | null>(null);
+	// Read openChat from URL on mount so it's available before searchParams Promise resolves (notification deep link)
+	const [openChatConversationId, setOpenChatConversationId] = useState<string | null>(() => {
+		if (typeof window === "undefined") return null;
+		const params = new URLSearchParams(window.location.search);
+		const openChat = params.get("openChat");
+		if (openChat) {
+			console.log("[ExperiencePage] initial state from URL openChat:", openChat);
+			return openChat;
+		}
+		return null;
+	});
 
 	// Function to fetch user context
 	const fetchUserContext = useCallback(async (forceRefresh = false) => {
@@ -115,10 +125,12 @@ export default function ExperiencePage({
 	useEffect(() => {
 		if (searchParams) {
 			searchParams.then((resolved) => {
+				console.log("[ExperiencePage] searchParams resolved:", { view: resolved.view, openChat: resolved.openChat });
 				if (resolved.view === "customer") {
 					setSelectedView("customer");
 				}
 				if (resolved.openChat) {
+					console.log("[ExperiencePage] Setting openChatConversationId from notification deep link:", resolved.openChat);
 					setOpenChatConversationId(resolved.openChat);
 				}
 			});
@@ -181,6 +193,7 @@ export default function ExperiencePage({
 	}
 
 	if (selectedView === "customer") {
+		console.log("[ExperiencePage] Rendering CustomerView (selectedView=customer)", { experienceId, openChatConversationId });
 		return (
 			<CustomerView
 				userName={currentUser.name}
@@ -201,6 +214,7 @@ export default function ExperiencePage({
 
 	if (authContext.autoSelectedView === "customer") {
 		// Backend determined: show CustomerView
+		console.log("[ExperiencePage] Rendering CustomerView (autoSelectedView=customer)", { experienceId, openChatConversationId });
 		return (
 			<CustomerView
 				userName={currentUser.name}
