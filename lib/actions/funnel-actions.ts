@@ -1416,6 +1416,47 @@ export async function upsertFunnelNotification(
 			throw new Error("Funnel not found");
 		}
 
+		// When id is provided (e.g. renumber after delete), update that notification by id
+		if (input.id) {
+			const byId = await db.query.funnelNotifications.findFirst({
+				where: eq(funnelNotifications.id, input.id),
+			});
+			if (byId && byId.funnelId === input.funnelId) {
+				const updateData: any = {
+					stageId: input.stageId,
+					sequence: input.sequence,
+					inactivityMinutes: input.inactivityMinutes,
+					message: input.message,
+					isReset: input.isReset ?? false,
+					resetAction: input.resetAction,
+					delayMinutes: input.delayMinutes,
+					updatedAt: new Date(),
+				};
+				if (input.notificationType !== undefined) {
+					updateData.notificationType = input.notificationType;
+				}
+				const [updated] = await db
+					.update(funnelNotifications)
+					.set(updateData)
+					.where(eq(funnelNotifications.id, input.id))
+					.returning();
+				return {
+					id: updated.id,
+					funnelId: updated.funnelId,
+					stageId: updated.stageId,
+					sequence: updated.sequence,
+					inactivityMinutes: updated.inactivityMinutes,
+					message: updated.message,
+					notificationType: (updated as any).notificationType ?? undefined,
+					isReset: updated.isReset,
+					resetAction: updated.resetAction ?? undefined,
+					delayMinutes: updated.delayMinutes ?? undefined,
+					createdAt: updated.createdAt,
+					updatedAt: updated.updatedAt,
+				};
+			}
+		}
+
 		// Check if notification already exists for this funnel/stage/sequence
 		const existingNotification = await db.query.funnelNotifications.findFirst({
 			where: and(

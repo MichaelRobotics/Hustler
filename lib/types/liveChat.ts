@@ -54,7 +54,7 @@ export interface LiveChatConversation {
 		[key: string]: any;
 	};
 	// LiveChat integration fields
-	currentStage?: string; // Current funnel stage (WELCOME, TRANSITION, etc.)
+	currentStage?: string; // Current funnel stage (WELCOME, TRANSITION, SEND_DM, etc.)
 	whopUserId?: string; // Whop user ID for WebSocket integration
 	experienceId?: string; // Experience ID for multi-tenancy
 	// Read receipts: message is "read by user" when createdAt <= userLastReadAt (bot/admin msgs); "read by admin" when createdAt <= adminLastReadAt (user msgs)

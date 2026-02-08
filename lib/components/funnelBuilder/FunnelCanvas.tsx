@@ -47,6 +47,8 @@ interface FunnelCanvasProps {
 	firstBlockY?: number;
 	firstStageY?: number;
 	firstStageHeight?: number;
+	/** When true, trigger arrow ends at the Send DM message icon (first stage) instead of the separator */
+	isFirstStageSendDm?: boolean;
 }
 
 // Base height of the trigger stage section
@@ -101,6 +103,7 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 	firstBlockY = 80,
 	firstStageY = 80,
 	firstStageHeight = 150,
+	isFirstStageSendDm = false,
 }) => {
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const [isDragging, setIsDragging] = React.useState(false);
@@ -278,10 +281,13 @@ const FunnelCanvas: React.FC<FunnelCanvasProps> = ({
 	
 	// Separator line position (between trigger stage and first stage)
 	const separatorY = triggerStageY + TRIGGER_STAGE_HEIGHT + (STAGE_GAP / 2);
+	// When first stage is Send DM, arrow ends at the TOP of the icon/card (not center or bottom)
+	const triggerSectionHeightForLine = TRIGGER_STAGE_HEIGHT + STAGE_GAP;
+	const sendDmIconTopY = triggerSectionHeightForLine + 40 + firstStageY;
 	
-	// Line coordinates: from bottom of trigger block to the separator line
+	// Line coordinates: from bottom of trigger block to separator or to Send DM icon
 	const lineStartY = triggerBlockY + triggerBlockHeight;
-	const lineEndY = separatorY;
+	const lineEndY = isFirstStageSendDm ? sendDmIconTopY : separatorY;
 
 	// Total canvas dimensions with padding for centering
 	// Add extra horizontal padding so user can pan left/right when sidebar overlaps content

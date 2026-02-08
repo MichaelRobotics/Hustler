@@ -534,6 +534,59 @@ export const funnelInteractions = pgTable(
 	}),
 );
 
+// ===== PENDING TRIGGERS (delayed trigger execution) =====
+export const pendingTriggers = pgTable(
+	"pending_triggers",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		funnelId: uuid("funnel_id")
+			.notNull()
+			.references(() => funnels.id, { onDelete: "cascade" }),
+		whopUserId: text("whop_user_id").notNull(), // Whop user id of the customer
+		triggerContext: text("trigger_context").notNull(), // e.g. "membership_activated", "app_entry"
+		membershipId: text("membership_id"), // Optional membership id from webhook
+		productId: text("product_id"), // Optional product id from webhook
+		fireAt: timestamp("fire_at").notNull(), // When to actually create conversation + send DM
+		status: text("status").default("pending").notNull(), // "pending" | "fired" | "cancelled"
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		experienceIdIdx: index("pending_triggers_experience_id_idx").on(table.experienceId),
+		statusFireAtIdx: index("pending_triggers_status_fire_at_idx").on(table.status, table.fireAt),
+		experienceUserUnique: unique("pending_triggers_experience_user_unique").on(
+			table.experienceId,
+			table.whopUserId,
+			table.funnelId,
+			table.status,
+		),
+	}),
+);
+
+// ===== DM CHANNELS (Whop native DMs, scoped by company) =====
+export const dmChannels = pgTable(
+	"dm_channels",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		companyId: text("company_id").notNull(), // Whop company id (experience.whopCompanyId)
+		adminWhopUserId: text("admin_whop_user_id").notNull(),
+		customerWhopUserId: text("customer_whop_user_id").notNull(),
+		channelId: text("channel_id").notNull(), // Whop DM channel id
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		companyIdIdx: index("dm_channels_company_id_idx").on(table.companyId),
+		channelLookupUnique: unique("dm_channels_company_admin_customer_unique").on(
+			table.companyId,
+			table.adminWhopUserId,
+			table.customerWhopUserId,
+		),
+	}),
+);
+
 // ===== ANALYTICS TABLES =====
 export const funnelAnalytics = pgTable(
 	"funnel_analytics",
@@ -640,6 +693,11 @@ export const funnelResourceAnalytics = pgTable(
 );
 
 // ===== RELATIONS =====
+export const pendingTriggersRelations = relations(pendingTriggers, ({ one }) => ({
+	experience: one(experiences, { fields: [pendingTriggers.experienceId], references: [experiences.id] }),
+	funnel: one(funnels, { fields: [pendingTriggers.funnelId], references: [funnels.id] }),
+}));
+
 export const experiencesRelations = relations(experiences, ({ one, many }) => ({
 	users: many(users),
 	funnels: many(funnels),

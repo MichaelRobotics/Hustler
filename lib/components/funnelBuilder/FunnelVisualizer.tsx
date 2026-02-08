@@ -22,6 +22,7 @@ import {
 	CircleDashed,
 	VectorSquare,
 	GripVertical,
+	MessageSquare,
 } from "lucide-react";
 import React from "react";
 import {
@@ -70,10 +71,12 @@ const SHAPE_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>
 import { useFunnelInteraction } from "../../hooks/useFunnelInteraction";
 import { useFunnelLayout } from "../../hooks/useFunnelLayout";
 import { useAutoSaveVisualization } from "../../hooks/useVisualizationPersistence";
+import { SEND_DM_STAGE_NAME, getSendDmBlockId } from "../../types/funnel";
 import CollapsibleText from "../common/CollapsibleText";
 import BlockEditor from "./BlockEditor";
 import FunnelCanvas from "./FunnelCanvas";
 import FunnelStage from "./FunnelStage";
+import SendDmBlockEditor from "./SendDmBlockEditor";
 import TriggerBlock, { type TriggerType } from "./TriggerBlock";
 
 import MobileFunnelView from "./MobileFunnelView";
@@ -466,6 +469,22 @@ const FunnelVisualizer = React.memo(
 			// Ref to store DOM elements for measurement
 			const blockRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
+			// Determine whether DM block has been configured (message differs from placeholder)
+			const initSendDmBlockId = funnelFlow ? getSendDmBlockId(funnelFlow) : null;
+			const initSendDmBlock = initSendDmBlockId ? funnelFlow?.blocks[initSendDmBlockId] : null;
+			const dmIsConfigured = !!(initSendDmBlock?.message && initSendDmBlock.message !== "Write DM there...");
+
+			// Show card when DM is already configured; otherwise start as icon-only
+			const [sendDmCardVisible, setSendDmCardVisible] = React.useState(dmIsConfigured);
+
+			// Sync: when funnelFlow changes (e.g. after save), ensure card stays visible if configured
+			React.useEffect(() => {
+				const blockId = funnelFlow ? getSendDmBlockId(funnelFlow) : null;
+				const block = blockId ? funnelFlow?.blocks[blockId] : null;
+				const configured = !!(block?.message && block.message !== "Write DM there...");
+				if (configured) setSendDmCardVisible(true);
+			}, [funnelFlow]);
+
 			const EXPLANATION_AREA_WIDTH = 250;
 
 			// Use custom hooks for layout and interaction logic
@@ -480,7 +499,7 @@ const FunnelVisualizer = React.memo(
 				enableCalculationsForOfferSelection,
 				enableCalculationsForBlockHighlight,
 				enableCalculationsForGoLive,
-			} = useFunnelLayout(funnelFlow, editingBlockId, blockRefs, funnelId);
+			} = useFunnelLayout(funnelFlow, editingBlockId, blockRefs, funnelId, sendDmCardVisible);
 
 			const {
 				selectedOfferBlockId,
@@ -662,9 +681,10 @@ const FunnelVisualizer = React.memo(
 						onAppTriggerConfigSave={onAppTriggerConfigSave}
 						onMembershipTriggerConfigSave={onMembershipTriggerConfigSave}
 						startBlockId={funnelFlow?.startBlockId}
-						firstBlockY={positions[funnelFlow?.startBlockId || ""]?.y || 120}
-						firstStageY={stageLayouts[0]?.y || 80}
-						firstStageHeight={stageLayouts[0]?.height || 150}
+						firstBlockY={positions[funnelFlow?.startBlockId || ""]?.y ?? 120}
+						firstStageY={stageLayouts[0]?.y ?? 80}
+						firstStageHeight={stageLayouts[0]?.height ?? 150}
+						isFirstStageSendDm={funnelFlow?.stages?.[0]?.name === SEND_DM_STAGE_NAME}
 					>
 						{/* Stage Explanations */}
 						<FunnelStage
@@ -673,6 +693,7 @@ const FunnelVisualizer = React.memo(
 							EXPLANATION_AREA_WIDTH={EXPLANATION_AREA_WIDTH}
 							onStageUpdate={onStageUpdate}
 							disableStageEditing={!!(pendingOptionSelection?.isActive && pendingOptionSelection?.upsellKind)}
+							sendDmCardVisible={sendDmCardVisible}
 						/>
 
 						{/* Funnel Blocks and Lines */}
@@ -775,13 +796,16 @@ const FunnelVisualizer = React.memo(
 											const y1 = line.y1;
 											const x2 = centerX + line.x2;
 											const y2 = line.y2;
-											
-											// Calculate adaptive control points for smooth curves
-											const distance = Math.abs(y2 - y1);
-											const controlOffset = Math.min(Math.max(distance * 0.35, 30), 80);
-											
-											// Create bezier curve path
-											const pathD = `M ${x1} ${y1} C ${x1} ${y1 + controlOffset}, ${x2} ${y2 - controlOffset}, ${x2} ${y2}`;
+											const sendDmBlockId = funnelFlow ? getSendDmBlockId(funnelFlow) : null;
+											const isFromSendDm = sendDmBlockId != null && sourceBlockId === sendDmBlockId;
+											// Send DM → next block: vertical line; otherwise bezier (same arrow marker as Merchant Conversation Editor)
+											const pathD = isFromSendDm
+												? `M ${centerX} ${y1} L ${centerX} ${y2}`
+												: (() => {
+													const distance = Math.abs(y2 - y1);
+													const controlOffset = Math.min(Math.max(distance * 0.35, 30), 80);
+													return `M ${x1} ${y1} C ${x1} ${y1 + controlOffset}, ${x2} ${y2 - controlOffset}, ${x2} ${y2}`;
+												})();
 											
 											// Check if this line is from deleted card (outgoing connection)
 											const isFromDeletedCard = pendingDelete && line.id.startsWith(`${pendingDelete.blockId}-`);
@@ -827,6 +851,105 @@ const FunnelVisualizer = React.memo(
 										{stage.blockIds.map((blockId) => {
 											const block = funnelFlow.blocks[blockId];
 											if (!block) return null;
+											const isSendDmStage = stage.name === SEND_DM_STAGE_NAME;
+											// Send DM stage: icon-only (State A) or card (State B)
+											if (isSendDmStage) {
+												const isEditing = editingBlockId === block.id;
+												const ICON_SIZE = 40;
+												const CARD_W = isEditing ? 320 : 224; // w-80 when editing, w-56 otherwise
+												const showCard = sendDmCardVisible || isEditing;
+												const halfWidth = showCard ? CARD_W / 2 : ICON_SIZE / 2;
+												const positionStyle = {
+													left: `calc(50% + ${(positions[block.id]?.x || 0) - halfWidth}px)`,
+													top: `${positions[block.id]?.y || 0}px`,
+													position: "absolute" as const,
+												};
+												return (
+													<div
+														key={block.id}
+														ref={(el) => { blockRefs.current[block.id] = el; }}
+														className="absolute"
+														style={positionStyle}
+													>
+														{!showCard ? (
+															/* State A: icon only */
+															<button
+																type="button"
+																onClick={() => setSendDmCardVisible(true)}
+																title="Send DM (click to configure)"
+																className="flex-shrink-0 w-10 h-10 border-2 rounded-lg flex items-center justify-center transition-colors shadow-lg border-blue-400 dark:border-blue-500 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 shadow-blue-500/30 dark:shadow-blue-500/20 bg-blue-500/10 dark:bg-blue-500/20"
+																data-no-drag
+															>
+																<MessageSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+															</button>
+														) : (
+															/* State B – card view (same wrapper for view & edit, like regular cards) */
+															<div className={`relative bg-surface/95 dark:bg-surface/90 border rounded-2xl shadow-2xl transform transition-all duration-300 backdrop-blur-sm ${
+																isEditing
+																	? "border-blue-500 ring-2 ring-blue-500/50 w-80"
+																	: "w-56 border-border/50 dark:border-border/30 cursor-pointer hover:scale-105 hover:shadow-blue-500/20"
+															}`}>
+																{isEditing ? (
+																	/* Inline editor (same pattern as BlockEditor in regular cards) */
+																	<SendDmBlockEditor
+																		block={block}
+																		experienceId={user?.experienceId ?? ""}
+																		onSave={(updated) => { onBlockUpdate(updated); setEditingBlockId(null); }}
+																		onCancel={() => setEditingBlockId(null)}
+																	/>
+																) : (
+																	<>
+																		{/* Header */}
+																		<div className="border-b border-border/30 dark:border-border/20 p-3 rounded-t-2xl flex justify-between items-center bg-gradient-to-r from-blue-500/5 to-blue-400/5 dark:from-blue-900/10 dark:to-blue-800/10">
+																			<div className="flex-1 min-w-0 mr-2 flex items-center gap-1.5">
+																				<MessageSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+																				<span className="text-xs font-bold leading-none text-blue-600 dark:text-blue-400 truncate">
+																					Send DM
+																				</span>
+																			</div>
+																			<div className="flex items-center gap-2">
+																				{/* Edit button - same style as regular cards */}
+																				<button
+																					onClick={(e) => { e.stopPropagation(); setEditingBlockId(block.id); }}
+																					className="p-1.5 rounded-lg transition-colors duration-200 flex-shrink-0 text-muted-foreground hover:text-foreground hover:bg-violet-100 dark:hover:bg-violet-800/50"
+																					title="Edit DM message"
+																				>
+																					<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z" />
+																					</svg>
+																				</button>
+																				{/* Delete DM: reset message to placeholder and collapse to icon */}
+																				<button
+																					onClick={(e) => {
+																						e.stopPropagation();
+																						// Reset the DM block message to default placeholder
+																						onBlockUpdate({ ...block, message: "Write DM there..." });
+																						setSendDmCardVisible(false);
+																						setEditingBlockId(null);
+																					}}
+																					className="p-1.5 rounded-lg transition-colors duration-200 flex-shrink-0 text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50"
+																					title="Remove DM"
+																				>
+																					<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+																					</svg>
+																				</button>
+																			</div>
+																		</div>
+																		{/* Body: message with link on last line */}
+																		<div className="p-4">
+																			<p className="text-sm text-foreground text-left whitespace-pre-wrap leading-relaxed line-clamp-5">
+																				{block.message || "Write DM there..."}{"\n"}
+																				<span className="text-xs text-blue-500 dark:text-blue-400">whop.com/apps/...</span>
+																			</p>
+																		</div>
+																	</>
+																)}
+															</div>
+														)}
+													</div>
+												);
+											}
 											// Qualification selection (add new option or change connection): selectable = new card + next-stage cards
 											const isInSelectionMode = pendingOptionSelection?.isActive && !pendingOptionSelection?.upsellKind && (
 												block.id === pendingOptionSelection.newBlockId ||
@@ -1343,13 +1466,13 @@ const FunnelVisualizer = React.memo(
 																)}
 															</div>
 														) : block.options && block.options.length > 0 && (() => {
-															// Check if this block is in a TRANSITION stage
-															const isTransitionBlock = funnelFlow.stages.some(
-																stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+															// Check if this block is in a SEND_DM stage
+															const isSendDmBlock = funnelFlow.stages.some(
+																s => s.name === SEND_DM_STAGE_NAME && s.blockIds.includes(block.id)
 															);
 															
-															// Hide options for TRANSITION stage blocks (they represent external links)
-															if (isTransitionBlock) {
+															// Hide options for SEND_DM stage blocks (single connector to next stage)
+															if (isSendDmBlock) {
 																return null;
 															}
 															
@@ -1415,13 +1538,13 @@ const FunnelVisualizer = React.memo(
 														})()}
 														{/* Always visible "+" option with input field (qualification only) */}
 														{!isDeployed && onAddNewOption && merchantType !== "upsell" && (() => {
-															// Check if this block is in a TRANSITION stage
-															const isTransitionBlock = funnelFlow.stages.some(
-																stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+															// Check if this block is in a SEND_DM stage
+															const isSendDmBlock = funnelFlow.stages.some(
+																s => s.name === SEND_DM_STAGE_NAME && s.blockIds.includes(block.id)
 															);
 															
-															// Hide "+" option for TRANSITION stage blocks
-															if (isTransitionBlock) {
+															// Hide "+" option for SEND_DM stage blocks
+															if (isSendDmBlock) {
 																return null;
 															}
 															

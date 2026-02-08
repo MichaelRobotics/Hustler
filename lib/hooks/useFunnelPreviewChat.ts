@@ -4,6 +4,7 @@ import type {
 	FunnelBlockOption,
 	FunnelFlow,
 } from "../types/funnel";
+import { SEND_DM_STAGE_NAME } from "../types/funnel";
 import { isProductCardBlock, getProductCardButtonLabel } from "../utils/funnelUtils";
 
 export const useFunnelPreviewChat = (
@@ -112,12 +113,13 @@ export const useFunnelPreviewChat = (
 			return resolvedMessage;
 		}
 
-		// Don't show numbered options for: product cards, WELCOME, TRANSITION, or Upsell/Downsell pair.
+		// Don't show numbered options for: product cards, WELCOME, TRANSITION/SEND_DM, or Upsell/Downsell pair.
 		const inNoOptionsStage = funnelFlow?.stages.some(
 			(stage) =>
 				(stage.cardType === "product" ||
 					stage.name === "WELCOME" ||
-					stage.name === "TRANSITION") &&
+					stage.name === "TRANSITION" ||
+					stage.name === SEND_DM_STAGE_NAME) &&
 				stage.blockIds.includes(block.id)
 		);
 		const isUpsellDownsellPair =
@@ -303,13 +305,13 @@ export const useFunnelPreviewChat = (
 			});
 		}
 
-		// Check if this block is in a TRANSITION stage - don't show options for these
-		const isTransitionBlock = funnelFlow?.stages.some(
-			stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
+		// Check if this block is in a TRANSITION or SEND_DM stage - don't show options for these
+		const isDmStageBlock = funnelFlow?.stages.some(
+			stage => (stage.name === "TRANSITION" || stage.name === SEND_DM_STAGE_NAME) && stage.blockIds.includes(currentBlock.id)
 		);
 
-		// Return empty array for TRANSITION blocks (they auto-proceed)
-		if (isTransitionBlock) return [];
+		// Return empty array for TRANSITION/SEND_DM blocks (they auto-proceed)
+		if (isDmStageBlock) return [];
 
 		return currentBlock.options;
 	}, [currentBlock, funnelFlow]);
@@ -378,11 +380,11 @@ export const useFunnelPreviewChat = (
 	// Handler for when a user clicks on a chat option
 	const handleOptionClick = useCallback(
 		(option: FunnelBlockOption, index: number) => {
-			// Check if we're in a TRANSITION stage - handle differently
+			// Check if we're in a TRANSITION or SEND_DM stage - handle differently
 			const currentBlock = funnelFlow?.blocks[currentBlockId || ""];
 			const isTransitionBlock = currentBlock && 
 				funnelFlow?.stages.some(stage => 
-					stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
+					(stage.name === "TRANSITION" || stage.name === SEND_DM_STAGE_NAME) && stage.blockIds.includes(currentBlock.id)
 				);
 
 			// If the selected option has no next block, the conversation ends
@@ -402,7 +404,7 @@ export const useFunnelPreviewChat = (
 
 			// If the next block exists, add the user's and the bot's messages to the history
 			if (nextBlock) {
-				// Check if we're transitioning from TRANSITION stage to EXPERIENCE_QUALIFICATION stage
+				// Check if we're transitioning from TRANSITION/SEND_DM stage to EXPERIENCE_QUALIFICATION stage
 				const isTransitionToLiveChat = isTransitionBlock &&
 					option.nextBlockId &&
 					funnelFlow?.stages.some(stage => 
@@ -417,7 +419,7 @@ export const useFunnelPreviewChat = (
 					};
 					setHistory((prev) => [...prev, transitionMarker]);
 				} else if (!isTransitionBlock) {
-					// Only add user message if not in TRANSITION stage
+					// Only add user message if not in TRANSITION/SEND_DM stage
 					const userMessage: ChatMessage = {
 						type: "user",
 						text: option.text,
@@ -495,22 +497,22 @@ export const useFunnelPreviewChat = (
 		[currentBlockId, funnelFlow, isValidOption],
 	);
 
-	// Effect to handle blocks with no options (dead-end paths) and TRANSITION blocks
+	// Effect to handle blocks with no options (dead-end paths) and TRANSITION/SEND_DM blocks
 	useEffect(() => {
 		if (currentBlockId && funnelFlow) {
 			const currentBlock = funnelFlow.blocks[currentBlockId];
 			if (!currentBlock) return;
 
-			// Check if this is a TRANSITION stage block - auto-proceed to next stage
-			const isTransitionBlock = funnelFlow.stages.some(
-				stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlock.id)
+			// Check if this is a TRANSITION or SEND_DM stage block - auto-proceed to next stage
+			const isDmStageBlock = funnelFlow.stages.some(
+				stage => (stage.name === "TRANSITION" || stage.name === SEND_DM_STAGE_NAME) && stage.blockIds.includes(currentBlock.id)
 			);
 
-			if (isTransitionBlock && currentBlock.options && currentBlock.options.length > 0) {
-				// Auto-proceed to the first option (there should only be one for TRANSITION blocks)
+			if (isDmStageBlock && currentBlock.options && currentBlock.options.length > 0) {
+				// Auto-proceed to the first option (there should only be one for TRANSITION/SEND_DM blocks)
 				const firstOption = currentBlock.options[0];
 				if (firstOption.nextBlockId) {
-					// Use shorter timeout for TRANSITION blocks to reduce flickering
+					// Use shorter timeout for DM stage blocks to reduce flickering
 					setTimeout(() => {
 						// Call handleOptionClick directly without including it in dependencies
 						handleOptionClick(firstOption, 0);

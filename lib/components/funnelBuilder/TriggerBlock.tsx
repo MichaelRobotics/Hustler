@@ -727,7 +727,8 @@ const TriggerBlock: React.FC<TriggerBlockProps> = ({
 
 				{/* App Trigger - qualification shows qualification funnels, upsell shows upsell funnels */}
 				<div>
-					<div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider">
+					<div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider">
+						<MessageSquare className="w-3.5 h-3.5" />
 						App Trigger
 					</div>
 					{renderTriggerBlock(

@@ -199,13 +199,13 @@ const MobileFunnelView: React.FC<MobileFunnelViewProps> = ({
 
 															{/* Enhanced Block Options with Frosted UI */}
 															{block.options && block.options.length > 0 && (() => {
-																// Check if this block is in a TRANSITION stage
-																const isTransitionBlock = funnelFlow.stages.some(
-																	stage => stage.name === "TRANSITION" && stage.blockIds.includes(block.id)
+																// Check if this block is in a TRANSITION or SEND_DM stage
+																const isDmStageBlock = funnelFlow.stages.some(
+																	stage => (stage.name === "TRANSITION" || stage.name === "SEND_DM") && stage.blockIds.includes(block.id)
 																);
 																
-																// Hide options for TRANSITION stage blocks (they represent external links)
-																if (isTransitionBlock) {
+																// Hide options for TRANSITION/SEND_DM stage blocks (they represent external links / single connector)
+																if (isDmStageBlock) {
 																	return null;
 																}
 																

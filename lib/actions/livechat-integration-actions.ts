@@ -75,7 +75,7 @@ export async function getConversationTypingState(conversationId: string): Promis
  * 
  * This module integrates livechat with the existing UserChat system by:
  * 1. Checking for existing conversations in the experience
- * 2. Mirroring UserChat TRANSITION stage logic
+ * 2. Mirroring UserChat TRANSITION/SEND_DM stage logic
  * 3. Intercepting WebSocket updates from UserChat conversations
  * 4. Providing real-time conversation management for admins
  */
@@ -646,36 +646,14 @@ function determineConversationStage(currentBlockId: string | null, funnelFlow: F
 }
 
 /**
- * Check if conversation is in TRANSITION stage
- * This mirrors the UserChat TRANSITION stage check
+ * Check if conversation is in TRANSITION or SEND_DM stage (DM stage; not shown in-app).
+ * This mirrors the UserChat stage check.
  */
-export function isConversationInTransitionStage(
-	currentBlockId: string | null,
-	funnelFlow: FunnelFlow | null,
-): boolean {
-	if (!currentBlockId || !funnelFlow) {
-		return false;
-	}
-
-	const transitionStage = funnelFlow.stages.find(stage => stage.name === "TRANSITION");
-	return transitionStage ? transitionStage.blockIds.includes(currentBlockId) : false;
-}
 
 /**
  * Check if conversation is in EXPERIENCE_QUALIFICATION stage
  * This mirrors the UserChat EXPERIENCE_QUALIFICATION stage check
  */
-export function isConversationInExperienceQualificationStage(
-	currentBlockId: string | null,
-	funnelFlow: FunnelFlow | null,
-): boolean {
-	if (!currentBlockId || !funnelFlow) {
-		return false;
-	}
-
-	const experienceQualStage = funnelFlow.stages.find(stage => stage.name === "EXPERIENCE_QUALIFICATION");
-	return experienceQualStage ? experienceQualStage.blockIds.includes(currentBlockId) : false;
-}
 
 /**
  * Get conversation stage information for livechat
@@ -686,9 +664,7 @@ export async function getConversationStageInfo(
 	experienceId: string,
 ): Promise<{
 	currentStage: string;
-	isTransitionStage: boolean;
 	isExperienceQualificationStage: boolean;
-	isDMFunnelActive: boolean;
 	funnelFlow: FunnelFlow | null;
 } | null> {
 	try {
@@ -710,18 +686,12 @@ export async function getConversationStageInfo(
 
 		const funnelFlow = conversation.funnel.flow as FunnelFlow;
 		const currentBlockId = conversation.currentBlockId;
-
-		// Determine stages
-		const isTransitionStage = isConversationInTransitionStage(currentBlockId, funnelFlow);
-		const isExperienceQualificationStage = isConversationInExperienceQualificationStage(currentBlockId, funnelFlow);
-		const isDMFunnelActive = !isTransitionStage && !isExperienceQualificationStage;
 		const currentStage = determineConversationStage(currentBlockId, funnelFlow);
+		const isExperienceQualificationStage = currentStage === "EXPERIENCE_QUALIFICATION" || currentStage === "PAIN_POINT_QUALIFICATION";
 
 		return {
 			currentStage,
-			isTransitionStage,
 			isExperienceQualificationStage,
-			isDMFunnelActive,
 			funnelFlow,
 		};
 	} catch (error) {

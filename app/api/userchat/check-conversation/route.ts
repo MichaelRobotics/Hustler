@@ -11,8 +11,7 @@ import {
 import type { FunnelFlow } from "@/lib/types/funnel";
 import { isProductCardBlock } from "@/lib/utils/funnelUtils";
 import { findFunnelForTrigger, hasConversationFromFunnel } from "@/lib/helpers/conversation-trigger";
-import { createConversation } from "@/lib/actions/simplified-conversation-actions";
-import { updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
+import { scheduleOrFireTrigger } from "@/lib/actions/user-join-actions";
 
 
 async function checkConversationHandler(
@@ -141,34 +140,33 @@ async function checkConversationHandler(
         funnelForAppEntry?.id != null &&
         (await hasConversationFromFunnel(experience.id, targetWhopUserId, funnelForAppEntry.id));
       if (funnelForAppEntry?.flow && !alreadyHasConversationFromFunnel) {
-        const flow = funnelForAppEntry.flow as FunnelFlow;
         try {
-          const conversationId = await createConversation(
+          const conversationId = await scheduleOrFireTrigger(
             experience.id,
-            funnelForAppEntry.id,
+            funnelForAppEntry,
             targetWhopUserId,
-            flow.startBlockId,
-            undefined,
-            undefined
+            "app_entry",
           );
-          await updateConversationToWelcomeStage(conversationId, flow);
-          // Re-fetch so we return the new conversation
-          activeConversation = await db.query.conversations.findFirst({
-            where: and(
-              eq(conversations.whopUserId, targetWhopUserId),
-              eq(conversations.experienceId, experience.id),
-              eq(conversations.status, "active")
-            ),
-            with: { funnel: true },
-          });
-          if (activeConversation) {
-            const conversationFunnel = await db.query.funnels.findFirst({
-              where: eq(funnels.id, activeConversation.funnelId),
+          if (conversationId) {
+            // Conversation was created immediately — re-fetch so we return it
+            activeConversation = await db.query.conversations.findFirst({
+              where: and(
+                eq(conversations.whopUserId, targetWhopUserId),
+                eq(conversations.experienceId, experience.id),
+                eq(conversations.status, "active")
+              ),
+              with: { funnel: true },
             });
-            if (conversationFunnel) {
-              funnelFlow = conversationFunnel.flow as FunnelFlow;
+            if (activeConversation) {
+              const conversationFunnel = await db.query.funnels.findFirst({
+                where: eq(funnels.id, activeConversation.funnelId),
+              });
+              if (conversationFunnel) {
+                funnelFlow = conversationFunnel.flow as FunnelFlow;
+              }
             }
           }
+          // If null, trigger was scheduled for later — no conversation to return yet
         } catch (err) {
           console.error("[check-conversation] Error auto-starting conversation:", err);
         }
@@ -184,8 +182,6 @@ async function checkConversationHandler(
         funnelFlow: funnelFlow,
         stageInfo: {
           currentStage: funnelFlow ? "NO_CONVERSATION" : "NO_FUNNEL",
-          isDMFunnelActive: false,
-          isTransitionStage: false,
           isExperienceQualificationStage: false,
         }
       });
@@ -202,75 +198,13 @@ async function checkConversationHandler(
     console.log(`Available blocks:`, Object.keys(funnelFlow?.blocks || {}));
     console.log(`Current block details:`, funnelFlow?.blocks[currentBlockId || ''] || 'Block not found');
     
-    const isTransitionStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlockId)
-    );
-    const isExperienceQualificationStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
-    );
-    const isWelcomeStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlockId)
-    );
-    const isValueDeliveryStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "VALUE_DELIVERY" && stage.blockIds.includes(currentBlockId)
-    );
-    const isPainPointQualificationStage = currentBlockId && funnelFlow?.stages.some(
-      stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
-    );
+    // Determine current stage dynamically from funnel flow (no hardcoded stage names)
     const isOfferStage = currentBlockId && funnelFlow ? isProductCardBlock(currentBlockId, funnelFlow) : false;
-
-    // Check if conversation is in UserChat phase (all stages are UserChat now)
-    const isDMFunnelActive = false; // No more DM funnel - everything is UserChat
-    
-    // Debug logging
-    console.log(`Stage detection results:`, {
-      isTransitionStage,
-      isExperienceQualificationStage,
-      isWelcomeStage,
-      isValueDeliveryStage,
-      isPainPointQualificationStage,
-      isOfferStage,
-      isDMFunnelActive
-    });
-
-    // Determine the current stage with better fallback logic
-    let currentStage = "UNKNOWN";
-    if (isTransitionStage) {
-      currentStage = "TRANSITION";
-    } else if (isExperienceQualificationStage) {
-      currentStage = "EXPERIENCE_QUALIFICATION";
-    } else if (isPainPointQualificationStage) {
-      currentStage = "PAIN_POINT_QUALIFICATION";
-    } else if (isOfferStage) {
-      currentStage = "OFFER";
-    } else if (isWelcomeStage) {
-      currentStage = "WELCOME";
-    } else if (isValueDeliveryStage) {
-      currentStage = "VALUE_DELIVERY";
-    } else if (currentBlockId && funnelFlow) {
-      // If we have a blockId but it's not in any stage, it might be a custom block
-      // Check if it's in the funnel flow at all
-      const blockExists = funnelFlow.blocks[currentBlockId];
-      if (blockExists) {
-        currentStage = "CUSTOM_BLOCK";
-      } else {
-        currentStage = "INVALID_BLOCK";
-      }
-    }
-
-    const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
-    
-    console.log(`Final stage info being returned:`, {
-      currentStage,
-      isDMFunnelActive,
-      isTransitionStage,
-      isExperienceQualificationStage: finalIsExperienceQualificationStage,
-      breakdown: {
-        isExperienceQualificationStage,
-        isPainPointQualificationStage,
-        isOfferStage
-      }
-    });
+    const currentStageObj = currentBlockId && funnelFlow
+      ? funnelFlow.stages.find(s => s.blockIds.includes(currentBlockId))
+      : null;
+    const currentStage = isOfferStage ? "OFFER" : (currentStageObj?.name ?? (currentBlockId ? "UNKNOWN" : "NO_BLOCK"));
+    const isExperienceQualificationStage = isOfferStage || (currentStageObj?.name === "EXPERIENCE_QUALIFICATION") || (currentStageObj?.name === "PAIN_POINT_QUALIFICATION");
 
     // Use conversation's custom flow if available, otherwise use original funnel flow
     let finalFunnelFlow = funnelFlow;
@@ -294,10 +228,8 @@ async function checkConversationHandler(
       },
       funnelFlow: finalFunnelFlow,
       stageInfo: {
-        currentStage: currentStage,
-        isDMFunnelActive: isDMFunnelActive,
-        isTransitionStage: isTransitionStage,
-        isExperienceQualificationStage: finalIsExperienceQualificationStage,
+        currentStage,
+        isExperienceQualificationStage,
       },
       merchantType: merchantType,
     });

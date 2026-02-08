@@ -73,8 +73,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const [error, setError] = useState<string | null>(null);
 	const [stageInfo, setStageInfo] = useState<{
 		currentStage: string;
-		isDMFunnelActive: boolean;
-		isTransitionStage: boolean;
 		isExperienceQualificationStage: boolean;
 	} | null>(null);
 	const [merchantType, setMerchantType] = useState<"qualification" | "upsell">("qualification");
@@ -488,6 +486,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			const data = json.data ?? json;
 			const list = Array.isArray(data.conversations) ? data.conversations : [];
 			const activeId = data.activeId ?? null;
+			console.log("[CustomerView] fetchConversationList: list length =", list.length, "activeId =", activeId, "items =", list.map((c: { id: string; status?: string }) => ({ id: c.id, status: (c as { status?: string }).status })));
 			setConversationList(list);
 			setActiveConversationId(activeId);
 			if (list.length === 0) setAggregatedMessages([]);
@@ -498,10 +497,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 		}
 	}, [experienceId]);
 
-	// Load messages for all conversations in the list and set aggregated timeline (merged, sorted).
+	// Load messages for all conversations in the list and set aggregated timeline (merged, sorted). Returns merged array so callers can sync conversation.messages to it.
 	const loadAllConversationsMessages = useCallback(
-		async (conversationIds: string[]) => {
-			if (!experienceId || conversationIds.length === 0) return;
+		async (conversationIds: string[]): Promise<AggregatedMessage[]> => {
+			if (!experienceId || conversationIds.length === 0) {
+				console.log("[CustomerView] loadAllConversationsMessages: skip, experienceId =", !!experienceId, "conversationIds.length =", conversationIds?.length ?? 0);
+				return [];
+			}
+			console.log("[CustomerView] loadAllConversationsMessages: loading", conversationIds.length, "conversations", conversationIds);
 			try {
 				const results = await Promise.all(
 					conversationIds.map((id) =>
@@ -509,9 +512,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					)
 				);
 				const messages: Array<{ id: string; type?: string; text?: string; content?: string; timestamp?: string; createdAt?: string; isRead?: boolean; metadata?: unknown }> = [];
-				for (const res of results) {
+				for (let i = 0; i < results.length; i++) {
+					const res = results[i];
 					const data = res.data ?? res;
 					const conv = data.conversation ?? res.conversation;
+					const count = conv?.messages?.length ?? 0;
+					console.log("[CustomerView] loadAllConversationsMessages: conv", conversationIds[i], "messages count =", count);
 					if (conv?.messages?.length) {
 						for (const m of conv.messages) {
 							messages.push({
@@ -527,9 +533,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						}
 					}
 				}
-				setAggregatedMessages(mergeAndSortMessages(messages));
+				const merged = mergeAndSortMessages(messages) as AggregatedMessage[];
+				console.log("[CustomerView] loadAllConversationsMessages: total raw messages =", messages.length, "after merge/sort =", merged.length);
+				setAggregatedMessages(merged);
+				return merged;
 			} catch (e) {
 				console.error("[CustomerView] Error loading all conversations messages:", e);
+				return [];
 			}
 		},
 		[experienceId, whopUserId, userType, mergeAndSortMessages]
@@ -569,11 +579,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			if (stageInfoData) setStageInfo(stageInfoData);
 			if (merchantTypeData === "upsell" || merchantTypeData === "qualification") setMerchantType(merchantTypeData);
 			setFunnelResources(Array.isArray(resourcesData) ? resourcesData : []);
-			// Merge this conversation's messages into aggregated timeline so single-conversation loads (e.g. poll or sidebar switch) keep timeline up to date
+			// Merge this conversation's messages into aggregated and keep conversation.messages in sync (single source of truth)
 			const convMessages = (conv as { messages?: Array<{ id: string; type?: string; text?: string; content?: string; timestamp?: string; createdAt?: string; isRead?: boolean; metadata?: unknown }> }).messages ?? [];
 			if (convMessages.length > 0) {
-				setAggregatedMessages((prev) =>
-					mergeAndSortMessages([
+				console.log("[CustomerView] loadConversationById: merging", convMessages.length, "messages from conv", convId, "into aggregated");
+				setAggregatedMessages((prev) => {
+					const next = mergeAndSortMessages([
 						...prev,
 						...convMessages.map((m) => ({
 							id: m.id,
@@ -585,8 +596,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							isRead: m.isRead,
 							metadata: m.metadata,
 						})),
-					])
-				);
+					]) as AggregatedMessage[];
+					setConversation((c) => (c ? { ...c, messages: next } : null));
+					return next;
+				});
 			}
 			const status = (conv as { status?: string } | undefined)?.status;
 			return { readOnly: status === "closed" };
@@ -634,6 +647,18 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 			// Fetch list of conversations (active + closed) first
 			const list = await fetchConversationList();
+			console.log("[CustomerView] loadFunnelAndConversation: list.length =", list.length, "will call loadAllConversationsMessages =", list.length > 0);
+
+			// Load aggregated messages for all conversations BEFORE setting active conversation,
+			// so UserChat receives the full timeline on first render (not just active conversation messages).
+			let aggregated: AggregatedMessage[] = [];
+			if (list.length > 0) {
+				const ids = list.map((c: { id: string }) => c.id);
+				console.log("[CustomerView] loadFunnelAndConversation: calling loadAllConversationsMessages with ids =", ids);
+				aggregated = await loadAllConversationsMessages(ids);
+			} else {
+				console.log("[CustomerView] loadFunnelAndConversation: list empty, skipping loadAllConversationsMessages");
+			}
 
 			// Step 1: Check if there's an active conversation
 			const checkResponse = await apiPost('/api/userchat/check-conversation', {
@@ -674,7 +699,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
 						if (data.success !== false && (loadResult.success || data.conversation)) {
 							const conv = data.conversation ?? loadResult.conversation;
-							if (conv) setConversation(conv);
+							// Use aggregated timeline for conversation.messages so conversation.messages.length === aggregated.length (single source of truth)
+							if (conv) setConversation(aggregated.length > 0 ? { ...conv, messages: aggregated } : conv);
 							if (data.stageInfo ?? loadResult.stageInfo) setStageInfo(data.stageInfo ?? loadResult.stageInfo);
 							if (data.merchantType === "upsell" || data.merchantType === "qualification" || loadResult.merchantType === "upsell" || loadResult.merchantType === "qualification") {
 								setMerchantType(data.merchantType ?? loadResult.merchantType ?? "qualification");
@@ -692,11 +718,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					setConversation(null);
 					setFunnelResources([]);
 					setIsChatReadOnly(true); // no active chat; if user picks closed, stays true
-				}
-
-				// Load messages for all conversations and set aggregated timeline (one chronological view)
-				if (list.length > 0) {
-					await loadAllConversationsMessages(list.map((c: { id: string }) => c.id));
 				}
 			} else {
 				throw new Error(checkResult.error || "Failed to check conversation status");
@@ -1119,6 +1140,9 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	console.log("CustomerView render state:", {
 		hasConversation: !!conversation,
 		conversationId,
+		conversationListLength: conversationList.length,
+		aggregatedMessagesLength: aggregatedMessages.length,
+		conversationMessagesLength: conversation?.messages?.length ?? 0,
 		stageInfo,
 		shouldShowUserChat,
 		funnelFlow: !!funnelFlow,
@@ -1782,11 +1806,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					<UserChat
 						funnelFlow={funnelFlow}
 						conversationId={conversationId || undefined}
-						conversation={
-							conversation
-								? { ...conversation, messages: aggregatedMessages.length > 0 ? aggregatedMessages : (conversation.messages ?? []) }
-								: undefined
-						}
+						conversation={(() => {
+							// Always prefer aggregated timeline when we have it so UserChat shows all conversations' messages
+							const messagesToPass = aggregatedMessages.length > 0 ? aggregatedMessages : (conversation?.messages ?? []);
+							console.log("[CustomerView] UserChat messages: passing", messagesToPass.length, "(aggregated =", aggregatedMessages.length, "conversation.messages =", conversation?.messages?.length ?? 0, ")");
+							return conversation
+								? { ...conversation, messages: messagesToPass }
+								: undefined;
+						})()}
 						experienceId={experienceId}
 						onMessageSent={handleMessageSentInternal}
 						userType={userType}
@@ -1821,28 +1848,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 								</svg>
 							</div>
 							
-							{stageInfo?.isDMFunnelActive ? (
-								<>
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">DM Funnel Active</h3>
-									<p className="text-gray-600 dark:text-gray-400 mb-4">
-										Please check your DMs to continue the conversation.
-									</p>
-								</>
-							) : stageInfo?.isTransitionStage ? (
-								<>
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Transitioning to Chat</h3>
-									<p className="text-gray-600 dark:text-gray-400 mb-4">
-										Please wait while we prepare your personalized strategy session.
-									</p>
-								</>
-							) : (
-								<>
-									<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Conversation</h3>
-									<p className="text-gray-600 dark:text-gray-400 mb-4">
-										You don't have an active conversation yet.
-									</p>
-								</>
-							)}
+							<>
+								<h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Conversation</h3>
+								<p className="text-gray-600 dark:text-gray-400 mb-4">
+									You don't have an active conversation yet.
+								</p>
+							</>
 							
 							<button
 								onClick={loadFunnelAndConversation}

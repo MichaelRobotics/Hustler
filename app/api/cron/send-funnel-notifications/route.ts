@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
         if (notif.isReset) {
           const delayMin = notif.delayMinutes ?? 0;
           const threshold = notif.inactivityMinutes + delayMin;
-          if (minutesInactive >= threshold && lastSeq >= 3) {
+          if (minutesInactive >= threshold) {
             if (notif.resetAction === "delete") {
               await db
                 .update(conversations)

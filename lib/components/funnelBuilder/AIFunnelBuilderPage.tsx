@@ -27,8 +27,9 @@ import { useModalManagement } from "../../hooks/useModalManagement";
 
 // Types
 import type { FunnelNotification, FunnelNotificationInput, FunnelProductFaq, FunnelProductFaqInput } from "@/lib/types/funnel";
-import { getLastBotMessageFromStage, createMinimalFlow, getUpsellBlockOptions } from "../../utils/funnelUtils";
-import { apiGet } from "../../utils/api-client";
+import { SEND_DM_STAGE_NAME } from "@/lib/types/funnel";
+import { getLastBotMessageFromStage, createMinimalFlow, getUpsellBlockOptions, ensureSendDmStage } from "../../utils/funnelUtils";
+import { apiGet, apiPost, apiDelete } from "../../utils/api-client";
 import { pickRandomUnusedCrossStageStyle } from "../../utils/crossStageStyles";
 
 // Type definitions
@@ -111,9 +112,13 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	
 	// Get flow to use (actual flow or minimal flow). For upsell, normalize block options from upsellBlockId/downsellBlockId.
 	// Pass validBlockIds so options never point to missing blocks (avoids "Invalid option connections" draft).
+	// Always ensure a SEND_DM stage exists so the DM icon/card is available for all funnels.
 	const flowToUse = React.useMemo(() => {
-		const raw = hasFlow ? currentFunnel.flow : createMinimalFlow(currentFunnel.id, merchantType);
-		if (!raw || merchantType !== "upsell") return raw;
+		let raw = hasFlow ? currentFunnel.flow : createMinimalFlow(currentFunnel.id, merchantType);
+		if (!raw) return raw;
+		// Ensure SEND_DM stage is present (for old funnels that don't have one)
+		raw = ensureSendDmStage(raw, currentFunnel.id);
+		if (merchantType !== "upsell") return raw;
 		const validBlockIds = new Set(Object.keys(raw.blocks ?? {}));
 		const blocks = { ...raw.blocks };
 		Object.keys(blocks).forEach((id) => {
@@ -127,7 +132,20 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 	
 	// Notification state
 	const [notifications, setNotifications] = React.useState<FunnelNotification[]>([]);
-	
+	// Ref to avoid applying stale preload when funnel changes before fetch completes
+	const notificationsFunnelIdRef = React.useRef<string | null>(null);
+	// Ref to hold remaining stage notifications after delete (for renumber + persist)
+	const remainingAfterDeleteRef = React.useRef<FunnelNotification[] | null>(null);
+
+	// Sort so reset (delete/complete) cards appear last in the list
+	const sortNotificationsWithResetLast = React.useCallback((list: FunnelNotification[]) => {
+		return [...list].sort((a, b) => {
+			if (a.isReset !== b.isReset) return a.isReset ? 1 : -1;
+			if (a.stageId !== b.stageId) return a.stageId.localeCompare(b.stageId);
+			return a.sequence - b.sequence;
+		});
+	}, []);
+
 	// Selection state for notifications and resets
 	const [selectedNotificationId, setSelectedNotificationId] = React.useState<string | null>(null);
 	const [selectedNotificationSequence, setSelectedNotificationSequence] = React.useState<number | null>(null);
@@ -372,6 +390,74 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 	const handleBlockUpdate = (updatedBlock: any) => {
 		if (!updatedBlock) return;
+
+		// --- SEND_DM block: add/remove from actual flow on demand ---
+		const isSendDmBlock = !!updatedBlock.sendDmBlock;
+		const dmHasRealMessage = !!(updatedBlock.message && updatedBlock.message !== "Write DM there...");
+
+		if (isSendDmBlock) {
+			const sendDmBlockId = updatedBlock.id;
+			const sendDmStageId = `send-dm-stage-${currentFunnel.id}`;
+			const existingFlow = currentFunnel.flow;
+
+			if (dmHasRealMessage) {
+				// User saved a real DM message → ensure SEND_DM stage exists in actual flow
+				if (existingFlow) {
+					const hasSendDmStage = existingFlow.stages?.some((s: any) => s.name === SEND_DM_STAGE_NAME);
+					const newFlow = { ...existingFlow };
+					if (!hasSendDmStage) {
+						// Inject SEND_DM stage + block into the actual flow
+						newFlow.stages = [
+							{ id: sendDmStageId, name: SEND_DM_STAGE_NAME, blockIds: [sendDmBlockId], explanation: "Send DM to user (Whop native chat); not shown in-app" },
+							...existingFlow.stages,
+						];
+						newFlow.blocks = { ...existingFlow.blocks, [sendDmBlockId]: updatedBlock };
+						newFlow.startBlockId = sendDmBlockId;
+						// Point DM block option to original startBlockId
+						if (!updatedBlock.options?.[0]?.nextBlockId) {
+							newFlow.blocks[sendDmBlockId] = { ...updatedBlock, options: [{ text: "Continue", nextBlockId: existingFlow.startBlockId }] };
+						}
+					} else {
+						// Stage already exists, just update the block
+						newFlow.blocks = { ...existingFlow.blocks, [sendDmBlockId]: updatedBlock };
+					}
+					const updatedFunnel = { ...currentFunnel, flow: newFlow };
+					setCurrentFunnel(updatedFunnel);
+					onUpdate(updatedFunnel);
+					validation.setEditingBlockId(null);
+				} else {
+					// No flow yet: create minimal flow with the DM message
+					const minimalFlow = createMinimalFlow(currentFunnel.id, merchantType);
+					minimalFlow.blocks[sendDmBlockId] = updatedBlock;
+					const updatedFunnel = { ...currentFunnel, flow: minimalFlow };
+					setCurrentFunnel(updatedFunnel);
+					onUpdate(updatedFunnel);
+					validation.setEditingBlockId(null);
+				}
+			} else {
+				// User deleted/reset the DM → remove SEND_DM stage + block from actual flow
+				if (existingFlow) {
+					const newFlow = { ...existingFlow };
+					// Find the DM block's next target so we can restore startBlockId
+					const dmBlock = existingFlow.blocks?.[sendDmBlockId];
+					const nextBlockId = dmBlock?.options?.[0]?.nextBlockId ?? existingFlow.startBlockId;
+					// Remove stage and block
+					newFlow.stages = existingFlow.stages.filter((s: any) => s.name !== SEND_DM_STAGE_NAME);
+					const { [sendDmBlockId]: _removed, ...remainingBlocks } = existingFlow.blocks;
+					newFlow.blocks = remainingBlocks;
+					// Restore startBlockId to the next real block
+					if (existingFlow.startBlockId === sendDmBlockId) {
+						newFlow.startBlockId = nextBlockId;
+					}
+					const updatedFunnel = { ...currentFunnel, flow: newFlow };
+					setCurrentFunnel(updatedFunnel);
+					onUpdate(updatedFunnel);
+					validation.setEditingBlockId(null);
+				}
+				// If no flow, nothing to remove
+			}
+			return;
+		}
 
 		// For upsell blocks, keep options in sync with upsellBlockId/downsellBlockId (for layout/lines)
 		if (merchantType === "upsell" && (updatedBlock.upsellBlockId !== undefined || updatedBlock.downsellBlockId !== undefined)) {
@@ -729,7 +815,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 		// Next stage exists: create new block (stage type), add to next stage, enter selection mode (do not set option yet; arrow stays on old connection until user selects)
 		const stageCardType = nextStage.cardType ||
-			(nextStage.name === "OFFER" || nextStage.name === "VALUE_DELIVERY" || nextStage.name === "TRANSITION"
+			(nextStage.name === "OFFER" || nextStage.name === "VALUE_DELIVERY" || nextStage.name === "TRANSITION" || nextStage.name === "SEND_DM"
 				? "product"
 				: "qualification");
 
@@ -819,7 +905,7 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 
 		// Determine card type from existing stage
 		const stageCardType = nextStage.cardType || 
-			(nextStage.name === "OFFER" || nextStage.name === "VALUE_DELIVERY" || nextStage.name === "TRANSITION" 
+			(nextStage.name === "OFFER" || nextStage.name === "VALUE_DELIVERY" || nextStage.name === "TRANSITION" || nextStage.name === "SEND_DM" 
 				? "product" 
 				: "qualification");
 
@@ -1626,98 +1712,225 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		});
 	};
 
-	// Handle notification save - saves to backend
+	// Handle notification save - optimistic update, then persist in DB
 	const handleNotificationSave = async (input: FunnelNotificationInput) => {
+		const optimisticPayload: FunnelNotification = {
+			id: selectedNotificationId || `temp-${input.stageId}-${input.sequence}`,
+			funnelId: input.funnelId,
+			stageId: input.stageId,
+			sequence: input.sequence,
+			inactivityMinutes: input.inactivityMinutes,
+			message: input.message,
+			notificationType: input.notificationType,
+			isReset: false,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		// Capture previous for revert
+		let previousNotification: FunnelNotification | null = null;
+		setNotifications((prev) => {
+			const existing = prev.find((n) => n.id === selectedNotificationId) ?? prev.find((n) => n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset);
+			if (existing) previousNotification = existing;
+			if (existing) {
+				return prev.map((n) => (n.id === existing.id ? { ...optimisticPayload, id: n.id, createdAt: n.createdAt } : n));
+			}
+			const filtered = prev.filter((n) => !(n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset));
+			return sortNotificationsWithResetLast([...filtered, optimisticPayload]);
+		});
 		try {
-			const response = await fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(input),
-			});
-			const data = await response.json();
+			const response = await apiPost(`/api/funnels/${currentFunnel.id}/notifications`, input, user?.experienceId);
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				const message = (data && typeof data.error === "string") ? data.error : `HTTP ${response.status}`;
+				throw new Error(message);
+			}
 			if (data.success && data.data) {
-				// Update local state with real data from backend
 				setNotifications((prev) => {
-					// Try to find by returned ID first (most reliable)
-					const existingById = prev.find((n) => n.id === data.data.id);
-					if (existingById) {
-						return prev.map((n) => (n.id === data.data.id ? { ...data.data } : n));
-					}
-					
-					// If we have a selectedNotificationId, try to find by that
-					if (selectedNotificationId) {
-						const existingBySelectedId = prev.find((n) => n.id === selectedNotificationId);
-						if (existingBySelectedId) {
-							return prev.map((n) => (n.id === selectedNotificationId ? { ...data.data } : n));
-						}
-					}
-					
-					// Try to find by stageId and sequence
-					const existingIndex = prev.findIndex(
-						(n) => n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset
-					);
-					if (existingIndex >= 0) {
-						return prev.map((n, i) => (i === existingIndex ? { ...data.data } : n));
-					} else {
-						// Remove any temp notification with same stageId and sequence
-						const filtered = prev.filter(
-							(n) => !(n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset && n.id !== data.data.id)
-						);
-						return [...filtered, { ...data.data }];
-					}
+					const byId = prev.find((n) => n.id === data.data.id);
+					const bySelected = selectedNotificationId ? prev.find((n) => n.id === selectedNotificationId) : null;
+					const byStageSeq = prev.findIndex((n) => n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset);
+					if (byId) return prev.map((n) => (n.id === data.data.id ? { ...data.data } : n));
+					if (bySelected) return prev.map((n) => (n.id === selectedNotificationId ? { ...data.data } : n));
+					if (byStageSeq >= 0) return prev.map((n, i) => (i === byStageSeq ? { ...data.data } : n));
+					const filtered = prev.filter((n) => !(n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset && n.id !== data.data.id));
+					return sortNotificationsWithResetLast([...filtered, data.data]);
 				});
-				// Close edit mode after saving
 				handleNotificationClose();
 			}
 		} catch (error) {
+			// Revert to previous
+			if (previousNotification) {
+				setNotifications((prev) => {
+					const target = prev.find((n) => n.id === previousNotification!.id) ?? prev.find((n) => n.stageId === input.stageId && n.sequence === input.sequence && !n.isReset);
+					if (!target) return prev;
+					return prev.map((n) => (n.id === target.id ? previousNotification! : n));
+				});
+			}
 			console.error("Error saving notification:", error);
+			throw error;
 		}
 	};
 
 
-	// Handle notification delete
+	// Handle notification delete - optimistic remove, revert on error
 	const handleNotificationDelete = async (notificationId: string) => {
+		// Temp IDs (never saved to DB): remove from local state only
+		if (notificationId.startsWith("temp-")) {
+			setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+			if (selectedNotificationId === notificationId) {
+				setSelectedNotificationId(null);
+				setSelectedNotificationSequence(null);
+				setSelectedNotificationStageId(null);
+			}
+			return;
+		}
+		// Capture for revert and for renumber (remaining in same stage)
+		let removed: FunnelNotification | null = null;
+		setNotifications((prev) => {
+			const found = prev.find((n) => n.id === notificationId);
+			if (found) {
+				removed = found;
+				const afterRemove = prev.filter((n) => n.id !== notificationId);
+				remainingAfterDeleteRef.current = afterRemove
+					.filter((n) => n.stageId === found.stageId && !n.isReset)
+					.sort((a, b) => a.sequence - b.sequence);
+			} else {
+				remainingAfterDeleteRef.current = null;
+			}
+			return prev.filter((n) => n.id !== notificationId);
+		});
+		if (selectedNotificationId === notificationId) {
+			setSelectedNotificationId(null);
+			setSelectedNotificationSequence(null);
+			setSelectedNotificationStageId(null);
+		}
 		try {
-			const response = await fetch(
-				`/api/funnels/${currentFunnel.id}/notifications?notificationId=${notificationId}`,
-				{
-					method: "DELETE",
-				}
+			const response = await apiDelete(
+				`/api/funnels/${currentFunnel.id}/notifications?notificationId=${encodeURIComponent(notificationId)}`,
+				user?.experienceId
 			);
-			const data = await response.json();
-			if (data.success) {
-				setNotifications(notifications.filter((n) => n.id !== notificationId));
-				if (selectedNotificationId === notificationId) {
-					setSelectedNotificationId(null);
-					setSelectedNotificationSequence(null);
-					setSelectedNotificationStageId(null);
-				}
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				const message = (data && typeof data.error === "string") ? data.error : `HTTP ${response.status}`;
+				throw new Error(message);
+			}
+			// Renumber remaining notifications in this stage to 1, 2, 3...
+			const stageId = removed!.stageId;
+			const stageNotifs = remainingAfterDeleteRef.current ?? [];
+			remainingAfterDeleteRef.current = null;
+			if (stageNotifs.length > 0) {
+				const renumbered = stageNotifs.map((n, i) => ({ ...n, sequence: i + 1 }));
+				setNotifications((prev) => {
+					const byId = new Map(renumbered.map((n) => [n.id, n]));
+					return sortNotificationsWithResetLast(
+						prev.map((n) => (n.stageId === stageId && !n.isReset ? byId.get(n.id) ?? n : n))
+					);
+				});
+				// Persist new sequences to backend (update by id so 3 -> 2 after deleting 2)
+				renumbered.forEach((n) => {
+					apiPost(
+						`/api/funnels/${currentFunnel.id}/notifications`,
+						{
+							id: n.id,
+							funnelId: n.funnelId,
+							stageId: n.stageId,
+							sequence: n.sequence,
+							inactivityMinutes: n.inactivityMinutes,
+							message: n.message,
+							notificationType: n.notificationType,
+							isReset: false,
+						},
+						user?.experienceId
+					)
+						.then((res) => res.json())
+						.then((data) => {
+							if (data?.success && data?.data) {
+								setNotifications((prev) => prev.map((notif) => (notif.id === n.id ? { ...notif, ...data.data } : notif)));
+							}
+						})
+						.catch(() => {});
+				});
 			}
 		} catch (error) {
+			// Revert: re-add the notification
+			if (removed) {
+				setNotifications((prev) => sortNotificationsWithResetLast([...prev, removed!]));
+			}
 			console.error("Error deleting notification:", error);
+			throw error;
 		}
 	};
 
-	// Handle notification click from canvas
+	// Add notification: optimistic add, then create in DB (called when + is clicked)
+	const handleAddNotification = async (stageId: string) => {
+		const stageNotifs = notifications.filter((n) => n.stageId === stageId && !n.isReset);
+		const nextSequence = stageNotifs.length + 1;
+		if (nextSequence > 3) return;
+		const lastMessage = getLastBotMessageFromStage(stageId, currentFunnel.flow);
+		const tempId = `temp-add-${stageId}-${nextSequence}-${Date.now()}`;
+		const optimistic: FunnelNotification = {
+			id: tempId,
+			funnelId: currentFunnel.id,
+			stageId,
+			sequence: nextSequence,
+			inactivityMinutes: 30,
+			message: lastMessage || "Reminder message",
+			notificationType: "standard",
+			isReset: false,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		// Optimistic: add to state and open panel immediately
+		setNotifications((prev) => sortNotificationsWithResetLast([...prev, optimistic]));
+		setSelectedNotificationId(tempId);
+		setSelectedNotificationStageId(stageId);
+		setSelectedNotificationSequence(null);
+		setSelectedResetId(null);
+		setSelectedResetStageId(null);
+		setShowConfigPanel(true);
+		try {
+			const response = await apiPost(
+				`/api/funnels/${currentFunnel.id}/notifications`,
+				{
+					funnelId: currentFunnel.id,
+					stageId,
+					sequence: nextSequence,
+					inactivityMinutes: 30,
+					message: lastMessage || "Reminder message",
+					notificationType: "standard",
+					isReset: false,
+				},
+				user?.experienceId
+			);
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				const message = (data && typeof data.error === "string") ? data.error : `HTTP ${response.status}`;
+				throw new Error(message);
+			}
+			if (data.success && data.data) {
+				setNotifications((prev) => {
+					const withoutTemp = prev.filter((n) => n.id !== tempId);
+					return sortNotificationsWithResetLast([...withoutTemp, data.data]);
+				});
+				setSelectedNotificationId(data.data.id);
+			}
+		} catch (error) {
+			// Revert: remove optimistic notification
+			setNotifications((prev) => prev.filter((n) => n.id !== tempId));
+			if (selectedNotificationId === tempId) {
+				setSelectedNotificationId(null);
+				setSelectedNotificationStageId(null);
+				setSelectedNotificationSequence(null);
+			}
+			console.error("Error creating notification:", error);
+			throw error;
+		}
+	};
+
+	// Handle notification click from canvas (select existing; add is via handleAddNotification)
 	const handleNotificationClick = (notification: FunnelNotification | null, stageId: string, sequence: number) => {
 		if (notification) {
 			setSelectedNotificationId(notification.id);
-			setSelectedNotificationSequence(null);
-			setSelectedNotificationStageId(stageId);
-		} else {
-			// Adding new notification - always create a new one
-			// Use a unique temp ID with timestamp to ensure it's always new
-			const tempId = `temp-${stageId}-${sequence}-${Date.now()}`;
-			setSelectedNotificationId(tempId);
-			handleNotificationChange({
-				funnelId: currentFunnel.id,
-				stageId,
-				sequence,
-				inactivityMinutes: 30,
-				message: "Reminder message",
-				notificationType: "standard",
-				isReset: false,
-			});
 			setSelectedNotificationSequence(null);
 			setSelectedNotificationStageId(stageId);
 		}
@@ -1783,68 +1996,83 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		});
 	};
 
-	// Handle reset save - saves to backend
+	// Handle reset save - optimistic update, then persist in DB
 	const handleResetSave = async (stageId: string, resetAction: "delete" | "complete", delayMinutes: number) => {
-		try {
-			// Find existing reset notification for this stage (regardless of action type)
-			const existingReset = notifications.find((n) => n.stageId === stageId && n.isReset);
+		const existingReset = notifications.find((n) => n.stageId === stageId && n.isReset);
 
-			// If delayMinutes is 0, delete the reset
-			if (delayMinutes === 0 && existingReset) {
-				await handleNotificationDelete(existingReset.id);
-				setSelectedResetId(null);
-				setSelectedResetStageId(null);
-				return;
+		if (delayMinutes === 0 && existingReset) {
+			await handleNotificationDelete(existingReset.id);
+			setSelectedResetId(null);
+			setSelectedResetStageId(null);
+			return;
+		}
+
+		const stageNotifications = notifications.filter((n) => n.stageId === stageId && !n.isReset);
+		const maxSequence = stageNotifications.length > 0 ? Math.max(...stageNotifications.map((n) => n.sequence)) : 0;
+		const sequence = existingReset?.sequence ?? maxSequence + 1;
+
+		const optimisticReset: FunnelNotification = {
+			id: existingReset?.id ?? `temp-reset-${stageId}`,
+			funnelId: currentFunnel.id,
+			stageId,
+			sequence,
+			inactivityMinutes: 0,
+			message: resetAction === "delete" ? "Delete conversation" : "Mark as completed",
+			isReset: true,
+			resetAction,
+			delayMinutes,
+			createdAt: existingReset?.createdAt ?? new Date(),
+			updatedAt: new Date(),
+		};
+
+		let previousReset: FunnelNotification | null = existingReset ?? null;
+		// Optimistic update
+		setNotifications((prev) => {
+			if (existingReset) {
+				return prev.map((n) => (n.id === existingReset.id ? optimisticReset : n));
 			}
+			const filtered = prev.filter((n) => !(n.stageId === stageId && n.isReset && n.id.startsWith("temp-")));
+			return sortNotificationsWithResetLast([...filtered, optimisticReset]);
+		});
+		setSelectedResetId(optimisticReset.id);
 
-			// Get max sequence for this stage
-			const stageNotifications = notifications.filter((n) => n.stageId === stageId && !n.isReset);
-			const maxSequence = stageNotifications.length > 0 
-				? Math.max(...stageNotifications.map((n) => n.sequence))
-				: 0;
-
+		try {
 			const input: FunnelNotificationInput = {
 				funnelId: currentFunnel.id,
 				stageId,
-				sequence: existingReset?.sequence ?? maxSequence + 1,
-				inactivityMinutes: 0, // Not used for reset
+				sequence,
+				inactivityMinutes: 0,
 				message: resetAction === "delete" ? "Delete conversation" : "Mark as completed",
 				isReset: true,
 				resetAction,
 				delayMinutes,
 			};
-
-			const response = await fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(input),
-			});
-			const data = await response.json();
+			const response = await apiPost(`/api/funnels/${currentFunnel.id}/notifications`, input, user?.experienceId);
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error("Failed to save reset");
 			if (data.success && data.data) {
-				// Update local state using functional update to ensure we have latest state
 				setNotifications((prev) => {
-					// Try to find by ID first (if updating existing)
-					const existingById = prev.find((n) => n.id === data.data.id);
-					if (existingById) {
-						// Update existing reset by ID - create new object to force re-render
-						return prev.map((n) => (n.id === data.data.id ? { ...data.data } : n));
-					}
-					
-					// Try to find by stageId and isReset (for existing reset)
-					const existingResetInState = prev.find((n) => n.stageId === stageId && n.isReset);
-					if (existingResetInState) {
-						// Update the existing reset with new action type - create new object
-						return prev.map((n) => (n.id === existingResetInState.id ? { ...data.data } : n));
-					} else {
-						// Remove any temp reset for this stage and add the real one
-						const filtered = prev.filter((n) => !(n.stageId === stageId && n.isReset && n.id.startsWith("temp-")));
-						return [...filtered, { ...data.data }];
-					}
+					const byId = prev.find((n) => n.id === data.data.id);
+					const byStageReset = prev.find((n) => n.stageId === stageId && n.isReset);
+					if (byId) return prev.map((n) => (n.id === data.data.id ? { ...data.data } : n));
+					if (byStageReset) return prev.map((n) => (n.id === byStageReset.id ? { ...data.data } : n));
+					const filtered = prev.filter((n) => !(n.stageId === stageId && n.isReset && n.id.startsWith("temp-")));
+					return sortNotificationsWithResetLast([...filtered, data.data]);
 				});
 				setSelectedResetId(data.data.id);
 			}
 		} catch (error) {
+			// Revert
+			if (previousReset) {
+				setNotifications((prev) => {
+					const current = prev.find((n) => n.stageId === stageId && n.isReset);
+					if (!current) return prev;
+					return prev.map((n) => (n.id === current.id ? previousReset! : n));
+				});
+				setSelectedResetId(previousReset.id);
+			}
 			console.error("Error saving reset:", error);
+			throw error;
 		}
 	};
 
@@ -1878,27 +2106,190 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 		}
 	};
 
-	// Fetch notifications when entering Configure view
+	// Keep ref in sync so preload callback can avoid applying stale results when funnel changes
 	React.useEffect(() => {
-		// Only fetch if we have all required data
+		notificationsFunnelIdRef.current = currentFunnel.id ?? null;
+	}, [currentFunnel.id]);
+
+	// Preload notifications when editor has a funnel so data is in browser before user clicks Notifications
+	React.useEffect(() => {
+		if (!currentFunnel.id || !currentFunnel.flow?.stages || !user?.experienceId) return;
+		const funnelId = currentFunnel.id;
+		const experienceId = user.experienceId;
+		notificationsFunnelIdRef.current = funnelId;
+		setNotifications((prev) => prev.filter((n) => n.funnelId === funnelId));
+
+		apiGet(`/api/funnels/${funnelId}/notifications`, experienceId)
+			.then((res) => {
+				if (!res.ok) {
+					if (res.status === 400 || res.status === 401) {
+						return res.json().then((errorData) => {
+							throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+						}).catch(() => {
+							throw new Error(`HTTP error! status: ${res.status}`);
+						});
+					}
+					throw new Error(`HTTP error! status: ${res.status}`);
+				}
+				const contentType = res.headers.get("content-type");
+				if (!contentType || !contentType.includes("application/json")) {
+					throw new Error("Response is not JSON");
+				}
+				return res.json();
+			})
+			.then((data) => {
+				if (!data.success || !data.data) return;
+				if (notificationsFunnelIdRef.current !== funnelId) return;
+				const fetchedNotifications = data.data;
+				const stages = currentFunnel.flow!.stages;
+				const optimisticDefaults: FunnelNotification[] = [];
+				for (const stage of stages) {
+					const hasNotification = fetchedNotifications.some(
+						(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
+					);
+					const hasReset = fetchedNotifications.some(
+						(n: FunnelNotification) => n.stageId === stage.id && n.isReset
+					);
+					if (!hasNotification) {
+						const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow!);
+						optimisticDefaults.push({
+							id: `temp-notif-${stage.id}-1`,
+							funnelId,
+							stageId: stage.id,
+							sequence: 1,
+							inactivityMinutes: 30,
+							message: lastMessage || "Reminder message",
+							notificationType: "standard",
+							isReset: false,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						});
+					}
+					if (!hasReset) {
+						const stageNotifs = fetchedNotifications.filter(
+							(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
+						);
+						const maxSequence = stageNotifs.length > 0
+							? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
+							: 0;
+						optimisticDefaults.push({
+							id: `temp-reset-${stage.id}`,
+							funnelId,
+							stageId: stage.id,
+							sequence: maxSequence + 1,
+							inactivityMinutes: 0,
+							message: "",
+							isReset: true,
+							resetAction: "delete",
+							delayMinutes: 60,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						});
+					}
+				}
+				setNotifications((prev) => {
+					if (notificationsFunnelIdRef.current !== funnelId) return prev;
+					const allNotifications = [...fetchedNotifications, ...optimisticDefaults];
+					const uniqueNotifications = allNotifications.reduce((acc: FunnelNotification[], notif: FunnelNotification) => {
+						const existing = acc.find((n: FunnelNotification) => n.id === notif.id ||
+							(n.stageId === notif.stageId && n.sequence === notif.sequence && n.isReset === notif.isReset));
+						if (!existing) acc.push(notif);
+						else if (!notif.id.startsWith("temp-")) acc[acc.indexOf(existing)] = notif;
+						return acc;
+					}, [] as FunnelNotification[]);
+					return sortNotificationsWithResetLast(uniqueNotifications);
+				});
+				for (const stage of stages) {
+					const hasNotification = fetchedNotifications.some(
+						(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
+					);
+					const hasReset = fetchedNotifications.some(
+						(n: FunnelNotification) => n.stageId === stage.id && n.isReset
+					);
+					if (!hasNotification) {
+						const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow!);
+						apiPost(`/api/funnels/${funnelId}/notifications`, {
+							funnelId,
+							stageId: stage.id,
+							sequence: 1,
+							inactivityMinutes: 30,
+							message: lastMessage || "Reminder message",
+							notificationType: "standard",
+							isReset: false,
+						}, experienceId)
+							.then((res) => res.json())
+							.then((result) => {
+								if (result.success && result.data) {
+									setNotifications((prev) => {
+										const withoutTemp = prev.filter((n) =>
+											!(n.id.startsWith("temp-notif-") && n.stageId === stage.id && n.sequence === 1)
+										);
+										const existing = withoutTemp.find((n) => n.id === result.data.id);
+										const next = existing ? withoutTemp.map((n) => n.id === result.data.id ? result.data : n) : [...withoutTemp, result.data];
+										return sortNotificationsWithResetLast(next);
+									});
+								}
+							})
+							.catch(() => {});
+					}
+					if (!hasReset) {
+						const stageNotifs = fetchedNotifications.filter(
+							(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
+						);
+						const maxSequence = stageNotifs.length > 0
+							? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
+							: 0;
+						apiPost(`/api/funnels/${funnelId}/notifications`, {
+							funnelId,
+							stageId: stage.id,
+							sequence: maxSequence + 1,
+							inactivityMinutes: 0,
+							message: "",
+							isReset: true,
+							resetAction: "delete",
+							delayMinutes: 60,
+						}, experienceId)
+							.then((res) => res.json())
+							.then((result) => {
+								if (result.success && result.data) {
+									setNotifications((prev) => {
+										const withoutTemp = prev.filter((n) =>
+											!(n.id.startsWith("temp-reset-") && n.stageId === stage.id)
+										);
+										const existing = withoutTemp.find((n) => n.id === result.data.id);
+										const next = existing ? withoutTemp.map((n) => n.id === result.data.id ? result.data : n) : [...withoutTemp, result.data];
+										return sortNotificationsWithResetLast(next);
+									});
+								}
+							})
+							.catch(() => {});
+					}
+				}
+			})
+			.catch(() => {});
+	}, [currentFunnel.id, currentFunnel.flow, user?.experienceId, sortNotificationsWithResetLast]);
+
+	// When loading Notification view: first load notifications (always fetch); then if delete/complete not selected, auto-select delete and load it after notifs.
+	React.useEffect(() => {
 		if (!showConfigureView || !currentFunnel.id || !user?.experienceId || !currentFunnel.flow?.stages) {
 			return;
 		}
-		
-		// Fetch existing notifications
-		fetch(`/api/funnels/${currentFunnel.id}/notifications`)
-			.then((res) => {
+		// Always fetch notifications when opening Notification view (even if we have one default from preload)
+		apiGet(`/api/funnels/${currentFunnel.id}/notifications`, user?.experienceId)
+			.then(async (res) => {
 					if (!res.ok) {
-						// If 400 or 401, try to get error message from response
+						let message = `HTTP error! status: ${res.status}`;
 						if (res.status === 400 || res.status === 401) {
-							return res.json().then((errorData) => {
-								console.error("API error:", errorData);
-								throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
-							}).catch(() => {
-								throw new Error(`HTTP error! status: ${res.status}`);
-							});
+							try {
+								const errorData = await res.json();
+								if (typeof (errorData as { error?: string })?.error === "string") {
+									message = (errorData as { error: string }).error;
+								}
+							} catch {
+								// ignore non-JSON body
+							}
 						}
-						throw new Error(`HTTP error! status: ${res.status}`);
+						throw new Error(message);
 					}
 					const contentType = res.headers.get("content-type");
 					if (!contentType || !contentType.includes("application/json")) {
@@ -1910,25 +2301,19 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 					if (data.success && data.data) {
 						const fetchedNotifications = data.data;
 						const stages = currentFunnel.flow.stages;
-						
-						// Create optimistic default notifications/resets immediately (before API calls)
-						const optimisticDefaults: FunnelNotification[] = [];
-						
+
+						// 1) First load notifications only (even if there is one default)
+						setNotifications(sortNotificationsWithResetLast(fetchedNotifications));
+
+						// 2) Add default notification (seq 1) if missing
+						const optimisticNotifs: FunnelNotification[] = [];
 						for (const stage of stages) {
-							// Check if stage has a notification with sequence 1
 							const hasNotification = fetchedNotifications.some(
 								(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
 							);
-							
-							// Check if stage has a reset
-							const hasReset = fetchedNotifications.some(
-								(n: FunnelNotification) => n.stageId === stage.id && n.isReset
-							);
-							
-							// Create optimistic default notification (Standard) if missing
 							if (!hasNotification) {
 								const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow);
-								optimisticDefaults.push({
+								optimisticNotifs.push({
 									id: `temp-notif-${stage.id}-1`,
 									funnelId: currentFunnel.id,
 									stageId: stage.id,
@@ -1941,18 +2326,79 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 									updatedAt: new Date(),
 								});
 							}
-							
-							// Create optimistic default reset (Delete) if missing
-							if (!hasReset) {
+						}
+						if (optimisticNotifs.length > 0) {
+							setNotifications((prev) => sortNotificationsWithResetLast([...prev, ...optimisticNotifs]));
+							for (const stage of stages) {
+								const hasNotification = fetchedNotifications.some(
+									(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
+								);
+								if (!hasNotification) {
+									const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow);
+									apiPost(`/api/funnels/${currentFunnel.id}/notifications`, {
+										funnelId: currentFunnel.id,
+										stageId: stage.id,
+										sequence: 1,
+										inactivityMinutes: 30,
+										message: lastMessage || "Reminder message",
+										notificationType: "standard",
+										isReset: false,
+									}, user?.experienceId)
+										.then((res) => res.json())
+										.then((result) => {
+											if (result.success && result.data) {
+												setNotifications((prev) => {
+													const withoutTemp = prev.filter((n) =>
+														!(n.id.startsWith("temp-notif-") && n.stageId === stage.id && n.sequence === 1)
+													);
+													const existing = withoutTemp.find((n) => n.id === result.data.id);
+													const next = !existing ? [...withoutTemp, result.data] : withoutTemp.map((n) => n.id === result.data.id ? result.data : n);
+													return sortNotificationsWithResetLast(next);
+												});
+											}
+										})
+										.catch((err) => console.error("Error creating default notification:", err));
+								}
+							}
+						}
+
+						// 3) After notifs are loaded: if delete/complete not selected, auto-select delete and load it (persist after notifs)
+						const stagesMissingReset = stages.filter(
+							(stage: { id: string }) => !fetchedNotifications.some(
+								(n: FunnelNotification) => n.stageId === stage.id && n.isReset
+							)
+						);
+						if (stagesMissingReset.length > 0) {
+							const optimisticResets: FunnelNotification[] = stagesMissingReset.map((stage: { id: string }) => {
 								const stageNotifs = fetchedNotifications.filter(
 									(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
 								);
-								const maxSequence = stageNotifs.length > 0 
+								const maxSequence = stageNotifs.length > 0
 									? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
 									: 0;
-								
-								optimisticDefaults.push({
+								return {
 									id: `temp-reset-${stage.id}`,
+									funnelId: currentFunnel.id,
+									stageId: stage.id,
+									sequence: maxSequence + 1,
+									inactivityMinutes: 0,
+									message: "",
+									isReset: true,
+									resetAction: "delete" as const,
+									delayMinutes: 60,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								};
+							});
+							setNotifications((prev) => sortNotificationsWithResetLast([...prev, ...optimisticResets]));
+							for (const stage of stagesMissingReset) {
+								const stageNotifs = fetchedNotifications.filter(
+									(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
+								);
+								const maxSequence = stageNotifs.length > 0
+									? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
+									: 0;
+								apiPost(`/api/funnels/${currentFunnel.id}/notifications`, {
 									funnelId: currentFunnel.id,
 									stageId: stage.id,
 									sequence: maxSequence + 1,
@@ -1961,123 +2407,22 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 									isReset: true,
 									resetAction: "delete",
 									delayMinutes: 60,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-								});
-							}
-						}
-						
-						// Set optimistic defaults immediately so they appear on canvas
-						setNotifications((prev) => {
-							const allNotifications = [...fetchedNotifications, ...optimisticDefaults];
-							const uniqueNotifications = allNotifications.reduce((acc: FunnelNotification[], notif: FunnelNotification) => {
-								const existing = acc.find((n: FunnelNotification) => n.id === notif.id || 
-									(n.stageId === notif.stageId && n.sequence === notif.sequence && n.isReset === notif.isReset));
-								if (!existing) {
-									acc.push(notif);
-								} else {
-									// Update existing with latest data (prefer fetched over optimistic)
-									const index = acc.indexOf(existing);
-									if (!notif.id.startsWith("temp-")) {
-										acc[index] = notif; // Prefer real data over temp
-									}
-								}
-								return acc;
-							}, [] as FunnelNotification[]);
-							return uniqueNotifications;
-						});
-						
-						// Create defaults via API in background (non-blocking)
-						// These will replace optimistic ones when they complete
-						for (const stage of stages) {
-							const hasNotification = fetchedNotifications.some(
-								(n: FunnelNotification) => n.stageId === stage.id && !n.isReset && n.sequence === 1
-							);
-							
-							const hasReset = fetchedNotifications.some(
-								(n: FunnelNotification) => n.stageId === stage.id && n.isReset
-							);
-							
-							// Create default notification (Standard) if missing - fire and forget
-							if (!hasNotification) {
-								const lastMessage = getLastBotMessageFromStage(stage.id, currentFunnel.flow);
-								fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
-									method: "POST",
-									headers: { "Content-Type": "application/json" },
-									body: JSON.stringify({
-										funnelId: currentFunnel.id,
-										stageId: stage.id,
-										sequence: 1,
-										inactivityMinutes: 30,
-										message: lastMessage || "Reminder message",
-										notificationType: "standard",
-										isReset: false,
-									}),
-								})
+								}, user?.experienceId)
 									.then((res) => res.json())
 									.then((result) => {
 										if (result.success && result.data) {
-											// Replace optimistic notification with real one
 											setNotifications((prev) => {
-												const withoutTemp = prev.filter((n) => 
-													!(n.id.startsWith("temp-notif-") && n.stageId === stage.id && n.sequence === 1)
-												);
-												const existing = withoutTemp.find((n) => n.id === result.data.id);
-												if (!existing) {
-													return [...withoutTemp, result.data];
-												}
-												return withoutTemp.map((n) => n.id === result.data.id ? result.data : n);
-											});
-										}
-									})
-									.catch((err) => {
-										console.error("Error creating default notification:", err);
-										// Keep optimistic notification on error
-									});
-							}
-							
-							// Create default reset (Delete) if missing - fire and forget
-							if (!hasReset) {
-								const stageNotifs = fetchedNotifications.filter(
-									(n: FunnelNotification) => n.stageId === stage.id && !n.isReset
-								);
-								const maxSequence = stageNotifs.length > 0 
-									? Math.max(...stageNotifs.map((n: FunnelNotification) => n.sequence))
-									: 0;
-								
-								fetch(`/api/funnels/${currentFunnel.id}/notifications`, {
-									method: "POST",
-									headers: { "Content-Type": "application/json" },
-									body: JSON.stringify({
-										funnelId: currentFunnel.id,
-										stageId: stage.id,
-										sequence: maxSequence + 1,
-										inactivityMinutes: 0,
-										message: "",
-										isReset: true,
-										resetAction: "delete",
-										delayMinutes: 60,
-									}),
-								})
-									.then((res) => res.json())
-									.then((result) => {
-										if (result.success && result.data) {
-											// Replace optimistic reset with real one
-											setNotifications((prev) => {
-												const withoutTemp = prev.filter((n) => 
+												const withoutTemp = prev.filter((n) =>
 													!(n.id.startsWith("temp-reset-") && n.stageId === stage.id)
 												);
 												const existing = withoutTemp.find((n) => n.id === result.data.id);
-												if (!existing) {
-													return [...withoutTemp, result.data];
-												}
-												return withoutTemp.map((n) => n.id === result.data.id ? result.data : n);
+												const next = !existing ? [...withoutTemp, result.data] : withoutTemp.map((n) => n.id === result.data.id ? result.data : n);
+												return sortNotificationsWithResetLast(next);
 											});
 										}
 									})
 									.catch((err) => {
 										console.error("Error creating default reset:", err);
-										// Keep optimistic reset on error
 									});
 							}
 						}
@@ -2122,22 +2467,24 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 							});
 						}
 						
-						setNotifications(optimisticDefaults);
+						setNotifications(sortNotificationsWithResetLast(optimisticDefaults));
 					} else {
 						setNotifications([]);
 					}
 				});
-	}, [showConfigureView, currentFunnel.id, currentFunnel.flow, user?.experienceId]);
+	}, [showConfigureView, currentFunnel.id, currentFunnel.flow, user?.experienceId, sortNotificationsWithResetLast]);
 
 	// Get stages from flow for ConfigPanel
 	const getStagesForConfig = () => {
 		if (!currentFunnel.flow?.stages) return [];
-		return currentFunnel.flow.stages.map((s: { id: string; name: string; explanation?: string; blockIds: string[] }) => ({
-			id: s.id,
-			name: s.name,
-			explanation: s.explanation || "",
-			blockIds: s.blockIds || [],
-		}));
+		return currentFunnel.flow.stages
+			.filter((s: { name: string }) => s.name !== "SEND_DM") // DM fires once after trigger; no notifications needed
+			.map((s: { id: string; name: string; explanation?: string; blockIds: string[] }) => ({
+				id: s.id,
+				name: s.name,
+				explanation: s.explanation || "",
+				blockIds: s.blockIds || [],
+			}));
 	};
 
 	// Deployment logic is now handled by useFunnelDeployment hook
@@ -2193,8 +2540,12 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 						stages={getStagesForConfig()}
 						notifications={notifications}
 						selectedNotificationId={selectedNotificationId || undefined}
+						selectedNotificationSequence={selectedNotificationSequence ?? undefined}
+						selectedNotificationStageId={selectedNotificationStageId ?? undefined}
 						selectedResetId={selectedResetId || undefined}
 						selectedResetStageId={selectedResetStageId || undefined}
+						isDeployed={!!currentFunnel.isDeployed}
+						onAddNotification={handleAddNotification}
 						onNotificationClick={handleNotificationClick}
 						onNotificationClose={handleNotificationClose}
 						onResetClick={handleResetClick}
@@ -2252,13 +2603,10 @@ const AIFunnelBuilderPage: React.FC<AIFunnelBuilderPageProps> = ({
 							const existing = resetId
 								? notifications.find((n) => n.id === resetId)
 								: notifications.find((n) => n.stageId === stageId && n.isReset);
-							
-							if (existing) {
-								handleResetChange(stageId, type, existing.delayMinutes || 60);
-							} else {
-								// New reset - create with defaults
-								handleResetChange(stageId, type, 60);
-							}
+							const delayMinutes = existing?.delayMinutes ?? 60;
+							handleResetChange(stageId, type, delayMinutes);
+							// Persist type change (delete ↔ complete) to backend
+							handleResetSave(stageId, type, delayMinutes);
 						}}
 						onClose={() => {
 							setShowConfigPanel(false);

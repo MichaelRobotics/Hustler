@@ -32,6 +32,8 @@ export interface FunnelBlock {
 	productSelectionType?: UpsellProductSelectionType;
 	/** When productSelectionType === "from_stage", the block ID of the card this product references */
 	referencedBlockId?: string | null;
+	/** If true, this block is the Send DM block (message icon stage); content sent to Whop native DM only, not shown in-app */
+	sendDmBlock?: boolean;
 }
 
 export interface FunnelStage {
@@ -48,6 +50,34 @@ export interface FunnelFlow {
 	startBlockId: string;
 	stages: FunnelStage[];
 	blocks: Record<string, FunnelBlock>;
+}
+
+/** Stage name for the Send DM stage (message icon); DM is sent to Whop native chat only */
+export const SEND_DM_STAGE_NAME = "SEND_DM";
+
+/** Returns true if this stage is the Send DM stage */
+export function isSendDmStage(stage: FunnelStage): boolean {
+	return stage.name === SEND_DM_STAGE_NAME;
+}
+
+/** Returns the Send DM block id if flow has a SEND_DM stage, else null */
+export function getSendDmBlockId(flow: FunnelFlow): string | null {
+	const sendDmStage = flow.stages.find((s) => s.name === SEND_DM_STAGE_NAME);
+	if (!sendDmStage?.blockIds?.length) return null;
+	const blockId = sendDmStage.blockIds[0];
+	const block = flow.blocks[blockId];
+	// Treat as Send DM if stage is SEND_DM (block may or may not have sendDmBlock flag)
+	return block ? blockId : null;
+}
+
+/** Returns the first block id after the Send DM stage (the block the message icon points to), or startBlockId if no SEND_DM stage */
+export function getFirstRealBlockIdAfterSendDm(flow: FunnelFlow): string | null {
+	const sendDmStage = flow.stages.find((s) => s.name === SEND_DM_STAGE_NAME);
+	if (!sendDmStage?.blockIds?.length) return flow.startBlockId;
+	const sendDmBlockId = sendDmStage.blockIds[0];
+	const sendDmBlock = flow.blocks[sendDmBlockId];
+	const nextOption = sendDmBlock?.options?.[0];
+	return nextOption?.nextBlockId ?? flow.startBlockId;
 }
 
 export interface ChatMessage {
@@ -110,6 +140,7 @@ export interface FunnelNotification {
 
 // Input for creating/updating a notification
 export interface FunnelNotificationInput {
+	id?: string; // When provided, update this notification (e.g. renumber after delete)
 	funnelId: string;
 	stageId: string;
 	sequence: number;

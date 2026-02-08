@@ -6,8 +6,7 @@ import { whopSdk } from "../whop-sdk";
 import { cleanupAbandonedExperiences, checkIfCleanupNeeded } from "../sync/experience-cleanup";
 import type { AuthenticatedUser, UserContext } from "../types/user";
 import type { FunnelFlow } from "../types/funnel";
-import { createConversation } from "../actions/simplified-conversation-actions";
-import { updateConversationToWelcomeStage } from "../actions/user-join-actions";
+import { scheduleOrFireTrigger } from "../actions/user-join-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "../analytics/background-tracking";
 import { hasActiveConversation, hasConversationFromFunnel, findFunnelForTrigger } from "../helpers/conversation-trigger";
 
@@ -755,26 +754,21 @@ async function createConversationForNewCustomer(
 			return;
 		}
 
-		const flow = liveFunnel.flow as FunnelFlow;
 		console.log(`[CONVERSATION-CREATION] Found funnel ${liveFunnel.id} for app_entry in experience ${experienceId}`);
 
-		const conversationId = await createConversation(
+		const conversationId = await scheduleOrFireTrigger(
 			experienceId,
-			liveFunnel.id,
+			liveFunnel,
 			whopUserId,
-			flow.startBlockId,
-			undefined,
-			undefined
+			"app_entry",
 		);
 
-		console.log(`[CONVERSATION-CREATION] Created conversation ${conversationId} for customer user ${userId}`);
-
-		await updateConversationToWelcomeStage(conversationId, flow);
-
-		console.log(`🚀 [CONVERSATION-CREATION] About to track awareness for experience ${experienceId}, funnel ${liveFunnel.id}`);
-		safeBackgroundTracking(() => trackAwarenessBackground(experienceId, liveFunnel.id));
-
-		console.log(`[CONVERSATION-CREATION] Successfully created conversation ${conversationId} for customer user ${userId}`);
+		if (conversationId) {
+			console.log(`[CONVERSATION-CREATION] Created conversation ${conversationId} for customer user ${userId}`);
+			safeBackgroundTracking(() => trackAwarenessBackground(experienceId, liveFunnel.id));
+		} else {
+			console.log(`[CONVERSATION-CREATION] Scheduled delayed trigger for user ${whopUserId} in experience ${experienceId}`);
+		}
 	} catch (error) {
 		console.error(`[CONVERSATION-CREATION] Error creating conversation for customer user ${userId}:`, error);
 		throw error;

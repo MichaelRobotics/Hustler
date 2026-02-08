@@ -35,6 +35,8 @@ interface NotificationCanvasViewProps {
 	selectedNotificationStageId?: string; // Stage ID for new notification being configured
 	selectedResetId?: string; // ID of reset being configured
 	selectedResetStageId?: string; // Stage ID for reset being configured
+	isDeployed?: boolean; // When true, lock + and show edit/delete as red (read-only)
+	onAddNotification?: (stageId: string) => Promise<void>; // Create notification in DB when + is clicked
 	onNotificationClick: (notification: FunnelNotification | null, stageId: string, sequence: number) => void;
 	onNotificationClose: () => void; // Close edit mode (deselect notification)
 	onResetClick: (reset: FunnelNotification | null, stageId: string) => void;
@@ -105,6 +107,8 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 	selectedNotificationStageId,
 	selectedResetId,
 	selectedResetStageId,
+	isDeployed = false,
+	onAddNotification,
 	onNotificationClick,
 	onNotificationClose,
 	onResetClick,
@@ -115,10 +119,17 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 	onResetSave,
 	onBack,
 }) => {
-	// Get notifications for a specific stage
+	// Get notifications for a specific stage (deduplicated by id so React keys stay unique)
 	const getStageNotifications = (stageId: string) => {
-		return notifications
-			.filter((n) => n.stageId === stageId && !n.isReset)
+		const byStage = notifications
+			.filter((n) => n.stageId === stageId && !n.isReset);
+		const seen = new Set<string>();
+		return byStage
+			.filter((n) => {
+				if (seen.has(n.id)) return false;
+				seen.add(n.id);
+				return true;
+			})
 			.sort((a, b) => a.sequence - b.sequence);
 	};
 
@@ -433,7 +444,7 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 									>
 										{/* Existing Notification Cards - Show first */}
 										{stageNotifs.map((notif, notifIndex) => (
-											<React.Fragment key={`${notif.id}-${notif.notificationType}-${notif.sequence}`}>
+											<React.Fragment key={`${notif.id}-${notifIndex}`}>
 												<CardHeightTracker
 													cardKey={`notif-${notif.id}`}
 													onHeightChange={(height) => handleHeightChange(`notif-${notif.id}`, height)}
@@ -442,7 +453,8 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 														notification={notif}
 														formatTime={formatTime}
 														isSelected={selectedNotificationId === notif.id}
-														onClick={() => handleNotificationClick(notif, stage.id, notif.sequence)}
+														isDeployed={isDeployed}
+														onClick={() => !isDeployed && handleNotificationClick(notif, stage.id, notif.sequence)}
 														onClose={onNotificationClose}
 														onDelete={() => onNotificationDelete(notif.id)}
 														onChange={onNotificationChange}
@@ -458,7 +470,7 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 											</React.Fragment>
 										))}
 
-										{/* Add Notification Button - Shows AFTER first notification */}
+										{/* Add Notification Button - Shows AFTER first notification; locked when live */}
 										{canAddNotification && (() => {
 											const nextSequence = getNextSequence(stage.id);
 											const isSelected = !selectedNotificationId && 
@@ -469,15 +481,19 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 												<>
 													<button
 														type="button"
-														onClick={() => handleNotificationClick(null, stage.id, nextSequence)}
+														disabled={isDeployed}
+														onClick={() => !isDeployed && onAddNotification?.(stage.id)}
+														title={isDeployed ? "Cannot add when Merchant is live" : "Add notification"}
 														className={`flex-shrink-0 w-10 h-10 border-2 rounded-lg flex items-center justify-center transition-colors shadow-lg ${
-															isSelected
-																? "border-amber-500 dark:border-amber-400 bg-amber-50 dark:bg-amber-900/30 shadow-amber-500/50 dark:shadow-amber-500/40 ring-2 ring-amber-500/50 dark:ring-amber-400/50"
-																: "border-amber-400 dark:border-amber-500 hover:border-amber-500 dark:hover:border-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/20 shadow-amber-500/30 dark:shadow-amber-500/20"
+															isDeployed
+																? "border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60"
+																: isSelected
+																	? "border-amber-500 dark:border-amber-400 bg-amber-50 dark:bg-amber-900/30 shadow-amber-500/50 dark:shadow-amber-500/40 ring-2 ring-amber-500/50 dark:ring-amber-400/50"
+																	: "border-amber-400 dark:border-amber-500 hover:border-amber-500 dark:hover:border-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/20 shadow-amber-500/30 dark:shadow-amber-500/20"
 														}`}
 														data-no-drag
 													>
-														<Plus className="w-5 h-5 text-amber-600 dark:text-amber-400 font-bold" />
+														<Plus className={`w-5 h-5 font-bold ${isDeployed ? "text-gray-400 dark:text-gray-500" : "text-amber-600 dark:text-amber-400"}`} />
 													</button>
 													{/* Arrow to Reset */}
 													{resetCard && (
@@ -505,7 +521,8 @@ const NotificationCanvasView: React.FC<NotificationCanvasViewProps> = ({
 												key={`reset-${stage.id}-${resetCard?.id || 'none'}-${resetCard?.resetAction || 'none'}`}
 												resetCard={resetCard}
 												isSelected={selectedResetId === resetCard?.id || (selectedResetId === null && selectedResetStageId === stage.id)}
-												onClick={() => handleResetClick(resetCard || null, stage.id)}
+												isDeployed={isDeployed}
+												onClick={() => !isDeployed && handleResetClick(resetCard || null, stage.id)}
 												stageId={stage.id}
 												onChange={onResetChange}
 												onSave={onResetSave}
@@ -542,6 +559,7 @@ interface NotificationCardInlineProps {
 	notification: FunnelNotification;
 	formatTime: (minutes: number) => string;
 	isSelected: boolean;
+	isDeployed?: boolean; // When true, edit/delete are disabled and red
 	onClick: () => void;
 	onClose: () => void; // Close edit mode (deselect)
 	onDelete: () => void;
@@ -553,6 +571,7 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 	notification,
 	formatTime,
 	isSelected,
+	isDeployed = false,
 	onClick,
 	onClose,
 	onDelete,
@@ -765,16 +784,17 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 				{isSelected && isCustom ? (
 					// Custom notification in edit mode - editable and auto-resizing
 					<div className="w-full" onClick={(e) => e.stopPropagation()} data-no-drag>
-						<textarea
-							ref={textareaRef}
-							value={localMessage}
-							onChange={handleMessageChange}
-							placeholder="Enter notification message..."
-							className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none overflow-hidden"
-							rows={1}
-							style={{ minHeight: "60px" }}
-							data-no-drag
-						/>
+				<textarea
+					ref={textareaRef}
+					value={localMessage}
+					onChange={handleMessageChange}
+					placeholder="Enter notification message..."
+					disabled={isDeployed}
+					className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+					rows={1}
+					style={{ minHeight: "60px" }}
+					data-no-drag
+				/>
 					</div>
 				) : isSelected && !isCustom ? (
 					// Standard notification selected - show full message, read-only, auto-resizing
@@ -807,52 +827,65 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 					</div>
 				)}
 
-				{/* Edit/Close Actions - Only show for Custom notifications */}
+				{/* Edit/Close Actions - Only show for Custom notifications; red and disabled when live */}
 				{isCustom && (
 					<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center gap-1">
 						{isSelected ? (
-							// Show Close icon when in edit mode
 							<button
 								type="button"
+								disabled={isDeployed}
 								onClick={handleClose}
 								onMouseDown={(e) => e.stopPropagation()}
-								className="p-1.5 bg-white dark:bg-gray-800 rounded shadow-sm hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700"
-								title="Close"
+								className={`p-1.5 rounded shadow-sm border ${
+									isDeployed
+										? "bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 cursor-not-allowed opacity-80"
+										: "bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700"
+								}`}
+								title={isDeployed ? "Locked when Merchant is live" : "Close"}
 							>
-								<X className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
+								<X className={`w-3.5 h-3.5 ${isDeployed ? "text-red-500" : "text-gray-600 dark:text-gray-400"}`} />
 							</button>
 						) : (
-							// Show Edit icon when not in edit mode
 							<button
 								type="button"
+								disabled={isDeployed}
 								onClick={(e) => {
 									e.preventDefault();
 									e.stopPropagation();
-									onClick(); // Trigger edit mode (select notification)
+									if (!isDeployed) onClick();
 								}}
 								onMouseDown={(e) => e.stopPropagation()}
-								className="p-1.5 bg-white dark:bg-gray-800 rounded shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/30 border border-gray-200 dark:border-gray-700"
-								title="Edit"
+								className={`p-1.5 rounded shadow-sm border ${
+									isDeployed
+										? "bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 cursor-not-allowed opacity-80"
+										: "bg-white dark:bg-gray-800 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-gray-200 dark:border-gray-700"
+								}`}
+								title={isDeployed ? "Locked when Merchant is live" : "Edit"}
 							>
-								<Edit className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+								<Edit className={`w-3.5 h-3.5 ${isDeployed ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`} />
 							</button>
 						)}
 					</div>
 				)}
 
-				{/* Delete Action - Show for notifications 2 and 3 (both Custom and Standard) */}
+				{/* Delete Action - Show for notifications 2 and 3; red and disabled when live */}
 				{notification.sequence >= 2 && (
 					<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center gap-1">
 						<button
 							type="button"
+							disabled={isDeployed}
 							onClick={(e) => {
 								e.preventDefault();
 								e.stopPropagation();
-								onDelete();
+								if (!isDeployed) onDelete();
 							}}
 							onMouseDown={(e) => e.stopPropagation()}
-							className="p-1.5 bg-white dark:bg-gray-800 rounded shadow-sm hover:bg-red-100 dark:hover:bg-red-900/30 border border-gray-200 dark:border-gray-700"
-							title="Delete"
+							className={`p-1.5 rounded shadow-sm border ${
+								isDeployed
+									? "bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 cursor-not-allowed opacity-80"
+									: "bg-white dark:bg-gray-800 hover:bg-red-100 dark:hover:bg-red-900/30 border-gray-200 dark:border-gray-700"
+							}`}
+							title={isDeployed ? "Locked when Merchant is live" : "Delete"}
 						>
 							<Trash2 className="w-3.5 h-3.5 text-red-500" />
 						</button>
@@ -875,21 +908,23 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 					value={localDisplayValue}
 					onChange={handleTimerChange}
 					onClick={(e) => e.stopPropagation()}
-					className="w-16 px-2 py-1 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+					disabled={isDeployed}
+					className="w-16 px-2 py-1 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-60 disabled:cursor-not-allowed"
 					data-no-drag
 				/>
 				<select
 					value={localTimeUnit}
 					onChange={handleUnitChange}
 					onClick={(e) => e.stopPropagation()}
-					className="px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+					disabled={isDeployed}
+					className="px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-60 disabled:cursor-not-allowed"
 					data-no-drag
 				>
 					<option value="minutes">min</option>
 					<option value="hours">hours</option>
 					<option value="days">days</option>
 				</select>
-				{hasUnsavedChanges && (
+				{hasUnsavedChanges && !isDeployed && (
 					<button
 						type="button"
 						onClick={handleSave}
@@ -909,6 +944,7 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 interface ResetCardInlineProps {
 	resetCard?: FunnelNotification;
 	isSelected: boolean;
+	isDeployed?: boolean; // When true, editing is disabled
 	onClick: () => void;
 	stageId: string;
 	onChange: (stageId: string, resetAction: "delete" | "complete", delayMinutes: number) => void; // Optimistic update
@@ -918,6 +954,7 @@ interface ResetCardInlineProps {
 const ResetCardInline: React.FC<ResetCardInlineProps> = ({ 
 	resetCard, 
 	isSelected, 
+	isDeployed = false,
 	onClick,
 	stageId,
 	onChange,
@@ -1095,16 +1132,16 @@ const ResetCardInline: React.FC<ResetCardInlineProps> = ({
 					value={localDisplayValue}
 					onChange={handleDelayChange}
 					onClick={(e) => e.stopPropagation()}
-					disabled={!resetCard && !isSelected}
+					disabled={isDeployed || (!resetCard && !isSelected)}
 					className="w-16 px-2 py-1 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-					title={!resetCard && !isSelected ? "Click the reset card first to create a reset" : ""}
+					title={isDeployed ? "Locked when Merchant is live" : !resetCard && !isSelected ? "Click the reset card first to create a reset" : ""}
 					data-no-drag
 				/>
 				<select
 					value={localTimeUnit}
 					onChange={handleUnitChange}
 					onClick={(e) => e.stopPropagation()}
-					disabled={!resetCard && !isSelected}
+					disabled={isDeployed || (!resetCard && !isSelected)}
 					className="px-2 py-1 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
 					data-no-drag
 				>
@@ -1112,7 +1149,7 @@ const ResetCardInline: React.FC<ResetCardInlineProps> = ({
 					<option value="hours">hours</option>
 					<option value="days">days</option>
 				</select>
-				{hasUnsavedChanges && resetCard && (
+				{hasUnsavedChanges && resetCard && !isDeployed && (
 					<button
 						type="button"
 						onClick={handleSave}

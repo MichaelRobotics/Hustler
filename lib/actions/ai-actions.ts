@@ -122,14 +122,14 @@ Invalid JSON:
 ${badJson}
 
 **CRITICAL RULES:**
-- FUNNEL_1: TRANSITION (webhook triggered, sends chat link)
+- FUNNEL_1: SEND_DM (webhook triggered; DM sent to Whop native chat only, not in-app)
 - FUNNEL_2: WELCOME → VALUE_DELIVERY → EXPERIENCE_QUALIFICATION → PAIN_POINT_QUALIFICATION → OFFER
 - VALUE_DELIVERY: ONLY "FREE_VALUE" resources
 - OFFER: ONLY "PAID" resources
 - ALL messages max 5 lines (except OFFER messages)
 - OFFER messages max 8 lines with proper paragraph spacing
 - OFFER: 3-part structure (Value Stack + FOMO + CTA)
-- TRANSITION: Simple message with chat link, NO 3-part structure
+- SEND_DM: Simple message with app link; sendDmBlock: true (DM only, not shown in-app)
 - Each VALUE_DELIVERY block MUST have "resourceName" field with exact resource name from category FREE_VALUE
 - Each OFFER block MUST have "resourceName" field with exact resource name from category PAID
 - resourceName must match exactly from provided list
@@ -137,13 +137,13 @@ ${badJson}
 **CORRECT JSON STRUCTURE:**
 \`\`\`json
 {
-  "startBlockId": "transition_1",
+  "startBlockId": "send_dm_1",
   "stages": [
     {
-      "id": "stage-transition",
-      "name": "TRANSITION",
-      "explanation": "DM in whop native chat with link to this conversation.",
-      "blockIds": ["transition_1"]
+      "id": "stage-send-dm",
+      "name": "SEND_DM",
+      "explanation": "DM in Whop native chat with link to this app; not shown in-app.",
+      "blockIds": ["send_dm_1"]
     },
     {
       "id": "stage-welcome",
@@ -177,10 +177,11 @@ ${badJson}
     }
   ],
   "blocks": {
-    "transition_1": {
-      "id": "transition_1",
+    "send_dm_1": {
+      "id": "send_dm_1",
       "message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!",
-      "options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
+      "options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}],
+      "sendDmBlock": true
     },
     "welcome_1": {
       "id": "welcome_1",
@@ -826,12 +827,12 @@ export const generateFunnelFlow = async (
 	**Line 6**: Empty line
 	**Line 7**: (A button with the resource link is added automatically at the end—do not put links in the message.)"
 	
-	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'unlock' (or similar), which points its 'nextBlockId' to the 'TRANSITION' stage.
+	**CRITICAL BLOCK RULE**: The block for this stage MUST have exactly one option in its 'options' array, with the text 'unlock' (or similar), which points its 'nextBlockId' to the next stage (EXPERIENCE_QUALIFICATION).
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "FREE_VALUE" in VALUE_DELIVERY blocks.
 	
-	**4. FOR ITEMS IN \`FUNNEL_1\`'s 'TRANSITION' STAGE:**
+	**4. FOR ITEMS IN \`FUNNEL_1\`'s 'SEND_DM' STAGE:**
 
-   TRANSITION message must be EXACTLY:
+   SEND_DM block message (sent to Whop native chat only; not in-app) must be EXACTLY:
 
 	"**Line 1**: Wait! [WHOP_OWNER] has a gift for you, [USER]!
 	**Line 2**: Empty line
@@ -860,7 +861,7 @@ export const generateFunnelFlow = async (
 	**CRITICAL RESOURCE RULE**: ONLY use resources with category "PAID" in OFFER blocks.
 	
 	**6. MESSAGE LENGTH RULES (CRITICAL - STRICTLY ENFORCED):**
-	- **TRANSITION messages** must be **6 lines or fewer** and include chat link
+	- **SEND_DM messages** must be **6 lines or fewer** (app link is added automatically)
 	- **WELCOME messages** must be **1 line only** and MUST be exactly: "[USER], check [WHOP] BEST quick-money paths!"
 	- **VALUE_DELIVERY messages** must be **6 lines or fewer** (not counting empty lines) to accommodate structure with [WHOP_OWNER] and [USER] placeholders
 	- **All other message types** (EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION) must be **5 lines or fewer**
@@ -871,7 +872,7 @@ export const generateFunnelFlow = async (
 	- Use line breaks strategically for readability
 	- **COUNT EVERY LINE**: Empty lines count as lines
 	- **MOBILE FORMATTING**: Add empty lines between paragraphs to prevent cluttering on mobile (but stay within line limits)
-	- **NO [LINK] IN MESSAGES**: Do not use [LINK] or any link placeholder in message text. The product link is resolved from the card's selected resource; a button is appended at the end automatically (OFFER/VALUE_DELIVERY = product link, TRANSITION = app link). User clicks the button to open the link in a new window.
+	- **NO [LINK] IN MESSAGES**: Do not use [LINK] or any link placeholder in message text. The product link is resolved from the card's selected resource; a button is appended at the end automatically (OFFER/VALUE_DELIVERY = product link, SEND_DM = app link). User clicks the button to open the link in a new window.
 	
 	**7. OFFER MESSAGE DESIGN (CRITICAL FOR PAID PRODUCTS):**
 	Each OFFER message must follow this exact 3-part structure:
@@ -909,7 +910,7 @@ export const generateFunnelFlow = async (
 	
 	### FUNNEL GENERATION RULES
 	
-	1.  **OVERALL GOAL**: Generate a single JSON object that contains the structures for **BOTH** \`FUNNEL_1_TRANSITION_GATE\` and \`FUNNEL_2_USERCHAT_STRATEGY_SESSION\`. The output must be one single, valid JSON object with the standard FunnelFlow structure: \`startBlockId\`, \`stages\`, and \`blocks\`. Both funnels will be combined into this single structure for JSON formatting purposes, but they remain logically separate.
+	1.  **OVERALL GOAL**: Generate a single JSON object that contains the structures for **BOTH** \`FUNNEL_1_SEND_DM_GATE\` and \`FUNNEL_2_USERCHAT_STRATEGY_SESSION\`. The output must be one single, valid JSON object with the standard FunnelFlow structure: \`startBlockId\`, \`stages\`, and \`blocks\`. Both funnels will be combined into this single structure for JSON formatting purposes, but they remain logically separate.
 	
 	2.  **RESOURCES**: You will be provided with a list of resources, categorized as 'Free Value' or 'Paid Product'.
 		 \ ${resourceList}
@@ -931,9 +932,9 @@ export const generateFunnelFlow = async (
 		 - Do NOT mix resources in the same block
 		 - **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
 	
-	3.  **FUNNEL 1: "TRANSITION GATE" STRUCTURE (WEBHOOK TRIGGERED)**
-		 * **Goal**: Send initial transition message with chat link, no DM funnel.
-		 * **Stages**: TRANSITION (webhook triggered, sends chat link)
+	3.  **FUNNEL 1: "SEND_DM" STRUCTURE (WEBHOOK TRIGGERED)**
+		 * **Goal**: Send DM to Whop native chat with app link (not shown in-app).
+		 * **Stages**: SEND_DM (webhook triggered; block has sendDmBlock: true)
 
 	4.  **FUNNEL 2: "STRATEGY SESSION" STRUCTURE (INTERNAL CHAT)**
 		 * **Goal**: Qualify user and present targeted paid resources in chat.
@@ -951,14 +952,14 @@ export const generateFunnelFlow = async (
 	6.  **MESSAGE CONSTRUCTION**: Follow the specific formatting rules for each message type (choices, offers, value delivery, etc.) as defined in previous instructions.
 
 	7.  **FLOW STRUCTURE REQUIREMENTS**:
-		 * **TRANSITION Stage**: Must be the first stage (startBlockId points to TRANSITION block)
+		 * **SEND_DM Stage**: Must be the first stage (startBlockId points to SEND_DM block; block has sendDmBlock: true)
 		 * **WELCOME Stage**: Second stage in chat, provides options to users
 		 * **VALUE_DELIVERY Stage**: Third stage, delivers free value and connects to EXPERIENCE_QUALIFICATION
 		 * **EXPERIENCE_QUALIFICATION Stage**: Fourth stage, qualifies user based on VALUE_DELIVERY choice
 		 * **PAIN_POINT_QUALIFICATION Stage**: Fifth stage, identifies user pain points
 		 * **OFFER Stage**: Final stage, presents paid products
 		 * **CRITICAL**: Each VALUE_DELIVERY block must have a direct connection to its corresponding EXPERIENCE_QUALIFICATION block
-		 * **CRITICAL**: The startBlockId must point to a TRANSITION block, not WELCOME
+		 * **CRITICAL**: The startBlockId must point to the SEND_DM block, not WELCOME
 	
 	8.  **\`resourceName\` FIELD (CRITICAL - EXACT MATCHING)**:
 		 - **EXACT MATCH**: resourceName must be EXACTLY the same as the resource name from the list above
@@ -991,9 +992,9 @@ export const generateFunnelFlow = async (
 	
 	**VERIFY BEFORE RETURNING:**
 	- Standard FunnelFlow structure: \`startBlockId\`, \`stages\`, \`blocks\`
-	- All stages included: WELCOME, VALUE_DELIVERY, TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION, OFFER
+	- All stages included: WELCOME, VALUE_DELIVERY, SEND_DM, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION, OFFER
 	- Each VALUE_DELIVERY block has corresponding EXPERIENCE_QUALIFICATION block
-	- TRANSITION blocks connect to specific EXPERIENCE_QUALIFICATION blocks
+	- SEND_DM block has sendDmBlock: true and one option pointing to first WELCOME block
 	- Every VALUE_DELIVERY/OFFER block has \`"resourceName"\` field with EXACT resource names (no variations allowed)
 	- Number of VALUE_DELIVERY blocks = number of FREE resources
 	- Number of OFFER blocks = number of PAID resources
@@ -1034,14 +1035,14 @@ export const generateFunnelFlow = async (
 	### FINAL VALIDATION CHECKLIST
 	
 	Before generating the JSON, verify:
-	1. **MESSAGE LENGTH**: WELCOME messages must be 1 line only and EXACTLY "[USER], check [WHOP] BEST quick-money paths!"; VALUE_DELIVERY messages must be 6 lines or fewer (not counting empty lines); TRANSITION, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION messages are 5 lines or fewer; OFFER messages MUST be 8 lines or fewer (including all formatting)
+	1. **MESSAGE LENGTH**: WELCOME messages must be 1 line only and EXACTLY "[USER], check [WHOP] BEST quick-money paths!"; VALUE_DELIVERY messages must be 6 lines or fewer (not counting empty lines); SEND_DM, EXPERIENCE_QUALIFICATION, PAIN_POINT_QUALIFICATION messages are 5 lines or fewer; OFFER messages MUST be 8 lines or fewer (including all formatting)
 	2. **WELCOME MESSAGE ENFORCEMENT**: WELCOME messages must be EXACTLY "[USER], check [WHOP] BEST quick-money paths!" - NO VARIATIONS ALLOWED
 	3. **VALUE_DELIVERY STRUCTURE**: VALUE_DELIVERY messages must include [WHOP_OWNER] and [USER] placeholders in the VIP chat invitation section
 	4. **EXACT NAMES**: resourceName fields match exactly with provided resource names
 	5. **CATEGORY MAPPING**: FREE_VALUE resources ONLY in VALUE_DELIVERY blocks, PAID resources ONLY in OFFER blocks
 	6. **NO [LINK] IN MESSAGES**: Do not use [LINK] or link placeholders. A button (product or app link) is added automatically at the end; user clicks to open in new window.
 	7. **OFFER STRUCTURE**: OFFER messages follow 3-part structure (Value Stack + FOMO + CTA); button with product link is added automatically.
-	8. **TRANSITION MESSAGE ENFORCEMENT**: TRANSITION messages must be EXACTLY "Wait! [WHOP_OWNER] has a gift for you, [USER]!\n\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\n\n[WHOP_OWNER] is waiting!" (no [LINK]; a button with app link is added automatically) - NO VARIATIONS ALLOWED
+	8. **SEND_DM MESSAGE**: SEND_DM block message is sent to Whop native chat only (not in-app). Use "Wait! [WHOP_OWNER] has a gift for you, [USER]!\n\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\n\n[WHOP_OWNER] is waiting!" (app link is appended automatically). Block must have "sendDmBlock": true.
 	9. **NO DUPLICATES**: Each resource appears in exactly one block
 	10. **NO IMAGINARY PRODUCTS**: Only use resources from the provided list
 	11. **NO PLACEHOLDERS**: ALL blocks must reference actual products from the provided resource list
@@ -1053,13 +1054,13 @@ export const generateFunnelFlow = async (
 	*Here is a detailed example of the correct, required JSON structure:*
 	\`\`\`json
 	{
-	  "startBlockId": "transition_1",
+	  "startBlockId": "send_dm_1",
 	  "stages": [
 		 {
-			"id": "stage-transition",
-			"name": "TRANSITION",
-			"explanation": "DM in whop native chat with link to this conversation.",
-			"blockIds": ["transition_1"]
+			"id": "stage-send-dm",
+			"name": "SEND_DM",
+			"explanation": "DM in Whop native chat with app link; not shown in-app.",
+			"blockIds": ["send_dm_1"]
 		 },
 		 {
 			"id": "stage-welcome",
@@ -1093,10 +1094,11 @@ export const generateFunnelFlow = async (
 		 }
 	  ],
 	  "blocks": {
-		 "transition_1": {
-			"id": "transition_1",
+		 "send_dm_1": {
+			"id": "send_dm_1",
 			"message": "Wait! [WHOP_OWNER] has a gift for you, [USER]!\\n\\nJoin [WHOP_OWNER] VIP chat to hand-pick your best-fit products together!\\n\\n[WHOP_OWNER] is waiting!",
-			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}]
+			"options": [{"text": "Continue to Strategy Session", "nextBlockId": "welcome_1"}],
+			"sendDmBlock": true
 		 },
 		 "welcome_1": {
 			"id": "welcome_1",

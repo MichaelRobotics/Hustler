@@ -139,41 +139,16 @@ async function loadConversationHandler(
     console.log(`  Current blockId: ${currentBlockId}`);
     console.log(`  Available stages:`, funnelFlow.stages.map(s => ({ name: s.name, blockIds: s.blockIds })));
     
-    const isTransitionStage = currentBlockId && funnelFlow.stages.some(
-      stage => stage.name === "TRANSITION" && stage.blockIds.includes(currentBlockId)
-    );
-    const isExperienceQualificationStage = currentBlockId && funnelFlow.stages.some(
-      stage => stage.name === "EXPERIENCE_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
-    );
-    const isPainPointQualificationStage = currentBlockId && funnelFlow.stages.some(
-      stage => stage.name === "PAIN_POINT_QUALIFICATION" && stage.blockIds.includes(currentBlockId)
-    );
+    // Determine current stage dynamically from funnel flow
+    const currentStageName = currentBlockId ? getStageNameForBlock(currentBlockId, funnelFlow) : "UNKNOWN";
     const isOfferStage = currentBlockId ? isProductCardBlock(currentBlockId, funnelFlow) : false;
-    const isWelcomeStage = currentBlockId && funnelFlow.stages.some(
-      stage => stage.name === "WELCOME" && stage.blockIds.includes(currentBlockId)
-    );
-    const isValueDeliveryStage = currentBlockId && funnelFlow.stages.some(
-      stage => stage.name === "VALUE_DELIVERY" && stage.blockIds.includes(currentBlockId)
-    );
-    
-    // Debug logging
-    console.log(`  Stage detection results:`, {
-      isTransitionStage,
-      isExperienceQualificationStage,
-      isPainPointQualificationStage,
-      isOfferStage,
-      isWelcomeStage,
-      isValueDeliveryStage
-    });
+    const isExperienceQualificationStage = isOfferStage || currentStageName === "EXPERIENCE_QUALIFICATION" || currentStageName === "PAIN_POINT_QUALIFICATION";
 
-		// Track interest when user reaches PAIN_POINT_QUALIFICATION stage - BACKGROUND PROCESSING
-		if (isPainPointQualificationStage) {
-			console.log(`🚀 [LOAD-CONVERSATION] About to track interest for experience ${conversation.experienceId}, funnel ${conversation.funnelId}`);
-			safeBackgroundTracking(() => trackInterestBackground(conversation.experienceId, conversation.funnelId));
-		}
-
-    // Check if conversation is in UserChat phase (all stages are UserChat now)
-    const isDMFunnelActive = false; // No more DM funnel - everything is UserChat
+    // Track interest when user reaches PAIN_POINT_QUALIFICATION stage - BACKGROUND PROCESSING
+    if (currentStageName === "PAIN_POINT_QUALIFICATION") {
+      console.log(`[LOAD-CONVERSATION] About to track interest for experience ${conversation.experienceId}, funnel ${conversation.funnelId}`);
+      safeBackgroundTracking(() => trackInterestBackground(conversation.experienceId, conversation.funnelId));
+    }
 
 
     // Load the conversation data
@@ -194,20 +169,7 @@ async function loadConversationHandler(
 
       console.log(`[load-conversation] Message filtering: ${unifiedMessages.length} -> ${finalMessages.length} (customer: ${isCustomerRequest})`);
 
-      const finalIsExperienceQualificationStage = isExperienceQualificationStage || isPainPointQualificationStage || isOfferStage;
-      
-      const currentStageName = currentBlockId ? getStageNameForBlock(currentBlockId, funnelFlow) : "UNKNOWN";
-      console.log(`Load-conversation final stage info being returned:`, {
-        currentStage: currentStageName,
-        isDMFunnelActive,
-        isTransitionStage,
-        isExperienceQualificationStage: finalIsExperienceQualificationStage,
-        breakdown: {
-          isExperienceQualificationStage,
-          isPainPointQualificationStage,
-          isOfferStage
-        }
-      });
+      console.log(`[load-conversation] Stage: ${currentStageName}, isExperienceQualificationStage: ${isExperienceQualificationStage}`);
 
       const funnelRecord = conversation.funnel as { merchantType?: string } | undefined;
       const merchantType = funnelRecord?.merchantType ?? "qualification";
@@ -313,9 +275,7 @@ async function loadConversationHandler(
         funnelFlow: funnelFlow,
         stageInfo: {
           currentStage: currentStageName,
-          isDMFunnelActive: isDMFunnelActive,
-          isTransitionStage: isTransitionStage,
-          isExperienceQualificationStage: finalIsExperienceQualificationStage,
+          isExperienceQualificationStage,
         },
         merchantType: merchantType,
         resources: funnelResourcesList,

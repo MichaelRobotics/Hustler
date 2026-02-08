@@ -14,7 +14,7 @@ import { isProductCardBlock, getProductCardButtonLabel } from "../utils/funnelUt
 import { updateFunnelGrowthPercentages } from "./funnel-actions";
 import { safeBackgroundTracking, trackInterestBackground } from "../analytics/background-tracking";
 import { findFunnelForTrigger, hasActiveConversation } from "../helpers/conversation-trigger";
-import { updateConversationToWelcomeStage } from "./user-join-actions";
+import { scheduleOrFireTrigger } from "./user-join-actions";
 
 function escapeHtmlAttr(s: string): string {
 	return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -646,17 +646,15 @@ export async function createNextConversationForCompletedFunnel(
 		});
 
 		if (nextFunnel?.flow) {
-			const flow = nextFunnel.flow as FunnelFlow & { startBlockId: string };
-			const newConversationId = await createConversation(
+			const conversationId = await scheduleOrFireTrigger(
 				experienceId,
-				nextFunnel.id,
+				nextFunnel,
 				whopUserId,
-				flow.startBlockId,
-				undefined,
-				undefined
+				"funnel_completed",
 			);
-			await updateConversationToWelcomeStage(newConversationId, flow);
-			safeBackgroundTracking(() => trackInterestBackground(experienceId, nextFunnel.id));
+			if (conversationId) {
+				safeBackgroundTracking(() => trackInterestBackground(experienceId, nextFunnel.id));
+			}
 		}
 	} catch (error) {
 		console.error("Error creating next conversation for completed funnel:", error);
@@ -738,17 +736,15 @@ export async function startConversationForMerchantClosedTrigger(
 
 		if (!funnel?.flow) return;
 
-		const flow = funnel.flow as FunnelFlow & { startBlockId: string };
-		const newConversationId = await createConversation(
+		const conversationId = await scheduleOrFireTrigger(
 			experienceId,
-			funnel.id,
+			funnel,
 			whopUserId,
-			flow.startBlockId,
-			undefined,
-			undefined
+			"merchant_conversation_deleted",
 		);
-		await updateConversationToWelcomeStage(newConversationId, flow);
-		safeBackgroundTracking(() => trackInterestBackground(experienceId, funnel.id));
+		if (conversationId) {
+			safeBackgroundTracking(() => trackInterestBackground(experienceId, funnel.id));
+		}
 	} catch (error) {
 		console.error("[startConversationForMerchantClosedTrigger] Error:", error);
 		// Do not throw: merchant close should still succeed; trigger flow is best-effort.
@@ -758,15 +754,44 @@ export async function startConversationForMerchantClosedTrigger(
 /**
  * Get app link for an experience (button at end of message for non-OFFER stages).
  * experienceId is the experience UUID (experiences.id).
+ *
+ * URL format: https://whop.com/joined/{companyRoute}/{whopExperienceId}/app/
+ * The link is fetched from Whop API on first call, then cached in the experiences.link column.
  */
 export async function getExperienceAppLink(experienceId: string): Promise<string> {
 	try {
 		const experience = await db.query.experiences.findFirst({
 			where: eq(experiences.id, experienceId),
-			columns: { link: true, whopCompanyId: true },
+			columns: { link: true, whopCompanyId: true, whopExperienceId: true },
 		});
+
+		// Return cached link
 		if (experience?.link) return experience.link;
-		if (experience?.whopCompanyId) return `https://whop.com/joined/${experience.whopCompanyId}/app/`;
+
+		// Build the correct URL from Whop API, then cache it
+		if (experience?.whopCompanyId && experience?.whopExperienceId) {
+			try {
+				const companyResult = await whopSdk.companies.getCompany({
+					companyId: experience.whopCompanyId,
+				});
+				const company = companyResult as any;
+				const companyRoute = company?.route;
+
+				if (companyRoute) {
+					const link = `https://whop.com/joined/${companyRoute}/${experience.whopExperienceId}/app/`;
+
+					// Cache in DB so we don't call the API again
+					await db
+						.update(experiences)
+						.set({ link })
+						.where(eq(experiences.id, experienceId));
+
+					return link;
+				}
+			} catch (err) {
+				console.error("[getExperienceAppLink] Failed to fetch company route:", err);
+			}
+		}
 	} catch (e) {
 		console.error("[getExperienceAppLink] Error:", e);
 	}

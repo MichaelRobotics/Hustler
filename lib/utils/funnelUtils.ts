@@ -4,7 +4,7 @@
  * Keeping these functions separate helps to maintain a clean and organized codebase.
  */
 
-import { FunnelFlow, FunnelStage, FunnelBlock, FunnelBlockOption } from "@/lib/types/funnel";
+import { FunnelFlow, FunnelStage, FunnelBlock, FunnelBlockOption, SEND_DM_STAGE_NAME } from "@/lib/types/funnel";
 
 interface Resource {
 	id: string;
@@ -51,7 +51,7 @@ export const createDefaultFunnel = (
 
 /**
  * Creates a minimal flow structure for "Create Merchant Manually" (no AI generation).
- * Qualification: trigger + WELCOME stage. Upsell: trigger + OFFER stage (first product card).
+ * First stage is SEND_DM (message icon); then WELCOME or OFFER. startBlockId points to Send DM block.
  * @param funnelId - The funnel ID (used for block/stage IDs).
  * @param merchantType - "qualification" | "upsell". Upsell gets OFFER stage with one product block.
  * @returns Minimal FunnelFlow.
@@ -60,47 +60,116 @@ export const createMinimalFlow = (
 	funnelId: string,
 	merchantType: "qualification" | "upsell"
 ): FunnelFlow => {
+	const sendDmBlockId = `send-dm-block-${funnelId}`;
+	const sendDmStageId = `send-dm-stage-${funnelId}`;
 	if (merchantType === "upsell") {
 		const offerBlockId = `offer-block-${funnelId}`;
 		const offerStageId = `offer-stage-${funnelId}`;
 		return {
-			stages: [{
-				id: offerStageId,
-				name: "OFFER",
-				blockIds: [offerBlockId],
-				explanation: "First product offer",
-				cardType: "product"
-			}],
+			stages: [
+				{
+					id: sendDmStageId,
+					name: SEND_DM_STAGE_NAME,
+					blockIds: [sendDmBlockId],
+					explanation: "Send DM to user (Whop native chat); not shown in-app",
+				},
+				{
+					id: offerStageId,
+					name: "OFFER",
+					blockIds: [offerBlockId],
+					explanation: "First product offer",
+					cardType: "product",
+				},
+			],
 			blocks: {
+				[sendDmBlockId]: {
+					id: sendDmBlockId,
+					message: "Write DM there...",
+					options: [{ text: "Continue", nextBlockId: offerBlockId }],
+					sendDmBlock: true,
+				},
 				[offerBlockId]: {
 					id: offerBlockId,
 					message: "",
 					options: [
 						{ text: "Upsell", nextBlockId: null },
-						{ text: "Downsell", nextBlockId: null }
-					]
-				}
+						{ text: "Downsell", nextBlockId: null },
+					],
+				},
 			},
-			startBlockId: offerBlockId
+			startBlockId: sendDmBlockId,
 		};
 	}
 	const welcomeBlockId = `welcome-block-${funnelId}`;
 	const welcomeStageId = `welcome-stage-${funnelId}`;
 	return {
-		stages: [{
-			id: welcomeStageId,
-			name: "WELCOME",
-			blockIds: [welcomeBlockId],
-			explanation: "Welcome message sent to users"
-		}],
+		stages: [
+			{
+				id: sendDmStageId,
+				name: SEND_DM_STAGE_NAME,
+				blockIds: [sendDmBlockId],
+				explanation: "Send DM to user (Whop native chat); not shown in-app",
+			},
+			{
+				id: welcomeStageId,
+				name: "WELCOME",
+				blockIds: [welcomeBlockId],
+				explanation: "Welcome message sent to users",
+			},
+		],
 		blocks: {
+			[sendDmBlockId]: {
+				id: sendDmBlockId,
+				message: "Write DM there...",
+				options: [{ text: "Continue", nextBlockId: welcomeBlockId }],
+				sendDmBlock: true,
+			},
 			[welcomeBlockId]: {
 				id: welcomeBlockId,
 				message: "",
-				options: []
-			}
+				options: [],
+			},
 		},
-		startBlockId: welcomeBlockId
+		startBlockId: sendDmBlockId,
+	};
+};
+
+/**
+ * Ensures a funnel flow has a SEND_DM stage. If one already exists, returns the flow as-is.
+ * If missing, prepends a SEND_DM stage and block, pointing its option to the current startBlockId.
+ * The new startBlockId becomes the SEND_DM block so the flow structure stays consistent.
+ * @param flow - The existing funnel flow.
+ * @param funnelId - The funnel ID (used to generate deterministic block/stage IDs).
+ * @returns The flow with a SEND_DM stage guaranteed.
+ */
+export const ensureSendDmStage = (flow: FunnelFlow, funnelId: string): FunnelFlow => {
+	const hasSendDm = flow.stages.some((s) => s.name === SEND_DM_STAGE_NAME);
+	if (hasSendDm) return flow;
+
+	const sendDmBlockId = `send-dm-block-${funnelId}`;
+	const sendDmStageId = `send-dm-stage-${funnelId}`;
+
+	return {
+		...flow,
+		startBlockId: sendDmBlockId,
+		stages: [
+			{
+				id: sendDmStageId,
+				name: SEND_DM_STAGE_NAME,
+				blockIds: [sendDmBlockId],
+				explanation: "Send DM to user (Whop native chat); not shown in-app",
+			},
+			...flow.stages,
+		],
+		blocks: {
+			...flow.blocks,
+			[sendDmBlockId]: {
+				id: sendDmBlockId,
+				message: "Write DM there...",
+				options: [{ text: "Continue", nextBlockId: flow.startBlockId }],
+				sendDmBlock: true,
+			},
+		},
 	};
 };
 

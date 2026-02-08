@@ -35,8 +35,6 @@ interface TemplateRendererProps {
   conversation?: ConversationWithMessages;
   stageInfo?: {
     currentStage: string;
-    isDMFunnelActive: boolean;
-    isTransitionStage: boolean;
     isExperienceQualificationStage: boolean;
   };
   userType?: "admin" | "customer";

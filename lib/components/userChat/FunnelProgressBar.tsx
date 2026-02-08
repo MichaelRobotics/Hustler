@@ -38,6 +38,7 @@ export const FunnelProgressBar: React.FC<FunnelProgressBarProps> = ({
 	// Define stage order with simple, clear names
 	const stageOrder = [
 		{ key: "TRANSITION", name: "Getting Started" },
+		{ key: "SEND_DM", name: "Send DM" },
 		{ key: "WELCOME", name: "Welcome" },
 		{ key: "VALUE_DELIVERY", name: "Value Delivery" },
 		{ key: "EXPERIENCE_QUALIFICATION", name: "Experience" },

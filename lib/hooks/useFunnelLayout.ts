@@ -46,6 +46,7 @@ export const useFunnelLayout = (
 	editingBlockId: string | null,
 	blockRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>,
 	funnelId?: string,
+	sendDmCardVisible?: boolean,
 ) => {
 	// State for layout calculations
 	const [positions, setPositions] = React.useState<Record<string, Position>>(
@@ -64,12 +65,19 @@ export const useFunnelLayout = (
 	const ITEM_WIDTH = 280;
 	const STAGE_Y_GAP = 120;
 	const ESTIMATED_BLOCK_HEIGHT = 200; // Initial estimate for measurement phase
+	const SEND_DM_ESTIMATED_HEIGHT = 48; // Small icon (40px + 8px padding); used for SEND_DM stage
 
-	// Reset layout when the funnel flow changes.
+	// Track funnelFlow identity to detect actual data changes (block saves)
+	const prevFunnelFlowRef = React.useRef(funnelFlow);
 	React.useEffect(() => {
-		// Only reset if not in performance mode
+		if (prevFunnelFlowRef.current === funnelFlow) return; // same reference, skip
+		prevFunnelFlowRef.current = funnelFlow;
+
 		if (performanceMode) {
-			return; // Performance mode active, no more resets
+			// Data changed after initial layout (e.g. block save) — unlock for one recalc
+			setLayoutPhase("final");
+			setPerformanceMode(false);
+			return;
 		}
 
 		blockRefs.current = {};
@@ -78,19 +86,23 @@ export const useFunnelLayout = (
 		setPerformanceMode(false);
 	}, [funnelFlow, performanceMode]);
 
-	// Reset layout when editing state changes (blocks change dimensions)
+	// Recalculate layout when Send DM card changes height:
+	// - icon ↔ card toggle (sendDmCardVisible)
+	// - card ↔ editor toggle (editingBlockId) — editor is taller, cards below must move
+	const prevSendDmCardVisibleRef = React.useRef(sendDmCardVisible);
+	const prevEditingBlockIdRef = React.useRef(editingBlockId);
 	React.useEffect(() => {
-		// Allow recalculations when editing ends, even in performance mode
-		// This enables layout updates when blocks are saved
-		if (!editingBlockId && Object.keys(positions).length > 0) {
-			// When editing ends, trigger final layout calculation
-			const timer = setTimeout(() => {
-				setLayoutPhase("final");
-			}, 100); // Slightly longer delay to ensure DOM updates
-
-			return () => clearTimeout(timer);
-		}
-	}, [editingBlockId, positions]);
+		const cardVisChanged = prevSendDmCardVisibleRef.current !== sendDmCardVisible;
+		const editChanged = prevEditingBlockIdRef.current !== editingBlockId;
+		prevSendDmCardVisibleRef.current = sendDmCardVisible;
+		prevEditingBlockIdRef.current = editingBlockId;
+		if (!cardVisChanged && !editChanged) return; // skip mount
+		const timer = setTimeout(() => {
+			setLayoutPhase("final");
+			setPerformanceMode(false);
+		}, 50);
+		return () => clearTimeout(timer);
+	}, [sendDmCardVisible, editingBlockId]);
 
 	// Trigger final layout calculation after blocks are rendered and measured
 	React.useEffect(() => {
@@ -141,10 +153,9 @@ export const useFunnelLayout = (
 			return;
 		}
 
-		// Allow recalculations when layout phase is "final" (block save scenario)
-		// This enables layout updates when blocks are saved, even in performance mode
-		if (performanceMode && layoutPhase !== "final") {
-			return; // Performance mode active, but allow final phase recalculations
+		// Performance mode: skip recalculation entirely until explicitly unlocked
+		if (performanceMode) {
+			return;
 		}
 
 		let maxStageWidth = 0;
@@ -156,6 +167,11 @@ export const useFunnelLayout = (
 			maxStageWidth = Math.max(maxStageWidth, stageWidth);
 		});
 
+		// Helper: get estimated height for a stage (SEND_DM is small icon; others use default)
+		const isSendDmStage = (stage: FunnelStage) => stage.name === "SEND_DM";
+		const estimatedHeightForStage = (stage: FunnelStage) =>
+			isSendDmStage(stage) ? SEND_DM_ESTIMATED_HEIGHT : ESTIMATED_BLOCK_HEIGHT;
+
 		if (layoutPhase === "measure") {
 			// Phase 1: Set initial positions for measurement
 			const measurePositions: Record<string, Position> = {};
@@ -164,13 +180,14 @@ export const useFunnelLayout = (
 			funnelFlow.stages.forEach((stage) => {
 				const itemsInStage = stage.blockIds;
 				const stageWidth = (itemsInStage.length - 1) * ITEM_WIDTH;
+				const stageEstHeight = estimatedHeightForStage(stage);
 
 				itemsInStage.forEach((blockId, itemIndex) => {
 					const xPos = itemIndex * ITEM_WIDTH - stageWidth / 2;
 					measurePositions[blockId] = { x: xPos, y: currentY, opacity: 1 };
 				});
 
-				currentY += ESTIMATED_BLOCK_HEIGHT + STAGE_Y_GAP;
+				currentY += stageEstHeight + STAGE_Y_GAP;
 			});
 
 			setItemCanvasWidth(maxStageWidth + ITEM_WIDTH);
@@ -181,18 +198,26 @@ export const useFunnelLayout = (
 			const tempStageLayouts: StageLayout[] = [];
 			let tempY = 0;
 			funnelFlow.stages.forEach((stage) => {
+				const stageEstHeight = estimatedHeightForStage(stage);
 				tempStageLayouts.push({
 					...stage,
 					y: tempY,
-					height: ESTIMATED_BLOCK_HEIGHT,
+					height: stageEstHeight,
 				});
-				tempY += ESTIMATED_BLOCK_HEIGHT + STAGE_Y_GAP;
+				tempY += stageEstHeight + STAGE_Y_GAP;
 			});
 			setStageLayouts(tempStageLayouts);
 
 			// Calculate lines with estimated heights (so arrows are visible immediately)
+			// Build a map of blockId → stage for quick lookup
+			const blockStageMap = new Map<string, FunnelStage>();
+			funnelFlow.stages.forEach((stage) => {
+				stage.blockIds.forEach((bid) => blockStageMap.set(bid, stage));
+			});
 			const measureLines: Line[] = [];
 			Object.values(funnelFlow.blocks).forEach((block) => {
+				const blockStage = blockStageMap.get(block.id);
+				const blockEstHeight = blockStage ? estimatedHeightForStage(blockStage) : ESTIMATED_BLOCK_HEIGHT;
 				block.options?.forEach((opt, index) => {
 					if (
 						opt.nextBlockId &&
@@ -202,7 +227,7 @@ export const useFunnelLayout = (
 						measureLines.push({
 							id: `${block.id}-${opt.nextBlockId}-${index}`,
 							x1: measurePositions[block.id].x,
-							y1: measurePositions[block.id].y + ESTIMATED_BLOCK_HEIGHT,
+							y1: measurePositions[block.id].y + blockEstHeight,
 							x2: measurePositions[opt.nextBlockId].x,
 							y2: measurePositions[opt.nextBlockId].y,
 						});
@@ -212,10 +237,17 @@ export const useFunnelLayout = (
 			setLines(measureLines);
 		} else if (layoutPhase === "final") {
 			// Phase 2: Calculate final positions based on actual heights
+			// Build a map of blockId → stage for correct fallback heights
+			const blockStageMapFinal = new Map<string, FunnelStage>();
+			funnelFlow.stages.forEach((stage) => {
+				stage.blockIds.forEach((bid) => blockStageMapFinal.set(bid, stage));
+			});
 			const heights: Record<string, number> = {};
 			Object.keys(funnelFlow.blocks).forEach((id) => {
 				const element = blockRefs.current[id];
-				heights[id] = element?.offsetHeight || ESTIMATED_BLOCK_HEIGHT;
+				const stg = blockStageMapFinal.get(id);
+				const fallback = stg && isSendDmStage(stg) ? SEND_DM_ESTIMATED_HEIGHT : ESTIMATED_BLOCK_HEIGHT;
+				heights[id] = element?.offsetHeight || fallback;
 			});
 
 			const finalPositions: Record<string, Position> = {};
@@ -225,11 +257,12 @@ export const useFunnelLayout = (
 			funnelFlow.stages.forEach((stage) => {
 				const itemsInStage = stage.blockIds;
 				const stageWidth = (itemsInStage.length - 1) * ITEM_WIDTH;
+				const minHeight = isSendDmStage(stage) ? SEND_DM_ESTIMATED_HEIGHT : ESTIMATED_BLOCK_HEIGHT;
 
 				// Calculate the maximum height of blocks in this stage
 				const maxBlockHeightInStage = Math.max(
-					ESTIMATED_BLOCK_HEIGHT, // Minimum height
-					...itemsInStage.map((id) => heights[id] || ESTIMATED_BLOCK_HEIGHT),
+					minHeight, // Minimum height (smaller for SEND_DM icon)
+					...itemsInStage.map((id) => heights[id] || minHeight),
 				);
 
 				itemsInStage.forEach((blockId, itemIndex) => {
@@ -250,7 +283,7 @@ export const useFunnelLayout = (
 			setPositions(finalPositions);
 			setStageLayouts(finalStageLayouts);
 
-			// Calculate lines with actual heights
+			// Calculate lines with actual heights (heights map already has correct fallbacks per stage)
 			const finalLines: Line[] = [];
 			Object.values(funnelFlow.blocks).forEach((block) => {
 				block.options?.forEach((opt, index) => {
@@ -262,9 +295,7 @@ export const useFunnelLayout = (
 						finalLines.push({
 							id: `${block.id}-${opt.nextBlockId}-${index}`,
 							x1: finalPositions[block.id].x,
-							y1:
-								finalPositions[block.id].y +
-								(heights[block.id] || ESTIMATED_BLOCK_HEIGHT),
+							y1: finalPositions[block.id].y + heights[block.id],
 							x2: finalPositions[opt.nextBlockId].x,
 							y2: finalPositions[opt.nextBlockId].y,
 						});
@@ -279,7 +310,7 @@ export const useFunnelLayout = (
 			// Activate performance mode - freeze all calculations
 			setPerformanceMode(true);
 		}
-	}, [funnelFlow, layoutPhase, editingBlockId, layoutCompleted]);
+	}, [funnelFlow, layoutPhase, layoutCompleted, performanceMode]);
 
 	// Functions for specific actions - performance mode stays active
 	const enableCalculationsForOfferSelection = React.useCallback(() => {

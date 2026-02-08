@@ -52,6 +52,17 @@ export interface FunnelForTrigger {
 	appTriggerConfig: unknown;
 	membershipTriggerConfig: unknown;
 	merchantType: string | null;
+	delayMinutes?: number; // App trigger delay
+	membershipDelayMinutes?: number; // Membership trigger delay
+}
+
+/**
+ * Get the effective delay in minutes for a funnel trigger.
+ * Membership triggers use membershipDelayMinutes; app triggers use delayMinutes.
+ */
+export function getEffectiveDelay(funnel: FunnelForTrigger, triggerContext: TriggerContext): number {
+	const isMembership = triggerContext === "membership_activated" || triggerContext === "membership_deactivated";
+	return (isMembership ? funnel.membershipDelayMinutes : funnel.delayMinutes) ?? 0;
 }
 
 /**
@@ -143,6 +154,8 @@ export async function findFunnelForTrigger(
 					appTriggerConfig: funnels.appTriggerConfig,
 					membershipTriggerConfig: funnels.membershipTriggerConfig,
 					merchantType: funnels.merchantType,
+					delayMinutes: funnels.delayMinutes,
+					membershipDelayMinutes: funnels.membershipDelayMinutes,
 				})
 				.from(funnels)
 				.where(
@@ -165,6 +178,8 @@ export async function findFunnelForTrigger(
 					appTriggerConfig: funnels.appTriggerConfig,
 					membershipTriggerConfig: funnels.membershipTriggerConfig,
 					merchantType: funnels.merchantType,
+					delayMinutes: funnels.delayMinutes,
+					membershipDelayMinutes: funnels.membershipDelayMinutes,
 				})
 				.from(funnels)
 				.where(
@@ -212,6 +227,8 @@ export async function findFunnelForTrigger(
 					appTriggerConfig: funnels.appTriggerConfig,
 					membershipTriggerConfig: funnels.membershipTriggerConfig,
 					merchantType: funnels.merchantType,
+					delayMinutes: funnels.delayMinutes,
+					membershipDelayMinutes: funnels.membershipDelayMinutes,
 				})
 				.from(funnels)
 				.where(

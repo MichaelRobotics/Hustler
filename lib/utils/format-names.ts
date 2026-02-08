@@ -10,7 +10,8 @@ export function formatStageName(stageName: string): string {
   // Special case mappings for better user experience
   const specialMappings: Record<string, string> = {
     'VALUE_DELIVERY': 'Gift Delivery',
-    'TRANSITION': 'DM Notif'
+    'TRANSITION': 'DM Notif',
+    'SEND_DM': 'Send DM'
   };
   
   if (specialMappings[stageName]) {

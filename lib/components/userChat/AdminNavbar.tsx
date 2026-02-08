@@ -22,8 +22,6 @@ interface AdminNavbarProps {
 	conversationId: string | null;
 	stageInfo: {
 		currentStage: string;
-		isDMFunnelActive: boolean;
-		isTransitionStage: boolean;
 		isExperienceQualificationStage: boolean;
 	} | null;
 	adminLoading: boolean;

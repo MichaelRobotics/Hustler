@@ -147,9 +147,7 @@ async function sendStageTransitionWebSocket(
         stageTransition: {
           currentStage: currentStage,
           previousStage: previousStage,
-          isTransitionStage: currentStage === 'TRANSITION',
           isExperienceQualificationStage: currentStage === 'EXPERIENCE_QUALIFICATION',
-          isDMFunnelActive: true
         }
       },
       experienceId: experienceId,
@@ -309,9 +307,7 @@ async function processFunnelNavigation(
   stageTransition?: {
     currentStage: string;
     previousStage: string;
-    isTransitionStage: boolean;
     isExperienceQualificationStage: boolean;
-    isDMFunnelActive: boolean;
   } | null;
 }> {
   try {
@@ -475,9 +471,7 @@ async function processFunnelNavigation(
       stageTransition = {
         currentStage,
         previousStage,
-        isTransitionStage: currentStage === 'TRANSITION',
         isExperienceQualificationStage: currentStage === 'EXPERIENCE_QUALIFICATION',
-        isDMFunnelActive: true
       };
       
       console.log(`[NAVIGATE-FUNNEL] Stage transition: ${previousStage} -> ${currentStage}`);

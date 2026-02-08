@@ -62,8 +62,6 @@ interface UserChatProps {
 	userType?: "admin" | "customer";
 	stageInfo?: {
 		currentStage: string;
-		isDMFunnelActive: boolean;
-		isTransitionStage: boolean;
 		isExperienceQualificationStage: boolean;
 	};
 	/** Funnel merchant type: qualification (options shown) or upsell (no options in OFFER, only latest offer message) */
@@ -128,6 +126,8 @@ const UserChat: React.FC<UserChatProps> = ({
 	const lastTypingRef = useRef<{ user?: boolean; admin?: boolean } | null>(null);
 	// Track which conversation we've seeded messages for (initialize once per conversationId to avoid blink on parent updates)
 	const initializedConversationIdRef = useRef<string | null>(null);
+	// When parent passes a larger message set for same conversation (e.g. CustomerView aggregated timeline), re-seed
+	const lastSeenMessageCountRef = useRef<number>(0);
 	const { appearance, toggleTheme } = useTheme();
 	const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
@@ -193,12 +193,17 @@ const UserChat: React.FC<UserChatProps> = ({
 	// Reset initialized ref when conversationId changes so we re-seed for the new conversation
 	useEffect(() => {
 		initializedConversationIdRef.current = null;
+		lastSeenMessageCountRef.current = 0;
 	}, [conversationId]);
 
-	// Initialize conversation messages from backend data ONCE per conversationId (avoids blink when parent updates conversation again e.g. cache then API)
+	// Initialize conversation messages from backend data. Re-seed when parent passes more messages for same conversation (e.g. CustomerView aggregated timeline).
 	useEffect(() => {
 		if (!conversation?.messages?.length || !conversationId) return;
-		if (initializedConversationIdRef.current === conversationId) return;
+		const incomingCount = conversation.messages.length;
+		const alreadyInitialized = initializedConversationIdRef.current === conversationId;
+		const wouldSkip = alreadyInitialized && incomingCount <= lastSeenMessageCountRef.current;
+		console.log("[UserChat] seed effect: incomingCount =", incomingCount, "alreadyInitialized =", alreadyInitialized, "lastSeen =", lastSeenMessageCountRef.current, "wouldSkip =", wouldSkip);
+		if (wouldSkip) return;
 
 		const processMessages = async () => {
 			const formattedMessages = await Promise.all(
@@ -213,12 +218,14 @@ const UserChat: React.FC<UserChatProps> = ({
 					};
 				})
 			);
+			console.log("[UserChat] seed effect: setting", formattedMessages.length, "messages");
 			setConversationMessages(formattedMessages);
 			initializedConversationIdRef.current = conversationId;
+			lastSeenMessageCountRef.current = incomingCount;
 			setTimeout(() => scrollToBottom(), 100);
 		};
 		processMessages();
-	}, [conversation?.messages, conversationId]);
+	}, [conversation?.messages, conversation?.messages?.length, conversationId]);
 
 	// Persist messages to sessionStorage cache when they change (so returning to this conversation shows them immediately)
 	useEffect(() => {
@@ -270,6 +277,9 @@ const UserChat: React.FC<UserChatProps> = ({
 						}));
 
 						setConversationMessages((prev) => {
+							// Never overwrite when we have no state yet: parent may pass aggregated timeline via prop; let seed effect or prop drive initial list.
+							if (prev.length === 0) return prev;
+
 							const existingIds = new Set(prev.map((m) => m.id));
 							const OPTIMISTIC_PREFIXES = /^(user-|bot-|temp-|error-)/;
 							const isOptimistic = (id: string) => OPTIMISTIC_PREFIXES.test(id);
@@ -290,7 +300,13 @@ const UserChat: React.FC<UserChatProps> = ({
 							const newFromServer = formattedServer.filter((s) => !existingIds.has(s.id));
 							const mergedIds = new Set(withoutDupedOptimistic.map((m) => m.id));
 							const reallyNew = newFromServer.filter((s) => !mergedIds.has(s.id));
-							const next = [...withoutDupedOptimistic, ...reallyNew].sort(
+							let next = [...withoutDupedOptimistic, ...reallyNew].sort(
+								(a, b) =>
+									(a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)).getTime() -
+									(b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)).getTime()
+							);
+							// Never shrink: parent may have passed aggregated timeline (more than this conversation's messages).
+							if (next.length < prev.length) next = [...prev, ...reallyNew].sort(
 								(a, b) =>
 									(a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)).getTime() -
 									(b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)).getTime()
@@ -353,13 +369,32 @@ const UserChat: React.FC<UserChatProps> = ({
 	const isUpsellOfferStage = isUpsell && stageInfo?.currentStage === "OFFER";
 	const options = isUpsell ? [] : (currentBlock?.options || []);
 
+	// Normalize conversation.messages from props so we can show them before internal state has been seeded (e.g. CustomerView aggregated timeline).
+	const messagesFromProp = useMemo(() => {
+		const raw = conversation?.messages;
+		if (!raw?.length) return [];
+		return raw.map((msg: { id?: string; type?: string; text?: string; content?: string; timestamp?: string | Date; createdAt?: string | Date; metadata?: unknown }) => {
+			const content = (msg.text ?? msg.content ?? "").trim();
+			const ts = msg.timestamp ?? msg.createdAt;
+			const createdAt = ts instanceof Date ? ts : new Date(ts ?? 0);
+			const type = (msg.type === "user" || msg.type === "bot" || msg.type === "system" || msg.type === "admin" ? msg.type : "bot") as "user" | "bot" | "system" | "admin";
+			return { id: msg.id ?? "", type, content, metadata: msg.metadata, createdAt };
+		});
+		// Include .length so we recompute when parent passes more messages (e.g. aggregated timeline) even if array ref is unchanged
+	}, [conversation?.messages, conversation?.messages?.length]);
+
+	// Prefer the richer list so parent's aggregated timeline (e.g. CustomerView's 22) isn't overwritten by the poll's load-conversation (single-conversation fetch returns only 3).
+	// Use raw prop length so we prefer parent's list even on first render when useMemo may not have run yet.
+	const propMessageCount = conversation?.messages?.length ?? 0;
+	const messagesForDisplay = conversationMessages.length >= propMessageCount ? conversationMessages : messagesFromProp;
+
 	// UpSell OFFER: show only the latest bot message (hide previous offers)
 	const displayedMessages = useMemo(() => {
-		if (!isUpsellOfferStage || conversationMessages.length === 0) return conversationMessages;
-		const lastBotIdx = [...conversationMessages].map((m, i) => ({ m, i })).filter(({ m }) => m.type === "bot").pop()?.i ?? -1;
-		if (lastBotIdx < 0) return conversationMessages;
-		return conversationMessages.filter((msg, i) => msg.type !== "bot" || i === lastBotIdx);
-	}, [conversationMessages, isUpsellOfferStage]);
+		if (!isUpsellOfferStage || messagesForDisplay.length === 0) return messagesForDisplay;
+		const lastBotIdx = [...messagesForDisplay].map((m, i) => ({ m, i })).filter(({ m }) => m.type === "bot").pop()?.i ?? -1;
+		if (lastBotIdx < 0) return messagesForDisplay;
+		return messagesForDisplay.filter((msg, i) => msg.type !== "bot" || i === lastBotIdx);
+	}, [messagesForDisplay, isUpsellOfferStage]);
 
 	// Update local current block ID when conversation changes
 	useEffect(() => {
@@ -728,8 +763,9 @@ const UserChat: React.FC<UserChatProps> = ({
 												conversationId: conversation.id,
 												blockId: conversation.currentBlockId,
 											})
-												.then((res: { data?: { conversation?: { status?: string } } }) => {
-													if (res?.data?.conversation?.status === "closed") {
+												.then((res) => res.json())
+												.then((data: { conversation?: { status?: string } }) => {
+													if (data?.conversation?.status === "closed") {
 														handleFunnelCompletion();
 													}
 												})
@@ -879,6 +915,13 @@ const UserChat: React.FC<UserChatProps> = ({
 		),
 	);
 
+	// Message list source flow:
+	// 1) Props: parent passes conversation.messages (e.g. CustomerView aggregated timeline or single-conversation from load-conversation).
+	// 2) messagesFromProp = normalized conversation?.messages (useMemo above).
+	// 3) Internal state conversationMessages is set by: (a) seed effect when conversation.messages arrives, (b) poll every 2s via POST /api/userchat/load-conversation (returns this conversation's messages only), (c) optimistic append on send.
+	// 4) messagesForDisplay = whichever has more (state vs prop) so parent's full timeline isn't overwritten by poll's single-conversation result.
+	// 5) displayedMessages = messagesForDisplay with upsell OFFER filter (latest bot only) if applicable.
+	// 6) messageList below = displayedMessages mapped to { type, text, timestamp }, then transition-message filter for customers.
 	// Memoized message list - show conversation messages (UpSell OFFER: only latest offer message)
 	const messageList = useMemo(() => {
 		const messagesToShow = displayedMessages.map(msg => ({

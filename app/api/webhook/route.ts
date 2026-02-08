@@ -13,11 +13,9 @@ import type { TriggerContext } from "@/lib/helpers/conversation-trigger";
 import type { FunnelForTrigger } from "@/lib/helpers/conversation-trigger";
 import { whopSdk } from "@/lib/whop-sdk";
 import { getMembershipUserInfo } from "@/lib/helpers/whop-membership-user";
-import { createConversation } from "@/lib/actions/simplified-conversation-actions";
-import { updateConversationToWelcomeStage } from "@/lib/actions/user-join-actions";
+import { scheduleOrFireTrigger } from "@/lib/actions/user-join-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "@/lib/analytics/background-tracking";
 import { hasActiveConversation, findFunnelForTrigger } from "@/lib/helpers/conversation-trigger";
-import type { FunnelFlow } from "@/lib/types/funnel";
 
 // Validate webhook secret exists
 if (!process.env.WHOP_WEBHOOK_SECRET) {
@@ -209,18 +207,19 @@ async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
 				);
 				for (const { experienceId, funnel } of matches) {
 					if (await hasActiveConversation(experienceId, uid)) continue;
-					const funnelFlow = funnel.flow as FunnelFlow;
-					const conversationId = await createConversation(
+					const conversationId = await scheduleOrFireTrigger(
 						experienceId,
-						funnel.id,
+						funnel,
 						uid,
-						funnelFlow.startBlockId,
-						normalized.membership_id ?? undefined,
-						normalized.product_id ?? undefined
+						"membership_activated",
+						{ membershipId: normalized.membership_id ?? undefined, productId: normalized.product_id ?? undefined },
 					);
-					await updateConversationToWelcomeStage(conversationId, funnelFlow);
-					safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
-					console.log(`[WEBHOOK payment.succeeded] Created membership-buy conversation ${conversationId} for user ${uid}`);
+					if (conversationId) {
+						safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
+						console.log(`[WEBHOOK payment.succeeded] Created membership-buy conversation ${conversationId} for user ${uid}`);
+					} else {
+						console.log(`[WEBHOOK payment.succeeded] Scheduled delayed trigger for user ${uid} in experience ${experienceId}`);
+					}
 				}
 			}
 		} catch (err) {
@@ -276,19 +275,19 @@ async function handleMembershipWentValidWebhook(data: MembershipWebhookData) {
         console.log(`[WEBHOOK membership.went_valid] User ${user_id} already has active conversation in experience ${experienceId} - skipping this experience`);
         continue;
       }
-      const funnelFlow = funnel.flow as FunnelFlow;
-      console.log(`[WEBHOOK membership.went_valid] Creating conversation for user ${user_id} in experience ${experienceId}`);
-      const conversationId = await createConversation(
+      const conversationId = await scheduleOrFireTrigger(
         experienceId,
-        funnel.id,
+        funnel,
         user_id,
-        funnelFlow.startBlockId,
-        membershipId,
-        product_id
+        "membership_activated",
+        { membershipId, productId: product_id },
       );
-      await updateConversationToWelcomeStage(conversationId, funnelFlow);
-      safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
-      console.log(`[WEBHOOK membership.went_valid] Created conversation ${conversationId} for experience ${experienceId}`);
+      if (conversationId) {
+        safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
+        console.log(`[WEBHOOK membership.went_valid] Created conversation ${conversationId} for experience ${experienceId}`);
+      } else {
+        console.log(`[WEBHOOK membership.went_valid] Scheduled delayed trigger for user ${user_id} in experience ${experienceId}`);
+      }
     }
     console.log(`[WEBHOOK membership.went_valid] Successfully processed for user ${user_id}`);
   } catch (error) {
@@ -334,19 +333,19 @@ async function handleMembershipDeactivatedWebhook(data: MembershipWebhookData) {
         console.log(`[WEBHOOK membership.deactivated] User ${user_id} already has active conversation in experience ${experienceId} - skipping this experience`);
         continue;
       }
-      const funnelFlow = funnel.flow as FunnelFlow;
-      console.log(`[WEBHOOK membership.deactivated] Creating conversation for user ${user_id} in experience ${experienceId}`);
-      const conversationId = await createConversation(
+      const conversationId = await scheduleOrFireTrigger(
         experienceId,
-        funnel.id,
+        funnel,
         user_id,
-        funnelFlow.startBlockId,
-        membershipId,
-        product_id
+        "membership_deactivated",
+        { membershipId, productId: product_id },
       );
-      await updateConversationToWelcomeStage(conversationId, funnelFlow);
-      safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
-      console.log(`[WEBHOOK membership.deactivated] Created conversation ${conversationId} for experience ${experienceId}`);
+      if (conversationId) {
+        safeBackgroundTracking(() => trackAwarenessBackground(experienceId, funnel.id));
+        console.log(`[WEBHOOK membership.deactivated] Created conversation ${conversationId} for experience ${experienceId}`);
+      } else {
+        console.log(`[WEBHOOK membership.deactivated] Scheduled delayed trigger for user ${user_id} in experience ${experienceId}`);
+      }
     }
     console.log(`[WEBHOOK membership.deactivated] Successfully processed for user ${user_id}`);
   } catch (error) {

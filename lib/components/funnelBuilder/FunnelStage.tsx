@@ -16,6 +16,7 @@ interface FunnelStageProps {
 	EXPLANATION_AREA_WIDTH: number;
 	onStageUpdate?: (stageId: string, updates: { name?: string; explanation?: string; blockIds?: string[] }) => void;
 	disableStageEditing?: boolean;
+	sendDmCardVisible?: boolean;
 }
 
 const FunnelStage: React.FC<FunnelStageProps> = ({
@@ -24,6 +25,7 @@ const FunnelStage: React.FC<FunnelStageProps> = ({
 	EXPLANATION_AREA_WIDTH,
 	onStageUpdate,
 	disableStageEditing = false,
+	sendDmCardVisible = false,
 }) => {
 	const [editingStageId, setEditingStageId] = React.useState<string | null>(null);
 	const [editingField, setEditingField] = React.useState<"name" | "explanation" | null>(null);
@@ -36,8 +38,13 @@ const FunnelStage: React.FC<FunnelStageProps> = ({
 	};
 
 	const handleSaveEdit = (stageId: string, field: "name" | "explanation") => {
-		if (onStageUpdate && editValue.trim()) {
-			onStageUpdate(stageId, { [field]: editValue.trim() });
+		if (onStageUpdate) {
+			// Name requires non-empty; explanation can be cleared
+			if (field === "name" && !editValue.trim()) {
+				handleCancelEdit();
+				return;
+			}
+			onStageUpdate(stageId, { [field]: field === "name" ? editValue.trim() : editValue });
 		}
 		setEditingStageId(null);
 		setEditingField(null);
@@ -54,6 +61,7 @@ const FunnelStage: React.FC<FunnelStageProps> = ({
 		<>
 			{/* Stage Explanations */}
 			{stageLayouts.map((layout, index) => {
+				const isSendDm = layout.name === "SEND_DM";
 				const isEditingName = editingStageId === layout.id && editingField === "name";
 				const isEditingExplanation = editingStageId === layout.id && editingField === "explanation";
 
@@ -71,6 +79,15 @@ const FunnelStage: React.FC<FunnelStageProps> = ({
 								justifyContent: "center",
 							}}
 						>
+							{isSendDm ? (
+							sendDmCardVisible ? (
+								<div className="bg-gradient-to-r from-blue-500/10 to-blue-400/10 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200/50 dark:border-blue-700/30 rounded-xl p-3">
+									<h3 className="text-lg font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+										{formatStageName(layout.name)}
+									</h3>
+								</div>
+							) : null
+						) : (
 							<div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200/50 dark:border-violet-700/30 rounded-xl p-3">
 								{/* Stage Name - Editable */}
 								{isEditingName ? (
@@ -123,6 +140,7 @@ const FunnelStage: React.FC<FunnelStageProps> = ({
 									</p>
 								)}
 							</div>
+							)}
 						</div>
 						{index < stageLayouts.length - 1 && (
 							<div

@@ -92,6 +92,7 @@ async function upsertNotificationHandler(
 		}
 
 		const notification = await upsertFunnelNotification(userContext.user, {
+			...(body.id && { id: body.id }),
 			funnelId,
 			stageId: body.stageId,
 			sequence: body.sequence,
