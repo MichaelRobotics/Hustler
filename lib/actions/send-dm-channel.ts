@@ -1,6 +1,8 @@
 /**
- * Send DM via Whop DM Channels API.
- * Uses list/create channel, add members, create message. Channels cached in dm_channels table by companyId.
+ * Send DM via Whop DM Channels API as the Whop admin who installed the app.
+ * - Company admin: resolved from users table (experienceId + accessLevel === "admin"), used for channel and message sender.
+ * - Channels: create/manage using company admin Whop user id + customer Whop user id; cached in dm_channels by companyId.
+ * - Messages: same Whop API calls; create message includes user_id of company admin so message appears from admin, not agent.
  * @see https://docs.whop.com/api-reference/dm-channels/list-dm-channels
  * @see https://docs.whop.com/api-reference/dm-channels/create-dm-channel
  * @see https://docs.whop.com/api-reference/dm-members/create-dm-member
@@ -94,21 +96,26 @@ async function addDmMember(channelId: string, userId: string): Promise<void> {
 }
 
 /**
- * Send a message to a DM channel.
+ * Send a message to a DM channel as the Whop admin (so it appears from the admin who installed the app, not as an agent).
  */
-async function sendMessageToChannel(channelId: string, content: string): Promise<void> {
-	console.log(`[send-dm-channel] POST ${WHOP_API_BASE}/messages — channel=${channelId}, content length=${content.length}`);
+async function sendMessageToChannel(
+	channelId: string,
+	content: string,
+	adminWhopUserId: string
+): Promise<void> {
+	const body = { channel_id: channelId, content, user_id: adminWhopUserId };
+	console.log(`[send-dm-channel] POST ${WHOP_API_BASE}/messages — channel=${channelId}, as admin=${adminWhopUserId}, content length=${content.length}`);
 	const res = await fetch(`${WHOP_API_BASE}/messages`, {
 		method: "POST",
 		headers: getAuthHeaders(),
-		body: JSON.stringify({ channel_id: channelId, content }),
+		body: JSON.stringify(body),
 	});
 	if (!res.ok) {
 		const errText = await res.text();
 		console.error(`[send-dm-channel] Send message response: ${res.status}`, errText);
 		throw new Error(`Whop create message failed: ${res.status} ${errText}`);
 	}
-	console.log(`[send-dm-channel] Message sent successfully to channel ${channelId}`);
+	console.log(`[send-dm-channel] Message sent successfully to channel ${channelId} as admin`);
 }
 
 /**
@@ -174,8 +181,8 @@ export async function sendDmViaChannel(
 		console.log(`[send-dm-channel] Getting/creating DM channel: company=${companyId}, admin=${adminWhopUserId}, customer=${customerWhopUserId}`);
 		const channelId = await getOrCreateDmChannel(companyId, adminWhopUserId, customerWhopUserId);
 		console.log(`[send-dm-channel] Channel ID: ${channelId}`);
-		console.log(`[send-dm-channel] Sending message to channel...`);
-		await sendMessageToChannel(channelId, content);
+		console.log(`[send-dm-channel] Sending message to channel as Whop admin...`);
+		await sendMessageToChannel(channelId, content, adminWhopUserId);
 		console.log(`[send-dm-channel] SUCCESS — DM sent to ${customerWhopUserId} via channel ${channelId}`);
 		return true;
 	} catch (err) {
