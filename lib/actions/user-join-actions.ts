@@ -495,9 +495,6 @@ export async function createConversationWithDm(
 		const appLink = await getExperienceAppLink(experienceId);
 		console.log(`[createConversationWithDm] appLink=${appLink}`);
 
-		const rawDmContent = [sendDmBlock?.message?.trim(), appLink].filter(Boolean).join("\n\n") || appLink;
-		console.log(`[createConversationWithDm] rawDmContent (first 120 chars): ${rawDmContent.substring(0, 120)}`);
-
 		const conversationId = await createConversation(
 			experienceId,
 			funnelId,
@@ -508,12 +505,18 @@ export async function createConversationWithDm(
 		);
 		console.log(`[createConversationWithDm] Created conversation ${conversationId} at block ${firstRealBlockId}`);
 
-		const resolvedDmContent = await resolvePlaceholders(rawDmContent, experienceId, conversationId);
-		console.log(`[createConversationWithDm] Sending DM to ${whopUserId}...`);
-		const dmSent = await sendDmViaChannel(experienceId, whopUserId, resolvedDmContent);
-		console.log(`[createConversationWithDm] DM sent result: ${dmSent}`);
-		if (!dmSent) {
-			console.error(`[createConversationWithDm] Failed to send DM to user ${whopUserId}`);
+		// Send as 2 separate DMs: first text, then link
+		const rawText = sendDmBlock?.message?.trim();
+		if (rawText) {
+			const resolvedText = await resolvePlaceholders(rawText, experienceId, conversationId);
+			console.log(`[createConversationWithDm] Sending first DM (text) to ${whopUserId}...`);
+			const textSent = await sendDmViaChannel(experienceId, whopUserId, resolvedText);
+			if (!textSent) console.error(`[createConversationWithDm] Failed to send text DM to user ${whopUserId}`);
+		}
+		if (appLink) {
+			console.log(`[createConversationWithDm] Sending second DM (link) to ${whopUserId}...`);
+			const linkSent = await sendDmViaChannel(experienceId, whopUserId, appLink);
+			if (!linkSent) console.error(`[createConversationWithDm] Failed to send link DM to user ${whopUserId}`);
 		}
 
 		// Add first in-app message (first real block) so UserChat/LiveChat show something
