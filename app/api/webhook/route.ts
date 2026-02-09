@@ -688,6 +688,7 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 async function handlePaymentWithAnalytics(webhookData: any) {
 	try {
 		console.log(`[Webhook Analytics] Processing payment webhook for user: ${webhookData.user_id}`);
+		console.log(`[Webhook Analytics] Full webhook payload:`, JSON.stringify(webhookData, null, 2));
 
 		// Step 1: Detect scenario (affiliate vs product owner vs error)
 		const scenarioData = await detectScenario(webhookData);
