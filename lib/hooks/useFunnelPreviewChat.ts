@@ -6,6 +6,7 @@ import type {
 } from "../types/funnel";
 import { SEND_DM_STAGE_NAME } from "../types/funnel";
 import { isProductCardBlock, getProductCardButtonLabel } from "../utils/funnelUtils";
+import { apiGet } from "../utils/api-client";
 
 export const useFunnelPreviewChat = (
 	funnelFlow: FunnelFlow | null,
@@ -33,7 +34,7 @@ export const useFunnelPreviewChat = (
 
 		const fetchExperienceData = async () => {
 			try {
-				const response = await fetch(`/api/experience/link?experienceId=${experienceId}`);
+				const response = await apiGet(`/api/experience/link?experienceId=${experienceId}`, experienceId);
 				if (response.ok) {
 					const data = await response.json();
 					if (data.experience) {

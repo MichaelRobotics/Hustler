@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withWhopAuth, type AuthContext } from '@/lib/middleware/whop-auth';
-import { db } from '@/lib/supabase/db-server';
-import { experiences } from '@/lib/supabase/schema';
-import { eq } from 'drizzle-orm';
 import { retrieveWhopAccount } from '@/lib/whop-rest';
+import { authorizeExperience } from '@/lib/helpers/experience-access-gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,38 +13,15 @@ export const GET = withWhopAuth(async (request: NextRequest, context: AuthContex
     const { user } = context;
     const experienceId = user.experienceId;
 
-    if (!experienceId) {
-      return NextResponse.json(
-        { error: 'Experience ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Resolve experience ID if it's a Whop experience ID
-    let resolvedExperienceId = experienceId;
-    if (experienceId.startsWith('exp_')) {
-      const experience = await db.query.experiences.findFirst({
-        where: eq(experiences.whopExperienceId, experienceId),
-        columns: { id: true, whopCompanyId: true },
-      });
-
-      if (experience) {
-        resolvedExperienceId = experience.id;
-      } else {
-        return NextResponse.json(
-          { error: 'Experience not found' },
-          { status: 404 }
-        );
-      }
-    }
-
-    // Get company ID from experience
-    const experience = await db.query.experiences.findFirst({
-      where: eq(experiences.id, resolvedExperienceId),
-      columns: { whopCompanyId: true },
+    const access = await authorizeExperience({
+      whopUserId: user.userId,
+      headerExperienceId: experienceId,
     });
+    if (!access.ok) return access.response;
 
-    if (!experience?.whopCompanyId) {
+    const experience = access.experience;
+
+    if (!experience.whopCompanyId) {
       return NextResponse.json(
         { error: 'Company ID not found' },
         { status: 404 }

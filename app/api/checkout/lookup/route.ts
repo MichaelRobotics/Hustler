@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireRequestExperience } from "@/lib/helpers/experience-access-gate";
 import { db } from "@/lib/supabase/db-server";
 import { subscriptions } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
@@ -15,6 +16,9 @@ import { eq, and } from "drizzle-orm";
  */
 export async function GET(request: NextRequest) {
 	try {
+		const access = await requireRequestExperience(request);
+		if (!access.ok) return access.response;
+
 		const { searchParams } = new URL(request.url);
 		const type = searchParams.get("type");
 		const amount = searchParams.get("amount");

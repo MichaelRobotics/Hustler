@@ -5,6 +5,7 @@ import { eq, and, inArray, or } from "drizzle-orm";
 import { deleteExistingConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
 import { headers } from "next/headers";
 import { whopSdk } from "@/lib/whop-sdk";
+import { authorizeExperience } from "@/lib/helpers/experience-access-gate";
 
 /**
  * Admin API endpoint to completely reset all conversations for a user
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const access = await authorizeExperience({
+      whopUserId,
+      headerExperienceId: request.headers.get("X-Experience-ID"),
+      bodyExperienceId: experienceId,
+      requireAdmin: true,
+    });
+    if (!access.ok) return access.response;
 
     console.log(`🧹 Admin resetting all conversations for user ${whopUserId} in experience ${experienceId}`);
 

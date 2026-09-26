@@ -11,7 +11,7 @@ interface NotificationEditModalProps {
 	stageId: string;
 	stageName: string;
 	nextSequence: number; // Next sequence number for new notifications
-	onSave: (notification: FunnelNotificationInput) => void;
+	onSave: (notification: FunnelNotificationInput) => void | Promise<void>;
 	onDelete?: () => void;
 	onClose: () => void;
 	funnelId: string;
@@ -37,6 +37,8 @@ const NotificationEditModal: React.FC<NotificationEditModalProps> = ({
 	const [inactivityMinutes, setInactivityMinutes] = useState(30);
 	const [message, setMessage] = useState("");
 	const [timeUnit, setTimeUnit] = useState<"minutes" | "hours">("minutes");
+	const [saveError, setSaveError] = useState<string | null>(null);
+	const [isSaving, setIsSaving] = useState(false);
 
 	const isEditing = !!notification;
 
@@ -61,18 +63,25 @@ const NotificationEditModal: React.FC<NotificationEditModalProps> = ({
 		}
 	}, [isOpen, notification]);
 
-	const handleSave = () => {
+	const handleSave = async () => {
 		const minutesValue = timeUnit === "hours" ? inactivityMinutes * 60 : inactivityMinutes;
-		
-		onSave({
-			funnelId,
-			stageId,
-			sequence: notification?.sequence ?? nextSequence,
-			inactivityMinutes: minutesValue,
-			message,
-			isReset: false,
-		});
-		onClose();
+		setIsSaving(true);
+		setSaveError(null);
+		try {
+			await onSave({
+				funnelId,
+				stageId,
+				sequence: notification?.sequence ?? nextSequence,
+				inactivityMinutes: minutesValue,
+				message,
+				isReset: false,
+			});
+			onClose();
+		} catch (error) {
+			setSaveError(error instanceof Error ? error.message : "Could not save this notification");
+		} finally {
+			setIsSaving(false);
+		}
 	};
 
 	if (!isOpen) return null;
@@ -163,6 +172,11 @@ const NotificationEditModal: React.FC<NotificationEditModalProps> = ({
 				</div>
 
 				{/* Footer */}
+				{saveError && (
+					<Text size="2" className="px-5 pb-2 text-red-600 dark:text-red-400">
+						{saveError}
+					</Text>
+				)}
 				<div className="flex items-center justify-between px-5 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
 					<div>
 						{isEditing && onDelete && (
@@ -194,7 +208,7 @@ const NotificationEditModal: React.FC<NotificationEditModalProps> = ({
 							size="2"
 							color="violet"
 							onClick={handleSave}
-							disabled={!message.trim()}
+							disabled={!message.trim() || isSaving}
 						>
 							{isEditing ? "Save Changes" : "Add Notification"}
 						</Button>

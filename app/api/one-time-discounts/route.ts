@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { withWhopAuth } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { experiences, oneTimeDiscounts } from "@/lib/supabase/schema";
+import { authorizeExperience } from "@/lib/helpers/experience-access-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,17 +50,16 @@ function toDiscount(row: typeof oneTimeDiscounts.$inferSelect): DiscountInput {
 	};
 }
 
-export const GET = withWhopAuth(async (request: NextRequest) => {
+export const GET = withWhopAuth(async (request: NextRequest, context) => {
 	const experienceId = request.nextUrl.searchParams.get("experienceId") || "";
-	if (!experienceId) {
-		return NextResponse.json({ error: "Experience ID is required" }, { status: 400 });
-	}
-
-	const experience = await resolveExperience(experienceId);
-	if (!experience) {
-		return NextResponse.json({ error: "Experience not found" }, { status: 404 });
-	}
-
+	const access = await authorizeExperience({
+		whopUserId: context.user.userId,
+		headerExperienceId: context.user.experienceId,
+		bodyExperienceId: experienceId || undefined,
+		requireAdmin: true,
+	});
+	if (!access.ok) return access.response;
+	const experience = access.experience;
 	const rows = await db.query.oneTimeDiscounts.findMany({
 		where: eq(oneTimeDiscounts.experienceId, experience.id),
 	});
@@ -67,7 +67,7 @@ export const GET = withWhopAuth(async (request: NextRequest) => {
 	return NextResponse.json({ discounts: rows.map(toDiscount) });
 });
 
-export const PUT = withWhopAuth(async (request: NextRequest) => {
+export const PUT = withWhopAuth(async (request: NextRequest, context) => {
 	const body = await request.json();
 	const experienceId = typeof body?.experienceId === "string" ? body.experienceId : "";
 	const discounts = Array.isArray(body?.discounts) ? (body.discounts as DiscountInput[]) : null;
@@ -76,10 +76,14 @@ export const PUT = withWhopAuth(async (request: NextRequest) => {
 		return NextResponse.json({ error: "experienceId and discounts are required" }, { status: 400 });
 	}
 
-	const experience = await resolveExperience(experienceId);
-	if (!experience) {
-		return NextResponse.json({ error: "Experience not found" }, { status: 404 });
-	}
+	const access = await authorizeExperience({
+		whopUserId: context.user.userId,
+		headerExperienceId: context.user.experienceId,
+		bodyExperienceId: experienceId,
+		requireAdmin: true,
+	});
+	if (!access.ok) return access.response;
+	const experience = access.experience;
 
 	const keptProductIds: string[] = [];
 	for (const discount of discounts) {

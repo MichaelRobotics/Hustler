@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRequestExperience } from '@/lib/helpers/experience-access-gate';
 import { GoogleGenAI } from '@google/genai';
 import { nanoBananaService } from '@/lib/components/store/SeasonalStore/actions/nanobananaService';
 
@@ -14,6 +15,8 @@ const validateEnvironment = () => {
 
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireRequestExperience(request, { requireAdmin: true });
+    if (!access.ok) return access.response;
     validateEnvironment();
     
     const { themeName, themePrompt } = await request.json();

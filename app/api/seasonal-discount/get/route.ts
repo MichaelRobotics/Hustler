@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withWhopAuth } from '@/lib/middleware/whop-auth';
+import { authorizeExperience } from '@/lib/helpers/experience-access-gate';
 
 // Force server-side only
 export const runtime = 'nodejs';
@@ -11,16 +12,15 @@ export const POST = withWhopAuth(async (request: NextRequest, context) => {
     const body = await request.json();
     const { experienceId } = body;
 
-    if (!experienceId) {
-      return NextResponse.json(
-        { error: 'Experience ID is required' },
-        { status: 400 }
-      );
-    }
+    const access = await authorizeExperience({
+      whopUserId: context.user.userId,
+      headerExperienceId: context.user.experienceId,
+      bodyExperienceId: experienceId,
+    });
+    if (!access.ok) return access.response;
 
-    // Dynamic import to prevent bundling issues
     const { getExperienceSeasonalDiscount } = await import('@/lib/actions/seasonal-discount-actions');
-    const discountData = await getExperienceSeasonalDiscount(experienceId);
+    const discountData = await getExperienceSeasonalDiscount(access.experience.whopExperienceId);
 
     return NextResponse.json({ discountData });
   } catch (error) {

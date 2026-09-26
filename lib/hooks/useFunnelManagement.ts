@@ -239,11 +239,11 @@ export function useFunnelManagement(user?: { experienceId?: string; name?: strin
 		setFunnels([...funnels, duplicatedFunnel]);
 	};
 
-	const handleSaveFunnelName = async (funnelId: string, newName: string) => {
+	const handleSaveFunnelName = async (funnelId: string, newName: string): Promise<boolean> => {
 		// Check if name is available (excluding current funnel)
 		if (!isFunnelNameAvailable(newName, funnelId)) {
 			setError("Funnel name already exists. Please choose a different name.");
-			return;
+			return false;
 		}
 
 		try {
@@ -262,11 +262,13 @@ export function useFunnelManagement(user?: { experienceId?: string; name?: strin
 
 			setFunnels(funnels.map((f) => (f.id === funnelId ? updatedFunnel : f)));
 			setEditingFunnelId(null);
+			return true;
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : "Failed to update funnel";
 			setError(errorMessage);
 			console.error("Error updating funnel:", err);
+			return false;
 		}
 	};
 

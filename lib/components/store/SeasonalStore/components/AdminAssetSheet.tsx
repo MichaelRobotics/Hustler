@@ -456,6 +456,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(experienceId ? { 'X-Experience-ID': experienceId } : {}),
         },
         body: JSON.stringify({
           themeName: formattedName,

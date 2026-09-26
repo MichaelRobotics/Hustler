@@ -1,3 +1,5 @@
+import { apiGet } from "./api-client";
+
 // Admin Analytics Utility Functions
 // These functions prepare data for backend integration while maintaining mock data support
 
@@ -182,12 +184,9 @@ export const fetchFunnelStats = async (
 ): Promise<FunnelStats> => {
 	try {
 		// Call our real analytics API
-		const url = new URL('/api/analytics/tracking-links', window.location.origin);
-		url.searchParams.set('funnelId', funnelId);
-		if (experienceId) {
-			url.searchParams.set('experienceId', experienceId);
-		}
-		const response = await fetch(url.toString());
+		const params = new URLSearchParams({ funnelId });
+		if (experienceId) params.set("experienceId", experienceId);
+		const response = await apiGet(`/api/analytics/tracking-links?${params.toString()}`, experienceId);
 		
 		if (!response.ok) {
 			throw new Error(`Failed to fetch analytics: ${response.statusText}`);
@@ -247,28 +246,7 @@ export const fetchFunnelStats = async (
 		};
 	} catch (error) {
 		console.error('Error fetching funnel stats:', error);
-		// Return zero data on error
-		return {
-			total: 0,
-			qualifiedUsers: 0,
-			converted: 0,
-			totalStarts: 0,
-			totalInterest: 0,
-			totalIntent: 0,
-			totalConversions: 0,
-			totalProductRevenue: 0,
-			totalAffiliateRevenue: 0,
-			todayStarts: 0,
-			todayInterest: 0,
-			todayIntent: 0,
-			todayConversions: 0,
-			todayProductRevenue: 0,
-			todayAffiliateRevenue: 0,
-			startsGrowthPercent: 0,
-			intentGrowthPercent: 0,
-			conversionsGrowthPercent: 0,
-			interestGrowthPercent: 0,
-		};
+		throw error;
 	}
 };
 

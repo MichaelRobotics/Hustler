@@ -3,6 +3,7 @@ import { withWhopAuth } from '@/lib/middleware/whop-auth';
 import { db } from '@/lib/supabase/db-server';
 import { experiences } from '@/lib/supabase/schema';
 import { eq } from 'drizzle-orm';
+import { authorizeExperience } from '@/lib/helpers/experience-access-gate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,37 +20,14 @@ export const POST = withWhopAuth(async (request: NextRequest, context) => {
       );
     }
 
-    // Resolve experienceId to companyId
-    let whopCompanyId: string | undefined;
-    
-    if (experienceId.startsWith('exp_')) {
-      const experience = await db.query.experiences.findFirst({
-        where: eq(experiences.whopExperienceId, experienceId),
-        columns: {
-          whopCompanyId: true,
-        },
-      });
-      if (experience) {
-        whopCompanyId = experience.whopCompanyId;
-      }
-    } else {
-      const experience = await db.query.experiences.findFirst({
-        where: eq(experiences.id, experienceId),
-        columns: {
-          whopCompanyId: true,
-        },
-      });
-      if (experience) {
-        whopCompanyId = experience.whopCompanyId;
-      }
-    }
-
-    if (!whopCompanyId) {
-      return NextResponse.json(
-        { error: 'Company ID not found for experience' },
-        { status: 404 }
-      );
-    }
+    const access = await authorizeExperience({
+      whopUserId: context.user.userId,
+      headerExperienceId: context.user.experienceId,
+      bodyExperienceId: experienceId,
+      requireAdmin: true,
+    });
+    if (!access.ok) return access.response;
+    const whopCompanyId = access.companyId;
 
     const { deletePromoById } = await import('@/lib/actions/seasonal-discount-actions');
     const result = await deletePromoById(promoId, whopCompanyId);

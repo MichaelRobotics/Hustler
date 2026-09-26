@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase/db-server";
-import { experiences } from "@/lib/supabase/schema";
-import { eq } from "drizzle-orm";
+import { requireRequestExperience } from "@/lib/helpers/experience-access-gate";
 
 /**
  * GET /api/experience/link - Get experience link for iframe URL
@@ -11,26 +9,11 @@ export async function GET(request: NextRequest) {
 		const { searchParams } = new URL(request.url);
 		const experienceId = searchParams.get("experienceId");
 		
-		if (!experienceId) {
-			return NextResponse.json(
-				{ error: "Experience ID is required" },
-				{ status: 400 }
-			);
-		}
+		const access = await requireRequestExperience(request, { bodyExperienceId: experienceId });
+		if (!access.ok) return access.response;
 
-		console.log(`[Experience Link] Getting link for experience: ${experienceId}`);
-
-		// Query experience from database
-		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, experienceId),
-			columns: {
-				id: true,
-				whopExperienceId: true,
-				whopCompanyId: true,
-				name: true,
-				link: true
-			}
-		});
+		const experience = access.experience;
+		console.log(`[Experience Link] Getting link for experience: ${experience.whopExperienceId}`);
 
 		if (!experience) {
 			console.log(`[Experience Link] No experience found for: ${experienceId}`);

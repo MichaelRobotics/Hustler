@@ -10,7 +10,7 @@ interface AIImageActions {
   handleRefineImage: (name: string, description: string, existingImageUrl: string, onSuccess: (url: string) => void) => Promise<void>;
 }
 
-export const useAIImageGeneration = (): AIImageState & AIImageActions => {
+export const useAIImageGeneration = (experienceId?: string): AIImageState & AIImageActions => {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isRefiningImage, setIsRefiningImage] = useState(false);
 
@@ -30,6 +30,7 @@ export const useAIImageGeneration = (): AIImageState & AIImageActions => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(experienceId ? { 'X-Experience-ID': experienceId } : {}),
         },
         body: JSON.stringify({
           name,
@@ -75,6 +76,7 @@ export const useAIImageGeneration = (): AIImageState & AIImageActions => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(experienceId ? { 'X-Experience-ID': experienceId } : {}),
         },
         body: JSON.stringify({
           name,

@@ -115,6 +115,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			name: string;
 			avatar?: string | null;
 			accessLevel?: string;
+			credits?: number;
+			messages?: number;
 		};
 	} | null>(null);
 
@@ -387,6 +389,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 							name: data.user.name,
 							avatar: data.user.avatar,
 							accessLevel: data.user.accessLevel,
+							credits: data.user.credits,
+							messages: data.user.messages,
 						},
 					});
 				}
@@ -1233,8 +1237,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 						whopUserId: whopUserId || "",
 						experienceId: experienceId || "",
 						email: "",
-						credits: 0,
-						messages: 0,
+						credits: userContext.user.credits ?? 0,
+						messages: userContext.user.messages ?? 0,
 						productsSynced: false,
 						experience: {
 							id: experienceId || "",
@@ -1337,8 +1341,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 					whopUserId: whopUserId || "",
 					experienceId: experienceId || "",
 					email: "",
-					credits: 0,
-					messages: 0,
+					credits: userContext.user.credits ?? 0,
+					messages: userContext.user.messages ?? 0,
 					productsSynced: false,
 					experience: {
 						id: experienceId || "",

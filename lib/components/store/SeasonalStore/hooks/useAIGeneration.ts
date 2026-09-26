@@ -31,6 +31,7 @@ interface UseAIGenerationProps {
   iframeDimensions?: { width: number; height: number };
   toggleEditorView?: () => void;
   isEditorView?: boolean; // Current editor view state
+  experienceId?: string;
 }
 
 export const useAIGeneration = ({
@@ -54,6 +55,7 @@ export const useAIGeneration = ({
   iframeDimensions,
   toggleEditorView,
   isEditorView = true, // Default to true if not provided
+  experienceId,
 }: UseAIGenerationProps) => {
   const isGeneratingRef = useRef(false);
 
@@ -73,14 +75,14 @@ export const useAIGeneration = ({
       console.log('🤖 Product ID:', product.id);
       console.log('🤖 Product type:', typeof product.id === 'string' && product.id.startsWith('resource-') ? 'ResourceLibrary' : 'SeasonalStore');
       
-      const refinedText = await generateProductText(product.name, product.description, theme);
+      const refinedText = await generateProductText(product.name, product.description, theme, experienceId);
       console.log('🤖 Generated text:', refinedText);
       
       console.log('🎨 Generating/refining product image for:', refinedText.newName);
       const imageUrlToUse = product.imageAttachmentUrl || product.image;
       console.log('🎨 Original image URL being sent to AI:', imageUrlToUse);
       console.log('🎨 Using uploaded image for refinement:', !!product.imageAttachmentUrl);
-      const finalImage = await generateProductImage(refinedText.newName, refinedText.newDescription, theme, imageUrlToUse);
+      const finalImage = await generateProductImage(refinedText.newName, refinedText.newDescription, theme, imageUrlToUse, experienceId);
       console.log('🎨 Generated product image URL:', finalImage);
 
       // Upload generated image to WHOP storage
@@ -139,14 +141,14 @@ export const useAIGeneration = ({
       setTextLoading(false);
       setGeneratingImage(false);
     }
-  }, [theme, updateProduct, setProducts, setTextLoading, setGeneratingImage, setError]);
+  }, [theme, updateProduct, setProducts, setTextLoading, setGeneratingImage, setError, experienceId]);
 
   const handleGenerateAssetFromText = useCallback(async (userPrompt: string) => {
     setTextLoading(true);
     setError(null);
     
     try {
-      const emoji = await generateEmojiMatch(userPrompt);
+      const emoji = await generateEmojiMatch(userPrompt, experienceId);
       console.log('🎨 Generated emoji:', emoji);
       
       const newAsset = {
@@ -170,7 +172,7 @@ export const useAIGeneration = ({
     } finally {
       setTextLoading(false);
     }
-  }, [setTextLoading, setError, setAvailableAssets]);
+  }, [setTextLoading, setError, setAvailableAssets, experienceId]);
 
   const handleGenerateBgClick = useCallback(async () => {
     if (isGeneratingRef.current) {
@@ -197,11 +199,13 @@ export const useAIGeneration = ({
         console.log('🎨 Generating responsive background with dimensions:', iframeDimensions);
         finalBackground = await generateResponsiveBackgroundImage(
           theme.themePrompt, 
-          imageUrlToUse
+          imageUrlToUse,
+          undefined,
+          experienceId
         );
       } else {
         console.log('🎨 Generating standard background');
-        finalBackground = await generateBackgroundImage(theme.themePrompt, theme.name, imageUrlToUse);
+        finalBackground = await generateBackgroundImage(theme.themePrompt, theme.name, imageUrlToUse, undefined, experienceId);
       }
       
       console.log('🎨 Generated background URL:', finalBackground);
@@ -231,7 +235,7 @@ export const useAIGeneration = ({
       setImageLoading(false);
       isGeneratingRef.current = false;
     }
-  }, [theme, backgroundAttachmentUrl, generatedBackground, uploadedBackground, iframeDimensions, setImageLoading, setError, setBackground, setBackgroundAttachmentId]);
+  }, [theme, backgroundAttachmentUrl, generatedBackground, uploadedBackground, iframeDimensions, setImageLoading, setError, setBackground, setBackgroundAttachmentId, experienceId]);
 
   const handleBgImageUpload = useCallback(async (file: File) => {
     if (!file) return;
@@ -267,7 +271,7 @@ export const useAIGeneration = ({
       const imageUrlToUse = logoAttachmentUrl || currentLogo.src;
       console.log('🎨 Using image URL for logo generation:', imageUrlToUse);
       
-      const finalLogo = await generateLogo(theme, shape as 'round' | 'square', imageUrlToUse || '');
+      const finalLogo = await generateLogo(theme, shape as 'round' | 'square', imageUrlToUse || '', undefined, experienceId);
       console.log('🎨 Generated logo URL:', finalLogo);
       
       setLogoAsset((prev: any) => ({
@@ -282,7 +286,7 @@ export const useAIGeneration = ({
     } finally {
       setImageLoading(false);
     }
-  }, [theme, logoAttachmentUrl, generatedBackground, uploadedBackground, setImageLoading, setError, setLogoAsset]);
+  }, [theme, logoAttachmentUrl, generatedBackground, uploadedBackground, setImageLoading, setError, setLogoAsset, experienceId]);
 
   const handleLogoImageUpload = useCallback(async (file: File) => {
     if (!file) return;

@@ -536,6 +536,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
     logoAttachmentUrl: logoAttachmentUrl ?? undefined,
     iframeDimensions: iframeDimensions ?? undefined,
     toggleEditorView,
+    experienceId,
   });
 
   // Custom add product function that resets index to show new product at front

@@ -3,6 +3,7 @@ import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { resources, experiences } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
+import { authorizeExperience } from "@/lib/helpers/experience-access-gate";
 
 /**
  * POST /api/admin/webhook-test - Test webhook for specific product
@@ -14,6 +15,12 @@ async function testWebhookHandler(
   try {
     const { user } = context;
     const experienceId = user.experienceId;
+    const access = await authorizeExperience({
+      whopUserId: user.userId,
+      headerExperienceId: experienceId,
+      requireAdmin: true,
+    });
+    if (!access.ok) return access.response;
     
     if (!experienceId) {
       return NextResponse.json(

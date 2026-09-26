@@ -4,6 +4,7 @@ import { db } from '@/lib/supabase/db-server';
 import { promos, plans, experiences } from '@/lib/supabase/schema';
 import { eq } from 'drizzle-orm';
 import { createWhopRestClient } from '@/lib/whop-rest';
+import { authorizeExperience } from '@/lib/helpers/experience-access-gate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,41 +31,14 @@ export const POST = withWhopAuth(async (request: NextRequest, context) => {
       );
     }
 
-    // Resolve companyId from experienceId if not provided
-    let resolvedCompanyId = companyId;
-    if (!resolvedCompanyId && experienceId) {
-      let resolvedExperienceId = experienceId;
-      if (experienceId.startsWith('exp_')) {
-        const experience = await db.query.experiences.findFirst({
-          where: eq(experiences.whopExperienceId, experienceId),
-          columns: {
-            id: true,
-            whopCompanyId: true,
-          },
-        });
-        if (experience) {
-          resolvedExperienceId = experience.id;
-          resolvedCompanyId = experience.whopCompanyId;
-        }
-      } else {
-        const experience = await db.query.experiences.findFirst({
-          where: eq(experiences.id, experienceId),
-          columns: {
-            whopCompanyId: true,
-          },
-        });
-        if (experience) {
-          resolvedCompanyId = experience.whopCompanyId;
-        }
-      }
-    }
-
-    if (!resolvedCompanyId) {
-      return NextResponse.json(
-        { error: 'Company ID is required' },
-        { status: 400 }
-      );
-    }
+    const access = await authorizeExperience({
+      whopUserId: context.user.userId,
+      headerExperienceId: context.user.experienceId,
+      bodyExperienceId: experienceId,
+      requireAdmin: true,
+    });
+    if (!access.ok) return access.response;
+    const resolvedCompanyId = access.companyId;
 
     const client = createWhopRestClient();
 

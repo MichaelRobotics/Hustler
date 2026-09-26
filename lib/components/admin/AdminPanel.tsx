@@ -194,6 +194,7 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 
 	// Dashboard view mode: cards grid or graph (My Merchants)
 	const [dashboardViewMode, setDashboardViewMode] = React.useState<"cards" | "graph">("cards");
+	const [funnelSaveError, setFunnelSaveError] = React.useState<string | null>(null);
 
 	// Use the extracted hooks
 	const {
@@ -231,6 +232,8 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 		handleGenerationError,
 		isFunnelNameAvailable,
 		isDeleting,
+		error: funnelError,
+		isLoading: funnelsLoading,
 	} = useFunnelManagement(user);
 
 	const {
@@ -793,16 +796,13 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 						onBack={() => setCurrentView("dashboard")}
 						user={user}
 						onAddToFunnel={handleAddToFunnelInLibrary}
-						onRemoveFromFunnel={(resource) => {
-							if (selectedFunnelForLibrary) {
-								removeResourceFromFunnel(selectedFunnelForLibrary.id, resource.id);
-								// Update the selectedFunnelForLibrary state
-								const updatedFunnel = {
-									...selectedFunnelForLibrary,
-									resources: selectedFunnelForLibrary.resources?.filter(r => r.id !== resource.id) || []
-								};
-								setSelectedFunnelForLibrary(updatedFunnel);
-							}
+						onRemoveFromFunnel={async (resource) => {
+							if (!selectedFunnelForLibrary) return;
+							await removeResourceFromFunnel(selectedFunnelForLibrary.id, resource.id);
+							setSelectedFunnelForLibrary({
+								...selectedFunnelForLibrary,
+								resources: selectedFunnelForLibrary.resources?.filter(r => r.id !== resource.id) || []
+							});
 						}}
 						onEdit={() => {
 							console.log("🔍 [LIBRARY EDIT] selectedFunnelForLibrary:", selectedFunnelForLibrary);
@@ -899,6 +899,12 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 		);
 
 		return (
+			<>
+			{funnelSaveError && (
+				<div className="fixed top-4 left-1/2 z-[80] -translate-x-1/2 max-w-md rounded-md bg-red-600 px-4 py-2 text-sm text-white shadow">
+					{funnelSaveError}
+				</div>
+			)}
 			<AIFunnelBuilderPage
 				funnel={selectedFunnel}
 				allResources={allResourcesForBuilder}
@@ -955,10 +961,11 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 						);
 
 						console.log("Funnel flow data saved to database successfully");
+						setFunnelSaveError(null);
 					} catch (error) {
 						console.error("Error saving funnel flow data:", error);
-						// Note: We don't revert the UI state here to avoid jarring user experience
-						// The user can try to save again or refresh to get the latest state
+						setFunnelSaveError(error instanceof Error ? error.message : "Failed to save funnel changes");
+						return;
 					}
 
 					// Only redirect to store on NEW deployments, not on every update to a deployed funnel
@@ -988,6 +995,7 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 				hasAnyLiveFunnel={hasAnyLiveFunnel}
 				isSingleMerchant={funnels.length === 1}
 			/>
+			</>
 		);
 	}
 
@@ -1219,6 +1227,8 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 								isDeleteDialogOpen={isDeleteDialogOpen}
 								isFunnelNameAvailable={isFunnelNameAvailable}
 								user={user}
+								error={funnelError}
+								isLoading={funnelsLoading}
 								/>
 							) : (
 								<MerchantsGraphView

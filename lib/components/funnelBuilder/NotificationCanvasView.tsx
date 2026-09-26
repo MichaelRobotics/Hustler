@@ -42,7 +42,7 @@ interface NotificationCanvasViewProps {
 	onResetClick: (reset: FunnelNotification | null, stageId: string) => void;
 	onNotificationDelete: (notificationId: string) => void;
 	onNotificationChange: (notification: FunnelNotificationInput) => void; // Optimistic update
-	onNotificationSave: (notification: FunnelNotificationInput) => void; // Save to backend
+	onNotificationSave: (notification: FunnelNotificationInput) => void | Promise<void>; // Save to backend
 	onResetChange: (stageId: string, resetAction: "delete" | "complete", delayMinutes: number) => void; // Optimistic update
 	onResetSave: (stageId: string, resetAction: "delete" | "complete", delayMinutes: number) => void; // Save to backend
 	onBack?: () => void; // Optional - header handles navigation now
@@ -564,7 +564,7 @@ interface NotificationCardInlineProps {
 	onClose: () => void; // Close edit mode (deselect)
 	onDelete: () => void;
 	onChange: (input: FunnelNotificationInput) => void; // Optimistic update
-	onSave: (input: FunnelNotificationInput) => void; // Save to backend
+	onSave: (input: FunnelNotificationInput) => void | Promise<void>; // Save to backend
 }
 
 const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
@@ -580,6 +580,7 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 }) => {
 	const [localMessage, setLocalMessage] = React.useState(notification.message || "");
 	const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+	const [saveError, setSaveError] = React.useState<string | null>(null);
 	const cardRef = React.useRef<HTMLDivElement>(null);
 	const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 	const standardTextareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -704,24 +705,28 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 		// No auto-save - changes only saved when user clicks Save button
 	};
 
-	const handleSave = (e?: React.MouseEvent) => {
+	const handleSave = async (e?: React.MouseEvent) => {
 		if (e) {
 			e.preventDefault();
 			e.stopPropagation();
 		}
 		const minutesValue = convertToMinutes(localDisplayValue, localTimeUnit);
-		onSave({
-			funnelId: notification.funnelId,
-			stageId: notification.stageId,
-			sequence: notification.sequence,
-			inactivityMinutes: minutesValue,
-			message: localMessage,
-			notificationType: notificationType,
-			isReset: false,
-		});
-		setHasUnsavedChanges(false);
-		// Close edit mode after saving
-		onClose();
+		setSaveError(null);
+		try {
+			await onSave({
+				funnelId: notification.funnelId,
+				stageId: notification.stageId,
+				sequence: notification.sequence,
+				inactivityMinutes: minutesValue,
+				message: localMessage,
+				notificationType: notificationType,
+				isReset: false,
+			});
+			setHasUnsavedChanges(false);
+			onClose();
+		} catch (error) {
+			setSaveError(error instanceof Error ? error.message : "Could not save this notification");
+		}
 	};
 	
 	const handleClose = (e?: React.MouseEvent) => {
@@ -924,6 +929,9 @@ const NotificationCardInline: React.FC<NotificationCardInlineProps> = ({
 					<option value="hours">hours</option>
 					<option value="days">days</option>
 				</select>
+				{saveError && (
+					<span className="text-xs text-red-600 dark:text-red-400">{saveError}</span>
+				)}
 				{hasUnsavedChanges && !isDeployed && (
 					<button
 						type="button"

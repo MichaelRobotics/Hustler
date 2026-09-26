@@ -6,6 +6,7 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getAllCreditPacks } from "../../actions/credit-actions";
+import { apiGet, apiPost } from "../../utils/api-client";
 import { useSafeIframeSdk } from "../../hooks/useSafeIframeSdk";
 import type { CreditPackId } from "../../types/credit";
 import type { AuthenticatedUser } from "../../types/user";
@@ -151,7 +152,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 				params.append("planId", planId);
 			}
 
-			const response = await fetch(`/api/checkout/lookup?${params.toString()}`);
+			const response = await apiGet(`/api/checkout/lookup?${params.toString()}`, experienceId);
 			
 			if (!response.ok) {
 				const errorData = await response.json();
@@ -176,16 +177,10 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 	// Helper function to create checkout dynamically with experience metadata
 	const createCheckout = async (planId: string, experienceId: string): Promise<{ checkoutId: string; planId: string } | null> => {
 		try {
-			const response = await fetch('/api/checkout/create', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					planId,
-					experienceId,
-				}),
-			});
+			const response = await apiPost('/api/checkout/create', {
+				planId,
+				experienceId,
+			}, experienceId);
 
 			if (!response.ok) {
 				const errorData = await response.json();

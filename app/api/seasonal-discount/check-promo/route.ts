@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withWhopAuth } from '@/lib/middleware/whop-auth';
+import { authorizeExperience } from '@/lib/helpers/experience-access-gate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -7,19 +8,26 @@ export const dynamic = 'force-dynamic';
 export const POST = withWhopAuth(async (request: NextRequest, context) => {
   try {
     const body = await request.json();
-    const { companyId, promoCode, productId, planIds } = body;
+    const { experienceId, promoCode, planIds } = body;
 
-    if (!companyId || !promoCode) {
+    if (!promoCode) {
       return NextResponse.json(
-        { error: 'Company ID and promo code are required' },
+        { error: 'Promo code is required' },
         { status: 400 }
       );
     }
 
+    const access = await authorizeExperience({
+      whopUserId: context.user.userId,
+      headerExperienceId: context.user.experienceId,
+      bodyExperienceId: experienceId,
+      requireAdmin: true,
+    });
+    if (!access.ok) return access.response;
+
     const { checkPromoConflict } = await import('@/lib/actions/seasonal-discount-actions');
-    // Only check planIds conflicts (product-scoped promos are no longer used)
     const hasConflict = await checkPromoConflict(
-      companyId,
+      access.companyId,
       planIds || []
     );
 

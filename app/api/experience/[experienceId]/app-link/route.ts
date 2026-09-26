@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/db-server";
 import { experiences } from "@/lib/supabase/schema";
 import { eq } from "drizzle-orm";
 import { retrieveWhopAccount } from "@/lib/whop-rest";
+import { requireRequestExperience } from "@/lib/helpers/experience-access-gate";
 
 /**
  * GET /api/experience/[experienceId]/app-link
@@ -12,11 +13,13 @@ import { retrieveWhopAccount } from "@/lib/whop-rest";
  * URL format: https://whop.com/joined/{company-route}/{whopExperienceId}/app/
  */
 export async function GET(
-	_request: NextRequest,
+	request: NextRequest,
 	{ params }: { params: Promise<{ experienceId: string }> }
 ) {
 	try {
 		const { experienceId } = await params;
+		const access = await requireRequestExperience(request, { bodyExperienceId: experienceId });
+		if (!access.ok) return access.response;
 		if (!experienceId) {
 			return NextResponse.json(
 				{ error: "Experience ID is required" },

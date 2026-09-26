@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoBananaService } from '@/lib/components/store/SeasonalStore/actions/nanobananaService';
+import { requireRequestExperience } from '@/lib/helpers/experience-access-gate';
 
 export async function POST(request: NextRequest) {
   let themePrompt: string = '';
@@ -8,6 +9,8 @@ export async function POST(request: NextRequest) {
   let backgroundContext: { isGenerated: boolean; isUploaded: boolean } | undefined = undefined;
   
   try {
+    const access = await requireRequestExperience(request, { requireAdmin: true });
+    if (!access.ok) return access.response;
     const body = await request.json();
     themePrompt = body.themePrompt;
     containerDimensions = body.containerDimensions;

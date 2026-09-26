@@ -30,6 +30,8 @@ export default function ExperiencePage({
 	searchParams?: Promise<{ view?: string; dashboard?: string; openChat?: string }>;
 }) {
 	const [authContext, setAuthContext] = useState<AuthContext | null>(null);
+	const [contextError, setContextError] = useState<string | null>(null);
+	const [contextLoading, setContextLoading] = useState(true);
 	const [experienceId, setExperienceId] = useState<string>("");
 	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
 	// Read openChat from URL on mount so it's available before searchParams Promise resolves (notification deep link)
@@ -62,15 +64,20 @@ export default function ExperiencePage({
 		}
 		
 		const url = `/api/user/context?experienceId=${expId}${forceRefresh ? '&forceRefresh=true' : ''}`;
+		setContextLoading(true);
+		setContextError(null);
+		try {
 		const response = await apiGet(url, expId);
 		
 		if (!response.ok) {
-			// Let Whop handle all errors natively
+			setContextError("Could not load this experience.");
+			setContextLoading(false);
 			return null;
 		}
 
 		const data = await response.json();
 		setAuthContext(data);
+		setContextLoading(false);
 		
 		// Backend determines everything - no frontend state management
 		console.log("🎯 Backend decision:", {
@@ -80,6 +87,12 @@ export default function ExperiencePage({
 		});
 		
 		return data;
+		} catch (error) {
+			console.error("Error getting user context:", error);
+			setContextError("Could not load this experience.");
+			setContextLoading(false);
+			return null;
+		}
 	}, [experienceId, params]);
 
 	// Function to refresh user context after payment (with retry logic for webhook processing)
@@ -155,6 +168,27 @@ export default function ExperiencePage({
 
 	// Let Whop handle all authentication and access errors natively
 	if (!authContext) {
+		if (contextError) {
+			return (
+				<div className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">
+					<p className="text-sm text-red-600">{contextError}</p>
+					<button
+						type="button"
+						className="rounded-md bg-violet-600 px-3 py-2 text-sm text-white"
+						onClick={() => fetchUserContext(true)}
+					>
+						Try again
+					</button>
+				</div>
+			);
+		}
+		if (contextLoading) {
+			return (
+				<div className="flex min-h-screen items-center justify-center p-6">
+					<p className="text-sm text-gray-500">Loading...</p>
+				</div>
+			);
+		}
 		return null;
 	}
 

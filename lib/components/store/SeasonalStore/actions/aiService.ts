@@ -8,6 +8,11 @@ import {
   getOptimalImageDimensions 
 } from '../utils/iframeDimensions';
 
+const jsonHeaders = (experienceId?: string): HeadersInit => ({
+  'Content-Type': 'application/json',
+  ...(experienceId ? { 'X-Experience-ID': experienceId } : {}),
+});
+
 // Utility for exponential backoff retry logic
 const retryFetch = async (url: string, options: RequestInit, maxRetries = 5): Promise<Response> => {
   let lastError: Error | null = null;
@@ -56,7 +61,8 @@ export const emojiToSvgDataURL = (emoji: string): string => {
 export const generateProductText = async (
   productName: string, 
   productDescription: string, 
-  theme: any
+  theme: any,
+  experienceId?: string
 ): Promise<{ newName: string; newDescription: string }> => {
   try {
     const requestBody = {
@@ -69,9 +75,7 @@ export const generateProductText = async (
     
     const response = await retryFetch('/api/seasonal-store/generate-product-text', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: jsonHeaders(experienceId),
       body: JSON.stringify(requestBody),
     });
 
@@ -91,15 +95,13 @@ export const generateProductText = async (
 };
 
 // Generate emoji match using AI
-export const generateEmojiMatch = async (prompt: string): Promise<string> => {
+export const generateEmojiMatch = async (prompt: string, experienceId?: string): Promise<string> => {
   try {
     console.log('🎯 [AI Service] Starting emoji match generation for prompt:', prompt);
     
     const response = await retryFetch('/api/seasonal-store/generate-emoji-match', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: jsonHeaders(experienceId),
       body: JSON.stringify({ prompt }),
     });
 
@@ -125,14 +127,13 @@ export const generateProductImage = async (
   productName: string, 
   productDescription: string,
   theme: any, 
-  originalImageUrl: string
+  originalImageUrl: string,
+  experienceId?: string
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-product-image-nanobanana', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: jsonHeaders(experienceId),
       body: JSON.stringify({
         productName,
         productDescription,
@@ -161,14 +162,13 @@ export const generateBackgroundImage = async (
   themePrompt: string, 
   containerDimensions?: { width: number; height: number; aspectRatio: number },
   existingBackgroundUrl?: string,
-  backgroundContext?: { isGenerated: boolean; isUploaded: boolean }
+  backgroundContext?: { isGenerated: boolean; isUploaded: boolean },
+  experienceId?: string
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-background-nanobanana', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: jsonHeaders(experienceId),
       body: JSON.stringify({ 
         themePrompt,
         containerDimensions,
@@ -197,14 +197,13 @@ export const generateLogo = async (
   theme: any, 
   shape: 'round' | 'square', 
   currentLogoUrl: string,
-  logoContext?: { isUploaded: boolean; isGenerated: boolean }
+  logoContext?: { isUploaded: boolean; isGenerated: boolean },
+  experienceId?: string
 ): Promise<string> => {
   try {
     const response = await retryFetch('/api/seasonal-store/generate-logo-nanobanana', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: jsonHeaders(experienceId),
       body: JSON.stringify({
         theme,
         shape,
@@ -232,7 +231,8 @@ export const generateLogo = async (
 export const generateResponsiveBackgroundImage = async (
   themePrompt: string, 
   existingBackgroundUrl?: string,
-  backgroundContext?: { isGenerated: boolean; isUploaded: boolean }
+  backgroundContext?: { isGenerated: boolean; isUploaded: boolean },
+  experienceId?: string
 ): Promise<string> => {
   try {
     console.log('🎨 [Responsive AI] Starting responsive background generation...');
@@ -243,13 +243,13 @@ export const generateResponsiveBackgroundImage = async (
     if (!containerDimensions) {
       console.warn('🎨 [Responsive AI] Could not measure container, using fallback dimensions');
       // Fallback to standard dimensions
-      return await generateBackgroundImage(themePrompt, undefined, existingBackgroundUrl, backgroundContext);
+      return await generateBackgroundImage(themePrompt, undefined, existingBackgroundUrl, backgroundContext, experienceId);
     }
     
     console.log('🎨 [Responsive AI] Container dimensions:', containerDimensions);
     
     // Generate image with container dimensions
-    const imageUrl = await generateBackgroundImage(themePrompt, containerDimensions, existingBackgroundUrl, backgroundContext);
+    const imageUrl = await generateBackgroundImage(themePrompt, containerDimensions, existingBackgroundUrl, backgroundContext, experienceId);
     
     // Validate image coverage
     const validation = await validateImageCoverage(imageUrl, containerDimensions);
@@ -289,6 +289,6 @@ export const generateResponsiveBackgroundImage = async (
     }
     
     // Only fallback for non-quota errors
-    return await generateBackgroundImage(themePrompt, undefined, undefined, backgroundContext);
+    return await generateBackgroundImage(themePrompt, undefined, undefined, backgroundContext, experienceId);
   }
 };

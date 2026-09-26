@@ -86,17 +86,15 @@ export default function DeleteFunnelModal({
 									Cancel
 								</Button>
 							</AlertDialog.Cancel>
-							<AlertDialog.Action asChild>
-								<Button
-									color="red"
-									onClick={onConfirmDelete}
-									disabled={isLiveFunnel}
-									className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-red-600"
-								>
-									<Trash2 size={18} strokeWidth={2.5} className="mr-2" />
-									Delete
-								</Button>
-							</AlertDialog.Action>
+							<Button
+								color="red"
+								onClick={onConfirmDelete}
+								disabled={isLiveFunnel}
+								className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 dark:bg-red-500 dark:hover:bg-red-600 dark:shadow-red-500/40 dark:hover:shadow-red-500/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-red-600"
+							>
+								<Trash2 size={18} strokeWidth={2.5} className="mr-2" />
+								Delete
+							</Button>
 						</div>
 					</div>
 				</AlertDialog.Content>

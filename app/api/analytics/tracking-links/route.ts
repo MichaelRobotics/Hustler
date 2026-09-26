@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireRequestExperience } from "@/lib/helpers/experience-access-gate";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 import { db } from "@/lib/supabase/db-server";
 import { resources, funnelAnalytics, funnelResourceAnalytics, funnelResources, experiences } from "@/lib/supabase/schema";
@@ -20,35 +21,16 @@ export async function GET(request: NextRequest) {
     const funnelId = searchParams.get('funnelId');
 
     // At least one of these must be provided
-    if (!companyId && !experienceId && !funnelId) {
-      return NextResponse.json(
-        { error: "companyId, experienceId, or funnelId is required" },
-        { status: 400 }
-      );
-    }
+    const access = await requireRequestExperience(request, {
+      requireAdmin: true,
+      bodyExperienceId: experienceId,
+    });
+    if (!access.ok) return access.response;
 
     console.log(`📊 Getting tracking analytics for:`, { companyId, experienceId, funnelId });
 
     // Resolve Whop experience ID to database UUID if needed
-    let resolvedExperienceId = experienceId;
-    if (experienceId && experienceId.startsWith('exp_')) {
-      // This is a Whop experience ID, need to resolve to database UUID
-      const experience = await db.select()
-        .from(experiences)
-        .where(eq(experiences.whopExperienceId, experienceId))
-        .limit(1);
-      
-      if (experience.length > 0) {
-        resolvedExperienceId = experience[0].id;
-        console.log(`📊 Resolved Whop experience ID ${experienceId} to database UUID ${resolvedExperienceId}`);
-      } else {
-        console.warn(`⚠️ No experience found for Whop experience ID: ${experienceId}`);
-        return NextResponse.json(
-          { error: `Experience not found: ${experienceId}` },
-          { status: 404 }
-        );
-      }
-    }
+    const resolvedExperienceId = access.experience.id;
 
     let funnelAnalyticsData: any[] = [];
     let resourceAnalyticsData: any[] = [];
@@ -56,17 +38,13 @@ export async function GET(request: NextRequest) {
 
     if (funnelId) {
       // Get data for specific funnel (and experience if provided)
-      const funnelWhere = resolvedExperienceId 
-        ? and(eq(funnelAnalytics.funnelId, funnelId), eq(funnelAnalytics.experienceId, resolvedExperienceId))
-        : eq(funnelAnalytics.funnelId, funnelId);
+      const funnelWhere = and(eq(funnelAnalytics.funnelId, funnelId), eq(funnelAnalytics.experienceId, resolvedExperienceId));
       
       funnelAnalyticsData = await db.select()
         .from(funnelAnalytics)
         .where(funnelWhere);
       
-      const resourceWhere = resolvedExperienceId
-        ? and(eq(funnelResourceAnalytics.funnelId, funnelId), eq(funnelResourceAnalytics.experienceId, resolvedExperienceId))
-        : eq(funnelResourceAnalytics.funnelId, funnelId);
+      const resourceWhere = and(eq(funnelResourceAnalytics.funnelId, funnelId), eq(funnelResourceAnalytics.experienceId, resolvedExperienceId));
       
       resourceAnalyticsData = await db.select()
         .from(funnelResourceAnalytics)
@@ -194,9 +172,12 @@ export async function POST(request: NextRequest) {
   try {
     const { companyId, planId, linkName, destination, redirectUrl } = await request.json();
 
-    if (!companyId || !planId || !linkName) {
+    const access = await requireRequestExperience(request, { requireAdmin: true });
+    if (!access.ok) return access.response;
+
+    if (!planId || !linkName) {
       return NextResponse.json(
-        { error: "companyId, planId, and linkName are required" },
+        { error: "planId and linkName are required" },
         { status: 400 }
       );
     }
@@ -206,7 +187,7 @@ export async function POST(request: NextRequest) {
     // Create a new tracking link using Whop's native system
     const trackingLink = await whopNativeTrackingService.createTrackingLink(
       planId,
-      companyId,
+      access.companyId,
       linkName,
       destination || 'checkout'
     );

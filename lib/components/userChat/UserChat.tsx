@@ -23,6 +23,7 @@ import { AvatarSquare } from "../common/AvatarSquare";
 import AnimatedGoldButton from "./AnimatedGoldButton";
 import { renderTextWithLinks } from "../../utils/link-utils";
 import { getFunnelProgressPercentageFromBlock } from "../../utils/funnelUtils";
+import { offerResponseClosedConversation } from "../../helpers/offer-cta-response";
 
 /**
  * Track intent by calling the API endpoint
@@ -32,7 +33,7 @@ async function trackIntent(experienceId: string, funnelId: string): Promise<void
     await apiPost("/api/analytics/track-intent", {
       experienceId,
       funnelId
-    });
+    }, experienceId);
     console.log(`✅ [UserChat] Intent tracked for experience ${experienceId}, funnel ${funnelId}`);
   } catch (error) {
     console.error("❌ [UserChat] Error tracking intent:", error);
@@ -100,6 +101,7 @@ const UserChat: React.FC<UserChatProps> = ({
 	resources,
 }) => {
 	const [message, setMessage] = useState("");
+	const [offerCtaError, setOfferCtaError] = useState<string | null>(null);
 	const [adminTyping, setAdminTyping] = useState(false);
 	// Resolved avatar URLs when not passed as props (same sources as LiveChat / CustomerView)
 	const [resolvedUserAvatar, setResolvedUserAvatar] = useState<string | null>(null);
@@ -759,17 +761,24 @@ const UserChat: React.FC<UserChatProps> = ({
 										}
 										// Start offer timer for OFFER CTA (upsell/downsell delay); qualification last-stage CTA closes conversation
 										if (!isValueDeliveryButton && conversation?.id && conversation.currentBlockId) {
+											setOfferCtaError(null);
 											apiPost("/api/userchat/offer-cta-clicked", {
 												conversationId: conversation.id,
 												blockId: conversation.currentBlockId,
-											})
-												.then((res) => res.json())
-												.then((data: { conversation?: { status?: string } }) => {
-													if (data?.conversation?.status === "closed") {
+											}, experienceId)
+												.then(async (res) => {
+													const data = await res.json().catch(() => ({}));
+													if (!res.ok) {
+														const message = typeof data?.error === "string" ? data.error : "Could not open this offer";
+														throw new Error(message);
+													}
+													if (offerResponseClosedConversation(data)) {
 														handleFunnelCompletion();
 													}
 												})
-												.catch(() => {});
+												.catch((error: unknown) => {
+													setOfferCtaError(error instanceof Error ? error.message : "Could not open this offer");
+												});
 										}
 										// Product/app link: always open in new window
 										window.open(href, "_blank", "noopener,noreferrer");
@@ -794,8 +803,13 @@ const UserChat: React.FC<UserChatProps> = ({
 							{textParts}
 							{/* All buttons below text with extra spacing */}
 							{buttons.length > 0 && (
-								<div className="flex justify-center pt-4">
+								<div className="flex flex-col items-center gap-2 pt-4">
 									{buttons}
+									{offerCtaError && (
+										<Text size="1" className="text-red-600 dark:text-red-400">
+											{offerCtaError}
+										</Text>
+									)}
 								</div>
 							)}
 						</div>

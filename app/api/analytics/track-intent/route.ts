@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireRequestExperience } from "@/lib/helpers/experience-access-gate";
 import { trackIntentBackground } from "../../../../lib/analytics/background-tracking";
 
 export async function POST(request: NextRequest) {
   try {
     const { experienceId, funnelId } = await request.json();
 
-    if (!experienceId || !funnelId) {
+    if (!funnelId) {
       return NextResponse.json(
-        { error: "Missing experienceId or funnelId" },
+        { error: "Missing funnelId" },
         { status: 400 }
       );
     }
 
+    const access = await requireRequestExperience(request, { bodyExperienceId: experienceId });
+    if (!access.ok) return access.response;
+
     // Track intent in the background
-    await trackIntentBackground(experienceId, funnelId);
+    await trackIntentBackground(access.experience.whopExperienceId, funnelId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

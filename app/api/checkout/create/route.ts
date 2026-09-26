@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireRequestExperience } from "@/lib/helpers/experience-access-gate";
 import { db } from "@/lib/supabase/db-server";
 import { subscriptions, experiences, plans } from "@/lib/supabase/schema";
 import { eq } from "drizzle-orm";
@@ -22,24 +23,9 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		if (!experienceId) {
-			return NextResponse.json(
-				{ error: "experienceId is required" },
-				{ status: 400 }
-			);
-		}
-
-		// 2. Get experience from database using experienceId
-		const experience = await db.query.experiences.findFirst({
-			where: eq(experiences.whopExperienceId, experienceId),
-		});
-
-		if (!experience) {
-			return NextResponse.json(
-				{ error: "Experience not found" },
-				{ status: 404 }
-			);
-		}
+		const access = await requireRequestExperience(request, { bodyExperienceId: experienceId });
+		if (!access.ok) return access.response;
+		const experience = access.experience;
 
 		// 1. Try to lookup plan from subscriptions table first (for credit packs, DMs, subscriptions)
 		let plan = await db.query.subscriptions.findFirst({

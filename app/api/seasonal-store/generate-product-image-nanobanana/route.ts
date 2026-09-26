@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoBananaService } from '@/lib/components/store/SeasonalStore/actions/nanobananaService';
+import { requireRequestExperience } from '@/lib/helpers/experience-access-gate';
 
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireRequestExperience(request, { requireAdmin: true });
+    if (!access.ok) return access.response;
     const body = await request.json();
     console.log('🎨 [Nano Banana API] Received request body:', JSON.stringify(body, null, 2));
     

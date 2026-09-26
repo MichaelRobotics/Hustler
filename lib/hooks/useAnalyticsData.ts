@@ -61,8 +61,9 @@ export const useAnalyticsData = ({
 	// Local state for component-specific loading
 	const [isLocalLoading, setIsLocalLoading] = useState(false);
 
+	const neverLive = !funnel.wasEverDeployed;
 	// Initialize with zero values if no data exists
-	const funnelStats = funnelAnalyticsData?.funnelStats || {
+	const funnelStats = neverLive ? null : (funnelAnalyticsData?.funnelStats || {
 		total: 0,
 		qualifiedUsers: 0,
 		converted: 0,
@@ -82,23 +83,23 @@ export const useAnalyticsData = ({
 		intentGrowthPercent: 0,
 		conversionsGrowthPercent: 0,
 		interestGrowthPercent: 0,
-	};
+	});
 
-	const salesStats = funnelAnalyticsData?.salesStats || {
+	const salesStats = neverLive ? null : (funnelAnalyticsData?.salesStats || {
 		affiliate: [],
 		myProducts: [],
 		affiliateTotal: { sales: 0, revenue: 0 },
 		myProductsTotal: { sales: 0, revenue: 0 },
-	};
+	});
 
 	const users = funnelAnalyticsData?.users || [];
 	const salesData = funnelAnalyticsData?.salesData || [];
-	const isLoading = funnelAnalyticsData?.isLoading || isLocalLoading || (!funnelAnalyticsData && enableBackend);
+	const isLoading = neverLive ? false : (funnelAnalyticsData?.isLoading || isLocalLoading || (!funnelAnalyticsData && enableBackend));
 	const error = funnelAnalyticsData?.error || globalError;
 
 	// Fetch data when component mounts or funnel changes - only once per funnel
 	useEffect(() => {
-		if (!funnel.id || !enableBackend) return;
+		if (!funnel.id || !enableBackend || !funnel.wasEverDeployed) return;
 
 		// Only fetch if we don't have any data for this funnel
 		if (!funnelAnalyticsData) {
@@ -113,7 +114,7 @@ export const useAnalyticsData = ({
 
 	// Live updates with proper throttling to prevent mass API calls
 	useEffect(() => {
-		if (!funnel.id || !enableBackend) return;
+		if (!funnel.id || !enableBackend || !funnel.wasEverDeployed) return;
 
 		console.log(`[useAnalyticsData] Setting up live updates for funnel ${funnel.id}`);
 
@@ -139,7 +140,7 @@ export const useAnalyticsData = ({
 
 	// Manual refresh function
 	const refreshData = useCallback(async () => {
-		if (!funnel.id || !enableBackend) return;
+		if (!funnel.id || !enableBackend || !funnel.wasEverDeployed) return;
 		
 		console.log(`[useAnalyticsData] Manual refresh for funnel ${funnel.id}`);
 		setIsLocalLoading(true);

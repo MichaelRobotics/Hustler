@@ -37,7 +37,9 @@ const SendDmBlockEditor: React.FC<SendDmBlockEditorProps> = ({
 		}
 		let cancelled = false;
 		setLinkLoading(true);
-		fetch(`/api/experience/${experienceId}/app-link`)
+		fetch(`/api/experience/${experienceId}/app-link`, {
+			headers: { "X-Experience-ID": experienceId },
+		})
 			.then((r) => r.json())
 			.then((data) => {
 				if (!cancelled && data?.link) setAppLink(data.link);

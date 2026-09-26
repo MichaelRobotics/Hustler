@@ -27,8 +27,8 @@ interface ResourceCardProps {
 	allResources: Resource[];
 	isResourceInFunnel: (resourceId: string) => boolean;
 	isResourceAssignedToAnyFunnel: (resourceId: string) => boolean;
-	onAddToFunnel?: (resource: Resource) => void;
-	onRemoveFromFunnel?: (resource: Resource) => void;
+	onAddToFunnel?: (resource: Resource) => void | Promise<void>;
+	onRemoveFromFunnel?: (resource: Resource) => void | Promise<void>;
 	onEdit: (resource: Resource) => void;
 	onDelete: (resourceId: string, resourceName: string) => void;
 	onUpdate?: (
@@ -67,6 +67,7 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [isAdding, setIsAdding] = useState(false);
+	const [assignError, setAssignError] = useState<string | null>(null);
 	const [isRemovingState, setIsRemovingState] = useState(false);
 	const [isJustAdded, setIsJustAdded] = useState(false);
 	const [isJustRemoved, setIsJustRemoved] = useState(false);
@@ -201,62 +202,53 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 		onEditingChange?.(false);
 	};
 
-	const handleAssignToFunnel = () => {
+	const handleAssignToFunnel = async () => {
 		if (!onAddToFunnel || !funnel) return;
 
-		// Check if we can assign this resource (not at limit)
+		const categoryLabel = resource.category === "PAID" ? "paid" : "free";
 		if (!canAssignResource(funnel, resource)) {
-			return; // Silently return if limit reached
+			setAssignError(`Cannot assign ${categoryLabel} product: limit reached (max 5 per category)`);
+			return;
 		}
 
 		setIsAdding(true);
+		setAssignError(null);
 		try {
-			onAddToFunnel(resource);
-			
-			// Show success animation and popup
+			await onAddToFunnel(resource);
 			setIsJustAdded(true);
 			setShowAddPopup(true);
-			
-			// Reset states after animations
 			setTimeout(() => {
 				setIsAdding(false);
 				setIsJustAdded(false);
 			}, 2000);
-			
-			// Hide popup after 3 seconds
 			setTimeout(() => {
 				setShowAddPopup(false);
 			}, 3000);
 		} catch (error) {
-			// Silently handle errors - no user feedback
 			setIsAdding(false);
+			setAssignError(error instanceof Error ? error.message : `Cannot assign ${categoryLabel} product`);
 		}
 	};
 
-	const handleUnassignFromFunnel = () => {
+	const handleUnassignFromFunnel = async () => {
 		if (!onRemoveFromFunnel || !funnel) return;
 
 		setIsRemovingState(true);
+		setAssignError(null);
 		try {
-			onRemoveFromFunnel(resource);
-			
-			// Show success animation and popup for removal
+			await onRemoveFromFunnel(resource);
 			setIsJustRemoved(true);
 			setShowRemovePopup(true);
-			
-			// Reset states after animations
 			setTimeout(() => {
 				setIsRemovingState(false);
 				setIsJustRemoved(false);
 			}, 2000);
-			
-			// Hide popup after 3 seconds
 			setTimeout(() => {
 				setShowRemovePopup(false);
 			}, 3000);
 		} catch (error) {
-			// Silently handle errors - no user feedback
 			setIsRemovingState(false);
+			setAssignError(error instanceof Error ? error.message : "Could not remove this product");
 		}
 	};
 
@@ -622,6 +614,11 @@ export const ResourceCard: React.FC<ResourceCardProps> = ({
 						: (resource.description || resource.link)
 					}
 				</Text>
+				{assignError && (
+					<Text size="1" className="text-red-600 dark:text-red-400">
+						{assignError}
+					</Text>
+				)}
 				{resource.promoCode && (
 					<div className="flex items-center gap-2">
 						<Text size="1" color="gray" className="text-muted-foreground">

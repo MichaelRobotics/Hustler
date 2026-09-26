@@ -948,6 +948,7 @@ export const TemplateRenderer: React.FC<TemplateRendererProps> = ({
                 conversationId={conversationId}
                 conversation={conversation}
                 experienceId={experienceId}
+                readOnly={conversation?.status === "closed"}
                 onMessageSent={onMessageSent}
                 userType={userType}
                 stageInfo={stageInfo}

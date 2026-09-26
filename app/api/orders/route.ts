@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
-import { orders, experiences } from "@/lib/supabase/schema";
-import { eq, and, desc, count, sql } from "drizzle-orm";
+import { orders } from "@/lib/supabase/schema";
+import { eq, and, desc, count } from "drizzle-orm";
+import { authorizeExperience } from "@/lib/helpers/experience-access-gate";
 
 export const dynamic = 'force-dynamic';
 
@@ -21,12 +22,11 @@ async function getOrdersHandler(
 		const { user } = context;
 		const experienceId = user.experienceId;
 
-		if (!experienceId) {
-			return NextResponse.json(
-				{ error: "Experience ID required" },
-				{ status: 400 }
-			);
-		}
+		const access = await authorizeExperience({
+			whopUserId: user.userId,
+			headerExperienceId: experienceId,
+		});
+		if (!access.ok) return access.response;
 
 		// Get query parameters
 		const { searchParams } = new URL(request.url);
@@ -34,46 +34,7 @@ async function getOrdersHandler(
 		const limit = parseInt(searchParams.get("limit") || "20", 10);
 		const offset = (page - 1) * limit;
 
-		// Resolve Whop experience ID to database UUID if needed
-		let resolvedExperienceId = experienceId;
-		let whopCompanyId: string | null = null;
-
-		if (experienceId.startsWith('exp_')) {
-			const experience = await db.query.experiences.findFirst({
-				where: eq(experiences.whopExperienceId, experienceId),
-				columns: {
-					id: true,
-					whopCompanyId: true,
-				},
-			});
-
-			if (experience) {
-				resolvedExperienceId = experience.id;
-				whopCompanyId = experience.whopCompanyId;
-			} else {
-				return NextResponse.json(
-					{ error: "Experience not found" },
-					{ status: 404 }
-				);
-			}
-		} else {
-			// If it's already a UUID, get the company ID
-			const experience = await db.query.experiences.findFirst({
-				where: eq(experiences.id, experienceId),
-				columns: {
-					whopCompanyId: true,
-				},
-			});
-
-			if (experience) {
-				whopCompanyId = experience.whopCompanyId;
-			} else {
-				return NextResponse.json(
-					{ error: "Experience not found" },
-					{ status: 404 }
-				);
-			}
-		}
+		const whopCompanyId = access.companyId;
 
 		if (!whopCompanyId) {
 			return NextResponse.json(

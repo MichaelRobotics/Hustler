@@ -5,7 +5,7 @@ import type React from "react";
 import { useState, useRef, useEffect } from "react";
 import type { CustomerResource } from "@/lib/types/resource";
 import { WHOP_ICON_URL } from "@/lib/constants/whop-icon";
-import { apiPost } from "@/lib/utils/api-client";
+import { apiGet, apiPost } from "@/lib/utils/api-client";
 
 interface CustomerResourceCardProps {
 	resource: CustomerResource;
@@ -146,20 +146,32 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 		if (resourceType === "FILE" && resource.storage_url) {
 			const filename = generateFilename();
 			const downloadUrl = `/api/download?url=${encodeURIComponent(resource.storage_url)}&filename=${encodeURIComponent(filename)}`;
-			
-			// Create a temporary anchor element to trigger download
-			const link = document.createElement('a');
-			link.href = downloadUrl;
-			link.download = filename;
-			link.target = '_blank';
-			link.style.display = 'none';
-			document.body.appendChild(link);
-			link.click();
-			
-			// Clean up the temporary element
-			setTimeout(() => {
-				document.body.removeChild(link);
-			}, 100);
+			setCancelError(null);
+			try {
+				const response = await fetch(downloadUrl, {
+					headers: experienceId ? { "X-Experience-ID": experienceId } : {},
+				});
+				if (!response.ok) {
+					setCancelError("Could not download this file");
+					return;
+				}
+				const blob = await response.blob();
+				const objectUrl = URL.createObjectURL(blob);
+				const link = document.createElement("a");
+				link.href = objectUrl;
+				link.download = filename;
+				link.style.display = "none";
+				document.body.appendChild(link);
+				link.click();
+				setTimeout(() => {
+					document.body.removeChild(link);
+					URL.revokeObjectURL(objectUrl);
+				}, 100);
+			} catch (error) {
+				console.error("Download failed:", error);
+				setCancelError("Could not download this file");
+				return;
+			}
 			
 			// Wait longer to ensure download has started before opening modal
 			// Use a longer delay to give the browser time to initiate the download
@@ -186,19 +198,20 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 		if (resource.membership_product_id && onOpenProductReview) {
 			// Fetch company slug from API
 			try {
-				const response = await fetch(`/api/company/route?experienceId=${encodeURIComponent(experienceId || '')}`);
+				const response = await apiGet(`/api/company/route?experienceId=${encodeURIComponent(experienceId || '')}`, experienceId);
 				if (response.ok) {
 					const data = await response.json();
 					if (data.route) {
 						onOpenProductReview(data.route);
 					} else {
-						console.error('Company route not found');
+						setCancelError("Could not open upgrade");
 					}
 				} else {
-					console.error('Failed to fetch company route');
+					setCancelError("Could not open upgrade");
 				}
 			} catch (error) {
 				console.error('Error fetching company route:', error);
+				setCancelError("Could not open upgrade");
 			}
 		}
 	};

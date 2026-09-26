@@ -43,7 +43,7 @@ export const ResourceCreateForm: React.FC<ResourceCreateFormProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const fileUpload = useFileUpload();
-  const aiImage = useAIImageGeneration();
+  const aiImage = useAIImageGeneration(experienceId);
   const validation = useResourceValidation();
 
   // Scroll to form when component mounts

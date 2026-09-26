@@ -43,7 +43,7 @@ interface FunnelsDashboardProps {
 	setFunnelSettingsToEdit?: (funnel: Funnel | null) => void;
 	editingFunnelId: string | null;
 	setEditingFunnelId: (id: string | null) => void;
-	handleSaveFunnelName: (funnelId: string, newName: string) => void;
+	handleSaveFunnelName: (funnelId: string, newName: string) => Promise<boolean> | boolean;
 	onFunnelClick: (funnel: Funnel) => void;
 	handleDuplicateFunnel: (funnel: Funnel) => void;
 	handleManageResources: (funnel: Funnel) => void;
@@ -59,6 +59,8 @@ interface FunnelsDashboardProps {
 	isDeleting: boolean;
 	isFunnelNameAvailable: (name: string, currentId?: string) => boolean;
 	user?: { experienceId?: string } | null;
+	error?: string | null;
+	isLoading?: boolean;
 }
 
 
@@ -88,6 +90,8 @@ const FunnelsDashboard = React.memo(
 		isDeleting,
 		isFunnelNameAvailable,
 		user,
+		error,
+		isLoading,
 	}: FunnelsDashboardProps) => {
 		// State to track which dropdown is open and which button is highlighted
 		const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -96,6 +100,7 @@ const FunnelsDashboard = React.memo(
 		>(null);
 		const [editingName, setEditingName] = useState("");
 		const [isSaving, setIsSaving] = useState(false);
+		const [actionError, setActionError] = useState<string | null>(null);
 		// State for selected merchant type during creation
 		const [selectedMerchantType, setSelectedMerchantType] = useState<"qualification" | "upsell" | null>(null);
 
@@ -140,15 +145,15 @@ const FunnelsDashboard = React.memo(
 			async (funnelName: string, merchantType: "qualification" | "upsell" = "qualification") => {
 				// Check if name is available
 				if (!isFunnelNameAvailable(funnelName)) {
-					console.error("Funnel name already exists");
+					setActionError("Funnel name already exists. Please choose a different name.");
 					return;
 				}
 
-				// Check if user context is available
 				if (!user?.experienceId) {
-					console.error("Experience ID is required");
+					setActionError("Experience ID is required");
 					return;
 				}
+				setActionError(null);
 
 				setIsSaving(true);
 				try {
@@ -182,6 +187,7 @@ const FunnelsDashboard = React.memo(
 					return newFunnel;
 				} catch (error) {
 					console.error("Error creating funnel:", error);
+					setActionError(error instanceof Error ? error.message : "Failed to create funnel");
 					throw error;
 				} finally {
 					setIsSaving(false);
@@ -232,7 +238,14 @@ const FunnelsDashboard = React.memo(
 
 		return (
 			<div className="space-y-6">
-				{/* Funnels Grid - Enhanced with smooth gradients for both themes */}
+				{(actionError || error) && (
+					<Text size="2" className="text-red-600 dark:text-red-400">
+						{actionError || error}
+					</Text>
+				)}
+				{isLoading && funnels.length === 0 ? (
+					<Text size="2" color="gray">Loading merchants...</Text>
+				) : error && funnels.length === 0 ? null : (
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
 					{/* New Funnel Creation Card */}
 					{isCreatingNewFunnel && (
@@ -504,11 +517,13 @@ const FunnelsDashboard = React.memo(
 													} else {
 														setIsSaving(true);
 														try {
-															await handleSaveFunnelName(
+															const saved = await handleSaveFunnelName(
 																funnel.id,
 																editingName,
 															);
-															handleSetIsRenaming(false); // Show sidebar after saving with timeout
+															if (saved) {
+																handleSetIsRenaming(false);
+															}
 														} catch (error) {
 															console.error(
 																"Failed to save funnel name:",
@@ -734,6 +749,7 @@ const FunnelsDashboard = React.memo(
 						);
 					})}
 				</div>
+				)}
 
 			</div>
 		);

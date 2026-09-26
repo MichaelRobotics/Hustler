@@ -3,6 +3,7 @@ import { db } from "../supabase/db-server";
 import { experiences, promos, resources, plans } from "../supabase/schema";
 import type { DiscountSettings } from "../components/store/SeasonalStore/types";
 import { createWhopRestClient } from "@/lib/whop-rest";
+import { resolveSyncedPlanIds } from "@/lib/helpers/promo-plan-ids";
 
 /** Generated PromoCodeListItem omits plan_ids. Create still sends them, so keep the read. */
 type ListedPromo = {
@@ -172,6 +173,11 @@ export async function syncPromosFromWhopAPI(
 								}
 							}
 
+							const existingPromo = await db.query.promos.findFirst({
+								where: eq(promos.whopPromoId, promo.id),
+								columns: { planIds: true },
+							});
+
 							// Map Whop API response to promos table schema
 							const promoData = {
 								whopCompanyId: companyId,
@@ -187,8 +193,11 @@ export async function syncPromosFromWhopAPI(
 								existingMembershipsOnly: promo.existing_memberships_only || null,
 								expiresAt: promo.expires_at ? new Date(promo.expires_at) : null,
 								onePerCustomer: promo.one_per_customer || null,
-								// planIds: set to null if promo has product_id, otherwise use plan_ids from API
-								planIds: promo.product?.id ? null : (promo.plan_ids && Array.isArray(promo.plan_ids) && promo.plan_ids.length > 0 ? JSON.stringify(promo.plan_ids) : null),
+								planIds: resolveSyncedPlanIds({
+									productId: promo.product?.id || null,
+									listedPlanIds: promo.plan_ids,
+									existingPlanIds: existingPromo?.planIds ?? null,
+								}),
 								productId: promo.product?.id || null,
 								stock: promo.stock || null,
 								unlimitedStock: promo.unlimited_stock || false,

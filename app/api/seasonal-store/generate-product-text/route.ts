@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateProductText } from '@/lib/actions/seasonal-store-actions';
 import { Theme } from '@/lib/components/store/SeasonalStore/types';
+import { requireRequestExperience } from '@/lib/helpers/experience-access-gate';
 
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireRequestExperience(request, { requireAdmin: true });
+    if (!access.ok) return access.response;
     const body = await request.json();
     console.log('🎯 [API] Received request body:', JSON.stringify(body, null, 2));
     

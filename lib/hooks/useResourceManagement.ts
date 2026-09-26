@@ -119,8 +119,7 @@ export function useResourceManagement(user?: { experienceId?: string } | null) {
 				}
 			} catch (err) {
 				console.error("Error adding resource to funnel:", err);
-				// Silently handle errors - no user feedback
-				// Don't update local state on error to maintain consistency
+				throw err;
 			}
 		}
 	};

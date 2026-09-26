@@ -4,6 +4,7 @@ import { db } from "@/lib/supabase/db-server";
 import { experiences, users } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
 import { addCredits } from "@/lib/actions/credit-actions";
+import { authorizeExperience } from "@/lib/helpers/experience-access-gate";
 
 /**
  * Add credits directly to user without triggering user context cleanup
@@ -96,7 +97,14 @@ async function testCreditPackHandler(
 			);
 		}
 
-		const company_id = experience[0].whopCompanyId;
+		const access = await authorizeExperience({
+			whopUserId: user_id,
+			headerExperienceId: experienceId,
+			requireAdmin: true,
+		});
+		if (!access.ok) return access.response;
+
+		const company_id = access.companyId;
 
 		// Validate packId exists in our mapping
 		if (!CREDIT_PACK_MAPPING[packId]) {

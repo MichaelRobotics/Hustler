@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withWhopAuth } from '@/lib/middleware/whop-auth';
+import { authorizeExperience } from '@/lib/helpers/experience-access-gate';
 import type { SeasonalDiscountData } from '@/lib/actions/seasonal-discount-actions';
 
 // Force server-side only
@@ -10,14 +11,23 @@ export const dynamic = 'force-dynamic';
 export const POST = withWhopAuth(async (request: NextRequest, context) => {
   try {
     const body = await request.json();
-    const { experienceId, discountData } = body;
+    const { experienceId: requestedExperienceId, discountData } = body;
 
-    if (!experienceId || !discountData) {
+    if (!discountData) {
       return NextResponse.json(
-        { error: 'Experience ID and discount data are required' },
+        { error: 'Discount data is required' },
         { status: 400 }
       );
     }
+
+    const access = await authorizeExperience({
+      whopUserId: context.user.userId,
+      headerExperienceId: context.user.experienceId,
+      bodyExperienceId: requestedExperienceId,
+      requireAdmin: true,
+    });
+    if (!access.ok) return access.response;
+    const experienceId = access.experience.whopExperienceId;
 
     // Dynamic import to prevent bundling issues
     const { updateExperienceSeasonalDiscount } = await import('@/lib/actions/seasonal-discount-actions');
