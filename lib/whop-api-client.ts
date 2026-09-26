@@ -1,5 +1,4 @@
-import { whopSdk } from '@/lib/whop-sdk';
-import Whop from '@whop/sdk';
+import { createWhopRestClient } from '@/lib/whop-rest';
 
 // App type classification based on name patterns
 function classifyAppType(appName: string): 'earn' | 'learn' | 'community' | 'other' {
@@ -117,18 +116,30 @@ export class WhopApiClient {
           console.log(`🔍 Trying ${strategy.name} strategy (${strategy.timeout}ms timeout, first: ${strategy.first})...`);
           
           // Use proper SDK method - whopSdk.experiences.listExperiences (not companies.listExperiences)
+          const client = createWhopRestClient();
           const experiencesResult = await Promise.race([
-            whopSdk.experiences.listExperiences({
-              companyId: this.companyId, // Required by the API
-              first: strategy.first,
-              onAccessPass: false
-            }),
+            (async () => {
+              const listed: Array<{
+                id: string;
+                name: string;
+                app: { id: string; name: string; icon: { url: string | null } | null };
+                image: { url: string | null } | null;
+              }> = [];
+              for await (const experience of await client.experiences.list({
+                account_id: this.companyId,
+                first: strategy.first,
+              })) {
+                listed.push(experience);
+                if (listed.length >= strategy.first) break;
+              }
+              return listed;
+            })(),
             new Promise<never>((_, reject) => 
               setTimeout(() => reject(new Error("API timeout")), strategy.timeout)
             )
           ]);
           
-          const experiences = experiencesResult?.experiencesV2?.nodes || [];
+          const experiences = experiencesResult || [];
           console.log(`✅ ${strategy.name} strategy succeeded! Found ${experiences.length} experiences`);
           
           if (experiences.length > 0) {
@@ -154,7 +165,7 @@ export class WhopApiClient {
               const app = {
                 id: exp.app?.id || exp.id,
                 name: exp.app?.name || exp.name,
-                description: exp.app?.description || exp.description, // Try app description first, then experience description
+                description: "",
                 price: 0,
                 currency: 'usd',
                 discoveryPageUrl: undefined,
@@ -163,7 +174,7 @@ export class WhopApiClient {
                 experienceId: exp.id, // Store the experience ID for this app installation
                 companyRoute: companyRoute || undefined, // Company route for URL generation
                 appSlug: experienceSlug, // Generated experience slug
-                bannerImage: exp.bannerImage?.sourceUrl || undefined
+                bannerImage: exp.image?.url || exp.app?.icon?.url || undefined
               };
               
               // Debug: Log app URL generation data
@@ -234,14 +245,11 @@ export class WhopApiClient {
     
     try {
       // Create Whop SDK client
-      const client = new Whop({
-        appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-        apiKey: process.env.WHOP_API_KEY!,
-      });
+      const client = createWhopRestClient();
 
       console.log("🔍 Step 1: Fetching all plans...");
       const plans: any[] = [];
-      for await (const planListResponse of client.plans.list({ company_id: this.companyId })) {
+      for await (const planListResponse of await client.plans.list({ account_id: this.companyId })) {
         plans.push(planListResponse);
       }
       console.log(`✅ Found ${plans.length} plans`);
@@ -262,9 +270,9 @@ export class WhopApiClient {
 
       console.log("🔍 Step 2: Fetching all products (regular type only)...");
       const products: any[] = [];
-      for await (const productListItem of client.products.list({ 
-        company_id: this.companyId,
-        product_types: ["regular"]
+      for await (const productListItem of await client.products.list({ 
+        account_id: this.companyId,
+        access_pass_types: ["regular"]
       })) {
         products.push(productListItem);
       }
@@ -359,7 +367,7 @@ export class WhopApiClient {
         const productName = firstPlan.product?.title || 'Unknown Product';
         
         // Verify the product is actually a regular product type by checking if it's in our regular products list
-        // If it's not in regularProductIds, it means it wasn't returned from the API with product_types: ["regular"]
+        // If it's not in regularProductIds, it means it wasn't returned from products.list({ access_pass_types: ["regular"] })
         // In that case, we should NOT create a product from its plans
         if (!regularProductIds.has(productId)) {
           console.log(`⚠️ Skipping product creation from plan: "${productName}" (${productId}) - product is not a regular type`);
@@ -474,7 +482,7 @@ export class WhopApiClient {
             detailedProduct = product;
           } else {
             // Get detailed product data from API
-            detailedProduct = await client.products.retrieve(product.id);
+            detailedProduct = await client.products.retrieve({ id: product.id });
             
             // Verify the product is a regular type (should be in our regular products list)
             // If it's not, skip it as it shouldn't have been processed
@@ -681,12 +689,9 @@ export class WhopApiClient {
   private async getCompanyRoute(): Promise<string | null> {
     try {
       // Create Whop SDK client
-      const client = new Whop({
-        appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-        apiKey: process.env.WHOP_API_KEY!,
-      });
+      const client = createWhopRestClient();
 
-      const company = await client.companies.retrieve(this.companyId);
+      const company = await client.accounts.retrieve({ id: this.companyId });
       return company.route || null;
     } catch (error) {
       console.error("❌ Failed to get company route:", error);

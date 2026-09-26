@@ -1,4 +1,6 @@
-import { makeWebhookValidator, type PaymentWebhookData, type MembershipWebhookData } from "@whop/api";
+import type { PaymentWebhookData, MembershipWebhookData } from "@whop/api";
+import { unwrapWebhook } from "@whop/sdk/helpers";
+import { checkExperienceAccess, readMoneyAmount } from "@/lib/whop-rest";
 import { after } from "next/server";
 import { addCredits, addMessages, updateUserSubscription } from "@/lib/actions/credit-actions";
 import type { CreditPackId } from "@/lib/types/credit";
@@ -24,30 +26,33 @@ if (!process.env.WHOP_WEBHOOK_SECRET) {
   throw new Error("WHOP_WEBHOOK_SECRET environment variable is required");
 }
 
-const validateWebhook = makeWebhookValidator({
-  webhookSecret: process.env.WHOP_WEBHOOK_SECRET,
-});
+interface WhopWebhookEnvelope {
+  type?: string;
+  data?: Record<string, unknown>;
+}
 
 export async function POST(request: Request) {
-  // Validate the webhook to ensure it's from Whop
-  const webhook = await validateWebhook(request);
+  const payload = await request.text();
+  const webhook = unwrapWebhook<WhopWebhookEnvelope>(payload, {
+    headers: Object.fromEntries(request.headers.entries()),
+    key: process.env.WHOP_WEBHOOK_SECRET,
+  });
 
-  // Handle the webhook event
-  // Membership webhooks are events; funnel TRIGGERS (any_membership_buy, membership_buy, cancel_membership, any_cancel_membership) use these events.
-  const action = webhook.action as string;
-  if (webhook.action === "membership.went_valid") {
-    // Membership-buy conversations are now created from payment.succeeded only; keep for logging.
+  // unwrapWebhook returns the parsed body. Official deliveries use type, not action.
+  const type = webhook.type;
+  const data = (webhook.data ?? {}) as Record<string, unknown>;
+  if (type === "membership.went_valid") {
     console.log(`[WEBHOOK] membership.went_valid - membership-buy handled by payment.succeeded`);
   }
-  else if (action === "membership.deactivated") {
+  else if (type === "membership.deactivated") {
     console.log(`[WEBHOOK] membership.deactivated - triggers: any_cancel_membership, cancel_membership`);
-    after(handleMembershipDeactivatedWebhook(webhook.data as MembershipWebhookData));
+    after(handleMembershipDeactivatedWebhook(data as unknown as MembershipWebhookData));
   }
-  else if (webhook.action === "payment.succeeded") {
-    after(handlePaymentSucceededWebhook(webhook.data));
+  else if (type === "payment.succeeded") {
+    after(handlePaymentSucceededWebhook(data as unknown as PaymentWebhookData));
   }
-  else if (action === "payment.failed" || action === "payment.requires_action") {
-    after(handlePaymentRecoveryWebhook(action, webhook.data));
+  else if (type === "payment.failed" || type === "payment.requires_action") {
+    after(handlePaymentRecoveryWebhook(type, data));
   }
 
   // Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
@@ -55,7 +60,7 @@ export async function POST(request: Request) {
 }
 
 /** Payload may include company_id (Whop membership webhooks). Use for correlation. */
-type MembershipWebhookPayload = MembershipWebhookData & { company_id?: string };
+type MembershipWebhookPayload = MembershipWebhookData & { company_id?: string; account_id?: string };
 
 /** Normalize payment.succeeded payload to flat user_id, company_id, product_id, plan_id (supports nested data.user.id, data.product.id, etc.). */
 function normalizePaymentPayload(data: Record<string, unknown>): {
@@ -72,16 +77,16 @@ function normalizePaymentPayload(data: Record<string, unknown>): {
 	const membership = data.membership as { id?: string } | undefined;
 	return {
 		user_id: (user?.id ?? data.user_id ?? null) as string | null,
-		company_id: (company?.id ?? data.company_id ?? null) as string | null,
-		product_id: (product?.id ?? data.product_id ?? null) as string | null,
-		plan_id: (plan?.id ?? data.plan_id ?? null) as string | null,
-		membership_id: (membership?.id ?? data.membership_id ?? null) as string | null,
+		company_id: (data.account_id ?? company?.id ?? data.company_id ?? null) as string | null,
+		product_id: (data.product_id ?? product?.id ?? null) as string | null,
+		plan_id: (data.plan_id ?? plan?.id ?? null) as string | null,
+		membership_id: (data.membership_id ?? membership?.id ?? null) as string | null,
 	};
 }
 
 /** Resolve company_id from payment payload (company_id or from product_id via resources -> experience). */
 async function resolveCompanyIdFromPaymentPayload(data: Record<string, unknown>): Promise<string | null> {
-	const companyId = (data.company_id ?? (data.company as { id?: string })?.id) as string | undefined;
+	const companyId = (data.account_id ?? data.company_id ?? (data.company as { id?: string })?.id) as string | undefined;
 	if (companyId) return companyId;
 	const productId = (data.product_id ?? (data.product as { id?: string })?.id) as string | undefined;
 	if (!productId) return null;
@@ -106,7 +111,7 @@ async function resolveCompanyIdFromPaymentPayload(data: Record<string, unknown>)
  * Uses payload.company_id if present; otherwise tries to resolve from product_id via resources table (resource.whopProductId -> experience.whopCompanyId).
  */
 async function resolveCompanyIdFromMembershipPayload(data: MembershipWebhookPayload): Promise<string | null> {
-  const companyId = data.company_id ?? (data as { company_id?: string }).company_id;
+  const companyId = data.account_id ?? data.company_id ?? (data as { company_id?: string }).company_id;
   if (companyId) return companyId;
   const productId = data.product_id;
   if (!productId) return null;
@@ -168,7 +173,8 @@ async function findExperiencesWithActiveFunnelForUser(
 }
 
 async function handlePaymentSucceededWebhook(data: PaymentWebhookData) {
-  const { id, user_id, subtotal, amount_after_fees, metadata, company_id } = data;
+  const { id, user_id, metadata } = data;
+  const company_id = (data as PaymentWebhookData & { account_id?: string }).account_id ?? data.company_id;
 
   // Check if this is a credit pack purchase via chargeUser (metadata-based method) - legacy
   if (metadata?.type === "credit_pack" && metadata?.packId && metadata?.credits) {
@@ -533,7 +539,8 @@ async function handlePaymentRecoveryWebhook(action: string, data: unknown) {
  * Handle new checkout system payments (Subscriptions, Credits, Messages)
  */
 async function handleNewCheckoutPayment(data: PaymentWebhookData) {
-	const { id, user_id, company_id, subtotal, amount_after_fees, metadata, checkout_id, plan_id, membership_id } = data;
+	const { id, user_id, metadata, checkout_id, plan_id, membership_id } = data;
+	const company_id = (data as PaymentWebhookData & { account_id?: string }).account_id ?? data.company_id;
 
 	if (!user_id) {
 		console.error("Missing user_id for new checkout payment");
@@ -605,11 +612,8 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 			const whopUser = await whopSdk.users.getUser({ userId: user_id }).catch(() => null);
 			let accessLevel = "customer" as string;
 			try {
-				const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
-					userId: user_id,
-					experienceId: whopExperienceId,
-				});
-				accessLevel = accessResult.accessLevel ?? "customer";
+				const accessResult = await checkExperienceAccess(user_id, whopExperienceId);
+				accessLevel = accessResult.access_level ?? "customer";
 			} catch {
 				// keep default customer
 			}
@@ -727,7 +731,11 @@ async function handleNewCheckoutPayment(data: PaymentWebhookData) {
 		}
 
 		// 5. Create order record
-		const paymentAmount = subtotal || amount_after_fees || amount || 0;
+		const rawPayment = data as unknown as Record<string, unknown>;
+		const paymentAmount = readMoneyAmount(rawPayment.subtotal)
+			|| readMoneyAmount(rawPayment.amount_after_fees)
+			|| readMoneyAmount(rawPayment.amount)
+			|| 0;
 		const prodName = paymentType === "Credits" 
 			? `${credits || 0} Credits`
 			: paymentType === "Messages"

@@ -7,7 +7,7 @@ import { db } from '@/lib/supabase/db-server';
 import { resources } from '@/lib/supabase/schema';
 import { eq, and } from 'drizzle-orm';
 import { getWhopApiClient } from '@/lib/whop-api-client';
-import { whopSdk } from '@/lib/whop-sdk';
+import { firstGalleryImageUrl, retrieveWhopProduct } from '@/lib/whop-rest';
 import type { AuthenticatedUser } from '@/lib/context/user-context';
 import { upsertPlansForProduct, getPlansForProduct } from '@/lib/actions/plan-actions';
 import { updateResource } from '@/lib/actions/resource-actions';
@@ -116,20 +116,13 @@ async function createResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   
     // For products, fetch from galleryImages using Whop SDK
     try {
-      const productResult = await whopSdk.accessPasses.getAccessPass({
-        accessPassId: whopProductId,
-      });
-      
-      if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
-        const firstImage = productResult.galleryImages.nodes[0];
-        if (firstImage?.source?.url) {
-          productImage = firstImage.source.url;
-          console.log(`✅ [API] Fetched product image from galleryImages for ${product.title}`);
-        } else {
-          console.log(`⚠️ [API] galleryImages found but no source.url for ${product.title}, using placeholder`);
-        }
+      const productResult = await retrieveWhopProduct(whopProductId);
+      const galleryUrl = firstGalleryImageUrl(productResult);
+      if (galleryUrl) {
+        productImage = galleryUrl;
+        console.log(`✅ [API] Fetched product image from gallery_images for ${product.title}`);
       } else {
-        console.log(`⚠️ [API] No galleryImages found for ${product.title}, using placeholder`);
+        console.log(`⚠️ [API] No gallery_images url for ${product.title}, using placeholder`);
       }
     } catch (imageError) {
       // Use placeholder if SDK fetch fails
@@ -305,20 +298,13 @@ async function updateResourceFromWhop(user: AuthenticatedUser, whopClient: any, 
   
     // For products, fetch from galleryImages using Whop SDK
     try {
-      const productResult = await whopSdk.accessPasses.getAccessPass({
-        accessPassId: whopProductId,
-      });
-      
-      if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
-        const firstImage = productResult.galleryImages.nodes[0];
-        if (firstImage?.source?.url) {
-          productImage = firstImage.source.url;
-          console.log(`✅ [API] Fetched product image from galleryImages for ${product.title}`);
-        } else {
-          console.log(`⚠️ [API] galleryImages found but no source.url for ${product.title}, using placeholder`);
-        }
+      const productResult = await retrieveWhopProduct(whopProductId);
+      const galleryUrl = firstGalleryImageUrl(productResult);
+      if (galleryUrl) {
+        productImage = galleryUrl;
+        console.log(`✅ [API] Fetched product image from gallery_images for ${product.title}`);
       } else {
-        console.log(`⚠️ [API] No galleryImages found for ${product.title}, using placeholder`);
+        console.log(`⚠️ [API] No gallery_images url for ${product.title}, using placeholder`);
       }
     } catch (imageError) {
       // Use placeholder if SDK fetch fails

@@ -4,7 +4,7 @@ import { resources, users, experiences } from "@/lib/supabase/schema";
 import { eq, and, isNotNull, sql } from "drizzle-orm";
 import { getWhopApiClient } from "@/lib/whop-api-client";
 import { createResource } from "@/lib/actions/resource-actions";
-import { whopSdk } from "@/lib/whop-sdk";
+import { firstGalleryImageUrl, retrieveWhopProduct } from "@/lib/whop-rest";
 import { whopNativeTrackingService } from "@/lib/analytics/whop-native-tracking";
 import { updateProductSync } from "./index";
 import { createOriginTemplateFromProduct, shouldCreateOriginTemplate } from "@/lib/services/origin-template-service";
@@ -375,18 +375,11 @@ export async function triggerProductSyncForNewAdmin(
 						
 						// Fetch product image from galleryImages using Whop SDK
 						try {
-							const productResult = await whopSdk.accessPasses.getAccessPass({
-								accessPassId: product.id,
-							});
-							
-							if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
-								const firstImage = productResult.galleryImages.nodes[0];
-								if (firstImage?.source?.url) {
-									productImage = firstImage.source.url;
-									console.log(`✅ [TRIGGER-SYNC] Fetched product image from galleryImages for ${product.title}: ${productImage.substring(0, 50)}...`);
-								} else {
-									console.log(`⚠️ [TRIGGER-SYNC] galleryImages found but no source.url for ${product.title}, using placeholder`);
-								}
+							const productResult = await retrieveWhopProduct(product.id);
+							const galleryUrl = firstGalleryImageUrl(productResult);
+							if (galleryUrl) {
+								productImage = galleryUrl;
+								console.log(`✅ [TRIGGER-SYNC] Fetched product image from gallery_images for ${product.title}: ${productImage.substring(0, 50)}...`);
 							} else {
 								console.log(`⚠️ [TRIGGER-SYNC] No galleryImages found for ${product.title}, using placeholder`);
 							}

@@ -3,6 +3,7 @@ import { withWhopAuth } from '@/lib/middleware/whop-auth';
 import { db } from '@/lib/supabase/db-server';
 import { promos, plans, experiences } from '@/lib/supabase/schema';
 import { eq } from 'drizzle-orm';
+import { createWhopRestClient } from '@/lib/whop-rest';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -65,21 +66,10 @@ export const POST = withWhopAuth(async (request: NextRequest, context) => {
       );
     }
 
-    // Import Whop SDK client
-    const Whop = (await import('@whop/sdk')).default;
-    const client = new Whop({
-      apiKey: process.env.WHOP_API_KEY!,
-    });
+    const client = createWhopRestClient();
 
-    // Access promoCodes from client
-    const promoCodesClient = (client as any).promoCodes;
-    if (!promoCodesClient) {
-      throw new Error('promoCodes is not available on Whop SDK client');
-    }
-
-    // Create promo via Whop API
-    const promo = await promoCodesClient.create({
-      company_id: resolvedCompanyId,
+    const promo = await client.promoCodes.create({
+      account_id: resolvedCompanyId,
       code: promoCode,
       amount_off: amountOff,
       base_currency: 'usd',

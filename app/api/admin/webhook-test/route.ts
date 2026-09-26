@@ -3,7 +3,6 @@ import { withWhopAuth, type AuthContext } from "@/lib/middleware/whop-auth";
 import { db } from "@/lib/supabase/db-server";
 import { resources, experiences } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
-import { makeWebhookValidator } from "@whop/api";
 
 /**
  * POST /api/admin/webhook-test - Test webhook for specific product

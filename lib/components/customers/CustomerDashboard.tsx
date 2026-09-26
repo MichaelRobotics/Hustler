@@ -461,6 +461,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 											resourceType={resource.resourceType || 'FILE'}
 											onOpenProductReview={(companySlug) => setProductReviewModal({ isOpen: true, companySlug })}
 											onOpenPlanReview={(resourceId, planId) => setPlanReviewModal({ isOpen: true, resourceId, planId, resourceName: resource.product_name, companyLogo: companyLogo || undefined })}
+											onResourceDeleted={() => {
+												if (currentViewUserId) void fetchCustomerResources(currentViewUserId);
+											}}
 											experienceId={user.experience.whopExperienceId}
 										/>
 									))}

@@ -23,14 +23,10 @@ async function retrievePaymentHandler(
 		}
 
 		// Use @whop/sdk client SDK to retrieve payment
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-			appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-		});
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient();
 
-		// Retrieve payment from Whop API
-		const payment = await client.payments.retrieve(paymentId);
+		const payment = await client.payments.retrieve({ id: paymentId });
 
 		if (!payment) {
 			return NextResponse.json(
@@ -44,20 +40,19 @@ async function retrievePaymentHandler(
 		return NextResponse.json({
 			id: payment.id,
 			status: payment.status,
-			plan: payment.plan ? {
-				id: payment.plan.id,
+			plan: payment.plan_id ? {
+				id: payment.plan_id,
 			} : null,
-			membership: payment.membership ? {
-				id: payment.membership.id,
-				status: payment.membership.status,
+			membership: payment.membership_id ? {
+				id: payment.membership_id,
 			} : null,
 			user: payment.user ? {
 				id: payment.user.id,
 				name: payment.user.name,
-				email: payment.user.email,
+				email: payment.customer_email,
 			} : null,
-			company: payment.company ? {
-				id: payment.company.id,
+			company: payment.account_id ? {
+				id: payment.account_id,
 			} : null,
 			paid_at: payment.paid_at,
 			created_at: payment.created_at,

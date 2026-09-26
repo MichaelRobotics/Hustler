@@ -1,6 +1,7 @@
 /**
- * Pick the membership to cancel from @whop/sdk@0.0.19 list/retrieve rows.
- * Those rows expose nested plan.id and user.id. A row without both is ignored.
+ * Pick the membership to cancel from @whop/sdk@2 list rows.
+ * Those rows expose plan_id, product_id, user_id, and account.id.
+ * A row without an id, plan_id, and user_id is ignored.
  */
 
 const LIVE_STATUS_RANK: Record<string, number> = {
@@ -13,10 +14,10 @@ const LIVE_STATUS_RANK: Record<string, number> = {
 export interface MembershipCancelCandidate {
 	id?: string | null;
 	status?: string | null;
-	plan?: { id?: string | null } | null;
-	user?: { id?: string | null } | null;
-	product?: { id?: string | null } | null;
-	company?: { id?: string | null } | null;
+	plan_id?: string | null;
+	user_id?: string | null;
+	product_id?: string | null;
+	account?: { id?: string | null } | null;
 }
 
 export interface MembershipCancelCriteria {
@@ -35,24 +36,21 @@ export function selectMembershipToCancel(
 	criteria: MembershipCancelCriteria,
 ): MembershipCancelSelection {
 	const matched = memberships.filter((membership) => {
-		const planId = membership.plan?.id;
-		const userId = membership.user?.id;
-		if (!membership.id || !planId || !userId) return false;
-		if (planId !== criteria.planId || userId !== criteria.userId) return false;
-		if (criteria.companyId && membership.company?.id && membership.company.id !== criteria.companyId) {
+		if (!membership.id || !membership.plan_id || !membership.user_id) return false;
+		if (membership.plan_id !== criteria.planId || membership.user_id !== criteria.userId) return false;
+		if (criteria.companyId && membership.account?.id && membership.account.id !== criteria.companyId) {
 			return false;
 		}
-		if (criteria.productId && membership.product?.id && membership.product.id !== criteria.productId) {
+		if (criteria.productId && membership.product_id && membership.product_id !== criteria.productId) {
 			return false;
 		}
 		return LIVE_STATUS_RANK[membership.status ?? ""] !== undefined;
 	});
 
-	const narrowed =
-		criteria.productId
-			? matched.filter((membership) => membership.product?.id === criteria.productId)
-			: matched;
-	const pool = narrowed.length > 0 ? narrowed : matched.filter((membership) => !membership.product?.id);
+	const narrowed = criteria.productId
+		? matched.filter((membership) => membership.product_id === criteria.productId)
+		: matched;
+	const pool = narrowed.length > 0 ? narrowed : matched.filter((membership) => !membership.product_id);
 
 	if (pool.length === 0) return { ok: false, reason: "not_found" };
 

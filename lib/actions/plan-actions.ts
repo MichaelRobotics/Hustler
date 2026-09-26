@@ -147,15 +147,12 @@ async function fetchPlansFromWhopAPI(
 	renewal_price?: number;
 	purchase_url?: string;
 }>> {
-	const WhopClient = (await import('@whop/sdk')).default;
-	const client = new WhopClient({
-		appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-		apiKey: process.env.WHOP_API_KEY!,
-	});
+	const { createWhopRestClient } = await import("@/lib/whop-rest");
+	const client = createWhopRestClient();
 
 	const allPlans: any[] = [];
-	for await (const planListResponse of client.plans.list({ 
-		company_id: companyId 
+	for await (const planListResponse of await client.plans.list({ 
+		account_id: companyId 
 	})) {
 		allPlans.push(planListResponse);
 	}

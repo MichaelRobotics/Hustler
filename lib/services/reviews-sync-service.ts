@@ -53,27 +53,16 @@ export async function syncReviewsForProduct(
 		}
 
 		// Import Whop SDK client
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-			appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-		});
-
-		// Access reviews from client
-		const reviewsClient = (client as any).reviews;
-		if (!reviewsClient) {
-			throw new Error('reviews is not available on Whop SDK client');
-		}
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient();
 
 		let syncedCount = 0;
 
-		// List all reviews for this product from Whop API
+		// Each yielded item is one review, not a page with data[].
 		try {
-			for await (const reviewListResponse of reviewsClient.list({
+			for await (const review of await client.reviews.list({
 				product_id: whopProductId,
 			})) {
-				if (reviewListResponse.data && Array.isArray(reviewListResponse.data)) {
-					for (const review of reviewListResponse.data) {
 						try {
 							// Map Whop API response to reviews table schema
 							const reviewData = {
@@ -118,8 +107,6 @@ export async function syncReviewsForProduct(
 							console.warn(`⚠️ Failed to sync review ${review.id}:`, error instanceof Error ? error.message : String(error));
 							// Continue with other reviews
 						}
-					}
-				}
 			}
 		} catch (error) {
 			console.error(`Error listing reviews for product ${whopProductId}:`, error instanceof Error ? error.message : String(error));

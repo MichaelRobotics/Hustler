@@ -232,11 +232,9 @@ export async function handleUserJoinEvent(
 			let accessLevel = "customer"; // Default fallback
 			
 			try {
-				const accessResult = await sdk.access.checkIfUserHasAccessToExperience({
-					userId: userId,
-					experienceId: experience.whopExperienceId,
-				});
-				accessLevel = accessResult.accessLevel || "no_access";
+				const { checkExperienceAccess } = await import("@/lib/whop-rest");
+				const accessResult = await checkExperienceAccess(userId, experience.whopExperienceId);
+				accessLevel = accessResult.access_level || "no_access";
 				console.log(`Whop API access level: ${accessLevel}`);
 			} catch (error) {
 				console.error("Error checking initial access level:", error);

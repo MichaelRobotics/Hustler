@@ -126,8 +126,8 @@ importers:
         specifier: 0.2.36
         version: 0.2.36(@auth/core@0.40.0)(@types/react-dom@19.1.5(@types/react@19.1.4))(@types/react@19.1.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@whop/sdk':
-        specifier: ^0.0.19
-        version: 0.0.19
+        specifier: ^2.0.0
+        version: 2.0.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2814,8 +2814,9 @@ packages:
     peerDependencies:
       react: ^19.0.0
 
-  '@whop/sdk@0.0.19':
-    resolution: {integrity: sha512-VZm6pZsNU3Y0MQyPrZgeHnLZQs0kOI3SNtAHy88D3PlkxVW7ZJRkAQGGIRHncVt2uhNOZ3M8XKUTVk5Uk6a52Q==}
+  '@whop/sdk@2.0.0':
+    resolution: {integrity: sha512-QWa/Iw5NBfmvqlO3Q+AxFlTh920o899E1aKww2tLQSn4TigDhttXM0hsl5NUMvkPyC89u3xHvVQkX7Z7AKmHhg==}
+    engines: {node: '>=18.0.0'}
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
@@ -6694,9 +6695,8 @@ snapshots:
       - '@types/react-dom'
       - react-dom
 
-  '@whop/sdk@0.0.19':
+  '@whop/sdk@2.0.0':
     dependencies:
-      jose: 6.1.0
       standardwebhooks: 1.0.0
 
   agent-base@7.1.4: {}

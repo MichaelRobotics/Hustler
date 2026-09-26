@@ -216,52 +216,14 @@ export async function addCredits(
 /**
  * Create a charge for credit pack purchase
  */
-export async function createCreditPackCharge(packId: CreditPackId): Promise<{
+export async function createCreditPackCharge(_packId: CreditPackId): Promise<{
 	status: "needs_action" | "success";
 	inAppPurchase?: {
 		id: string;
 		planId: string;
 	};
 }> {
-	try {
-		const headersList = await headers();
-		const { userId } = await whopSdk.verifyUserToken(headersList);
-
-		const pack = CREDIT_PACKS[packId];
-		if (!pack.planId) {
-			throw new Error(`Plan ID not configured for pack ${packId}`);
-		}
-
-		// Create charge using Whop SDK
-		const result = await whopSdk.payments.chargeUser({
-			userId,
-			amount: pack.price,
-			currency: "usd",
-			description: `${pack.name} - ${pack.credits} AI Funnel Credits`,
-			metadata: {
-				packId,
-				credits: pack.credits,
-				type: "credit_pack",
-			},
-		});
-
-		if (!result) {
-			throw new Error("Failed to create charge");
-		}
-
-		return {
-			status: result.status as "needs_action" | "success",
-			inAppPurchase: result.inAppPurchase
-				? {
-						id: result.inAppPurchase.id,
-						planId: result.inAppPurchase.planId,
-					}
-				: undefined,
-		};
-	} catch (error) {
-		console.error("Error creating credit pack charge:", error);
-		throw error;
-	}
+	throw new Error("Credit packs use checkout configurations. chargeUser is not used for new charges.");
 }
 
 /**
@@ -357,12 +319,9 @@ export async function cancelMembership(membershipId: string): Promise<boolean> {
 		console.log(`Cancelling membership: ${membershipId}`);
 		
 		// Use @whop/sdk directly for membership cancellation
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-		});
-		
-		await client.memberships.cancel(membershipId);
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient();
+		await client.memberships.cancel({ id: membershipId });
 		console.log(`Successfully cancelled membership: ${membershipId}`);
 		return true;
 	} catch (error: any) {

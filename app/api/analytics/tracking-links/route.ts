@@ -99,9 +99,8 @@ export async function GET(request: NextRequest) {
         .from(resources)
         .where(eq(resources.experienceId, resolvedExperienceId));
     } else if (companyId) {
-      // For company-wide analytics, you might need to join across experiences/funnels
-      // For simplicity, this example assumes experienceId or funnelId is usually provided
-      // You would fetch all experiences for the company, then all funnels/resources
+      // funnel_analytics and funnel_resource_analytics store experienceId only.
+      // They have no company id, so this branch cannot roll up a company.
       return NextResponse.json(
         { error: "Company-wide analytics not fully implemented, please provide experienceId or funnelId" },
         { status: 400 }

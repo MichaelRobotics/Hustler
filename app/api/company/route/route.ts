@@ -3,7 +3,7 @@ import { withWhopAuth, type AuthContext } from '@/lib/middleware/whop-auth';
 import { db } from '@/lib/supabase/db-server';
 import { experiences } from '@/lib/supabase/schema';
 import { eq } from 'drizzle-orm';
-import { whopSdk } from '@/lib/whop-sdk';
+import { retrieveWhopAccount } from '@/lib/whop-rest';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,13 +55,10 @@ export const GET = withWhopAuth(async (request: NextRequest, context: AuthContex
 
     // Get company route from Whop SDK
     try {
-      const companyResult = await whopSdk.companies.getCompany({
-        companyId: experience.whopCompanyId,
-      });
+      const companyResult = await retrieveWhopAccount(experience.whopCompanyId);
 
-      const company = companyResult as any;
-      const route = company?.route || null;
-      const logo = company?.logo?.sourceUrl || company?.logo || null;
+      const route = companyResult.route || null;
+      const logo = companyResult.logo_url || null;
 
       if (!route) {
         return NextResponse.json(

@@ -55,31 +55,17 @@ export async function syncPlanMemberCount(
 		const whopCompanyId = experience.whopCompanyId;
 
 		// Import Whop SDK client
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-			appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-		});
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient();
 
-		// Fetch all plans from Whop API and filter by planId
+		// Each yielded item is one plan.
 		let memberCount: number | null = null;
 		try {
-			for await (const planListResponse of client.plans.list({ 
-				company_id: whopCompanyId 
+			for await (const plan of await client.plans.list({ 
+				account_id: whopCompanyId 
 			})) {
-				// Handle different response formats
-				const plans = (planListResponse as any).data || (planListResponse as any) || [];
-				const plansArray = Array.isArray(plans) ? plans : [];
-				
-				for (const plan of plansArray) {
-					if (plan.id === planId) {
-						// Found the plan - extract member_count
-						memberCount = plan.member_count || plan.active_users_count || null;
-						break;
-					}
-				}
-				// If we found the plan, break out of the outer loop
-				if (memberCount !== null) {
+				if (plan.id === planId) {
+					memberCount = plan.member_count ?? null;
 					break;
 				}
 			}

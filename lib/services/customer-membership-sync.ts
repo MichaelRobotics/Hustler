@@ -309,14 +309,12 @@ export async function syncCustomerMemberships(
 		});
 
 		// Import Whop SDK
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-		});
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient();
 
 		// Fetch all memberships from Whop API for this company
 		const memberships: any[] = [];
-		for await (const membershipListResponse of client.memberships.list({ company_id: companyId })) {
+		for await (const membershipListResponse of await client.memberships.list({ account_id: companyId })) {
 			memberships.push(membershipListResponse);
 		}
 
@@ -331,9 +329,9 @@ export async function syncCustomerMemberships(
 		const skippedNoMatchingResources: Array<{ id: string; productId?: string; planId?: string; reason: string }> = [];
 		
 		const relevantMemberships = memberships.filter((membership: any) => {
-			const membershipCompanyId = membership.company?.id;
-			const membershipUserId = membership.user?.id;
-			const membershipPlanId = membership.plan?.id;
+			const membershipCompanyId = membership.account?.id;
+			const membershipUserId = membership.user_id;
+			const membershipPlanId = membership.plan_id;
 			
 			// Check company match
 			if (membershipCompanyId !== companyId) {
@@ -345,7 +343,7 @@ export async function syncCustomerMemberships(
 				if (!membershipUserId) {
 					skippedNoUserId.push({
 						id: membership.id,
-						reason: "Missing user.id"
+						reason: "Missing user_id"
 					});
 				} else {
 					skippedUserNotFound.push({
@@ -372,8 +370,8 @@ export async function syncCustomerMemberships(
 		const planIdsWithResources = new Set(resourcesByPlanId.keys());
 		
 		const membershipsToProcess = relevantMemberships.filter(m => {
-			const membershipProductId = m.product?.id;
-			const membershipPlanId = m.plan?.id;
+			const membershipProductId = m.product_id;
+			const membershipPlanId = m.plan_id;
 			
 			// Check if membership has product.id and we have resources for that product
 			if (membershipProductId && productIdsWithResources.has(membershipProductId)) {
@@ -544,10 +542,9 @@ export async function syncCustomerMemberships(
 		// Process each membership
 		for (const membership of membershipsToProcess) {
 			try {
-				const membershipProductId = membership.product?.id;
-				const membershipPlanId = membership.plan?.id;
-				const membershipUserId = membership.user?.id;
-				const membershipUserName = membership.user?.name || "Unknown User";
+				const membershipProductId = membership.product_id;
+				const membershipPlanId = membership.plan_id;
+				const membershipUserId = membership.user_id;
 
 				if (!membershipUserId) {
 					// Should not happen after filtering, but double-check
@@ -558,6 +555,7 @@ export async function syncCustomerMemberships(
 				const dbUser = experienceUsers.find(
 					(u: (typeof experienceUsers)[0]) => u.whopUserId === membershipUserId
 				);
+				const membershipUserName = dbUser?.name || "Unknown User";
 
 				if (!dbUser) {
 					// Should not happen after filtering, but double-check

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { whopSdk } from "@/lib/whop-sdk";
+import { uploadPublicWhopFile } from "@/lib/utils/whop-file-upload";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,25 +31,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload to WHOP storage
-    const response = await whopSdk.attachments.uploadAttachment({
-      file: file,
-      record: "experience", // Store as experience-related attachment
-    });
+    const uploaded = await uploadPublicWhopFile(file);
 
     console.log("🔍 Image uploaded successfully:", {
-      attachmentId: response.directUploadId,
-      url: response.attachment.source.url
+      attachmentId: uploaded.attachmentId,
+      url: uploaded.url
     });
 
-    // Return the attachment details
     return NextResponse.json({
       success: true,
-      attachmentId: response.directUploadId,
-      url: response.attachment.source.url,
-      filename: file.name,
-      size: file.size,
-      type: file.type,
+      ...uploaded,
     });
   } catch (error) {
     console.error("Error uploading image:", error);

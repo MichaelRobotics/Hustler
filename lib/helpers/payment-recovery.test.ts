@@ -36,6 +36,19 @@ describe("readPaymentRecoveryFields", () => {
 		assert.equal(fields.planId, null);
 	});
 
+	it("prefers account_id on a dated payment envelope", () => {
+		const fields = readPaymentRecoveryFields({
+			account_id: "biz_new",
+			company_id: "biz_old",
+			user_id: "user_3",
+			plan_id: "plan_3",
+			recovery_url: "https://whop.com/billing/recover",
+		});
+
+		assert.equal(fields.companyId, "biz_new");
+		assert.equal(fields.planId, "plan_3");
+	});
+
 	it("returns nulls for a non-object payload", () => {
 		const fields = readPaymentRecoveryFields(null);
 		assert.equal(fields.userId, null);

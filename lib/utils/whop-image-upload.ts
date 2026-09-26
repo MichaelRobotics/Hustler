@@ -45,27 +45,15 @@ export async function uploadFileToWhop(file: File): Promise<UploadedImage> {
       // Server context: Use WHOP SDK directly
       console.log('🔍 Server context: Using WHOP SDK directly...');
       
-      // Import the existing WHOP SDK
-      const { whopSdk } = await import('../whop-sdk');
-      
-      // Upload to WHOP storage using the SDK directly
-      const response = await whopSdk.attachments.uploadAttachment({
-        file: file,
-        record: "experience", // Store as experience-related attachment
-      });
+      const { uploadPublicWhopFile } = await import('./whop-file-upload');
+      const uploaded = await uploadPublicWhopFile(file);
 
       console.log("🔍 Image uploaded successfully:", {
-        attachmentId: response.directUploadId,
-        url: response.attachment.source.url
+        attachmentId: uploaded.attachmentId,
+        url: uploaded.url
       });
 
-      return {
-        attachmentId: response.directUploadId,
-        url: response.attachment.source.url,
-        filename: file.name,
-        size: file.size,
-        type: file.type,
-      };
+      return uploaded;
     } else {
       // Client context: Use API route
       console.log('🔍 Client context: Uploading file to WHOP via API route...');

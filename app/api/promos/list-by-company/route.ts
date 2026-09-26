@@ -3,6 +3,7 @@ import { withWhopAuth } from '@/lib/middleware/whop-auth';
 import { db } from '@/lib/supabase/db-server';
 import { experiences } from '@/lib/supabase/schema';
 import { eq } from 'drizzle-orm';
+import { createWhopRestClient } from '@/lib/whop-rest';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,31 +49,15 @@ export const POST = withWhopAuth(async (request: NextRequest, context) => {
       );
     }
 
-    // Import Whop SDK client
-    const Whop = (await import('@whop/sdk')).default;
-    const client = new Whop({
-      apiKey: process.env.WHOP_API_KEY!,
-    });
+    const client = createWhopRestClient();
 
-    // Access promoCodes from client
-    const promoCodesClient = (client as any).promoCodes;
-    if (!promoCodesClient) {
-      throw new Error('promoCodes is not available on Whop SDK client');
-    }
-
-    // List all promos from Whop API for this company
     const allPromoCodes: string[] = [];
     try {
-      for await (const promoListResponse of promoCodesClient.list({
-        company_id: resolvedCompanyId,
-        // No filters - get all promos for the company
+      for await (const promo of await client.promoCodes.list({
+        account_id: resolvedCompanyId,
       })) {
-        if (promoListResponse.data && Array.isArray(promoListResponse.data)) {
-          for (const promo of promoListResponse.data) {
-            if (promo.code) {
-              allPromoCodes.push(promo.code);
-            }
-          }
+        if (promo.code) {
+          allPromoCodes.push(promo.code);
         }
       }
     } catch (error) {

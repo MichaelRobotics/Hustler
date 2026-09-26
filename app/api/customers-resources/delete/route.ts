@@ -2,15 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/supabase/db-server";
-import { customersResources, experiences, users } from "@/lib/supabase/schema";
+import { customersResources, experiences } from "@/lib/supabase/schema";
 import { getUserContext } from "@/lib/context/user-context";
 import { whopSdk } from "@/lib/whop-sdk";
-import { cancelMembership } from "@/lib/actions/credit-actions";
-import { selectMembershipToCancel, type MembershipCancelCandidate } from "@/lib/helpers/membership-cancel";
 
 /**
- * POST /api/customers-resources/cancel
- * Resolves a membership from the stored plan id via plan_id and user_id, then cancels it immediately.
+ * POST /api/customers-resources/delete
+ * Removes the local customers_resources row. Does not delete remote file storage.
  */
 export async function POST(request: NextRequest) {
 	try {
@@ -63,56 +61,11 @@ export async function POST(request: NextRequest) {
 			return NextResponse.json({ error: "Access denied" }, { status: 403 });
 		}
 
-		const owner = await db.query.users.findFirst({
-			where: eq(users.id, resource.userId),
-			columns: { whopUserId: true },
-		});
-		if (!owner?.whopUserId || !resource.membershipPlanId || !resource.companyId) {
-			return NextResponse.json(
-				{ error: "This resource is missing the plan or member needed to cancel" },
-				{ status: 400 },
-			);
-		}
-
-		const { createWhopRestClient } = await import("@/lib/whop-rest");
-		const client = createWhopRestClient();
-
-		const listed: MembershipCancelCandidate[] = [];
-		for await (const membership of await client.memberships.list({
-			account_id: resource.companyId,
-			plan_id: resource.membershipPlanId,
-			user_id: owner.whopUserId,
-		})) {
-			listed.push(membership);
-		}
-
-		const selection = selectMembershipToCancel(listed, {
-			planId: resource.membershipPlanId,
-			userId: owner.whopUserId,
-			productId: resource.membershipProductId,
-			companyId: resource.companyId,
-		});
-
-		if (!selection.ok) {
-			const message = selection.reason === "ambiguous"
-				? "More than one live membership matches this plan"
-				: "No live membership matches this plan and member";
-			return NextResponse.json({ error: message }, { status: selection.reason === "ambiguous" ? 409 : 404 });
-		}
-
-		const cancelled = await cancelMembership(selection.membershipId);
-		if (!cancelled) {
-			return NextResponse.json({ error: "Whop could not cancel this membership" }, { status: 502 });
-		}
-
 		await db.delete(customersResources).where(eq(customersResources.id, resource.id));
 
-		return NextResponse.json({
-			success: true,
-			membershipId: selection.membershipId,
-		});
+		return NextResponse.json({ success: true });
 	} catch (error) {
-		console.error("Error cancelling customer membership:", error);
+		console.error("Error deleting customer resource:", error);
 		return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 	}
 }

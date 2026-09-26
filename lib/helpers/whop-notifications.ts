@@ -30,15 +30,12 @@ export async function sendWhopNotification(
 	}
 
 	try {
-		const Whop = (await import("@whop/sdk")).default;
-		const client = new Whop({
-			apiKey,
-			appID: appID ?? undefined,
-		});
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient(apiKey);
 
 		const notification = await client.notifications.create({
 			experience_id: input.experience_id,
-			user_ids: input.user_ids ?? null,
+			...(input.user_ids ? { user_ids: input.user_ids } : {}),
 			title: input.title,
 			content: input.content,
 			...(input.rest_path != null && { rest_path: input.rest_path }),

@@ -11,7 +11,7 @@ import { db } from "../supabase/db-server";
 import { experiences, resources, users, plans } from "../supabase/schema";
 import { getWhopApiClient, type WhopProduct as ApiWhopProduct, type WhopApp } from "../whop-api-client";
 import { updateOriginTemplateFromProduct, shouldUpdateOriginTemplate, shouldCreateOriginTemplate, createOriginTemplateFromProduct } from "../services/origin-template-service";
-import { whopSdk } from "../whop-sdk";
+import { firstGalleryImageUrl, retrieveWhopProduct } from "../whop-rest";
 import { syncReviewsForProduct } from "../services/reviews-sync-service";
 import { syncPromosFromWhopAPI } from "../actions/seasonal-discount-actions";
 import { updateTemplatesWithProductData } from "../services/template-sync-service";
@@ -247,9 +247,7 @@ export class UpdateProductSync {
           if (!product.whopProductId) continue;
           
           try {
-            const productResult = await whopSdk.accessPasses.getAccessPass({
-              accessPassId: product.whopProductId,
-            });
+            const productResult = await retrieveWhopProduct(product.whopProductId);
             if (productResult) {
               validProduct = product;
               break;
@@ -279,9 +277,7 @@ export class UpdateProductSync {
           } else {
             // Origin template exists, check if it needs update (company logo/banner changes)
             try {
-              const productResult = await whopSdk.accessPasses.getAccessPass({
-                accessPassId: validProduct.whopProductId,
-              });
+              const productResult = await retrieveWhopProduct(validProduct.whopProductId);
               if (productResult) {
                 const shouldUpdate = await shouldUpdateOriginTemplate(experienceId, productResult);
                 if (shouldUpdate) {
@@ -465,20 +461,13 @@ export class UpdateProductSync {
     
     // Fetch product image from galleryImages using Whop SDK
     try {
-      const productResult = await whopSdk.accessPasses.getAccessPass({
-        accessPassId: whopProduct.id,
-      });
-      
-      if (productResult.galleryImages?.nodes && productResult.galleryImages.nodes.length > 0) {
-        const firstImage = productResult.galleryImages.nodes[0];
-        if (firstImage?.source?.url) {
-          newImage = firstImage.source.url;
-          console.log(`✅ [UPDATE-SYNC] Fetched product image from galleryImages for ${whopProduct.title}`);
-        } else {
-          console.log(`⚠️ [UPDATE-SYNC] galleryImages found but no source.url for ${whopProduct.title}, using placeholder`);
-        }
+      const productResult = await retrieveWhopProduct(whopProduct.id);
+      const galleryUrl = firstGalleryImageUrl(productResult);
+      if (galleryUrl) {
+        newImage = galleryUrl;
+        console.log(`✅ [UPDATE-SYNC] Fetched product image from gallery_images for ${whopProduct.title}`);
       } else {
-        console.log(`⚠️ [UPDATE-SYNC] No galleryImages found for ${whopProduct.title}, using placeholder`);
+        console.log(`⚠️ [UPDATE-SYNC] No gallery_images url for ${whopProduct.title}, using placeholder`);
       }
     } catch (imageError) {
       // Use placeholder if SDK fetch fails

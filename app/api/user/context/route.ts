@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserContext } from "@/lib/context/user-context";
 import { whopSdk } from "@/lib/whop-sdk";
+import { checkExperienceAccess, retrieveWhopExperience } from "@/lib/whop-rest";
 import { headers } from "next/headers";
 
 /**
@@ -30,18 +31,12 @@ export async function GET(request: NextRequest) {
 		console.log(`[user-context] Debug - Session userId from whopSdk.verifyUserToken: ${userId}`);
 		
 		// Get company ID from experience data
-		const experience = await whopSdk.experiences.getExperience({
-			experienceId,
-		});
+		const experience = await retrieveWhopExperience(experienceId);
 		const whopCompanyId = experience.company.id;
 
-		// Check access to the experience
-		const experienceAccess = await whopSdk.access.checkIfUserHasAccessToExperience({
-			userId: userId,
-			experienceId: experienceId,
-		});
+		const experienceAccess = await checkExperienceAccess(userId, experienceId);
 
-		if (!experienceAccess.hasAccess) {
+		if (!experienceAccess.has_access) {
 			return NextResponse.json(
 				{ error: "Access denied", hasAccess: false },
 				{ status: 403 }
@@ -54,7 +49,7 @@ export async function GET(request: NextRequest) {
 			whopCompanyId,
 			experienceId,
 			forceRefresh,
-			experienceAccess.accessLevel,
+			experienceAccess.access_level,
 		);
 
 		if (!userContext?.isAuthenticated) {

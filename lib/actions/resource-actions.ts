@@ -168,29 +168,22 @@ export async function createResource(
 			try {
 				// Create checkout configuration using Whop Client SDK (@whop/sdk)
 				// The server SDK doesn't have checkoutConfigurations, so we use the client SDK
-				const Whop = (await import('@whop/sdk')).default;
-				const client = new Whop({
-					apiKey: process.env.WHOP_API_KEY!,
-					appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-				});
+				const { createWhopRestClient } = await import("@/lib/whop-rest");
+				const client = createWhopRestClient();
 
-				// Build plan object - for standalone paid resources, we need a one-time payment plan
-				// Price (initial_price) is required and planType is hardcoded to 'one_time'
 				if (!input.price) {
 					throw new Error("Price is required for paid resources");
 				}
 
-				const planData: any = {
-					company_id: user.experience.whopCompanyId,
-					currency: 'usd',
-					planType: 'one_time', // Hardcoded to one-time payment
-					initial_price: parseFloat(input.price), // Required
-					title: input.name, // Use resource name as plan title
-					description: input.description || null, // Use resource description as plan description
-				};
-
 				checkoutConfig = await client.checkoutConfigurations.create({
-					plan: planData as any,
+					plan: {
+						account_id: user.experience.whopCompanyId,
+						currency: "usd",
+						plan_type: "one_time",
+						initial_price: parseFloat(input.price),
+						title: input.name,
+						description: input.description || null,
+					},
 				});
 
 				// Extract data from checkout configuration

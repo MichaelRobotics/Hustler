@@ -13,6 +13,7 @@ interface CustomerResourceCardProps {
 	onOpenProductReview?: (companySlug: string) => void;
 	onOpenPlanReview?: (resourceId: string | undefined, planId: string) => void;
 	onMembershipCanceled?: () => void;
+	onResourceDeleted?: () => void;
 	experienceId?: string;
 }
 
@@ -22,10 +23,12 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 	onOpenProductReview,
 	onOpenPlanReview,
 	onMembershipCanceled,
+	onResourceDeleted,
 	experienceId,
 }) => {
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [isCancelling, setIsCancelling] = useState(false);
+	const [isDeleting, setIsDeleting] = useState(false);
 	const [cancelError, setCancelError] = useState<string | null>(null);
 	const settingsRef = useRef<HTMLDivElement>(null);
 
@@ -77,14 +80,42 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 		}
 	};
 
+	const handleDelete = async () => {
+		if (!experienceId || isDeleting) return;
+		setIsDeleting(true);
+		setCancelError(null);
+		try {
+			const response = await apiPost(
+				"/api/customers-resources/delete",
+				{
+					customerResourceId: resource.customer_resource_id,
+					experienceId,
+				},
+				experienceId,
+			);
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				setCancelError(typeof data.error === "string" ? data.error : "Could not delete this file");
+				return;
+			}
+			onResourceDeleted?.();
+		} catch (error) {
+			console.error("Delete customer resource failed:", error);
+			setCancelError("Could not delete this file");
+		} finally {
+			setIsDeleting(false);
+			setIsSettingsOpen(false);
+		}
+	};
+
 	const handleAction = (action: "cancel" | "delete") => {
 		if (action === "cancel") {
 			void handleCancel();
 			return;
 		}
 		if (action === "delete") {
-			// Delete stays unfinished: there is no file-delete route or storage contract.
-			console.log("Delete file:", resource.customer_resource_id);
+			void handleDelete();
+			return;
 		}
 		setIsSettingsOpen(false);
 	};
@@ -239,10 +270,14 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 								</DropdownMenu.Item>
 							) : resourceType === "FILE" ? (
 								<DropdownMenu.Item
-									onSelect={() => handleAction("delete")}
-									className="px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer"
+									disabled={isDeleting}
+									onSelect={(event) => {
+										event.preventDefault();
+										handleAction("delete");
+									}}
+									className="px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer data-[disabled]:opacity-50"
 								>
-									Delete
+									{isDeleting ? "Deleting..." : "Delete"}
 								</DropdownMenu.Item>
 							) : null}
 						</DropdownMenu.Content>

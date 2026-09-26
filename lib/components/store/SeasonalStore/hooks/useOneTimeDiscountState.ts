@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { apiGet, apiPut } from '@/lib/utils/api-client';
 
 export interface OneTimeDiscountMessage {
   message: string;
@@ -21,7 +22,7 @@ export interface OneTimeDiscount {
   messages: OneTimeDiscountMessage[];
 }
 
-export function useOneTimeDiscountState() {
+export function useOneTimeDiscountState(experienceId?: string | null) {
   // Panel visibility
   const [showOneTimeDiscount, setShowOneTimeDiscount] = React.useState(false);
   
@@ -51,6 +52,24 @@ export function useOneTimeDiscountState() {
   const [showOneTimeImageModal, setShowOneTimeImageModal] = React.useState(false);
   const [showOneTimeLinkModal, setShowOneTimeLinkModal] = React.useState(false);
   const [oneTimeLinkUrl, setOneTimeLinkUrl] = React.useState('');
+
+  React.useEffect(() => {
+    if (!experienceId) return;
+    let cancelled = false;
+    apiGet(`/api/one-time-discounts?experienceId=${encodeURIComponent(experienceId)}`, experienceId)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.discounts)) {
+          setOneTimeDiscounts(data.discounts);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load one-time discounts:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [experienceId]);
 
   // Select a product to edit
   const selectProduct = React.useCallback((productId: string) => {
@@ -141,11 +160,18 @@ export function useOneTimeDiscountState() {
 
   // Save changes and clear selection
   const saveAndClose = React.useCallback(() => {
-    console.log('✅ One-Time Discount saved:', oneTimeDiscounts);
-    // TODO: Add API call to save one-time discount
+    if (experienceId) {
+      void apiPut(
+        '/api/one-time-discounts',
+        { experienceId, discounts: oneTimeDiscounts },
+        experienceId,
+      ).catch((error) => {
+        console.error('Failed to save one-time discounts:', error);
+      });
+    }
     setOneTimeDiscountsSnapshot(null);
     setSelectedOneTimeProductId(null);
-  }, [oneTimeDiscounts]);
+  }, [oneTimeDiscounts, experienceId]);
 
   // Revert changes and clear selection
   const cancelAndRevert = React.useCallback(() => {

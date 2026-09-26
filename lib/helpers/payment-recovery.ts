@@ -41,7 +41,11 @@ export function readPaymentRecoveryFields(data: unknown): PaymentRecoveryFields 
 
 	return {
 		userId: readId(record, "user_id") ?? readId(nestedPayment, "user_id"),
-		companyId: readId(record, "company_id") ?? readId(nestedPayment, "company_id"),
+		companyId:
+			readId(record, "account_id") ??
+			readId(nestedPayment, "account_id") ??
+			readId(record, "company_id") ??
+			readId(nestedPayment, "company_id"),
 		planId: readId(record, "plan_id") ?? readId(nestedPayment, "plan_id"),
 		membershipId: readId(record, "membership_id") ?? readId(nestedPayment, "membership_id"),
 		experienceId:

@@ -47,11 +47,12 @@ export async function findOrCreateUserForConversation(
 		let accessLevel = "customer"; // Default fallback
 		
 		try {
-			const accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
-				userId: whopUserId,
-				experienceId: experience?.whopExperienceId || "",
-			});
-			accessLevel = accessResult.accessLevel || "no_access";
+			const { checkExperienceAccess } = await import("@/lib/whop-rest");
+			const accessResult = await checkExperienceAccess(
+				whopUserId,
+				experience?.whopExperienceId || "",
+			);
+			accessLevel = accessResult.access_level || "no_access";
 			console.log(`Whop API access level: ${accessLevel}`);
 		} catch (error) {
 			console.error("Error checking initial access level:", error);

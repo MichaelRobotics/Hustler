@@ -87,18 +87,13 @@ export async function POST(request: NextRequest) {
 
 		// 3. Create checkout configuration dynamically with experience metadata
 		// Use @whop/sdk client SDK (not server SDK) for checkout configurations
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-			appID: process.env.NEXT_PUBLIC_WHOP_APP_ID!,
-		});
+		const { createWhopRestClient } = await import("@/lib/whop-rest");
+		const client = createWhopRestClient();
 		
-		// Create checkout configuration with plan reference
-		// Reference existing plan by ID using plan_id property
 		const checkout = await client.checkoutConfigurations.create({
-			plan_id: planId, // Reference existing plan by ID
+			plan_id: planId,
 			metadata: planMetadata,
-		} as any); // Type assertion needed because SDK types don't match API expectations
+		});
 
 		console.log(`✅ Created checkout for plan ${planId} with experience ${experienceId}: ${checkout.id}`);
 

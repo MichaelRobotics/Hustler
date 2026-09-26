@@ -1,8 +1,10 @@
 /**
- * Retrieve membership from Whop API to get user email and id (for use when creating user records).
- * Uses @whop/sdk. Does not touch subscription/membership fields; only for reading user profile data.
- * @see https://docs.whop.com/api-reference/memberships/retrieve-membership
+ * Retrieve a membership, then the buyer, on @whop/sdk@2.
+ * Membership rows expose user_id, not a nested user. Email is only populated
+ * on users.retrieve("me"); other users return null.
  */
+
+import { createWhopRestClient } from "@/lib/whop-rest";
 
 export interface MembershipUserInfo {
 	userId: string;
@@ -11,23 +13,17 @@ export interface MembershipUserInfo {
 	username: string | null;
 }
 
-/**
- * Fetch membership by id and return user info (email, id, name, username).
- * Returns null if membership not found or API error.
- */
 export async function getMembershipUserInfo(
-	membershipId: string | null | undefined
+	membershipId: string | null | undefined,
 ): Promise<MembershipUserInfo | null> {
 	if (!membershipId) return null;
-	const apiKey = process.env.WHOP_API_KEY;
-	if (!apiKey) return null;
+	if (!process.env.WHOP_API_KEY) return null;
 
 	try {
-		const Whop = (await import("@whop/sdk")).default;
-		const client = new Whop({ apiKey });
-		const membership = await client.memberships.retrieve(membershipId);
-		const user = (membership as { user?: { id?: string; email?: string | null; name?: string | null; username?: string | null } }).user;
-		if (!user?.id) return null;
+		const client = createWhopRestClient();
+		const membership = await client.memberships.retrieve({ id: membershipId });
+		if (!membership.user_id) return null;
+		const user = await client.users.retrieve({ id: membership.user_id });
 		return {
 			userId: user.id,
 			email: user.email ?? null,

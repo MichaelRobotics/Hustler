@@ -11,7 +11,7 @@
 // Load environment variables - try .env.local first, then .env
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import Whop from '@whop/sdk';
+import { createWhopRestClient } from '../lib/whop-rest';
 
 // Load .env.local first, then .env
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
@@ -36,17 +36,15 @@ async function cancelTrialingMemberships() {
 	console.log('');
 
 	// Initialize Whop SDK client
-	const client = new Whop({
-		apiKey: process.env.WHOP_API_KEY!,
-	});
+	const client = createWhopRestClient();
 
 	// Fetch all memberships for the company
 	console.log('📋 Fetching memberships...');
 	const memberships: any[] = [];
 	
 	try {
-		for await (const membershipListResponse of client.memberships.list({ 
-			company_id: COMPANY_ID 
+		for await (const membershipListResponse of await client.memberships.list({ 
+			account_id: COMPANY_ID 
 		})) {
 			memberships.push(membershipListResponse);
 		}
@@ -58,7 +56,7 @@ async function cancelTrialingMemberships() {
 
 	// Filter memberships for the target user with "trialing" status
 	const trialingMemberships = memberships.filter((membership: any) => {
-		const membershipUserId = membership.user?.id;
+		const membershipUserId = membership.user_id;
 		const membershipStatus = membership.status;
 		return (
 			membershipUserId === TARGET_USER_ID &&
@@ -76,8 +74,8 @@ async function cancelTrialingMemberships() {
 	// Display memberships to be cancelled
 	console.log('\n📝 Memberships to cancel:');
 	trialingMemberships.forEach((membership: any, index: number) => {
-		const planName = membership.plan?.title || membership.plan?.name || 'Unknown Plan';
-		const planId = membership.plan?.id || 'N/A';
+		const planName = 'Plan';
+		const planId = membership.plan_id || 'N/A';
 		console.log(
 			`   ${index + 1}. Membership ID: ${membership.id}\n` +
 			`      Plan: "${planName}" (${planId})\n` +
@@ -99,7 +97,7 @@ async function cancelTrialingMemberships() {
 	for (const membership of trialingMemberships) {
 		try {
 			console.log(`🔄 Cancelling membership ${membership.id}...`);
-			const cancelledMembership = await client.memberships.cancel(membership.id);
+			const cancelledMembership = await client.memberships.cancel({ id: membership.id });
 			console.log(`   ✅ Successfully cancelled: ${cancelledMembership.id}`);
 			successCount++;
 		} catch (error: any) {

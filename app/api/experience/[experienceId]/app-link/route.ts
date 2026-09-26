@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db-server";
 import { experiences } from "@/lib/supabase/schema";
 import { eq } from "drizzle-orm";
-import { whopSdk } from "@/lib/whop-sdk";
+import { retrieveWhopAccount } from "@/lib/whop-rest";
 
 /**
  * GET /api/experience/[experienceId]/app-link
@@ -37,11 +37,8 @@ export async function GET(
 		// No link stored yet — fetch company route from Whop API, build the URL, and save it
 		if (experience?.whopCompanyId) {
 			try {
-				const companyResult = await whopSdk.companies.getCompany({
-					companyId: experience.whopCompanyId,
-				});
-				const company = companyResult as any;
-				const companyRoute = company?.route;
+				const companyResult = await retrieveWhopAccount(experience.whopCompanyId);
+				const companyRoute = companyResult.route;
 
 				if (companyRoute) {
 					const link = `https://whop.com/joined/${companyRoute}/${experienceId}/app/`;

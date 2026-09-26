@@ -1,7 +1,7 @@
 import { db } from "@/lib/supabase/db-server";
 import { originTemplates, experiences, resources, themes } from "@/lib/supabase/schema";
 import { eq, and } from "drizzle-orm";
-import { whopSdk } from "@/lib/whop-sdk";
+import { accountBrandingFromProduct, retrieveWhopProduct } from "@/lib/whop-rest";
 import { generateThemePromptFromImage, getDefaultThemePrompt } from "./theme-prompt-generator";
 import { getThemePlaceholderUrl } from "@/lib/components/store/SeasonalStore/utils/getThemePlaceholder";
 import { getThemeDefaultText, initialThemes, getThemeTextColor } from "@/lib/components/store/SeasonalStore/actions/constants";
@@ -100,8 +100,9 @@ export async function shouldUpdateOriginTemplate(
       return false; // No origin template to update
     }
 
-    const currentBannerUrl = productResult?.company?.bannerImage?.sourceUrl || null;
-    const currentLogoUrl = productResult?.company?.logo?.sourceUrl || null;
+    const branding = accountBrandingFromProduct(productResult ?? {});
+    const currentBannerUrl = branding.bannerUrl;
+    const currentLogoUrl = branding.logoUrl;
 
     // Check if URLs changed
     const bannerChanged = originTemplate.companyBannerImageUrl !== currentBannerUrl;
@@ -378,9 +379,7 @@ export async function createOriginTemplateFromProduct(
     // Fetch product data from Whop SDK
     let productResult;
     try {
-      productResult = await whopSdk.accessPasses.getAccessPass({
-        accessPassId: productId,
-      });
+      productResult = await retrieveWhopProduct(productId);
     } catch (error) {
       console.error('❌ [Origin Template Service] Failed to fetch product data:', error);
       return null;
@@ -392,9 +391,10 @@ export async function createOriginTemplateFromProduct(
     }
 
     // Extract company data
-    const companyBannerUrl = productResult.company?.bannerImage?.sourceUrl || null;
-    const companyLogoUrl = productResult.company?.logo?.sourceUrl || null;
-    const companyTitle = productResult.company?.title || 'Company Theme';
+    const branding = accountBrandingFromProduct(productResult);
+    const companyBannerUrl = branding.bannerUrl;
+    const companyLogoUrl = branding.logoUrl;
+    const companyTitle = branding.title || 'Company Theme';
 
     console.log('📦 [Origin Template Service] Company banner:', companyBannerUrl ? 'Found' : 'Not found');
     console.log('📦 [Origin Template Service] Company logo:', companyLogoUrl ? 'Found' : 'Not found');
@@ -624,9 +624,7 @@ export async function updateOriginTemplateFromProduct(
     // Fetch product data from Whop SDK
     let productResult;
     try {
-      productResult = await whopSdk.accessPasses.getAccessPass({
-        accessPassId: productId,
-      });
+      productResult = await retrieveWhopProduct(productId);
     } catch (error) {
       console.error('❌ [Origin Template Service] Failed to fetch product data:', error);
       return null;
@@ -638,8 +636,9 @@ export async function updateOriginTemplateFromProduct(
     }
 
     // Extract company data
-    const companyBannerUrl = productResult.company?.bannerImage?.sourceUrl || null;
-    const companyLogoUrl = productResult.company?.logo?.sourceUrl || null;
+    const branding = accountBrandingFromProduct(productResult);
+    const companyBannerUrl = branding.bannerUrl;
+    const companyLogoUrl = branding.logoUrl;
 
     // Check if URLs changed
     const bannerChanged = existing.companyBannerImageUrl !== companyBannerUrl;

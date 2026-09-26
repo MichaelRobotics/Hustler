@@ -49,12 +49,10 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Verify user has access to this Whop experience
     try {
-      const userAccess = await whopSdk.access.checkIfUserHasAccessToExperience({
-        userId: whopUserId,
-        experienceId: experienceId,
-      });
+      const { checkExperienceAccess } = await import("@/lib/whop-rest");
+      const userAccess = await checkExperienceAccess(whopUserId, experienceId);
       
-      if (!userAccess.hasAccess || userAccess.accessLevel !== 'admin') {
+      if (!userAccess.has_access || userAccess.access_level !== "admin") {
         return NextResponse.json(
           { error: "Admin access required for this experience" },
           { status: 403 }

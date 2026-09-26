@@ -1075,6 +1075,32 @@ export const customersResources = pgTable(
 	}),
 );
 
+// ===== ONE-TIME DISCOUNTS =====
+export const oneTimeDiscounts = pgTable(
+	"one_time_discounts",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		experienceId: uuid("experience_id")
+			.notNull()
+			.references(() => experiences.id, { onDelete: "cascade" }),
+		productId: text("product_id").notNull(),
+		promoCode: text("promo_code").notNull().default(""),
+		targetProductId: text("target_product_id").notNull().default(""),
+		discountType: text("discount_type").notNull().default("percentage"),
+		discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+		messages: jsonb("messages").notNull().default([]),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		experienceProductUnique: unique("one_time_discounts_experience_product_unique").on(
+			table.experienceId,
+			table.productId,
+		),
+		experienceIdIdx: index("one_time_discounts_experience_id_idx").on(table.experienceId),
+	}),
+);
+
 export const originTemplatesRelations = relations(originTemplates, ({ one }) => ({
 	experience: one(experiences, {
 		fields: [originTemplates.experienceId],

@@ -771,11 +771,9 @@ export async function getExperienceAppLink(experienceId: string): Promise<string
 		// Build the correct URL from Whop API, then cache it
 		if (experience?.whopCompanyId && experience?.whopExperienceId) {
 			try {
-				const companyResult = await whopSdk.companies.getCompany({
-					companyId: experience.whopCompanyId,
-				});
-				const company = companyResult as any;
-				const companyRoute = company?.route;
+				const { retrieveWhopAccount } = await import("@/lib/whop-rest");
+				const companyResult = await retrieveWhopAccount(experience.whopCompanyId);
+				const companyRoute = companyResult.route;
 
 				if (companyRoute) {
 					const link = `https://whop.com/joined/${companyRoute}/${experience.whopExperienceId}/app/`;

@@ -2,7 +2,26 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import { db } from "../supabase/db-server";
 import { experiences, promos, resources, plans } from "../supabase/schema";
 import type { DiscountSettings } from "../components/store/SeasonalStore/types";
-import Whop from '@whop/sdk';
+import { createWhopRestClient } from "@/lib/whop-rest";
+
+/** Generated PromoCodeListItem omits plan_ids. Create still sends them, so keep the read. */
+type ListedPromo = {
+	id: string;
+	code: string | null;
+	amount_off: number;
+	currency?: string | null;
+	new_users_only?: boolean;
+	promo_duration_months?: number | null;
+	promo_type?: string;
+	churned_users_only?: boolean;
+	existing_memberships_only?: boolean;
+	expires_at?: string | null;
+	one_per_customer?: boolean;
+	plan_ids?: string[];
+	product?: { id?: string | null } | null;
+	stock?: number | null;
+	unlimited_stock?: boolean;
+};
 
 /**
  * Interface for seasonal discount data
@@ -121,28 +140,17 @@ export async function syncPromosFromWhopAPI(
 			}
 		}
 
-		// Import Whop SDK client
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-		});
-
-		// Access promoCodes from client
-		const promoCodesClient = (client as any).promoCodes;
-		if (!promoCodesClient) {
-			throw new Error('promoCodes is not available on Whop SDK client');
-		}
+		const client = createWhopRestClient();
 
 		let syncedCount = 0;
 
-		// List ALL promos from Whop API for this company (no filters)
+		// List ALL promos from Whop API for this company (no filters).
+		// The SDK iterator yields one promo, not a { data: [] } page.
 		try {
-			for await (const promoListResponse of promoCodesClient.list({
-				company_id: companyId,
-				// No product_ids or plan_ids filters - sync all promos for the company
+			for await (const promoItem of await client.promoCodes.list({
+				account_id: companyId,
 			})) {
-				if (promoListResponse.data && Array.isArray(promoListResponse.data)) {
-					for (const promo of promoListResponse.data) {
+				const promo = promoItem as ListedPromo;
 						try {
 							// Before saving promo, check if any of its plan_ids exist in plans table
 							if (promo.plan_ids && Array.isArray(promo.plan_ids) && promo.plan_ids.length > 0 && !promo.product?.id) {
@@ -244,8 +252,6 @@ export async function syncPromosFromWhopAPI(
 							console.warn(`⚠️ Failed to sync promo ${promo.id}:`, error instanceof Error ? error.message : String(error));
 							// Continue with other promos
 						}
-					}
-				}
 			}
 		} catch (error) {
 			console.error('Error listing promos from Whop API:', error instanceof Error ? error.message : String(error));
@@ -387,17 +393,7 @@ export async function createPromoCodeForSeasonalDiscount(
 			.map((p: PlanWithResource) => p.planId)
 			.filter((id: string | null): id is string => Boolean(id));
 
-		// Import Whop SDK client
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-		});
-
-		// Access promoCodes from client
-		const promoCodesClient = (client as any).promoCodes;
-		if (!promoCodesClient) {
-			throw new Error('promoCodes is not available on Whop SDK client');
-		}
+		const client = createWhopRestClient();
 
 		// Map discount data to Whop API format
 		const promoDurationMonths = mapDurationToMonths(discountData);
@@ -467,8 +463,8 @@ export async function createPromoCodeForSeasonalDiscount(
 		}
 
 		try {
-			const promo = await promoCodesClient.create({
-				company_id: companyId,
+			const promo = await client.promoCodes.create({
+				account_id: companyId,
 				code: promoCode,
 				amount_off: amountOff,
 				base_currency: 'usd',
@@ -625,16 +621,7 @@ export async function deleteOrphanedPromos(
 		let deletedCount = 0;
 		let errorCount = 0;
 
-		// Import Whop SDK client
-		const Whop = (await import('@whop/sdk')).default;
-		const client = new Whop({
-			apiKey: process.env.WHOP_API_KEY!,
-		});
-		const promoCodesClient = (client as any).promoCodes;
-
-		if (!promoCodesClient) {
-			throw new Error('promoCodes is not available on Whop SDK client');
-		}
+		const client = createWhopRestClient();
 
 		for (const promo of allPromos) {
 			try {
@@ -672,7 +659,7 @@ export async function deleteOrphanedPromos(
 					// Delete from Whop API first
 					if (promo.whopPromoId) {
 						try {
-							await promoCodesClient.delete(promo.whopPromoId);
+							await client.promoCodes.delete({ id: promo.whopPromoId });
 							console.log(`✅ Deleted promo ${promo.whopPromoId} from Whop API`);
 						} catch (error) {
 							console.warn(`⚠️ Failed to delete promo ${promo.whopPromoId} from Whop API:`, error);
@@ -817,10 +804,7 @@ export async function deleteSeasonalDiscountPromos(
 			}
 		};
 
-		// Initialize Whop SDK client
-		const client = new Whop({
-			apiKey: process.env['WHOP_API_KEY'], // Use bracket notation as in user's example
-		});
+		const client = createWhopRestClient();
 
 		// Delete each promo from Whop API and database
 		for (const promo of matchingPromos) {
@@ -829,7 +813,7 @@ export async function deleteSeasonalDiscountPromos(
 				await removePromoIdFromPlans(promo.whopPromoId);
 
 				try {
-					await client.promoCodes.delete(promo.whopPromoId);
+					await client.promoCodes.delete({ id: promo.whopPromoId });
 					console.log(`✅ Deleted promo ${promo.whopPromoId} (code: ${promo.code}) from Whop API`);
 				} catch (error) {
 					console.warn(`⚠️ Failed to delete promo ${promo.whopPromoId} from Whop API:`, error instanceof Error ? error.message : String(error));
@@ -990,19 +974,11 @@ export async function deletePromoById(
 		const plansUpdated = await removePromoIdFromPlans(promo.whopPromoId, promoPlanIds);
 		console.log(`✅ Removed promo from ${plansUpdated} plan(s)`);
 
-		// Delete from Whop API
-		const client = new Whop({
-			apiKey: process.env['WHOP_API_KEY'],
-		});
-
-		// Verify promoCodes is available
-		if (!(client as any).promoCodes) {
-			throw new Error('promoCodes is not available on Whop SDK client');
-		}
+		const client = createWhopRestClient();
 
 		console.log(`🗑️ Deleting promo ${promo.whopPromoId} from Whop API...`);
 		try {
-			await client.promoCodes.delete(promo.whopPromoId);
+			await client.promoCodes.delete({ id: promo.whopPromoId });
 			console.log(`✅ Deleted promo ${promo.whopPromoId} (code: ${promo.code}) from Whop API`);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
