@@ -10,6 +10,7 @@ import {
 	users,
 	experiences,
 } from "../supabase/schema";
+import { computeConversationAnalytics } from "../analytics/conversation-analytics";
 import type { LiveChatConversation, LiveChatFilters } from "../types/liveChat";
 
 export interface LiveChatPagination {
@@ -1073,57 +1074,26 @@ export async function getConversationAnalytics(
 			};
 		}
 
-		// Calculate analytics
-		const totalMessages = conversation.messages.length;
-		const userMessages = conversation.messages.filter((msg: any) => msg.type === "user").length;
-		const botMessages = conversation.messages.filter((msg: any) => msg.type === "bot").length;
+		const flow = conversation.funnel?.flow as
+			| { blocks?: Record<string, unknown> }
+			| null
+			| undefined;
 
-		// Calculate average response time (simplified)
-		let avgResponseTime = 0;
-		if (conversation.messages.length > 1) {
-			const responseTimes: number[] = [];
-			for (let i = 1; i < conversation.messages.length; i++) {
-				const prevMsg = conversation.messages[i - 1];
-				const currMsg = conversation.messages[i];
-				
-				if (prevMsg.type === "user" && currMsg.type === "bot") {
-					const responseTime = currMsg.createdAt.getTime() - prevMsg.createdAt.getTime();
-					responseTimes.push(responseTime);
-				}
-			}
-			
-			if (responseTimes.length > 0) {
-				avgResponseTime = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length;
-			}
-		}
-
-		// Calculate conversation duration
-		const conversationDuration = conversation.updatedAt.getTime() - conversation.createdAt.getTime();
-
-		// Calculate funnel progress
-		const funnelProgress = conversation.funnelInteractions.length > 0 ? 
-			(conversation.funnelInteractions.length / 10) * 100 : 0; // Assuming 10 steps max
-
-		// Get last activity
-		const lastActivity = conversation.updatedAt;
-
-		// Calculate engagement score (simplified)
-		const engagementScore = Math.min(100, (userMessages * 10) + (funnelProgress * 0.5));
-
-		const analytics: LiveChatAnalytics = {
+		const analytics: LiveChatAnalytics = computeConversationAnalytics({
 			conversationId,
-			totalMessages,
-			userMessages,
-			botMessages,
-			avgResponseTime: 0, // TODO: Calculate actual response time
-			conversationDuration: 0, // TODO: Calculate actual duration
-			funnelProgress,
-			lastActivity: new Date(),
-			engagementScore,
-		};
+			messages: conversation.messages.map((message: { type: string; createdAt: Date }) => ({
+				type: message.type,
+				createdAt: message.createdAt,
+			})),
+			interactionCount: conversation.funnelInteractions.length,
+			createdAt: conversation.createdAt,
+			updatedAt: conversation.updatedAt,
+			flow,
+		});
 
 		return {
 			success: true,
+			analytics,
 		};
 	} catch (error) {
 		console.error("Error getting conversation analytics:", error);

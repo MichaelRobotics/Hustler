@@ -38,7 +38,7 @@ function getStageIdForBlock(blockId: string | null, flow: FunnelFlow | null): st
 /**
  * Resolve offer timer: for conversations that have passed their deadline,
  * check purchase in window and advance to upsell or downsell block.
- * Purchase check is a stub (returns false) until Whop webhooks or purchases table is wired.
+ * Purchase is conversations.offerPurchasedAt, set by the payment.succeeded webhook.
  */
 async function resolveOfferTimers(now: Date): Promise<{ resolved: string[]; errors: string[] }> {
   const resolved: string[] = [];
@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
           user_ids: [conv.whopUserId],
           title: "Reminder",
           content: notif.message,
-          rest_path: `/chat?conversation=${conv.id}`,
+          rest_path: `?openChat=${conv.id}`,
         });
 
         if (!result.success) {

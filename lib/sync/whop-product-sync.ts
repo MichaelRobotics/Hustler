@@ -527,8 +527,9 @@ export class WhopProductSync {
 		return {
 			lastSync: this.lastSyncTime.get(syncKey),
 			isSyncing: this.syncInProgress.get(syncKey) || false,
-			totalProducts: 0, // TODO: Calculate actual total
-			syncedProducts: 0, // TODO: Calculate actual synced
+			// Catalog size needs a user-scoped Whop products call this method does not have.
+			totalProducts,
+			syncedProducts,
 		};
 	}
 
