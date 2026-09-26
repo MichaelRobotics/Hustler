@@ -355,20 +355,24 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 								<div className="p-3 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg w-16 h-16 mx-auto mb-4 flex items-center justify-center">
 									<Crown size={28} className="text-white" />
 								</div>
-								<Heading
-									size="4"
-									weight="bold"
-									className="text-gray-900 dark:text-white mb-2"
-								>
-									Upgrade to Pro
-								</Heading>
-								<Text
-									size="2"
-									color="gray"
-									className="text-gray-600 dark:text-gray-300"
-								>
-									Unlock Live Chat functionality
-								</Text>
+								<Dialog.Title asChild>
+									<Heading
+										size="4"
+										weight="bold"
+										className="text-gray-900 dark:text-white mb-2"
+									>
+										Upgrade to Pro
+									</Heading>
+								</Dialog.Title>
+								<Dialog.Description asChild>
+									<Text
+										size="2"
+										color="gray"
+										className="text-gray-600 dark:text-gray-300"
+									>
+										Unlock Live Chat functionality
+									</Text>
+								</Dialog.Description>
 							</div>
 
 							{/* Action Buttons */}
