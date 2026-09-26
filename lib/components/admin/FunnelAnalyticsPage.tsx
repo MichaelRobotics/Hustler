@@ -4,7 +4,7 @@ import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { Button, Heading, Text } from "frosted-ui";
 import { Activity, ArrowLeft, Edit3, Settings } from "lucide-react";
 import React, { useMemo, useCallback, useEffect } from "react";
-import type { Funnel, SalesData, User, FunnelStats, SalesStats } from "../../utils/adminAnalytics";
+import type { Funnel, FunnelStats, SalesStats } from "../../utils/adminAnalytics";
 import { useAnalyticsData } from "../../hooks/useAnalyticsData";
 import { ThemeToggle } from "../common/ThemeToggle";
 import UnifiedNavigation from "../common/UnifiedNavigation";
@@ -13,8 +13,6 @@ import SalesPerformance from "./SalesPerformance";
 
 interface FunnelAnalyticsPageProps {
 	funnel: Funnel;
-	allUsers: User[];
-	allSalesData: SalesData[];
 	onBack: () => void;
 	onGoToBuilder: (funnel: Funnel) => void;
 	onGlobalGeneration: () => Promise<void>;
@@ -43,8 +41,6 @@ interface FunnelAnalyticsPageProps {
 const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 	({
 		funnel,
-		allUsers,
-		allSalesData,
 		onBack,
 		onGoToBuilder,
 		onGlobalGeneration,
@@ -93,8 +89,6 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 			console.log("FunnelAnalyticsPage Debug:", {
 				funnelId: funnel.id,
 				...funnelValidation,
-				allUsersCount: allUsers.length,
-				allSalesDataCount: allSalesData.length,
 				funnelStats,
 				salesStats,
 			});
@@ -116,10 +110,11 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 									variant="ghost"
 									color="gray"
 									onClick={onBack}
-									className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
-									aria-label="Back to dashboard"
+									className="text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 transition-colors duration-200 dark:hover:bg-surface/60"
+									aria-label="Merchants"
 								>
 									<ArrowLeft size={20} strokeWidth={2.5} />
+									<span className="ml-2">Merchants</span>
 								</Button>
 
 								<div>
@@ -255,7 +250,7 @@ const FunnelAnalyticsPage: React.FC<FunnelAnalyticsPageProps> = React.memo(
 							</div>
 						) : (
 							<>
-								{/* Merchant Analytics Components - Show if funnel was ever live OR if we have mock data */}
+								{/* Merchant analytics from stored funnel metrics */}
 								{funnelStats && <FunnelAnalytics stats={funnelStats} />}
 
 								{/* Live Sales Indicator */}

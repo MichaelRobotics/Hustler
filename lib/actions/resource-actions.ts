@@ -2,6 +2,10 @@ import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AuthenticatedUser } from "../context/user-context";
 import { db } from "../supabase/db-server";
 import { funnelResources, funnels, resources, plans } from "../supabase/schema";
+import {
+	projectCheckoutResource,
+	resourceListOwnerFilter,
+} from "../helpers/resource-read-scope";
 import { GLOBAL_LIMITS } from "../types/resource";
 import { whopSdk } from "../whop-sdk";
 import { createPlanFromCheckoutConfiguration } from "./plan-actions";
@@ -355,8 +359,8 @@ export async function getResources(
 		// Build where conditions
 		let whereConditions = eq(resources.experienceId, user.experience.id);
 
-		// Add user filter for customers
-		if (user.accessLevel === "customer") {
+		// Customers read every resource in the experience. Writes stay gated elsewhere.
+		if (resourceListOwnerFilter(user.accessLevel) === "caller") {
 			whereConditions = and(whereConditions, eq(resources.userId, user.id))!;
 		}
 
@@ -455,9 +459,15 @@ export async function getResources(
 		const resourcesWithFunnels: ResourceWithFunnels[] = Array.from(
 			resourceMap.values(),
 		);
+		const visibleResources =
+			user.accessLevel === "customer"
+				? resourcesWithFunnels.map((resource) =>
+						projectCheckoutResource(resource as unknown as Record<string, unknown>),
+					)
+				: resourcesWithFunnels;
 
 		return {
-			resources: resourcesWithFunnels,
+			resources: visibleResources as ResourceWithFunnels[],
 			total,
 			page,
 			limit,

@@ -1,5 +1,6 @@
 'use client';
 
+import { promoPlanScopeLabel } from '@/lib/helpers/promo-plan-ids';
 import React, { useMemo, useEffect } from 'react';
 import { Card, Heading, Text, Button } from 'frosted-ui';
 import { Flame, Star, Loader2 } from 'lucide-react';
@@ -47,10 +48,21 @@ interface ProductDiscountFormProps {
   isLoadingPromos: boolean;
   isPromoDataLoaded: boolean;
   setIsPromoDataLoaded: (loaded: boolean) => void;
+  selectedPromoData: {
+    code: string;
+    amountOff: number;
+    promoType: 'percentage' | 'flat_amount';
+    productId?: string | null;
+    planIds?: string[];
+    stock?: number;
+    unlimitedStock?: boolean;
+    promoDurationMonths?: number;
+  } | null;
   setSelectedPromoData: (data: {
     code: string;
     amountOff: number;
     promoType: 'percentage' | 'flat_amount';
+    productId?: string | null;
     planIds?: string[];
     stock?: number;
     unlimitedStock?: boolean;
@@ -110,6 +122,7 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
   isLoadingPromos,
   isPromoDataLoaded,
   setIsPromoDataLoaded,
+  selectedPromoData,
   setSelectedPromoData,
   hasDiscountSelected,
   discountValidationError,
@@ -251,6 +264,14 @@ export const ProductDiscountForm: React.FC<ProductDiscountFormProps> = ({
                       </option>
                     ))}
                   </select>
+                  {isPromoDataLoaded && promoPlanScopeLabel({
+                    productId: selectedPromoData?.productId,
+                    planIds: selectedPromoData?.planIds,
+                  }) && (
+                    <Text size="2" className="w-full text-gray-600 dark:text-gray-300">
+                      plans set in Whop
+                    </Text>
+                  )}
                   {showNewPromoButton && (
                     <Button
                       size="3"

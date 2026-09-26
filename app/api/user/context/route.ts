@@ -64,25 +64,17 @@ export async function GET(request: NextRequest) {
 		const isDeveloperCompany = whopCompanyId === developerCompanyId;
 		const accessLevel = userContext.user.accessLevel;
 		
-		// Determine if user should see view selection panel
+		// Owners, including the admin of NEXT_PUBLIC_WHOP_COMPANY_ID, open the admin view.
 		let shouldShowViewSelection = false;
 		let autoSelectedView = null;
 		let userType = null;
 		
 		if (accessLevel === "customer") {
-			// Customers go directly to CustomerView
 			autoSelectedView = "customer";
 			userType = "customer";
 		} else if (accessLevel === "admin") {
-			if (isDeveloperCompany) {
-				// Developer company + admin = View Selection Panel
-				shouldShowViewSelection = true;
-				userType = "developer_admin";
-			} else {
-				// Non-developer company + admin = Direct to Admin Panel
-				autoSelectedView = "admin";
-				userType = "client_admin";
-			}
+			autoSelectedView = "admin";
+			userType = isDeveloperCompany ? "developer_admin" : "client_admin";
 		} else if (accessLevel === "no_access") {
 			// No access - will be handled by hasAccess check
 			userType = "no_access";

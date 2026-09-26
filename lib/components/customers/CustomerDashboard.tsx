@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Heading, Text, Button, Card, Separator } from "frosted-ui";
-import { User, Link2, FileText, ArrowLeft, Loader2, Gift, Home } from "lucide-react";
+import { User, Link2, FileText, ArrowLeft, Loader2 } from "lucide-react";
 import { CustomerResourceCard } from "./CustomerResourceCard";
-import { ClaimRewardsView } from "./claim-rewards";
 import { UserSelectionDropdown } from "./UserSelectionDropdown";
 import { ProductReviewModal } from "./ProductReviewModal";
 import { PlanReviewModal } from "./PlanReviewModal";
@@ -51,7 +50,6 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 		companyLogo: undefined,
 	});
 	const [companyLogo, setCompanyLogo] = useState<string | null>(null);
-	const [dashboardView, setDashboardView] = useState<'home' | 'claimRewards'>('home');
 
 	const isAdmin = user.accessLevel === 'admin';
 	const currentViewUserId = isAdmin ? selectedCustomerUser : user.id;
@@ -343,47 +341,16 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 				{/* Subtle Separator Line */}
 				<div className="w-full h-0.5 bg-gradient-to-r from-transparent via-violet-300/40 dark:via-violet-600/40 to-transparent mb-4" />
 
-				{/* Bottom Section: Theme Toggle (left) + single switch button (right): shows other view */}
 				<div className="flex justify-between items-center gap-2 sm:gap-3">
 					<div className="flex-shrink-0">
 						<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20">
 							<ThemeToggle />
 						</div>
 					</div>
-					<div className="flex-shrink-0 flex rounded-xl bg-surface/50 border border-border/50 backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 p-1">
-						{dashboardView === 'home' ? (
-							<Button
-								size="3"
-								variant="soft"
-								color="gray"
-								className="gap-2 shadow-none"
-								aria-label="Claim rewards"
-								onClick={() => setDashboardView('claimRewards')}
-							>
-								<Gift size={20} strokeWidth={2.5} />
-								Claim rewards
-							</Button>
-						) : (
-							<Button
-								size="3"
-								variant="soft"
-								color="gray"
-								className="gap-2 shadow-none"
-								aria-label="Home"
-								onClick={() => setDashboardView('home')}
-							>
-								<Home size={20} strokeWidth={2.5} />
-								Home
-							</Button>
-						)}
-					</div>
 				</div>
 					</div>
 
 					<div className="mt-8">
-				{dashboardView === 'claimRewards' ? (
-					<ClaimRewardsView user={user} experienceId={user.experience.whopExperienceId} />
-				) : (
 				<>
 				{/* Sync Loading Indicator */}
 				{syncError && (
@@ -485,7 +452,6 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 					</div>
 				)}
 				</>
-				)}
 					</div>
 				</div>
 			</div>

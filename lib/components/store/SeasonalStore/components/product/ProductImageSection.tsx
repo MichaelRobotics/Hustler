@@ -105,14 +105,14 @@ export const ProductImageSection: React.FC<ProductImageSectionProps> = ({
               ? 'cursor-not-allowed' 
               : ''
           }`}
-          title="Theme Up!"
+          title="Customize theme"
         >
           <Zap
             size={20}
             strokeWidth={2.5}
             className="group-hover:scale-110 transition-transform duration-300"
           />
-          <span className="ml-1">Theme Up!</span>
+          <span className="ml-1">Customize theme</span>
         </Button>
       )}
 

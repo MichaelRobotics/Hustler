@@ -91,7 +91,7 @@ export const ResourceLibraryHeader: React.FC<ResourceLibraryHeaderProps> = ({
 						weight="bold"
 						className="text-black dark:text-white"
 					>
-						{context === "funnel" ? "Merchant Market Stall" : context === "store" ? "Market Stall" : "Warehouse"}
+						Market Stall
 					</Heading>
 				</div>
 				</div>

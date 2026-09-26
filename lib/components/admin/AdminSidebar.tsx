@@ -2,6 +2,9 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button, Heading, Text } from "frosted-ui";
+import { liveChatRequiresPro, purchaseProSubscription } from "@/lib/helpers/pro-checkout";
+import { useSafeIframeSdk } from "@/lib/hooks/useSafeIframeSdk";
+import { apiGet, apiPost } from "@/lib/utils/api-client";
 import {
 	BarChart3,
 	Crown,
@@ -23,8 +26,7 @@ interface AdminSidebarProps {
 		| "funnelBuilder"
 		| "preview"
 		| "liveChat"
-		| "store"
-		| "storePreview";
+		| "store";
 	onViewChange: (
 		view:
 			| "dashboard"
@@ -33,9 +35,11 @@ interface AdminSidebarProps {
 			| "funnelBuilder"
 			| "preview"
 			| "liveChat"
-			| "store"
-			| "storePreview",
+			| "store",
 	) => void;
+	subscription?: "Basic" | "Pro" | "Vip" | null;
+	experienceId?: string;
+	onProPurchased?: () => void;
 	onLibraryIconClick?: () => void;
 	className?: string;
 	libraryContext?: "global" | "funnel";
@@ -48,7 +52,7 @@ interface AdminSidebarProps {
  * --- Admin Sidebar Component ---
  * This component provides navigation between different admin views:
  * - Merchants (Default dashboard view)
- * - Warehouse (Warehouse without funnel context)
+ * - Market Stall (products without a merchant context)
  * - Merchants Conversations (Pro version upgrade prompt)
  *
  * Following Whop's design patterns for clean, organized navigation.
@@ -63,8 +67,14 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 		currentFunnelForLibrary = null,
 		isUserTyping = false,
 		disabled = false,
+		subscription = null,
+		experienceId,
+		onProPurchased,
 	}) => {
 		const [isProModalOpen, setIsProModalOpen] = useState(false);
+		const [proCheckoutError, setProCheckoutError] = useState<string | null>(null);
+		const [isUpgrading, setIsUpgrading] = useState(false);
+		const { iframeSdk, isInIframe } = useSafeIframeSdk();
 
 		// Memoized view states for better performance
 		const viewStates = useMemo(
@@ -75,7 +85,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 				isFunnelBuilderView: currentView === "funnelBuilder",
 				isLiveChatView: currentView === "liveChat",
 				isStoreView: currentView === "store",
-				isStorePreviewView: currentView === "storePreview",
 			}),
 			[currentView],
 		);
@@ -89,13 +98,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 					| "funnelBuilder"
 					| "preview"
 					| "liveChat"
-					| "store"
-					| "storePreview",
+					| "store",
 			) => {
 				if (disabled) return; // Prevent navigation when disabled
+				if (view === "liveChat" && liveChatRequiresPro(subscription)) {
+					setProCheckoutError(null);
+					setIsProModalOpen(true);
+					return;
+				}
 				onViewChange(view);
 			},
-			[onViewChange, disabled],
+			[onViewChange, disabled, subscription],
 		);
 
 		return (
@@ -103,7 +116,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 				{/* Desktop Sidebar - Icons Only */}
 				{!disabled && (
 					<div
-						className={`hidden lg:block w-16 bg-surface/95 dark:bg-surface/90 border-r border-border/50 dark:border-border/30 backdrop-blur-sm transition-all duration-300 ${className}`}
+						className={`hidden lg:block w-24 bg-surface/95 dark:bg-surface/90 border-r border-border/50 dark:border-border/30 backdrop-blur-sm transition-all duration-300 ${className}`}
 					>
 						{/* Desktop Navigation - Icons Only */}
 						<div className="pt-12 px-4 space-y-8">
@@ -113,16 +126,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									variant="ghost"
 									color={viewStates.isDashboardView ? "violet" : "gray"}
 									onClick={() => handleViewChange("dashboard")}
-									className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
+									className={`w-full h-auto py-2 px-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 rounded-lg relative group ${
 										viewStates.isDashboardView
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Merchants - Manage funnels & analytics"
+									title="Merchants"
 								>
 									<div className="relative">
 										<Zap size={20} strokeWidth={2} />
 									</div>
+									<Text size="1" weight="semi-bold" className="text-xs">
+										Merchants
+									</Text>
 									{viewStates.isDashboardView && (
 										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
 									)}
@@ -135,16 +151,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									variant="ghost"
 									color={viewStates.isLibraryView ? "violet" : "gray"}
 									onClick={onLibraryIconClick || (() => handleViewChange("resourceLibrary"))}
-									className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
+									className={`w-full h-auto py-2 px-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 rounded-lg relative group ${
 										viewStates.isLibraryView
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Warehouse - All available products"
+									title="Market Stall"
 								>
 									<div className="relative">
 										<Library size={20} strokeWidth={2} />
 									</div>
+									<Text size="1" weight="semi-bold" className="text-xs text-center leading-tight">
+										Market Stall
+									</Text>
 									{viewStates.isLibraryView && (
 										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
 									)}
@@ -171,16 +190,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									variant="ghost"
 									color={viewStates.isLiveChatView ? "violet" : "gray"}
 									onClick={() => handleViewChange("liveChat")}
-									className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
+									className={`w-full h-auto py-2 px-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 rounded-lg relative group ${
 										viewStates.isLiveChatView
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Merchants Conversations - Monitor conversations"
+									title="Chat"
 								>
 									<div className="relative">
 										<MessageCircle size={20} strokeWidth={2} />
 									</div>
+									<Text size="1" weight="semi-bold" className="text-xs">
+										Chat
+									</Text>
 									{viewStates.isLiveChatView && (
 										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
 									)}
@@ -193,16 +215,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 									variant="ghost"
 									color={viewStates.isStoreView ? "violet" : "gray"}
 									onClick={() => handleViewChange("store")}
-									className={`w-full h-12 p-0 flex items-center justify-center transition-all duration-200 rounded-lg relative group ${
+									className={`w-full h-auto py-2 px-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 rounded-lg relative group ${
 										viewStates.isStoreView
 											? "bg-violet-500/10 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300"
 											: "hover:bg-surface/80 dark:hover:bg-surface/60 text-foreground"
 									}`}
-									title="Store - Manage products and sales"
+									title="Store"
 								>
 									<div className="relative">
 										<Store size={20} strokeWidth={2} />
 									</div>
+									<Text size="1" weight="semi-bold" className="text-xs">
+										Store
+									</Text>
 									{viewStates.isStoreView && (
 										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
 									)}
@@ -257,8 +282,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 										<div className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full" />
 									)}
 								</div>
-								<Text size="1" weight="semi-bold" className="text-xs">
-									Warehouse
+								<Text size="1" weight="semi-bold" className="text-xs text-center leading-tight">
+									Market Stall
 								</Text>
 
 								{/* Mobile Context Indicator */}
@@ -348,12 +373,53 @@ const AdminSidebar: React.FC<AdminSidebarProps> = React.memo(
 
 							{/* Action Buttons */}
 							<div className="flex gap-3">
+								{proCheckoutError && (
+									<Text size="2" className="text-red-600 dark:text-red-400 mb-4">
+										{proCheckoutError}
+									</Text>
+								)}
 								<Button
 									color="violet"
+									disabled={isUpgrading}
 									onClick={() => {
-										// Handle upgrade action
-										window.open("https://whop.com/pro", "_blank");
-										setIsProModalOpen(false);
+										void (async () => {
+											setIsUpgrading(true);
+											setProCheckoutError(null);
+											const result = await purchaseProSubscription({
+												experienceId,
+												inWhop: isInIframe && !!iframeSdk,
+												lookupPlan: async () => {
+													const response = await apiGet(
+														"/api/checkout/lookup?type=Pro",
+														experienceId,
+													);
+													if (!response.ok) return null;
+													const data = await response.json();
+													const planId = data.planId || data.data?.planId;
+													return planId ? { planId } : null;
+												},
+												createCheckout: async (planId, checkoutExperienceId) => {
+													const response = await apiPost(
+														"/api/checkout/create",
+														{ planId, experienceId: checkoutExperienceId },
+														checkoutExperienceId,
+													);
+													if (!response.ok) return null;
+													const data = await response.json();
+													if (!data.checkoutId || !data.planId) return null;
+													return { checkoutId: data.checkoutId, planId: data.planId };
+												},
+												inAppPurchase: async (input) => iframeSdk!.inAppPurchase(input),
+											});
+											setIsUpgrading(false);
+											if (!result.ok) {
+												setProCheckoutError(result.reason);
+												return;
+											}
+											onProPurchased?.();
+											setIsProModalOpen(false);
+											onViewChange("liveChat");
+										})();
 									}}
 									className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-semibold !py-3 !px-6 rounded-xl shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105 transition-all duration-300 dark:bg-violet-500 dark:hover:bg-violet-600 dark:shadow-violet-500/40 dark:hover:shadow-violet-500/60"
 								>

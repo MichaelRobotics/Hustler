@@ -676,7 +676,7 @@ export const AdminAssetSheet: React.FC<AdminAssetSheetProps> = ({
                       className="w-full !px-6 !py-3 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 transition-all duration-300 dark:shadow-violet-500/30 dark:hover:shadow-violet-500/50 flex items-center justify-center gap-2"
                       >
                       <Zap className="w-5 h-5" />
-                      <span>Theme Up Background</span>
+                      <span>Customize theme</span>
                       </Button>
                   )}
                   </div>

@@ -11,6 +11,7 @@ import { EMOJI_DATABASE } from '../actions/constants';
 import type { DiscountSettings } from '../types';
 import { ProductPageModal } from './ProductPageModal';
 import type { LegacyTheme } from '../types';
+import { normalizePlanIds } from '@/lib/helpers/promo-plan-ids';
 import { apiPost, apiGet } from '@/lib/utils/api-client';
 import { removeProductPromoData, checkDiscountStatus, type DiscountData } from '../utils/discountHelpers';
 import { 
@@ -355,6 +356,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
     code: string;
     amountOff: number;
     promoType: 'percentage' | 'flat_amount';
+    productId?: string | null;
     planIds?: string[];
     stock?: number;
     unlimitedStock?: boolean;
@@ -712,27 +714,13 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
             setLocalPromoDurationMonths(promo.promoDurationMonths);
           }
 
-          // Store promo data
-          // Handle planIds: Drizzle should parse JSONB automatically, but handle edge cases
-          let parsedPlanIds: string[] | undefined = undefined;
-          if (promo.planIds) {
-            if (Array.isArray(promo.planIds)) {
-              parsedPlanIds = promo.planIds;
-            } else if (typeof promo.planIds === 'string') {
-              try {
-                const parsed = JSON.parse(promo.planIds);
-                parsedPlanIds = Array.isArray(parsed) ? parsed : undefined;
-              } catch (e) {
-                // If parsing fails, it might be a single plan ID string, wrap it in an array
-                parsedPlanIds = [promo.planIds];
-              }
-            }
-          }
+          const parsedPlanIds = normalizePlanIds(promo.planIds);
           
           setSelectedPromoData({
             code: promo.code,
             amountOff: parseFloat(promo.amountOff),
             promoType: promo.promoType,
+            productId: promo.productId || null,
             planIds: parsedPlanIds,
             stock: promo.stock || undefined,
             unlimitedStock: promo.unlimitedStock || false,
@@ -2701,6 +2689,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     isLoadingPromos={isLoadingPromos}
                     isPromoDataLoaded={isPromoDataLoaded}
                     setIsPromoDataLoaded={setIsPromoDataLoaded}
+                    selectedPromoData={selectedPromoData}
                     setSelectedPromoData={setSelectedPromoData}
                     hasDiscountSelected={hasDiscountSelected}
                     discountValidationError={discountValidationError}

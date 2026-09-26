@@ -1093,7 +1093,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
         resourceName={planReviewModal.resourceName || undefined}
         experienceId={experienceId}
         companyName={storeName}
-        readOnly={true}
+        readOnly={false}
       />
     )}
     </>

@@ -4,7 +4,6 @@ import AdminPanel from "@/lib/components/admin/AdminPanel";
 import { CustomerView } from "@/lib/components/userChat";
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
-import ViewSelectionPanel from "@/lib/components/experiences/ViewSelectionPanel";
 import type { AuthenticatedUser } from "@/lib/types/user";
 import { apiGet } from "@/lib/utils/api-client";
 
@@ -18,7 +17,6 @@ interface AuthContext {
 	isAuthenticated: boolean;
 	hasAccess: boolean;
 	userType?: string; // Backend-determined user type
-	shouldShowViewSelection?: boolean;
 	autoSelectedView?: string;
 }
 
@@ -33,7 +31,6 @@ export default function ExperiencePage({
 	const [contextError, setContextError] = useState<string | null>(null);
 	const [contextLoading, setContextLoading] = useState(true);
 	const [experienceId, setExperienceId] = useState<string>("");
-	const [selectedView, setSelectedView] = useState<"admin" | "customer" | null>(null);
 	// Read openChat from URL on mount so it's available before searchParams Promise resolves (notification deep link)
 	const [openChatConversationId, setOpenChatConversationId] = useState<string | null>(() => {
 		if (typeof window === "undefined") return null;
@@ -146,9 +143,6 @@ export default function ExperiencePage({
 		if (searchParams) {
 			searchParams.then((resolved) => {
 				console.log("[ExperiencePage] searchParams resolved:", { view: resolved.view, openChat: resolved.openChat });
-				if (resolved.view === "customer") {
-					setSelectedView("customer");
-				}
 				if (resolved.view === "liveChat") {
 					setInitialAdminView("liveChat");
 				}
@@ -198,12 +192,6 @@ export default function ExperiencePage({
 	// Use backend-determined access level (no frontend logic)
 	const currentAccessLevel = authContext.user.accessLevel;
 
-	const handleViewSelected = (view: "admin" | "customer") => {
-		// User selected a view from ViewSelectionPanel
-		console.log("User selected view:", view);
-		setSelectedView(view);
-	};
-
 	const handleCustomerMessage = (message: string, conversationId?: string) => {
 		// Handle customer messages - could send to analytics, backend, etc.
 		console.log("Customer interaction:", {
@@ -216,38 +204,7 @@ export default function ExperiencePage({
 		});
 	};
 
-	// Backend determines everything - no frontend logic
-	if (authContext.shouldShowViewSelection && !selectedView) {
-		// Backend determined: show ViewSelectionPanel (only if no view selected yet)
-		return (
-			<ViewSelectionPanel
-				userName={currentUser.name}
-				accessLevel={currentAccessLevel as "admin"}
-				onViewSelected={handleViewSelected}
-			/>
-		);
-	}
-
-	// Handle user-selected view from ViewSelectionPanel
-	if (selectedView === "admin") {
-		return <AdminPanel user={authContext?.user || null} initialView={initialAdminView ?? undefined} />;
-	}
-
-	if (selectedView === "customer") {
-		console.log("[ExperiencePage] Rendering CustomerView (selectedView=customer)", { experienceId, openChatConversationId });
-		return (
-			<CustomerView
-				userName={currentUser.name}
-				experienceId={experienceId}
-				onMessageSent={handleCustomerMessage}
-				userType="admin" // Developer admin gets admin controls on customer view
-				whopUserId={currentUser.whopUserId}
-				initialOpenConversationId={openChatConversationId ?? undefined}
-			/>
-		);
-	}
-
-	// Handle backend auto-selected views
+	// Owners open the admin view. Customers open the customer view.
 	if (authContext.autoSelectedView === "admin") {
 		// Backend determined: show AdminPanel
 		return <AdminPanel user={authContext?.user || null} initialView={initialAdminView ?? undefined} />;

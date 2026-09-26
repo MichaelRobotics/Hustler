@@ -9,6 +9,7 @@ import React, {
 	useCallback,
 	useMemo,
 } from "react";
+import { liveChatFilterLabel } from "@/lib/helpers/live-chat-labels";
 import type { LiveChatFilters } from "../../types/liveChat";
 import { ThemeToggle } from "../common/ThemeToggle";
 
@@ -217,7 +218,7 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 								}`}
 							>
 								<span className="font-semibold text-sm sm:text-base">
-									{isOpenStatus ? "Open" : "Auto"}
+									{liveChatFilterLabel(isOpenStatus ? "open" : "auto")}
 								</span>
 							</Button>
 						</div>

@@ -924,6 +924,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 	const OPEN_CHAT_DELAY_MS = 1000; // After store ready: brief delay so template/products can paint before opening chat
 	useEffect(() => {
 		if (!storeReady || !pendingOpenChatWhenReadyRef.current) return;
+		if (!funnelFlow || !stageInfo || stageInfo.currentStage === "NO_FUNNEL") return;
 		const t = setTimeout(() => {
 			if (!pendingOpenChatWhenReadyRef.current) return;
 			pendingOpenChatWhenReadyRef.current = false;
@@ -932,7 +933,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 			console.log("[CustomerView] open-chat: Store and products ready, opening Claim-button chat");
 		}, OPEN_CHAT_DELAY_MS);
 		return () => clearTimeout(t);
-	}, [storeReady]);
+	}, [storeReady, funnelFlow, stageInfo]);
 
 	// Validate discount settings against database (same logic as usePreviewLiveTemplate)
 	useEffect(() => {

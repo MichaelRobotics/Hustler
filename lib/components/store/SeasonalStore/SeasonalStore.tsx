@@ -2216,20 +2216,19 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
         isActive={isActive}
       />
 
-      {/* Seasonal Store Chat - Half View with Unfold/Fold Animation */}
-      {/* When text editing modals are open, show chat as overlay above them */}
+      {/* Chat only when a live funnel exists, so the empty sheet does not cover the store. */}
       <div className={`fixed inset-x-0 bottom-0 ${(editingText.isOpen || productEditor.isOpen) ? 'z-[70]' : 'z-50'} bg-white/40 dark:bg-black/40 backdrop-blur-md text-gray-900 dark:text-gray-100 shadow-2xl border-t border-b-0 border-white/20 dark:border-gray-700/20 transition-all duration-300 ease-in-out transform ${
-        isChatOpen 
+        isChatOpen && funnelFlow && isFunnelActive
           ? 'translate-y-0 opacity-100' 
-          : 'translate-y-full opacity-0'
+          : 'translate-y-full opacity-0 pointer-events-none'
       }`}>
          <div className={`w-full flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
-           isChatOpen 
+           isChatOpen && funnelFlow && isFunnelActive
              ? isMobile ? 'max-h-[100vh] opacity-100' : 'max-h-[50vh] opacity-100'
              : 'max-h-0 opacity-0'
          }`} style={{ 
-           height: isChatOpen ? (isMobile ? '100vh' : '50vh') : '0vh', 
-           maxHeight: isChatOpen ? (isMobile ? '100vh' : '50vh') : '0vh' 
+           height: isChatOpen && funnelFlow && isFunnelActive ? (isMobile ? '100vh' : '50vh') : '0vh', 
+           maxHeight: isChatOpen && funnelFlow && isFunnelActive ? (isMobile ? '100vh' : '50vh') : '0vh' 
          }}>
             {/* Beautiful Golden Separator Line */}
             <div className="absolute top-0 left-0 right-0 z-20">
@@ -2241,7 +2240,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
               <div className="h-0.5 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-pulse"></div>
             </div>
             <div className="flex-1 overflow-hidden relative border-t border-yellow-500/20" style={{ height: '100%', maxHeight: '100%' }}>
-              {funnelFlow && isFunnelActive ? (
+                {funnelFlow && isFunnelActive ? (
                 <SeasonalStoreChat
                   funnelFlow={funnelFlow}
                   resources={liveFunnel?.resources || []}
@@ -2258,32 +2257,7 @@ export const SeasonalStore: React.FC<SeasonalStoreProps> = ({ onBack, user, allR
                     setShowFunnelBuilder(true);
                   }}
                 />
-                 ) : (
-                   <div className="h-full flex items-center justify-center bg-white/40 dark:bg-black/40 backdrop-blur-sm">
-                     <div className="text-center max-w-md mx-auto p-6">
-                       <div className="w-16 h-16 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
-                         <svg className="w-8 h-8 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                         </svg>
-                       </div>
-                       
-                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No Live Funnel</h3>
-                       <p className="text-gray-600 dark:text-gray-400 mb-4">
-                         There's no live funnel to preview yet.
-                       </p>
-                       
-                       <button
-                        onClick={() => {
-                          console.log('[SeasonalStore] Manual refresh triggered');
-                          window.location.reload();
-                        }}
-                         className="px-4 py-2 bg-blue-500/90 dark:bg-blue-600/90 backdrop-blur-sm text-white rounded-lg hover:bg-blue-600/90 dark:hover:bg-blue-700/90 transition-colors border border-blue-400/30 dark:border-blue-500/30 shadow-lg"
-                       >
-                         Refresh
-                       </button>
-                     </div>
-                   </div>
-                 )}
+                ) : null}
             </div>
           </div>
         </div>

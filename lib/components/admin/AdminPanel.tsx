@@ -5,7 +5,6 @@ import AIFunnelBuilderPage from "../funnelBuilder/AIFunnelBuilderPage";
 import { LiveChatPage } from "../liveChat";
 import PreviewPage from "../preview/PreviewPage";
 import ResourceLibrary from "../products/ResourceLibrary";
-import StorePreview from "../store/StorePreview";
 import { SeasonalStore } from "../store/SeasonalStore/SeasonalStore";
 import AdminHeader from "./AdminHeader";
 import AdminSidebar from "./AdminSidebar";
@@ -31,10 +30,6 @@ import { GLOBAL_LIMITS } from "@/lib/types/resource";
 import { apiPut } from "@/lib/utils/api-client";
 import type { Resource } from "@/lib/types/resource";
 import type { AuthenticatedUser } from "@/lib/types/user";
-import {
-	generateMockData,
-	generateSalesData,
-} from "@/lib/utils/dataSimulation";
 
 interface Funnel {
 	id: string;
@@ -56,8 +51,7 @@ type View =
 	| "funnelBuilder"
 	| "preview"
 	| "liveChat"
-	| "store"
-	| "storePreview";
+	| "store";
 
 interface AdminPanelProps {
 	user: AuthenticatedUser | null;
@@ -689,10 +683,8 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 			hasValidFlow: hasValidFlow(selectedFunnel),
 		});
 
-		// Validate that the funnel actually has valid flow before showing analytics
-		// But allow analytics if we have mock data to show
 		if (!hasValidFlow(selectedFunnel)) {
-			console.log("No valid flow, but allowing analytics with mock data");
+			console.log("No valid flow; analytics still shows stored metrics when the funnel was live");
 			// Don't redirect - let the analytics page handle it gracefully
 		}
 
@@ -700,15 +692,7 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 			<>
 				<FunnelAnalyticsPage
 					funnel={selectedFunnel}
-					allUsers={generateMockData(150).map((user) => ({
-						...user,
-						funnelId: selectedFunnel.id,
-					}))}
 					experienceId={user?.experienceId}
-					allSalesData={generateSalesData().map((sale) => ({
-						...sale,
-						funnelId: selectedFunnel.id,
-					}))}
 					onBack={handleBackToDashboard}
 					onGoToBuilder={(funnel) => {
 						if (funnel && hasValidFlow(funnel)) {
@@ -758,6 +742,11 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 							className="flex-shrink-0 h-full"
 							libraryContext={libraryContext}
 							currentFunnelForLibrary={selectedFunnelForLibrary}
+							subscription={user?.subscription ?? null}
+							experienceId={user?.experienceId}
+							onProPurchased={() =>
+								handlePurchaseSuccess({ type: "subscription", subscription: "Pro" })
+							}
 							disabled={isLibraryModalOpen}
 						/>
 					)}
@@ -1013,6 +1002,11 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 							className="flex-shrink-0 h-full"
 							libraryContext={libraryContext}
 							currentFunnelForLibrary={selectedFunnelForLibrary}
+							subscription={user?.subscription ?? null}
+							experienceId={user?.experienceId}
+							onProPurchased={() =>
+								handlePurchaseSuccess({ type: "subscription", subscription: "Pro" })
+							}
 							disabled={isLibraryModalOpen}
 						/>
 					)}
@@ -1085,15 +1079,12 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 		);
 	}
 
-	// Store view and StorePreview - Keep both SeasonalStore instances mounted to preserve state
-	// Hide/show them based on currentView to maintain state persistence
-	if (currentView === "store" || currentView === "storePreview") {
+	if (currentView === "store") {
 		return (
 			<div className="min-h-screen bg-gradient-to-br from-surface via-surface/95 to-surface/90 font-sans transition-all duration-300">
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.08)_1px,transparent_0)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(120,119,198,0.15)_1px,transparent_0)] bg-[length:24px_24px] pointer-events-none" />
 
-				{/* SeasonalStore - Main store view (always mounted, hidden when in storePreview) */}
-				<div className={`h-screen w-full ${currentView === "store" ? '' : 'hidden'}`}>
+				<div className="h-screen w-full">
 					<SeasonalStore
 						user={user}
 						allResources={allResources} // Market Stall (global ResourceLibrary) products from useResourceManagement
@@ -1121,44 +1112,6 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 						}}
 					/>
 				</div>
-
-				{/* StorePreview - Preview view (always mounted, hidden when in store) */}
-				{currentView === "storePreview" && (
-					<div className="h-screen w-full">
-						<StorePreview
-							user={user}
-							allResources={allResources}
-							setAllResources={setAllResources}
-							onMessageSent={(message, conversationId) => {
-								console.log("Store preview message:", {
-									message,
-									conversationId,
-									experienceId: user?.experienceId,
-									timestamp: new Date().toISOString(),
-								});
-							}}
-							onBack={() => {
-								console.log("🏪 [STORE PREVIEW] Back to SeasonalStore");
-								setCurrentView("store");
-							}}
-							onLiveFunnelLoaded={(funnel) => {
-								console.log("🏪 [STORE PREVIEW] Live funnel loaded:", funnel);
-								setSelectedFunnel(funnel);
-							}}
-							onEditMerchant={() => {
-								console.log("🏪 [STORE PREVIEW] onEditMerchant called");
-								console.log("🏪 [STORE PREVIEW] selectedFunnel:", selectedFunnel);
-								console.log("🏪 [STORE PREVIEW] hasValidFlow:", selectedFunnel ? hasValidFlow(selectedFunnel) : false);
-								if (selectedFunnel && hasValidFlow(selectedFunnel)) {
-									console.log("🏪 [STORE PREVIEW] Navigating to funnel builder for editing:", selectedFunnel.id);
-									setCurrentView("funnelBuilder");
-								} else {
-									console.log("🏪 [STORE PREVIEW] No valid funnel to edit");
-								}
-							}}
-						/>
-					</div>
-				)}
 			</div>
 		);
 	}
@@ -1179,6 +1132,11 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 						currentFunnelForLibrary={selectedFunnelForLibrary}
 						isUserTyping={isUserTyping}
 						disabled={isLibraryModalOpen}
+						subscription={user?.subscription ?? null}
+						experienceId={user?.experienceId}
+						onProPurchased={() =>
+							handlePurchaseSuccess({ type: "subscription", subscription: "Pro" })
+						}
 					/>
 				)}
 
@@ -1234,6 +1192,7 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 								<MerchantsGraphView
 									funnels={funnels as GraphFunnel[]}
 									onFunnelClick={handleFunnelClickWithNavigation}
+									onConnect={handleEditFunnelWithNavigation}
 									allResources={allResources}
 								/>
 							)}

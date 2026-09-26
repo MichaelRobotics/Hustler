@@ -1,5 +1,6 @@
 "use client";
 
+import { merchantNodeIsConnected } from "@/lib/helpers/merchant-graph";
 import { hasValidFlow } from "@/lib/helpers/funnel-validation";
 import { TRIGGER_OPTIONS } from "@/lib/components/funnelBuilder/TriggerBlock";
 import type { TriggerType } from "@/lib/types/funnel";
@@ -53,6 +54,7 @@ interface Edge {
 interface MerchantsGraphViewProps {
 	funnels: GraphFunnel[];
 	onFunnelClick: (funnel: GraphFunnel) => void;
+	onConnect?: (funnel: GraphFunnel) => void;
 	profiles?: Array<{ id: string; name: string }>;
 	/** All resources (products) for resolving membership trigger product name by resourceId */
 	allResources?: Array<{ id: string; name?: string }>;
@@ -204,10 +206,14 @@ function MerchantCardCompact({
 	funnel,
 	onClick,
 	cardRef,
+	connected = true,
+	onConnect,
 }: {
 	funnel: GraphFunnel;
 	onClick: () => void;
 	cardRef?: (el: HTMLDivElement | null) => void;
+	connected?: boolean;
+	onConnect?: (funnel: GraphFunnel) => void;
 }) {
 	const isValid = hasValidFlow(funnel);
 	return (
@@ -236,15 +242,30 @@ function MerchantCardCompact({
 						)}
 						{funnel.merchantType && (
 							<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-violet-100 to-purple-100 dark:from-violet-900/60 dark:to-purple-900/60 text-violet-800 dark:text-violet-200 border border-violet-300 dark:border-violet-600">
-								{funnel.merchantType === "qualification" ? "Qualification" : "UpSell"}
+								{funnel.merchantType === "qualification" ? "Qualification" : "Upsell"}
 							</span>
 						)}
 					</div>
 				</div>
 				<div className="p-3 bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-900/80 dark:via-gray-800/60 dark:to-indigo-900/30">
 					<span className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 break-words">{funnel.name}</span>
+					{!connected && (
+						<p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">Not connected</p>
+					)}
 				</div>
 			</button>
+			{!connected && (
+				<div className="px-3 pb-3">
+					<Button
+						size="1"
+						variant="soft"
+						color="gray"
+						onClick={() => (onConnect ? onConnect(funnel) : onClick())}
+					>
+						Connect
+					</Button>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -357,12 +378,13 @@ interface GraphSectionProps {
 	compEdges: Edge[];
 	funnelMap: Map<string, GraphFunnel>;
 	onFunnelClick: (funnel: GraphFunnel) => void;
+	onConnect?: (funnel: GraphFunnel) => void;
 	profiles: Array<{ id: string; name: string }> | undefined;
 	showMembershipTrigger?: boolean;
 	allResources?: Array<{ id: string; name?: string }>;
 }
 
-function GraphSection({ comp, compEdges, funnelMap, onFunnelClick, profiles, showMembershipTrigger = false, allResources }: GraphSectionProps) {
+function GraphSection({ comp, compEdges, funnelMap, onFunnelClick, onConnect, profiles, showMembershipTrigger = false, allResources }: GraphSectionProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 	const pillRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -464,7 +486,12 @@ function GraphSection({ comp, compEdges, funnelMap, onFunnelClick, profiles, sho
 									labelRef={registerMembershipLabelRef(funnel.id)}
 								/>
 							)}
-							<MerchantCardCompact funnel={funnel} onClick={() => onFunnelClick(funnel)} />
+							<MerchantCardCompact
+								funnel={funnel}
+								onClick={() => onFunnelClick(funnel)}
+								connected={merchantNodeIsConnected(funnel.id, compEdges)}
+								onConnect={onConnect}
+							/>
 						</div>
 					);
 				})}
@@ -629,6 +656,7 @@ function GraphNetworkCard({
 	compEdges,
 	funnelMap,
 	onFunnelClick,
+	onConnect,
 	profiles,
 	allResources,
 }: {
@@ -636,6 +664,7 @@ function GraphNetworkCard({
 	compEdges: Edge[];
 	funnelMap: Map<string, GraphFunnel>;
 	onFunnelClick: (funnel: GraphFunnel) => void;
+	onConnect?: (funnel: GraphFunnel) => void;
 	profiles: Array<{ id: string; name: string }> | undefined;
 	allResources?: Array<{ id: string; name?: string }>;
 }) {
@@ -661,6 +690,7 @@ function GraphNetworkCard({
 				compEdges={compEdges}
 				funnelMap={funnelMap}
 				onFunnelClick={onFunnelClick}
+				onConnect={onConnect}
 				profiles={profiles}
 				showMembershipTrigger={showMembershipTrigger}
 				allResources={allResources}
@@ -670,7 +700,7 @@ function GraphNetworkCard({
 	);
 }
 
-export default function MerchantsGraphView({ funnels, onFunnelClick, profiles, allResources }: MerchantsGraphViewProps) {
+export default function MerchantsGraphView({ funnels, onFunnelClick, onConnect, profiles, allResources }: MerchantsGraphViewProps) {
 	const { edges, components, funnelMap } = useMemo(() => {
 		const filtered = funnels.filter((f) => f != null);
 		const edges = buildEdges(filtered);
@@ -700,6 +730,7 @@ export default function MerchantsGraphView({ funnels, onFunnelClick, profiles, a
 							compEdges={compEdges}
 							funnelMap={funnelMap}
 							onFunnelClick={onFunnelClick}
+							onConnect={onConnect}
 							profiles={profiles}
 							allResources={allResources}
 						/>

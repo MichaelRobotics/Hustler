@@ -1,3 +1,4 @@
+import { Heading, Text } from "frosted-ui";
 import { BarChart3, Target, TrendingUp, Users } from "lucide-react";
 import type React from "react";
 import type { FunnelStats } from "../../utils/adminAnalytics";
@@ -102,6 +103,32 @@ const FunnelAnalytics: React.FC<FunnelAnalyticsProps> = ({ stats }) => {
 						colorScheme={metric.colorScheme}
 					/>
 				))}
+			</div>
+
+			<div className="mb-8">
+				<Heading size="4" weight="bold" className="text-black dark:text-white mb-4">
+					Today's Activity
+				</Heading>
+				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+					{[
+						["Starts", stats.todayStarts],
+						["Interested", stats.todayInterest],
+						["Intent", stats.todayIntent],
+						["Conversions", stats.todayConversions],
+					].map(([label, value]) => (
+						<div
+							key={label}
+							className="rounded-xl border border-border bg-surface/80 p-4"
+						>
+							<Text size="2" className="text-muted-foreground">
+								{label}
+							</Text>
+							<Text size="5" weight="bold" className="text-foreground">
+								{Number(value || 0).toLocaleString()}
+							</Text>
+						</div>
+					))}
+				</div>
 			</div>
 		</>
 	);

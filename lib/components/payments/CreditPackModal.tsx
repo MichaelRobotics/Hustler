@@ -42,14 +42,14 @@ const subscriptionPlans = [
 		id: "basic",
 		name: "Basic",
 		price: 29,
-		features: ["10 DMs", "100 credits", "Full store access"],
+		features: ["10 messages", "100 credits", "Full store access"],
 		icon: <Zap className="w-6 h-6 text-blue-500" />,
 	},
 	{
 		id: "pro",
 		name: "Pro",
 		price: 79,
-		features: ["500 DMs/mo", "1000 credits/mo", "Full store access", "Promo system"],
+		features: ["500 messages/mo", "1000 credits/mo", "Full store access", "Promo system"],
 		icon: <Star className="w-6 h-6 text-yellow-500" />,
 		badge: "Most Popular",
 	},
@@ -58,7 +58,7 @@ const subscriptionPlans = [
 		name: "VIP",
 		price: 149,
 		features: [
-			"1000 DMs/mo",
+			"1000 messages/mo",
 			"2000 credits/mo",
 			"Full store access",
 			"Promo system",
@@ -435,7 +435,7 @@ export const CreditPackModal: React.FC<CreditPackModalProps> = ({
 
 			if (!isInIframe || !iframeSdk) {
 				setError(
-					"Please access this app through Whop to purchase DMs. The payment system is only available within the Whop platform.",
+					"Please access this app through Whop to purchase messages. The payment system is only available within the Whop platform.",
 				);
 				return;
 			}
