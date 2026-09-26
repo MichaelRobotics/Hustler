@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateToken } from "@whop-apps/sdk";
+import { whopSdk } from "@/lib/whop-sdk";
 import { tenantMetricsCollector } from "@/lib/monitoring/tenant-metrics";
 
 /**
@@ -15,8 +15,7 @@ import { tenantMetricsCollector } from "@/lib/monitoring/tenant-metrics";
 export async function GET(request: NextRequest) {
   try {
     // Authenticate admin user
-    const headersList = await request.headers;
-    const { userId: whopUserId } = await validateToken({ headers: headersList });
+    const { userId: whopUserId } = await whopSdk.verifyUserToken(request.headers);
     
     if (!whopUserId) {
       return NextResponse.json(
@@ -84,8 +83,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authenticate admin user
-    const headersList = await request.headers;
-    const { userId: whopUserId } = await validateToken({ headers: headersList });
+    const { userId: whopUserId } = await whopSdk.verifyUserToken(request.headers);
     
     if (!whopUserId) {
       return NextResponse.json(

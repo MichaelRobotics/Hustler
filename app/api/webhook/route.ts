@@ -16,6 +16,8 @@ import { getMembershipUserInfo } from "@/lib/helpers/whop-membership-user";
 import { scheduleOrFireTrigger } from "@/lib/actions/user-join-actions";
 import { safeBackgroundTracking, trackAwarenessBackground } from "@/lib/analytics/background-tracking";
 import { hasActiveConversation, findFunnelForTrigger } from "@/lib/helpers/conversation-trigger";
+import { sendWhopNotification } from "@/lib/helpers/whop-notifications";
+import { readPaymentRecoveryFields, renewalTierFromType } from "@/lib/helpers/payment-recovery";
 
 // Validate webhook secret exists
 if (!process.env.WHOP_WEBHOOK_SECRET) {
@@ -43,6 +45,9 @@ export async function POST(request: Request) {
   }
   else if (webhook.action === "payment.succeeded") {
     after(handlePaymentSucceededWebhook(webhook.data));
+  }
+  else if (action === "payment.failed" || action === "payment.requires_action") {
+    after(handlePaymentRecoveryWebhook(action, webhook.data));
   }
 
   // Make sure to return a 2xx status code quickly. Otherwise the webhook will be retried.
@@ -446,6 +451,81 @@ async function lookupPlan(
 	} catch (error) {
 		console.error("Error looking up plan:", error);
 		return null;
+	}
+}
+
+/**
+ * Basic/Pro/Vip renewal failures and off-session 3DS.
+ * Does not grant credits or start a membership-buy funnel.
+ */
+async function handlePaymentRecoveryWebhook(action: string, data: unknown) {
+	const fields = readPaymentRecoveryFields(data);
+	let tier = renewalTierFromType(fields.metadataType);
+
+	if (!tier && fields.planId && !fields.metadataType) {
+		const plan = await lookupPlan(fields.planId);
+		tier = renewalTierFromType(plan?.type);
+	}
+
+	if (!tier) {
+		console.log(`[WEBHOOK ${action}] Not a Basic/Pro/Vip renewal — no credits, no funnel`);
+		return;
+	}
+
+	if (!fields.recoveryUrl) {
+		console.log(`[WEBHOOK ${action}] ${tier} renewal has no recovery_url — notification skipped`);
+		return;
+	}
+
+	if (!fields.userId) {
+		console.log(`[WEBHOOK ${action}] ${tier} renewal missing user id — notification skipped`);
+		return;
+	}
+
+	const userRows = (await db.query.users.findMany({
+		where: eq(users.whopUserId, fields.userId),
+		with: { experience: true },
+	})) as Array<{
+		subscription: "Basic" | "Pro" | "Vip" | null;
+		experience: { whopExperienceId: string; whopCompanyId: string } | null;
+	}>;
+
+	const inScope = userRows.filter((row) => {
+		const experience = row.experience;
+		if (!experience?.whopExperienceId) return false;
+		if (fields.companyId && experience.whopCompanyId !== fields.companyId) return false;
+		if (fields.experienceId && experience.whopExperienceId !== fields.experienceId) return false;
+		return true;
+	});
+	const tierMatches = inScope.filter((row) => row.subscription === tier);
+	const targets = tierMatches.length > 0
+		? tierMatches
+		: inScope.filter((row) => !row.subscription);
+
+	if (targets.length === 0) {
+		console.log(`[WEBHOOK ${action}] No experience to notify for user ${fields.userId}`);
+		return;
+	}
+
+	const title = action === "payment.requires_action"
+		? "Confirm your subscription payment"
+		: "Subscription payment failed";
+	const content = `Your ${tier} renewal needs attention. ${fields.recoveryUrl}`;
+
+	for (const row of targets) {
+		const experienceId = row.experience?.whopExperienceId;
+		if (!experienceId) continue;
+		const result = await sendWhopNotification({
+			experience_id: experienceId,
+			user_ids: [fields.userId],
+			title,
+			content,
+		});
+		if (!result.success) {
+			console.warn(`[WEBHOOK ${action}] Notification failed for ${experienceId}: ${result.error}`);
+		} else {
+			console.log(`[WEBHOOK ${action}] Sent ${tier} recovery link to ${fields.userId} in ${experienceId}`);
+		}
 	}
 }
 

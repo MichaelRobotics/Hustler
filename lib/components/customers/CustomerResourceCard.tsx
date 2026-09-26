@@ -5,12 +5,14 @@ import type React from "react";
 import { useState, useRef, useEffect } from "react";
 import type { CustomerResource } from "@/lib/types/resource";
 import { WHOP_ICON_URL } from "@/lib/constants/whop-icon";
+import { apiPost } from "@/lib/utils/api-client";
 
 interface CustomerResourceCardProps {
 	resource: CustomerResource;
 	resourceType: "WHOP" | "LINK" | "FILE"; // Type determined from original resource
 	onOpenProductReview?: (companySlug: string) => void;
 	onOpenPlanReview?: (resourceId: string | undefined, planId: string) => void;
+	onMembershipCanceled?: () => void;
 	experienceId?: string;
 }
 
@@ -19,9 +21,12 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 	resourceType,
 	onOpenProductReview,
 	onOpenPlanReview,
+	onMembershipCanceled,
 	experienceId,
 }) => {
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+	const [isCancelling, setIsCancelling] = useState(false);
+	const [cancelError, setCancelError] = useState<string | null>(null);
 	const settingsRef = useRef<HTMLDivElement>(null);
 
 	// Close dropdown when clicking outside
@@ -44,12 +49,41 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 		};
 	}, [isSettingsOpen]);
 
+	const handleCancel = async () => {
+		if (!experienceId || isCancelling) return;
+		setIsCancelling(true);
+		setCancelError(null);
+		try {
+			const response = await apiPost(
+				"/api/customers-resources/cancel",
+				{
+					customerResourceId: resource.customer_resource_id,
+					experienceId,
+				},
+				experienceId,
+			);
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				setCancelError(typeof data.error === "string" ? data.error : "Could not cancel membership");
+				return;
+			}
+			onMembershipCanceled?.();
+		} catch (error) {
+			console.error("Cancel membership failed:", error);
+			setCancelError("Could not cancel membership");
+		} finally {
+			setIsCancelling(false);
+			setIsSettingsOpen(false);
+		}
+	};
+
 	const handleAction = (action: "cancel" | "delete") => {
 		if (action === "cancel") {
-			// TODO: Implement cancel membership logic
-			console.log("Cancel membership:", resource.customer_resource_id);
-		} else if (action === "delete") {
-			// TODO: Implement delete file logic
+			void handleCancel();
+			return;
+		}
+		if (action === "delete") {
+			// Delete stays unfinished: there is no file-delete route or storage contract.
 			console.log("Delete file:", resource.customer_resource_id);
 		}
 		setIsSettingsOpen(false);
@@ -194,10 +228,14 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 						>
 							{resourceType === "WHOP" ? (
 								<DropdownMenu.Item
-									onSelect={() => handleAction("cancel")}
-									className="px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer"
+									disabled={isCancelling}
+									onSelect={(event) => {
+										event.preventDefault();
+										handleAction("cancel");
+									}}
+									className="px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer data-[disabled]:opacity-50"
 								>
-									Cancel
+									{isCancelling ? "Canceling..." : "Cancel"}
 								</DropdownMenu.Item>
 							) : resourceType === "FILE" ? (
 								<DropdownMenu.Item
@@ -303,6 +341,11 @@ export const CustomerResourceCard: React.FC<CustomerResourceCardProps> = ({
 						className="text-muted-foreground line-clamp-2 mb-3"
 					>
 						{resource.description}
+					</Text>
+				)}
+				{cancelError && (
+					<Text size="1" className="text-red-600 dark:text-red-400">
+						{cancelError}
 					</Text>
 				)}
 			</div>

@@ -1,10 +1,10 @@
-import { validateToken } from "@whop-apps/sdk";
 import { headers } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
+import { whopSdk } from "@/lib/whop-sdk";
 
 /**
- * Simple WHOP Authentication using validateToken from @whop-apps/sdk
- * Based on WHOP documentation examples
+ * Iframe auth via whopSdk.verifyUserToken (@whop/api).
+ * @whop-apps/sdk stays installed for the dev proxy only.
  */
 
 export interface WhopUser {
@@ -18,7 +18,7 @@ export interface AuthContext {
 }
 
 /**
- * Simple WHOP authentication using validateToken
+ * Authenticate the iframe user token.
  */
 export async function authenticateWhopUser(
 	request?: NextRequest,
@@ -26,7 +26,7 @@ export async function authenticateWhopUser(
 	try {
 		const headersList = await headers();
 		
-		const { userId } = await validateToken({ headers: headersList });
+		const { userId } = await whopSdk.verifyUserToken(headersList);
 
 		if (!userId) {
 			return null;
@@ -95,7 +95,7 @@ export function withWhopAuth(
 export async function getWhopUserId(): Promise<string | null> {
 	try {
 		const headersList = await headers();
-		const { userId } = await validateToken({ headers: headersList });
+		const { userId } = await whopSdk.verifyUserToken(headersList);
 		return userId || null;
 	} catch (error) {
 		console.error("Error getting WHOP user ID:", error);

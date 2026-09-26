@@ -3,8 +3,8 @@ import { db } from "@/lib/supabase/db-server";
 import { conversations, messages, funnelInteractions, experiences } from "@/lib/supabase/schema";
 import { eq, and, inArray, or } from "drizzle-orm";
 import { deleteExistingConversationsByWhopUserId } from "@/lib/actions/user-management-actions";
-import { validateToken } from "@whop-apps/sdk";
 import { headers } from "next/headers";
+import { whopSdk } from "@/lib/whop-sdk";
 
 /**
  * Admin API endpoint to completely reset all conversations for a user
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   try {
     // Authenticate admin user
     const headersList = await headers();
-    const { userId: whopUserId } = await validateToken({ headers: headersList });
+    const { userId: whopUserId } = await whopSdk.verifyUserToken(headersList);
     
     if (!whopUserId) {
       return NextResponse.json(

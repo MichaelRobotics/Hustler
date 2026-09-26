@@ -51,7 +51,11 @@ async function createDmChannelAndCache(
 	adminWhopUserId: string,
 	customerWhopUserId: string
 ): Promise<string> {
-	const body = { with_user_ids: [adminWhopUserId, customerWhopUserId] };
+	// account_id is this experience's company id. Create returns the existing channel when one already exists.
+	const body = {
+		with_user_ids: [adminWhopUserId, customerWhopUserId],
+		account_id: companyId,
+	};
 	console.log(`[send-dm-channel] POST ${WHOP_API_BASE}/dm_channels`, JSON.stringify(body));
 	const res = await fetch(`${WHOP_API_BASE}/dm_channels`, {
 		method: "POST",
@@ -69,13 +73,22 @@ async function createDmChannelAndCache(
 	if (!channelId || typeof channelId !== "string") {
 		throw new Error("Whop create DM channel response missing id");
 	}
-	await db.insert(dmChannels).values({
-		companyId,
-		adminWhopUserId,
-		customerWhopUserId,
-		channelId,
-		updatedAt: new Date(),
-	});
+	await db
+		.insert(dmChannels)
+		.values({
+			companyId,
+			adminWhopUserId,
+			customerWhopUserId,
+			channelId,
+			updatedAt: new Date(),
+		})
+		.onConflictDoUpdate({
+			target: [dmChannels.companyId, dmChannels.adminWhopUserId, dmChannels.customerWhopUserId],
+			set: {
+				channelId,
+				updatedAt: new Date(),
+			},
+		});
 	console.log(`[send-dm-channel] Cached channel ${channelId} in dm_channels table`);
 	return channelId;
 }
