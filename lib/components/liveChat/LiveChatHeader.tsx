@@ -91,8 +91,8 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 		return (
 			<div className="sticky top-0 z-40 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm py-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-border/30 dark:border-border/20 shadow-lg">
 				{/* Top Section: Back Button + Title + Search */}
-				<div className="flex items-center justify-between gap-4 mb-6">
-					<div className="flex items-center gap-4">
+				<div className="flex items-center justify-between gap-2 sm:gap-4 mb-6">
+					<div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
 						<Button
 							size="2"
 							variant="ghost"
@@ -106,12 +106,12 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 
 						{/* Title - Hidden on mobile when search is open */}
 						<div
-							className={`transition-all duration-300 ${isMobileSearchOpen ? "sm:block hidden" : "block"}`}
+							className={`min-w-0 transition-all duration-300 ${isMobileSearchOpen ? "sm:block hidden" : "block"}`}
 						>
 							<Heading
-								size="6"
+								size="4"
 								weight="bold"
-								className="text-black dark:text-white"
+								className="text-black dark:text-white truncate sm:text-2xl"
 							>
 								Merchants Conversations
 							</Heading>
@@ -138,7 +138,7 @@ const LiveChatHeader: React.FC<LiveChatHeaderProps> = React.memo(
 					</div>
 
 					{/* Mobile Search - Icon Button or Expanded Input */}
-					<div className="sm:hidden">
+					<div className="sm:hidden flex-shrink-0">
 						{!isMobileSearchOpen ? (
 							/* Mobile Search Icon Button */
 							<div className="p-1 rounded-xl bg-surface/50 border border-border/50 shadow-lg backdrop-blur-sm dark:bg-surface/30 dark:border-border/30 dark:shadow-xl dark:shadow-black/20 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200">

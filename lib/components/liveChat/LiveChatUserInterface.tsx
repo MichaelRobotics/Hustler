@@ -516,7 +516,7 @@ const LiveChatUserInterface: React.FC<LiveChatUserInterfaceProps> = React.memo(
 					</div>
 
 					{/* Input Area - Now below the overflow container */}
-					<div className="flex-shrink-0 px-4 py-2 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg safe-area-bottom">
+					<div className="flex-shrink-0 px-4 py-2 pb-4 bg-gradient-to-br from-surface via-surface/95 to-surface/90 backdrop-blur-sm border-t border-border/30 dark:border-border/20 shadow-lg">
 						<div className="flex items-end gap-3">
 							<div className="flex-1">
 								<textarea

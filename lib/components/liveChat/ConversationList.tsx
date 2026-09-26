@@ -61,7 +61,7 @@ const ConversationList: React.FC<ConversationListProps> = React.memo(
 		);
 
 		return (
-			<div className="h-full flex flex-col min-h-[400px] lg:max-h-[500px]">
+			<div className="h-full flex flex-col min-h-0 lg:min-h-[400px] lg:max-h-[500px]">
 				{/* Conversation List */}
 				<div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
 					{isLoading ? (

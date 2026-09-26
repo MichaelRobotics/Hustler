@@ -48,7 +48,10 @@ async function getConversationsHandler(
     const authenticatedUser = userContext.user;
 
     const filters = {
-      status: (status === "auto" ? "auto" : "open") as "open" | "auto",
+      // "all" lists every active or closed thread. Open and Auto stay the two labeled filters.
+      ...(status === "all"
+        ? {}
+        : { status: (status === "auto" ? "auto" : "open") as "open" | "auto" }),
       sortBy: sortBy as "newest" | "oldest" | "most_messages" | "least_messages",
       search,
     };

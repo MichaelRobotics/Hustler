@@ -35,14 +35,14 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+		<div className="min-h-screen bg-surface text-foreground flex items-center justify-center p-4">
 			<div className="max-w-2xl w-full">
 				{/* Header */}
 				<div className="text-center mb-8">
-					<h1 className="text-3xl font-bold text-white mb-2">
+					<h1 className="text-3xl font-bold text-foreground mb-2">
 						Welcome, {userName}! 👋
 					</h1>
-					<p className="text-gray-300 text-lg">
+					<p className="text-muted-foreground text-lg">
 						Choose how you'd like to experience this funnel
 					</p>
 					<div className="mt-2 px-3 py-1 bg-violet-500/20 border border-violet-500/30 rounded-full inline-block">
@@ -59,7 +59,7 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 						className={`relative p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer group ${
 							selectedView === "admin"
 								? "border-violet-500 bg-violet-500/10"
-								: "border-gray-600 bg-gray-800/50 hover:border-gray-500 hover:bg-gray-800/70"
+								: "border-border bg-surface hover:border-violet-400"
 						}`}
 						onClick={() => handleViewSelect("admin")}
 					>
@@ -74,24 +74,24 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 							)}
 						</div>
 
-						<h3 className="text-xl font-semibold text-white mb-2">
+						<h3 className="text-xl font-semibold text-foreground mb-2">
 							Admin View
 						</h3>
-						<p className="text-gray-300 mb-4">
+						<p className="text-muted-foreground mb-4">
 							Access the full dashboard with analytics, funnel management, live
 							chat, and all administrative features.
 						</p>
 
 						<div className="space-y-2">
-							<div className="flex items-center gap-2 text-sm text-gray-400">
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<div className="w-2 h-2 bg-violet-500 rounded-full"></div>
 								<span>Merchant Conversation Editor & Analytics</span>
 							</div>
-							<div className="flex items-center gap-2 text-sm text-gray-400">
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<div className="w-2 h-2 bg-violet-500 rounded-full"></div>
 								<span>Live Chat Management</span>
 							</div>
-							<div className="flex items-center gap-2 text-sm text-gray-400">
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<div className="w-2 h-2 bg-violet-500 rounded-full"></div>
 								<span>Resource Library</span>
 							</div>
@@ -103,7 +103,7 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 						className={`relative p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer group ${
 							selectedView === "customer"
 								? "border-green-500 bg-green-500/10"
-								: "border-gray-600 bg-gray-800/50 hover:border-gray-500 hover:bg-gray-800/70"
+								: "border-border bg-surface hover:border-green-400"
 						}`}
 						onClick={() => handleViewSelect("customer")}
 					>
@@ -118,24 +118,24 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 							)}
 						</div>
 
-						<h3 className="text-xl font-semibold text-white mb-2">
+						<h3 className="text-xl font-semibold text-foreground mb-2">
 							Customer View
 						</h3>
-						<p className="text-gray-300 mb-4">
+						<p className="text-muted-foreground mb-4">
 							Experience the funnel as your customers would - clean chat
 							interface with personalized conversations.
 						</p>
 
 						<div className="space-y-2">
-							<div className="flex items-center gap-2 text-sm text-gray-400">
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<div className="w-2 h-2 bg-green-500 rounded-full"></div>
 								<span>Interactive Chat Experience</span>
 							</div>
-							<div className="flex items-center gap-2 text-sm text-gray-400">
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<div className="w-2 h-2 bg-green-500 rounded-full"></div>
 								<span>Personalized Conversations</span>
 							</div>
-							<div className="flex items-center gap-2 text-sm text-gray-400">
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<div className="w-2 h-2 bg-green-500 rounded-full"></div>
 								<span>Clean, Focused Interface</span>
 							</div>
@@ -143,12 +143,6 @@ const ViewSelectionPanel: React.FC<ViewSelectionPanelProps> = ({
 					</div>
 				</div>
 
-				{/* Footer */}
-				<div className="text-center mt-8">
-					<p className="text-gray-400 text-sm">
-						You can switch between views anytime by refreshing the page
-					</p>
-				</div>
 			</div>
 		</div>
 	);

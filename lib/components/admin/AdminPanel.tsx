@@ -1183,7 +1183,7 @@ const AdminPanel = ({ user: userProp, initialView }: AdminPanelProps) => {
 				)}
 
 				<div className="flex-1 overflow-auto w-full lg:w-auto">
-					<div className="relative p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8">
+					<div className="relative p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8">
 						<div className="max-w-7xl mx-auto">
 							{(() => {
 								console.log("🔄 [AdminPanel] Rendering AdminHeader - handlePurchaseSuccess:", typeof handlePurchaseSuccess === 'function' ? "function" : typeof handlePurchaseSuccess);

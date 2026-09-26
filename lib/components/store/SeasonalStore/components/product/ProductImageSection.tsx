@@ -43,7 +43,7 @@ export const ProductImageSection: React.FC<ProductImageSectionProps> = ({
     product.promoQuantityLeft > 0;
 
   return (
-    <div className="relative h-56 w-full">
+    <div className="relative h-56 w-full overflow-hidden rounded-t-2xl">
       {/* Background Image - fills top half */}
       <div 
         className="absolute inset-0 rounded-t-2xl overflow-hidden"

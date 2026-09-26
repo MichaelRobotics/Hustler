@@ -69,7 +69,7 @@ export const ProductButtonSection: React.FC<ProductButtonSectionProps> = ({
 
   return (
     <button 
-      className={`w-full max-w-48 py-1.5 px-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.03] ${buttonBaseClass} shadow-xl ring-2 ring-offset-2 ring-offset-white mx-auto`}
+      className={`w-full max-w-full sm:max-w-48 py-1.5 px-3 rounded-full font-bold uppercase tracking-wider transition-all duration-300 sm:hover:scale-[1.03] ${buttonBaseClass} shadow-xl ring-2 sm:ring-offset-2 mx-auto`}
       onClick={async (e) => { 
         // Prevent any action if inline editing is active
         if (inlineButtonEditing) {

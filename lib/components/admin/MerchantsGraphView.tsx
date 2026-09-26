@@ -242,7 +242,7 @@ function MerchantCardCompact({
 					</div>
 				</div>
 				<div className="p-3 bg-gradient-to-br from-gray-50/80 via-gray-100/60 to-violet-50/40 dark:from-gray-900/80 dark:via-gray-800/60 dark:to-indigo-900/30">
-					<span className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">{funnel.name}</span>
+					<span className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 break-words">{funnel.name}</span>
 				</div>
 			</button>
 		</div>
@@ -690,7 +690,7 @@ export default function MerchantsGraphView({ funnels, onFunnelClick, profiles, a
 
 	return (
 		<div className="space-y-6">
-			<div className="flex flex-wrap gap-8 items-start overflow-x-auto pb-4">
+			<div className="flex flex-wrap gap-8 items-start overflow-x-auto pb-24 lg:pb-4">
 				{components.map((comp, compIndex) => {
 					const compEdges = edges.filter((e) => comp.has(e.sourceId) && comp.has(e.targetId));
 					return (

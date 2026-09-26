@@ -572,7 +572,7 @@ const FunnelsDashboard = React.memo(
 											<Text
 												size="4"
 												weight="semi-bold"
-												className="cursor-pointer group-hover:text-violet-600 dark:group-hover:text-violet-300 transition-colors duration-200 text-foreground line-clamp-2"
+												className="cursor-pointer group-hover:text-violet-600 dark:group-hover:text-violet-300 transition-colors duration-200 text-foreground line-clamp-2 break-words"
 											>
 												{funnel.name}
 											</Text>

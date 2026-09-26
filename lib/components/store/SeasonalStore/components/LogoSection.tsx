@@ -47,15 +47,13 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
       <div className="w-full max-w-5xl mx-auto">
         <div className="text-center">
           <div 
-            className="relative w-24 h-24 mx-auto overflow-hidden group"
+            className="relative w-24 h-24 mx-auto group"
             data-prevent-bg-toggle="true"
             onMouseEnter={() => {
-              // Show controls when hovering over entire logo
               const controls = document.querySelector('.logo-controls') as HTMLElement;
               if (controls) controls.style.opacity = '1';
             }}
             onMouseLeave={() => {
-              // Hide controls when leaving entire logo
               const controls = document.querySelector('.logo-controls') as HTMLElement;
               if (controls) controls.style.opacity = '0';
             }}
@@ -71,7 +69,7 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
             />
             
             {/* Logo Controls - Only visible when hovering over entire logo */}
-            <div className="logo-controls absolute inset-0 flex flex-col items-center justify-center space-y-4 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full">
+            <div className="logo-controls absolute inset-0 hidden sm:flex flex-col items-center justify-center space-y-2 opacity-0 transition-opacity duration-300 bg-black/50 rounded-full overflow-hidden">
               {/* Upload Button - Top */}
               <input 
                 type="file" 
@@ -133,6 +131,34 @@ export const LogoSection: React.FC<LogoSectionProps> = ({
                 )}
               </Button>
             </div>
+          </div>
+          <div className="mt-3 flex sm:hidden items-center justify-center gap-2">
+            <Button
+              size="2"
+              color="green"
+              onClick={() => {
+                const input = document.getElementById('logo-upload') as HTMLInputElement;
+                if (input) input.click();
+              }}
+              className="p-2"
+              disabled={loadingState.isUploadingImage}
+              title="Upload Logo"
+            >
+              <Upload size={16} strokeWidth={2.5} />
+            </Button>
+            <Button
+              size="2"
+              color="violet"
+              onClick={() => setLogoAsset((prev) => ({
+                ...prev,
+                shape: prev.shape === 'round' ? 'square' : 'round',
+              }))}
+              disabled={loadingState.isImageLoading}
+              className="p-2"
+              title={`Switch to ${logoAsset.shape === 'round' ? 'Square' : 'Round'}`}
+            >
+              {logoAsset.shape === 'round' ? <Circle size={16} strokeWidth={2.5} /> : <Square size={16} strokeWidth={2.5} />}
+            </Button>
           </div>
         </div>
       </div>

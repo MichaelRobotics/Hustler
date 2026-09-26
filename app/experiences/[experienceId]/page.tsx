@@ -182,14 +182,11 @@ export default function ExperiencePage({
 				</div>
 			);
 		}
-		if (contextLoading) {
-			return (
-				<div className="flex min-h-screen items-center justify-center p-6">
-					<p className="text-sm text-gray-500">Loading...</p>
-				</div>
-			);
-		}
-		return null;
+		return (
+			<div className="flex min-h-screen items-center justify-center p-6">
+				<p className="text-sm text-gray-500">Loading...</p>
+			</div>
+		);
 	}
 
 	// Use authenticated user data (backend-determined)

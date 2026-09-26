@@ -181,6 +181,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 	const conversationOrderIdsRef = useRef<string[]>([]);
 	const selectedConversationIdRef = useRef<string | null>(null);
 	selectedConversationIdRef.current = selectedConversationId;
+	const keepListedThreadsRef = useRef(false);
 
 	// User is passed as prop - no need to fetch (same pattern as ResourceLibrary)
 	useEffect(() => {
@@ -254,6 +255,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				if (!result.success || !result.data?.conversations) return;
 
 				const serverConversations = result.data.conversations as LiveChatConversation[];
+				if (serverConversations.length === 0 && keepListedThreadsRef.current) return;
 				serverConversations.forEach((serverConv) => {
 					const lastUpdate = lastConversationUpdateRef.current.get(serverConv.id) ?? 0;
 					const serverUpdate = new Date(serverConv.updatedAt).getTime();
@@ -460,7 +462,26 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				throw new Error(result.error || "Failed to load conversations");
 			}
 
-			const raw = result.data?.conversations || result.conversations || [];
+			let raw = result.data?.conversations || result.conversations || [];
+			keepListedThreadsRef.current = false;
+			if (reset && raw.length === 0 && statusParam === "open") {
+				const allParams = new URLSearchParams({
+					experienceId,
+					status: "all",
+					page: "1",
+					limit: "50",
+				});
+				const allResponse = await apiGet(`/api/livechat/conversations?${allParams}`, experienceId, {
+					'x-on-behalf-of': user.whopUserId,
+					'x-company-id': user.experience.whopCompanyId
+				});
+				const allResult = await allResponse.json();
+				const allRows = allResult.data?.conversations || allResult.conversations || [];
+				if (allRows.length > 0) {
+					raw = allRows;
+					keepListedThreadsRef.current = true;
+				}
+			}
 			if (reset) {
 				const sortBy = filters.sortBy === "oldest" ? "oldest" : "newest";
 				const sorted = sortConversationsByFilter(raw, sortBy);
@@ -1007,6 +1028,15 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 		loadConversations(1, true);
 	}, [user]);
 
+	// Auto lists a thread in the sidebar; open that thread instead of leaving the pane empty.
+	useEffect(() => {
+		if ((filters.status ?? "open") !== "auto") return;
+		if (selectedConversationId) return;
+		const first = userGroupedConversations[0];
+		if (!first) return;
+		setSelectedConversationId(first.id);
+	}, [filters.status, selectedConversationId, userGroupedConversations]);
+
 	// Load conversation details only when selection changes; pass all conversation ids for this user to show aggregated timeline
 	useEffect(() => {
 		if (!selectedConversationId) return;
@@ -1049,7 +1079,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 
 	return (
 		<div
-			className={`relative h-full w-full ${selectedConversation ? "lg:p-4 lg:pb-8" : "p-4 sm:p-6 lg:p-8"} pb-20 lg:pb-8`}
+			className={`relative h-full w-full ${selectedConversation ? "lg:p-4 lg:pb-8" : "p-4 sm:p-6 lg:p-8"} pb-24 lg:pb-8`}
 		>
 			{/* Error Display */}
 			{error && (
@@ -1087,7 +1117,7 @@ const LiveChatPage: React.FC<LiveChatPageProps> = React.memo(({ onBack, experien
 				>
 					{/* Mobile: Show conversation list or chat view */}
 					<div
-						className={`lg:hidden ${selectedConversation ? "fixed inset-0 top-0 left-0 right-0 bottom-0 z-40" : "h-[calc(100vh-300px)]"} min-h-[400px] overflow-hidden`}
+						className={`lg:hidden ${selectedConversation ? "fixed inset-x-0 top-0 bottom-16 z-40" : "h-[calc(100dvh-16rem)]"} overflow-hidden`}
 					>
 						{selectedConversation ? (
 							<div className="h-full animate-in fade-in duration-0">

@@ -270,7 +270,7 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
               </div>
             )}
 
-            {/* Debug Toggle */}
+            {process.env.NODE_ENV === "development" && (
             <div className="mt-3 flex justify-center">
               <button
                 onClick={() => setIsDebugExpanded(!isDebugExpanded)}
@@ -287,9 +287,10 @@ export const SyncChangesPopup: React.FC<SyncChangesPopupProps> = ({
                 <span>Debug Info</span>
               </button>
             </div>
+            )}
 
             {/* Debug Section */}
-            {isDebugExpanded && syncResult && (
+            {process.env.NODE_ENV === "development" && isDebugExpanded && syncResult && (
               <div className="mt-3 bg-black/20 backdrop-blur-sm rounded-lg p-3 text-xs text-white/90 max-h-60 overflow-y-auto">
                 <div className="space-y-2">
                   <div className="font-semibold text-white mb-2">🔍 Update Check Details:</div>

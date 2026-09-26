@@ -12,7 +12,7 @@ export const BadgeDisplay: React.FC<BadgeDisplayProps> = ({ badge }) => {
 
   return (
     <div 
-      className="absolute top-0 left-0 z-30 pointer-events-none"
+      className="absolute top-0 left-0 z-30 pointer-events-none overflow-hidden"
       style={{
         width: '100%',
         height: '100%',

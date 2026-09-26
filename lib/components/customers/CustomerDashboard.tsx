@@ -34,6 +34,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSyncing, setIsSyncing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [syncError, setSyncError] = useState<string | null>(null);
 	const [users, setUsers] = useState<Array<{ id: string; name: string; avatar?: string; whopUserId: string }>>([]);
 	const [selectedCustomerUser, setSelectedCustomerUser] = useState<string | null>(selectedUserIdProp ?? user.id);
 	
@@ -186,6 +187,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
 	const triggerSync = useCallback(async () => {
 		setIsSyncing(true);
+		setSyncError(null);
 		try {
 			const experienceId = experienceIdRef.current;
 			// Sync memberships for the currently viewed user
@@ -210,11 +212,11 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 			} else {
 				const errorData = await response.json();
 				console.error('❌ [CustomerDashboard] Sync failed:', errorData);
-				// Don't set error state for sync failures - just log it
+				setSyncError(typeof errorData?.error === "string" ? errorData.error : "Membership sync failed");
 			}
 		} catch (err) {
 			console.error('❌ [CustomerDashboard] Error triggering sync:', err);
-			// Don't set error state for sync failures - just log it
+			setSyncError(err instanceof Error ? err.message : "Membership sync failed");
 		} finally {
 			setIsSyncing(false);
 		}
@@ -265,9 +267,11 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 				} else {
 					const errorData = await response.json();
 					console.error('❌ [CustomerDashboard] Sync failed for user:', errorData);
+					setSyncError(typeof errorData?.error === "string" ? errorData.error : "Membership sync failed");
 				}
 			} catch (err) {
 				console.error('❌ [CustomerDashboard] Error triggering sync for user:', err);
+				setSyncError(err instanceof Error ? err.message : "Membership sync failed");
 			} finally {
 				setIsSyncing(false);
 			}
@@ -382,6 +386,14 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 				) : (
 				<>
 				{/* Sync Loading Indicator */}
+				{syncError && (
+					<div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+						<Text size="3" className="text-red-700 dark:text-red-300">
+							{syncError}
+						</Text>
+					</div>
+				)}
+
 				{isSyncing && (
 					<div className="mb-6 p-4 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg flex items-center gap-3">
 						<Loader2 size={20} className="animate-spin text-violet-500" />
