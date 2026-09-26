@@ -1,6 +1,8 @@
 import type { Product, LegacyTheme } from '../types';
 import { truncateDescription } from './index';
-import { getTextColorsFromCardClass } from './colors';
+import { DEFAULT_CARD_CLASS, DEFAULT_THEME_TEXT_CLASS, getTextColorsFromCardClass } from './colors';
+
+const DEFAULT_ACCENT_CLASS = 'bg-indigo-500 hover:bg-indigo-600 text-white ring-indigo-400';
 
 // Re-export for backward compatibility
 export { getTextColorsFromCardClass };
@@ -29,7 +31,10 @@ export const applyThemeStylesToProducts = (
   if (!products || products.length === 0) return products;
   if (!theme) return products;
 
-  const textColors = getTextColorsFromCardClass(theme.card, theme.text);
+  const card = theme.card || DEFAULT_CARD_CLASS;
+  const text = theme.text || DEFAULT_THEME_TEXT_CLASS;
+  const accent = theme.accent || DEFAULT_ACCENT_CLASS;
+  const textColors = getTextColorsFromCardClass(card, text);
 
   return products.map((product) => {
     // If preserving existing and product has all card styles, skip
@@ -47,19 +52,19 @@ export const applyThemeStylesToProducts = (
     if (forceApply) {
       return {
         ...product,
-        cardClass: theme.card,
+        cardClass: card,
         titleClass: textColors.titleClass,
         descClass: textColors.descClass,
-        buttonClass: theme.accent,
+        buttonClass: accent,
       };
     }
 
     return {
       ...product,
-      cardClass: product.cardClass || theme.card,
+      cardClass: product.cardClass || card,
       titleClass: product.titleClass || textColors.titleClass,
       descClass: product.descClass || textColors.descClass,
-      buttonClass: product.buttonClass || theme.accent,
+      buttonClass: product.buttonClass || accent,
     };
   });
 };
@@ -249,7 +254,9 @@ export const convertResourcesToProducts = (
     return 0; // Maintain original order for resources without displayOrder
   });
 
-  const textColors = getTextColorsFromCardClass(theme.card, theme.text);
+  const card = theme.card || DEFAULT_CARD_CLASS;
+  const text = theme.text || DEFAULT_THEME_TEXT_CLASS;
+  const textColors = getTextColorsFromCardClass(card, text);
 
   return sortedResources.map((resource) => ({
     id: `resource-${resource.id}`,
@@ -268,10 +275,10 @@ export const convertResourcesToProducts = (
     type: resource.type, // Include type (LINK or FILE)
     storageUrl: resource.storageUrl, // Include storageUrl for FILE type
     productImages: Array.isArray(resource.productImages) ? resource.productImages : undefined, // Include productImages array
-    cardClass: theme.card,
+    cardClass: card,
     titleClass: textColors.titleClass,
     descClass: textColors.descClass,
-    buttonClass: theme.accent,
+    buttonClass: theme.accent || DEFAULT_ACCENT_CLASS,
   }));
 };
 

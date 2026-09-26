@@ -6,6 +6,7 @@ import { Zap, Flame, Star } from 'lucide-react';
 import type { Product } from './types';
 import type { LegacyTheme, LoadingState } from '../../types/index';
 import { BadgeDisplay } from './BadgeDisplay';
+import { FallbackProductImage } from './FallbackProductImage';
 
 interface ProductImageSectionProps {
   product: Product;
@@ -48,21 +49,15 @@ export const ProductImageSection: React.FC<ProductImageSectionProps> = ({
       <div 
         className="absolute inset-0 rounded-t-2xl overflow-hidden"
         style={{
-          backgroundImage: product.imageAttachmentUrl 
-            ? `url(${product.imageAttachmentUrl})` 
-            : product.image
-              ? `url(${product.image})`
-              : `url(https://assets-2-prod.whop.com/uploads/user_16843562/image/experiences/2025-10-24/e6822e55-e666-43de-aec9-e6e116ea088f.webp)`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
           filter: `drop-shadow(0 10px 10px ${
             theme.name === 'Fall' ? 'rgba(160, 82, 45, 0.5)' : 
             theme.name === 'Winter' ? 'rgba(31, 74, 155, 0.5)' : 
             'rgba(232, 160, 2, 0.5)'
           })`
         }}
-      />
+      >
+        <FallbackProductImage src={product.imageAttachmentUrl || product.image} />
+      </div>
       
       {/* Fire Icon + "X left" text - Top Right Corner */}
       {showFire && (

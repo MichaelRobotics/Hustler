@@ -73,7 +73,8 @@ export const generateAssetId = (): string => {
 /**
  * Extract color from CSS class
  */
-export const extractColorFromClass = (className: string, prefix: string): string | null => {
+export const extractColorFromClass = (className: string | null | undefined, prefix: string): string | null => {
+  if (!className) return null;
   const match = className.match(new RegExp(`${prefix}-(\\w+)`));
   return match ? match[1] : null;
 };
@@ -113,7 +114,8 @@ export const truncateDescription = (description: string, maxLength: number = 120
 /**
  * Extract text color from CSS class
  */
-export const extractTextColor = (className: string): string => {
+export const extractTextColor = (className: string | null | undefined): string => {
+  if (!className) return 'gray-800';
   const match = className.match(/text-(\w+)/);
   return match ? match[1] : 'gray-800';
 };
@@ -121,7 +123,8 @@ export const extractTextColor = (className: string): string => {
 /**
  * Extract ring color from CSS class
  */
-export const extractRingColor = (className: string): string => {
+export const extractRingColor = (className: string | null | undefined): string => {
+  if (!className) return 'blue-500';
   const match = className.match(/ring-(\w+)/);
   return match ? match[1] : 'blue-500';
 };
@@ -166,8 +169,8 @@ export const getThemeQuickColors = (theme: LegacyTheme): string[] => {
   // Get theme's main color families
   const accentFamily = parseBgFamily(theme.accent || '') || 'blue';
   const ringFamily = parseRingFamily(theme.accent || '') || 'blue';
-  const welcome = parseText(theme.welcomeColor);
-  const body = parseText(theme.text);
+  const welcome = parseText(theme.welcomeColor || '');
+  const body = parseText(theme.text || '');
   
   // Define contrast colors - opposite/complementary to theme
   const contrastMap: Record<string, string[]> = {

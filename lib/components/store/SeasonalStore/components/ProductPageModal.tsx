@@ -10,6 +10,7 @@ import { apiGet, apiPost, apiPut } from '../../../../utils/api-client';
 import { useFileUpload } from '../../../../hooks/useFileUpload';
 import { PlanReviewModal } from '../../../customers/PlanReviewModal';
 import { Star } from 'lucide-react';
+import { FallbackProductImage } from './product/FallbackProductImage';
 
 interface ProductPageModalProps {
   isOpen: boolean;
@@ -822,13 +823,8 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
               {/* Main Image */}
               <div
                 className={`relative w-full aspect-square rounded-xl overflow-hidden ${cardClass}`}
-                style={{
-                  backgroundImage: `url(${displayedMainImage})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  backgroundRepeat: 'no-repeat',
-                }}
               >
+                <FallbackProductImage src={displayedMainImage} />
                 <div className="absolute inset-0 bg-black/10" />
               </div>
 
@@ -855,10 +851,7 @@ export const ProductPageModal: React.FC<ProductPageModalProps> = ({
                               : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 cursor-pointer'
                           } transition-all`}
                         >
-                          <div
-                            className="w-full h-full bg-cover bg-center"
-                            style={{ backgroundImage: `url(${thumbnailUrl})` }}
-                          />
+                          <FallbackProductImage src={thumbnailUrl} className="h-full w-full object-cover" />
                           {!isFirstSlot && !disableImageEditing && (
                             <div
                               onClick={(e) => {

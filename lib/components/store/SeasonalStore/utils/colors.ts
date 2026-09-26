@@ -243,6 +243,13 @@ export const tailwindBgColorToHex = (bgClass: string): string | null => {
   return null;
 };
 
+/** Same card class `convertThemeToLegacy` uses when a stored theme has no card. */
+export const DEFAULT_CARD_CLASS =
+  'bg-white/95 backdrop-blur-sm shadow-xl hover:shadow-2xl shadow-indigo-500/30';
+
+/** Same text class paired with that default card. */
+export const DEFAULT_THEME_TEXT_CLASS = 'text-gray-800';
+
 /**
  * Determine appropriate text colors based on card background class
  * Ensures readability by selecting contrasting text colors
@@ -252,24 +259,27 @@ export const tailwindBgColorToHex = (bgClass: string): string | null => {
  * @returns Object with titleClass and descClass for text styling
  */
 export const getTextColorsFromCardClass = (
-  cardClass: string,
-  themeText: string
+  cardClass: string | null | undefined,
+  themeText: string | null | undefined
 ): { titleClass: string; descClass: string } => {
+  const resolvedCard = cardClass || DEFAULT_CARD_CLASS;
+  const resolvedText = themeText || DEFAULT_THEME_TEXT_CLASS;
+
   // Check if card is dark
   const isDarkCard =
-    cardClass.includes('bg-gray-900') ||
-    cardClass.includes('bg-slate-800') ||
-    cardClass.includes('bg-[#0f0b1f]') ||
-    cardClass.includes('bg-gray-950');
+    resolvedCard.includes('bg-gray-900') ||
+    resolvedCard.includes('bg-slate-800') ||
+    resolvedCard.includes('bg-[#0f0b1f]') ||
+    resolvedCard.includes('bg-gray-950');
 
   if (isDarkCard) {
     // For dark cards, use theme's text color (which is already appropriate for dark backgrounds)
     // e.g., text-orange-100 for Spooky Night, text-cyan-300 for Cyber Sale
-    return { titleClass: themeText, descClass: themeText };
+    return { titleClass: resolvedText, descClass: resolvedText };
   }
 
   // Extract color from cardClass (e.g., bg-violet-50, bg-green-50)
-  const match = cardClass.match(
+  const match = resolvedCard.match(
     /\bbg-(violet|green|red|blue|amber|gray|slate|emerald|rose|purple|indigo|pink|yellow|orange|cyan|teal)-(\d+)/
   );
   const colorName = match ? match[1] : null;
@@ -284,8 +294,8 @@ export const getTextColorsFromCardClass = (
 
   // For white/light cards or fallback, use theme text
   return {
-    titleClass: themeText,
-    descClass: themeText,
+    titleClass: resolvedText,
+    descClass: resolvedText,
   };
 };
 

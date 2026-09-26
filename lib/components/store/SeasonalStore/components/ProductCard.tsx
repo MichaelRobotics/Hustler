@@ -4,6 +4,7 @@ import { Product, LegacyTheme, LoadingState } from '../types';
 import { TrashIcon, ZapIcon } from './Icons';
 import { Button } from 'frosted-ui';
 import { Star } from 'lucide-react';
+import { DEFAULT_CARD_CLASS } from '../utils/colors';
 import { stripInlineColorTags, normalizeHtmlContent } from '../utils/html';
 import { FormattingToolbar, ProductImageSection, BadgeDisplay, ProductNameSection, ProductDescriptionSection, ProductPriceSection, ProductButtonSection } from './product';
 import { apiPost } from '../../../../utils/api-client';
@@ -462,7 +463,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       if (!nameRef && !descRef) return;
       
       // Check if card is dark
-      const cardClass = product.cardClass || theme.card;
+      const cardClass = product.cardClass || theme.card || DEFAULT_CARD_CLASS;
       const isDarkCard = cardClass.includes('bg-gray-900') || cardClass.includes('bg-slate-800') || cardClass.includes('bg-[#0f0b1f]') || theme.name === 'Cyber Sale' || theme.name === 'Spooky Night';
       
       // Get colors from Card Styles
@@ -579,12 +580,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Logic: prefer per-card text classes, then theme
   const titleClass = product.titleClass || theme.text;
   const descClass = product.descClass || theme.text;
-  const isDarkCard = (product.cardClass || theme.card).includes('bg-gray-900') || (product.cardClass || theme.card).includes('bg-slate-800') || (product.cardClass || theme.card).includes('bg-[#0f0b1f]') || theme.name === 'Cyber Sale' || theme.name === 'Spooky Night';
+  const isDarkCard = (product.cardClass || theme.card || DEFAULT_CARD_CLASS).includes('bg-gray-900') || (product.cardClass || theme.card || DEFAULT_CARD_CLASS).includes('bg-slate-800') || (product.cardClass || theme.card || DEFAULT_CARD_CLASS).includes('bg-[#0f0b1f]') || theme.name === 'Cyber Sale' || theme.name === 'Spooky Night';
   const priceTextColor = titleClass?.startsWith('text-') ? titleClass : (isDarkCard ? 'text-white' : theme.text);
   
   // Check if HTML content has formatting (tags or inline styles)
 
-  const cardClass = product.cardClass || theme.card;
+  const cardClass = product.cardClass || theme.card || DEFAULT_CARD_CLASS;
   
   // Determine button text: if product has a promo code (from Apply Promotion), show ticket icon + promo code
   // Otherwise use product.buttonText or default to 'VIEW DETAILS'

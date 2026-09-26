@@ -15,7 +15,7 @@
 		"db:up": "drizzle-kit up",
 		"db:studio": "drizzle-kit studio",
 		"db:studio:safe": "./scripts/run-drizzle-studio.sh",
-		"test": "node --experimental-strip-types --test lib/analytics/conversation-analytics.test.ts lib/helpers/payment-recovery.test.ts lib/helpers/membership-cancel.test.ts lib/helpers/download-url.test.ts lib/helpers/product-decisions.test.ts"
+		"test": "node --experimental-strip-types --test lib/analytics/conversation-analytics.test.ts lib/helpers/payment-recovery.test.ts lib/helpers/membership-cancel.test.ts lib/helpers/download-url.test.ts lib/helpers/product-decisions.test.ts lib/components/store/SeasonalStore/utils/colors.test.ts"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "^6.3.1",
