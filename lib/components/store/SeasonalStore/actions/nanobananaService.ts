@@ -54,8 +54,8 @@ interface ImageGenerationResponse {
 
 export class NanoBananaImageService {
   private genAI: GoogleGenAI;
-  private readonly BACKGROUND_MODEL = 'gemini-2.5-flash-image'; // Use Gemini for all image generation
-  private readonly REFINEMENT_MODEL = 'gemini-2.5-flash-image'; // Use flash for refinement
+  private readonly BACKGROUND_MODEL = 'gemini-3.1-flash-image'; // Use Gemini for all image generation
+  private readonly REFINEMENT_MODEL = 'gemini-3.1-flash-image'; // Use flash for refinement
   private readonly API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
   constructor() {
@@ -106,7 +106,7 @@ export class NanoBananaImageService {
   }
 
   /**
-   * Generate or refine background images for seasonal themes using gemini-2.5-flash-image
+   * Generate or refine background images for seasonal themes using gemini-3.1-flash-image
    */
   async generateBackgroundImage(
     themePrompt: string, 
@@ -300,7 +300,7 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
         console.log('🎨 [Nano Banana] Base64 contains valid image data:', imageBase64.length > 1000);
         
         // Use Gemini's generateContent with base64 image data
-        console.log('🎨 [Nano Banana] Using Gemini (gemini-2.5-flash-image) for background editing');
+        console.log('🎨 [Nano Banana] Using Gemini (gemini-3.1-flash-image) for background editing');
         response = await this.genAI.models.generateContent({
           model: this.BACKGROUND_MODEL,
           contents: [
@@ -319,7 +319,7 @@ REMEMBER: This is BACKGROUND REFINEMENT, not background creation. The background
         } as any);
       } else {
         console.log('🎨 [Nano Banana] Using text-to-image generation for new/regenerated background');
-        console.log('🎨 [Nano Banana] Using Gemini image generation (gemini-2.5-flash-image)');
+        console.log('🎨 [Nano Banana] Using Gemini image generation (gemini-3.1-flash-image)');
         
         // Use Gemini for text-to-image generation
         response = await this.genAI.models.generateContent({
@@ -910,7 +910,7 @@ Requirements:
   }
 
   /**
-   * Generate multiple image variations with styles using Gemini (gemini-2.5-flash-image)
+   * Generate multiple image variations with styles using Gemini (gemini-3.1-flash-image)
    */
   async generateImageVariations(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
     console.log('🎨 [Nano Banana] Starting image variations generation:', request);

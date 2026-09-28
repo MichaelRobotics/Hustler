@@ -190,7 +190,7 @@ async function generateThemeStylesFromBannerImage(bannerImageUrl: string): Promi
     Return ONLY the JSON object, no additional text.`;
 
     const response = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: [
         {
           parts: [

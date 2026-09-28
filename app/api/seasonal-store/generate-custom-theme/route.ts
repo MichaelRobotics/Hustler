@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     Return ONLY the JSON object, no additional text.`;
 
     const response = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash-preview-05-20',
+      model: 'gemini-3.8-flash',
       contents: themeGenerationPrompt,
     });
     

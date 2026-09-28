@@ -52,7 +52,7 @@ export async function generateThemePromptFromImage(imageUrl: string): Promise<st
     Generate a concise theme prompt (2-3 sentences) that captures the essence of this brand's visual identity for use in creating a seasonal store theme.`;
     
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: [
         {
           parts: [

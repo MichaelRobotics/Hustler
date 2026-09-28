@@ -226,7 +226,7 @@ ${badJson}
 
 		// Use the official SDK to generate content
 		const response = await genAI.models.generateContent({
-			model: "gemini-2.5-flash",
+			model: "gemini-3.8-flash",
 			contents: repairPrompt,
 		});
 
@@ -1152,7 +1152,7 @@ export const generateFunnelFlow = async (
 
 		// Use the official SDK to generate content
 		const response = await genAI.models.generateContent({
-			model: "gemini-2.5-flash",
+			model: "gemini-3.8-flash",
 			contents: prompt,
 		});
 

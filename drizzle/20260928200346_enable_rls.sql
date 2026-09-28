@@ -1,0 +1,24 @@
+ALTER TABLE "conversations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "customers_resources" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "dm_channels" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "experiences" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnel_analytics" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnel_interactions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnel_notifications" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnel_product_faq" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnel_resource_analytics" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnel_resources" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "funnels" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "messages" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "one_time_discounts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "orders" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "origin_templates" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "pending_triggers" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "plans" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "promos" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "resources" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "reviews" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "subscriptions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "templates" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "themes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;

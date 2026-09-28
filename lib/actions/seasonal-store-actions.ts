@@ -51,8 +51,8 @@ const validateEnvironment = (): void => {
 };
 
 // Use the correct Google AI API endpoints
-const LLM_MODEL = 'gemini-2.5-flash';
-const IMAGE_MODEL = 'gemini-2.5-flash-image';
+const LLM_MODEL = 'gemini-3.8-flash';
+const IMAGE_MODEL = 'gemini-3.1-flash-image';
 
 // Helper function to check if an image URL is a placeholder
 const isPlaceholderImage = (url: string): boolean => {
