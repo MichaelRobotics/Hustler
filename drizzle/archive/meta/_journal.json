@@ -1,0 +1,167 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1757077572694,
+      "tag": "20250905130612_happy_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1757103184512,
+      "tag": "20250905201304_parallel_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1757104989346,
+      "tag": "20250905204309_real_machine_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1757162709647,
+      "tag": "20250906124509_lean_power_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1757173856658,
+      "tag": "20250906155056_purple_wild_child",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1757539734884,
+      "tag": "20250910212854_green_polaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1757592005580,
+      "tag": "20250911120005_jazzy_fat_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1757607220257,
+      "tag": "20250911161340_aspiring_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1757607357695,
+      "tag": "20250911161557_sturdy_ghost_rider",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1757611301610,
+      "tag": "20250911172141_mean_sentinels",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1757612392196,
+      "tag": "20250911173952_sloppy_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1757963570364,
+      "tag": "20250915191250_natural_runaways",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1758018291123,
+      "tag": "20250916102451_melodic_red_wolf",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1758222391758,
+      "tag": "20250918190631_analytics-restructure",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1758377329553,
+      "tag": "20250920140849_add_membership_id_to_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1758400307406,
+      "tag": "20250920203147_hesitant_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1758640089457,
+      "tag": "20250923150809_giant_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1758640752387,
+      "tag": "20250923151912_breezy_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1758640913288,
+      "tag": "20250923152153_bored_quentin_quire",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1758641137000,
+      "tag": "20250925124537_add_my_affiliate_link_to_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1758641338000,
+      "tag": "20250927000858_add_link_to_experiences",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1765136609376,
+      "tag": "20251207194329_colorful_tusk",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1765206073160,
+      "tag": "20251208150113_add_product_images",
+      "breakpoints": true
+    }
+  ]
+}

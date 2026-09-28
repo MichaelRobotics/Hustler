@@ -778,8 +778,9 @@ async function handlePaymentWithAnalytics(webhookData: any) {
 		console.log(`[Webhook Analytics] Processing payment webhook for user: ${webhookData.user_id}`);
 		console.log(`[Webhook Analytics] Full webhook payload:`, JSON.stringify(webhookData, null, 2));
 
-		// Step 1: Detect scenario (affiliate vs product owner vs error)
-		const scenarioData = await detectScenario(webhookData);
+		// The experience company is the merchant for this install.
+		const { experience, conversation } = await getExperienceContextFromWebhook(webhookData);
+		const scenarioData = await detectScenario(webhookData, experience?.whopCompanyId);
 		
 		// Handle free products as normal (not errors)
 		if (scenarioData.scenario === 'free_product') {
@@ -797,9 +798,6 @@ async function handlePaymentWithAnalytics(webhookData: any) {
 			return;
 		}
 
-		// Step 2: Get experience context
-		const { experience, conversation } = await getExperienceContextFromWebhook(webhookData);
-		
 		if (!validateExperienceContext(experience, conversation)) {
 			console.log(`[Webhook Analytics] 🚫 Purchase NOT through your funnel - skipping analytics (user bought independently)`);
 			return;

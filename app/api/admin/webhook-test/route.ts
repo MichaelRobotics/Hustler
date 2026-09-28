@@ -91,9 +91,6 @@ async function testWebhookHandler(
       console.error('[Webhook Test] Error fetching Whop owner company ID:', error);
     }
 
-    // Get the developer's company ID for affiliate commission logic
-    const developerCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "biz_yourcompany123";
-
     // Create mock webhook data that matches real Whop payment webhook structure
     const webhookData = {
       action: "payment.succeeded",
@@ -110,9 +107,9 @@ async function testWebhookHandler(
         // Include affiliate commission for both scenarios (different recipient company IDs)
         affiliate_commission: {
           amount: "10.00", // 10.00 USD in dollars
-          recipient_company_id: scenario === 'PRODUCT' 
-            ? developerCompanyId // Developer gets the commission
-            : "biz_othercompany456" // Other company gets the commission
+          recipient_company_id: scenario === 'PRODUCT'
+            ? whopOwnerCompanyId
+            : "biz_othercompany456"
         }
       }
     };
@@ -135,7 +132,7 @@ async function testWebhookHandler(
       const paymentData = webhookData.data;
       
       // Step 1: Detect scenario (affiliate vs product owner vs error)
-      const scenarioData = await detectScenario(paymentData);
+      const scenarioData = await detectScenario(paymentData, whopOwnerCompanyId);
       
       if (!validateScenarioData(scenarioData)) {
         console.log(`[Webhook Test] Invalid scenario data - skipping analytics`);

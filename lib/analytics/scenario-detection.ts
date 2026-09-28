@@ -18,7 +18,10 @@ export interface ScenarioData {
 /**
  * Detect scenario from webhook data
  */
-export async function detectScenario(webhookData: any): Promise<ScenarioData> {
+export async function detectScenario(
+  webhookData: any,
+  ownerCompanyId?: string | null,
+): Promise<ScenarioData> {
   try {
     console.log(`[Scenario Detection] Analyzing webhook data:`, {
       companyId: webhookData.company_id,
@@ -26,13 +29,6 @@ export async function detectScenario(webhookData: any): Promise<ScenarioData> {
       userId: webhookData.user_id,
       amount: webhookData.amount
     });
-
-    const YOUR_COMPANY_ID = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-    
-    if (!YOUR_COMPANY_ID) {
-      console.error('[Scenario Detection] NEXT_PUBLIC_WHOP_COMPANY_ID not configured');
-      return createErrorScenario(webhookData, 'NEXT_PUBLIC_WHOP_COMPANY_ID not configured');
-    }
 
     // Check if this is a free product (amount = 0)
     const amount = parseFloat(webhookData.final_amount || webhookData.amount || '0');
@@ -61,11 +57,16 @@ export async function detectScenario(webhookData: any): Promise<ScenarioData> {
         return createErrorScenario(webhookData, 'No recipient company ID');
       }
 
+      if (!ownerCompanyId) {
+        console.error('[Scenario Detection] Experience company is required to classify affiliate revenue');
+        return createErrorScenario(webhookData, 'Experience company is required');
+      }
+
       const affiliateAmount = parseFloat(affiliateCommission.amount || '0');
       const totalAmount = parseFloat(webhookData.final_amount || webhookData.amount || '0');
       const productOwnerAmount = totalAmount - affiliateAmount;
 
-      if (recipientCompanyId === YOUR_COMPANY_ID) {
+      if (recipientCompanyId === ownerCompanyId) {
         // Scenario 1: You get affiliate commission, Whop Owner gets product revenue
         console.log('[Scenario Detection] Scenario 1: You get affiliate commission, Whop Owner gets product revenue');
         return {

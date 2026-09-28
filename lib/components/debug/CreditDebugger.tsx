@@ -29,7 +29,6 @@ export const CreditDebugger: React.FC<CreditDebuggerProps> = ({ user }) => {
                 } : null,
                 environment: {
                     NEXT_PUBLIC_WHOP_EXPERIENCE_ID: process.env.NEXT_PUBLIC_WHOP_EXPERIENCE_ID,
-                    NEXT_PUBLIC_WHOP_COMPANY_ID: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
                 },
                 tests: {}
             };

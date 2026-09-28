@@ -140,9 +140,7 @@ async function createUserContext(
 					console.log(`✅ Got company ID from Whop API: ${companyId}`);
 				} catch (error) {
 					console.error("❌ Failed to get company ID from Whop API:", error);
-					// Fallback to environment variable as last resort
-					companyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || "";
-					console.log(`⚠️ Using fallback company ID: ${companyId}`);
+					companyId = "";
 				}
 			}
 			

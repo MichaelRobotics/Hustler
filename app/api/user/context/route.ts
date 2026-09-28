@@ -59,12 +59,8 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		// Determine view selection logic based on company and access level
-		const developerCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-		const isDeveloperCompany = whopCompanyId === developerCompanyId;
+		// Owners open the admin view. Customers open the customer view.
 		const accessLevel = userContext.user.accessLevel;
-		
-		// Owners, including the admin of NEXT_PUBLIC_WHOP_COMPANY_ID, open the admin view.
 		let shouldShowViewSelection = false;
 		let autoSelectedView = null;
 		let userType = null;
@@ -74,17 +70,14 @@ export async function GET(request: NextRequest) {
 			userType = "customer";
 		} else if (accessLevel === "admin") {
 			autoSelectedView = "admin";
-			userType = isDeveloperCompany ? "developer_admin" : "client_admin";
+			userType = "admin";
 		} else if (accessLevel === "no_access") {
-			// No access - will be handled by hasAccess check
 			userType = "no_access";
 		}
 		
 		console.log("🔍 Backend Access Decision:", {
 			accessLevel,
 			companyId: whopCompanyId,
-			developerCompanyId,
-			isDeveloperCompany,
 			userType,
 			shouldShowViewSelection,
 			autoSelectedView
