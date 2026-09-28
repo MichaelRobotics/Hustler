@@ -1,61 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-// This file is server-only and should never be imported by client-side code
-// Use this for server-side database operations only
-
-// Environment variables for Supabase configuration
-const getSupabaseConfig = () => {
-	const supabaseUrl = process.env.SUPABASE_URL;
-	const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-	const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-	// Only validate during runtime, not build time
-	if (typeof window === "undefined" && process.env.NODE_ENV !== "production") {
-		if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-			throw new Error("Missing required Supabase environment variables");
-		}
-	}
-
-	return { supabaseUrl, supabaseAnonKey, supabaseServiceRoleKey };
-};
-
-// Supabase client for client-side operations (with RLS)
-export const supabase = (() => {
-	const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
-	if (!supabaseUrl || !supabaseAnonKey) {
-		return null as any; // Will be properly initialized at runtime
-	}
-	return createClient(supabaseUrl, supabaseAnonKey, {
-		auth: {
-			autoRefreshToken: true,
-			persistSession: true,
-			detectSessionInUrl: true,
-		},
-		db: {
-			schema: "public",
-		},
-	});
-})();
-
-// Supabase client for server-side operations (bypasses RLS)
-export const supabaseAdmin = (() => {
-	const { supabaseUrl, supabaseServiceRoleKey } = getSupabaseConfig();
-	if (!supabaseUrl || !supabaseServiceRoleKey) {
-		return null as any; // Will be properly initialized at runtime
-	}
-	return createClient(supabaseUrl, supabaseServiceRoleKey, {
-		auth: {
-			autoRefreshToken: false,
-			persistSession: false,
-		},
-		db: {
-			schema: "public",
-		},
-	});
-})();
+// Server-only Drizzle/Postgres connection. Do not import this from client code.
+// The unused Supabase JS clients (anon and service role) were removed; queries go through Drizzle.
 
 // Postgres connection for Drizzle ORM
 const getConnectionString = () => {
